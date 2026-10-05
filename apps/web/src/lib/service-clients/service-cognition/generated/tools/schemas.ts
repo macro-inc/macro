@@ -1674,6 +1674,7 @@ export const CreateCalendarEvent = z.object({
       z.null(),
     ])
     .optional(),
+  addMacroCall: z.boolean().optional(),
   addGoogleMeet: z.boolean().optional(),
   eventType: z
     .any()
@@ -1765,6 +1766,7 @@ export const UserToolResponseForToolCalendarEvent = z
             attendeeCount: z.number().int().gte(0),
             organizerEmail: z.union([z.string(), z.null()]).optional(),
             conferenceUrl: z.union([z.string(), z.null()]).optional(),
+            macroCallUrl: z.union([z.string(), z.null()]).optional(),
             isReadOnly: z.boolean(),
             calendarId: z.union([z.string().uuid(), z.null()]).optional(),
           }),
@@ -9202,6 +9204,7 @@ export const ToolCalendarEvent = z.object({
   attendeeCount: z.number().int().gte(0),
   organizerEmail: z.union([z.string(), z.null()]).optional(),
   conferenceUrl: z.union([z.string(), z.null()]).optional(),
+  macroCallUrl: z.union([z.string(), z.null()]).optional(),
   isReadOnly: z.boolean(),
   calendarId: z.union([z.string().uuid(), z.null()]).optional(),
 });

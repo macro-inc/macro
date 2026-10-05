@@ -28,7 +28,7 @@ async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 aws-sdk-sqs.workspace = true
 bots = { path = "../bots", default-features = false, features = ["ai_tools", "outbound"] }
-calendar_events = { path = "../calendar_events", features = ["ai_tools", "mutation-client", "postgres"] }
+calendar_events = { path = "../calendar_events", features = ["ai_tools", "call-meetings", "mutation-client", "postgres"] }
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 channels = { path = "../channels", features = ["ai_tools", "outbound"] }

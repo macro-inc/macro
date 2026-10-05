@@ -16,6 +16,7 @@ import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { recipientEntityMapper, useContacts } from '@core/user';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
@@ -86,6 +87,10 @@ function CalendarDraftComposerFallback() {
 function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const calendarsQuery = useVisibleCalendarsQuery();
   const contacts = useContacts();
+  // The tool mints the Macro call when it executes, so the composer offers the
+  // choice under the same flag as the calendar's own event composer.
+  const quickCalls = useQuickCallsFlag();
+  const macroCallsEnabled = () => quickCalls().enabled && !quickCalls().loading;
   const [operation, setOperation] = createSignal<'create' | 'reject'>();
   let finalized = false;
 
@@ -164,7 +169,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
           </Show>
           <EventForm
             controller={controller}
-            macroCallsEnabled={false}
+            macroCallsEnabled={macroCallsEnabled()}
             class="min-w-0"
             disabled={
               finalized || !props.sink.canAct() || operation() === 'reject'

@@ -7,6 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::*;
+use crate::domain::meeting_links::{MeetingLink, MeetingLinkError, MeetingLinkRequest};
 use crate::domain::models::{
     AttendeeResponseStatus, CalendarAttendee, CalendarEventDraft, CalendarEventPatch,
     CalendarOccurrence, CalendarSyncStatus, ConferenceChange, EventReminderOverride,
@@ -15,7 +16,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     CalendarDeletionScope, CalendarMutationError, CalendarMutationService,
-    CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope,
+    CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope, MeetingLinkProvider,
 };
 
 #[test]
@@ -281,16 +282,69 @@ impl CalendarOccurrenceService for MockOccurrences {
     }
 }
 
+const MEETING_URL: &str = "https://macro.com/app/meet/join/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+#[derive(Default)]
+struct MockMeetingLinks {
+    requests: Mutex<Vec<MeetingLinkRequest>>,
+    cancelled: Mutex<Vec<Uuid>>,
+    create_error: Mutex<Option<MeetingLinkError>>,
+}
+
+impl MeetingLinkProvider for MockMeetingLinks {
+    async fn create_meeting_link(
+        &self,
+        _requester_id: &str,
+        request: MeetingLinkRequest,
+    ) -> Result<MeetingLink, MeetingLinkError> {
+        if let Some(error) = self.create_error.lock().unwrap().take() {
+            return Err(error);
+        }
+        self.requests.lock().unwrap().push(request);
+        Ok(MeetingLink {
+            id: Uuid::from_u128(42),
+            url: MEETING_URL.to_string(),
+        })
+    }
+
+    async fn cancel_meeting_link(
+        &self,
+        _requester_id: &str,
+        meeting_id: Uuid,
+    ) -> Result<(), MeetingLinkError> {
+        self.cancelled.lock().unwrap().push(meeting_id);
+        Ok(())
+    }
+}
+
+type MockContext = CalendarToolContext<MockMutations, MockOccurrences, MockMeetingLinks>;
+
 fn context(
     mutations: MockMutations,
     occurrences: MockOccurrences,
+) -> (std::sync::Arc<MockMutations>, ServiceContext<MockContext>) {
+    let (mutations, _, context) =
+        context_with_meeting_links(mutations, occurrences, MockMeetingLinks::default());
+    (mutations, context)
+}
+
+fn context_with_meeting_links(
+    mutations: MockMutations,
+    occurrences: MockOccurrences,
+    meeting_links: MockMeetingLinks,
 ) -> (
     std::sync::Arc<MockMutations>,
-    ServiceContext<CalendarToolContext<MockMutations, MockOccurrences>>,
+    std::sync::Arc<MockMeetingLinks>,
+    ServiceContext<MockContext>,
 ) {
     let mutations = std::sync::Arc::new(mutations);
-    let context = CalendarToolContext::new(mutations.clone(), std::sync::Arc::new(occurrences));
-    (mutations, ServiceContext(context))
+    let meeting_links = std::sync::Arc::new(meeting_links);
+    let context = CalendarToolContext::new(
+        mutations.clone(),
+        std::sync::Arc::new(occurrences),
+        meeting_links.clone(),
+    );
+    (mutations, meeting_links, ServiceContext(context))
 }
 
 fn request_context() -> RequestContext {
@@ -373,6 +427,7 @@ async fn create_converts_input_into_a_domain_draft() {
                 minutes: 15,
             }],
         }),
+        add_macro_call: false,
         add_google_meet: true,
         event_type: CalendarEventTypeInput::Default,
         out_of_office: None,
@@ -422,6 +477,7 @@ async fn create_maps_out_of_office_input_into_the_draft() {
         recurrence_lines: Vec::new(),
         calendar_id: None,
         reminders: None,
+        add_macro_call: false,
         add_google_meet: false,
         event_type: CalendarEventTypeInput::OutOfOffice,
         out_of_office: Some(OutOfOfficeInput {
@@ -461,6 +517,7 @@ async fn create_rejects_out_of_office_settings_on_a_default_event() {
         recurrence_lines: Vec::new(),
         calendar_id: None,
         reminders: None,
+        add_macro_call: false,
         add_google_meet: false,
         event_type: CalendarEventTypeInput::Default,
         out_of_office: Some(OutOfOfficeInput::default()),
@@ -490,6 +547,7 @@ async fn create_surfaces_missing_calendar_as_an_actionable_error() {
         recurrence_lines: Vec::new(),
         calendar_id: None,
         reminders: None,
+        add_macro_call: false,
         add_google_meet: false,
         event_type: CalendarEventTypeInput::Default,
         out_of_office: None,
@@ -502,6 +560,176 @@ async fn create_surfaces_missing_calendar_as_an_actionable_error() {
         "unexpected description: {}",
         error.description
     );
+}
+
+fn macro_call_tool() -> CreateCalendarEvent {
+    CreateCalendarEvent {
+        title: "Design review".to_string(),
+        time: EventTimeInput::Timed {
+            starts_at: Utc.with_ymd_and_hms(2026, 8, 20, 17, 0, 0).unwrap(),
+            ends_at: Utc.with_ymd_and_hms(2026, 8, 20, 18, 0, 0).unwrap(),
+            time_zone: Some("America/New_York".to_string()),
+        },
+        description: Some("<p>Agenda</p>".to_string()),
+        location: None,
+        attendees: vec![AttendeeInput {
+            email: "guest@example.com".to_string(),
+            is_optional: false,
+        }],
+        recurrence_lines: Vec::new(),
+        calendar_id: Some(Uuid::from_u128(3)),
+        reminders: None,
+        add_macro_call: true,
+        add_google_meet: false,
+        event_type: CalendarEventTypeInput::Default,
+        out_of_office: None,
+    }
+}
+
+#[tokio::test]
+async fn create_with_a_macro_call_mints_a_meeting_and_writes_its_link_into_the_event() {
+    let (mutations, meeting_links, context) = context_with_meeting_links(
+        MockMutations::default(),
+        empty_occurrences(),
+        MockMeetingLinks::default(),
+    );
+
+    let response = macro_call_tool()
+        .call(context, request_context())
+        .await
+        .unwrap();
+    assert_eq!(response.event_id, Uuid::from_u128(7));
+    assert_eq!(response.macro_call_url.as_deref(), Some(MEETING_URL));
+
+    let requests = meeting_links.requests.lock().unwrap();
+    let request = requests.first().expect("one meeting minted");
+    assert_eq!(request.title, "Design review");
+    assert_eq!(
+        request.scheduled_start,
+        Some(Utc.with_ymd_and_hms(2026, 8, 20, 17, 0, 0).unwrap())
+    );
+    assert_eq!(
+        request.scheduled_end,
+        Some(Utc.with_ymd_and_hms(2026, 8, 20, 18, 0, 0).unwrap())
+    );
+
+    let created = mutations.created.lock().unwrap();
+    let (_, target_calendar, draft) = created.first().expect("one create call");
+    assert_eq!(*target_calendar, Some(Uuid::from_u128(3)));
+    assert_eq!(draft.location.as_deref(), Some(MEETING_URL));
+    assert_eq!(
+        draft.description.as_deref(),
+        Some(
+            format!(
+                "<p>Agenda</p>\n<p>Join Macro call: <a href=\"{MEETING_URL}\">{MEETING_URL}</a></p>"
+            )
+            .as_str()
+        )
+    );
+    assert_eq!(draft.conference, None);
+    assert_eq!(draft.attendees.len(), 1);
+    assert!(meeting_links.cancelled.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mcp_toolset_accepts_add_macro_call() {
+    let (mutations, meeting_links, context) = context_with_meeting_links(
+        MockMutations::default(),
+        empty_occurrences(),
+        MockMeetingLinks::default(),
+    );
+    let mut args = create_tool_args();
+    args["addMacroCall"] = serde_json::json!(true);
+
+    let event = mcp_toolset()
+        .try_tool_call(context.0, request_context(), "CreateCalendarEvent", &args)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(event["eventId"], Uuid::from_u128(7).to_string());
+    assert_eq!(event["macroCallUrl"], MEETING_URL);
+    assert_eq!(meeting_links.requests.lock().unwrap().len(), 1);
+    assert_eq!(mutations.created.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn create_refuses_both_a_macro_call_and_a_google_meet() {
+    let (mutations, meeting_links, context) = context_with_meeting_links(
+        MockMutations::default(),
+        empty_occurrences(),
+        MockMeetingLinks::default(),
+    );
+
+    let error = CreateCalendarEvent {
+        add_google_meet: true,
+        ..macro_call_tool()
+    }
+    .call(context, request_context())
+    .await
+    .unwrap_err();
+
+    assert!(
+        error.description.contains("mutually exclusive"),
+        "unexpected description: {}",
+        error.description
+    );
+    assert!(meeting_links.requests.lock().unwrap().is_empty());
+    assert!(mutations.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_with_a_macro_call_rolls_the_meeting_back_when_the_calendar_write_fails() {
+    let (mutations, meeting_links, context) = context_with_meeting_links(
+        MockMutations {
+            create_error: Mutex::new(Some(CalendarMutationError::NoWritableCalendar)),
+            ..Default::default()
+        },
+        empty_occurrences(),
+        MockMeetingLinks::default(),
+    );
+
+    let error = macro_call_tool()
+        .call(context, request_context())
+        .await
+        .unwrap_err();
+
+    assert!(
+        error
+            .description
+            .contains("not connected a Google Calendar"),
+        "unexpected description: {}",
+        error.description
+    );
+    assert_eq!(
+        *meeting_links.cancelled.lock().unwrap(),
+        vec![Uuid::from_u128(42)]
+    );
+    assert!(mutations.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_with_a_macro_call_explains_an_unwired_host() {
+    let (mutations, _, context) = context_with_meeting_links(
+        MockMutations::default(),
+        empty_occurrences(),
+        MockMeetingLinks {
+            create_error: Mutex::new(Some(MeetingLinkError::Unavailable)),
+            ..Default::default()
+        },
+    );
+
+    let error = macro_call_tool()
+        .call(context, request_context())
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.description.contains("addGoogleMeet"),
+        "unexpected description: {}",
+        error.description
+    );
+    assert!(mutations.created.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

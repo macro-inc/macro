@@ -8,6 +8,9 @@ version = "0.1.0"
 default = []
 # The AI toolset adapter exposing calendar CRUD to agents.
 ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
+# The meeting-link adapter that mints Macro calls through the call domain
+# service, for hosts that compose both calendars and calls.
+call-meetings = ["dep:call", "dep:macro_user_id"]
 # The reminder dispatch queue worker. Transport-agnostic: it drives the
 # domain through the dispatch ports.
 dispatch = ["dep:tokio", "dep:tokio-util"]
@@ -34,6 +37,9 @@ anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
+call = { path = "../call", default-features = false, features = [
+  "ports",
+], optional = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
