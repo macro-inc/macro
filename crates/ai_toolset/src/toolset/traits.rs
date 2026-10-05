@@ -103,6 +103,7 @@ where
         let schemas = self
             .tools
             .values()
+            .filter(|tool| !self.is_deferred(&tool.name))
             .map(|tool| RequestSchema {
                 name: tool.name.clone(),
                 schema: tool.input_schema.clone().into(),
@@ -113,5 +114,17 @@ where
         } else {
             Some(schemas)
         }
+    }
+
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.tools
+            .values()
+            .filter(|tool| self.is_deferred(&tool.name))
+            .map(|tool| SearchableTool {
+                name: tool.name.clone(),
+                description: tool.description.clone(),
+                schema: tool.input_schema.clone().into(),
+            })
+            .collect()
     }
 }

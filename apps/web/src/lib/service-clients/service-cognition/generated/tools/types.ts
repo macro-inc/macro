@@ -8516,11 +8516,11 @@ export interface ToolTeamInvite {
   role: string;
 }
 /**
- * Load tools by name (from `SearchTools` results) so you can call them. After loading, invoke each tool by its name. Only load the tools you actually need.
+ * Load tools by name (from the More Macro Tools list in your instructions, or from `SearchTools` results) so you can call them. After loading, invoke each tool by its name. Only load the tools you actually need.
  */
 export interface LoadTools {
   /**
-   * Exact tool names to load, taken from SearchTools results.
+   * Exact tool names to load.
    */
   names: string[];
 }
@@ -10290,7 +10290,7 @@ export interface SearchSkillsResponse {
   results: SkillSearchResult[];
 }
 /**
- * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
+ * Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
  */
 export interface SearchTools {
   /**

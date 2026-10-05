@@ -335,3 +335,67 @@ fn every_host_exposes_skill_discovery_and_reading() {
         );
     }
 }
+
+#[test]
+fn hosts_with_tool_search_defer_all_but_the_core_tools() {
+    for host in [AiHost::Chat, AiHost::AgentSession, AiHost::ChannelBot] {
+        let tools = tools_for(host);
+        let sent: Vec<String> = tools
+            .toolset
+            .request_schemas()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|schema| schema.name)
+            .collect();
+        let catalog: Vec<String> = tools
+            .toolset
+            .searchable_catalog()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect();
+        let prompt = tools.prompt.to_string();
+
+        for name in ["ReadContent", "ContentSearch", "LoadTools", "SearchTools"] {
+            assert!(sent.contains(&name.to_string()), "{host:?} sends {name}");
+        }
+        for name in ["EditPresentation", "EditSpreadsheet", "QueryDatabase"] {
+            assert!(!sent.contains(&name.to_string()), "{host:?} defers {name}");
+            assert!(
+                catalog.contains(&name.to_string()),
+                "{host:?} catalogs {name}"
+            );
+            assert!(
+                prompt.contains(&format!("\n- {name}: ")),
+                "{host:?} lists {name} in the prompt"
+            );
+        }
+        assert_eq!(
+            sent.len() + catalog.len(),
+            tools.toolset.tools.len(),
+            "{host:?}: every tool is either sent or catalogued"
+        );
+    }
+}
+
+#[test]
+fn the_mcp_host_defers_nothing() {
+    let tools = tools_for(AiHost::Mcp);
+
+    assert!(tools.toolset.searchable_catalog().is_empty());
+    assert_eq!(
+        tools.toolset.request_schemas().unwrap_or_default().len(),
+        tools.toolset.tools.len()
+    );
+    assert!(!tools.prompt.to_string().contains("LoadTools"));
+}
+
+#[test]
+fn every_eager_tool_exists() {
+    let tools = tools_for(AiHost::Chat);
+    for name in EAGER_TOOLS {
+        assert!(
+            tools.toolset.tools.contains_key(*name),
+            "{name} is not a tool"
+        );
+    }
+}

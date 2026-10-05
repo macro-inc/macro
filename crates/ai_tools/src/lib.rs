@@ -182,6 +182,37 @@ pub enum AiHost {
     Mcp,
 }
 
+/// The tools whose schemas go out with every request on hosts with tool
+/// search: the ones most turns use. Every other tool is deferred, listed by
+/// name and summary in the prompt and loaded with `LoadTools` when needed.
+pub const EAGER_TOOLS: &[&str] = &[
+    "BashCodeExecution",
+    "ContentSearch",
+    "CreateDocument",
+    "DisplayResults",
+    "EditDocument",
+    "GetThread",
+    "ListEntities",
+    "ListSkills",
+    "LoadTools",
+    "NameSearch",
+    "ReadChannelMessageContext",
+    "ReadChannelMessages",
+    "ReadChannelThread",
+    "ReadChat",
+    "ReadContent",
+    "ReadMetadata",
+    "ReadSkill",
+    "SearchSkills",
+    "SearchTools",
+    "SelfKnowledge",
+    "SendChannelMessage",
+    "Subagent",
+    "TextEditorCodeExecution",
+    "WebFetch",
+    "WebSearch",
+];
+
 /// Assemble the toolset and tool-use prompt for a host. These are actually
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
@@ -213,6 +244,13 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
+    // External MCP clients have no `LoadTools`, so they get every schema.
+    let toolset = match host {
+        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => {
+            toolset.defer_all_except(EAGER_TOOLS)
+        }
+        AiHost::Mcp => toolset,
+    };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
         AiHost::Chat => Box::new(prompt::TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT)),
         AiHost::AgentSession => {
@@ -222,6 +260,16 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
             Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
         }
     };
+    let catalog = ai_toolset::ToolSet::<ToolServiceContext>::searchable_catalog(&toolset);
+    let catalog: Vec<(&str, &str)> = catalog
+        .iter()
+        .map(|tool| (tool.name.as_str(), tool.description.as_str()))
+        .collect();
+    let prompt: Box<dyn std::fmt::Display + Send + Sync> =
+        match prompt::deferred_tools::render(&catalog) {
+            Some(section) => Box::new(format!("{prompt}{section}")),
+            None => prompt,
+        };
     ToolSetWithPrompt {
         toolset: Arc::new(toolset),
         prompt,

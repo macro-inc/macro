@@ -9,7 +9,7 @@ use axum::extract::FromRef;
 use schemars::{JsonSchema, Schema};
 use serde::Serialize;
 use serde::de::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 use tracing::Instrument as _;
 
@@ -97,6 +97,9 @@ pub struct ToolCollection<T> {
     pub tools: BTreeMap<String, T>,
     /// Non type-erased user tools
     pub user_tools: BTreeMap<String, T>,
+    /// Tools left out of every request and loaded on demand through tool
+    /// search; see [`Self::defer_all_except`].
+    deferred: BTreeSet<String>,
 }
 
 impl<T> ToolCollection<T> {
@@ -105,7 +108,27 @@ impl<T> ToolCollection<T> {
         Self {
             tools: BTreeMap::new(),
             user_tools: BTreeMap::new(),
+            deferred: BTreeSet::new(),
         }
+    }
+
+    /// Defer every tool in the collection except `eager`. A deferred tool stays
+    /// callable, but only its name and description are offered upfront (as the
+    /// [`searchable_catalog`](crate::ToolSet::searchable_catalog)); its schema
+    /// is sent once the model loads it. Tools added afterwards are eager.
+    pub fn defer_all_except(mut self, eager: &[&str]) -> Self {
+        self.deferred = self
+            .tools
+            .keys()
+            .filter(|name| !eager.contains(&name.as_str()))
+            .cloned()
+            .collect();
+        self
+    }
+
+    /// Whether `name` is deferred.
+    pub fn is_deferred(&self, name: &str) -> bool {
+        self.deferred.contains(name)
     }
 }
 
@@ -126,6 +149,7 @@ impl<T> ToolCollection<T> {
         }
         self.tools.extend(toolset.tools);
         self.user_tools.extend(toolset.user_tools);
+        self.deferred.extend(toolset.deferred);
         self
     }
 }
@@ -356,6 +380,7 @@ where
             let widened = tool.widen::<ToolSetContext>();
             self.user_tools.insert(name, widened);
         }
+        self.deferred.extend(subtoolset.deferred);
         self
     }
 }

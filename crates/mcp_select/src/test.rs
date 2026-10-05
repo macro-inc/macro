@@ -209,3 +209,74 @@ async fn empty_alias_list_does_not_match() {
             .is_empty()
     );
 }
+
+mod combined_catalog {
+    use super::*;
+    use ai_toolset::{AsyncTool, ServiceContext, ToolAnnotated, ToolAnnotations};
+    use schemars::JsonSchema;
+    use serde::Deserialize;
+
+    #[derive(JsonSchema, Deserialize)]
+    #[schemars(title = "EditDeck", description = "Edit a slide deck.")]
+    struct EditDeck {}
+
+    impl ToolAnnotated for EditDeck {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Edit deck");
+    }
+
+    #[async_trait::async_trait]
+    impl AsyncTool<()> for EditDeck {
+        type Output = String;
+        async fn call(&self, _: ServiceContext<()>, _: RequestContext) -> ToolResult<String> {
+            Ok("edited".to_string())
+        }
+    }
+
+    struct OneMcpTool;
+
+    impl ToolSet<()> for OneMcpTool {
+        fn dispatch_tool_call<'a>(
+            &'a self,
+            _: (),
+            _: RequestContext,
+            tool_name: &'a str,
+            _: &'a serde_json::Value,
+        ) -> ai_toolset::ToolCallFuture<'a> {
+            Box::pin(async move { Err(ToolSetError::NotFound(tool_name.to_owned())) })
+        }
+
+        fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
+            None
+        }
+
+        fn searchable_catalog(&self) -> Vec<SearchableTool> {
+            vec![SearchableTool {
+                name: "mcp__linear__create_issue".to_string(),
+                description: "Create a Linear issue.".to_string(),
+                schema: schemars::Schema::default(),
+            }]
+        }
+    }
+
+    #[test]
+    fn the_catalog_holds_deferred_static_tools_and_mcp_tools() {
+        let static_tools = AsyncToolCollection::<()>::new()
+            .add_tool::<EditDeck, ()>()
+            .defer_all_except(&[]);
+        let combined = CombinedToolSet::new(Arc::new(static_tools), OneMcpTool);
+
+        let names: Vec<String> = combined
+            .searchable_catalog()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect();
+
+        assert_eq!(
+            names,
+            vec![
+                "EditDeck".to_string(),
+                "mcp__linear__create_issue".to_string()
+            ]
+        );
+    }
+}
