@@ -214,7 +214,9 @@ differ:
 What each level means on a form, which the UI copy must say: view = can
 respond, edit = can change questions and read responses, owner = can also
 change audience, close, trash. Posting a form into a channel grants view (RFC
-03 §2).
+03 §2). Because editing questions uses the database schema, edit also grants
+full database Edit, including changing response rows and other columns. The
+share dialog must disclose this; grant edit only to trusted collaborators.
 
 ### Derived database access
 
@@ -278,15 +280,15 @@ The service, in order:
    the sanctioned case: the forms service is doing the authorization). Refuse
    if `status = closed`, `closes_at` has passed, the table is gone, or the
    audience is `members` and the receipt is unauthenticated.
-2. Validate: every answer names a question of this form; every required
-   question in a reached `questions` section has a nonempty, non-`Clear`
-   value (sections after the first failing gate are not reached); each value
-   fits its column kind as `apply_ops` would check it (text for Text, options
-   of this column for Select, and so on). Do not re-implement the cell type
-   checks; validate shape and required-ness, and let `apply_ops` be the
-   authority on fit. A refusal from `apply_ops` maps to
-   `FormError::InvalidAnswer { question }`.
-3. Evaluate gates in section order against the answer map. The rules are a
+2. Refuse a signed-in caller whose ledger already holds a submitted response
+   before inserting another row (`AlreadyResponded`; edits use PUT). Validate
+   that every supplied answer names a question of this form and has a valid
+   shape. Let `apply_ops` remain the authority on cell fit; its refusals map
+   to `FormError::InvalidAnswer { question }`.
+3. Traverse the layout in section order. In each reached `questions` section,
+   require a nonempty, non-`Clear` value for every required question. At each
+   gate, evaluate against the answer map and stop immediately on failure,
+   before validating required questions in later sections. The rules are a
    `FilterGroup`; add a pure evaluator `models_databases::views::eval::matches(&FilterGroup, &HashMap<ColumnId, CellValue>) -> bool`
    next to `views/check.rs`. Gates intentionally use stricter empty-answer
    semantics than database views: absent, `Clear`, blank text and empty lists
@@ -306,7 +308,11 @@ The service, in order:
    `SubmissionOutcome::Submitted { response, row }`. The databases write and
    the ledger write are two transactions. A ledger failure after a committed
    row is logged with the row id and surfaces as an error to the client; the
-   row stays. Rare, recoverable by hand, not worth a saga.
+   row stays. Rare, recoverable by hand, not worth a saga. The early ledger
+   check prevents sequential duplicate submissions. Concurrent submissions
+   can still race: the unique ledger key accepts one, the losing request
+   returns `AlreadyResponded`, and its committed row is logged and retained
+   under this same failure policy. This is not a cross-service atomic write.
 6. Publish `form.response_submitted` (§9).
 
 Public audience permits anonymous access; it does not discard a signed-in

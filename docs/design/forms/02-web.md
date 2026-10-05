@@ -171,7 +171,10 @@ Flow (mock: the second artifact):
   immediately. The server is the authority; a stop from the server renders
   the same screen.
   `FormDetail` includes the gate predicates so this local evaluation can run;
-  the respondent UI never renders the predicates or their editor.
+  the respondent UI never renders the predicates or their editor. These
+  predicates are available to a caller inspecting the response; gates are
+  questionnaire flow rules, not a mechanism for keeping eligibility criteria
+  secret. The server still enforces the rules on every submission.
 - Stop screen: eyebrow "This form can't take your response", the gate
   message, "Nothing you entered was submitted", buttons "Check my answers"
   and "Message the owner". The rules are never shown.
