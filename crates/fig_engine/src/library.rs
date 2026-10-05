@@ -438,6 +438,35 @@ pub fn uses(doc: &Document) -> LibraryUse {
     }
 }
 
+/// A PNG of the asset (or any layer) `id`, on whatever canvas it is
+/// (library copies live on the internal one), fitted in `size` pixels.
+pub fn thumbnail(
+    doc: &Document,
+    images: &mut crate::images::ImageStore,
+    id: Guid,
+    size: u32,
+) -> Option<Vec<u8>> {
+    let i = doc.find(id)?;
+    let canvas = doc.page_of(i)?;
+    let scene = crate::scene::Scene::build(doc, canvas);
+    let at = scene.find(doc, &id.to_string())?;
+    let bounds = scene.node(at).bounds;
+    let longest = bounds.w.max(bounds.h);
+    if longest <= 0.0 {
+        return None;
+    }
+    let scale = (f64::from(size) / longest).min(4.0);
+    let pixmap = crate::render::render_node(
+        doc,
+        &scene,
+        images,
+        at,
+        scale,
+        crate::render::RenderOptions::default(),
+    )?;
+    Some(crate::images::encode_png(&pixmap))
+}
+
 /// The ids of the components, styles, and variables `p` uses (its
 /// instance's component, swaps, shared styles, bound variables, a
 /// variable's collection and aliases), overrides included.

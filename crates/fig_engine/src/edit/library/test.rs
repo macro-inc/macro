@@ -515,3 +515,17 @@ fn enabled_libraries_are_stored_on_the_document() {
     app.history.undo(&mut app.doc).unwrap();
     assert!(lib::enabled(&app.doc).is_empty());
 }
+
+#[test]
+fn copies_have_thumbnails() {
+    let (_, app, _) = card_in_app();
+    let copy = lib::uses(&app.doc).copies[0].id.clone();
+    let png = lib::thumbnail(
+        &app.doc,
+        &mut crate::images::ImageStore::default(),
+        Guid::parse(&copy).unwrap(),
+        64,
+    )
+    .expect("a copy on the internal canvas draws");
+    assert!(png.starts_with(b"\x89PNG"));
+}
