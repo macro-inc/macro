@@ -1,14 +1,14 @@
-//! Stripe adapter: one-off Checkout for credit packs, and immediate invoices
-//! for overage chunks.
+//! Stripe adapter: one-off Checkout for credit packs, immediate invoices for
+//! overage chunks, and the current subscription period.
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::{
-    BillingError, CreditCheckoutRequest, OverageChargeRequest, PaymentGateway, Result,
-    SubscriptionScope,
+    BillingError, BillingPeriod, CreditCheckoutRequest, OverageChargeRequest, PaymentGateway,
+    Result, SubscriptionScope,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use macro_uuid::Uuid;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -175,6 +175,38 @@ fn in_scope(subscription: &Subscription, scope: SubscriptionScope) -> bool {
     }
 }
 
+/// Active | Trialing, shared by charge selection and period selection.
+fn billable(subscription: &Subscription) -> bool {
+    matches!(
+        subscription.status,
+        SubscriptionStatus::Active | SubscriptionStatus::Trialing
+    )
+}
+
+/// The period shared by every billable subscription in `scope`.
+fn scoped_period(
+    subscriptions: &[Subscription],
+    scope: SubscriptionScope,
+) -> Result<Option<BillingPeriod>> {
+    let mut periods = subscriptions
+        .iter()
+        .filter(|subscription| billable(subscription) && in_scope(subscription, scope))
+        .filter_map(|subscription| {
+            let start = DateTime::from_timestamp(subscription.current_period_start, 0)?;
+            let end = DateTime::from_timestamp(subscription.current_period_end, 0)?;
+            (start < end).then_some(BillingPeriod { start, end })
+        });
+    let Some(period) = periods.next() else {
+        return Ok(None);
+    };
+    if periods.any(|other| other != period) {
+        return Err(BillingError::Payment(anyhow::anyhow!(
+            "active subscriptions disagree on the billing period"
+        )));
+    }
+    Ok(Some(period))
+}
+
 fn charge_method(
     fallback: Option<PaymentMethodId>,
     subscriptions: &[Subscription],
@@ -182,11 +214,7 @@ fn charge_method(
 ) -> Result<ChargeMethod> {
     let mut selected = ChargeMethod::NoMatchingSubscription;
     for subscription in subscriptions {
-        if !matches!(
-            subscription.status,
-            SubscriptionStatus::Active | SubscriptionStatus::Trialing
-        ) || !in_scope(subscription, scope)
-        {
+        if !billable(subscription) || !in_scope(subscription, scope) {
             continue;
         }
         let candidate = payment_method_id(&subscription.default_payment_method)
@@ -471,6 +499,17 @@ impl PaymentGateway for StripePaymentGateway {
             }
         }
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn subscription_period(
+        &self,
+        customer_id: &str,
+        scope: SubscriptionScope,
+    ) -> Result<Option<BillingPeriod>> {
+        let customer = parse_customer(customer_id)?;
+        let subscriptions = self.non_canceled_subscriptions(&customer).await?;
+        scoped_period(&subscriptions, scope)
+    }
 }
 
 /// A [`PaymentGateway`] for services that never settle (they only read
@@ -500,5 +539,13 @@ impl PaymentGateway for NoOpPaymentGateway {
         Err(BillingError::Payment(anyhow::anyhow!(
             "payments are not configured in this service"
         )))
+    }
+
+    async fn subscription_period(
+        &self,
+        _customer_id: &str,
+        _scope: SubscriptionScope,
+    ) -> Result<Option<BillingPeriod>> {
+        Ok(None)
     }
 }

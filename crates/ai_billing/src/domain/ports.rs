@@ -334,6 +334,16 @@ pub trait PaymentGateway: Send + Sync + 'static {
         invoice_id: &str,
         scope: SubscriptionScope,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// The current period of the customer's active or trialing subscription in
+    /// `scope`. `Ok(None)` when no such subscription exists or the gateway cannot
+    /// read subscriptions. Matching subscriptions that disagree on the period are
+    /// a [`BillingError::Payment`](super::BillingError::Payment).
+    fn subscription_period(
+        &self,
+        customer_id: &str,
+        scope: SubscriptionScope,
+    ) -> impl Future<Output = Result<Option<BillingPeriod>>> + Send;
 }
 
 /// Asks whoever owns Stripe to settle a payer. Fire-and-forget: services that

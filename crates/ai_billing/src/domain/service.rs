@@ -120,8 +120,8 @@ where
     async fn position(&self, user: &MacroUserIdStr<'_>, now: DateTime<Utc>) -> Result<Position> {
         let first = self.entitlements.entitlement(user).await?;
         let settings = self.repo.settings(&first.payer).await?;
-        let period = BillingPeriod::current(settings.period_anchor, now);
-        if !first.tier.is_paid() || first.unlimited {
+        let period = self.usage_period(&first, settings.period_anchor, now).await;
+        if !first.is_metered() {
             return Ok(Position {
                 entitlement: first,
                 settings,
@@ -159,14 +159,16 @@ where
         if entitlement.payer.as_ref() != first.payer.as_ref() {
             // `settings.seat_generation` was read for `first.payer`.
             let settings = self.repo.settings(&entitlement.payer).await?;
-            let period = BillingPeriod::current(settings.period_anchor, now);
+            let period = self
+                .usage_period(&entitlement, settings.period_anchor, now)
+                .await;
             return Ok(Position {
                 entitlement,
                 settings,
                 period,
             });
         }
-        if !entitlement.tier.is_paid() || entitlement.unlimited {
+        if !entitlement.is_metered() {
             return Ok(Position {
                 entitlement,
                 settings,
@@ -191,6 +193,78 @@ where
                 period,
             }),
         }
+    }
+
+    /// The payer's usage period at `now`. Never fails the caller.
+    async fn usage_period(
+        &self,
+        entitlement: &Entitlement,
+        anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
+        now: DateTime<Utc>,
+    ) -> BillingPeriod {
+        if let Some(period) = BillingPeriod::covering(anchor, now) {
+            return period;
+        }
+        if !entitlement.is_metered() {
+            return BillingPeriod::current(anchor, now);
+        }
+        let payer = &entitlement.payer;
+        let read = match self.entitlements.stripe_customer_id(payer).await {
+            Ok(Some(customer_id)) => {
+                self.payments
+                    .subscription_period(&customer_id, SubscriptionScope::from(&entitlement.scope))
+                    .await
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        };
+        match read {
+            Ok(Some(period)) => {
+                let _ = self
+                    .repo
+                    .set_period(payer, period.start, period.end)
+                    .await
+                    .inspect_err(
+                        |e| tracing::warn!(error = ?e, "storing the subscription period failed"),
+                    );
+                BillingPeriod::current(Some((period.start, period.end)), now)
+            }
+            Ok(None) => {
+                tracing::debug!("no subscription period to read; metering the fallback period");
+                BillingPeriod::current(anchor, now)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = ?e,
+                    "reading the subscription period failed; metering the fallback period"
+                );
+                BillingPeriod::current(anchor, now)
+            }
+        }
+    }
+
+    /// Implementation behind `OpenSeatRelease::release`, with an explicit clock.
+    async fn release_at(
+        &self,
+        team_id: Uuid,
+        member: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        let Some(payer) = self.entitlements.team_payer(team_id).await? else {
+            return Ok(());
+        };
+        if payer.as_ref() == member.as_ref() {
+            return Ok(());
+        }
+        let entitlement = self.entitlements.entitlement(&payer).await?;
+        let settings = self.repo.settings(&payer).await?;
+        let period = self
+            .usage_period(&entitlement, settings.period_anchor, now)
+            .await;
+        let Some(open) = period.open_start(now) else {
+            return Ok(());
+        };
+        self.repo.release_open_seat(&payer, open, member).await
     }
 
     async fn snapshot_at(
@@ -465,18 +539,7 @@ where
 
     #[tracing::instrument(skip(self), err)]
     async fn release(&self, team_id: Uuid, member: &MacroUserIdStr<'_>) -> Result<()> {
-        let Some(payer) = self.entitlements.team_payer(team_id).await? else {
-            return Ok(());
-        };
-        if payer.as_ref() == member.as_ref() {
-            return Ok(());
-        }
-        let settings = self.repo.settings(&payer).await?;
-        let now = Utc::now();
-        let Some(open) = BillingPeriod::current(settings.period_anchor, now).open_start(now) else {
-            return Ok(());
-        };
-        self.repo.release_open_seat(&payer, open, member).await
+        self.release_at(team_id, member, Utc::now()).await
     }
 }
 
