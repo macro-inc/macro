@@ -1,9 +1,19 @@
 //! Image fills: decoding (PNG, JPEG, GIF, WebP) into premultiplied pixmaps,
 //! mip levels for drawing large images small, and a memory budget.
 
+use crate::model::ImageFilters;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tiny_skia::{IntSize, Pixmap};
+
+pub mod adjust;
+
+/// A level with adjustments applied: the image, the adjustments (by bits),
+/// and the level's width.
+type AdjustedKey = (String, [u32; 7], u32);
+
+/// Bytes of adjusted levels kept (a share of the store's budget).
+const ADJUSTED_SHARE: usize = 4;
 
 /// One image's mip levels (each half the size of the one before), built on
 /// demand. Any level may be missing: a level is always built by halving
@@ -70,6 +80,9 @@ fn halve(src: &Pixmap) -> Option<Pixmap> {
 pub struct ImageStore {
     /// `None` for images that do not decode.
     entries: HashMap<String, Option<Entry>>,
+    /// Levels with an image paint's adjustments applied, with when each
+    /// was last drawn.
+    adjusted: HashMap<AdjustedKey, (Arc<Pixmap>, u64)>,
     clock: u64,
     budget: usize,
 }
@@ -84,6 +97,7 @@ impl ImageStore {
     pub fn new(budget: usize) -> Self {
         Self {
             entries: HashMap::new(),
+            adjusted: HashMap::new(),
             clock: 0,
             budget,
         }
@@ -164,12 +178,74 @@ impl ImageStore {
         Some((pixmap, factor))
     }
 
-    /// Drops the least recently drawn levels until the store fits its
-    /// budget.
+    /// [`ImageStore::level`] with the image paint's adjustments applied.
+    pub fn level_adjusted(
+        &mut self,
+        hash: &str,
+        encoded: Option<&[u8]>,
+        device_per_pixel: f64,
+        filters: &ImageFilters,
+    ) -> Option<(Arc<Pixmap>, f64)> {
+        let (level, factor) = self.level(hash, encoded, device_per_pixel)?;
+        if filters.is_identity() {
+            return Some((level, factor));
+        }
+        let ImageFilters {
+            exposure,
+            contrast,
+            saturation,
+            temperature,
+            tint,
+            highlights,
+            shadows,
+        } = *filters;
+        let bits = [
+            exposure,
+            contrast,
+            saturation,
+            temperature,
+            tint,
+            highlights,
+            shadows,
+        ]
+        .map(f32::to_bits);
+        let key = (hash.to_owned(), bits, level.width());
+        let clock = self.clock;
+        if let Some((pixmap, used)) = self.adjusted.get_mut(&key) {
+            *used = clock;
+            return Some((pixmap.clone(), factor));
+        }
+        let mut pixmap = (*level).clone();
+        adjust::apply(&mut pixmap, filters);
+        let pixmap = Arc::new(pixmap);
+        self.adjusted.insert(key, (pixmap.clone(), clock));
+        let limit = self.budget / ADJUSTED_SHARE;
+        let mut total: usize = self.adjusted.values().map(|(p, _)| p.data().len()).sum();
+        while total > limit && self.adjusted.len() > 1 {
+            let Some(oldest) = self
+                .adjusted
+                .iter()
+                .filter(|(_, (_, used))| *used != clock)
+                .min_by_key(|(_, (_, used))| *used)
+                .map(|(k, _)| k.clone())
+            else {
+                break;
+            };
+            if let Some((p, _)) = self.adjusted.remove(&oldest) {
+                total = total.saturating_sub(p.data().len());
+            }
+        }
+        Some((pixmap, factor))
+    }
+
     /// Forgets `hash` (an image that was missing may have arrived).
     pub fn forget(&mut self, hash: &str) {
         self.entries.remove(hash);
+        self.adjusted.retain(|(h, _, _), _| h != hash);
     }
+
+    /// Drops the least recently drawn levels until the store fits its
+    /// budget.
 
     fn evict(&mut self) {
         let mut total: usize = self.entries.values().flatten().map(Entry::bytes).sum();

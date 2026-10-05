@@ -107,7 +107,10 @@ impl Painter<'_> {
             return;
         };
         let device_per_pixel = ts.mul(&image_to_node).scale_factor();
-        let Some((pixmap, factor)) = self.images.level(hash, encoded, device_per_pixel) else {
+        let Some((pixmap, factor)) =
+            self.images
+                .level_adjusted(hash, encoded, device_per_pixel, &image.filters)
+        else {
             return;
         };
         let level_to_node = image_to_node.mul(&Affine::scale(1.0 / factor, 1.0 / factor));
