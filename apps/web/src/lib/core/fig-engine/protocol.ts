@@ -32,7 +32,10 @@ export type QueryMethod =
   | 'layoutAids'
   | 'exportables'
   | 'fonts'
-  | 'textGeometry';
+  | 'textGeometry'
+  | 'libraryStatus'
+  | 'libraryAssets'
+  | 'libraryUses';
 
 export type FigRequest =
   | { id: number; kind: 'open'; bytes: ArrayBuffer }
@@ -104,7 +107,21 @@ export type FigRequest =
       images: ArrayBuffer | null;
       /** `PasteSpec` JSON. */
       spec: string;
-    };
+    }
+  /** A package of library assets (`string[]` JSON of keys). */
+  | { id: number; kind: 'libraryPackage'; keys: string }
+  | {
+      id: number;
+      kind: 'importLibrary';
+      page: number;
+      /** A package from another file's `libraryPackage`. */
+      document: ArrayBuffer;
+      images: ArrayBuffer | null;
+      /** `LibrarySpec` JSON. */
+      spec: string;
+    }
+  /** A PNG of a layer on any canvas, fitted in `size` pixels. */
+  | { id: number; kind: 'nodeThumbnail'; node: string; size: number };
 
 export type FigResponse =
   | { id: number; ok: true; kind: 'open'; summary: FileSummary }

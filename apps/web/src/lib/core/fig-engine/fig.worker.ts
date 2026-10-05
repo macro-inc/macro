@@ -187,6 +187,15 @@ async function serve(request: FigRequest) {
         case 'prototype':
           json = f.prototype(a as number);
           break;
+        case 'libraryStatus':
+          json = f.libraryStatus();
+          break;
+        case 'libraryAssets':
+          json = f.libraryAssets();
+          break;
+        case 'libraryUses':
+          json = f.libraryUses();
+          break;
         case 'layoutAids':
           json = f.layoutAids(a as number);
           break;
@@ -294,6 +303,36 @@ async function serve(request: FigRequest) {
         request.spec
       );
       post({ id: request.id, ok: true, kind: 'edit', json });
+      return;
+    }
+    case 'libraryPackage': {
+      const copied = openFile().libraryPackage(request.keys);
+      const document = copied.document.slice().buffer;
+      const images = copied.images.slice().buffer;
+      copied.free();
+      post({ id: request.id, ok: true, kind: 'copied', document, images }, [
+        document,
+        images,
+      ]);
+      return;
+    }
+    case 'importLibrary': {
+      const json = openFile().importLibrary(
+        request.page,
+        new Uint8Array(request.document),
+        request.images ? new Uint8Array(request.images) : null,
+        request.spec
+      );
+      post({ id: request.id, ok: true, kind: 'edit', json });
+      return;
+    }
+    case 'nodeThumbnail': {
+      const png = openFile().nodeThumbnail(request.node, request.size);
+      const bytes = png.length > 0 ? png.slice().buffer : null;
+      post(
+        { id: request.id, ok: true, kind: 'png', bytes },
+        bytes ? [bytes] : []
+      );
       return;
     }
     case 'registerFont': {

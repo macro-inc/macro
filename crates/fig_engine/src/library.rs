@@ -336,7 +336,7 @@ pub fn published(doc: &Document) -> PublishedLibrary {
         ) else {
             continue;
         };
-        if !is_published_name(doc, i) || kind == AssetKind::ComponentSet {
+        if !is_published_name(doc, i) {
             continue;
         }
         let set = set_of(doc, i);

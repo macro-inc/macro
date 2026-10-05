@@ -103,6 +103,23 @@ export interface WasmFigFile {
     images: Uint8Array | null | undefined,
     spec: string
   ) => string;
+  /** `LibraryStatus` JSON: what publishing the library would change. */
+  libraryStatus: () => string;
+  /** `PublishedLibrary` JSON: the published assets. */
+  libraryAssets: () => string;
+  /** `LibraryUse` JSON: libraries used and copies of their assets. */
+  libraryUses: () => string;
+  /** A package of assets (`string[]` JSON of keys) for another file. */
+  libraryPackage: (keys: string) => WasmClipboard;
+  /** Imports a package; `LibrarySpec` JSON in, `EditResult` JSON out. */
+  importLibrary: (
+    page: number,
+    document: Uint8Array,
+    images: Uint8Array | null | undefined,
+    spec: string
+  ) => string;
+  /** PNG of a layer on any canvas, fitted in `size` pixels (empty: none). */
+  nodeThumbnail: (id: string, size: number) => Uint8Array;
   free: () => void;
 }
 

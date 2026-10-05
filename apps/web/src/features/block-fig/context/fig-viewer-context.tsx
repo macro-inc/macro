@@ -8,6 +8,7 @@ import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 import type { LocalFont } from '../core/fonts';
 import type { FigPeer, FigPresence, Version } from '../core/presence';
 import type { FigCommentStore } from './fig-comments';
+import type { FigLibrarySource } from './fig-libraries';
 
 /** Presence of the other people in a shared design. */
 export interface FigCollaboration {
@@ -88,6 +89,8 @@ export interface FigViewerContext {
   presentAt?: string;
   /** Fonts for laying out edited text (Inter alone without it). */
   fonts?: FigFontSource;
+  /** Other designs to use as team libraries; absent where there are none. */
+  libraries?: FigLibrarySource;
 }
 
 const Context = createContext<FigViewerContext>();
