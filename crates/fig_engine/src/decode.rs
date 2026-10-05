@@ -1050,10 +1050,5 @@ pub fn is_removed(m: &MsgRef) -> bool {
 
 /// A list value's message elements (helper for the top-level message).
 pub fn list_msgs<'a>(v: ValRef<'a>) -> impl Iterator<Item = MsgRef<'a>> + 'a {
-    let schema = v.schema;
-    match v.value {
-        crate::kiwi::Value::List(items) => items.iter(),
-        _ => [].iter(),
-    }
-    .filter_map(move |value| crate::kiwi::ValRef { schema, value }.as_msg())
+    v.as_list().filter_map(|v| v.as_msg())
 }

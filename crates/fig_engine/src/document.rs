@@ -5,7 +5,7 @@ use crate::container::{Container, Encoded};
 use crate::decode;
 use crate::error::{FigError, Result, corrupt};
 use crate::geometry::{self, ParsedPath};
-use crate::kiwi::{Decoder, Kind, MsgRef, Reader, Schema};
+use crate::kiwi::{Decoder, Flat, Kind, MsgRef, Reader, Schema};
 use crate::model::{Guid, NodeType, Props};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -421,6 +421,7 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<M
     let mut r = Reader::new(data);
     let mut ranges = Vec::new();
     let mut images = Vec::new();
+    let mut flat = Flat::new(data);
     let def = schema.def(root);
     loop {
         let id = r.var_uint()?;
@@ -435,8 +436,9 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<M
                 let count = r.var_uint()? as usize;
                 table.reserve(count.min(1 << 20));
                 for _ in 0..count {
-                    let msg = decoder.decode(&mut r, node_def)?;
-                    let m = MsgRef::new(schema, &msg);
+                    flat.clear();
+                    let slot = flat.decode(schema, &mut r, node_def)?;
+                    let m = MsgRef::flat(schema, &flat, slot);
                     if !decode::is_removed(&m) {
                         decode::embedded_images(&m, &mut images);
                         table.add(decode::props(m));
