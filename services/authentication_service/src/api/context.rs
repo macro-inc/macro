@@ -179,6 +179,8 @@ pub(crate) struct ApiContext {
     pub stripe_prices: crate::api::user::stripe::StripePrices,
     /// AI allowances, credits, and overage
     pub ai_billing_service: Arc<AiBillingServiceType>,
+    /// Stripe subscription reads for the internal AI billing period route
+    pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,
     /// Whether Gmail link consent requests the Google Calendar scope.
     pub calendar_scope_enabled: bool,
 }

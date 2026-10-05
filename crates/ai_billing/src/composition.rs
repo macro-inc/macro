@@ -3,8 +3,9 @@
 use crate::{
     AiAdmissionService, AiUsageEnforcement, BillingAdmissionService,
     domain::BillingServiceImpl,
-    outbound::{NoOpPaymentGateway, PgBillingRepo, PgUsageReader, RolesTeamsEntitlementSource},
+    outbound::{HttpPaymentGateway, PgBillingRepo, PgUsageReader, RolesTeamsEntitlementSource},
 };
+use authentication_service_client::AuthServiceClient;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -14,11 +15,13 @@ use teams::domain::team_repo::TeamRepository;
 mod test;
 
 /// Compose quota admission for hosts without an existing billing service.
-/// Adapter construction stays in this owning-domain composition root.
+/// Adapter construction stays in this owning-domain composition root. `auth`
+/// reads subscription periods, as described on [`admission_service`].
 #[cfg(feature = "pg-admission")]
 pub fn pg_admission_service(
     pool: PgPool,
     enforcement: AiUsageEnforcement,
+    auth: Arc<AuthServiceClient>,
 ) -> Arc<dyn AiAdmissionService> {
     admission_service(
         pool.clone(),
@@ -28,6 +31,7 @@ pub fn pg_admission_service(
         ),
         teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
         enforcement,
+        auth,
     )
 }
 
@@ -35,13 +39,16 @@ pub fn pg_admission_service(
 /// database pool. Both admission and billing receive the same explicit policy.
 /// This service never settles usage, requests collection, or installs financial
 /// funding: its settlement policy stays disabled regardless of the host's
-/// `ENABLE_AI_USAGE_BILLING`. Hosts already owning a billing instance can wrap
-/// it with [`BillingAdmissionService`].
+/// `ENABLE_AI_USAGE_BILLING`. It does read a payer's subscription period through
+/// the authentication service when the stored period is missing or ended.
+/// Hosts already owning a billing instance can wrap it with
+/// [`BillingAdmissionService`].
 pub fn admission_service<P, T>(
     pool: PgPool,
     permissions: P,
     teams: T,
     enforcement: AiUsageEnforcement,
+    auth: Arc<AuthServiceClient>,
 ) -> Arc<dyn AiAdmissionService>
 where
     P: UserRolesAndPermissionsService,
@@ -51,7 +58,7 @@ where
         RolesTeamsEntitlementSource::new(permissions, teams),
         PgUsageReader::new(pool.clone()),
         PgBillingRepo::new(pool),
-        NoOpPaymentGateway,
+        HttpPaymentGateway::new(auth),
     )
     .with_enforcement(enforcement);
     Arc::new(BillingAdmissionService::new(Arc::new(billing), enforcement))

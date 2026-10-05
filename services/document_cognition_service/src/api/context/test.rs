@@ -166,7 +166,15 @@ impl StreamRepo for MockStreamRepo {
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     let config = Config::new_empty_for_test();
     let enforcement = config.enable_ai_usage_enforcement;
-    let admission = ai_billing::composition::pg_admission_service(pool.clone(), enforcement);
+    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
+        "testing".to_string(),
+        "http://127.0.0.1:9".to_string(),
+    ));
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        enforcement,
+        auth_service_client.clone(),
+    );
     let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
     use aws_sdk_sqs;
     use channels::{
@@ -640,7 +648,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 ),
                 ai_billing::outbound::PgUsageReader::new(pool.clone()),
                 ai_billing::outbound::PgBillingRepo::new(pool.clone()),
-                ai_billing::outbound::NoOpPaymentGateway,
+                ai_billing::outbound::HttpPaymentGateway::new(auth_service_client),
             )
             .with_enforcement(enforcement),
         ),

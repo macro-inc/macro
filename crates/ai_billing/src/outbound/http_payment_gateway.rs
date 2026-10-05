@@ -1,0 +1,75 @@
+//! Reads the subscription period through the authentication service, which
+//! owns Stripe.
+
+#[cfg(test)]
+mod test;
+
+use super::NoOpPaymentGateway;
+use crate::domain::{
+    BillingError, BillingPeriod, CreditCheckoutRequest, OverageChargeRequest, PaymentGateway,
+    Result, SubscriptionScope,
+};
+use authentication_service_client::AuthServiceClient;
+use macro_uuid::Uuid;
+use std::sync::Arc;
+
+/// [`PaymentGateway`] for hosts that gate AI requests but do not own Stripe.
+/// Reads the subscription period through the authentication service and
+/// refuses to pay like [`NoOpPaymentGateway`].
+#[derive(Clone)]
+pub struct HttpPaymentGateway {
+    client: Arc<AuthServiceClient>,
+}
+
+impl HttpPaymentGateway {
+    /// Wrap an internal auth-service client.
+    pub fn new(client: Arc<AuthServiceClient>) -> Self {
+        Self { client }
+    }
+}
+
+impl PaymentGateway for HttpPaymentGateway {
+    async fn create_credit_checkout(&self, request: CreditCheckoutRequest) -> Result<String> {
+        NoOpPaymentGateway.create_credit_checkout(request).await
+    }
+
+    async fn open_overage_invoice(&self, request: OverageChargeRequest) -> Result<String> {
+        NoOpPaymentGateway.open_overage_invoice(request).await
+    }
+
+    async fn pay_overage_invoice(
+        &self,
+        charge_id: Uuid,
+        invoice_id: &str,
+        scope: SubscriptionScope,
+    ) -> Result<bool> {
+        NoOpPaymentGateway
+            .pay_overage_invoice(charge_id, invoice_id, scope)
+            .await
+    }
+
+    async fn subscription_period(
+        &self,
+        customer_id: &str,
+        scope: SubscriptionScope,
+    ) -> Result<Option<BillingPeriod>> {
+        let team_id = match scope {
+            SubscriptionScope::Personal => None,
+            SubscriptionScope::Team { team_id } => Some(team_id),
+        };
+        let period = self
+            .client
+            .ai_subscription_period(customer_id, team_id)
+            .await
+            .map_err(|e| {
+                BillingError::Payment(
+                    anyhow::Error::new(e)
+                        .context("reading the subscription period from the authentication service"),
+                )
+            })?;
+        Ok(period.map(|period| BillingPeriod {
+            start: period.start,
+            end: period.end,
+        }))
+    }
+}

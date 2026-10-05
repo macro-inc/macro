@@ -1,5 +1,10 @@
-use super::{ReturnUrlError, get_plans_handler, validate_return_url};
-use crate::domain::PlanTier;
+use super::{
+    ReturnUrlError, SubscriptionPeriodQuery, get_plans_handler, scope_from_query,
+    validate_return_url,
+};
+use crate::domain::{PlanTier, SubscriptionScope};
+use axum::extract::Query;
+use macro_uuid::Uuid;
 
 #[test]
 fn return_urls_must_be_https_on_the_calling_origin() {
@@ -58,4 +63,33 @@ async fn plan_catalog_contains_only_free_and_purchasable_paid_plans() {
         .collect::<Vec<_>>();
 
     assert_eq!(tiers, vec![PlanTier::Free, PlanTier::Premium]);
+}
+
+#[test]
+fn subscription_period_query_selects_the_scope() {
+    let Query(team) = Query::<SubscriptionPeriodQuery>::try_from_uri(
+        &"/internal/ai-billing/subscription-period?customerId=cus_123&teamId=00000000-0000-0000-0000-000000000007"
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(team.customer_id, "cus_123");
+    assert_eq!(
+        scope_from_query(team.team_id),
+        SubscriptionScope::Team {
+            team_id: Uuid::from_u128(7)
+        }
+    );
+
+    let Query(personal) = Query::<SubscriptionPeriodQuery>::try_from_uri(
+        &"/internal/ai-billing/subscription-period?customerId=cus_123"
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(personal.customer_id, "cus_123");
+    assert_eq!(
+        scope_from_query(personal.team_id),
+        SubscriptionScope::Personal
+    );
 }

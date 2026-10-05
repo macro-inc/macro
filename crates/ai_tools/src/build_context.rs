@@ -43,8 +43,8 @@ use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
-    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, AuthServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -117,8 +117,9 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`,
-/// `INTERNAL_API_KEY` (presented to the lexical service and to the
-/// connection gateway for realtime channel side effects), `KAFKA_BROKERS`.
+/// `INTERNAL_API_KEY` (presented to the lexical service, to the connection
+/// gateway for realtime channel side effects, and to the authentication service
+/// for AI subscription-period reads), `KAFKA_BROKERS`.
 ///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
@@ -152,6 +153,7 @@ pub async fn build_tool_service_context_from_env(
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
     let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
     let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
+    let auth_service_url = AuthServiceUrl::new()?.to_string();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
@@ -522,7 +524,14 @@ pub async fn build_tool_service_context_from_env(
         skill_tool_context,
         schedule_tool_context: crate::build_routine_tool_context()?,
         anthropic_tool_context,
-        admission: ai_billing::composition::pg_admission_service(pool.clone(), enforcement),
+        admission: ai_billing::composition::pg_admission_service(
+            pool.clone(),
+            enforcement,
+            Arc::new(authentication_service_client::AuthServiceClient::new(
+                env.internal_api_key.to_string(),
+                auth_service_url,
+            )),
+        ),
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })

@@ -36,7 +36,8 @@ use macro_event_broker::{
     MacroEventConsumerService,
 };
 use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentStorageServiceUrl, LexicalServiceUrl, StaticFileServiceUrl,
+    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, LexicalServiceUrl,
+    StaticFileServiceUrl,
 };
 use messages::domain::api::MessageCommands;
 use messages::outbound::pg_message_repo::PgMessageRepository;
@@ -141,6 +142,10 @@ async fn run() -> anyhow::Result<()> {
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
         config.enable_ai_usage_enforcement,
+        Arc::new(authentication_service_client::AuthServiceClient::new(
+            config.internal_api_key.clone(),
+            AuthServiceUrl::new()?.to_string(),
+        )),
     );
     let task_context = ProjectTaskAssignmentContext::new(
         DssTaskAssignmentContext::new(

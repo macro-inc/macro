@@ -36,8 +36,8 @@ use github_pull_requests::{
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
-    AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
-    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, AuthServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
@@ -479,6 +479,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         admission: ai_billing::composition::pg_admission_service(
             db.clone(),
             config.enable_ai_usage_enforcement,
+            Arc::new(authentication_service_client::AuthServiceClient::new(
+                config.internal_api_key.to_string(),
+                AuthServiceUrl::new()?.to_string(),
+            )),
         ),
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),

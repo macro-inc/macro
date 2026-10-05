@@ -404,6 +404,7 @@ dependencies = [
  "ai_toolset",
  "ai_usage",
  "anyhow",
+ "authentication_service_client",
  "aws-sdk-kms",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -703,6 +704,7 @@ dependencies = [
  "ai_billing",
  "ai_usage",
  "anyhow",
+ "authentication_service_client",
  "bots",
  "channels",
  "connection_gateway_client",
@@ -864,6 +866,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "attachment",
+ "authentication_service_client",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -1959,11 +1962,13 @@ name = "authentication_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "model",
  "reqwest 0.13.4",
  "serde",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -11685,6 +11690,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "attachment",
+ "authentication_service_client",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -16225,6 +16231,7 @@ dependencies = [
  "ai_billing",
  "ai_usage",
  "anyhow",
+ "authentication_service_client",
  "aws-sdk-secretsmanager",
  "axum",
  "bot_id",
