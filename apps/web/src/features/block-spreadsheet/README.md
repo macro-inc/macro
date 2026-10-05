@@ -405,9 +405,10 @@ Import keeps what Excel calculates and shows:
   import worker, and the PNG becomes the drawing's `preview`. Without a canvas
   the drawing shows its name in a placeholder.
 - Pivot tables. `core/xlsx-pivots.ts` keeps each pivot table's definition and its
-  cache definition without records, marked to refresh on load, in
-  `metadata.pivotTables`; Macro shows the values Excel last saved, and Excel or
-  LibreOffice rebuilds the table from its source cells when the download opens.
+  cache definition in `metadata.pivotTables`, and Macro shows the values Excel
+  last saved. A table over this workbook's cells keeps no records and is marked
+  to refresh on load: Excel or LibreOffice rebuilds it from its source cells
+  when the download opens.
   A table source becomes its range, and custom number formats and area formats
   (number formats, fonts and fills) are rewritten for the exported styles; a
   custom pivot style falls back to Excel's default.
@@ -425,7 +426,10 @@ Import keeps what Excel calculates and shows:
   consolidated ranges keep only their values, and pivot charts linked to them
   become ordinary charts; other pivot charts keep the series names their pivot
   table gives.
-  GETPIVOTDATA calculates: `packages/spreadsheet/src/pivot-layout.ts` reads a
+  Renaming a sheet updates the charts that read it. Deleting it keeps the
+  values those charts showed as fixed values (`{1,2,3}` references, exported
+  as `numLit`/`strLit`), as Excel keeps a chart's last values.
+- GETPIVOTDATA calculates: `packages/spreadsheet/src/pivot-layout.ts` reads a
   kept table's row and column items (`rowItems`, `colItems`), its fields and
   cache items, and tells the engine which cell shows each value
   (`setPivotTables`); GETPIVOTDATA matches its data field and items to a row and
@@ -434,10 +438,7 @@ Import keeps what Excel calculates and shows:
   pivot table Macro could not keep, or whose argument is not a plain reference,
   keeps its last value. A table whose cells were reshaped by inserting or
   deleting rows inside it gives #REF!, as its layout no longer holds; Excel
-  rebuilds it on open. Renaming a sheet updates the charts
-  that read it. Deleting it keeps the values those charts showed as fixed
-  values (`{1,2,3}` references, exported as `numLit`/`strLit`), as Excel keeps
-  a chart's last values.
+  rebuilds it on open.
 
 Confirming an import writes its cells in commits of 5,000 under sheet ids no
 reader knows yet, outside undo history, and yields to the page between commits
