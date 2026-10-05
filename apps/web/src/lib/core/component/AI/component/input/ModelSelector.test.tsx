@@ -14,11 +14,16 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ModelOption, ModelSelector } from './ModelSelector';
 
-const state = vi.hoisted(() => ({ dev: false, mobile: false }));
+const state = vi.hoisted(() => ({ aiUsageBilling: false, mobile: false }));
 vi.mock('@core/constant/featureFlags', () => ({
-  get DEV_MODE_ENV() {
-    return state.dev;
-  },
+  enableAiUsageBilling: { key: 'enable-ai-usage-billing', override: undefined },
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: state.aiUsageBilling,
+    payload: undefined,
+    loading: false,
+  }),
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => state.mobile }));
 vi.mock('@components/app/mobile/MobileDrawer', () => {
@@ -41,7 +46,7 @@ vi.mock('@components/app/mobile/MobileDrawer', () => {
 });
 
 beforeEach(() => {
-  state.dev = false;
+  state.aiUsageBilling = false;
   state.mobile = false;
 });
 afterEach(cleanup);
@@ -128,19 +133,19 @@ describe('ModelSelector: availability', () => {
   });
 
   it.each([
-    { dev: false, mobile: false },
-    { dev: true, mobile: false },
-    { dev: false, mobile: true },
-    { dev: true, mobile: true },
+    { aiUsageBilling: false, mobile: false },
+    { aiUsageBilling: true, mobile: false },
+    { aiUsageBilling: false, mobile: true },
+    { aiUsageBilling: true, mobile: true },
   ])(
-    'gates usage multipliers on dev ($dev), mobile=$mobile',
-    ({ dev, mobile }) => {
-      state.dev = dev;
+    'gates usage multipliers on enable-ai-usage-billing ($aiUsageBilling), mobile=$mobile',
+    ({ aiUsageBilling, mobile }) => {
+      state.aiUsageBilling = aiUsageBilling;
       state.mobile = mobile;
       const { container } = render(() => (
         <ModelSelector models={ALL_PAID} onSelect={() => {}} />
       ));
-      expect(container.textContent?.includes('× usage')).toBe(dev);
+      expect(container.textContent?.includes('× usage')).toBe(aiUsageBilling);
     }
   );
 

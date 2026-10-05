@@ -2,6 +2,8 @@ use super::*;
 use crate::testing::{V, fig_file, node, simple_file, size, solid, translate};
 
 mod fidelity;
+mod groups;
+mod stroke_order;
 
 fn rgba(p: &Pixmap, x: u32, y: u32) -> [u8; 4] {
     let c = p.pixel(x, y).unwrap().demultiply();
@@ -149,6 +151,32 @@ fn exports_one_node_on_transparency() {
     .unwrap();
     assert_eq!((p.width(), p.height()), (200, 100));
     assert_eq!(rgba(&p, 100, 50), [255, 0, 0, 255]);
+}
+
+#[test]
+fn exports_children_with_their_shadows() {
+    // Showcase: "Home" holds a white "Card" (24, 260, 312 × 120) with a drop
+    // shadow (y 4, blur 12) on the frame's white.
+    let bytes = crate::testing::showcase_file();
+    let doc = Document::open(&bytes).unwrap();
+    let scene = Scene::build(&doc, doc.pages[0]);
+    let home = (0..scene.nodes.len() as SceneIdx)
+        .find(|&i| scene.props(&doc, i).name() == "Home")
+        .unwrap();
+    for scale in [1.0, 2.0] {
+        let p = render_node(
+            &doc,
+            &scene,
+            &mut ImageStore::default(),
+            home,
+            scale,
+            RenderOptions::default(),
+        )
+        .unwrap();
+        let at = |v: f64| (v * scale) as u32;
+        let [r, ..] = rgba(&p, at(180.0), at(384.0));
+        assert!(r < 250, "the shadow shows below the card at {scale}× ({r})");
+    }
 }
 
 #[test]

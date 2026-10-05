@@ -622,7 +622,7 @@ export function EventComposerRecurrencePill(
 
 export interface EventComposerCalendarPillProps {
   options: EventEditorCalendarOption[];
-  value: EventEditorCalendarOption;
+  value: EventEditorCalendarOption | undefined;
   onChange: (calendarId: string) => void;
   disabled?: boolean;
   readOnly?: boolean;
@@ -634,6 +634,7 @@ export function EventComposerCalendarPill(
 ) {
   return (
     <Select<EventEditorCalendarOption>
+      placeholder="Choose calendar"
       options={props.options}
       value={props.value}
       onChange={(option) => {

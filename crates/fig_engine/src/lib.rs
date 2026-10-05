@@ -24,6 +24,7 @@ pub mod svg;
 #[cfg(test)]
 pub(crate) mod testing;
 pub mod text;
+mod variables;
 pub mod vector;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

@@ -3,10 +3,15 @@ import { describe, expect, it } from 'vitest';
 import {
   baseBlobs,
   changedKeys,
+  designBase,
   designFormat,
   type EntryKey,
+  entriesApplyTo,
+  fileFingerprint,
   readEntries,
   readValues,
+  recordStoredFile,
+  restartOnFile,
   seedDesign,
   writeEntryChanges,
 } from './collab-entries';
@@ -84,5 +89,57 @@ describe('collab entries', () => {
     sync(bob, alice);
     const value = (doc: LoroDoc) => doc.getMap('figNodes').get('1:2');
     expect(value(alice)).toBe(value(bob));
+  });
+});
+
+describe('stored files', () => {
+  it('applies entries to the file they began on and files stored from it', () => {
+    const doc = new LoroDoc();
+    seedDesign(doc);
+    // Shared before files were recorded: the first file opened begins it.
+    expect(entriesApplyTo(doc, 'first')).toBe(true);
+    expect(recordStoredFile(doc, 'first')).toBe(true);
+    expect(designBase(doc)).toBe('first');
+    expect(recordStoredFile(doc, 'first')).toBe(false);
+    // Someone stores the merged file; it is listed before it is stored.
+    recordStoredFile(doc, 'saved');
+    expect(entriesApplyTo(doc, 'first')).toBe(true);
+    expect(entriesApplyTo(doc, 'saved')).toBe(true);
+    // A file stored outside the design is not.
+    expect(entriesApplyTo(doc, 'uploaded')).toBe(false);
+  });
+
+  it('starts over on a replaced file, dropping the entries', () => {
+    const alice = new LoroDoc();
+    seedDesign(alice);
+    recordStoredFile(alice, 'first');
+    writeEntryChanges(alice, [
+      { container: 'figNodes', key: '1:2', value: 'AQID' },
+      { container: 'figBlobs', key: 'abc', value: 'BAUG' },
+      { container: 'figMeta', key: 'baseBlobs', value: '3' },
+    ]);
+    const bob = new LoroDoc();
+    sync(alice, bob);
+    restartOnFile(bob, 'uploaded');
+    sync(bob, alice);
+    for (const doc of [alice, bob]) {
+      expect(readEntries(doc)).toEqual(
+        expect.not.arrayContaining([
+          expect.objectContaining({ container: 'figNodes' }),
+        ])
+      );
+      expect(designFormat(doc)).toBe(1);
+      expect(designBase(doc)).toBe('uploaded');
+      expect(baseBlobs(doc)).toBeNull();
+      expect(entriesApplyTo(doc, 'uploaded')).toBe(true);
+      expect(entriesApplyTo(doc, 'first')).toBe(false);
+    }
+  });
+
+  it('fingerprints file bytes', async () => {
+    const a = await fileFingerprint(new Uint8Array([1, 2, 3]));
+    expect(a).toMatch(/^[0-9a-f]{32}$/);
+    expect(await fileFingerprint(new Uint8Array([1, 2, 3]))).toBe(a);
+    expect(await fileFingerprint(new Uint8Array([1, 2, 4]))).not.toBe(a);
   });
 });

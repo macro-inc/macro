@@ -161,7 +161,7 @@ test('zooms with Figma’s shortcuts', async ({ page }) => {
   await page.getByTestId('fig-canvas').focus();
   await page.keyboard.press('Shift+0');
   await expect(zoom).toHaveText(/100%/);
-  await page.keyboard.press('Control+=');
+  await page.keyboard.press('ControlOrMeta+=');
   await expect(zoom).toHaveText(/200%/);
   await page.keyboard.press('Shift+1');
   await expect(zoom).not.toHaveText(/200%/);
@@ -234,6 +234,44 @@ test('draws, moves, and saves shapes', async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => window.figFixture.errors()))
     .toEqual([]);
+});
+
+test('undo and redo bring back the selection', async ({ page }) => {
+  await openNew(page);
+  const canvas = page.getByTestId('fig-canvas');
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [100, 100], [140, 140]);
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
+  const rows = page.getByTestId('fig-layer-row');
+  // Top-most first: the copy is the first row.
+  const selectedRows = () =>
+    rows.evaluateAll((all) =>
+      all.flatMap((r, i) =>
+        r.getAttribute('aria-selected') === 'true' ? [i] : []
+      )
+    );
+  await canvas.focus();
+  await page.keyboard.press('Control+d');
+  await expect(rows).toHaveCount(2);
+  await expect.poll(selectedRows).toEqual([0]);
+  // As in Figma, undoing the duplicate selects the original again …
+  await page.keyboard.press('Control+z');
+  await expect(rows).toHaveCount(1);
+  await expect.poll(selectedRows).toEqual([0]);
+  // … and redoing it, the copy.
+  await page.keyboard.press('Control+Shift+z');
+  await expect(rows).toHaveCount(2);
+  await expect.poll(selectedRows).toEqual([0]);
+  // Undoing a nudge of a layer no longer selected selects it.
+  await page.keyboard.press('Escape');
+  await rows.nth(1).click();
+  await canvas.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Escape');
+  await expect.poll(selectedRows).toEqual([]);
+  await page.keyboard.press('Control+z');
+  await expect.poll(selectedRows).toEqual([1]);
 });
 
 test('lays out with auto layout', async ({ page }) => {
@@ -397,6 +435,36 @@ test('resizes several layers and rotates one', async ({ page }) => {
   await expect(page.getByTestId('fig-field-rotation')).not.toHaveValue('0');
 });
 
+test('keeps a flip apart from rotation and position', async ({ page }) => {
+  await openNew(page);
+  const canvas = page.getByTestId('fig-canvas');
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [100, 100], [220, 180]);
+  await canvas.focus();
+  await page.keyboard.press('Shift+h');
+  // As in Figma, a horizontal flip keeps the angle and the top left corner.
+  await expect(page.getByTestId('fig-field-rotation')).toHaveValue('0');
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('100');
+  const rotation = page.getByTestId('fig-field-rotation');
+  await rotation.fill('90');
+  await rotation.press('Enter');
+  await rotation.fill('0');
+  await rotation.press('Enter');
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('100');
+  // Unflipped again, a vertical flip reads as a half turn; its corners
+  // still resize it.
+  await canvas.focus();
+  await page.keyboard.press('Shift+h');
+  await page.keyboard.press('Shift+v');
+  await expect(page.getByTestId('fig-field-rotation')).toHaveValue(/^-?180$/);
+  await dragOnCanvas(page, [220, 180], [260, 200]);
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('160');
+  await expect(page.getByTestId('fig-field-h')).toHaveValue('100');
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('260');
+  await expect(page.getByTestId('fig-field-y')).toHaveValue('200');
+});
+
 test('draws lines and arrows', async ({ page }) => {
   await openNew(page);
   const canvas = page.getByTestId('fig-canvas');
@@ -500,4 +568,11 @@ test('is read-only without edit access', async ({ page }) => {
     'Settings',
     'Home',
   ]);
+  // With nothing to nudge, arrow keys move through the layer tree.
+  await page
+    .getByTestId('fig-layer-row')
+    .filter({ hasText: 'Settings' })
+    .click();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('fig-design-panel')).toContainText('Home');
 });

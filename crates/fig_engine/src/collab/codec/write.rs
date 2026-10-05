@@ -203,6 +203,15 @@ impl<'a> Writer<'a> {
                 }
                 self.opt(original_size, |w, s| w.vec2(s));
             }
+            PaintKind::Pattern(pattern) => {
+                self.u8(4);
+                self.guid(&pattern.source);
+                self.str(pattern.layout.name());
+                self.f32(pattern.scale);
+                self.vec2(&pattern.spacing);
+                self.str(pattern.horizontal.name());
+                self.str(pattern.vertical.name());
+            }
             PaintKind::Unsupported(name) => {
                 self.u8(3);
                 self.str(name);
@@ -625,6 +634,7 @@ impl<'a> Writer<'a> {
             corner_radius,
             corner_radii,
             corner_smoothing,
+            arc_data,
             clip_disabled,
             background_color,
             internal_only,
@@ -872,6 +882,11 @@ impl<'a> Writer<'a> {
             });
         });
         self.bool(*recomputed);
+        self.opt(arc_data, |w, values| {
+            for value in values {
+                w.f32(*value);
+            }
+        });
     }
 
     /// The finished entry: version, the shared blob keys it uses, and the

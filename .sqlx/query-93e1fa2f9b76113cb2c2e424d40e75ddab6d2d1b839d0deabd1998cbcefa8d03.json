@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_properties(id, entity_id, entity_type, property_definition_id, values)\n        VALUES ($1, 'message-doc-a', 'DOCUMENT', $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93e1fa2f9b76113cb2c2e424d40e75ddab6d2d1b839d0deabd1998cbcefa8d03"
+}

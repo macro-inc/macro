@@ -422,6 +422,13 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
     ],
   },
   {
+    title: 'Review',
+    items: [
+      { action: 'Comment', keys: ['C'] },
+      { action: 'Present', keys: ['mod', '⌥', '↵'] },
+    ],
+  },
+  {
     title: 'Export',
     items: [
       { action: 'Copy as PNG', keys: ['mod', '⇧', 'C'] },

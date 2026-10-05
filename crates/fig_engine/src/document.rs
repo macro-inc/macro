@@ -131,6 +131,13 @@ impl Document {
     pub fn open_lazy(bytes: &Arc<Vec<u8>>) -> Result<Document> {
         let container = Container::open_shared(bytes)?;
         let mut doc = Self::decode_container(container, true)?;
+        // The page picker needs every page's name and canvas color even
+        // before its layers are decoded. These seeds do not expand children.
+        doc.decode_closure(
+            std::iter::once(doc.root)
+                .chain(doc.pages.iter().copied())
+                .collect(),
+        )?;
         if let Some(&first) = doc.pages.first() {
             doc.decode_page(first)?;
         }
@@ -148,12 +155,19 @@ impl Document {
         } else {
             None
         };
+        let assets = decode::assets::AssetIds::read(&container.schema, &container.message)?;
         let mut table = NodeTable::default();
         let MessageParts {
             blobs: ranges,
             images: embedded,
             node_def,
-        } = read_message(&schema, skeleton.as_ref(), &container.message, &mut table)?;
+        } = read_message(
+            &schema,
+            skeleton.as_ref(),
+            &container.message,
+            &mut table,
+            &assets,
+        )?;
         let NodeTable {
             mut nodes,
             by_guid,
@@ -261,6 +275,7 @@ impl Document {
                     remaining,
                     cursor: 0,
                     shared: FlatShared::default(),
+                    assets,
                 }))
             }
             _ => {
@@ -379,6 +394,7 @@ impl Document {
             expanded,
             remaining,
             shared,
+            assets,
             ..
         } = pending;
         let mut flat = Flat::with_shared(message, std::mem::take(shared));
@@ -414,7 +430,7 @@ impl Document {
                 };
                 let m = MsgRef::flat(schema, &flat, slot);
                 decode::embedded_images(&m, &mut embedded);
-                let p = decode::props(m);
+                let p = decode::props_with_assets(m, assets);
                 match &mut props {
                     Some(first) => first.merge(&p),
                     None => props = Some(p),
@@ -631,6 +647,7 @@ struct Pending {
     cursor: usize,
     /// What decoded node changes share ([`MsgRef::shared`]).
     shared: FlatShared,
+    assets: decode::assets::AssetIds,
 }
 
 /// The nodes `p` draws from besides its subtree: the components its
@@ -638,6 +655,60 @@ struct Pending {
 /// `seen` skips lists shared by many nodes after the first.
 fn references(p: &Props, out: &mut Vec<Guid>, seen: &mut HashSet<usize>) {
     out.extend(p.swapped_symbol);
+    for paint in p
+        .fills()
+        .iter()
+        .chain(p.strokes())
+        .chain(
+            p.text_content
+                .iter()
+                .flat_map(|t| t.styles.iter())
+                .flat_map(|s| s.fills.iter().flat_map(|p| p.iter())),
+        )
+        .chain(
+            p.vector_styles
+                .iter()
+                .flat_map(|s| s.iter())
+                .flat_map(|s| s.fills.iter().flat_map(|p| p.iter())),
+        )
+    {
+        if let crate::model::PaintKind::Pattern(pattern) = &paint.kind {
+            out.push(pattern.source);
+        }
+    }
+    out.extend(
+        p.fills()
+            .iter()
+            .chain(p.strokes())
+            .filter_map(|p| p.color_var),
+    );
+    for style in p
+        .text_content
+        .iter()
+        .flat_map(|t| t.styles.iter())
+        .chain(p.vector_styles.iter().flat_map(|s| s.iter()))
+    {
+        out.extend(
+            style
+                .fills
+                .iter()
+                .flat_map(|f| f.iter())
+                .filter_map(|p| p.color_var),
+        );
+    }
+    if let Some(variable) = &p.variable {
+        out.extend(variable.set);
+        out.extend(variable.values.iter().filter_map(|(_, value)| match value {
+            crate::model::VariableValue::Alias(id) => Some(*id),
+            _ => None,
+        }));
+    }
+    out.extend(
+        p.mode_by_set
+            .iter()
+            .flat_map(|m| m.iter())
+            .map(|(set, _)| *set),
+    );
     out.extend(
         [
             p.fill_style,
@@ -747,6 +818,7 @@ fn read_message(
     skeleton: Option<&Schema>,
     data: &[u8],
     table: &mut NodeTable,
+    assets: &decode::assets::AssetIds,
 ) -> Result<MessageParts> {
     let root = schema
         .def_index("Message")
@@ -786,7 +858,7 @@ fn read_message(
                         table.add(decode::skeleton(m), Some(start));
                     } else {
                         decode::embedded_images(&m, &mut images);
-                        table.add(decode::props(m), None);
+                        table.add(decode::props_with_assets(m, assets), None);
                     }
                 }
             }

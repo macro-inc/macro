@@ -271,6 +271,9 @@ impl Txn<'_> {
                 match self.group(&same, true)? {
                     Some(g) => {
                         self.edit(g, flags::NAME).name = Some("Frame".into());
+                        // As in Figma, the new frame does not clip what it
+                        // wraps (shadows and overhangs stay visible).
+                        self.edit(g, flags::CLIP).clip_disabled = Some(true);
                         g
                     }
                     None => return Ok(None),

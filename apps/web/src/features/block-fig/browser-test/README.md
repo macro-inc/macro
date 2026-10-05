@@ -96,11 +96,14 @@ App's copy, keeping the instance.
 (`&people=alice,bob` by default), each with the real shared-design session
 (Loro document, WAL, awareness), engine, and viewer, connected through an
 in-page sync server (`memory-sync.ts`, the `LiveSyncSource` contract the sync
-service's transport implements); `window.figFixture.collab.people()` exposes
-each person's engine, saves, status, and peers.
-`collaboration.browser.e2e.ts` covers edits and undo reaching the other
-person, remote pointers, selections and avatars, one person storing the
-merged file, and following someone's view.
+service's transport implements), which also holds the stored file;
+`window.figFixture.collab.people()` exposes each person's engine, saves,
+status, and peers, and `storeOutside()`, `reopen(name)`, and
+`setReachable(bool)` replace the stored file, reopen a person, and take the
+server down. `collaboration.browser.e2e.ts` covers edits and undo reaching
+the other person, remote pointers, selections and avatars, one person
+storing the merged file, following someone's view, a file stored outside
+the session, and an unreachable sync service.
 
 `FIG_CORPUS_DIR` (with a trailing slash) serves another directory of
 files; `--port` runs a second server beside the default one.

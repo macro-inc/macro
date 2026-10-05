@@ -329,9 +329,15 @@ export function LayersPanel(props: {
     );
   };
 
-  /** Arrow keys move through the rows shown, and expand or collapse. */
+  /**
+   * Read-only, arrow keys move through the rows shown, and expand or
+   * collapse. Editing, they nudge the selection, as in Figma, whose layers
+   * list leaves the arrows to the canvas (Tab, Enter, and ⇧Enter move
+   * through the layers there).
+   */
   const onTreeKey = (e: KeyboardEvent) => {
     if (
+      props.editor?.enabled() ||
       e.metaKey ||
       e.ctrlKey ||
       e.altKey ||
@@ -502,7 +508,7 @@ export function LayersPanel(props: {
       </Show>
       <div
         ref={tree}
-        // Takes the keys after a row is clicked (arrows move in the tree).
+        // Takes the keys after a row is clicked (see `onTreeKey`).
         tabIndex={-1}
         aria-label="Layers"
         data-testid="fig-layer-tree"

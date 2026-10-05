@@ -261,6 +261,24 @@ fn wraps_layers_in_a_hugging_stack() {
     assert_eq!(doc.node(frame).children.len(), 2);
     // 40 + 40 gap + 60 wide, as tall as the taller one.
     assert_eq!(doc.props(frame).size(), Vec2::new(140.0, 30.0));
+    // As in Figma, the wrapping frame does not clip (shadows show).
+    assert!(!doc.props(frame).clips_content());
+}
+
+#[test]
+fn a_frame_around_a_selection_does_not_clip_it() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (_, kids) = row(&mut doc, &mut h);
+    let created = apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"group","ids":["{}","{}"],"frame":true}}]"#,
+            kids[0], kids[1]
+        ),
+    );
+    assert!(!doc.props(idx(&doc, &created[0])).clips_content());
 }
 
 #[test]

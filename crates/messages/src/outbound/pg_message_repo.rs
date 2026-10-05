@@ -415,7 +415,7 @@ impl PgMessageRepository {
             Some(NewThreadAnchor::PdfHighlight { anchor_id }) => {
                 let changed = sqlx::query!(
                     r#"UPDATE "PdfHighlightAnchor" SET root_id = $1
-                    WHERE uuid = $2 AND "documentId" = $3 AND root_id IS NULL AND "threadId" IS NULL
+                    WHERE uuid = $2 AND "documentId" = $3 AND root_id IS NULL
                         AND "deletedAt" IS NULL"#,
                     root_id,
                     anchor_id,

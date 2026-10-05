@@ -17,6 +17,10 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
+import {
+  calendarConsentScopes,
+  reconnectScopes,
+} from '@core/email-link/consent';
 import GmailIcon from '@icon/mcp-gmail.svg';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
@@ -181,9 +185,17 @@ export function EmailCard() {
                 hasCompletedBackfill={hasCompletedBackfill(primary().id)}
                 resyncing={resyncingIds().has(primary().id)}
                 onResync={() => handleResyncInbox(primary().id)}
-                onReconnect={() => void startAddInbox()}
+                onReconnect={() =>
+                  void startAddInbox({
+                    scopes: reconnectScopes(primary()),
+                    emailAddress: primary().email_address,
+                  })
+                }
                 onEnableCalendar={() =>
-                  void startAddInbox({ scopes: 'calendar' })
+                  void startAddInbox({
+                    scopes: calendarConsentScopes(primary()),
+                    emailAddress: primary().email_address,
+                  })
                 }
                 onRemove={() =>
                   setRemoveTarget({
@@ -216,9 +228,17 @@ export function EmailCard() {
                 hasCompletedBackfill={hasCompletedBackfill(link.id)}
                 resyncing={resyncingIds().has(link.id)}
                 onResync={() => handleResyncInbox(link.id)}
-                onReconnect={() => void startAddInbox()}
+                onReconnect={() =>
+                  void startAddInbox({
+                    scopes: reconnectScopes(link),
+                    emailAddress: link.email_address,
+                  })
+                }
                 onEnableCalendar={() =>
-                  void startAddInbox({ scopes: 'calendar' })
+                  void startAddInbox({
+                    scopes: calendarConsentScopes(link),
+                    emailAddress: link.email_address,
+                  })
                 }
                 onRemove={() =>
                   setRemoveTarget({
@@ -474,12 +494,7 @@ function InboxRow(props: {
           </Show>
         </div>
         <div class="flex flex-wrap items-center gap-2 shrink-0">
-          <Show
-            when={
-              ENABLE_INBOX_SYNC_STATUS &&
-              props.link.sync_status === SyncStatus.NEEDS_REAUTH
-            }
-          >
+          <Show when={props.link.needs_reauth}>
             <Button
               variant="accent"
               size="md"
@@ -490,10 +505,8 @@ function InboxRow(props: {
               Reconnect
             </Button>
           </Show>
-          {/* Its own consent flow, since Reconnect asks for the Gmail scopes
-              only. Shown alongside Reconnect rather than after it: this
-              request is a superset, so one consent repairs a dead grant and
-              enables calendar, sparing a full revoke two round trips. */}
+          {/* Explicitly enabling calendar also restores mailbox access when
+              the Google grant has expired. */}
           <Show
             when={calendarUiEnabled() && props.link.needs_calendar_permission}
           >

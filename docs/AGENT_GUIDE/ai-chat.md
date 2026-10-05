@@ -457,7 +457,8 @@ than treating it as approval or repeatedly sending the prompt.
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
 Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
-are hidden outside frontend development mode. Normal paid-model access rules
+are shown only when the `enable-ai-usage-billing` PostHog flag is on (default on
+in frontend development builds). Normal paid-model access rules
 still apply everywhere. Backend enforcement does not depend on those frontend
 controls, and enabling it does not enable credit collection; that needs
 `ENABLE_AI_USAGE_BILLING`. There is no new upgrade prompt in this rollout.

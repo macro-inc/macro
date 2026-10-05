@@ -11,8 +11,8 @@ async fn search_projection_preserves_author_and_sender(pool: sqlx::PgPool) -> an
     for author in [Some("unique-archive-bot"), None] {
         sqlx::query!(
             r#"
-            INSERT INTO comms_messages (id, channel_id, sender_id, content, imported_author)
-            VALUES ($1, $2, 'macro|user1@test.com', 'Historical content', $3)
+            INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, imported_author)
+            VALUES ($1, 'channel', $2::uuid::text, 'macro|user1@test.com', 'Historical content', $3)
             ON CONFLICT (id) DO UPDATE SET imported_author = EXCLUDED.imported_author
             "#,
             message_id,

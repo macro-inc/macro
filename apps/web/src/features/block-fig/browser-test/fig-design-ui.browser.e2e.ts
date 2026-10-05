@@ -129,14 +129,17 @@ test('right-click menus act on layers and the canvas', async ({ page }) => {
   await expect(page.getByTestId('fig-field-x')).toHaveValue('400');
   await expect(page.getByTestId('fig-field-y')).toHaveValue('300');
 
-  // Flip about the center: the origin moves to the right edge; undo.
+  // Flip about the center: as in Figma, the panel keeps the flip apart
+  // from position and rotation; undo.
   await rightClick(page, 450, 350);
   await page.getByTestId('fig-menu-flip-horizontal').click();
-  await expect(page.getByTestId('fig-field-x')).toHaveValue('500');
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('400');
+  await expect(page.getByTestId('fig-field-rotation')).toHaveValue('0');
   await page.getByTestId('fig-canvas').focus();
   await page.keyboard.press('Control+z');
-  await expect(page.getByTestId('fig-field-x')).toHaveValue('400');
+  // A vertical flip reads as a half turn about the center.
   await page.keyboard.press('Shift+V');
+  await expect(page.getByTestId('fig-field-rotation')).toHaveValue(/^-?180$/);
   await expect(page.getByTestId('fig-field-y')).toHaveValue('400');
 
   // The same menu on a layers panel row.
@@ -274,16 +277,13 @@ test('edits several layers at once, with mixed values', async ({ page }) => {
     '2 layers selected'
   );
 
-  // Arrow keys move through the layer tree after a row is clicked.
+  // As in Figma, arrow keys nudge the layer after its row is clicked.
   await rows(page).filter({ hasText: 'Rectangle 3' }).click();
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 2');
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
-  await page.keyboard.press('ArrowUp');
-  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 2');
-  // It did not move the layer.
-  await expect(page.getByTestId('fig-field-y')).toHaveValue('100');
+  await expect(page.getByTestId('fig-field-y')).toHaveValue('101');
+  await page.keyboard.press('Shift+ArrowUp');
+  await expect(page.getByTestId('fig-field-y')).toHaveValue('91');
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 3');
 });
 
 test('sets the canvas color from the picker', async ({ page }) => {

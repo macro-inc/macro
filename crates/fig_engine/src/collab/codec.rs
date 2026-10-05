@@ -21,7 +21,7 @@ pub use read::Reader;
 pub use write::Writer;
 
 /// Layout version of a node entry (its first byte).
-pub(super) const ENTRY_VERSION: u8 = 1;
+pub(super) const ENTRY_VERSION: u8 = 2;
 
 /// A node as the shared maps hold it.
 #[derive(Clone, Debug, PartialEq)]

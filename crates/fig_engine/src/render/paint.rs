@@ -96,6 +96,9 @@ impl Painter<'_> {
             PaintKind::Image(image) => {
                 self.fill_image(surface, shape, ts, image, size, alpha, blend, clip);
             }
+            PaintKind::Pattern(pattern) => {
+                self.fill_pattern(surface, shape, ts, pattern, size, alpha, blend, clip);
+            }
             PaintKind::Unsupported(_) => {}
         }
     }

@@ -379,7 +379,11 @@ impl Painter<'_> {
                 &mut plane,
                 w as usize,
                 h as usize,
-                (f64::from(e.spread) * scale).round() as i32,
+                if self.props(i).supports_shadow_spread() {
+                    (f64::from(e.spread) * scale).round() as i32
+                } else {
+                    0
+                },
             );
             let (dx, dy) = self.device_vector(i, e.offset);
             let mut plane = shifted(

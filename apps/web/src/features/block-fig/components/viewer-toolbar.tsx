@@ -91,7 +91,9 @@ export function ViewerToolbar(props: {
 
   return (
     <div
-      class="-translate-x-1/2 absolute bottom-3 left-1/2 z-10 flex items-center gap-0.5 rounded-xl border border-edge-muted bg-menu p-1 shadow-lg"
+      // A narrow canvas wraps the toolbar onto more rows rather than hiding
+      // tools under the panels.
+      class="-translate-x-1/2 absolute bottom-3 left-1/2 z-10 flex w-max max-w-[calc(100%-1rem)] flex-wrap items-center justify-center gap-0.5 rounded-xl border border-edge-muted bg-menu p-1 shadow-lg"
       data-testid="fig-toolbar"
       onPointerDown={(e) => e.stopPropagation()}
     >

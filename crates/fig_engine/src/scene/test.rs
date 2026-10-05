@@ -94,6 +94,100 @@ fn expands_instances_with_overrides() {
 }
 
 #[test]
+fn resolves_imported_override_paths_inside_each_component() {
+    use crate::testing::{SCHEMA, fig_file_with};
+
+    // Both original-library keys collide with unrelated document ids. A
+    // second import also reuses the leaf key, replacing the global index.
+    let path = || V::Msg(vec![("guids", V::List(vec![guid(42), guid(21)]))]);
+    let schema = SCHEMA.replace(
+        "unusedField:string",
+        "unusedField:string derivedSymbolData:NodeChange[]",
+    );
+    let bytes = fig_file_with(
+        &schema,
+        vec![
+            node(0, None, "DOCUMENT", "Document", vec![]),
+            node(1, Some((0, "!")), "CANVAS", "Page", vec![]),
+            node(10, Some((1, "a")), "SYMBOL", "Imported", vec![]),
+            node(
+                11,
+                Some((10, "a")),
+                "RECTANGLE",
+                "Leaf",
+                vec![
+                    ("overrideKey", guid(21)),
+                    ("size", size(10.0, 10.0)),
+                    ("fillPaints", V::List(vec![solid(0.0, 0.0, 1.0)])),
+                ],
+            ),
+            node(21, Some((1, "b")), "FRAME", "Unrelated", vec![]),
+            node(30, Some((1, "c")), "SYMBOL", "Other import", vec![]),
+            node(
+                31,
+                Some((30, "a")),
+                "RECTANGLE",
+                "Other leaf",
+                vec![("overrideKey", guid(21))],
+            ),
+            node(40, Some((1, "d")), "SYMBOL", "Outer", vec![]),
+            node(
+                41,
+                Some((40, "a")),
+                "INSTANCE",
+                "Nested",
+                vec![
+                    ("overrideKey", guid(42)),
+                    ("symbolData", V::Msg(vec![("symbolID", guid(10))])),
+                ],
+            ),
+            node(42, Some((1, "e")), "FRAME", "Also unrelated", vec![]),
+            node(
+                50,
+                Some((1, "f")),
+                "INSTANCE",
+                "Placed",
+                vec![
+                    (
+                        "symbolData",
+                        V::Msg(vec![
+                            ("symbolID", guid(40)),
+                            (
+                                "symbolOverrides",
+                                V::List(vec![V::Msg(vec![
+                                    ("guidPath", path()),
+                                    ("fillPaints", V::List(vec![solid(0.0, 1.0, 0.0)])),
+                                ])]),
+                            ),
+                        ]),
+                    ),
+                    (
+                        "derivedSymbolData",
+                        V::List(vec![V::Msg(vec![
+                            ("guidPath", path()),
+                            ("size", size(60.0, 20.0)),
+                            ("transform", translate(7.0, 9.0)),
+                        ])]),
+                    ),
+                ],
+            ),
+        ],
+        vec![],
+    );
+    let doc = Document::open(&bytes).unwrap();
+    let scene = Scene::build(&doc, doc.pages[0]);
+    let leaf = scene.find(&doc, "I1:50;1:41;1:11").unwrap();
+    let props = scene.props(&doc, leaf);
+    assert_eq!(props.size(), Vec2::new(60.0, 20.0));
+    assert_eq!(props.transform(), Affine::translate(7.0, 9.0));
+    assert!(
+        matches!(props.fills()[0].kind, crate::model::PaintKind::Solid(c) if c.g == 1.0 && c.b == 0.0)
+    );
+    let original = scene.find(&doc, "1:11").unwrap();
+    assert_eq!(scene.props(&doc, original).size(), Vec2::new(10.0, 10.0));
+}
+
+#[test]
 fn survives_an_instance_of_itself() {
     // A component containing an instance of itself must not recurse forever.
     let bytes = fig_file(

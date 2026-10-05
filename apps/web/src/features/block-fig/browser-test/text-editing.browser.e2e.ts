@@ -182,9 +182,15 @@ test('switches fonts, loading them first', async ({ page }) => {
     'data-value',
     'Roboto Mono'
   );
-  const requests = await page.evaluate(() => window.figFixture.fontRequests());
-  expect(requests.some((r) => r.includes('family=Roboto+Mono'))).toBe(true);
-  expect(requests.some((r) => r.endsWith('InterVariable.ttf'))).toBe(true);
+  // The panel shows the family as soon as it is picked; its files load after.
+  const requested = async (match: (r: string) => boolean) =>
+    (await page.evaluate(() => window.figFixture.fontRequests())).some(match);
+  await expect
+    .poll(() => requested((r) => r.includes('family=Roboto+Mono')))
+    .toBe(true);
+  await expect
+    .poll(() => requested((r) => r.endsWith('InterVariable.ttf')))
+    .toBe(true);
   await expect
     .poll(async () => (await textInfo(page))?.fontStatus)
     .toBe('AVAILABLE');

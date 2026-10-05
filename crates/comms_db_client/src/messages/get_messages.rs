@@ -29,14 +29,15 @@ pub async fn get_channel_messages_for_search_backfill(
     only_deleted: Option<bool>,
 ) -> Result<Vec<ChannelMessageBackfillRow>> {
     let (created_at, message_id) = cursor.unzip();
+    let channel_ids = channel_ids.map(|ids| ids.iter().map(Uuid::to_string).collect::<Vec<_>>());
     sqlx::query_as!(
         ChannelMessageBackfillRow,
         r#"
-        SELECT channel_id AS "channel_id!", id AS message_id, created_at
+        SELECT parent_entity_id::uuid AS "channel_id!", id AS message_id, created_at
         FROM comms_messages
-        WHERE channel_id IS NOT NULL
+        WHERE parent_entity_type = 'channel'
           AND ($2::timestamptz IS NULL OR (created_at, id) > ($2, $3::uuid))
-          AND ($4::uuid[] IS NULL OR channel_id = ANY($4))
+          AND ($4::text[] IS NULL OR parent_entity_id = ANY($4))
           AND (
               $5::bool IS NULL
               OR ($5 AND deleted_at IS NOT NULL)
@@ -48,7 +49,7 @@ pub async fn get_channel_messages_for_search_backfill(
         limit,
         created_at,
         message_id,
-        channel_ids,
+        channel_ids.as_deref(),
         only_deleted,
     )
     .fetch_all(db)

@@ -94,6 +94,7 @@ export function FigViewer() {
             collab.peers()
           )
       : undefined,
+    online: collab ? () => collab.status() === 'connected' : undefined,
   });
 
   const review = createFigReview({

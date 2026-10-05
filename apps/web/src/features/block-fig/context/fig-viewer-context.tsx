@@ -35,10 +35,21 @@ export interface FigSharing {
   onIncoming: (listener: () => void) => () => void;
   /** The shared version the engine holds, recorded with a stored file. */
   appliedVersion: () => Version;
+  /**
+   * Records that `bytes` are about to be stored, so whoever opens them
+   * applies the shared changes to them. `false` when that could not reach
+   * the sync service (offline): the file is then not stored.
+   */
+  willStore: (bytes: Uint8Array<ArrayBuffer>) => Promise<boolean>;
   /** Tells everyone a file holding `version` was stored. */
   markStored: (version: Version) => void;
   /** Calls `listener` when someone else stored everything seen here. */
   onStoredElsewhere: (listener: () => void) => () => void;
+  /**
+   * Calls `listener` when the shared design started over on a file stored
+   * outside it (a new upload, an AI edit): this copy is out of date.
+   */
+  onReplaced: (listener: () => void) => () => void;
   close: () => void;
 }
 
