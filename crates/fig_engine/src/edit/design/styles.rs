@@ -335,7 +335,17 @@ impl Txn<'_> {
             if i == style || self.doc.node(i).removed {
                 continue;
             }
-            let p = self.doc.props(i).clone();
+            let p = self.doc.props(i);
+            let refs = [p.fill_style, p.stroke_style, p.effect_style, p.text_style_id];
+            let in_overrides = p.symbol.as_ref().is_some_and(|sym| {
+                sym.overrides.iter().any(|o| {
+                    [o.fill_style, o.stroke_style, o.effect_style].contains(&Some(g))
+                })
+            });
+            if !refs.contains(&Some(g)) && !in_overrides {
+                continue;
+            }
+            let p = p.clone();
             if p.fill_style == Some(g) {
                 self.edit(i, flags::FILLS).fills = s.fills.clone();
             }
