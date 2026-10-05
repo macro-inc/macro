@@ -89,7 +89,7 @@ still needed.
 
 ## Desktop onboarding
 
-With onboarding v4 enabled, new desktop users enter the same flow from
+New desktop users enter the same flow from
 `/app/signup`, `/app/login`, or `/app/onboarding`. Marketing Get Started links
 open `/app/signup`. Existing members and native mobile keep their existing routes.
 

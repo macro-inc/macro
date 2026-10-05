@@ -533,18 +533,6 @@ export const botManagement = defineFlag({
   default: onInDev,
 });
 
-// Onboarding v4: the full-screen stepper new users land in after signup
-// (unified with /login), driving the import machinery with auto-import.
-// PostHog-gated; override with VITE_ENABLE_ONBOARDING_V4. Read it through
-// `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
-// callers can wait instead of treating "flags not loaded yet" as "off").
-// `just run_local` sets the env to false unless `--enable-onboarding`.
-export const enableOnboardingV4 = defineFlag({
-  key: 'enable-onboarding-v4',
-  env: 'ENABLE_ONBOARDING_V4',
-  default: onInDev,
-});
-
 // Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
 // that re-runs Google consent for inboxes connected before the calendar
 // scope existed. PostHog-gated with a dev-mode default; override with

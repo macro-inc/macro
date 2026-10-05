@@ -1,7 +1,6 @@
 import { clearSignupDraft } from '@app/features/setup/core/signupDraft';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { NoiseBackground } from '@app/features/setup/flow/shared';
-import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { SignupJourney } from '@app/features/setup/views/SignupJourney';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
@@ -77,29 +76,18 @@ function PostLoginRedirect() {
  */
 function PostAuthGate() {
   const userInfoQuery = useUserInfoQuery();
-  const onboardingV4 = useOnboardingV4Flag();
 
-  const isFirstTimeDesktopUser = () =>
+  const needsOnboarding = () =>
     !isMobile() &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     userInfoQuery.data.tutorialComplete === false;
 
-  const needsOnboarding = () =>
-    onboardingV4().enabled && isFirstTimeDesktopUser();
-
-  // Don't redirect into the app while the gate is still unknown: a first-time
-  // user would land on home for a beat and then get yanked to /onboarding.
-  const waitingOnFlag = () =>
-    onboardingV4().loading && isFirstTimeDesktopUser();
-
   return (
     <Suspense fallback={<LoadingBlock />}>
       <Show when={userInfoQuery.data} fallback={<LoadingBlock />}>
-        <Show when={!waitingOnFlag()} fallback={<LoadingBlock />}>
-          <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
-            <OnboardingFlow />
-          </Show>
+        <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
+          <OnboardingFlow />
         </Show>
       </Show>
     </Suspense>
@@ -478,13 +466,9 @@ function VerifyFormNew(props: {
 }
 
 export function Login(props: { signupMode?: boolean }) {
-  const onboardingV4 = useOnboardingV4Flag();
   const startSignup = useSsoLogin({ signupMode: true });
   const useSignupJourney = () =>
-    props.signupMode &&
-    !isMobile() &&
-    !isNativeMobilePlatform() &&
-    onboardingV4().enabled;
+    props.signupMode && !isMobile() && !isNativeMobilePlatform();
   const [searchParams] = useSearchParams();
   const [stage, setStage] = createSignal(
     searchParams.email ? Stage.Email : Stage.None

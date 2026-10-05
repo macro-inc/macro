@@ -18,7 +18,6 @@ import { usePendingNotificationNavigationEffect } from '@app/features/notificati
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
-import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { SearchProvider } from '@app/features/soup/search/context';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
@@ -42,9 +41,7 @@ import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { enableOnboardingV4 } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -195,46 +192,6 @@ const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
     successPath: '/',
   });
 
-/** The retired /setup path forwards to the onboarding flow, query intact. */
-function SetupRedirect() {
-  const location = useLocation();
-  return <Navigate href={`/onboarding${location.search}`} />;
-}
-
-/**
- * The old split-screen /setup surface is retired; the onboarding flow lives at
- * /onboarding now. Flag off, /setup must go home — forwarding would land
- * flag-off web users on /login and native users on MobileOnboarding.
- */
-function SetupRoute() {
-  const onboardingV4 = useOnboardingV4Flag();
-
-  return (
-    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
-      <Show when={onboardingV4().enabled} fallback={<Navigate href="/" />}>
-        <SetupRedirect />
-      </Show>
-    </Show>
-  );
-}
-
-/**
- * Web/desktop gate for /onboarding. Waits for PostHog to report flags before
- * bouncing: with the flag on but not yet loaded, a direct visit (or a reload
- * mid-flow) would otherwise get kicked to /login and lose its ?next.
- */
-function OnboardingRoute() {
-  const onboardingV4 = useOnboardingV4Flag();
-
-  return (
-    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
-      <Show when={onboardingV4().enabled} fallback={<Navigate href="/login" />}>
-        <OnboardingFlow />
-      </Show>
-    </Show>
-  );
-}
-
 const ROUTES: RouteDefinition[] = [
   { path: '/meet/*path', component: MeetingRouter },
   {
@@ -306,16 +263,8 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/onboarding',
-    // Flag-gated at the route, not just the redirect: with the flag off a
-    // direct visit must not touch the onboarding backend (reading it
-    // creates the flow's row and starts gathers).
     component: () =>
-      isNativeMobilePlatform() ? <MobileOnboarding /> : <OnboardingRoute />,
-  },
-  {
-    // Preserve the query (?next deep links) when forwarding to /onboarding.
-    path: '/setup',
-    component: SetupRoute,
+      isNativeMobilePlatform() ? <MobileOnboarding /> : <OnboardingFlow />,
   },
   {
     // A personal GTM invite link (`?token=`): welcome page, then signup.
@@ -468,20 +417,13 @@ function QuerySyncProviderWithUserId() {
 
 function InitialInteractiveOnboardingModal() {
   const userInfoQuery = useUserInfoQuery();
-  const onboardingV4 = useOnboardingV4Flag();
   const [open, setOpen] = createSignal(true);
   const [onboardingStarted, setOnboardingStarted] = createSignal(false);
 
   const modalOpen = () =>
     open() &&
-    // `just run_local` sets VITE_ENABLE_ONBOARDING_V4=false; without this the
-    // v4-off fallback would still open this legacy modal. Opt in with
-    // `just run_local --enable-onboarding`.
-    enableOnboardingV4.override !== false &&
-    // Onboarding-v4 replaces this modal on desktop; the Layout redirect
-    // sends first-time users to /onboarding instead. Desktop waits for the
-    // flag to resolve so this doesn't flash before that redirect fires.
-    (isMobile() || (!onboardingV4().loading && !onboardingV4().enabled)) &&
+    // Desktop first-run users go through /onboarding instead (Layout redirect).
+    isMobile() &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
