@@ -16,61 +16,10 @@ use fig_engine::text::{Font, FontGlyph};
 use std::collections::HashMap;
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
-/// A font's family and style for a PostScript name.
+/// The family and style a PostScript font name stands for: the
+/// registered face with that name, else read from the name.
 pub fn family_and_style(postscript: &str) -> (String, String) {
-    if let Some(found) = fig_engine::text::postscript_face(postscript) {
-        return found;
-    }
-    let name = postscript.trim();
-    let (family, style) = match name.split_once('-') {
-        Some((f, s)) => (f, s),
-        None => (name, "Regular"),
-    };
-    let family = family
-        .trim_end_matches("PSMT")
-        .trim_end_matches("MT")
-        .trim_end_matches("PS");
-    let style = style.trim_end_matches("MT").trim_end_matches("PS");
-    (spaced(family), style_words(style))
-}
-
-/// "MyriadPro" as "Myriad Pro" (a capital after a lowercase letter starts a
-/// word).
-fn spaced(s: &str) -> String {
-    let mut out = String::new();
-    let mut prev_lower = false;
-    for c in s.chars() {
-        if c.is_uppercase() && prev_lower {
-            out.push(' ');
-        }
-        prev_lower = c.is_lowercase() || c.is_ascii_digit();
-        out.push(c);
-    }
-    out
-}
-
-/// A PostScript style suffix as style words ("BoldIt" is "Bold Italic").
-fn style_words(s: &str) -> String {
-    let words = spaced(s);
-    let mut out: Vec<String> = Vec::new();
-    for w in words.split_whitespace() {
-        let w = match w {
-            "It" | "Ital" | "Obl" => "Italic",
-            "Bd" => "Bold",
-            "Semibold" | "Smbd" => "SemiBold",
-            "Lt" => "Light",
-            "Md" | "Med" => "Medium",
-            "Blk" => "Black",
-            "Roman" | "Book" | "Regular" | "Reg" => "Regular",
-            other => other,
-        };
-        out.push(w.to_string());
-    }
-    if out.is_empty() {
-        "Regular".into()
-    } else {
-        out.join(" ")
-    }
+    fig_engine::text::family_and_style(postscript)
 }
 
 /// Fonts by PostScript name, set up once per layout.

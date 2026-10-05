@@ -1,6 +1,13 @@
 //! Content streams: the operators and operands that draw a page, with
 //! inline images, and writing operators back.
 
+mod inline;
+#[cfg(test)]
+mod test;
+
+use super::lexer::Token;
+use super::parse::{Mode, Parser};
+use super::write;
 use super::{Dict, Object};
 use std::ops::Range;
 
@@ -48,15 +55,82 @@ impl Op {
     }
 }
 
+/// Operands an operator may collect; past this the run is junk.
+const MAX_OPERANDS: usize = 1 << 16;
+
 /// Splits a content stream into operators. Damaged input is skipped up to
 /// the next operator rather than failing.
 pub fn parse(content: &[u8]) -> Vec<Op> {
-    let _ = content;
-    todo!("content::parse")
+    let mut p = Parser::new(content, 0, Mode::Content);
+    let mut ops = Vec::new();
+    let mut operands = Vec::new();
+    let mut start: Option<usize> = None;
+    while let Some(t) = p.next() {
+        match t.token {
+            Token::Keyword(b"BI") => {
+                let (image, end) = inline::read(content, &mut p);
+                ops.push(Op {
+                    operator: b"BI".to_vec(),
+                    operands: Vec::new(),
+                    inline_image: Some(image),
+                    span: t.start..end,
+                });
+                operands.clear();
+                start = None;
+            }
+            Token::Keyword(k) if !matches!(k, b"true" | b"false" | b"null") => {
+                ops.push(Op {
+                    operator: k.to_vec(),
+                    operands: std::mem::take(&mut operands),
+                    inline_image: None,
+                    span: start.unwrap_or(t.start)..t.end,
+                });
+                start = None;
+            }
+            Token::ArrayClose | Token::DictClose | Token::Brace(_) | Token::Junk(_) => {
+                if operands.is_empty() {
+                    start = None;
+                }
+            }
+            _ => {
+                let at = t.start;
+                if let Some(v) = p.value(t, 0) {
+                    if operands.len() >= MAX_OPERANDS {
+                        operands.clear();
+                        start = None;
+                    }
+                    start.get_or_insert(at);
+                    operands.push(v);
+                }
+            }
+        }
+    }
+    ops
 }
 
 /// Writes operators as a content stream (one per line).
 pub fn write(ops: &[Op]) -> Vec<u8> {
-    let _ = ops;
-    todo!("content::write")
+    let mut out = Vec::new();
+    for op in ops {
+        if let Some(image) = &op.inline_image {
+            out.extend_from_slice(b"BI");
+            for (k, v) in image.dict.iter() {
+                out.push(b' ');
+                write::name(k, &mut out);
+                out.push(b' ');
+                write::value(v, &mut out, true);
+            }
+            out.extend_from_slice(b" ID ");
+            out.extend_from_slice(&image.data);
+            out.extend_from_slice(b"\nEI\n");
+            continue;
+        }
+        for o in &op.operands {
+            write::value(o, &mut out, true);
+            out.push(b' ');
+        }
+        out.extend_from_slice(&op.operator);
+        out.push(b'\n');
+    }
+    out
 }

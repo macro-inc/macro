@@ -3,14 +3,25 @@
 //! merged image, each kept as its bytes so that an unedited file writes
 //! back byte for byte.
 //!
-//! [`read`] splits a `.psd` or `.psb` file into a [`PsdFile`]; [`write`]
+//! [`read`] splits a `.psd` or `.psb` file into a [`PsdFile`]; [`write()`]
 //! joins one back. Neither interprets pixels or tagged blocks: the
 //! [`crate::channels`] codecs decode channel data, and the [`crate::codec`]
 //! modules decode blocks. High-bit documents keep their layers in a
 //! document-level `Lr16` or `Lr32` block; [`LayerSection::info`] holds them
 //! wherever they are stored ([`LayerSection::info_key`]).
+//!
+//! Padding is kept only where a file departs from what Photoshop writes,
+//! so a changed or new part gets Photoshop's layout: tagged blocks padded
+//! to four bytes (counted in the length inside layer records, not at the
+//! document level), names padded to four, the layer info padded to four.
+//! Damaged files never panic: what cannot be split becomes a
+//! [`PsdError::Corrupt`] error or, past the essentials, bytes kept as they
+//! are ([`LayerRecord::extra_tail`], [`LayerSection::tail`]).
 
-use crate::error::Result;
+mod read;
+mod write;
+
+use crate::error::{PsdError, Result};
 use crate::raster::IRect;
 
 /// The file header.
@@ -136,7 +147,11 @@ pub struct RealMask {
     pub rect: [i32; 4],
 }
 
-/// A layer record's mask data.
+/// A layer record's mask data: 20 bytes for a lone mask (two of them
+/// padding), 36 with the real user mask, then the parameters when
+/// [`MaskData::flags`] has bit 4. The real mask comes before the
+/// parameters, as Photoshop writes them (not as the specification lists
+/// them).
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaskData {
     /// Top, left, bottom, right of the mask's pixels.
@@ -155,17 +170,22 @@ pub struct MaskData {
 /// An additional layer information block (document level or per layer).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaggedBlock {
-    /// `8BIM` or `8B64`.
+    /// `8BIM` or `8B64` (blocks with `padding: None` are written with
+    /// Photoshop's: `8B64` in large documents for keys with 64-bit
+    /// lengths).
     pub signature: [u8; 4],
     /// The block's key (`luni`, `lfx2`, `TySh`, …).
     pub key: [u8; 4],
-    /// The block's data, without padding.
+    /// The block's data: the bytes its length covers (inside layer records
+    /// Photoshop counts the padding, so it ends with up to three zeros).
     pub data: Vec<u8>,
-    /// Padding written after the data in the file (kept so unedited
-    /// blocks write back as they were; new blocks leave it `None` and get
-    /// the padding Photoshop writes for their key).
+    /// Bytes written after the data, when they differ from what Photoshop
+    /// writes (other writers' padding, stray bytes before the next block);
+    /// `None` writes Photoshop's: zeros to a multiple of four bytes,
+    /// counted in the length inside layer records. Code that changes
+    /// `data` sets this to `None`.
     pub padding: Option<Vec<u8>>,
-    /// The length field counted the padding.
+    /// The length field counts `padding` (only used with `Some` padding).
     pub length_includes_padding: bool,
 }
 
@@ -211,15 +231,20 @@ pub struct LayerRecord {
     /// Bytes the record's extra data held that were not understood
     /// (written back unchanged after the tagged blocks).
     pub extra_tail: Vec<u8>,
-    /// Padding after the name (so unedited records write back exactly).
+    /// Zero bytes after the name. Values below 4 stand for Photoshop's
+    /// padding (the name and its length byte to a multiple of four bytes),
+    /// recomputed on write so renamed and new records need not set it; a
+    /// name its writer padded otherwise keeps its padding plus 4, so it
+    /// writes back as it was.
     pub name_padding: usize,
 }
 
 impl LayerRecord {
-    /// The layer's pixel rectangle.
+    /// The layer's pixel rectangle (empty when its edges are reversed).
     pub fn rect(&self) -> IRect {
         let [top, left, bottom, right] = self.rect;
-        IRect::from_ltrb(left, top, right, bottom)
+        let size = |from: i32, to: i32| (i64::from(to) - i64::from(from)).clamp(0, 1 << 30) as i32;
+        IRect::new(left, top, size(left, right), size(top, bottom))
     }
 
     /// The first block with a key.
@@ -282,7 +307,11 @@ pub struct LayerSection {
     /// Bytes at the end of the section that were not understood (written
     /// back unchanged).
     pub tail: Vec<u8>,
-    /// Padding of the layer info (so unedited files write back exactly).
+    /// Zero bytes after the layer info. Values below 4 stand for
+    /// Photoshop's padding (the section's layer info to a multiple of four
+    /// bytes, none inside an `Lr16`/`Lr32` block), recomputed on write; a
+    /// layer info its writer padded otherwise keeps its padding plus 4, so
+    /// it writes back as it was.
     pub info_padding: usize,
 }
 
@@ -291,9 +320,22 @@ impl LayerSection {
     pub fn block(&self, key: &[u8; 4]) -> Option<&TaggedBlock> {
         self.tagged.iter().find(|b| &b.key == key)
     }
+
+    /// Whether the section holds nothing (files without layers may store
+    /// no section at all).
+    pub fn is_empty(&self) -> bool {
+        self.info.records.is_empty()
+            && !self.info.merged_alpha
+            && self.info_key.is_none()
+            && self.global_mask.is_none()
+            && self.tagged.is_empty()
+            && self.tail.is_empty()
+            && self.info_padding < ESCAPED
+    }
 }
 
-/// The merged image data.
+/// The merged image data. A file that ends before it reads as `Raw` with
+/// no bytes, which writes back as nothing.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ImageData {
     /// How it is compressed.
@@ -328,15 +370,71 @@ impl PsdFile {
 
 /// Splits a `.psd` or `.psb` file into its parts.
 pub fn read(bytes: &[u8]) -> Result<PsdFile> {
-    let _ = bytes;
-    Err(crate::error::PsdError::Unsupported(
-        "reading files is not implemented yet".into(),
-    ))
+    read::file(bytes)
 }
 
 /// Joins a file's parts back into bytes; an unedited file comes out as it
 /// was read.
 pub fn write(file: &PsdFile) -> Vec<u8> {
-    let _ = file;
-    Vec::new()
+    write::file(file)
 }
+
+/// Keys whose blocks have 64-bit lengths in large documents.
+const LARGE_KEYS: [&[u8; 4]; 13] = [
+    b"LMsk", b"Lr16", b"Lr32", b"Layr", b"Mt16", b"Mt32", b"Mtrn", b"Alph", b"FMsk", b"lnk2",
+    b"FEid", b"FXid", b"PxSD",
+];
+
+/// Keys some readers (psd-tools) also take as 64-bit in large documents;
+/// new blocks with them, and with [`LARGE_KEYS`], are signed `8B64` there
+/// so every reader agrees, as recent Photoshop versions write them.
+const MAYBE_LARGE_KEYS: [&[u8; 4]; 8] = [
+    b"lnk3", b"lnkE", b"FELS", b"pths", b"extd", b"extn", b"cinf", b"artd",
+];
+
+/// The layer-info blocks of 16- and 32-bit documents.
+const LAYER_INFO_KEYS: [&[u8; 4]; 2] = [b"Lr16", b"Lr32"];
+
+/// Added to a padding count the file departs from Photoshop's layout
+/// with ([`LayerRecord::name_padding`], [`LayerSection::info_padding`]).
+const ESCAPED: usize = 4;
+
+/// Whether a block's length field is 64 bits.
+fn is_large(signature: &[u8; 4], key: &[u8; 4], psb: bool) -> bool {
+    signature == b"8B64" || (psb && LARGE_KEYS.contains(&key))
+}
+
+/// The signature blocks without kept padding are written with.
+fn writer_signature(key: &[u8; 4], psb: bool) -> [u8; 4] {
+    if psb && (LARGE_KEYS.contains(&key) || MAYBE_LARGE_KEYS.contains(&key)) {
+        *b"8B64"
+    } else {
+        *b"8BIM"
+    }
+}
+
+/// Whether bytes start with a tagged block signature.
+fn is_block_signature(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"8BIM") || bytes.starts_with(b"8B64")
+}
+
+/// Zeros that bring `len` bytes to a multiple of four.
+fn pad4(len: usize) -> usize {
+    (4 - len % 4) % 4
+}
+
+/// Where a block sits, which decides the padding Photoshop gives it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Level {
+    /// In a layer record: padded to four, the length counting the padding.
+    Record,
+    /// After the layer info: padded to four, the length not counting it.
+    Document,
+}
+
+fn corrupt(what: &str) -> PsdError {
+    PsdError::corrupt(what)
+}
+
+#[cfg(test)]
+mod test;

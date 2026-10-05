@@ -28,7 +28,8 @@ use std::sync::Arc;
 pub use caret::{CaretLine, TextGeometry, geometry};
 pub use font::{
     DEFAULT_FAMILY, FaceSource, Font, FontGlyph, FontStatus, RegisteredFace, StyleRequest,
-    face_source, font_status, parse_style, postscript_face, register_font, registered, style_name,
+    face_source, family_and_style, font_status, parse_style, postscript_face, register_font,
+    registered, style_name,
 };
 
 /// Whether text in `family` can be laid out with that family's own font

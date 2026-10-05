@@ -9,11 +9,21 @@
 
 pub mod content;
 pub mod filter;
+pub(crate) mod lexer;
+mod pages;
+pub(crate) mod parse;
+mod repair;
+#[cfg(test)]
+mod test;
 pub mod write;
+mod xref;
 
-use crate::error::Result;
+use crate::error::{AiError, Result};
+use parse::{Mode, Parser};
+use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use xref::{Entry, Xref};
 
 /// A name (`/Type`), as its bytes after `#xx` escapes are decoded.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -453,17 +463,78 @@ pub struct PageRef {
     pub dict: Dict,
 }
 
-/// An open PDF file. Objects are parsed when first asked for.
+/// An open PDF file. Objects are parsed when first asked for, and kept.
 pub struct Pdf {
     bytes: Arc<[u8]>,
+    /// The header's version.
+    header: Option<(u8, u8)>,
+    xref: Xref,
+    /// Whether the cross-reference was rebuilt by scanning the file.
+    repaired: bool,
+    cache: Mutex<Cache>,
 }
+
+/// Objects parsed so far, and object streams decoded so far.
+#[derive(Default)]
+struct Cache {
+    objects: HashMap<u32, Object>,
+    streams: HashMap<u32, Arc<ObjStm>>,
+}
+
+/// A decoded object stream.
+struct ObjStm {
+    data: Vec<u8>,
+    /// Each object's number and where it starts in `data`.
+    index: Vec<(u32, usize)>,
+}
+
+/// How many references [`Pdf::resolve`] follows, and how deeply loading one
+/// object may load others (an indirect `Length`, an object stream).
+const MAX_CHAIN: u32 = 32;
+
+/// How far into the file the `%PDF-` header is looked for.
+const HEADER_WINDOW: usize = 1024;
 
 impl Pdf {
     /// Opens a file: reads its cross-reference (repairing it by scanning
     /// for objects when it is damaged) and trailer.
     pub fn open(bytes: Arc<[u8]>) -> Result<Pdf> {
-        let _ = &bytes;
-        todo!("Pdf::open")
+        let header = header(&bytes);
+        let (xref, repaired) = match xref::read(&bytes) {
+            Some(x) if xref::valid(&bytes, &x) => (x, false),
+            _ => (repair::scan(&bytes), true),
+        };
+        let mut pdf = Pdf {
+            bytes,
+            header,
+            xref,
+            repaired,
+            cache: Mutex::default(),
+        };
+        if !pdf.repaired && !pdf.root_is_catalog() {
+            pdf.xref = repair::scan(&pdf.bytes);
+            pdf.repaired = true;
+            pdf.cache = Mutex::default();
+        }
+        if pdf.xref.trailer.contains("Encrypt") {
+            return Err(AiError::Encrypted);
+        }
+        if pdf.xref.entries.is_empty() {
+            return Err(match header {
+                Some(_) => AiError::corrupt("no objects"),
+                None => AiError::NotAi,
+            });
+        }
+        if !pdf.root_is_catalog()
+            && let Some(&num) = pdf.xref.catalogs.first()
+        {
+            let generation = match pdf.xref.entries.get(&num) {
+                Some(Entry::Offset { generation, .. }) => *generation,
+                _ => 0,
+            };
+            pdf.xref.trailer.set("Root", ObjRef::new(num, generation));
+        }
+        Ok(pdf)
     }
 
     /// The file's bytes.
@@ -471,54 +542,204 @@ impl Pdf {
         &self.bytes
     }
 
-    /// The header version (`"1.5"`), or the catalog's `Version` when later.
-    pub fn version(&self) -> String {
-        todo!("Pdf::version")
+    /// Whether the cross-reference was damaged and rebuilt by scanning.
+    pub fn repaired(&self) -> bool {
+        self.repaired
     }
 
-    /// The trailer dictionary (the newest one's entries).
+    /// The header version (`"1.5"`), or the catalog's `Version` when later.
+    pub fn version(&self) -> String {
+        let header = self.header.unwrap_or((1, 4));
+        let catalog = self
+            .catalog()
+            .and_then(|c| c.get("Version").map(|v| self.resolve(v)))
+            .and_then(|v| v.as_name().and_then(|n| parse_version(n.as_bytes())));
+        let (major, minor) = catalog.filter(|&c| c > header).unwrap_or(header);
+        format!("{major}.{minor}")
+    }
+
+    /// The trailer dictionary (the newest one's entries, with the older
+    /// ones' for keys it lacks).
     pub fn trailer(&self) -> &Dict {
-        todo!("Pdf::trailer")
+        &self.xref.trailer
     }
 
     /// An indirect object (`None` when it does not exist or is free).
     pub fn get(&self, r: ObjRef) -> Option<Object> {
-        let _ = r;
-        todo!("Pdf::get")
+        self.load(r.num, 0)
     }
 
     /// Follows references (a bounded number of times) to a direct value.
     pub fn resolve(&self, o: &Object) -> Object {
-        let _ = o;
-        todo!("Pdf::resolve")
+        self.resolve_at(o, 0)
     }
 
     /// The document catalog.
     pub fn catalog(&self) -> Option<Dict> {
-        todo!("Pdf::catalog")
+        match self.resolve(self.xref.trailer.get("Root")?) {
+            Object::Dict(d) => Some(d),
+            _ => None,
+        }
     }
 
     /// The pages, in order.
     pub fn pages(&self) -> Vec<PageRef> {
-        todo!("Pdf::pages")
+        self.page_tree()
     }
 
     /// A stream's data with its filters undone, up to an image codec
     /// (`DCTDecode`, `JPXDecode`, `JBIG2Decode`, `CCITTFaxDecode`), which is
     /// returned with its parameters for the caller to handle.
     pub fn decode_stream(&self, stream: &Stream) -> Result<(Vec<u8>, Option<filter::ImageCodec>)> {
-        let _ = stream;
-        todo!("Pdf::decode_stream")
+        self.decode_at(stream, 0)
     }
 
     /// A stream's data with every filter undone; fails on image codecs.
     pub fn stream_data(&self, stream: &Stream) -> Result<Vec<u8>> {
-        let _ = stream;
-        todo!("Pdf::stream_data")
+        match self.decode_stream(stream)? {
+            (data, None) => Ok(data),
+            (_, Some(codec)) => Err(AiError::Unsupported(format!("image data ({codec:?})"))),
+        }
     }
 
     /// Every object the cross-reference lists as in use.
     pub fn object_refs(&self) -> Vec<ObjRef> {
-        todo!("Pdf::object_refs")
+        let mut refs: Vec<ObjRef> = self
+            .xref
+            .entries
+            .iter()
+            .filter_map(|(&num, e)| match *e {
+                Entry::Free => None,
+                Entry::Offset { generation, .. } => Some(ObjRef::new(num, generation)),
+                Entry::Compressed { .. } => Some(ObjRef::new(num, 0)),
+            })
+            .collect();
+        refs.sort_unstable();
+        refs
     }
+
+    fn cache(&self) -> MutexGuard<'_, Cache> {
+        self.cache.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Whether the trailer's `Root` is a catalog.
+    fn root_is_catalog(&self) -> bool {
+        self.catalog()
+            .is_some_and(|c| c.is("Type", "Catalog") || c.contains("Pages"))
+    }
+
+    /// Object `num`, parsed (and kept) when first asked for; `depth`
+    /// counts the loads that led here.
+    fn load(&self, num: u32, depth: u32) -> Option<Object> {
+        if depth > MAX_CHAIN {
+            return None;
+        }
+        if let Some(o) = self.cache().objects.get(&num) {
+            return Some(o.clone());
+        }
+        let object = match *self.xref.entries.get(&num)? {
+            Entry::Free => return None,
+            Entry::Offset { offset, .. } => self.parse_at(offset, num, depth)?,
+            Entry::Compressed { stream, index } => self.compressed(stream, index, num, depth)?,
+        };
+        self.cache().objects.insert(num, object.clone());
+        Some(object)
+    }
+
+    /// The object `N G obj` at `offset` defines, which must be `num`.
+    fn parse_at(&self, offset: usize, num: u32, depth: u32) -> Option<Object> {
+        let length = |r: ObjRef| self.load(r.num, depth + 1).and_then(|o| o.as_i64());
+        let ind = parse::indirect(&self.bytes, offset, &length)?;
+        if ind.num != num {
+            return None;
+        }
+        Some(match (ind.object, ind.stream) {
+            (Object::Dict(dict), Some(range)) => Object::Stream(Stream {
+                dict,
+                data: Arc::from(&self.bytes[range]),
+            }),
+            (object, _) => object,
+        })
+    }
+
+    /// Object `num`, number `index` of object stream `stream`.
+    fn compressed(&self, stream: u32, index: u32, num: u32, depth: u32) -> Option<Object> {
+        let s = self.objstm(stream, depth + 1)?;
+        let at = match s.index.get(index as usize) {
+            Some(&(n, at)) if n == num => at,
+            _ => s.index.iter().find(|e| e.0 == num)?.1,
+        };
+        // Some writers wrap objects in object streams as `N G obj`.
+        if xref::header_at(&s.data, at) == Some(num) {
+            return parse::indirect(&s.data, at, &|_| None).map(|ind| ind.object);
+        }
+        Parser::new(&s.data, at, Mode::Object).object(0)
+    }
+
+    /// Object stream `num`, decoded (and kept).
+    fn objstm(&self, num: u32, depth: u32) -> Option<Arc<ObjStm>> {
+        if let Some(s) = self.cache().streams.get(&num) {
+            return Some(s.clone());
+        }
+        let Object::Stream(stream) = self.load(num, depth + 1)? else {
+            return None;
+        };
+        let (data, None) = self.decode_at(&stream, depth + 1).ok()? else {
+            return None;
+        };
+        let mut dict = stream.dict.clone();
+        for key in ["N", "First"] {
+            if let Some(v @ Object::Ref(_)) = dict.get(key) {
+                let v = self.resolve_at(v, depth + 1);
+                dict.set(key, v);
+            }
+        }
+        let index = parse::objstm_index(&dict, &data);
+        let s = Arc::new(ObjStm { data, index });
+        self.cache().streams.insert(num, s.clone());
+        Some(s)
+    }
+
+    fn resolve_at(&self, o: &Object, depth: u32) -> Object {
+        let Object::Ref(mut r) = *o else {
+            return o.clone();
+        };
+        for _ in 0..MAX_CHAIN {
+            match self.load(r.num, depth) {
+                Some(Object::Ref(next)) => r = next,
+                Some(o) => return o,
+                None => return Object::Null,
+            }
+        }
+        Object::Null
+    }
+
+    fn decode_at(
+        &self,
+        stream: &Stream,
+        depth: u32,
+    ) -> Result<(Vec<u8>, Option<filter::ImageCodec>)> {
+        filter::decode_chain(&stream.dict, &stream.data, &|o| {
+            self.resolve_at(o, depth + 1)
+        })
+    }
+}
+
+/// The `%PDF-M.m` header's version.
+fn header(bytes: &[u8]) -> Option<(u8, u8)> {
+    let window = &bytes[..bytes.len().min(HEADER_WINDOW)];
+    let at = lexer::find(window, b"%PDF-", 0)?;
+    let rest = &bytes[at + 5..];
+    let end = rest
+        .iter()
+        .position(|b| !b.is_ascii_digit() && *b != b'.')
+        .unwrap_or(rest.len());
+    parse_version(&rest[..end]).or(Some((1, 4)))
+}
+
+/// `M.m` as numbers.
+fn parse_version(s: &[u8]) -> Option<(u8, u8)> {
+    let s = std::str::from_utf8(s).ok()?;
+    let (major, minor) = s.split_once('.')?;
+    Some((major.parse().ok()?, minor.parse().ok()?))
 }

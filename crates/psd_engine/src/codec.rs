@@ -3,7 +3,10 @@
 //!
 //! Each decoder turns a block's data into the model's typed values; each
 //! encoder writes the model back, starting from the original block when
-//! there is one so fields the model does not cover survive.
+//! there is one so fields the model does not cover survive. Decoders accept
+//! the alignment padding Photoshop counts in some blocks' lengths; encoders
+//! write only the data, except the binary adjustments Photoshop itself pads
+//! (curves, gradient maps).
 
 pub mod adjustment;
 pub mod descriptor;
@@ -14,3 +17,10 @@ pub mod pattern;
 pub mod smart;
 pub mod text;
 pub mod vector;
+
+mod paint;
+
+#[cfg(test)]
+mod corpus;
+#[cfg(test)]
+mod test;

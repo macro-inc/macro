@@ -10,12 +10,22 @@
 
 #![deny(missing_docs)]
 
+pub mod build;
 pub mod color;
+pub mod edit;
 pub mod error;
+pub mod file;
 pub mod font;
 pub mod function;
+pub mod geom;
 pub mod image;
+pub mod interp;
+pub mod marks;
+pub mod model;
 pub mod pdf;
+pub mod render;
+pub mod save;
 pub mod shading;
+pub mod text;
 
 pub use error::{AiError, Result};

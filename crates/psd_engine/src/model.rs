@@ -1347,6 +1347,13 @@ pub struct Subpath {
     pub op: PathOp,
     /// Its points, in order.
     pub knots: Vec<Knot>,
+    /// Filled by the nonzero winding rule rather than even-odd.
+    #[serde(default)]
+    pub nonzero: bool,
+    /// The live shape (the index of its entry in the layer's `vogk`
+    /// origination data) it was drawn as.
+    #[serde(default)]
+    pub shape: u32,
 }
 
 /// A layer's vector mask (or a shape layer's outline).
