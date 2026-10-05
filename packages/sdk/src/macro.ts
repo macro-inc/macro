@@ -11,6 +11,7 @@ import { DocumentNamespace } from './entities/documents/namespace';
 import { EmailNamespace } from './entities/email/namespace';
 import { FavoritesNamespace } from './entities/favorites/namespace';
 import { ForeignEntityNamespace } from './entities/foreign/namespace';
+import { FormNamespace } from './entities/forms/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
 import { ProjectNamespace } from './entities/projects/namespace';
@@ -34,6 +35,24 @@ export {
   MacroOpRefusedError,
   type OpResultOf,
 } from './entities/databases/database';
+export {
+  Form,
+  type FormAnswer,
+  type FormAnswerValue,
+  type FormEntityHandle,
+  type FormQuestionPlacement,
+  type FormQuestionTally,
+  FormReference,
+  type FormResponseSummary,
+  type FormRules,
+  type FormRuleTest,
+  type FormSectionPlacement,
+  type FormSubmissionOutcome,
+  type MyFormResponse,
+} from './entities/forms/form';
+export { FormOption, FormQuestion } from './entities/forms/question';
+export { FormResponse } from './entities/forms/response';
+export { FormSection } from './entities/forms/section';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -60,6 +79,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly email: EmailNamespace;
   readonly favorites: FavoritesNamespace;
   readonly foreignEntities: ForeignEntityNamespace;
+  /** Build forms and submit answers without granting respondents database access. */
+  readonly forms: FormNamespace;
   readonly notifications: NotificationNamespace;
   readonly pins: PinsNamespace;
   readonly projects: ProjectNamespace;
@@ -91,6 +112,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.email = new EmailNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
+    this.forms = new FormNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);

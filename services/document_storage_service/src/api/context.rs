@@ -495,6 +495,7 @@ pub(crate) type DssEntityMutationService =
         DssEmailService,
         ProjectService,
         DatabasesServiceType,
+        FormsServiceType,
         EntityAccessService,
         crate::outbound::entity_mutation::DssEntityLifecycleAdapter<DssEventBroker>,
     >;
@@ -531,6 +532,21 @@ pub(crate) type DatabasesServiceType =
 /// Type alias for the databases router state.
 pub(crate) type DssDatabasesState =
     DatabasesRouterState<DatabasesServiceType, EntityAccessService, AuthorizationService>;
+
+/// Forms compose the databases domain service, so row writes retain its validation and events.
+pub(crate) type FormsServiceType = forms::wiring::PgFormsService<
+    DatabasesServiceType,
+    EntityAccessService,
+    forms::outbound::gateway_event_publisher::GatewayFormEventPublisher,
+    DssEventBroker,
+>;
+
+/// Forms use the same authentication and entity-access services as databases.
+pub(crate) type DssFormsState = forms::inbound::axum_router::FormsRouterState<
+    FormsServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
 
 /// Database onboarding composes transaction-capable owning domain adapters.
 pub(crate) type DssDatabaseStarterState =
@@ -770,6 +786,7 @@ pub(crate) struct ApiContext {
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub databases_state: DssDatabasesState,
+    pub forms_state: DssFormsState,
     pub database_starter_state: DssDatabaseStarterState,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
