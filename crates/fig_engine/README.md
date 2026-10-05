@@ -61,7 +61,8 @@ scene            one page with instances expanded: overrides, component
                  properties, swaps, shared styles, world transforms, bounds
 render           tiles: fills, strokes (inside/outside via clipping), masks,
                  blend modes, isolation, effects (shadows, blurs), images, text;
-                 some layers only (a paint-order window, a set, all but a set)
+                 some layers only (a paint-order window, a set, all but a set);
+                 wide blurs at a fraction of the resolution (render/coarse)
 inspect          layer rows, frames, hit tests, marquee, node info, search, SVG
                  outlines; a page's prototype (inspect/prototype); how to draw
                  moving layers apart from the page (inspect/lift)
@@ -351,6 +352,22 @@ uses the instance's derived sizes, transforms, and geometry. Rendering is a
 CPU rasterizer over the scene; the viewer asks for 512 px tiles at the
 current scale and composites them on a canvas, so a file renders
 progressively and only what is visible is drawn.
+
+## Blurs and shadows
+
+Figma's blur radius is twice a Gaussian's standard deviation, and the
+renderer approximates the Gaussian with three box blurs, which cost the same
+at any radius but grow with the area they cover, as zooming in grows it. A
+wide blur is smooth, so a layer blur, drop shadow, inner shadow, or
+background blur at least 16 device pixels wide (its deviation) renders at a
+power-of-two fraction of the resolution that keeps it at least 8 coarse
+pixels wide, and scales back up bilinearly (`render/coarse`); fractional
+offsets and spreads stay exact. A layer with drop shadows and no layer blur
+keeps its own content at full resolution and casts the shadows from a
+coarse copy. Coarse pixels are aligned to the page's origin, so tiles agree
+where they meet. Inner shadows are cast from the node's own geometry, so
+unlike background blurs they need no margin around the tile. Tests compare
+coarse blurs with true Gaussians and tiles with whole renders.
 
 ## Moving layers
 

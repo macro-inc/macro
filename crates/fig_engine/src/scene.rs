@@ -600,23 +600,27 @@ fn text_bounds(props: &Props, size: Vec2) -> Rect {
 
 /// How far effects reach beyond the node's geometry, in page units.
 fn effect_outset(props: &Props, world: &Affine) -> f64 {
-    let mut outset: f64 = 0.0;
+    let (mut blur, mut shadow): (f64, f64) = (0.0, 0.0);
     for e in props.effects().iter().filter(|e| e.is_visible()) {
-        let reach = match e.kind {
+        match e.kind {
             EffectKind::DropShadow => {
-                f64::from(e.radius) * 1.5
-                    + if props.supports_shadow_spread() {
-                        f64::from(e.spread.max(0.0))
-                    } else {
-                        0.0
-                    }
-                    + e.offset.x.abs().max(e.offset.y.abs())
+                shadow = shadow.max(
+                    f64::from(e.radius) * 1.5
+                        + if props.supports_shadow_spread() {
+                            f64::from(e.spread.max(0.0))
+                        } else {
+                            0.0
+                        }
+                        + e.offset.x.abs().max(e.offset.y.abs()),
+                );
             }
-            EffectKind::LayerBlur => f64::from(e.radius) * 1.5,
-            _ => 0.0,
-        };
-        outset = outset.max(reach);
+            EffectKind::LayerBlur => blur += f64::from(e.radius.max(0.0)) * 1.5,
+            _ => {}
+        }
     }
+    // Blurs apply one after another, and drop shadows are cast from the
+    // blurred layer: their reaches add up.
+    let outset = blur + shadow;
     if outset > 0.0 {
         outset * world.scale_factor().max(1e-6)
     } else {

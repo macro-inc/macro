@@ -94,7 +94,7 @@ export interface PageState {
 /** Longest side of the overview, in device pixels. */
 const OVERVIEW_SIDE = 2048;
 /** Quiet time after which the view counts as settled. */
-const SETTLE_MS = 140;
+const SETTLE_MS = 100;
 /** Quiet time after an edit before tiles out of view are re-rendered. */
 const EDIT_SETTLE_MS = 300;
 /** Priority of overview tiles changed by an edit: after every view tile. */

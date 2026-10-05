@@ -8,8 +8,11 @@
 //! following siblings until the next mask or the end of its parent.
 //!
 //! Layers are sized to the node's bounds within the region being rendered,
-//! so isolated nodes cost what they cover, not a full surface.
+//! so isolated nodes cost what they cover, not a full surface; wide blurs
+//! and shadows render at a fraction of the resolution (see `coarse`).
 
+mod blend;
+mod coarse;
 mod effects;
 pub(crate) mod paint;
 pub(crate) mod pattern;
@@ -22,8 +25,9 @@ use crate::model::{
     Affine, Color, EffectKind, MaskType, NodeType, Props, Rect, StrokeAlign, Vec2, WindingRule,
 };
 use crate::scene::{Scene, SceneIdx};
+use blend::composite;
 use std::sync::Arc;
-use tiny_skia::{FillRule, Mask, Path, PathBuilder, Pixmap, PixmapPaint, Transform};
+use tiny_skia::{FillRule, Mask, Path, PathBuilder, Pixmap, Transform};
 
 /// What to draw: a page rectangle starting at `(x, y)` (page units) at
 /// `scale` device pixels per unit, `width × height` pixels.
@@ -369,36 +373,41 @@ impl<'a> Painter<'a> {
     }
 
     /// How far (device pixels) the node's layer blurs and drop shadows
-    /// sample beyond a pixel, with a few pixels to spare for rounding.
+    /// sample beyond a pixel, with a few pixels to spare for rounding. Layers
+    /// at full resolution reach no further than [`MAX_MARGIN`].
     fn layer_reach(&self, i: SceneIdx) -> f64 {
-        let mut reach: f64 = 0.0;
+        let (mut blur, mut shadow): (f64, f64) = (0.0, 0.0);
         for e in self.props(i).effects().iter().filter(|e| e.is_visible()) {
-            let r = match e.kind {
+            match e.kind {
                 EffectKind::DropShadow => {
-                    f64::from(e.radius) * 1.5
-                        + if self.props(i).supports_shadow_spread() {
-                            f64::from(e.spread.abs())
-                        } else {
-                            0.0
-                        }
-                        + e.offset.x.abs().max(e.offset.y.abs())
+                    shadow = shadow.max(
+                        f64::from(e.radius) * 1.5
+                            + if self.props(i).supports_shadow_spread() {
+                                f64::from(e.spread.abs())
+                            } else {
+                                0.0
+                            }
+                            + e.offset.x.abs().max(e.offset.y.abs()),
+                    );
                 }
-                EffectKind::LayerBlur if e.radius > 0.0 => f64::from(e.radius) * 1.5,
-                _ => continue,
-            };
-            reach = reach.max(r);
+                EffectKind::LayerBlur if e.radius > 0.0 => blur += f64::from(e.radius) * 1.5,
+                _ => {}
+            }
         }
+        // Blurs apply one after another, and drop shadows are cast from the
+        // blurred layer: their reaches add up.
+        let reach = blur + shadow;
         if reach > 0.0 {
-            (reach * self.scene.node(i).world.scale_factor() * self.scale + 3.0).min(MAX_MARGIN)
+            reach * self.scene.node(i).world.scale_factor() * self.scale + 3.0
         } else {
             0.0
         }
     }
 
-    /// How far (device pixels) inner shadows and background blurs in the
-    /// subtree sample beyond their node's geometry, for nodes that intersect
-    /// the region. (They read the surface they draw on; layer blurs and drop
-    /// shadows extend their own layers instead.)
+    /// How far (device pixels) background blurs in the subtree sample beyond
+    /// their node's geometry, for nodes that intersect the region. (They
+    /// read the surface they draw on; inner shadows, layer blurs, and drop
+    /// shadows cast from their node's own geometry or layer instead.)
     fn effect_margin(&self, i: SceneIdx) -> f64 {
         let node = self.scene.node(i);
         let mut margin: f64 = 0.0;
@@ -408,20 +417,13 @@ impl<'a> Painter<'a> {
                 return 0.0;
             }
             for e in props.effects().iter().filter(|e| e.is_visible()) {
-                let reach = match e.kind {
-                    EffectKind::InnerShadow => {
-                        f64::from(e.radius) * 1.5
-                            + if props.supports_shadow_spread() {
-                                f64::from(e.spread.abs())
-                            } else {
-                                0.0
-                            }
-                            + e.offset.x.abs().max(e.offset.y.abs())
-                    }
-                    EffectKind::BackgroundBlur => f64::from(e.radius) * 1.5,
-                    _ => 0.0,
-                };
-                margin = margin.max(reach * node.world.scale_factor() * self.scale);
+                if e.kind == EffectKind::BackgroundBlur && e.radius > 0.0 {
+                    // As far as the blur reaches, at the resolution it
+                    // renders at (see `background_blur`).
+                    let sigma = f64::from(e.radius) / 2.0 * node.world.scale_factor() * self.scale;
+                    let k = f64::from(coarse::coarseness_for(sigma));
+                    margin = margin.max(3.0 * sigma + 3.0 + coarse::PAD * k);
+                }
             }
         }
         for c in node.below() {
@@ -618,8 +620,16 @@ impl<'a> Painter<'a> {
         // Blurs and shadows sample around each pixel: their layer reaches
         // past the surface by as far as they do, so it is complete within
         // (and no further than any layer around it reaches past the region).
+        let reach = self.layer_reach(i);
+        if reach > 0.0 {
+            let k = self.coarseness(i);
+            if k > 1 {
+                self.draw_coarse(i, surface, clip, k);
+                return;
+            }
+        }
         let outer = self.reach;
-        let layer = match self.layer_reach(i) {
+        let layer = match reach.min(MAX_MARGIN) {
             reach if reach > 0.0 => {
                 self.reach = outer.max(reach - self.margin);
                 let bound = surface
@@ -666,12 +676,11 @@ impl<'a> Painter<'a> {
                 let offset = self.device_vector(i, e.offset);
                 effects::drop_shadow(&mut with_shadows.pixmap, &layer.pixmap, &e, offset, scale);
             }
-            with_shadows.pixmap.draw_pixmap(
-                0,
-                0,
+            blend::draw_over(
+                &mut with_shadows.pixmap,
                 layer.pixmap.as_ref(),
-                &PixmapPaint::default(),
-                Transform::identity(),
+                (0, 0),
+                1.0,
                 None,
             );
             layer = with_shadows;
@@ -1251,28 +1260,6 @@ pub(crate) fn solid_paint(c: Color) -> tiny_skia::Paint<'static> {
     p.set_color(c.to_skia());
     p.anti_alias = true;
     p
-}
-
-/// Draws `layer` onto `surface` at its device position.
-fn composite(
-    surface: &mut Surface,
-    layer: &Surface,
-    opacity: f32,
-    blend: tiny_skia::BlendMode,
-    clip: Option<&Mask>,
-) {
-    surface.pixmap.draw_pixmap(
-        layer.ox - surface.ox,
-        layer.oy - surface.oy,
-        layer.pixmap.as_ref(),
-        &PixmapPaint {
-            opacity,
-            blend_mode: blend,
-            quality: tiny_skia::FilterQuality::Nearest,
-        },
-        Transform::identity(),
-        clip,
-    );
 }
 
 #[cfg(test)]
