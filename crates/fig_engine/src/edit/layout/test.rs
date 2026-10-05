@@ -745,4 +745,37 @@ fn strokes_take_space_when_the_frame_includes_them() {
     assert_eq!(bounds(&doc, &kids[1]).1, 12.0);
     assert_eq!(bounds(&doc, &frame).2, 4.0 + 96.0 + 32.0 + 96.0 + 4.0);
     assert_eq!(bounds(&doc, &frame).3, 104.0);
+
+    // A divider: a line takes its stroke's thickness, above it.
+    let column = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":300,"width":320,"height":10}"#,
+    );
+    let line = make(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"type":"LINE","x":0,"y":300,"width":320,"height":0}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &line,
+        r#"{"strokes":[{"color":"000000"}],"strokeWeight":1}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"layoutMode":"VERTICAL","sizingHorizontal":"FIXED","sizingVertical":"HUG"}"#,
+    );
+    let c = idx(&doc, &column) as usize;
+    let mut al = (**doc.nodes[c].props.auto_layout.as_ref().unwrap()).clone();
+    al.strokes_in_layout = true;
+    doc.nodes[c].props.auto_layout = Some(std::sync::Arc::new(al));
+    set(&mut doc, &mut h, &line, r#"{"sizingHorizontal":"FILL"}"#);
+    assert_eq!(bounds(&doc, &column).3, 1.0);
+    assert_eq!(bounds(&doc, &line), (0.0, 1.0, 320.0, 0.0));
 }

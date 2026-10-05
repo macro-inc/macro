@@ -92,6 +92,14 @@ impl Txn<'_> {
         if !p.has_visible_strokes() {
             return [0.0; 4];
         }
+        if p.node_type() == NodeType::Line {
+            // Figma lays a line out as its stroke's thickness, above it.
+            return if outer {
+                [f64::from(p.stroke_weight()), 0.0, 0.0, 0.0]
+            } else {
+                [0.0; 4]
+            };
+        }
         let share = match (p.stroke_align(), outer) {
             (StrokeAlign::Center, _) => 0.5,
             (StrokeAlign::Outside, true) | (StrokeAlign::Inside, false) => 1.0,
