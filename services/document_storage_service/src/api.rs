@@ -27,6 +27,7 @@ mod middleware;
 // Routes
 mod annotations;
 mod documents;
+mod folders_query;
 mod graphql_soup;
 mod health;
 mod history;

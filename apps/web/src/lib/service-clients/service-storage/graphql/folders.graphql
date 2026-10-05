@@ -1,0 +1,20 @@
+fragment DriveFolderFields on GraphqlSoupProject {
+  __typename
+  id
+  name
+  ownerId
+  parentId
+  createdAt
+  updatedAt
+  viewedAt
+  deletedAt
+}
+
+query DriveFolders {
+  user {
+    id
+    folders {
+      ...DriveFolderFields
+    }
+  }
+}

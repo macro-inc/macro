@@ -53,6 +53,12 @@ INSERT INTO public.entity_access (entity_id, entity_type, source_id, source_type
 VALUES
     ('10000000-0000-0000-0000-000000000001', 'project', 'macro|owner@test.com', 'user', 'owner'),
     ('10000000-0000-0000-0000-000000000001', 'project', 'macro|viewer@test.com', 'user', 'view'),
+    ('10000000-0000-0000-0000-000000000002', 'project', 'macro|owner@test.com', 'user', 'owner'),
+    ('10000000-0000-0000-0000-000000000003', 'project', 'macro|owner@test.com', 'user', 'owner'),
+    ('10000000-0000-0000-0000-000000000005', 'project', 'macro|owner@test.com', 'user', 'owner'),
+    ('10000000-0000-0000-0000-000000000006', 'project', 'macro|owner@test.com', 'user', 'owner'),
+    ('10000000-0000-0000-0000-000000000007', 'project', 'macro|viewer@test.com', 'user', 'owner'),
+    ('10000000-0000-0000-0000-000000000008', 'project', 'macro|owner@test.com', 'user', 'owner'),
     ('20000000-0000-0000-0000-000000000001', 'document', 'macro|viewer@test.com', 'user', 'owner'),
     ('30000000-0000-0000-0000-000000000001', 'chat', 'macro|owner@test.com', 'user', 'owner');
 

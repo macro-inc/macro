@@ -1,4 +1,5 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use crate::api::folders_query::DssFoldersQueryReader;
 use async_graphql::{
     Data,
     http::{ALL_WEBSOCKET_PROTOCOLS, GraphiQLSource},
@@ -165,6 +166,9 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_entity_mutation_service.clone());
     data.insert(state.favorites_mutation_service.clone());
     data.insert(state.favorites_service.clone());
+    data.insert(graphql_soup::FoldersQuery::new(DssFoldersQueryReader(
+        state.projects_state.service.clone(),
+    )));
     data.insert(state.channel_service.clone());
     data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
