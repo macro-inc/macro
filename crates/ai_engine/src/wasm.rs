@@ -214,6 +214,22 @@ impl AiFile {
         Some(crate::text::hit(t, local))
     }
 
+    /// A text object's lines and caret stops for the type tool
+    /// (`TextGeometry` JSON, `null` for other nodes).
+    #[wasm_bindgen(js_name = textGeometry)]
+    pub fn text_geometry(&self, id: u32) -> String {
+        let geometry = self.doc.find(id).and_then(|i| {
+            let n = self.doc.node(i);
+            match &n.kind {
+                crate::model::NodeKind::Text(t) if !n.removed => {
+                    Some(crate::text::geometry(t, n.transform))
+                }
+                _ => None,
+            }
+        });
+        to_json(&geometry)
+    }
+
     /// The document described for search and agents.
     pub fn describe(&self) -> String {
         describe::outline(&self.doc, 60_000)

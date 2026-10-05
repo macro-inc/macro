@@ -6,6 +6,10 @@
 //! characters, and alignment is around the anchor (point text) or within
 //! the width (area text).
 
+mod geometry;
+
+pub use geometry::{CaretLine, TextGeometry, geometry};
+
 use crate::geom::{Affine, PathData, Point, Rect};
 use crate::model::{TextAlign, TextNode};
 use fig_engine::text::{Font, FontGlyph};
@@ -43,6 +47,8 @@ pub struct Placed {
     pub glyph: FontGlyph,
     /// Its origin on the baseline.
     pub x: f64,
+    /// How far the pen moves past it (tracking and kerning included).
+    pub advance: f64,
     /// The baseline.
     pub y: f64,
     /// Index of the character (in `char`s) it shows.
@@ -163,6 +169,7 @@ pub fn layout(t: &TextNode) -> Layout {
                 glyphs.push(Placed {
                     glyph: g,
                     x,
+                    advance: w,
                     y: baseline,
                     index: i,
                 });
