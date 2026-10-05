@@ -54,9 +54,10 @@ let catalog: Promise<GoogleFamily[]> | undefined;
 
 /** The Google Fonts families, most popular first (loaded once). */
 export function googleFamilies(): Promise<GoogleFamily[]> {
-  catalog ??= import('./google-fonts.json').then((m) =>
-    parseCatalog(m.default as CatalogRow[])
-  );
+  catalog ??= (async () => {
+    const rows = (await import('./google-fonts.json')).default;
+    return parseCatalog(rows as CatalogRow[]);
+  })();
   return catalog;
 }
 

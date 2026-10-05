@@ -35,7 +35,13 @@ function Row(props: {
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
       observer.disconnect();
-      void preview(props.family).then(setFace, () => undefined);
+      void (async () => {
+        try {
+          setFace(await preview(props.family));
+        } catch {
+          // No preview: the name shows in the panel's font.
+        }
+      })();
     });
     observer.observe(el);
     onCleanup(() => observer.disconnect());

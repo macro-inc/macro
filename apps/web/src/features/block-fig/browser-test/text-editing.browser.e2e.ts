@@ -53,12 +53,24 @@ test('draws the caret and selection from the layout', async ({ page }) => {
   await typeNewText(page, 'Hello world');
   const caret = page.getByTestId('fig-text-caret');
   await expect(caret).toHaveCount(1);
-  const end = await caret.boundingBox();
   await page.keyboard.press('Home');
   await expect.poll(() => selection(page)).toEqual([0, 0]);
   const start = await caret.boundingBox();
-  expect(end && start && end.x - start.x).toBeGreaterThan(40);
+  await page.keyboard.press('End');
+  await expect.poll(() => selection(page)).toEqual([11, 11]);
+  // The caret spans the text's width, as the engine laid it out.
+  const textBox = page.getByTestId('fig-text-box');
+  await expect
+    .poll(async () => {
+      const [end, text] = [
+        await caret.boundingBox(),
+        await textBox.boundingBox(),
+      ];
+      return end && start && text ? Math.abs(end.x - start.x - text.width) : 99;
+    })
+    .toBeLessThan(3);
   // Shift extends; the selection shows instead of the caret.
+  await page.keyboard.press('Home');
   await page.keyboard.press('Shift+End');
   await expect.poll(() => selection(page)).toEqual([0, 11]);
   await expect(page.getByTestId('fig-text-selection')).toHaveCount(1);
@@ -81,8 +93,9 @@ test('moves between lines with the arrow keys', async ({ page }) => {
   await expect.poll(() => selection(page)).toEqual([12, 12]);
   await page.keyboard.press('ArrowUp');
   await expect.poll(() => selection(page)).toEqual([5, 5]);
+  // Down keeps the x: "first|" sits over "sec|ond".
   await page.keyboard.press('Shift+ArrowDown');
-  await expect.poll(() => selection(page)).toEqual([5, 12]);
+  await expect.poll(() => selection(page)).toEqual([5, 9]);
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('Home');
   await expect.poll(() => selection(page)).toEqual([0, 0]);

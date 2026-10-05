@@ -176,7 +176,8 @@ export function TextEditor(props: {
   let pending: Promise<unknown> = Promise.resolve();
   const send = (ops: Parameters<FigEditor['apply']>[0], coalesce?: string) => {
     inflight++;
-    pending = pending.then(async () => {
+    const after = async (before: Promise<unknown>) => {
+      await before;
       try {
         await fontsReady(latest);
         await props.editor.apply(ops, coalesce);
@@ -184,7 +185,8 @@ export function TextEditor(props: {
         inflight--;
       }
       await load();
-    });
+    };
+    pending = after(pending);
     return pending;
   };
 
@@ -266,46 +268,48 @@ export function TextEditor(props: {
     document.removeEventListener('selectionchange', onSelectionChange);
   });
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    e.stopPropagation();
+  /** Inserts text at the selection as if typed. */
+  const insert = (text: string) => {
+    area.setRangeText(text, area.selectionStart, area.selectionEnd, 'end');
+    onInput();
+  };
+
+  /** Keys that do something other than move: whether one was handled. */
+  const command = (e: KeyboardEvent): boolean => {
     const mod = IS_MAC ? e.metaKey : e.ctrlKey;
     const k = e.key.toLowerCase();
     if (e.key === 'Escape') {
-      e.preventDefault();
       void finish();
-      return;
+      return true;
     }
     if (mod && !e.altKey && (k === 'b' || k === 'i' || k === 'u')) {
-      e.preventDefault();
       const text = info()?.text;
-      if (!text) return;
-      const { start, end } = sel();
-      const r = rangeStyle(text, start, end);
-      style(
-        k === 'b'
-          ? toggleBold(r)
-          : k === 'i'
-            ? toggleItalic(r)
-            : toggleUnderline(r)
-      );
-      return;
+      if (!text) return true;
+      const r = rangeStyle(text, sel().start, sel().end);
+      const toggle = { b: toggleBold, i: toggleItalic, u: toggleUnderline }[k];
+      style(toggle(r));
+      return true;
     }
     if (mod && (k === 'z' || k === 'y')) {
-      e.preventDefault();
       void history(k === 'y' || e.shiftKey);
-      return;
+      return true;
     }
+    // Shift+Enter: Figma's line break within a paragraph.
     if (e.key === 'Enter' && e.shiftKey) {
-      // Figma's soft line break.
-      e.preventDefault();
-      area.setRangeText(' ', area.selectionStart, area.selectionEnd, 'end');
-      onInput();
-      return;
+      insert('\u2028');
+      return true;
     }
     if (e.key === 'Tab') {
+      insert('\t');
+      return true;
+    }
+    return false;
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    e.stopPropagation();
+    if (command(e)) {
       e.preventDefault();
-      area.setRangeText('\t', area.selectionStart, area.selectionEnd, 'end');
-      onInput();
       return;
     }
     const vertical =
@@ -320,7 +324,10 @@ export function TextEditor(props: {
       e.preventDefault();
       const { key, shiftKey } = e;
       // After what was typed is laid out.
-      void pending.then(() => moveByLine(key, shiftKey, vertical));
+      void (async () => {
+        await pending;
+        moveByLine(key, shiftKey, vertical);
+      })();
       return;
     }
     goalX = undefined;

@@ -38,18 +38,28 @@ const runOf = (text: TextInfo, unit: number): TextRun | undefined => {
 
 /** The style character `unit` (a UTF-16 index) is drawn in. */
 export function styleAt(text: TextInfo, unit: number): CharStyle {
-  const run = runOf(text, unit);
-  return {
-    fontFamily: run?.fontFamily ?? text.fontFamily ?? 'Inter',
-    fontStyle: run?.fontStyle ?? text.fontStyle ?? 'Regular',
-    fontSize: run?.fontSize ?? text.fontSize ?? 12,
-    decoration: run?.decoration ?? text.decoration ?? 'NONE',
-    letterSpacing: run?.letterSpacing ?? text.letterSpacing,
-    lineHeight: run?.lineHeight ?? text.lineHeight,
-    case: run?.case ?? text.case ?? 'ORIGINAL',
-    fills: run?.fills ?? null,
-    fontStatus: run?.fontStatus ?? text.fontStatus,
+  const defaults: CharStyle = {
+    fontFamily: 'Inter',
+    fontStyle: 'Regular',
+    fontSize: 12,
+    decoration: 'NONE',
+    letterSpacing: null,
+    lineHeight: null,
+    case: 'ORIGINAL',
+    fills: null,
+    fontStatus: text.fontStatus,
   };
+  // The run's values over the layer's over the defaults.
+  const layer = { ...text, fills: null };
+  const out = { ...defaults };
+  for (const source of [layer, runOf(text, unit)]) {
+    for (const key of KEYS) {
+      const v = source?.[key];
+      if (v !== null && v !== undefined)
+        (out as Record<string, unknown>)[key] = v;
+    }
+  }
+  return out;
 }
 
 const KEYS: (keyof CharStyle)[] = [

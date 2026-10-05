@@ -51,13 +51,15 @@ export function createFontRegistry(options: FontRegistryOptions) {
   let catalogLoad: Promise<GoogleFamily[]> | undefined;
 
   const loadCatalog = () => {
-    catalogLoad ??= catalog().then(
-      (list) => {
+    catalogLoad ??= (async () => {
+      try {
+        const list = await catalog();
         setFamilies(list);
         return list;
-      },
-      () => [] as GoogleFamily[]
-    );
+      } catch {
+        return [];
+      }
+    })();
     return catalogLoad;
   };
 
@@ -116,14 +118,17 @@ export function createFontRegistry(options: FontRegistryOptions) {
     const k = key(f.family);
     let faces = stylesheets.get(k);
     if (!faces) {
-      const load = async () => {
+      const load = async (): Promise<FontFaceSource[]> => {
         if (!source) return [];
-        return parseFontFaces(await source.stylesheet(googleCssUrl(f)));
+        try {
+          return parseFontFaces(await source.stylesheet(googleCssUrl(f)));
+        } catch {
+          // Offline: asked again next time.
+          stylesheets.delete(k);
+          return [];
+        }
       };
-      faces = load().catch(() => {
-        stylesheets.delete(k);
-        return [] as FontFaceSource[];
-      });
+      faces = load();
       stylesheets.set(k, faces);
     }
     return faces;
@@ -205,7 +210,7 @@ export function createFontRegistry(options: FontRegistryOptions) {
     const k = key(family);
     let known = previews.get(k);
     if (!known) {
-      const load = async () => {
+      const load = async (): Promise<string | undefined> => {
         const google = await googleFamily(family);
         if (!google || !source) {
           return document.fonts.check(`12px "${family}"`) ? family : undefined;
@@ -221,7 +226,14 @@ export function createFontRegistry(options: FontRegistryOptions) {
         document.fonts.add(font);
         return name;
       };
-      known = load().catch(() => undefined);
+      const attempt = async () => {
+        try {
+          return await load();
+        } catch {
+          return undefined;
+        }
+      };
+      known = attempt();
       previews.set(k, known);
     }
     return known;
