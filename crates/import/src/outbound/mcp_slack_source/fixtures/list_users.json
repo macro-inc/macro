@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"ok\":true,\"members\":[{\"id\":\"U0000000001\",\"team_id\":\"T0000000001\",\"name\":\"example-human\",\"real_name\":\"Example Human\",\"deleted\":false,\"is_bot\":false,\"profile\":{\"display_name\":\"Example\",\"real_name\":\"Example Human\",\"email\":\"human@example.com\"}},{\"id\":\"U0000000002\",\"team_id\":\"T0000000001\",\"name\":\"example-bot\",\"real_name\":\"Example Bot\",\"deleted\":false,\"is_bot\":true,\"profile\":{\"display_name\":\"Example Bot\"}},{\"id\":\"U0000000003\",\"team_id\":\"T0000000001\",\"name\":\"example-deleted\",\"real_name\":\"Example Deleted\",\"deleted\":true,\"is_bot\":false,\"profile\":{\"display_name\":\"\",\"email\":\"deleted@example.com\"}}],\"response_metadata\":{\"next_cursor\":\"\"}}"
+    }
+  ],
+  "isError": false
+}
