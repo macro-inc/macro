@@ -73,6 +73,8 @@ export function ViewerToolbar(props: {
   /** Boolean operations on the selection (when editable and selected). */
   onBoolean?: (operation: BooleanOperation) => void;
   onFlatten?: () => void;
+  /** Review tools after the drawing tools (comments, present). */
+  review?: JSX.Element;
 }) {
   const [open, setOpen] = createSignal(false);
   const [booleanOpen, setBooleanOpen] = createSignal(false);
@@ -111,6 +113,7 @@ export function ViewerToolbar(props: {
           </Button>
         )}
       </For>
+      {props.review}
       <Show when={props.editable}>
         <div ref={booleanMenu} class="relative">
           <Button

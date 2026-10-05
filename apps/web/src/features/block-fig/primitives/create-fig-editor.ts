@@ -29,6 +29,7 @@ import {
   pasteParent,
 } from '../core/clipboard';
 import type { PaintType, StopSpec } from '../core/paint';
+import type { InteractionSpec } from '../core/prototype';
 import type { Measure } from '../core/type';
 import { type PenPoint, penNetwork } from '../core/vector';
 import type { FigViewer, Selected } from './create-fig-viewer';
@@ -173,7 +174,9 @@ export type Op =
       name?: string;
       props?: Patch;
     }
-  | { op: 'setVector'; id: string; network: VectorNetwork };
+  | { op: 'setVector'; id: string; network: VectorNetwork }
+  | { op: 'setInteractions'; id: string; interactions: InteractionSpec[] }
+  | { op: 'setFlowStart'; id: string; name: string | null };
 
 export interface FigEditorOptions {
   engine: FigEngine;

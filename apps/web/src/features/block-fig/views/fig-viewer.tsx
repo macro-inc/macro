@@ -15,9 +15,13 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { CommentPins } from '../components/comment-pins';
 import { DesignPanel } from '../components/design-panel';
 import { FigContextMenu } from '../components/fig-context-menu';
 import { FollowFrame, PeerAvatars } from '../components/peer-presence';
+import { PrototypeNoodles } from '../components/prototype-noodles';
+import { PrototypePanel } from '../components/prototype-panel';
+import { ReviewButtons } from '../components/review-buttons';
 import { ShortcutsDialog } from '../components/shortcuts-dialog';
 import { ViewerToolbar } from '../components/viewer-toolbar';
 import { useFigViewerContext } from '../context/fig-viewer-context';
@@ -34,10 +38,13 @@ import {
 import { deleteVertex, VECTOR_EDITABLE } from '../core/vector';
 import { createFigContextMenu } from '../primitives/create-fig-context-menu';
 import { createFigEditor, type Patch } from '../primitives/create-fig-editor';
+import { createFigReview } from '../primitives/create-fig-review';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { createPeerOverlays } from '../primitives/create-peer-overlays';
 import { AssetsPanel } from './assets-panel';
+import { CommentsPanel } from './comments-panel';
 import { LayersPanel } from './layers-panel';
+import { PresentMode } from './present-mode';
 import { TextEditor } from './text-editor';
 import { ViewerCanvas } from './viewer-canvas';
 
@@ -69,6 +76,14 @@ export function FigViewer() {
             collab.peers()
           )
       : undefined,
+  });
+
+  const review = createFigReview({
+    context,
+    engine,
+    viewer,
+    editor,
+    mac: IS_MAC,
   });
 
   const [spaceHeld, setSpaceHeld] = createSignal(false);
@@ -492,6 +507,7 @@ export function FigViewer() {
     // A focused select or button keeps the keys it uses itself.
     const control = target.closest('select, button, a[href]');
     if (control && controlOwnsKey(control.tagName, e)) return;
+    if (review.onKey(e)) return;
     if (e.key === ' ') {
       e.preventDefault();
       setSpaceHeld(true);
@@ -701,6 +717,31 @@ export function FigViewer() {
               />
             )}
           </Show>
+          <Show
+            when={
+              showDesign() &&
+              review.panelTab() === 'prototype' &&
+              !review.comments?.active() &&
+              review.prototype()
+            }
+          >
+            {(info) => (
+              <PrototypeNoodles
+                info={info()}
+                camera={viewer.camera()}
+                selected={viewer.selected().map((s) => s.id)}
+              />
+            )}
+          </Show>
+          <Show when={review.comments?.active() && review.comments}>
+            {(c) => (
+              <CommentPins
+                comments={c()}
+                camera={viewer.camera()}
+                viewport={viewer.viewport()}
+              />
+            )}
+          </Show>
           <Show when={viewer.loadingPage()}>
             <div class="pointer-events-none absolute inset-0 flex items-center justify-center text-ink-muted text-sm">
               Loading page…
@@ -728,6 +769,19 @@ export function FigViewer() {
               zoomLabel={zoomLabel(viewer.camera().zoom)}
               zoomItems={zoomItems()}
               onShortcuts={() => setShowShortcuts((s) => !s)}
+              review={
+                <ReviewButtons
+                  mac={IS_MAC}
+                  comments={
+                    review.comments && {
+                      active: review.comments.active(),
+                      unread: review.comments.unreadCount(),
+                      onToggle: review.toggleComments,
+                    }
+                  }
+                  onPresent={() => void review.present()}
+                />
+              }
             />
           </Show>
           <Show when={collab}>
@@ -773,7 +827,18 @@ export function FigViewer() {
           />
         </ViewerCanvas>
       </div>
-      <Show when={showDesign()}>
+      <Show when={showDesign() && review.comments?.active() && review.comments}>
+        {(c) => (
+          <aside class="flex w-64 shrink-0 flex-col border-edge-muted border-l bg-panel">
+            <CommentsPanel
+              comments={c()}
+              currentPage={viewer.pages[viewer.page()]?.id}
+              pageName={(id) => viewer.pages.find((p) => p.id === id)?.name}
+            />
+          </aside>
+        )}
+      </Show>
+      <Show when={showDesign() && !review.comments?.active()}>
         <aside class="flex w-64 shrink-0 flex-col border-edge-muted border-l bg-panel">
           <DesignPanel
             info={info()}
@@ -800,8 +865,42 @@ export function FigViewer() {
             }
             onFlatten={() => void editor.flatten()}
             onCopyText={(text) => void copyText(text)}
+            onTabChange={review.setPanelTab}
+            prototype={
+              <PrototypePanel
+                info={review.prototype()}
+                selected={
+                  viewer.selected().length === 1 && info()
+                    ? { id: info()?.id ?? '', name: info()?.name ?? '' }
+                    : undefined
+                }
+                onInteractions={
+                  editor.enabled()
+                    ? (id, index, edited) =>
+                        void review.setInteraction(id, index, edited)
+                    : undefined
+                }
+                onFlowStart={editor.enabled() ? review.setFlowStart : undefined}
+                onPresent={(frame) => void review.present(frame)}
+              />
+            }
           />
         </aside>
+      </Show>
+      <Show when={review.presenting()}>
+        {(p) => (
+          <PresentMode
+            engine={engine}
+            page={p().page}
+            info={p().info}
+            start={p().start}
+            onExit={() => {
+              review.stopPresenting();
+              root.focus({ preventScroll: true });
+            }}
+            onCopyLink={review.copyFrameLink}
+          />
+        )}
       </Show>
     </div>
   );
