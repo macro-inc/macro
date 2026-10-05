@@ -15,7 +15,7 @@ export function DropZone(props: DropZoneProps) {
 
   return (
     <div
-      class="contents"
+      class="relative"
       use:fileFolderDrop={{
         onDragStart: (valid) => props.onDragStart?.(valid),
         onDragEnd: () => props.onDragEnd?.(),
