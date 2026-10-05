@@ -2062,6 +2062,10 @@ open the corresponding exhausted-usage prompt directly. The previews also work
 before the usage summary loads or when it fails. The paid-plan preview allows
 testing Auto-Reload settings. Purchases and payment management are disabled during any
 preview; `Reset preview` restores server data and closes the usage-limit dialog.
+`Preview production before Oct 8` shows the October 8 announcement and disables
+Usage controls, including usage-limit dialogs. Dev tools remain interactive:
+Free and paid previews can be combined with this state, and `Reset preview`
+restores the normal dev view.
 
 `Billing` shows the current plan and `Manage`, an `Upgrade` section for Free
 users with Premium (`Upgrade now`) and Max (`Get Max`), an `Upgrade to Max` card
