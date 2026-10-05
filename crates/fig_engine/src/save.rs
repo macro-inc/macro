@@ -1522,7 +1522,7 @@ fn package(doc: &Document, canvas: &[u8], meta: Option<&serde_json::Value>) -> V
             serde_json::Value::String(doc.file_name.clone().unwrap_or_else(|| "Untitled".into())),
         );
     }
-    let meta_bytes = serde_json::to_vec(&meta).unwrap_or_default();
+    let meta_bytes = serde_json::to_vec(&sorted(meta)).unwrap_or_default();
     let thumb = thumbnail(doc).unwrap_or_default();
     let mut names: Vec<(String, &[u8])> = vec![
         ("canvas.fig".into(), canvas),
@@ -1538,6 +1538,23 @@ fn package(doc: &Document, canvas: &[u8], meta: Option<&serde_json::Value>) -> V
     }
     let entries: Vec<(&str, &[u8])> = names.iter().map(|(n, b)| (n.as_str(), *b)).collect();
     crate::zip::write_stored(&entries)
+}
+
+/// `value` with object keys in sorted order at every level, so saved bytes
+/// don't depend on whether `serde_json` keeps insertion order (a feature
+/// other crates in the workspace turn on).
+fn sorted(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(obj) => {
+            let mut entries: Vec<_> = obj.into_iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            serde_json::Value::Object(entries.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.into_iter().map(sorted).collect())
+        }
+        other => other,
+    }
 }
 
 /// A render of the first page's content, at most 400 px wide, as Figma
