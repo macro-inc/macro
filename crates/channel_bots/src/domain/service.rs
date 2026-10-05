@@ -60,6 +60,9 @@ words the highlight covers.";
 const BLANK_HIGHLIGHT_INSTRUCTION: &str = "This discussion is attached to a PDF highlight that \
 carries no text, so which words it covers is not known.";
 
+const FIG_ANCHOR_INSTRUCTION: &str = "This discussion is pinned to a point on a design: on the \
+layer named by nodeId, offset by x and y from its origin, or on the page canvas when nodeId is null.";
+
 const PIN_ANCHOR_INSTRUCTION: &str = "This discussion is pinned to a point on a PDF page rather \
 than to a span of text, so it covers no words.";
 
@@ -87,6 +90,13 @@ enum DiscussionAnchor {
     /// A point on a PDF page, which covers no text.
     PdfPin {
         anchor_id: Uuid,
+    },
+    /// A point pinned on a design, on a layer or on the bare page canvas.
+    Fig {
+        page_id: String,
+        node_id: Option<String>,
+        x: f64,
+        y: f64,
     },
 }
 
@@ -196,6 +206,22 @@ fn append_document_anchor(prompt: &mut String, anchor: &DiscussionAnchor) {
             prompt,
             "\n<anchor pin=\"{anchor_id}\">\n{PIN_ANCHOR_INSTRUCTION}\n</anchor>\n"
         ),
+        DiscussionAnchor::Fig {
+            page_id,
+            node_id,
+            x,
+            y,
+        } => {
+            let location =
+                serde_json::json!({ "pageId": page_id, "nodeId": node_id, "x": x, "y": y })
+                    .to_string()
+                    .replace('<', "\\u003c")
+                    .replace('>', "\\u003e");
+            write!(
+                prompt,
+                "\n<anchor type=\"fig\">\n{FIG_ANCHOR_INSTRUCTION}\n{location}\n</anchor>\n"
+            )
+        }
     };
 }
 
@@ -355,6 +381,17 @@ where
                 marked_text,
             },
             ThreadAnchor::PdfPlaceable { anchor_id } => DiscussionAnchor::PdfPin { anchor_id },
+            ThreadAnchor::Fig {
+                page_id,
+                node_id,
+                x,
+                y,
+            } => DiscussionAnchor::Fig {
+                page_id,
+                node_id,
+                x,
+                y,
+            },
         });
         let mut thread_ids = HashSet::new();
         let mut lines = Vec::new();
