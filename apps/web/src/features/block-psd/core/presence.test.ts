@@ -19,7 +19,10 @@ describe('presence', () => {
         session: 7,
         cursor: { x: 1, y: 2 },
         layers: [3],
-        selection: { bounds: { x: 0, y: 0, w: 4, h: 4 }, outline: [[0, 0, 4, 0, 4, 4]] },
+        selection: {
+          bounds: { x: 0, y: 0, w: 4, h: 4 },
+          outline: [[0, 0, 4, 0, 4, 4]],
+        },
         view: { x: 0, y: 0, w: 10, h: 10 },
         editing: 3,
       })

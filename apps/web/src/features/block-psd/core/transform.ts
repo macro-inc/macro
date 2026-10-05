@@ -26,15 +26,7 @@ export interface FreeTransform {
 }
 
 /** Handle positions by their sides: `[x, y]` each -1, 0, or 1. */
-export type Handle =
-  | 'nw'
-  | 'n'
-  | 'ne'
-  | 'e'
-  | 'se'
-  | 's'
-  | 'sw'
-  | 'w';
+export type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 export const HANDLE_SIDES: Record<Handle, [number, number]> = {
   nw: [-1, -1],
@@ -102,7 +94,10 @@ export function matrixOf(t: FreeTransform): Matrix {
 }
 
 export function applyMatrix(m: Matrix, p: Point): Point {
-  return { x: m[0] * p.x + m[2] * p.y + m[4], y: m[1] * p.x + m[3] * p.y + m[5] };
+  return {
+    x: m[0] * p.x + m[2] * p.y + m[4],
+    y: m[1] * p.x + m[3] * p.y + m[5],
+  };
 }
 
 const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
@@ -207,11 +202,16 @@ export function hitTransform(
   t: FreeTransform,
   p: Point,
   slop: number
-): { kind: 'handle'; handle: Handle } | { kind: 'move' } | { kind: 'rotate' } | undefined {
+):
+  | { kind: 'handle'; handle: Handle }
+  | { kind: 'move' }
+  | { kind: 'rotate' }
+  | undefined {
   for (const handle of HANDLES) {
     const [sx, sy] = HANDLE_SIDES[handle];
     const h = boxPoint(t, sx, sy);
-    if (Math.hypot(p.x - h.x, p.y - h.y) <= slop) return { kind: 'handle', handle };
+    if (Math.hypot(p.x - h.x, p.y - h.y) <= slop)
+      return { kind: 'handle', handle };
   }
   const { u, v } = axes(t);
   const d = { x: p.x - t.cx, y: p.y - t.cy };

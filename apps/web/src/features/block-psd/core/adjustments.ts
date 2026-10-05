@@ -65,7 +65,11 @@ export const IDENTITY_LEVELS: LevelsChannel = {
 const WARMING: Rgb = { r: 236 / 255, g: 138 / 255, b: 0 };
 
 /** A two-color gradient from `from` to `to`. */
-export function twoColorGradient(from: Rgb, to: Rgb, name = 'Custom'): Gradient {
+export function twoColorGradient(
+  from: Rgb,
+  to: Rgb,
+  name = 'Custom'
+): Gradient {
   return {
     name,
     kind: 'linear',
@@ -172,10 +176,10 @@ export function defaultAdjustment(type: EditableAdjustment): Adjustment {
 }
 
 /** Whether the editor has controls for an adjustment's kind. */
-export const isEditable = (a: Adjustment): a is Extract<
-  Adjustment,
-  { type: EditableAdjustment }
-> => (ADJUSTMENT_TYPES as readonly string[]).includes(a.type);
+export const isEditable = (
+  a: Adjustment
+): a is Extract<Adjustment, { type: EditableAdjustment }> =>
+  (ADJUSTMENT_TYPES as readonly string[]).includes(a.type);
 
 /**
  * A curve's points sorted by input, without two at the same input, with

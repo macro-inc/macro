@@ -75,8 +75,12 @@ describe('tiles', () => {
       w: 4,
       h: 1,
     });
-    expect(tileTouches({ level: 1, ix: 1, iy: 0 }, { x: 1024, y: 0, w: 1, h: 1 })).toBe(true);
-    expect(tileTouches({ level: 1, ix: 1, iy: 0 }, { x: 1023, y: 0, w: 1, h: 1 })).toBe(false);
+    expect(
+      tileTouches({ level: 1, ix: 1, iy: 0 }, { x: 1024, y: 0, w: 1, h: 1 })
+    ).toBe(true);
+    expect(
+      tileTouches({ level: 1, ix: 1, iy: 0 }, { x: 1023, y: 0, w: 1, h: 1 })
+    ).toBe(false);
   });
 });
 
@@ -87,19 +91,23 @@ describe('cell sources', () => {
   };
 
   it('prefers the cell itself', () => {
-    expect(cellSources({ level: 1, ix: 0, iy: 0 }, doc, have('1:0:0', '2:0:0'))).toEqual([
-      { level: 1, ix: 0, iy: 0 },
-    ]);
+    expect(
+      cellSources({ level: 1, ix: 0, iy: 0 }, doc, have('1:0:0', '2:0:0'))
+    ).toEqual([{ level: 1, ix: 0, iy: 0 }]);
   });
 
   it('uses sharper children only when they cover the cell', () => {
     const cell = { level: 1, ix: 1, iy: 1 };
     const children = ['0:2:2', '0:3:2', '0:2:3', '0:3:3'];
-    expect(cellSources(cell, doc, have(...children)).map(tileId)).toEqual(children);
+    expect(cellSources(cell, doc, have(...children)).map(tileId)).toEqual(
+      children
+    );
     // One missing: the coarser parent instead (never mixed, which would
     // draw transparent areas twice).
     expect(
-      cellSources(cell, doc, have('0:2:2', '0:3:2', '0:2:3', '3:0:0')).map(tileId)
+      cellSources(cell, doc, have('0:2:2', '0:3:2', '0:2:3', '3:0:0')).map(
+        tileId
+      )
     ).toEqual(['3:0:0']);
   });
 
@@ -108,7 +116,11 @@ describe('cell sources', () => {
     // children are outside it.
     const small = { width: 600, height: 500 };
     expect(
-      cellSources({ level: 1, ix: 0, iy: 0 }, small, have('0:0:0', '0:1:0')).map(tileId)
+      cellSources(
+        { level: 1, ix: 0, iy: 0 },
+        small,
+        have('0:0:0', '0:1:0')
+      ).map(tileId)
     ).toEqual(['0:0:0', '0:1:0']);
   });
 

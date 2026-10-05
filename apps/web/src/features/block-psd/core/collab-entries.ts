@@ -96,10 +96,7 @@ export function entriesApplyTo(doc: LoroDoc, fingerprint: string): boolean {
 }
 
 /** The layer grids recorded for a stored file (`layers:<fingerprint>`). */
-export function storedLayers(
-  doc: LoroDoc,
-  fingerprint: string
-): string | null {
+export function storedLayers(doc: LoroDoc, fingerprint: string): string | null {
   const value = doc.getMap(META).get(layersKey(fingerprint));
   return typeof value === 'string' ? value : null;
 }

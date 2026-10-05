@@ -18,9 +18,13 @@
  * - Requests that fall out of view before they start are cancelled.
  */
 
-import type { PendingTile, PsdEngine, TileResult } from '@core/psd-engine/client';
-import type { IRect } from '@core/psd-engine/types';
 import type { Camera, Size } from '@app/features/block-fig/core/camera';
+import type {
+  PendingTile,
+  PsdEngine,
+  TileResult,
+} from '@core/psd-engine/client';
+import type { IRect } from '@core/psd-engine/types';
 import {
   canvasToLevel,
   cellSources,
@@ -41,10 +45,9 @@ import {
 export interface TileSurface {
   width: number;
   height: number;
-  getContext(kind: '2d'): Pick<
-    CanvasRenderingContext2D,
-    'clearRect' | 'drawImage'
-  > | null;
+  getContext(
+    kind: '2d'
+  ): Pick<CanvasRenderingContext2D, 'clearRect' | 'drawImage'> | null;
 }
 
 interface Entry {
@@ -178,7 +181,8 @@ export function createTileCompositor(options: TileCompositorOptions) {
         cache.get(id) !== entry
       ) {
         result?.bitmap?.close();
-        if (current && !entry.surface && cache.get(id) === entry) cache.delete(id);
+        if (current && !entry.surface && cache.get(id) === entry)
+          cache.delete(id);
         return;
       }
       const ctx = ensureSurface(entry).getContext('2d');
@@ -446,7 +450,8 @@ export function createTileCompositor(options: TileCompositorOptions) {
 
     /** Whether no render is in flight. */
     idle(): boolean {
-      for (const e of cache.values()) if (e.pending || e.patches > 0) return false;
+      for (const e of cache.values())
+        if (e.pending || e.patches > 0) return false;
       return true;
     },
 

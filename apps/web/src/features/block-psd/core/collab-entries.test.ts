@@ -79,7 +79,8 @@ describe('shared document entries', () => {
     const doc = seeded();
     const seen: string[] = [];
     doc.subscribe((batch) => {
-      for (const k of changedKeys(doc, batch)) seen.push(`${k.container}/${k.key}`);
+      for (const k of changedKeys(doc, batch))
+        seen.push(`${k.container}/${k.key}`);
     });
     writeEntryChanges(doc, [
       { container: 'psdLayers', key: '1', value: 'x' },

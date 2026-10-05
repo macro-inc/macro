@@ -28,7 +28,12 @@ function row(
     fillOpacity: 255,
     blend: 'normal',
     clipping: false,
-    locks: { transparency: false, pixels: false, position: false, artboard: false },
+    locks: {
+      transparency: false,
+      pixels: false,
+      position: false,
+      artboard: false,
+    },
     colorTag: 0,
     background: false,
     hasMask: false,

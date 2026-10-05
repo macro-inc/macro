@@ -68,7 +68,9 @@ describe('text layers', () => {
   });
 
   it('spells PostScript names', () => {
-    expect(postscriptName('Open Sans', 'Bold Italic')).toBe('OpenSans-BoldItalic');
+    expect(postscriptName('Open Sans', 'Bold Italic')).toBe(
+      'OpenSans-BoldItalic'
+    );
     expect(postscriptName('Inter', 'Regular')).toBe('Inter-Regular');
   });
 });

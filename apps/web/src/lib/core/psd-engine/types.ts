@@ -199,6 +199,8 @@ export interface Subpath {
   op: PathOp;
   knots: Knot[];
   nonzero?: boolean;
+  /** Part of the previous subpath's shape rather than one of its own. */
+  joined?: boolean;
   shape?: number;
 }
 
@@ -398,7 +400,12 @@ export interface Glow {
 
 export interface Bevel {
   enabled: boolean;
-  style: 'outerBevel' | 'innerBevel' | 'emboss' | 'pillowEmboss' | 'strokeEmboss';
+  style:
+    | 'outerBevel'
+    | 'innerBevel'
+    | 'emboss'
+    | 'pillowEmboss'
+    | 'strokeEmboss';
   technique: 'smooth' | 'chiselHard' | 'chiselSoft';
   depth: number;
   up: boolean;

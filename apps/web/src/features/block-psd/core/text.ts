@@ -106,7 +106,9 @@ export function retext(layer: TextLayer, edited: string): TextLayer {
   );
   // Typed characters take the style of the character before them.
   const owner =
-    prefix === 0 ? 0 : spans.findIndex((s) => s.start < prefix && prefix <= s.end);
+    prefix === 0
+      ? 0
+      : spans.findIndex((s) => s.start < prefix && prefix <= s.end);
   if (lengths.length > 0) lengths[Math.max(0, owner)] += inserted;
   const runs: TextLayer['runs'] = spans
     .map((s, i) => ({ length: lengths[i], style: s.style }))

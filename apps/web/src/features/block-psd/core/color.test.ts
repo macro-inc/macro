@@ -20,7 +20,14 @@ describe('colors', () => {
   });
 
   it('round-trips HSB', () => {
-    for (const hex of ['FF0000', '00FF00', '0000FF', '808080', '3A7BD5', 'F5A623']) {
+    for (const hex of [
+      'FF0000',
+      '00FF00',
+      '0000FF',
+      '808080',
+      '3A7BD5',
+      'F5A623',
+    ]) {
       const c = parseHex(hex);
       if (!c) throw new Error(hex);
       expect(toHex(fromHsb(toHsb(c)))).toBe(hex);
@@ -33,6 +40,8 @@ describe('colors', () => {
     expect(css(fromBytes(10, 20, 30))).toBe('rgb(10, 20, 30)');
     expect(css(fromBytes(10, 20, 30), 0.5)).toBe('rgba(10, 20, 30, 0.5)');
     expect(toBytes({ r: 1.2, g: -1, b: 0.5 })).toEqual([255, 0, 128]);
-    expect(sameColor({ r: 0.5, g: 0.5, b: 0.5 }, { r: 0.501, g: 0.5, b: 0.5 })).toBe(true);
+    expect(
+      sameColor({ r: 0.5, g: 0.5, b: 0.5 }, { r: 0.501, g: 0.5, b: 0.5 })
+    ).toBe(true);
   });
 });

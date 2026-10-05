@@ -62,7 +62,13 @@ export function dropPlacement(
   if (dragged.includes(target.id)) return undefined;
   let parent: number | null;
   let position: Position;
-  if (zone === 'inside' || (zone === 'after' && target.kind === 'group' && target.open && target.children > 0)) {
+  if (
+    zone === 'inside' ||
+    (zone === 'after' &&
+      target.kind === 'group' &&
+      target.open &&
+      target.children > 0)
+  ) {
     // Into the group, on top of its stack (first under it in the panel).
     parent = target.id;
     position = { type: 'top' };

@@ -44,7 +44,9 @@ export function parseHex(text: string): Rgb | undefined {
 /** A CSS color. */
 export function css(c: Rgb, alpha = 1): string {
   const [r, g, b] = toBytes(c);
-  return alpha >= 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  return alpha >= 1
+    ? `rgb(${r}, ${g}, ${b})`
+    : `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /** Hue (degrees), saturation and brightness (`0..=1`). */

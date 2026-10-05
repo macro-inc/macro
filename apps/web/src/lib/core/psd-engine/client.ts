@@ -197,9 +197,7 @@ export class PsdEngine {
     method: QueryMethod,
     ...args: (number | null)[]
   ): Promise<T> {
-    return parse<T>(
-      await this.worker.request({ kind: 'query', method, args })
-    );
+    return parse<T>(await this.worker.request({ kind: 'query', method, args }));
   }
 
   private async bytes(
@@ -257,7 +255,9 @@ export class PsdEngine {
         kind: 'render',
         ...tile,
       });
-      return r.kind === 'render' ? { bitmap: r.bitmap, millis: r.millis } : null;
+      return r.kind === 'render'
+        ? { bitmap: r.bitmap, millis: r.millis }
+        : null;
     };
     return { id, promise: run() };
   }

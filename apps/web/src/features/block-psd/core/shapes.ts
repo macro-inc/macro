@@ -24,7 +24,16 @@ const corner = (x: number, y: number): Knot => ({
 
 function closedPath(knots: Knot[]): VectorMask {
   return {
-    subpaths: [{ closed: true, op: 'combine', knots, nonzero: false, shape: 0 }],
+    subpaths: [
+      {
+        closed: true,
+        op: 'combine',
+        knots,
+        nonzero: false,
+        joined: false,
+        shape: 0,
+      },
+    ],
     invert: false,
     disabled: false,
     unlinked: false,
@@ -57,7 +66,12 @@ export function ellipsePath(r: IRect): VectorMask {
     by: number,
     fx: number,
     fy: number
-  ): Knot => ({ before: [bx, by], anchor: [ax, ay], after: [fx, fy], linked: true });
+  ): Knot => ({
+    before: [bx, by],
+    anchor: [ax, ay],
+    after: [fx, fy],
+    linked: true,
+  });
   return closedPath([
     smooth(cx, cy - ry, cx - kx, cy - ry, cx + kx, cy - ry),
     smooth(cx + rx, cy, cx + rx, cy - ky, cx + rx, cy + ky),

@@ -5,7 +5,10 @@ import type {
   TileResult,
 } from '@core/psd-engine/client';
 import { describe, expect, it } from 'vitest';
-import { createTileCompositor, type TileSurface } from './create-tile-compositor';
+import {
+  createTileCompositor,
+  type TileSurface,
+} from './create-tile-compositor';
 
 /** An engine whose renders resolve when the test says so. */
 function fakeEngine() {
@@ -68,7 +71,11 @@ describe('tile compositor', () => {
   it('composites the overview first, then the view at its level', async () => {
     const { engine, queued, finishAll } = fakeEngine();
     const { createSurface } = fakeSurfaces();
-    const compositor = createTileCompositor({ engine, onTile: () => {}, createSurface });
+    const compositor = createTileCompositor({
+      engine,
+      onTile: () => {},
+      createSurface,
+    });
     compositor.setDocument(doc);
     // A 4096 × 2048 canvas fits 2048 pixels at level 1: 4 × 2 tiles.
     expect(queued.map((q) => q.tile.level)).toEqual(Array(8).fill(1));
@@ -76,11 +83,15 @@ describe('tile compositor', () => {
     await finishAll();
 
     // 100% at 1×: level 0 tiles for a 1000 × 600 view at the top left.
-    const view = { camera: { x: 0, y: 0, zoom: 1 }, viewport: { w: 1000, h: 600 }, dpr: 1 };
+    const view = {
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewport: { w: 1000, h: 600 },
+      dpr: 1,
+    };
     compositor.update(view);
-    expect(queued.map((q) => `${q.tile.level}:${q.tile.x},${q.tile.y}`).sort()).toEqual(
-      ['0:0,0', '0:512,0', '0:0,512', '0:512,512'].sort()
-    );
+    expect(
+      queued.map((q) => `${q.tile.level}:${q.tile.x},${q.tile.y}`).sort()
+    ).toEqual(['0:0,0', '0:512,0', '0:0,512', '0:512,512'].sort());
     expect(compositor.isSharp(view)).toBe(false);
     await finishAll();
     expect(compositor.isSharp(view)).toBe(true);
@@ -94,9 +105,17 @@ describe('tile compositor', () => {
   it('patches only the changed area of tiles in view', async () => {
     const { engine, queued, finishAll } = fakeEngine();
     const { draws, createSurface } = fakeSurfaces();
-    const compositor = createTileCompositor({ engine, onTile: () => {}, createSurface });
+    const compositor = createTileCompositor({
+      engine,
+      onTile: () => {},
+      createSurface,
+    });
     compositor.setDocument(doc);
-    const view = { camera: { x: 0, y: 0, zoom: 1 }, viewport: { w: 500, h: 500 }, dpr: 1 };
+    const view = {
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewport: { w: 500, h: 500 },
+      dpr: 1,
+    };
     compositor.update(view);
     await finishAll();
     draws.length = 0;
@@ -127,8 +146,16 @@ describe('tile compositor', () => {
     });
     compositor.setDocument(doc);
     await finishAll();
-    compositor.update({ camera: { x: 0, y: 0, zoom: 1 }, viewport: { w: 400, h: 400 }, dpr: 1 });
-    compositor.update({ camera: { x: 3000, y: 1500, zoom: 1 }, viewport: { w: 400, h: 400 }, dpr: 1 });
+    compositor.update({
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewport: { w: 400, h: 400 },
+      dpr: 1,
+    });
+    compositor.update({
+      camera: { x: 3000, y: 1500, zoom: 1 },
+      viewport: { w: 400, h: 400 },
+      dpr: 1,
+    });
     expect(cancelled.length).toBeGreaterThan(0);
     compositor.dispose();
   });

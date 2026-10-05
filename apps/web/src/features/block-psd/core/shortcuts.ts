@@ -156,7 +156,8 @@ export const EDIT_COMMANDS: ReadonlySet<Command> = new Set<Command>([
 
 /** Brush sizes `[` and `]` step through, as Photoshop's do. */
 export function stepBrushSize(size: number, direction: 1 | -1): number {
-  const step = size < 10 ? 1 : size < 100 ? 10 : size < 200 ? 25 : size < 300 ? 50 : 100;
+  const step =
+    size < 10 ? 1 : size < 100 ? 10 : size < 200 ? 25 : size < 300 ? 50 : 100;
   const next = direction > 0 ? size + step : size - (size <= 10 ? 1 : step);
   return Math.min(5000, Math.max(1, Math.round(next)));
 }

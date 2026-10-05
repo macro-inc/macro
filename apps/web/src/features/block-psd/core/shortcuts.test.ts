@@ -19,7 +19,9 @@ describe('shortcuts', () => {
       t: 'command',
       command: 'undo',
     });
-    expect(keyAction(key('KeyZ', { metaKey: true, shiftKey: true }), true)).toEqual({
+    expect(
+      keyAction(key('KeyZ', { metaKey: true, shiftKey: true }), true)
+    ).toEqual({
       t: 'command',
       command: 'redo',
     });
@@ -33,7 +35,9 @@ describe('shortcuts', () => {
       t: 'command',
       command: 'freeTransform',
     });
-    expect(keyAction(key('KeyI', { metaKey: true, shiftKey: true }), true)).toEqual({
+    expect(
+      keyAction(key('KeyI', { metaKey: true, shiftKey: true }), true)
+    ).toEqual({
       t: 'command',
       command: 'invertSelection',
     });
@@ -41,7 +45,9 @@ describe('shortcuts', () => {
       t: 'command',
       command: 'zoomFit',
     });
-    expect(keyAction(key('KeyG', { metaKey: true, altKey: true }), true)).toEqual({
+    expect(
+      keyAction(key('KeyG', { metaKey: true, altKey: true }), true)
+    ).toEqual({
       t: 'command',
       command: 'clippingMask',
     });
@@ -51,27 +57,41 @@ describe('shortcuts', () => {
   });
 
   it('maps tools, colors, and brush keys', () => {
-    expect(keyAction(key('KeyB'), true)).toEqual({ t: 'tool', key: 'B', cycle: false });
+    expect(keyAction(key('KeyB'), true)).toEqual({
+      t: 'tool',
+      key: 'B',
+      cycle: false,
+    });
     expect(keyAction(key('KeyM', { shiftKey: true }), true)).toEqual({
       t: 'tool',
       key: 'M',
       cycle: true,
     });
-    expect(keyAction(key('KeyX'), true)).toEqual({ t: 'command', command: 'swapColors' });
+    expect(keyAction(key('KeyX'), true)).toEqual({
+      t: 'command',
+      command: 'swapColors',
+    });
     expect(keyAction(key('BracketRight', {}, ']'), true)).toEqual({
       t: 'command',
       command: 'brushLarger',
     });
-    expect(keyAction(key('BracketLeft', { shiftKey: true }, '{'), true)).toEqual({
+    expect(
+      keyAction(key('BracketLeft', { shiftKey: true }, '{'), true)
+    ).toEqual({
       t: 'command',
       command: 'brushSofter',
     });
-    expect(keyAction(key('Digit5', {}, '5'), true)).toEqual({ t: 'opacity', value: 5 });
+    expect(keyAction(key('Digit5', {}, '5'), true)).toEqual({
+      t: 'opacity',
+      value: 5,
+    });
     expect(keyAction(key('KeyQ'), true)).toBeUndefined();
   });
 
   it('nudges, deletes, and fills', () => {
-    expect(keyAction(key('ArrowLeft', { shiftKey: true }, 'ArrowLeft'), true)).toEqual({
+    expect(
+      keyAction(key('ArrowLeft', { shiftKey: true }, 'ArrowLeft'), true)
+    ).toEqual({
       t: 'nudge',
       dx: -10,
       dy: 0,
@@ -80,11 +100,15 @@ describe('shortcuts', () => {
       t: 'command',
       command: 'delete',
     });
-    expect(keyAction(key('Backspace', { altKey: true }, 'Backspace'), true)).toEqual({
+    expect(
+      keyAction(key('Backspace', { altKey: true }, 'Backspace'), true)
+    ).toEqual({
       t: 'command',
       command: 'fillForeground',
     });
-    expect(keyAction(key('Backspace', { metaKey: true }, 'Backspace'), true)).toEqual({
+    expect(
+      keyAction(key('Backspace', { metaKey: true }, 'Backspace'), true)
+    ).toEqual({
       t: 'command',
       command: 'fillBackground',
     });

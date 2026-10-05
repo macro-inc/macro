@@ -17,9 +17,10 @@ import { layerBelow } from './layer-tree';
  * Where a new layer goes: above the active layer in its stack (the top of
  * the document when nothing is active).
  */
-export function newLayerPlace(
-  active: LayerRow | undefined
-): { parent: number | null; position: Position } {
+export function newLayerPlace(active: LayerRow | undefined): {
+  parent: number | null;
+  position: Position;
+} {
   if (!active) return { parent: null, position: { type: 'top' } };
   return { parent: active.parent, position: { type: 'above', id: active.id } };
 }
