@@ -31,21 +31,23 @@ export function createDesignSystem(options: {
   const [components, setComponents] = createSignal<ComponentInfo[]>([]);
 
   let request = 0;
+  /** Loads the details of the single selected layer (the latest wins). */
+  const loadInfo = async (id: string | undefined) => {
+    const mine = ++request;
+    if (!id) {
+      setInfo(undefined);
+      return;
+    }
+    try {
+      const next = await engine.designInfo(viewer.page(), id);
+      if (mine === request) setInfo(next);
+    } catch {
+      if (mine === request) setInfo(undefined);
+    }
+  };
   createEffect(
     on([viewer.selected, viewer.editVersion], ([selected]) => {
-      const mine = ++request;
-      if (selected.length !== 1) {
-        setInfo(undefined);
-        return;
-      }
-      engine
-        .designInfo(viewer.page(), selected[0].id)
-        .then((i) => {
-          if (mine === request) setInfo(i);
-        })
-        .catch(() => {
-          if (mine === request) setInfo(undefined);
-        });
+      void loadInfo(selected.length === 1 ? selected[0].id : undefined);
     })
   );
 

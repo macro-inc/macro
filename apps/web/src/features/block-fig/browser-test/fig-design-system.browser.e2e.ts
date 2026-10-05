@@ -28,8 +28,6 @@ async function openPage(page: Page, name: string) {
   await expect(page.getByTestId('fig-layer-row').first()).toBeVisible();
 }
 
-const panel = (page: Page) => page.getByTestId('fig-design-panel');
-
 async function expectSavedCleanly(page: Page) {
   await expect
     .poll(() => page.evaluate(() => window.figFixture.saves().length), {
@@ -88,9 +86,7 @@ test('sets an instance’s properties, swaps it, and resets it', async ({
     .getByTestId('fig-component-choice')
     .filter({ hasText: 'Icon/Heart' })
     .click();
-  await expect(page.getByTestId('fig-main-component')).toHaveText(
-    'Icon/Heart'
-  );
+  await expect(page.getByTestId('fig-main-component')).toHaveText('Icon/Heart');
   await page.getByTestId('fig-canvas').focus();
   await page.keyboard.press('Control+z');
   await expect(page.getByTestId('fig-main-component')).toHaveText('Card');
