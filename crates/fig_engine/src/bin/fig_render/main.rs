@@ -57,6 +57,15 @@ enum Command {
         verbose: bool,
         files: Vec<PathBuf>,
     },
+    /// Combine every boolean layer's operands again and compare the outline
+    /// with the one Figma stored (the overlap of the two, as a share of
+    /// what either covers).
+    Booleans {
+        /// Print each boolean layer's score.
+        #[arg(long)]
+        verbose: bool,
+        files: Vec<PathBuf>,
+    },
 }
 
 fn main() {
@@ -91,6 +100,20 @@ fn main() {
         Command::BenchEdit { files } => {
             for path in files {
                 bench_edit(&path);
+            }
+        }
+        Command::Booleans { verbose, files } => {
+            let mut scores = Vec::new();
+            for path in files {
+                scores.extend(booleans(&path, verbose));
+            }
+            if !scores.is_empty() {
+                let mean = scores.iter().sum::<f64>() / scores.len() as f64;
+                let low = scores.iter().filter(|&&s| s < 0.98).count();
+                println!(
+                    "mean overlap {mean:.4} over {} boolean layers; {low} below 0.98",
+                    scores.len()
+                );
             }
         }
         Command::Relayout { verbose, files } => {
@@ -657,4 +680,73 @@ fn bench_edit(path: &Path) {
         resize.0,
         resize.1
     );
+}
+
+/// Scores each boolean layer's recombined outline against Figma's.
+fn booleans(path: &Path, verbose: bool) -> Vec<f64> {
+    use fig_engine::model::{NodeType, WindingRule};
+    let Some((_, doc)) = open(path) else {
+        return Vec::new();
+    };
+    let mut scores = Vec::new();
+    let started = Instant::now();
+    for (i, node) in doc.nodes.iter().enumerate() {
+        let p = &node.props;
+        if p.node_type() != NodeType::BooleanOperation || p.fill_geometry().is_empty() {
+            continue;
+        }
+        let size = p.size();
+        if size.x <= 0.0 || size.y <= 0.0 {
+            continue;
+        }
+        let k = 256.0 / size.x.max(size.y);
+        let (w, h) = (
+            ((size.x * k).ceil() as u32).max(1),
+            ((size.y * k).ceil() as u32).max(1),
+        );
+        let ts = tiny_skia::Transform::from_scale(k as f32, k as f32);
+        let (Some(mut stored), Some(mut ours)) =
+            (tiny_skia::Mask::new(w, h), tiny_skia::Mask::new(w, h))
+        else {
+            continue;
+        };
+        for g in p.fill_geometry() {
+            if let Some(path) = doc.blobs.path(g.blob) {
+                let rule = match g.winding {
+                    WindingRule::NonZero => tiny_skia::FillRule::Winding,
+                    WindingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
+                };
+                stored.fill_path(&path.path, rule, true, ts);
+            }
+        }
+        if let Some(path) = fig_engine::edit::shapes::combined(&doc, i as u32) {
+            ours.fill_path(&path, tiny_skia::FillRule::Winding, true, ts);
+        }
+        let (mut both, mut either) = (0u64, 0u64);
+        for (a, b) in stored.data().iter().zip(ours.data()) {
+            both += u64::from((*a).min(*b));
+            either += u64::from((*a).max(*b));
+        }
+        if either == 0 {
+            continue;
+        }
+        let score = both as f64 / either as f64;
+        if verbose || score < 0.9 {
+            println!(
+                "  {:.4} {} {} ({})",
+                score,
+                p.guid.map(|g| g.to_string()).unwrap_or_default(),
+                p.name(),
+                p.boolean_operation.as_deref().unwrap_or("UNION")
+            );
+        }
+        scores.push(score);
+    }
+    println!(
+        "{}: {} boolean layers in {:.0?}",
+        stem(path),
+        scores.len(),
+        started.elapsed()
+    );
+    scores
 }

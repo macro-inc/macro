@@ -112,7 +112,7 @@ fn follows_each_paths_winding_rule() {
     pb.push_rect(tiny_skia::Rect::from_xywh(0.0, 0.0, 30.0, 30.0).unwrap());
     pb.push_rect(tiny_skia::Rect::from_xywh(10.0, 10.0, 10.0, 10.0).unwrap());
     let ring = vec![(pb.finish().unwrap(), FillRule::EvenOdd)];
-    let p = combine(BoolOp::Union, &[ring.clone()]).unwrap();
+    let p = combine(BoolOp::Union, std::slice::from_ref(&ring)).unwrap();
     assert!(!inside(&p, 15.0, 15.0) && inside(&p, 5.0, 5.0));
     let p = combine(BoolOp::Union, &[ring, rect(12.0, 12.0, 4.0, 4.0)]).unwrap();
     assert!(inside(&p, 14.0, 14.0) && !inside(&p, 18.0, 18.0));

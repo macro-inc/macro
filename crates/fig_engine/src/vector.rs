@@ -307,11 +307,11 @@ impl Network {
             }
         };
         // Open runs first, from their loose ends and junctions.
-        for v in 0..nv {
-            if at[v].len() == 2 {
+        for (v, around) in at.iter().enumerate() {
+            if around.len() == 2 {
                 continue;
             }
-            for &s in &at[v].clone() {
+            for &s in around {
                 if !used[s as usize] {
                     out.push(walk(v as u32, s, &mut used));
                 }
