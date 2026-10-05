@@ -158,6 +158,7 @@ fn vector_paint(paint: &Paint) -> bool {
         PaintKind::Image(img) => {
             img.scale_mode != ImageScaleMode::Tile && img.filters == ImageFilters::default()
         }
+        PaintKind::Pattern(_) => false,
         PaintKind::Unsupported(_) => true,
     }
 }
@@ -506,7 +507,7 @@ impl Page<'_> {
                     matrix(&world.mul(&to_node).mul(&unit))
                 );
             }
-            PaintKind::Unsupported(_) => {}
+            PaintKind::Pattern(_) | PaintKind::Unsupported(_) => {}
         }
     }
 
@@ -574,6 +575,11 @@ impl Page<'_> {
                 }
             }
         }
+        let container_stroke =
+            self.props(i).node_type().is_frame_like() && !self.props(i).clips_content();
+        if container_stroke && self.props(i).has_visible_strokes() {
+            self.strokes(i, alpha);
+        }
         let p = self.props(i);
         let children = self.scene.node(i).children.clone();
         if p.node_type().draws_children() && !children.is_empty() {
@@ -596,7 +602,7 @@ impl Page<'_> {
                 self.ops.push_str("Q\n");
             }
         }
-        if self.props(i).has_visible_strokes() {
+        if self.props(i).has_visible_strokes() && !container_stroke {
             self.strokes(i, alpha);
         }
     }

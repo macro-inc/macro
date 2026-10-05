@@ -258,6 +258,7 @@ fn paint_info(p: &Paint, size: Vec2) -> PaintInfo {
             info.scale_mode = Some(enum_name(&img.scale_mode));
             info.image_hash = img.hash.as_deref().map(str::to_owned);
         }
+        PaintKind::Pattern(_) => info.kind = "PATTERN".into(),
         PaintKind::Unsupported(kind) => info.kind = kind.to_ascii_uppercase(),
     }
     info

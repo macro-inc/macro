@@ -161,7 +161,7 @@ test('zooms with Figma’s shortcuts', async ({ page }) => {
   await page.getByTestId('fig-canvas').focus();
   await page.keyboard.press('Shift+0');
   await expect(zoom).toHaveText(/100%/);
-  await page.keyboard.press('Control+=');
+  await page.keyboard.press('ControlOrMeta+=');
   await expect(zoom).toHaveText(/200%/);
   await page.keyboard.press('Shift+1');
   await expect(zoom).not.toHaveText(/200%/);

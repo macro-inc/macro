@@ -35,7 +35,9 @@ enum MessageType JOIN_START NODE_CHANGES USER_CHANGES JOIN_END SIGNAL STYLE STYL
 enum NodePhase CREATED REMOVED
 enum NodeType NONE DOCUMENT CANVAS GROUP FRAME BOOLEAN_OPERATION VECTOR STAR LINE ELLIPSE RECTANGLE REGULAR_POLYGON ROUNDED_RECTANGLE TEXT SLICE SYMBOL INSTANCE STICKY SHAPE_WITH_TEXT CONNECTOR CODE_BLOCK WIDGET STAMP MEDIA HIGHLIGHT SECTION SECTION_OVERLAY WASHI_TAPE VARIABLE TABLE TABLE_CELL
 enum BlendMode PASS_THROUGH NORMAL DARKEN MULTIPLY LINEAR_BURN COLOR_BURN LIGHTEN SCREEN LINEAR_DODGE COLOR_DODGE OVERLAY SOFT_LIGHT HARD_LIGHT DIFFERENCE EXCLUSION HUE SATURATION COLOR LUMINOSITY
-enum PaintType SOLID GRADIENT_LINEAR GRADIENT_RADIAL GRADIENT_ANGULAR GRADIENT_DIAMOND IMAGE EMOJI VIDEO
+enum PaintType SOLID GRADIENT_LINEAR GRADIENT_RADIAL GRADIENT_ANGULAR GRADIENT_DIAMOND IMAGE EMOJI VIDEO PATTERN
+enum PatternTileType RECTANGULAR HORIZONTAL_HEXAGONAL VERTICAL_HEXAGONAL
+enum PatternAlignment START CENTER END
 enum ImageScaleMode STRETCH FIT FILL TILE
 enum EffectType INNER_SHADOW DROP_SHADOW FOREGROUND_BLUR BACKGROUND_BLUR
 enum StrokeAlign CENTER INSIDE OUTSIDE
@@ -67,7 +69,7 @@ message Number value:float units:NumberUnits
 message FontName family:string style:string postscript:string
 message ColorStop color:Color position:float
 message Image hash:byte[] name:string
-message Paint type:PaintType color:Color opacity:float visible:bool blendMode:BlendMode stops:ColorStop[] transform:Matrix image:Image imageScaleMode:ImageScaleMode rotation:float scale:float originalImageWidth:uint originalImageHeight:uint
+message Paint type:PaintType color:Color opacity:float visible:bool blendMode:BlendMode stops:ColorStop[] transform:Matrix image:Image imageScaleMode:ImageScaleMode rotation:float scale:float originalImageWidth:uint originalImageHeight:uint sourceNodeId:GUID patternSpacing:Vector patternTileType:PatternTileType horizontalAlignment:PatternAlignment verticalAlignment:PatternAlignment
 message Effect type:EffectType color:Color offset:Vector radius:float visible:bool blendMode:BlendMode spread:float showShadowBehindNode:bool
 message Path windingRule:WindingRule commandsBlob:uint styleID:uint
 message Glyph commandsBlob:uint position:Vector styleID:uint fontSize:float firstCharacter:uint advance:float
@@ -102,7 +104,8 @@ struct ExportConstraint type:ExportConstraintType value:float
 message ExportSettings suffix:string imageType:ImageType constraint:ExportConstraint svgIDMode:ExportSVGIDMode svgOutlineText:bool contentsOnly:bool useAbsoluteBounds:bool quality:float
 message LayoutGrid type:LayoutGridType axis:Axis visible:bool numSections:int offset:float sectionSize:float gutterSize:float color:Color pattern:LayoutGridPattern
 message Guide axis:Axis offset:float guid:GUID
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID booleanOperation:BooleanOperation vectorData:VectorData componentPropDefs:ComponentPropDef[] componentPropRefs:ComponentPropRef[] componentPropAssignments:ComponentPropAssignment[] variantPropSpecs:VariantPropSpec[] stateGroupPropertyValueOrders:StateGroupPropertyValueOrder[] isStateGroup:bool propsAreBubbled:bool description:string key:string styleType:StyleType sortPosition:string isSoftDeleted:bool styleIdForFill:StyleId styleIdForStrokeFill:StyleId styleIdForEffect:StyleId styleIdForText:StyleId styleID:uint exportSettings:ExportSettings[] layoutGrids:LayoutGrid[] guides:Guide[]
+message ArcData startingAngle:float endingAngle:float innerRadius:float
+message NodeChange arcData:ArcData guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID booleanOperation:BooleanOperation vectorData:VectorData componentPropDefs:ComponentPropDef[] componentPropRefs:ComponentPropRef[] componentPropAssignments:ComponentPropAssignment[] variantPropSpecs:VariantPropSpec[] stateGroupPropertyValueOrders:StateGroupPropertyValueOrder[] isStateGroup:bool propsAreBubbled:bool description:string key:string styleType:StyleType sortPosition:string isSoftDeleted:bool styleIdForFill:StyleId styleIdForStrokeFill:StyleId styleIdForEffect:StyleId styleIdForText:StyleId styleID:uint exportSettings:ExportSettings[] layoutGrids:LayoutGrid[] guides:Guide[]
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -259,6 +262,15 @@ impl<'s> Build<'s> {
                     m.set(self.schema, "originalImageHeight", Value::Uint(s.y as u32));
                 }
                 "IMAGE"
+            }
+            PaintKind::Pattern(pattern) => {
+                self.guid_field(&mut m, "sourceNodeId", pattern.source);
+                m.set(self.schema, "scale", Value::Float(pattern.scale));
+                self.vector(&mut m, "patternSpacing", pattern.spacing);
+                self.set_enum(&mut m, "patternTileType", pattern.layout.name());
+                self.set_enum(&mut m, "horizontalAlignment", pattern.horizontal.name());
+                self.set_enum(&mut m, "verticalAlignment", pattern.vertical.name());
+                "PATTERN"
             }
             PaintKind::Unsupported(_) => return None,
         };
@@ -726,6 +738,13 @@ impl<'s> Build<'s> {
         if edits & flags::GEOMETRY != 0 {
             self.geometry(m, "fillGeometry", p.fill_geometry.as_deref());
             self.geometry(m, "strokeGeometry", p.stroke_geometry.as_deref());
+            if let Some([start, end, inner]) = p.arc_data {
+                self.msg_field(m, "arcData", |b, arc| {
+                    arc.set(b.schema, "startingAngle", Value::Float(start));
+                    arc.set(b.schema, "endingAngle", Value::Float(end));
+                    arc.set(b.schema, "innerRadius", Value::Float(inner));
+                });
+            }
         }
         if edits & flags::TEXT != 0 {
             self.text(m, p);
@@ -1105,7 +1124,7 @@ impl<'s> Build<'s> {
         };
         self.set_enum(&mut m, "type", t);
         let mut edits = !flags::GEOMETRY;
-        if p.fill_geometry.is_some() || p.stroke_geometry.is_some() {
+        if p.fill_geometry.is_some() || p.stroke_geometry.is_some() || p.arc_data.is_some() {
             edits |= flags::GEOMETRY;
         }
         if p.node_type() != NodeType::Text {

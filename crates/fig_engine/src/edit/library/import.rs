@@ -87,13 +87,18 @@ impl Ids {
 
 fn map_paints(paints: &mut Option<Arc<[Paint]>>, ids: &mut Ids) {
     if let Some(list) = paints
-        && list.iter().any(|p| p.color_var.is_some())
+        && list
+            .iter()
+            .any(|p| p.color_var.is_some() || matches!(p.kind, crate::model::PaintKind::Pattern(_)))
     {
         *list = list
             .iter()
             .map(|p| {
                 let mut p = p.clone();
                 p.color_var = p.color_var.map(|g| ids.map(g));
+                if let crate::model::PaintKind::Pattern(pattern) = &mut p.kind {
+                    pattern.source = ids.map(pattern.source);
+                }
                 p
             })
             .collect();

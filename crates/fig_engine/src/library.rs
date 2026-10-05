@@ -519,6 +519,9 @@ pub(crate) fn dependencies(p: &Props, out: &mut Vec<Guid>) {
     add(p.text_style_id);
     for paint in p.fills().iter().chain(p.strokes()) {
         add(paint.color_var);
+        if let crate::model::PaintKind::Pattern(pattern) = &paint.kind {
+            add(Some(pattern.source));
+        }
     }
     for a in p.prop_assignments.iter().flat_map(|a| a.iter()) {
         if let PropValue::Symbol(g) = a.value {

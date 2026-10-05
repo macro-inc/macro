@@ -19,6 +19,7 @@ use std::sync::Arc;
 pub struct Reader<'a> {
     data: &'a [u8],
     at: usize,
+    version: u8,
     keys: Vec<Arc<str>>,
     blob: &'a dyn Fn(&BlobRef) -> Option<u32>,
 }
@@ -28,6 +29,7 @@ impl<'a> Reader<'a> {
         Self {
             data,
             at: 0,
+            version: ENTRY_VERSION,
             keys: Vec::new(),
             blob,
         }
@@ -217,6 +219,18 @@ impl<'a> Reader<'a> {
                         .unwrap_or("paint"),
                 )
             }
+            4 => PaintKind::Pattern(crate::model::PatternPaint {
+                source: self.guid()?,
+                layout: match self.string()?.as_str() {
+                    "RECTANGULAR" => crate::model::PatternLayout::Rectangular,
+                    "HORIZONTAL_HEXAGONAL" => crate::model::PatternLayout::HorizontalHexagonal,
+                    _ => return Err(DecodeError::Invalid),
+                },
+                scale: self.f32()?,
+                spacing: self.vec2()?,
+                horizontal: crate::model::PatternAlign::parse(&self.string()?),
+                vertical: crate::model::PatternAlign::parse(&self.string()?),
+            }),
             _ => return Err(DecodeError::Invalid),
         };
         Ok(Paint {
@@ -632,12 +646,18 @@ impl<'a> Reader<'a> {
             })?,
             macro_data: self.opt(|r| r.arc_list(|r| Ok((r.arc_str()?, r.arc_str()?))))?,
             recomputed: self.bool()?,
+            arc_data: if self.version >= 2 {
+                self.opt(|r| Ok([r.f32()?, r.f32()?, r.f32()?]))?
+            } else {
+                None
+            },
         })
     }
 
     /// Reads a whole entry written by [`Writer::node`].
     pub fn node(mut self) -> Decoded<NodeState> {
-        if self.u8()? != ENTRY_VERSION {
+        self.version = self.u8()?;
+        if !(1..=ENTRY_VERSION).contains(&self.version) {
             return Err(DecodeError::Invalid);
         }
         self.keys = self.list(Self::arc_str)?;
