@@ -122,6 +122,62 @@ test('a returning visitor on sign-up can switch to sign in', async ({
   await expectLanded(page, '/');
 });
 
+test('returning from Google sign-up settles into onboarding without flashing', async ({
+  page,
+}) => {
+  // Record, from the first paint of every load, whether the signed-out slide
+  // ever shows, and whether the placeholder comes back after a real step.
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __frames: { signedOut: boolean; placeholderAfterStep: boolean };
+    };
+    w.__frames = { signedOut: false, placeholderAfterStep: false };
+    let sawStep = false;
+    const check = () => {
+      const text = document.body?.textContent ?? '';
+      if (text.includes('Your work email becomes your Macro sign-in'))
+        w.__frames.signedOut = true;
+      const placeholder = !!document.querySelector(
+        '[aria-label="Loading setup"]'
+      );
+      if (sawStep && placeholder) w.__frames.placeholderAfterStep = true;
+      if (document.querySelector('h1')?.textContent?.includes('Connect your'))
+        sawStep = true;
+    };
+    new MutationObserver(check).observe(document, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  });
+  await openFixture(page, '/?page=signup&latency=500&sso=cookie', {
+    ssoEmail: 'founder@acme.com',
+  });
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Connect work email' }).click();
+
+  // Back from Google: the session takes 500ms to resolve on the fresh load.
+  await expect(
+    page.getByRole('heading', { level: 1, name: /Connect your work/ })
+  ).toBeVisible();
+  // Settled: the step's inbox lookup has landed.
+  await expect(
+    page.getByRole('button', { name: 'Connect work email' })
+  ).toBeEnabled();
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __frames: { signedOut: boolean; placeholderAfterStep: boolean };
+          }
+        ).__frames
+    )
+  ).toEqual({ signedOut: false, placeholderAfterStep: false });
+});
+
 test('a mobile-web visitor gets a desktop link instead of signing up', async ({
   page,
 }) => {

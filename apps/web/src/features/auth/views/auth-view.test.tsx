@@ -245,4 +245,29 @@ describe('desktop sign-up', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in instead' }));
     expect(signIn).toHaveBeenCalledOnce();
   });
+
+  it('holds a pending frame while the session resolves, then shows the signed-out slides', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderWithFakeAuth(
+      () => (
+        <AuthView
+          intent="signup"
+          showApple={false}
+          compact={false}
+          signupJourney={(slots) => <Journey {...slots} />}
+          pending={() => <p data-testid="pending">Loading</p>}
+          signedIn={() => <p data-testid="signed-in" />}
+        />
+      ),
+      {},
+      { sessionLatencyMs: 300 }
+    );
+    expect(screen.getByTestId('pending')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Connect work email' })
+    ).toBeNull();
+    await vi.advanceTimersByTimeAsync(300);
+    await screen.findByRole('button', { name: 'Connect work email' });
+    expect(screen.queryByTestId('pending')).toBeNull();
+  });
 });

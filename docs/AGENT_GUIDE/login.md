@@ -126,7 +126,7 @@ Cancellation returns to this step. A successful return
 polls the server's license state, completes onboarding, and enters the app without
 an extra confirmation click. A pending webhook shows a retryable confirmation
 state. The Guest scroll cue opens a comparison with a separate Guest continuation.
-Both completion paths preserve an original `next` destination. Old saved email,
+Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume.
 
 ## Public onboarding preview

@@ -39,6 +39,11 @@ export function AuthView(props: {
   signupJourney?: (slots: SignupJourneySlots) => JSX.Element;
   /** Switches a returning visitor from sign-up to sign-in. */
   onSignIn?: () => void;
+  /**
+   * Shown while the session is still resolving on a cold load, instead of the
+   * signed-out screens a returning visitor would otherwise see flash by.
+   */
+  pending?: () => JSX.Element;
   /** What a signed-in visitor sees instead. */
   signedIn: (user: AuthUser) => JSX.Element;
 }) {
@@ -112,8 +117,10 @@ export function AuthView(props: {
   );
 
   return (
-    <Show when={user()} keyed fallback={signedOut()}>
-      {(signedIn) => props.signedIn(signedIn)}
+    <Show when={context.session().t !== 'loading'} fallback={props.pending?.()}>
+      <Show when={user()} keyed fallback={signedOut()}>
+        {(signedIn) => props.signedIn(signedIn)}
+      </Show>
     </Show>
   );
 }

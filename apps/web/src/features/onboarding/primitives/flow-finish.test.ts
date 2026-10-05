@@ -89,10 +89,10 @@ describe('leaving onboarding', () => {
     expect(navigate).toHaveBeenCalledWith('/channel/live');
   });
 
-  it('lands on Getting Started without a deep link', async () => {
+  it('lands on Home without a deep link', async () => {
     const { finish, navigate } = setup({}, '/home');
     await finish.finishFree(true);
-    expect(navigate).toHaveBeenCalledWith('/getting-started');
+    expect(navigate).toHaveBeenCalledWith('/home');
   });
 
   it('stays on setup with saved progress when completion fails', async () => {

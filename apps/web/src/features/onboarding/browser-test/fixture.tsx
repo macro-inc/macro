@@ -42,6 +42,9 @@ const fake = createFakeOnboarding(loadWorld(), {
     location.assign(`${location.pathname}?view=flow`);
     await new Promise(() => {});
   },
+  // `?latency=ms`: the viewer and sources load like a cold page instead of instantly.
+  latencyMs: Number(params.latency ?? 0),
+  viewerLatencyMs: Number(params.latency ?? 0),
   checkoutUrl: (tier) =>
     sessionStorage.getItem(FIXTURE_KEYS.checkoutOutcome) === 'cancel'
       ? `${location.pathname}?view=flow&subscriptionCancel=true`

@@ -71,6 +71,8 @@ export function createFakeAuth(
       intent: AuthIntent,
       email: string
     ) => Promise<void>;
+    /** Report the session as loading this long, like a cold page load. */
+    sessionLatencyMs?: number;
   } = {}
 ) {
   const [world, setWorld] = createStore<FakeAuthWorld>({
@@ -93,10 +95,15 @@ export function createFakeAuth(
       draft.pendingEmail = undefined;
     });
 
+  const [settled, setSettled] = createSignal(!options.sessionLatencyMs);
+  if (options.sessionLatencyMs)
+    setTimeout(() => setSettled(true), options.sessionLatencyMs);
   const session = (): AuthSession =>
-    world.user
-      ? { t: 'signed-in', user: { ...world.user } }
-      : { t: 'signed-out' };
+    !settled()
+      ? { t: 'loading' }
+      : world.user
+        ? { t: 'signed-in', user: { ...world.user } }
+        : { t: 'signed-out' };
 
   const context: AuthContext = {
     session,

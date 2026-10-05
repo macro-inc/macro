@@ -60,3 +60,4 @@ export function OnboardingSignup(props: {
 }
 
 export { clearSignupDraft } from './primitives/flow-storage';
+export { OnboardingPendingView as OnboardingPending } from './views/onboarding-pending-view';

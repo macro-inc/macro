@@ -156,12 +156,9 @@ describe('onboarding flow', () => {
       world: { webhookPollsRemaining: 1 },
     });
     await heading('Free Claude & GPT for 30 days.');
-    await waitFor(
-      () => expect(navigate).toHaveBeenCalledWith('/getting-started'),
-      {
-        timeout: 3_000,
-      }
-    );
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'), {
+      timeout: 3_000,
+    });
   });
 
   it('starts hosted checkout from the trial offer', async () => {
@@ -253,5 +250,14 @@ describe('onboarding flow', () => {
     setup({ resume: 'team' });
     await heading('Built for teams.');
     expect(screen.queryByRole('button', { name: 'Bypass' })).toBeNull();
+  });
+
+  it('paints the resumed step on the first render, without a placeholder in between', () => {
+    setup({ resume: 'team' });
+    // Synchronous: no effect or timer has run yet.
+    expect(screen.queryByRole('status', { name: 'Loading setup' })).toBeNull();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Built for teams.' })
+    ).toBeTruthy();
   });
 });

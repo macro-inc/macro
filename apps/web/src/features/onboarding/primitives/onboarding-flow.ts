@@ -1,4 +1,10 @@
-import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  untrack,
+} from 'solid-js';
 import type {
   Loadable,
   OnboardingContext,
@@ -63,24 +69,23 @@ export function createOnboardingFlow(
 
   // Restore once per viewer: the signed-out draft's OAuth return wins, then
   // saved progress; a checkout return always lands on the plan step.
-  createEffect(
-    on(
-      () => viewer()?.id,
-      (userId) => {
-        if (!userId || step()) return;
-        const draft = readSignupDraft();
-        const initial = restoreOnboardingStep(
-          draft?.authenticating ? 'work' : readSavedStep(userId),
-          options.checkoutReturn() !== undefined
-        );
-        saveStep(userId, initial);
-        if (draft?.authenticating && draft.accent)
-          context.applyAccent(draft.accent, userId);
-        clearSignupDraft();
-        setStep(initial);
-      }
-    )
-  );
+  const restore = (userId: string | undefined) => {
+    if (!userId || step()) return;
+    const draft = readSignupDraft();
+    const initial = restoreOnboardingStep(
+      draft?.authenticating ? 'work' : readSavedStep(userId),
+      options.checkoutReturn() !== undefined
+    );
+    saveStep(userId, initial);
+    if (draft?.authenticating && draft.accent)
+      context.applyAccent(draft.accent, userId);
+    clearSignupDraft();
+    setStep(initial);
+  };
+  // A viewer already known (sign-in just resolved it) restores before the
+  // first render, so the flow never paints a placeholder in between.
+  untrack(() => restore(viewer()?.id));
+  createEffect(on(() => viewer()?.id, restore, { defer: true }));
 
   let started = false;
   createEffect(() => {
