@@ -1278,6 +1278,14 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
     if wants_library && let Some(extended) = library::with_library_fields(&container.schema)? {
         container.schema = extended;
     }
+    let wants_variables = doc.nodes.iter().any(|n| {
+        !n.removed
+            && n.edits & flags::LIBRARY != 0
+            && (n.props.variable.is_some() || n.props.variable_modes.is_some())
+    });
+    if wants_variables && let Some(extended) = library::with_variable_fields(&container.schema)? {
+        container.schema = extended;
+    }
     let schema = Schema::decode(&container.schema)?;
     let b = Build { schema: &schema };
     let message_def = b

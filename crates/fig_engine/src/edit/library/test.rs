@@ -460,14 +460,63 @@ fn library_variables_bind_and_update() {
     let saved = save(&app.doc, &app.original).unwrap();
     let container = crate::container::Container::open_without_images(&saved).unwrap();
     let schema = crate::kiwi::Schema::decode(&container.schema).unwrap();
-    let records =
-        crate::edit::paste::decode_records(&schema, &container.message).unwrap();
+    let records = crate::edit::paste::decode_records(&schema, &container.message).unwrap();
     let type_of = |g: Guid| match records[&g].get(&schema, "type") {
         Some(crate::kiwi::Value::Enum(def, v)) => schema.enum_name(*def, *v).map(str::to_owned),
         _ => None,
     };
     assert_eq!(type_of(var).as_deref(), Some("VARIABLE"));
     assert_eq!(type_of(v.set.unwrap()).as_deref(), Some("VARIABLE_SET"));
+}
+
+#[test]
+fn library_variables_reach_designs_made_in_macro() {
+    let mut l = File::open(variables_file());
+    l.op(r#"[{"op":"publishLibrary","seed":"vars"}]"#);
+    let brand = l.key_of("Brand");
+    let package = lib::package(&l.doc, &l.original, std::slice::from_ref(&brand)).unwrap();
+    // A blank design's schema has no variables.
+    let mut app = File::open(blank("App"));
+    let rect = app.op(
+        r#"[{"op":"create","parent":"0:1","node":{"type":"RECTANGLE","x":0,"y":0,"width":50,"height":50}}]"#,
+    )[0]
+    .clone();
+    app.import(
+        &package,
+        &format!(
+            r#"{{"library":"vars","then":[{{"op":"bindVariable","ids":["{rect}"],"field":"FILL","index":0,"variable":"key:{brand}"}}]}}"#
+        ),
+    );
+    let reopened = app.reopen();
+    let r = reopened.doc.find(Guid::parse(&rect).unwrap()).unwrap();
+    assert_eq!(color(reopened.doc.props(r)).as_deref(), Some("0000FF"));
+    let var = reopened.doc.props(r).fills()[0]
+        .color_var
+        .expect("the binding is saved");
+    let v = reopened
+        .doc
+        .props(reopened.doc.find(var).unwrap())
+        .variable
+        .clone()
+        .expect("the variable is saved");
+    assert_eq!(v.values.len(), 2);
+    let set = reopened
+        .doc
+        .find(v.set.unwrap())
+        .expect("its collection too");
+    assert_eq!(
+        reopened
+            .doc
+            .props(set)
+            .variable_modes
+            .as_ref()
+            .map(|m| m.len()),
+        Some(2)
+    );
+    assert_eq!(
+        lib::uses(&reopened.doc).copies.len(),
+        lib::uses(&app.doc).copies.len()
+    );
 }
 
 #[test]
