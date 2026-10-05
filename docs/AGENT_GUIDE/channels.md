@@ -491,6 +491,14 @@ Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
 
+With GraphQL caching enabled, a current-query cached Channels or DMs page
+(including an empty page) remains quiet on a response-free refresh failure.
+Hold or fail the refresh before local filtering finishes: cached rows must not
+flash **Couldn’t load conversations** while awaiting reconciliation. Changing
+filters or resetting the cache must not use older rows to hide a new-query error.
+Cache misses, HTTP/GraphQL failures, and failures to load an uncached continuation
+still show errors and retry controls; background refresh retries continue.
+
 Right-clicking a favorite opens the same menu as its channel's row in the
 sections below — `Mark Read`, `Unfavorite`, `Mute notifications`, `Copy Link`,
 and the label actions when channel labels are enabled — and focuses the
