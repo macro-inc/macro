@@ -39,6 +39,7 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         .add_step(nix_build_dmg())
         .add_step(collect_dmg())
         .add_step(validate_signed_dmg())
+        .add_step(notarize_dmg())
         .add_step(steps::upload_artifact(
             "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
             xtask_paths::runtime_path!("artifacts/*"),
@@ -91,4 +92,11 @@ fn validate_signed_dmg() -> Step<Run> {
     Step::new("Validate signed DMG")
         .run(include_str!("scripts/validate_signed_dmg.sh"))
         .shell("bash")
+}
+
+fn notarize_dmg() -> Step<Run> {
+    Step::new("Notarize and staple DMG")
+        .run(include_str!("scripts/notarize_dmg.sh"))
+        .shell("bash")
+        .add_env(("DOPPLER_TOKEN", vars::MACOS_RELEASE_DOPPLER_TOKEN))
 }
