@@ -88,7 +88,7 @@ impl Painter<'_> {
             return;
         };
         let encoded = self.doc.images.get(hash).map(|e| &**e);
-        let Some(decoded) = self.images.get(hash, encoded) else {
+        let Some((width, height)) = self.images.size(hash, encoded) else {
             // Missing or undecodable: Figma shows a neutral placeholder.
             let mut p = super::solid_paint(crate::model::Color {
                 r: 0.9,
@@ -102,12 +102,12 @@ impl Painter<'_> {
                 .fill_path(shape.path(), &p, shape.rule(), ts.to_skia(), clip);
             return;
         };
-        let (iw, ih) = (f64::from(decoded.width), f64::from(decoded.height));
+        let (iw, ih) = (f64::from(width), f64::from(height));
         let Some(image_to_node) = image_transform(image, iw, ih, size) else {
             return;
         };
         let device_per_pixel = ts.mul(&image_to_node).scale_factor();
-        let Some((pixmap, factor)) = decoded.level_for(device_per_pixel) else {
+        let Some((pixmap, factor)) = self.images.level(hash, encoded, device_per_pixel) else {
             return;
         };
         let level_to_node = image_to_node.mul(&Affine::scale(1.0 / factor, 1.0 / factor));
