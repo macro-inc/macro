@@ -215,8 +215,10 @@ commands and other secondary details stay inside the session. There are no toolt
 Click the card or **Open session** to read the full response or answer a question;
 click the PR to open its Macro split (GitHub until its entity has synced). While the
 synced PR is open, a green **Merge** button sits at the end of the PR row. It asks
-**Merge pull request?** first, then merges on GitHub with your own linked GitHub
-account, so GitHub's permissions and branch protections apply; a refusal shows
+**Merge pull request?** first, showing the title and repository/PR number in the
+shared confirmation dialog (a bottom drawer on phones). **Cancel** returns to the
+chip; **Merge pull request** merges on GitHub with your own linked GitHub account,
+so GitHub's permissions and branch protections apply; a refusal shows
 GitHub's reason as a toast, and success flips the chip to merged without a reload.
 Merged and closed PRs show no Merge button. Expanded session mentions retain their
 collapse control. The card never expands in place.

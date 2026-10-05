@@ -9,9 +9,9 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAccessToken,
-        GithubError, GithubLink, GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
-        GithubPullRequestRef, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubMergeMethod,
+        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestRef,
+        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -172,8 +172,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
             })
             .ok()?;
         let pull_request = EnrichedGithubPullRequest::from_details(reference, details);
-        self.refresh_stored_pull_request(&pull_request)
-            .await;
+        self.refresh_stored_pull_request(&pull_request).await;
         Some(pull_request)
     }
 

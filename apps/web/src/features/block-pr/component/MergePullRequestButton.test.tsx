@@ -105,9 +105,9 @@ describe('MergePullRequestButton', () => {
     expect(confirmDialog).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Merge pull request?',
-        confirmLabel: 'Merge',
-        body: expect.stringContaining('#6369 · Fix reply state'),
-      })
+        confirmLabel: 'Merge pull request',
+      }),
+      expect.objectContaining({ owner: expect.any(Object) })
     );
     expect(authServiceClient.mergeGithubPullRequest).toHaveBeenCalledWith({
       owner: 'macro-inc',

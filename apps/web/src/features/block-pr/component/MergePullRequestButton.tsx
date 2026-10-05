@@ -1,10 +1,11 @@
 import GitMerge from '@phosphor/git-merge.svg';
-import { Button, type ButtonSize, cn } from '@ui';
-import { Show } from 'solid-js';
+import { Button, type ButtonSize, cn, confirmDialog } from '@ui';
+import { getOwner, Show } from 'solid-js';
 import {
   createMergePullRequestAction,
   type MergePullRequestTarget,
 } from '../primitives/create-merge-pull-request-action';
+import { prDisplayName } from '../util/prKey';
 
 /**
  * Merge an open pull request as the signed-in user. Renders nothing unless
@@ -20,7 +21,44 @@ export function MergePullRequestButton(props: {
   iconOnly?: boolean;
   onMerged?: () => void;
 }) {
-  const action = createMergePullRequestAction({ onMerged: props.onMerged });
+  const owner = getOwner();
+  const action = createMergePullRequestAction({
+    onMerged: props.onMerged,
+    confirm: (target) =>
+      confirmDialog(
+        {
+          title: 'Merge pull request?',
+          get body() {
+            return (
+              <div class="space-y-4 pt-2">
+                <div class="flex items-start gap-3 rounded-lg border border-edge-muted bg-input p-3">
+                  <GitMerge
+                    aria-hidden="true"
+                    class="mt-0.5 size-4 shrink-0 text-ink-muted"
+                  />
+                  <div class="min-w-0 space-y-1">
+                    <Show when={target.title}>
+                      <p class="text-sm font-medium text-ink wrap-anywhere">
+                        {target.title}
+                      </p>
+                    </Show>
+                    <p class="text-xs text-ink-muted wrap-anywhere">
+                      {prDisplayName(target)}
+                    </p>
+                  </div>
+                </div>
+                <p>
+                  This will merge the pull request into its base branch on
+                  GitHub.
+                </p>
+              </div>
+            );
+          },
+          confirmLabel: 'Merge pull request',
+        },
+        { owner }
+      ),
+  });
   const label = () => (action.pending() ? 'Merging…' : 'Merge');
   return (
     <Show when={props.status === 'open'}>

@@ -4,7 +4,6 @@ import {
   type MergeGithubPullRequestInput,
   useMergeGithubPullRequestMutation,
 } from '@queries/storage/pr-merge';
-import { confirmDialog } from '@ui';
 import type { Accessor } from 'solid-js';
 import { type PrRef, prDisplayName } from '../util/prKey';
 
@@ -32,7 +31,8 @@ function mergeFailureMessage(error: unknown): string {
  * user, and report the outcome. GitHub decides whether the user may merge
  * and names what blocks it, so a refusal is shown in GitHub's words.
  */
-export function createMergePullRequestAction(options?: {
+export function createMergePullRequestAction(options: {
+  confirm: (target: MergePullRequestTarget) => Promise<boolean>;
   onMerged?: (target: MergePullRequestTarget) => void;
 }): MergePullRequestAction {
   const mutation = useMergeGithubPullRequestMutation();
@@ -40,14 +40,7 @@ export function createMergePullRequestAction(options?: {
   const merge = async (target: MergePullRequestTarget) => {
     if (mutation.isPending) return;
     const name = prDisplayName(target);
-    const confirmed = await confirmDialog({
-      title: 'Merge pull request?',
-      body: target.title
-        ? `Merge #${target.number} · ${target.title} into its base branch on GitHub.`
-        : `Merge ${name} into its base branch on GitHub.`,
-      confirmLabel: 'Merge',
-      tone: 'success',
-    });
+    const confirmed = await options.confirm(target);
     if (!confirmed || mutation.isPending) return;
 
     const input: MergeGithubPullRequestInput = {
@@ -57,11 +50,12 @@ export function createMergePullRequestAction(options?: {
     };
     try {
       await mutation.mutateAsync(input);
-      toast.success(`Merged ${name}`);
-      options?.onMerged?.(target);
     } catch (error) {
       toast.failure(mergeFailureMessage(error));
+      return;
     }
+    toast.success(`Merged ${name}`);
+    options.onMerged?.(target);
   };
 
   return { merge, pending: () => mutation.isPending };

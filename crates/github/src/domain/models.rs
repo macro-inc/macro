@@ -17,11 +17,12 @@ pub(crate) use app_jwt::app_jwt;
 pub use github_pull_requests::domain::models::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
     EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef, GithubKey,
-    GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestMerge,
+    GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestCheckRun,
+    GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestLabel,
+    GithubPullRequestMerge, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser,
     GithubRepositoryMergeSettings, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
-    GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
-    GithubPullRequestLabel, GithubPullRequestRef, GithubPullRequestReview,
-    GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser, latest_reviews,
+    latest_reviews,
 };
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
