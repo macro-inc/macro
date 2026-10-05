@@ -1,3 +1,4 @@
+import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import type { PipedreamConnectionResponse } from '@service-cognition/client';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
 
@@ -27,6 +28,8 @@ export type Capability = {
   scope: CapabilityScope;
   status: CapabilityStatus;
   mechanism: CapabilityMechanism;
+  /** Stored Pipedream slug used to update or remove this connection. */
+  appSlug?: string;
   /** Native MCP URL, when this row is that server. */
   sourceUrl?: string;
 };
@@ -121,7 +124,9 @@ function nativeCuratedProvider(
 function pipedreamBySlug(
   connections: PipedreamConnectionResponse[]
 ): Map<string, PipedreamConnectionResponse> {
-  return new Map(connections.map((row) => [row.app_slug, row]));
+  return new Map(
+    connections.map((row) => [canonicalPipedreamSlug(row.app_slug), row])
+  );
 }
 
 function aiStatus(enabled: boolean): CapabilityStatus {
@@ -177,6 +182,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
         scope: 'personal',
         status: aiStatus(pd.enabled),
         mechanism: 'pipedream',
+        appSlug: pd.app_slug,
       });
       if (native) {
         usedNative.add(native.url);
@@ -210,7 +216,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
   }
 
   for (const row of input.pipedream) {
-    if (row.app_slug in CURATED_AI) continue;
+    if (canonicalPipedreamSlug(row.app_slug) in CURATED_AI) continue;
     leftovers.push({
       kind: 'pipedream',
       id: `pipedream:${row.app_slug}`,

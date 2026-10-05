@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { FeaturedMcpServer } from '@core/component/AI/constant/mcpServers';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
+import { pipedreamSlugsMatch } from '@core/pipedream/slugs';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
@@ -36,8 +37,8 @@ export function ConnectorStep(props: {
     serversQuery.data?.find((server) => server.url === props.server.url)
   );
   const pipedreamRecord = createMemo(() =>
-    pipedreamQuery.data?.find(
-      (connection) => connection.app_slug === props.server.app_slug
+    pipedreamQuery.data?.find((connection) =>
+      pipedreamSlugsMatch(connection.app_slug, props.server.app_slug)
     )
   );
   const authenticated = () =>

@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
+import { connectSlugForPipedreamApp } from '@core/pipedream/slugs';
 import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
@@ -72,7 +73,7 @@ export function PipedreamAiProvider(props: {
   const native = useNativeMcpActions();
   const { connect, busy } = createPipedreamCatalogConnect({
     entry: () => ({
-      app_slug: props.provider,
+      app_slug: connectSlugForPipedreamApp(props.provider),
       display_name: copy.name,
     }),
     onConnected: () => toast.success(`${copy.name} connected`),
@@ -95,7 +96,7 @@ export function PipedreamAiProvider(props: {
       return;
     }
     update.mutate(
-      { app_slug: props.provider, enabled },
+      { app_slug: row()?.appSlug ?? props.provider, enabled },
       { onError: () => toast.failure('Failed to update connector') }
     );
   };
@@ -126,7 +127,7 @@ export function PipedreamAiProvider(props: {
       body: `Disconnect ${copy.name}?`,
       onConfirm: () =>
         remove.mutate(
-          { app_slug: props.provider },
+          { app_slug: row()?.appSlug ?? props.provider },
           {
             onSuccess: () =>
               toast.success(`Disconnected ${copy.name} from Macro`),
