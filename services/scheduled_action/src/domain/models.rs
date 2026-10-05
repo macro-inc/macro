@@ -19,7 +19,7 @@ mod test;
 
 pub const MAX_ACTION_TIME: Duration = Duration::minutes(20);
 
-#[derive(Serialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, ToSchema)]
 pub struct Schedule(String);
 
 impl Schedule {
@@ -67,7 +67,7 @@ pub struct AgentTask {
     /// Required for model targets; overrides the persona default for agent targets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<RoutineModelId>,
-    /// Absent for legacy model-only tasks.
+    /// Absent when using Macro's agent-session runtime with a selected model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentTaskAgent>,
     pub prompt: String,
@@ -114,6 +114,17 @@ pub enum ResolvedTaskTarget<'a> {
         /// None means use the selected persona's default at execution time.
         model: Option<&'a RoutineModelId>,
     },
+}
+
+impl<'a> ResolvedTaskTarget<'a> {
+    /// Use the same Macro runtime as the new AI composer for model selections.
+    /// Explicit agent selections keep their own runtime and optional model override.
+    pub fn session_target(self) -> (BotId, Option<&'a RoutineModelId>) {
+        match self {
+            Self::Model { model } => (bot_id::MACRO_NEW_BOT_ID, Some(model)),
+            Self::Agent { bot_id, model } => (bot_id, model),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

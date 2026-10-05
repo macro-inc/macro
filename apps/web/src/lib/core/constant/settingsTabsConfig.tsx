@@ -2,6 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BellIcon from '@phosphor/bell-simple.svg';
 import BugIcon from '@phosphor/bug.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
@@ -25,6 +26,7 @@ import {
   botManagement,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
+  enableCalendarScheduling,
   enableChatV3Agents,
   enableCrm,
   enableNotificationSettings,
@@ -143,6 +145,12 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         keywords: ['contacts', 'customers', 'deals'],
       },
       {
+        tab: 'Calendar',
+        label: 'Calendar',
+        icon: CalendarIcon,
+        keywords: ['scheduling', 'bookings', 'availability'],
+      },
+      {
         tab: 'Connected',
         label: 'Integrations',
         icon: CpuIcon,
@@ -164,7 +172,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         tab: 'Bots',
         label: 'Bots',
         icon: BotIcon,
-        keywords: ['automation', 'bot'],
+        keywords: ['routine', 'bot'],
       },
     ],
   },
@@ -198,6 +206,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Harness: 'runtimes',
   Bots: 'bots',
   Team: 'team',
+  Calendar: 'calendar',
   Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
@@ -234,6 +243,7 @@ export const settingsSlugToTab = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
+  const calendarSchedulingFlag = useFeatureFlag(enableCalendarScheduling);
   const botManagementFlag = useFeatureFlag(botManagement);
   const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
   const crmFlag = useFeatureFlag(enableCrm);
@@ -246,6 +256,8 @@ export const useSettingsTabAvailable = () => {
       case 'Account':
       case 'Billing':
         return true;
+      case 'Calendar':
+        return calendarSchedulingFlag().enabled;
       // Issuing and copying a key is desk work, and the mobile sheet has no
       // good place for a one-time secret.
       case 'API Keys':

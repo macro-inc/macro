@@ -701,8 +701,20 @@ where
             file_type,
             text,
         } = document;
+        self.create_file(principal, metadata, file_type, text.into_bytes())
+            .await
+    }
 
-        let bytes = text.into_bytes();
+    /// Create a file document from its bytes (a PowerPoint deck, an image, or
+    /// any other non-markdown file) and upload it to document storage.
+    #[tracing::instrument(skip(self, metadata, bytes), fields(bytes = bytes.len()), err)]
+    pub async fn create_file(
+        &self,
+        principal: &CreationPrincipal,
+        metadata: NewDocumentMetadata,
+        file_type: NonMarkdownFileType,
+        bytes: Vec<u8>,
+    ) -> Result<CreatedDocument, DocumentError> {
         let hashes = file_shas(&bytes);
         let new_document = metadata.into_new_document(RepoDocumentKind {
             file_type: Some(file_type.into_file_type()),

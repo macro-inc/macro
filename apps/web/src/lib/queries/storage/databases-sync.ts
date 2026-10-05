@@ -24,6 +24,7 @@ const AWARENESS_EXPIRY_MS = 45_000;
 const AWARENESS_SWEEP_MS = 5_000;
 
 const awarenessSchema: z.ZodType<Awareness> = z.object({
+  peerId: z.string().uuid().optional(),
   tableId: z.string(),
   rowId: z.string().optional(),
   columnId: z.string().optional(),
@@ -92,7 +93,7 @@ export function useDatabaseTableChangedSync(
 }
 
 /** Where this client is inside a database. */
-export type LocalDatabaseAwareness = Omit<Awareness, 'left'>;
+export type LocalDatabaseAwareness = Omit<Awareness, 'left' | 'peerId'>;
 
 /** Where another viewer is inside the database. */
 type RemoteDatabaseAwareness = Omit<Awareness, 'left' | 'editing'> & {
@@ -101,8 +102,9 @@ type RemoteDatabaseAwareness = Omit<Awareness, 'left' | 'editing'> & {
 };
 
 type HeldAwareness = {
+  userId: string;
   state: Awareness;
-  /** Server relay time, orders messages from the same viewer. */
+  /** Server relay time, orders messages from the same peer. */
   relayedAt: number;
   /** Local clock, decides expiry so clock skew cannot drop live viewers. */
   receivedAt: number;
@@ -117,12 +119,13 @@ export function useDatabaseAwareness(
   local: () => LocalDatabaseAwareness | undefined
 ): { remote: Accessor<RemoteDatabaseAwareness[]> } {
   const userId = useUserId();
+  const peerId = crypto.randomUUID();
   const held = new ReactiveMap<string, HeldAwareness>();
 
   let announced: { databaseId: string; state: Awareness } | undefined;
   const send = (id: string, state: Awareness) => {
     void storageServiceClient.databases
-      .shareAwareness({ id, state })
+      .shareAwareness({ id, state: { ...state, peerId } })
       .mapErr((errors) =>
         Telemetry.warn('database awareness was not shared', {
           databaseId: id,
@@ -175,6 +178,7 @@ export function useDatabaseAwareness(
       () => shareSoon()
     )
   );
+  createEffect(on(databaseId, () => held.clear()));
   const heartbeat = setInterval(() => {
     if (announced) send(announced.databaseId, announced.state);
   }, AWARENESS_HEARTBEAT_MS);
@@ -183,14 +187,16 @@ export function useDatabaseAwareness(
     if (message.type !== AWARENESS_MESSAGE_TYPE) return;
     const relay = parseMessageData(message, awarenessRelaySchema);
     if (!relay || relay.databaseId !== databaseId()) return;
-    if (relay.userId === userId()) return;
-    const current = held.get(relay.userId);
-    if (current && current.relayedAt > relay.relayedAt) return;
-    if (relay.state.left) {
-      held.delete(relay.userId);
+    if (
+      relay.userId === userId() &&
+      (!relay.state.peerId || relay.state.peerId === peerId)
+    )
       return;
-    }
-    held.set(relay.userId, {
+    const key = JSON.stringify([relay.userId, relay.state.peerId ?? null]);
+    const current = held.get(key);
+    if (current && current.relayedAt > relay.relayedAt) return;
+    held.set(key, {
+      userId: relay.userId,
       state: relay.state,
       relayedAt: relay.relayedAt,
       receivedAt: Date.now(),
@@ -211,14 +217,17 @@ export function useDatabaseAwareness(
   });
 
   const remote = () =>
-    [...held.entries()].map(([id, { state }]) => ({
-      userId: id,
-      tableId: state.tableId,
-      rowId: state.rowId,
-      columnId: state.columnId,
-      endRowId: state.endRowId,
-      endColumnId: state.endColumnId,
-      editing: Boolean(state.editing),
-    }));
+    [...held.values()]
+      .filter(({ state }) => !state.left)
+      .map(({ userId, state }) => ({
+        userId,
+        peerId: state.peerId,
+        tableId: state.tableId,
+        rowId: state.rowId,
+        columnId: state.columnId,
+        endRowId: state.endRowId,
+        endColumnId: state.endColumnId,
+        editing: Boolean(state.editing),
+      }));
   return { remote };
 }

@@ -19,13 +19,12 @@ fn database_workflow_reaches_every_agent_host_without_unrelated_scoped_tools() {
             "SaveDatabaseView",
             "insertedRowIds",
             "cannot save charts",
-            "RenameDatabase",
-            "DeleteTable",
-            "RenameColumn",
-            "ChangeColumnType",
-            "DeleteColumn",
-            "ReorderColumns",
-            "ReorderTables",
+            "CREATE DATABASE",
+            "ALTER TABLE",
+            "RENAME COLUMN",
+            "DROP COLUMN",
+            "REORDER COLUMNS",
+            "REORDER TABLES",
             "SaveDatabaseQuery",
             "<m-db-query>",
             "verbatim",
@@ -50,4 +49,22 @@ fn database_workflow_reaches_every_agent_host_without_unrelated_scoped_tools() {
     // granting an email tool; the scoped prompt must omit its action rules.
     assert!(!scoped.contains("MUST use the `SendEmail` tool"));
     assert!(!scoped.contains("PendingUserExecution"));
+}
+
+#[test]
+fn database_prompts_do_not_advertise_removed_schema_tools() {
+    let text = DATABASE_TOOL_USE_PROMPT.to_string();
+    for removed in [
+        "`CreateDatabase`",
+        "`CreateTable`",
+        "`RenameTable`",
+        "`AddColumn`",
+        "`ChangeColumnType`",
+    ] {
+        assert!(!text.contains(removed), "obsolete tool {removed}");
+    }
+    let read_only = crate::DATABASE_READ_ONLY_TOOL_USE_PROMPT.to_string();
+    assert!(read_only.contains("QueryDatabase's registered description"));
+    assert!(read_only.contains("This host is read-only"));
+    assert!(!read_only.contains("SaveDatabaseQuery"));
 }

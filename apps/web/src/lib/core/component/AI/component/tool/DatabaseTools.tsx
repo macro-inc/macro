@@ -48,6 +48,7 @@ function describeDatabaseQuery(input: {
 }): string {
   const changed = input.result.changesApplied;
   return match(input.result.statement)
+    .with({ kind: 'schema' }, ({ summary }) => summary)
     .with({ kind: 'select' }, () => {
       const read = [
         ...new Set(
@@ -256,98 +257,6 @@ const queryDatabaseHandler = createToolRenderer({
   },
 });
 
-const createDatabaseHandler = createToolRenderer({
-  name: 'CreateDatabase',
-  render: (ctx) => (
-    <BaseTool icon={DatabaseIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Create database <span class="text-ink">{ctx.tool.data.name}</span>
-      </span>
-    </BaseTool>
-  ),
-});
-
-const createTableHandler = createToolRenderer({
-  name: 'CreateTable',
-  render: (ctx) => (
-    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Create table <span class="text-ink">{ctx.tool.data.name}</span>
-      </span>
-    </BaseTool>
-  ),
-});
-
-const renameTableHandler = createToolRenderer({
-  name: 'RenameTable',
-  render: (ctx) => (
-    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Rename table to <span class="text-ink">{ctx.tool.data.name}</span>
-      </span>
-    </BaseTool>
-  ),
-});
-
-const reorderTablesHandler = createToolRenderer({
-  name: 'ReorderTables',
-  render: (ctx) => {
-    const count = () => ctx.tool.data.tableIds.length;
-    return (
-      <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-        <span class="min-w-0 truncate">
-          Reorder{' '}
-          <span class="text-ink">
-            {count()} table{count() === 1 ? '' : 's'}
-          </span>
-          <Scope name={ctx.response?.data.database?.name} preposition="in" />
-        </span>
-      </BaseTool>
-    );
-  },
-});
-
-const addColumnHandler = createToolRenderer({
-  name: 'AddColumn',
-  render: (ctx) => {
-    const options = () => ctx.tool.data.options ?? [];
-
-    return (
-      <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-        <span class="min-w-0 truncate">
-          Add column <span class="text-ink">{ctx.tool.data.name}</span>
-          <span class="pl-1.5 text-ink-extra-muted">
-            {ctx.tool.data.dataType}
-            <Show when={options().length > 0}>
-              {' · '}
-              {options().join(', ')}
-            </Show>
-          </span>
-        </span>
-      </BaseTool>
-    );
-  },
-});
-
-const addColumnOptionsHandler = createToolRenderer({
-  name: 'AddColumnOptions',
-  render: (ctx) => (
-    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Add options{' '}
-        <span class="text-ink">{ctx.tool.data.labels.join(', ')}</span>
-        <Show when={ctx.response}>
-          {(response) => (
-            <span class="pl-1.5 text-ink-extra-muted">
-              · now {response().data.options.length} options
-            </span>
-          )}
-        </Show>
-      </span>
-    </BaseTool>
-  ),
-});
-
 const saveDatabaseViewHandler = createToolRenderer({
   name: 'SaveDatabaseView',
   handleResponse: async (ctx) => {
@@ -417,161 +326,6 @@ const deleteDatabaseViewHandler = createToolRenderer({
   ),
 });
 
-function schemaTable(
-  schema: DatabaseSchema | null | undefined,
-  tableId: string
-) {
-  return schema?.tables.find((table) => table.id === tableId);
-}
-
-function schemaColumn(
-  schema: DatabaseSchema | null | undefined,
-  tableId: string,
-  columnId: string
-) {
-  return schemaTable(schema, tableId)?.columns.find(
-    (column) => column.id === columnId
-  );
-}
-
-function Scope(props: { name: string | undefined; preposition: string }) {
-  return (
-    <Show when={props.name}>
-      {(name) => (
-        <>
-          {' '}
-          <span class="text-ink-extra-muted">
-            {props.preposition} {name()}
-          </span>
-        </>
-      )}
-    </Show>
-  );
-}
-
-const renameDatabaseHandler = createToolRenderer({
-  name: 'RenameDatabase',
-  render: (ctx) => (
-    <BaseTool icon={DatabaseIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Rename database to{' '}
-        <span class="text-ink">
-          {ctx.response?.data.name ?? ctx.tool.data.name}
-        </span>
-      </span>
-    </BaseTool>
-  ),
-});
-
-const deleteTableHandler = createToolRenderer({
-  name: 'DeleteTable',
-  render: (ctx) => (
-    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Delete table
-        <Scope name={ctx.response?.data.database?.name} preposition="from" />
-      </span>
-    </BaseTool>
-  ),
-});
-
-const renameColumnHandler = createToolRenderer({
-  name: 'RenameColumn',
-  render: (ctx) => (
-    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Rename column to{' '}
-        <span class="text-ink">
-          {ctx.response?.data.name ?? ctx.tool.data.name}
-        </span>
-        <Scope
-          name={
-            schemaTable(ctx.response?.data.database, ctx.tool.data.tableId)
-              ?.name
-          }
-          preposition="in"
-        />
-      </span>
-    </BaseTool>
-  ),
-});
-
-const changeColumnTypeHandler = createToolRenderer({
-  name: 'ChangeColumnType',
-  render: (ctx) => {
-    const options = () => ctx.tool.data.options ?? [];
-    const column = () =>
-      schemaColumn(
-        ctx.response?.data.database,
-        ctx.tool.data.tableId,
-        ctx.tool.data.columnId
-      );
-    return (
-      <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-        <span class="min-w-0 truncate">
-          <Show when={column()} fallback="Change column type to ">
-            {(changed) => (
-              <>
-                Change <span class="text-ink">{changed().name}</span> to{' '}
-              </>
-            )}
-          </Show>
-          <span class="text-ink">{ctx.tool.data.dataType}</span>
-          <span class="pl-1.5 text-ink-extra-muted">
-            <Show when={ctx.tool.data.isMultiSelect}>multiple</Show>
-            <Show when={options().length > 0}>
-              {' · '}
-              {options().join(', ')}
-            </Show>
-          </span>
-        </span>
-      </BaseTool>
-    );
-  },
-});
-
-const deleteColumnHandler = createToolRenderer({
-  name: 'DeleteColumn',
-  render: (ctx) => (
-    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Delete column
-        <Scope
-          name={
-            schemaTable(ctx.response?.data.database, ctx.tool.data.tableId)
-              ?.name
-          }
-          preposition="from"
-        />
-      </span>
-    </BaseTool>
-  ),
-});
-
-const reorderColumnsHandler = createToolRenderer({
-  name: 'ReorderColumns',
-  render: (ctx) => {
-    const count = () => ctx.tool.data.columnIds.length;
-    return (
-      <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-        <span class="min-w-0 truncate">
-          Reorder{' '}
-          <span class="text-ink">
-            {count()} column{count() === 1 ? '' : 's'}
-          </span>
-          <Scope
-            name={
-              schemaTable(ctx.response?.data.database, ctx.tool.data.tableId)
-                ?.name
-            }
-            preposition="in"
-          />
-        </span>
-      </BaseTool>
-    );
-  },
-});
-
 const saveDatabaseQueryHandler = createToolRenderer({
   name: 'SaveDatabaseQuery',
   render: (ctx) => {
@@ -619,19 +373,7 @@ export const databaseToolHandlers: DatabaseToolHandlerMap = {
   ListDatabases: listDatabasesHandler,
   DescribeDatabase: describeDatabaseHandler,
   QueryDatabase: queryDatabaseHandler,
-  CreateDatabase: createDatabaseHandler,
-  CreateTable: createTableHandler,
-  RenameTable: renameTableHandler,
-  ReorderTables: reorderTablesHandler,
-  AddColumn: addColumnHandler,
-  AddColumnOptions: addColumnOptionsHandler,
   SaveDatabaseView: saveDatabaseViewHandler,
   DeleteDatabaseView: deleteDatabaseViewHandler,
-  RenameDatabase: renameDatabaseHandler,
-  DeleteTable: deleteTableHandler,
-  RenameColumn: renameColumnHandler,
-  ChangeColumnType: changeColumnTypeHandler,
-  DeleteColumn: deleteColumnHandler,
-  ReorderColumns: reorderColumnsHandler,
   SaveDatabaseQuery: saveDatabaseQueryHandler,
 };

@@ -729,6 +729,14 @@ where
                 .await?;
         }
 
+        let property_value = if property_definition_id == SystemPropertyKey::PROJECT_UUID
+            && entity_type == EntityType::Task
+        {
+            self.validate_task_project(access, property_value).await?
+        } else {
+            property_value
+        };
+
         if property_definition_id == SystemPropertyKey::ASSIGNEES_UUID
             && entity_type == EntityType::Initiative
         {

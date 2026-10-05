@@ -112,6 +112,7 @@ enum ReceiptStatement {
     Update,
     Delete,
     AlterColumnType,
+    Schema,
 }
 
 fn database_change(name: &str, response: &serde_json::Value) -> DatabaseChange {
@@ -132,7 +133,7 @@ fn database_change(name: &str, response: &serde_json::Value) -> DatabaseChange {
 fn query_database_change(response: &serde_json::Value) -> DatabaseChange {
     match QueryDatabaseReceipt::deserialize(response) {
         Ok(QueryDatabaseReceipt {
-            statement: ReceiptStatement::AlterColumnType,
+            statement: ReceiptStatement::AlterColumnType | ReceiptStatement::Schema,
             ..
         }) => DatabaseChange::Schema,
         Ok(QueryDatabaseReceipt {

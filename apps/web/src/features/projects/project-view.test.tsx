@@ -30,13 +30,14 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: fixtures.toast },
 }));
-vi.mock('@app/features/tasks-view/route', () => ({
+vi.mock('@app/routes/routes', () => ({
   projectDetailRoute: {},
   tasksProjectsRoute: {},
 }));
 vi.mock('@app/lib/split-router', () => ({
   useNavigate: () => fixtures.navigate,
-  useSplitHistory: () => () => (fixtures.routed() ? { index: 0 } : undefined),
+  usePaneHistory: () => () =>
+    fixtures.routed() ? { entries: [], index: 0 } : undefined,
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({

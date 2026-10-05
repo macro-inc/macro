@@ -50,6 +50,9 @@ export function ProductDemo(props: {
   ref?: (element: HTMLDivElement) => void;
   onInteract?: () => void;
   action?: string;
+  /** Window height in px, so short scenes don't leave an empty frame. */
+  height?: number;
+  mobileHeight?: number;
 }) {
   return (
     <div
@@ -57,6 +60,12 @@ export function ProductDemo(props: {
       class="product-demo-stage"
       role="group"
       aria-label={props.label}
+      style={{
+        '--demo-h': props.height ? `${props.height}px` : undefined,
+        '--demo-h-mobile': props.mobileHeight
+          ? `${props.mobileHeight}px`
+          : undefined,
+      }}
       onPointerDown={() => props.onInteract?.()}
       onKeyDown={() => props.onInteract?.()}
     >

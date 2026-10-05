@@ -31,7 +31,7 @@ type IdOnlyPreviewSelection = {
   id: string;
   type:
     | 'agent_session'
-    | 'automation'
+    | 'routine'
     | 'call'
     | 'chat'
     | 'crm_company'

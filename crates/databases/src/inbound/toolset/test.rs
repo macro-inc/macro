@@ -1,7 +1,6 @@
 //! Toolset tests over a fake service and entity access: receipts gate the
 //! schema operations and errors reach the model in a form it can act on.
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ai_toolset::schema::generate_validated_input_schema;
@@ -23,15 +22,11 @@ use models_properties::shared::{DataType, PropertyOwner};
 use uuid::Uuid;
 
 use super::*;
-mod committed_writes;
-mod options;
 mod receipts;
 mod relations;
 mod rendering;
-mod schema_changes;
 mod schemas;
 mod views;
-mod write_warning;
 use crate::domain::models::{Column, ColumnDetail, Database, Table, TableDetail, TableVersion};
 
 const USER: &str = "macro|wolf@macro.com";
@@ -50,8 +45,6 @@ fn request_context() -> RequestContext {
 struct Calls {
     listed: usize,
     described: usize,
-    created_databases: Vec<String>,
-    renamed_databases: Vec<String>,
     /// The agent each attributed write reached the service as.
     acting_bots: Vec<Option<BotId>>,
     /// Every batch of ops the service was asked to apply.
@@ -61,8 +54,6 @@ struct Calls {
 #[derive(Clone, Default)]
 struct FakeService {
     calls: Arc<Mutex<Calls>>,
-    /// Fail only the post-write schema enrichment.
-    schema_error: bool,
     multi_select_group: bool,
     /// The described table's views.
     views: Vec<crate::domain::models::DatabaseView>,
@@ -160,12 +151,9 @@ fn detail(grant: AccessLevel) -> DatabaseDetail {
 impl DatabasesService for FakeService {
     async fn create_database(
         &self,
-        command: crate::domain::models::CreateDatabase,
+        _command: crate::domain::models::CreateDatabase,
     ) -> Result<Database, DatabaseError> {
-        let mut calls = self.calls.lock().unwrap();
-        calls.created_databases.push(command.name);
-        calls.acting_bots.push(command.acting_bot);
-        Ok(database())
+        unimplemented!("database creation runs through the SQL tool")
     }
 
     async fn list_databases(&self, _viewer: Viewer) -> Result<Vec<ListedDatabase>, DatabaseError> {
@@ -256,10 +244,7 @@ impl DatabasesService for FakeService {
         viewer: Viewer,
         batch: OpBatch,
     ) -> Result<Vec<OpResult>, DatabaseError> {
-        use models_databases::{
-            ColumnChange, ColumnResult, DatabaseOp, TableChange, TableResult, VersionedTable,
-            ViewChange, ViewResult,
-        };
+        use models_databases::{DatabaseOp, ViewChange, ViewResult};
         {
             let mut calls = self.calls.lock().unwrap();
             calls.applied.push(batch.clone());
@@ -271,50 +256,6 @@ impl DatabasesService for FakeService {
             .ops
             .into_iter()
             .map(|op| match op {
-                DatabaseOp::Table { table, change } => {
-                    let (table_version, change) = match change {
-                        TableChange::Create { .. } => (Some(TableVersion(1)), TableResult::Created),
-                        TableChange::Rename { .. } => (Some(table_version), TableResult::Renamed),
-                        TableChange::Delete => (None, TableResult::Deleted),
-                        TableChange::ReorderColumns { .. } => {
-                            (Some(table_version), TableResult::ColumnsReordered)
-                        }
-                        other => unimplemented!("the toolset sends no {other:?}"),
-                    };
-                    OpResult::Table {
-                        table,
-                        table_version,
-                        change,
-                    }
-                }
-                DatabaseOp::ReorderTables { order } => OpResult::ReorderTables {
-                    tables: order
-                        .into_iter()
-                        .map(|table| VersionedTable {
-                            table,
-                            version: table_version,
-                        })
-                        .collect(),
-                },
-                DatabaseOp::Column {
-                    table,
-                    column,
-                    change,
-                } => OpResult::Column {
-                    table,
-                    column,
-                    table_version,
-                    change: match change {
-                        ColumnChange::Create { .. } => ColumnResult::Created,
-                        ColumnChange::Rename { .. } => ColumnResult::Renamed,
-                        ColumnChange::Delete => ColumnResult::Deleted,
-                        ColumnChange::AddOptions { options } => ColumnResult::OptionsAdded {
-                            added: options.into_iter().map(|option| option.id).collect(),
-                        },
-                        ColumnChange::ChangeType { .. } => ColumnResult::TypeChanged,
-                        other => unimplemented!("the toolset sends no {other:?}"),
-                    },
-                },
                 DatabaseOp::View {
                     table,
                     view: id,
@@ -387,57 +328,26 @@ impl DatabasesService for FakeService {
             .collect())
     }
 
-    /// The fixed database, its Status column holding the options every
-    /// applied batch added to it.
+    /// The fixed database, with the views used by saved-view tests.
     async fn get_database(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<DatabaseDetail, DatabaseError> {
         let mut calls = self.calls.lock().unwrap();
         calls.described += 1;
-        if self.schema_error {
-            return Err(DatabaseError::Repo(
-                rootcause::Report::new(std::io::Error::other("schema connection lost"))
-                    .into_dynamic(),
-            ));
-        }
         let mut database = detail(AccessLevel::Owner);
         let status = &mut database.tables[0].columns[0].definition;
         status.definition.is_multi_select = self.multi_select_group;
-        let added = calls
-            .applied
-            .iter()
-            .flat_map(|batch| &batch.ops)
-            .filter_map(|op| match op {
-                models_databases::DatabaseOp::Column {
-                    column,
-                    change: models_databases::ColumnChange::AddOptions { options },
-                    ..
-                } if *column == COLUMN_ID => Some(options),
-                _ => None,
-            })
-            .flatten();
-        for (offset, added) in added.enumerate() {
-            status
-                .property_options
-                .push(option(&added.label, 2 + offset as i32));
-        }
         database.tables[0].views = self.views.clone();
         Ok(database)
     }
 
     async fn rename_database(
         &self,
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-        name: String,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _name: String,
     ) -> Result<Database, DatabaseError> {
-        let mut calls = self.calls.lock().unwrap();
-        calls.renamed_databases.push(name.clone());
-        calls.acting_bots.push(match receipt.auth() {
-            entity_access::domain::models::EntityAccessAuth::Bot(bot) => Some(bot.bot_id()),
-            _ => None,
-        });
-        Ok(Database { name, ..database() })
+        unimplemented!("database renames run through the SQL tool")
     }
 
     async fn infer_column_type(

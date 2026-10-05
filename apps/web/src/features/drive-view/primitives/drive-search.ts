@@ -8,7 +8,7 @@ import {
   isSafeName,
   type SerializedSearchParams,
   takeLast,
-} from '@app/split-router';
+} from '@app/lib/split-router';
 import { z } from 'zod';
 
 const searchSchema = z.object({

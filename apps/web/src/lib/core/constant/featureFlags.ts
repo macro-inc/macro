@@ -224,6 +224,16 @@ export const ENABLE_DOCX_TO_PDF = defineFlag({
   default: true,
 }).enabled;
 
+/**
+ * Open DOCX files in the collaborative DOCX editor instead of the converted
+ * PDF. On in development; deployed environments defer to PostHog.
+ */
+export const enableDocxEditor = defineFlag({
+  key: 'enable-docx-editor',
+  env: 'ENABLE_DOCX_EDITOR',
+  default: DEV_MODE_ENV || undefined,
+});
+
 export const ENABLE_MARKDOWN_LIVE_COLLABORATION = defineFlag({
   env: 'ENABLE_MARKDOWN_LIVE_COLLABORATION',
   default: true,
@@ -596,6 +606,14 @@ export function isCalendarSearchUiEnabled(): boolean {
   );
 }
 
+// Scheduling settings, calendar shortcuts, and public booking/receipt pages.
+// On in dev; production defers to PostHog.
+export const enableCalendarScheduling = defineFlag({
+  key: 'enable-calendar-scheduling',
+  env: 'ENABLE_CALENDAR_SCHEDULING',
+  default: onInDev,
+});
+
 // The "Enable calendar" prompt on phones. Off by default everywhere,
 // including dev: the mobile toast layout drops the body and the close button,
 // so the prompt lands as an undismissable one-line bar over the composer.
@@ -722,6 +740,17 @@ export const enableRecentView = defineFlag({
 export const enableNotificationSettings = defineFlag({
   key: 'enable-notification-settings',
   env: 'ENABLE_NOTIFICATION_SETTINGS',
+  default: onInDev,
+});
+
+/**
+ * The in-browser PowerPoint editor (`block-pptx`). Off shows uploaded
+ * `.pptx` files as before: download only. On in dev; deployed environments
+ * follow PostHog.
+ */
+export const enablePptxEditor = defineFlag({
+  key: 'enable-pptx-editor',
+  env: 'ENABLE_PPTX_EDITOR',
   default: onInDev,
 });
 

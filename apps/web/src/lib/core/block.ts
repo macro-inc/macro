@@ -51,13 +51,6 @@ import type { ObjectLike, ResultError } from './util/result';
 
 export { BlockAliasRegistry, BlockRegistry } from '../constants/block-registry';
 
-/** Block names that resolve through another concrete block implementation. */
-export const VirtualBlockRegistry = ['write'] as const;
-const virtualBlockNames = new Set<string>(VirtualBlockRegistry);
-export const ConcreteBlockRegistry = BlockRegistry.filter(
-  (name) => !virtualBlockNames.has(name)
-);
-
 type BlockNameKeys = keyof typeof BlockRegistry & number;
 
 /**
@@ -86,7 +79,7 @@ export const NonDocumentBlockTypes = [
   'email',
   'contact',
   'company',
-  'automation',
+  'routine',
   'pr',
   'agent',
   'initiative',
@@ -138,6 +131,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   email: allBlockNames,
   canvas: allBlockNames,
   spreadsheet: allBlockNames,
+  pptx: allBlockNames,
   project: allBlockNames,
   unknown: allBlockNames,
   video: allBlockNames,
@@ -146,7 +140,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   task: allBlockNames,
   snippet: allBlockNames,
   skill: allBlockNames,
-  automation: allBlockNames,
+  routine: allBlockNames,
   csv: allBlockNames,
   pr: allBlockNames,
   agent: allBlockNames,
@@ -159,6 +153,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   calendar: new Set([]),
   canvas: new Set(['md']),
   spreadsheet: new Set([]),
+  pptx: new Set([]),
   database: new Set([]),
   chat: new Set([]),
   pdf: new Set(['md']),
@@ -176,7 +171,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   task: new Set([]),
   snippet: new Set([]),
   skill: new Set([]),
-  automation: new Set([]),
+  routine: new Set([]),
   csv: new Set([]),
   pr: new Set([]),
   agent: new Set([]),

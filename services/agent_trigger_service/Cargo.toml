@@ -37,6 +37,7 @@ messages = { path = "../../crates/messages", features = ["broker", "delivery", "
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
+system_properties = { path = "../../crates/system_properties" }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 static_file = { path = "../../crates/static_file" }

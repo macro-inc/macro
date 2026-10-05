@@ -7,17 +7,17 @@ lighter bubble with the normal text palette. Preview Markdown and controls at
 
 ## Working with projects
 
-Project tools can list, read, create, update, delete, and share projects; set or
-clear task associations; and read project activity. Backend tool names use
-`Initiative`. These operate on the native Projects views in Tasks.
+Project tools can list, read, create, update, delete, and share projects, and
+read project activity. Backend tool names use `Initiative`. These operate on the
+native Projects views in Tasks. Agents set or clear a task's project with
+`SetEntityProperty` on the task's `Project` property.
 
 Each completed tool row has an expandable result toggle, including empty results
 and per-task failures. Project chips open the native project. Shift-click opens
 another split. **Result data** reveals the complete returned response. Successful
 mutations refresh the project views.
 Deleting a project shows its result without a link to the deleted project.
-Failed project deletions show `Not deleted`. Clearing projects from several tasks
-reports each task's outcome, including partial failures.
+Failed project deletions show `Not deleted`.
 
 ## Phones with new agents enabled
 
@@ -202,11 +202,12 @@ the shimmer.
   Macro's models use the same searchable catalog as running sessions: a short
   **Recommended** list and a **More models** submenu grouped by model family,
   followed by **Agents** and **Coding agents** sections. Models have readable
-  names (for example, **Sonnet 5**) and provider or model icons aligned with the
+  names (for example, **Sonnet 5.5**) and provider or model icons aligned with the
   agent icons. The in-memory catalog offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
-  open-weight models; and Google's **Gemini 3.8 Flash**. Older Sonnet and Opus
-  versions are not offered.
+  open-weight models; and Google's **Gemini 3.8 Flash**. The Anthropic models
+  are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 4.5**; older Claude versions
+  (Sonnet 5, Opus 5, Fable 5.1) are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
   A model chosen from that catalog is remembered in local storage as the
@@ -589,7 +590,7 @@ existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
-  `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
+  `Sonnet 5.5`, `Opus 5.5`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
   in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
   On the free plan everything but `Haiku 4.5` is
   dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
@@ -762,14 +763,14 @@ On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
 sits on top and a footer row holds the model (left, as a provider logo and
-name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). On touch devices Enter on the
+name, e.g. `✳ Sonnet 5.5 ⌄`) and **Send** (right). On touch devices Enter on the
 virtual keyboard inserts a newline and never sends; only **Send** submits, the
 same as channel composers. This also applies to the Agents workspace session
 and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
 Enter still sends and Shift+Enter inserts a newline. Tapping the model opens a
 bottom sheet listing every model the same way, with a check on the current one
 — pick a row to switch. Models read as names even when the runtime reports
-only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the
+only ids: Macro Agent's `anthropic/claude-sonnet-5-5` shows as **Sonnet 5.5**. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
 sits above the box. Tap the session title
@@ -916,7 +917,8 @@ Existing announcement chips remain locked to the turn they announced.
 
 Sessions with a linked GitHub pull request capture that PR's diff when each
 turn ends, regardless of the coding runtime. Unpushed workspace changes and
-branches without a PR are not included. The session header gains a **Changes**
+branches without a PR are not included. The capture is the same stored diff the
+PR's Changes pane in Reviews shows for that base and head. The session header gains a **Changes**
 toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
 Chat sessions on Macro's in-memory harness have no repository, so they show
@@ -1028,6 +1030,14 @@ Regression check: open a long session, let a reply stream while at latest, then
 scroll several screens up and confirm output does not pull you down. Scroll down
 to reveal the overlay and return to latest. Repeat with a short session and on a
 physical phone while opening/dismissing the keyboard, both at latest and in history.
+
+After a harness server crashes and its lease expires, the session stops showing
+Working and becomes disconnected without requiring a new message. Its transcript
+is preserved; recovery does not replay the prompt or retry tool calls. Open chats
+refresh the durable history while preserving live events arriving during the read,
+so a session that has already resumed stays active. Verify that a transient history
+read failure retries automatically while live messages continue, and that closing
+the chat cancels pending retries.
 
 When a session reconnects using ACP load, the last committed conversation stays
 visible while history is reconstructed. A successful load replaces the transcript
@@ -1167,7 +1177,7 @@ There is no periodic PR lookup polling.
 Open the model selector and hover a model to choose its reasoning effort in the
 submenu. Keyboard users open it with Right Arrow; touch users tap the model.
 Cursor and Macro's in-memory agent load the hovered model's own advertised
-choices. The selected label includes the effort, such as `Sonnet 5 · High`;
+choices. The selected label includes the effort, such as `Sonnet 5.5 · High`;
 there is no separate effort control in the input box. Models without effort
 support remain selectable through `Use <model>` (or a desktop click/Enter).
 Default keeps the model's existing behavior.

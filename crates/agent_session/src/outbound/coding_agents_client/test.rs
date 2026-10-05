@@ -192,6 +192,64 @@ async fn domain_dispatch_failure_preserves_the_session_for_followup() {
 }
 
 #[tokio::test]
+async fn contradictory_status_and_error_envelopes_keep_dispatch_uncertain() {
+    for (status, error) in [
+        (307, CodingAgentError::Unavailable),
+        (500, CodingAgentError::InvalidPrompt),
+        (503, CodingAgentError::Forbidden),
+        (504, CodingAgentError::OperationFailed),
+        (
+            400,
+            CodingAgentError::DispatchFailed {
+                agent_session_id: Uuid::now_v7(),
+                reason: crate::domain::routines::RoutineSessionError::PromptDeliveryUnknown,
+            },
+        ),
+    ] {
+        let server = server(vec![Reply::json(status, json!(error))]).await;
+        let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
+        assert_eq!(
+            client.dispatch(command()).await.unwrap_err(),
+            CodingAgentError::DispatchDeliveryUnknown,
+        );
+        assert_eq!(server.requests.lock().unwrap().len(), 1);
+    }
+}
+
+#[tokio::test]
+async fn matching_domain_errors_and_gateway_timeouts_are_preserved() {
+    for (status, error) in [
+        (400, CodingAgentError::InvalidCommand),
+        (400, CodingAgentError::InvalidPrompt),
+        (403, CodingAgentError::Forbidden),
+        (404, CodingAgentError::Unavailable),
+        (500, CodingAgentError::OperationFailed),
+        (502, CodingAgentError::DispatchDeliveryUnknown),
+        (504, CodingAgentError::DispatchDeliveryUnknown),
+    ] {
+        let server = server(vec![Reply::json(status, json!(error))]).await;
+        let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
+        assert_eq!(client.dispatch(command()).await.unwrap_err(), error);
+        assert_eq!(server.requests.lock().unwrap().len(), 1);
+    }
+    let server = server(vec![
+        Reply::json(504, json!(CodingAgentError::OperationFailed)),
+        Reply::json(504, json!(CodingAgentError::DispatchDeliveryUnknown)),
+    ])
+    .await;
+    let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
+    assert_eq!(
+        client.list(command().user_id).await.unwrap_err(),
+        CodingAgentError::OperationFailed,
+    );
+    assert_eq!(
+        client.list(command().user_id).await.unwrap_err(),
+        CodingAgentError::OperationFailed,
+    );
+    assert_eq!(server.requests.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
 async fn redirects_never_forward_credentials_or_replay_dispatch() {
     let sink = server(vec![Reply::json(200, json!({"agents":[]}))]).await;
     let server = server(vec![Reply {

@@ -14,6 +14,7 @@ import type {
   Step,
 } from './generated/types';
 import {
+  type DatabaseSqlReadContext,
   type DatabaseSqlRunTrace,
   type DatabaseSqlStepTrace,
   traceDatabaseSqlRun,
@@ -176,10 +177,14 @@ export function runDatabaseSql(
   {
     source,
     open = openDatabaseSqlQuery,
-  }: { source: RowSource; open?: OpenEngine }
+    context,
+  }: { source: RowSource; open?: OpenEngine; context?: DatabaseSqlReadContext }
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
-  return traceDatabaseSqlRun({ kind: 'sql', sql }, catalog, (trace) =>
-    drive(() => open(catalog, sql), source, trace)
+  return traceDatabaseSqlRun(
+    { kind: 'sql', sql },
+    catalog,
+    (trace) => drive(() => open(catalog, sql), source, trace),
+    context
   );
 }
 
@@ -190,10 +195,14 @@ export function runDatabaseView(
   {
     source,
     open = openDatabaseViewQuery,
-  }: { source: RowSource; open?: OpenView }
+    context,
+  }: { source: RowSource; open?: OpenView; context?: DatabaseSqlReadContext }
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
-  return traceDatabaseSqlRun({ kind: 'view', view }, catalog, (trace) =>
-    drive(() => open(catalog, view), source, trace)
+  return traceDatabaseSqlRun(
+    { kind: 'view', view },
+    catalog,
+    (trace) => drive(() => open(catalog, view), source, trace),
+    context
   );
 }
 

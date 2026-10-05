@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT entity_id\n            FROM entity_properties\n            WHERE property_definition_id = $1\n              AND entity_type = 'TASK'\n              AND values @> jsonb_build_object(\n                  'value', jsonb_build_array(jsonb_build_object(\n                      'entity_id', $2::text, 'entity_type', 'INITIATIVE'\n                  ))\n              )\n            ORDER BY entity_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d7bad4039582741fcae82df8c90a5148a76cfd4567fcef8e0432ee746a9a2e3d"
+}

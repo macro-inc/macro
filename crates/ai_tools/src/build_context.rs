@@ -33,6 +33,10 @@ use foreign_entity::{
 };
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use image_generation::domain::ports::{ImageGenerator, UnconfiguredImageGenerator};
 use image_generation::outbound::gemini::GeminiImageGenerator;
 use lexical_client::LexicalClient;
@@ -244,8 +248,10 @@ pub async fn build_tool_service_context_from_env(
     );
     let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
         Arc::new(email_service.clone());
-    let foreign_entity_service =
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone()));
+    let github_pull_request_service = GithubPullRequestServiceImpl::new(
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
+        PgGithubPullRequestRepo::new(pool.clone()),
+    );
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(ReadOnlyPool(pool.clone())),
         frecency_service,
@@ -255,11 +261,16 @@ pub async fn build_tool_service_context_from_env(
             call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
         ),
         crm::domain::service::NoOpCrmService,
-        foreign_entity_service,
+        github_pull_request_service,
         reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
+    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+        pool.clone(),
+        s3_client.clone(),
+        env.document_storage_bucket.to_string(),
+    );
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
         env.document_storage_bucket.to_string(),
@@ -345,7 +356,8 @@ pub async fn build_tool_service_context_from_env(
             Arc::new(lexical_client.clone()),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_presentation_files(Arc::new(presentation_files));
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),
@@ -444,7 +456,6 @@ pub async fn build_tool_service_context_from_env(
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        side_effect_clients.sqs,
         side_effect_clients.macro_event_broker,
     );
 
@@ -464,6 +475,8 @@ pub async fn build_tool_service_context_from_env(
         pool.clone(),
     );
 
+    let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
+
     Ok(ToolServiceContext {
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
@@ -477,6 +490,7 @@ pub async fn build_tool_service_context_from_env(
         image_generation_tool_context: crate::build_image_generation_tool_context(
             &document_tool_context,
             build_image_generator_from_env(),
+            recorder.clone(),
         )?,
         document_tool_context,
         properties_tool_context,
@@ -510,10 +524,10 @@ pub async fn build_tool_service_context_from_env(
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
         skill_tool_context,
-        schedule_tool_context: crate::NoOpScheduleContext,
+        schedule_tool_context: crate::build_routine_tool_context()?,
         anthropic_tool_context,
         admission: ai_billing::composition::pg_admission_service(pool.clone(), enforcement),
-        recorder: ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement),
+        recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })
 }

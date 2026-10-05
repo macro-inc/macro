@@ -9,11 +9,10 @@ use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges, SoupItemDataLoader};
 use crate::{
     InitiativeGraphqlContext, graphql_error,
     inputs::{CreateInitiativeInput, UpdateInitiativeInput},
-    objects::GraphqlInitiativeTaskAssignment,
     query::load_from_soup,
 };
 
-/// Primary-backed canonical Soup reader for initiative detail, references, and mutation replies.
+/// Primary-backed canonical Soup reader for initiative detail and mutation replies.
 /// List queries and subscriptions retain their replica-backed Soup reader.
 #[derive(Clone)]
 pub struct InitiativeEntityLoader(pub SoupItemDataLoader);
@@ -27,7 +26,8 @@ impl<E: SoupEntityEdges> Default for InitiativeMutationRoot<E> {
     }
 }
 
-/// Authenticated initiative lifecycle, sharing, and task relationship mutations.
+/// Authenticated initiative lifecycle and sharing mutations. Tasks join a project through
+/// their Project property.
 #[Object]
 impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
     /// Create an initiative owned by the authenticated user.
@@ -76,6 +76,23 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
         .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
     }
 
+    /// Idempotently ensure the collaborative description surface of an initiative the viewer
+    /// can see, returning its id, which is the initiative's id. Call before connecting.
+    async fn ensure_initiative_description_surface(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+    ) -> async_graphql::Result<ID> {
+        let user = require_authenticated_user(ctx)?;
+        let id = parse_id(initiative_id, "initiativeId")?;
+        ctx.data::<InitiativeGraphqlContext>()?
+            .0
+            .ensure_description_surface(user, id)
+            .await
+            .map_err(graphql_error)?;
+        Ok(ID(id.to_string()))
+    }
+
     /// Delete an initiative after its owner capability has been verified.
     async fn delete_initiative(
         &self,
@@ -87,60 +104,6 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
         ctx.data::<InitiativeGraphqlContext>()?
             .0
             .delete(user, id)
-            .await
-            .map_err(graphql_error)?;
-        Ok(true)
-    }
-
-    /// Assign or move tasks, preserving partial task authorization results.
-    async fn assign_initiative_tasks(
-        &self,
-        ctx: &Context<'_>,
-        initiative_id: ID,
-        task_ids: Vec<ID>,
-    ) -> async_graphql::Result<Vec<GraphqlInitiativeTaskAssignment>> {
-        let user = require_authenticated_user(ctx)?;
-        let id = parse_id(initiative_id, "initiativeId")?;
-        let result = ctx
-            .data::<InitiativeGraphqlContext>()?
-            .0
-            .assign(
-                user,
-                id,
-                task_ids.into_iter().map(|id| id.to_string()).collect(),
-            )
-            .await
-            .map_err(graphql_error)?;
-        Ok(result.results.into_iter().map(Into::into).collect())
-    }
-
-    /// Remove a task using project and task edit capabilities.
-    async fn unassign_initiative_task(
-        &self,
-        ctx: &Context<'_>,
-        initiative_id: ID,
-        task_id: ID,
-    ) -> async_graphql::Result<bool> {
-        let user = require_authenticated_user(ctx)?;
-        let id = parse_id(initiative_id, "initiativeId")?;
-        ctx.data::<InitiativeGraphqlContext>()?
-            .0
-            .unassign(user, id, task_id.to_string())
-            .await
-            .map_err(graphql_error)?;
-        Ok(true)
-    }
-
-    /// Clear a task's project using task edit access, even after project access is revoked.
-    async fn clear_task_initiative(
-        &self,
-        ctx: &Context<'_>,
-        task_id: ID,
-    ) -> async_graphql::Result<bool> {
-        let user = require_authenticated_user(ctx)?;
-        ctx.data::<InitiativeGraphqlContext>()?
-            .0
-            .clear(user, task_id.to_string())
             .await
             .map_err(graphql_error)?;
         Ok(true)

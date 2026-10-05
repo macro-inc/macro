@@ -30,6 +30,13 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude],
     projects: [
+      {
+        extends: './src/features/scheduling/vitest.config.ts',
+        test: {
+          include: ['src/features/scheduling/**/*.{test,spec}.{ts,tsx}'],
+          name: 'scheduling',
+        },
+      },
       '../../packages/email-renderer/vitest.config.ts',
       '../../packages/collaboration/vitest.collab.config.ts',
       '../../packages/collaboration/vitest.transport.config.ts',
@@ -206,6 +213,7 @@ export default defineConfig({
           exclude: [
             ...configDefaults.exclude,
             'src/components/view-shell/**/*',
+            'src/features/scheduling/**/*',
             'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email,email-message,email-thread,email-compose}/**/*',
           ],
           include: [

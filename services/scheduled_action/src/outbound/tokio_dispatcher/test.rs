@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::event_runs::ConfigurationRevision;
+use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{ActionKind, Schedule};
 use model_owner::Owner;
 use serde_json::json;
@@ -27,6 +28,12 @@ fn only_enabled_cron_actions_get_a_timer() {
         enabled: true,
     };
     assert!(action_sleep(id, &action, 0).is_some());
+    action.trigger = serde_json::from_value(json!({"type":"multiple", "triggers":[
+        {"type":"cron", "schedule":"* * * * * *", "timezone":"UTC"},
+        {"type":"events", "filters":[{"events":["document.created"]}]}
+    ]}))
+    .unwrap();
+    assert!(action_sleep(id, &action, 1).is_some());
     action.enabled = false;
     assert!(action_sleep(id, &action, 1).is_none());
     action.enabled = true;

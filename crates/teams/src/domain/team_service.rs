@@ -1307,8 +1307,16 @@ where
                 self.delete_team_as(team_id, user_id.clone().into_owned())
                     .await?;
             } else {
-                self.remove_member(team_id, user_id, user_id.clone().into_owned())
-                    .await?;
+                match self
+                    .remove_member(team_id, user_id, user_id.clone().into_owned())
+                    .await
+                {
+                    // The goal is that the user is off the team, so a
+                    // membership that vanished between the lookup and the
+                    // removal is already done.
+                    Ok(()) | Err(RemoveUserFromTeamError::UserNotInTeam) => {}
+                    Err(error) => return Err(error.into()),
+                }
             }
         }
         Ok(())

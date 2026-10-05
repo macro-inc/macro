@@ -49,6 +49,30 @@
       }
     },
     {
+      "includes": [
+        "src/lib/split-router/routes/**",
+        "src/lib/split-router/router/run.ts",
+        "src/lib/split-router/router/url-gate.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["solid-js", "solid-js/**"],
+                    "message": "The split router's route table and navigation machines are pure; keep Solid out of them."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/lib/service-clients/**/generated/**"],
       "linter": {
         "enabled": false

@@ -196,7 +196,7 @@ export async function deleteItem(args: {
       itemType === 'channel' ||
       itemType === 'email' ||
       itemType === 'channel_message' ||
-      itemType === 'automation' ||
+      itemType === 'routine' ||
       itemType === 'call' ||
       itemType === 'foreign'
     )

@@ -63,6 +63,13 @@ export type SnapshotIngest =
 
 export type LoroManagerOptions = {
   documentId: string;
+  /**
+   * Keep a JSON mirror of the schema's state and report it through
+   * `onStateChange` (the default). Editors that read the LoroDoc directly
+   * turn it off: the mirror re-reads the whole document on every change.
+   * State updates then carry no state, only the initialization signal.
+   */
+  mirror?: boolean;
 };
 
 /** Map Loro's {@link ImportStatus} onto our Result: ok(didChange), or
@@ -295,6 +302,18 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       return err([{ code: error.code, message: error.message }]);
     }
 
+    if (this.options.mirror === false) {
+      this.emitState({
+        state: {} as InferType<S>,
+        metadata: {
+          direction: SyncDirection.TO_LORO,
+          tags: ['INITIALIZE'],
+        },
+      });
+      this.setInitialized(true);
+      return ok(undefined);
+    }
+
     const mirror = createMirror(this._doc, this.schema);
 
     try {
@@ -331,7 +350,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   getUpdateSince(
     lastVersionVector: VersionVector
   ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]> {
-    if (!this._initialized || !this._mirror) {
+    if (!this._initialized) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
       ]);
@@ -457,6 +476,18 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     if (statusResult.isErr()) {
       // A reset snapshot must be self-contained; pending deps mean a bad seed.
       return err(statusResult.error);
+    }
+
+    if (this.options.mirror === false) {
+      this.emitState({
+        state: {} as InferType<S>,
+        metadata: {
+          direction: SyncDirection.TO_LORO,
+          tags: [LoroStateTag.Initialize],
+        },
+      });
+      this.setInitialized(true);
+      return ok(undefined);
     }
 
     const newMirror = createMirror(newDoc, this.schema);

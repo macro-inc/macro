@@ -30,6 +30,8 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
+mod scheduling_recovery;
+
 #[tokio::main]
 #[tracing::instrument(err)]
 async fn main() -> anyhow::Result<()> {
@@ -188,11 +190,33 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
     ));
 
+    let scheduling_service = Arc::new(calendar_scheduling::domain::service::Service::new(
+        calendar_scheduling::outbound::postgres::PostgresRepository::new(db.clone()),
+        calendar_scheduling::outbound::macro_services::MacroCalendars::new(
+            calendar_service.clone(),
+            calendar_mutation_service.clone(),
+            match config.environment {
+                Environment::Production => Some("https://macro.com".into()),
+                Environment::Develop => Some("https://dev.macro.com".into()),
+                Environment::Local => None,
+            },
+        ),
+        calendar_scheduling::outbound::macro_services::MacroDirectory(
+            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+        ),
+    ));
+    if config.calendar_sync_enabled {
+        worker_tracker.spawn(scheduling_recovery::run(
+            scheduling_service.clone(),
+            worker_cancellation_token.clone(),
+        ));
+    }
     let api_result = calendar_service::api::setup_and_serve(ApiContext {
         config: Arc::new(config),
         authorization_state,
         calendar_service,
         calendar_mutation_service,
+        scheduling_service,
     })
     .await;
 

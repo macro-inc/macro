@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use sqlx::{Pool, Postgres};
 
 #[tracing::instrument(skip(db))]

@@ -18,7 +18,7 @@ use uuid::Uuid;
 /// What one statement can see: the viewer's databases in detail, and the
 /// catalog built from them for the statement's scope.
 pub(crate) struct ViewerCatalog {
-    databases: Vec<DatabaseDetail>,
+    pub(crate) databases: Vec<DatabaseDetail>,
     catalog: Catalog,
 }
 

@@ -1,6 +1,6 @@
 use super::*;
 
-const FEATURES: [(AiFeature, bool); 13] = [
+const FEATURES: [(AiFeature, bool); 14] = [
     (AiFeature::Chat, true),
     (AiFeature::Memory, false),
     (AiFeature::Automation, true),
@@ -14,6 +14,7 @@ const FEATURES: [(AiFeature, bool); 13] = [
     (AiFeature::AgentSession, true),
     (AiFeature::AgentRepositoryChoice, true),
     (AiFeature::Dictation, false),
+    (AiFeature::ImageGeneration, true),
 ];
 
 #[test]

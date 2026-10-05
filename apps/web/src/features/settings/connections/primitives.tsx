@@ -50,7 +50,7 @@ export function SettingsPage(props: {
           'mx-auto w-full max-w-[710px]',
           inSheet
             ? 'px-3 pt-2 pb-[max(24px,var(--mobile-sheet-safe-padding))]'
-            : 'px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
+            : 'px-10 pt-4 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
         )}
       >
         <Show when={props.onBack}>

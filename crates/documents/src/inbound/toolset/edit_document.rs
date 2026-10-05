@@ -27,7 +27,7 @@ pub(super) mod test;
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "EditDocument",
-    description = "Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and automations; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips. To insert document-card(s), include each document's documentId and documentName."
+    description = "Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips. To insert document-card(s), include each document's documentId and documentName."
 )]
 pub struct EditDocument {
     #[schemars(
@@ -63,6 +63,12 @@ fn ensure_markdown(document: &DocumentBasic) -> Result<(), ToolCallError> {
     }
 
     let file_type = document.file_type.as_deref().unwrap_or("unknown");
+    if document.try_file_type() == Some(FileType::Docx) {
+        return Err(ToolCallError {
+            description: "this is an uploaded Word (.docx) document, which EditDocument cannot change. Use ReadWordDocument to read it with paragraph ids, then EditWordDocument to edit it.".to_owned(),
+            internal_error: anyhow::anyhow!("document file type docx is not markdown"),
+        });
+    }
     Err(ToolCallError {
         description: format!(
             "this document cannot be edited: it is a `{file_type}` file, not a Macro markdown document. AI editing only works on markdown documents authored in Macro's collaborative editor -- uploaded files (PDFs, DOCX, images, source files, and so on) are readable but not editable. Report this back to the user rather than retrying."

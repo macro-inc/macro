@@ -75,6 +75,7 @@ function pullRequest(
       deletions: 1,
       comments: [],
       checks: [],
+      labels: [],
     },
   };
 }

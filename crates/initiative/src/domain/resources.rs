@@ -30,8 +30,12 @@ pub trait InitiativeResources: std::fmt::Debug + Send + Sync + 'static {
         id: InitiativeId,
         values: Vec<InitialPropertyValue>,
     ) -> ResourceFuture<'_, ()>;
-    /// Clean up properties after the initiative is deleted using its already-verified capability.
+    /// Clean up properties after the initiative is deleted using its already-verified capability:
+    /// its own values, and the Project values that put tasks in it.
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()>;
+    /// Tasks whose Project property names the initiative, in id order. Callers authorize each
+    /// task before showing it.
+    fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>>;
     /// Return a view capability for a related entity under the same user/bot scope.
     /// Missing and inaccessible entities return `None`; infrastructure failures remain errors.
     fn view(

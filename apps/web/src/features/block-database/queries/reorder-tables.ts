@@ -5,7 +5,6 @@ import {
 } from '@queries/storage/databases';
 import { databasesKeys } from '@queries/storage/keys';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
-import type { VersionedTable } from '@service-storage/generated/schemas/versionedTable';
 import { ResultAsync } from 'neverthrow';
 import type { DatabaseSchemaChange } from '../core/column-schema';
 import { createKeyedSerializer } from '../core/keyed-serializer';
@@ -81,32 +80,11 @@ export function reorderDatabaseTables(params: {
           ? withTableOrder(current, previousOrder)
           : current
       );
+      // setQueryData during rollback marks the cache fresh; reconcile after it.
       void invalidateDatabase(params.databaseId);
       return result.map(() => undefined);
     }
-    const [reordered] = result.value;
-    if (reordered?.kind === 'reorder_tables') commit(key, reordered.tables);
     return result.map(() => undefined);
   };
   return new ResultAsync(reorder());
-}
-
-/** Each table's committed version; a cached table already past it keeps its own. */
-function commit(key: readonly unknown[], tables: VersionedTable[]) {
-  const committed = new Map(
-    tables.map(({ table, version }) => [table, version])
-  );
-  queryClient.setQueryData(key, (current: DatabaseDetail | undefined) =>
-    current
-      ? {
-          ...current,
-          tables: current.tables.map((entry) => {
-            const version = committed.get(entry.table.id);
-            return version !== undefined && entry.table.version <= version
-              ? { ...entry, table: { ...entry.table, version } }
-              : entry;
-          }),
-        }
-      : current
-  );
 }

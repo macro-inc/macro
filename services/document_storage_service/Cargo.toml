@@ -32,7 +32,7 @@ roles_and_permissions = { path = "../../crates/roles_and_permissions", default-f
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 agent_changes = { path = "../../crates/agent_changes", default-features = false, features = ["outbound"] }
 dictation = { path = "../../crates/dictation", features = ["inbound", "outbound"] }
-initiative_documents = { path = "../../crates/initiative_documents" }
+initiative_description = { path = "../../crates/initiative_description" }
 agent_session = { path = "../../crates/agent_session", features = ["outbound"] }
 activity = { path = "../../crates/activity" }
 ai_tools = { path = "../../crates/ai_tools" }
@@ -129,6 +129,12 @@ github = { path = "../../crates/github", default-features = false, features = [
   "inbound",
   "outbound",
   "sync",
+] }
+github_pull_requests = { path = "../../crates/github_pull_requests", default-features = false, features = [
+  "inbound",
+  "outbound",
+  "s3",
+  "service",
 ] }
 graphql_soup = { path = "../../crates/graphql_soup" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }

@@ -11,6 +11,7 @@ import type {
   DatabaseView,
   Outcome,
   Request,
+  RunError,
 } from './generated/types';
 
 const PREFIX = '[database-sql]';
@@ -22,6 +23,26 @@ export type DatabaseSqlSubject =
   | { kind: 'sql'; sql: string }
   | { kind: 'check'; sql: string }
   | { kind: 'view'; view: DatabaseView };
+
+/** Why the caller is reading; contains no statement or cell content. */
+export type DatabaseSqlReadReason =
+  | 'initial'
+  | 'statement-change'
+  | 'schema-change'
+  | 'refresh'
+  | 'after-write'
+  | 'websocket'
+  | 'cache-change'
+  | 'cache-reconcile'
+  | 'read';
+
+export type DatabaseSqlReadContext = {
+  reason: DatabaseSqlReadReason;
+  scope?: string;
+  requestPolicy: string;
+  /** An initial cache-only miss is expected, not a failed network read. */
+  reportFailure?: boolean;
+};
 
 /** What a row source tells a step about the GraphQL request it sends. */
 export interface DatabaseSqlStepTrace {
@@ -119,6 +140,7 @@ function subjectAttributes(span: Span, subject: DatabaseSqlSubject) {
     )
     .with({ kind: 'view' }, ({ view }) => {
       span.setAttr('database_sql.view_id', view.id);
+      span.setAttr('database_sql.table_id', view.tableId);
       span.setAttr('database_sql.view_name', view.name);
     })
     .exhaustive();
@@ -165,14 +187,22 @@ function logStep(step: DatabaseSqlStepRecord, tableNames: Map<string, string>) {
  * Run `drive` inside a `database_sql.run` span, giving it a trace whose
  * fetches and folds are child spans, then log the run as one group.
  */
-export function traceDatabaseSqlRun<Failure extends { kind: string }>(
+export function traceDatabaseSqlRun<
+  Failure extends { kind: string; error?: RunError },
+>(
   subject: DatabaseSqlSubject,
   catalog: Catalog,
-  drive: (trace: DatabaseSqlRunTrace) => ResultAsync<Outcome, Failure>
+  drive: (trace: DatabaseSqlRunTrace) => ResultAsync<Outcome, Failure>,
+  context?: DatabaseSqlReadContext
 ): ResultAsync<Outcome, Failure> {
   const started = performance.now();
   const runSpan = Telemetry.span('database_sql.run');
   subjectAttributes(runSpan, subject);
+  if (context) {
+    runSpan.setAttr('database_sql.read_reason', context.reason);
+    runSpan.setAttr('database_sql.request_policy', context.requestPolicy);
+    if (context.scope) runSpan.setAttr('database_sql.scope_id', context.scope);
+  }
   runSpan.setAttr(
     'database_sql.database_ids',
     [...new Set(catalog.tables.map((table) => table.databaseId))].join(',')
@@ -291,8 +321,37 @@ export function traceDatabaseSqlRun<Failure extends { kind: string }>(
       );
     })
     .orTee((failure) => {
+      const engineError = failure.error;
+      const detail = {
+        ...(engineError
+          ? { 'database_sql.error_stage': engineError.stage }
+          : {}),
+        ...(engineError?.stage === 'resolve' || engineError?.stage === 'view'
+          ? { 'database_sql.error_code': engineError.kind }
+          : {}),
+      };
+      for (const [key, value] of Object.entries(detail))
+        runSpan.setAttr(key, value);
       runSpan.setAttr('database_sql.error_kind', failure.kind);
       runSpan.error(JSON.stringify(failure));
+      // Error messages may contain SQL literals or cell values. The error kind
+      // and target IDs locate the failed trace without exporting that content.
+      if (context && context.reportFailure !== false)
+        runSpan.run(() =>
+          Telemetry.warn('database SQL read failed', {
+            ...detail,
+            'database_sql.error_kind': failure.kind,
+            'database_sql.read_reason': context.reason,
+            'database_sql.request_policy': context.requestPolicy,
+            'database_sql.scope_id': context.scope ?? '',
+            'database_sql.database_ids': [
+              ...new Set(catalog.tables.map((table) => table.databaseId)),
+            ].join(','),
+            'database_sql.table_ids': catalog.tables
+              .map((table) => table.id)
+              .join(','),
+          })
+        );
       finish({ error: failure.kind }, failure);
     });
 }

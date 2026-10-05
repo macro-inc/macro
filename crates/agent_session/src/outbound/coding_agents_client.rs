@@ -111,7 +111,29 @@ impl CodingAgentsClient {
             return serde_json::from_slice(&body).map_err(|_| operation.uncertain_error());
         }
         if let Ok(error) = serde_json::from_slice::<CodingAgentError>(&body) {
-            return Err(error);
+            let valid_status = match &error {
+                CodingAgentError::InvalidCommand | CodingAgentError::InvalidPrompt => {
+                    status == StatusCode::BAD_REQUEST
+                }
+                CodingAgentError::Forbidden => status == StatusCode::FORBIDDEN,
+                CodingAgentError::Unavailable => status == StatusCode::NOT_FOUND,
+                CodingAgentError::OperationFailed => {
+                    status == StatusCode::INTERNAL_SERVER_ERROR
+                        || (operation == Operation::List && status == StatusCode::GATEWAY_TIMEOUT)
+                }
+                CodingAgentError::DispatchFailed { .. } => status == StatusCode::BAD_GATEWAY,
+                CodingAgentError::DispatchDeliveryUnknown => {
+                    status == StatusCode::BAD_GATEWAY
+                        || (operation == Operation::Dispatch
+                            && status == StatusCode::GATEWAY_TIMEOUT)
+                }
+            };
+            // A contradictory envelope is not evidence that dispatch was refused.
+            return Err(if valid_status {
+                error
+            } else {
+                operation.uncertain_error()
+            });
         }
         // Never expose gateway/provider bodies, which may contain private content.
         Err(match status {

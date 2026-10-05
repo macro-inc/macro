@@ -239,8 +239,8 @@ fn only_confirmed_effort_replays_and_removal_resets_it() {
     let mut frames = vec![config_frame(REASONING_EFFORT_CONFIG_ID, "low")];
     assert_eq!(replay_reasoning_effort(&frames), ReasoningEffort::Default);
     let options = crate::domain::model_options::session_config_options(
-        "anthropic/claude-sonnet-5",
-        &["anthropic/claude-sonnet-5"],
+        "anthropic/claude-sonnet-5-5",
+        &["anthropic/claude-sonnet-5-5"],
         ReasoningEffort::Low,
     );
     frames.push(config_response(

@@ -7,35 +7,35 @@ import {
 
 const comparisonRows: ComparisonRow[] = [
   {
-    feature: 'Builds itself from your email (no data entry)',
+    feature: 'Companies and contacts created from your email',
     cells: [true, false, 'partial', 'partial'],
   },
   {
-    feature: 'Automatic company enrichment',
+    feature: 'Company descriptions filled in automatically',
     cells: [true, 'partial', true, true],
   },
   {
-    feature: 'Discussion threads on every record',
+    feature: 'Threaded discussion on every company',
     cells: [true, 'partial', 'partial', false],
   },
   {
-    feature: '@mention records in docs, tasks & chat',
+    feature: '@mention companies in docs, tasks, and chat',
     cells: [true, false, false, false],
   },
   {
-    feature: 'One customer view across email, calls, docs & tasks',
+    feature: 'Emails, calls, files, and tasks on the record',
     cells: [true, 'partial', 'partial', false],
   },
   {
-    feature: 'Built-in email, calls, docs & tasks',
+    feature: 'Email, calls, docs, and tasks in the same app',
     cells: [true, 'partial', 'partial', false],
   },
   {
-    feature: 'Agents with full-workspace context',
+    feature: 'Agents can also read your email, calls, and docs',
     cells: [true, 'partial', 'partial', 'partial'],
   },
   {
-    feature: 'Unified search across everything',
+    feature: 'One search across email, chat, docs, and customers',
     cells: [true, false, false, false],
   },
   { feature: 'Open source (AGPLv3)', cells: [true, false, false, false] },

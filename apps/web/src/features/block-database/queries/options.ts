@@ -28,11 +28,11 @@ function definitionOf(
 }
 
 /** Every column bound to the target's definition, with its options changed. */
-function patchOptions(
+async function patchOptions(
   target: OptionTarget,
   change: (options: PropertyOption[]) => PropertyOption[]
 ): Promise<void> {
-  return patchDetail(target.databaseId, (detail) => {
+  await patchDetail(target.databaseId, (detail) => {
     const definition = definitionOf(detail, target);
     return {
       ...detail,
@@ -111,7 +111,6 @@ export function updateDatabaseOption(
     .andThen(() =>
       applyOp(
         target.databaseId,
-        target.tableId,
         {
           kind: 'column',
           table: target.tableId,
@@ -136,7 +135,6 @@ export function deleteDatabaseOption(
     .andThen(() =>
       applyOp(
         target.databaseId,
-        target.tableId,
         {
           kind: 'column',
           table: target.tableId,

@@ -33,7 +33,6 @@ import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Fla
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import { AutomationComposer } from '@block-automation/component';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
@@ -51,7 +50,6 @@ import {
   enableReminders,
 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -116,9 +114,7 @@ export function Layout(props: RouteSectionProps) {
     () =>
       !isTouchDevice() &&
       isAuthenticated() === true &&
-      !AUTH_URLS.includes(location.pathname) &&
-      // Settings-as-the-sole-split has its own tab nav — hide app chrome.
-      !isSoloSettings()
+      !AUTH_URLS.includes(location.pathname)
   );
 
   return (
@@ -318,7 +314,6 @@ function LayoutInner(props: RouteSectionProps) {
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-          <AutomationComposer />
         </Show>
       </Suspense>
       <DevStatusBar />

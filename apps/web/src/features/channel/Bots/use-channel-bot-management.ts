@@ -65,7 +65,7 @@ export function useChannelBotManagement(
     scopeId: options.hotkeyScopeId,
     description: 'Create bot for channel',
     icon: PlusIcon,
-    keywords: ['webhook', 'automation', 'agent'],
+    keywords: ['webhook', 'routine', 'agent'],
     displayPriority: 9,
     condition: canManageBots,
     keyDownHandler: () => {

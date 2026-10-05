@@ -104,7 +104,7 @@ export function showsSessionHarness(session: {
 /**
  * A model's display name. Runtimes that keep no name for a model report its
  * slug as the name, so the house label reads the id instead of showing
- * `claude-sonnet-5` where the rest of the app says "Sonnet 5".
+ * `claude-sonnet-5-5` where the rest of the app says "Sonnet 5.5".
  */
 export function modelDisplayName(
   id: string,

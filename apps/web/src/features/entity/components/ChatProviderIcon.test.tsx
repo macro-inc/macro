@@ -34,7 +34,7 @@ describe('soup chat provider selection', () => {
     expect(
       container.querySelector('[data-ai-provider="openai"]')
     ).not.toBeNull();
-    setModel(Model.sonnet5);
+    setModel(Model.sonnet55);
     expect(
       container.querySelector('[data-ai-provider="anthropic"]')
     ).not.toBeNull();
@@ -42,7 +42,7 @@ describe('soup chat provider selection', () => {
   });
 
   it('uses a saved selection without a saved soup model', async () => {
-    storeChatStateImmediate('draft-only', { model: Model.sonnet5 });
+    storeChatStateImmediate('draft-only', { model: Model.sonnet55 });
     const { container } = render(() => <ChatProviderIcon id="draft-only" />);
     expect(
       container.querySelector('[data-ai-provider="anthropic"]')
@@ -75,7 +75,7 @@ describe('soup chat provider selection', () => {
     expect(
       container.querySelector('[data-ai-provider="openai"] svg')
     ).not.toBeNull();
-    setModel(Model.sonnet5);
+    setModel(Model.sonnet55);
     expect(
       container.querySelector('[data-ai-provider="openai"] svg')
     ).not.toBeNull();
@@ -85,7 +85,7 @@ describe('soup chat provider selection', () => {
     const { container } = render(() => (
       <>
         <ChatProviderIcon id="openai-chat" model={Model.gpt56} />
-        <ChatProviderIcon id="anthropic-chat" model={Model.opus5} />
+        <ChatProviderIcon id="anthropic-chat" model={Model.opus55} />
       </>
     ));
     expect(
@@ -118,7 +118,7 @@ describe('soup chat provider selection', () => {
         <ChatProviderIcon id="other-chat" model={Model.gpt56} />
       </>
     ));
-    storeChatStateImmediate('selected-chat', { model: Model.sonnet5 });
+    storeChatStateImmediate('selected-chat', { model: Model.sonnet55 });
     expect(
       Array.from(container.querySelectorAll('[data-ai-provider]'), (el) =>
         el.getAttribute('data-ai-provider')

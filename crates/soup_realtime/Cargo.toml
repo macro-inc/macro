@@ -16,6 +16,7 @@ consumer = [
   "dep:projects",
   "dep:properties",
   "dep:rdkafka",
+  "dep:system_properties",
   "dep:tokio",
   "macro_event_broker/outbound",
   "ports",
@@ -56,6 +57,7 @@ properties = { path = "../properties", default-features = false, features = ["po
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
+system_properties = { path = "../system_properties", optional = true }
 tokio = { workspace = true, features = ["sync", "time"], optional = true }
 tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }

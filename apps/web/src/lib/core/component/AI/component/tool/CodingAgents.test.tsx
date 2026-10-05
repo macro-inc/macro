@@ -99,6 +99,41 @@ describe('coding agent dispatch', () => {
 });
 
 describe('available coding agents', () => {
+  it.each([false, true])(
+    'updates an already mounted row when listing fails (grouped: %s)',
+    (grouped) => {
+      const [error, setError] = createSignal<string>();
+      const view = render(() => (
+        <ToolErrorContext.Provider value={error}>
+          <listCodingAgentsHandler.render
+            tool={{ id: 'list-1', name: 'ListCodingAgents', data: {} }}
+            chat_id="chat-1"
+            message_id="message-1"
+            part_index={0}
+            isComplete={!!error()}
+            renderContext={{
+              isStreaming: !error(),
+              followedBy: () => false,
+              grouped,
+            }}
+          />
+        </ToolErrorContext.Provider>
+      ));
+      const label = view.getByText('Available coding agents');
+      expect(view.queryByText('Failed')).toBeNull();
+      expect(label.closest('.opacity-50')).toBeNull();
+
+      setError('failed');
+      expect(view.getByText('Failed')).toBeTruthy();
+      expect(label.closest('.opacity-50')).toBeTruthy();
+      expect(view.getByText('Available coding agents')).toBe(label);
+
+      setError(undefined);
+      expect(view.queryByText('Failed')).toBeNull();
+      expect(label.closest('.opacity-50')).toBeNull();
+    }
+  );
+
   it('keeps an empty result discoverable in its disclosure', () => {
     const view = render(() => (
       <listCodingAgentsHandler.render

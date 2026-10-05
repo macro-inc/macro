@@ -5,7 +5,7 @@ use crate::domain::{
     ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo},
 };
 use documents::domain::ports::DocumentService;
-use foreign_entity::domain::ports::ForeignEntityService;
+use github_pull_requests::domain::ports::GithubPullRequestService;
 use notification::domain::service::NotificationIngress;
 
 use super::GithubSyncServiceImpl;
@@ -14,10 +14,10 @@ impl<
     D: DocumentService,
     R: GithubSyncRepo,
     C: GithubSyncClient,
-    F: ForeignEntityService,
+    G: GithubPullRequestService,
     N: NotificationIngress,
     P: GithubSyncRealtime,
-> GithubSyncServiceImpl<D, R, C, F, N, P>
+> GithubSyncServiceImpl<D, R, C, G, N, P>
 {
     /// Handle `installation` events with action `created`.
     ///

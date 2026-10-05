@@ -213,7 +213,7 @@ it('preserves a real soup composer selection when creating and opening its first
   });
   const composer = render(() => <SoupChatInput />);
   fireEvent.click(
-    screen.getByRole('button', { name: 'Choose model, Sonnet 5' })
+    screen.getByRole('button', { name: 'Choose model, Sonnet 5.5' })
   );
   const dialog = await screen.findByRole('dialog', { name: 'Select model' });
   fireEvent.click(within(dialog).getByRole('button', { name: 'GPT-5.6' }));
@@ -237,7 +237,7 @@ it('preserves a real soup composer selection when creating and opening its first
         {
           chat: {
             id: 'selected-first-chat',
-            model: Model.sonnet5,
+            model: Model.sonnet55,
             messages: [],
           },
         } as unknown as ChatData
@@ -319,8 +319,8 @@ it.each([true, false])(
       </ChatInputProvider>
     ));
     const trigger = mobile
-      ? screen.getByRole('button', { name: 'Choose model, Sonnet 5' })
-      : screen.getByRole('button', { name: 'Sonnet 5' });
+      ? screen.getByRole('button', { name: 'Choose model, Sonnet 5.5' })
+      : screen.getByRole('button', { name: 'Sonnet 5.5' });
     if (mobile) fireEvent.click(trigger);
     else fireEvent.keyDown(trigger, { key: 'ArrowDown' });
     if (mobile) {

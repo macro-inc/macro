@@ -197,9 +197,24 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         subscription_id: &stripe::SubscriptionId,
     ) -> Result<(), CustomerError> {
-        let cancel_parmas = stripe::CancelSubscription::default();
+        // Cancelling is idempotent: a subscription that is already cancelled,
+        // or that went away with its customer, needs nothing further.
+        match stripe::Subscription::retrieve(&self.client, subscription_id, &[]).await {
+            Ok(subscription) if subscription.status == stripe::SubscriptionStatus::Canceled => {
+                return Ok(());
+            }
+            Ok(_) => {}
+            Err(stripe::StripeError::Stripe(error))
+                if matches!(error.code, Some(stripe::ErrorCode::ResourceMissing)) =>
+            {
+                return Ok(());
+            }
+            Err(error) => return Err(CustomerError::StorageLayerError(error.into())),
+        }
 
-        stripe::Subscription::cancel(&self.client, subscription_id, cancel_parmas)
+        let cancel_params = stripe::CancelSubscription::default();
+
+        stripe::Subscription::cancel(&self.client, subscription_id, cancel_params)
             .await
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 

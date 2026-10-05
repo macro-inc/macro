@@ -55,7 +55,10 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
           </Switch>
           <Property.Text
             property={props.property}
-            resolveSingleEntity={props.showLabel}
+            resolveSingleEntity={
+              props.showLabel ||
+              props.property.specificEntityType === 'INITIATIVE'
+            }
             class="min-w-0 max-w-60"
             fallback={
               <Property.Empty

@@ -1,0 +1,201 @@
+/* Calls page: frozen call record, channel call states, and CallOverlay. */
+.call-flow-frame { position: relative; }
+.call-flow-pointer { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 9; transition: transform 600ms cubic-bezier(.2, .8, .2, 1); }
+
+/* Top bars: labels drop to icons when the split header runs out of room. */
+.call-bar { container-type: inline-size; }
+.call-bar-action { gap: 8px; padding-inline: 8px; }
+.call-tab { display: inline-flex; align-items: center; }
+.call-tab-icon { display: none; }
+.call-tab-text { display: inline-flex; align-items: center; gap: 6px; }
+@container (max-width: 760px) {
+  .call-tab-icon { display: block; }
+  .call-tab-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .call-channel-tabs label { padding-inline: 8px; }
+}
+@container (max-width: 480px) {
+  .call-channel-bar { gap: 8px; }
+  .call-channel-tabs label { padding-inline: 6px; }
+  .call-bar-invite { display: none; }
+}
+@container (max-width: 600px) {
+  .call-bar-label { display: none; }
+  .call-bar-action { width: 32px; padding: 0; }
+  .call-bar-copy { display: none; }
+}
+
+/* ChannelDetail content area (px-2) and its message timeline. */
+.call-channel-body { display: flex; flex: 1; flex-direction: column; min-height: 0; padding-inline: 8px; }
+.call-channel-log { display: flex; flex-direction: column; }
+.call-channel-log > .sample-chat-log { margin: auto auto 0; }
+.product-demo .call-channel-log > .sample-chat-log { padding-bottom: 8px; }
+.call-channel-body .sample-chat-composer { margin-inline: auto; }
+.call-banner { width: 100%; max-width: 944px; margin-inline: auto; padding-inline: 32px; }
+.call-banner-grid { display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: start; column-gap: 8px; padding: 8px 8px 0; }
+.call-empty { padding: 56px 0; text-align: center; font-size: 14px; color: var(--color-ink-muted); }
+.call-participants { padding: 16px 32px; }
+.call-avatar-group { display: flex; padding-left: 8px; }
+.call-avatar-group > img { width: 40px; height: 40px; margin-left: -8px; border-radius: 999px; object-fit: cover; box-shadow: 0 0 0 2px var(--color-panel); }
+
+/* ChannelCallsTab with ListEntity's wide call rows. */
+.call-calls-tab { display: flex; flex: 1; justify-content: center; min-height: 0; padding: 8px; }
+.call-calls-width { display: flex; flex-direction: column; width: 100%; max-width: 944px; min-height: 0; container-type: inline-size; }
+.call-calls-grid { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.call-list-row { display: grid; grid-template-columns: 16px minmax(0, max-content) auto minmax(0, 1fr) auto 8ch; grid-template-areas: 'icon title channel summary meta time'; align-items: center; column-gap: 8px; width: calc(100% - 8px); min-height: 40px; margin-inline: 4px; padding: 2px 8px 2px 12px; border-radius: 12px; font-size: 14px; text-align: left; color: var(--color-ink); }
+.call-list-row:hover { background: var(--color-hover); }
+.call-list-row[data-fresh='true'] { animation: call-row-in 1600ms ease both; }
+.call-list-icon { grid-area: icon; color: var(--color-ink-muted); }
+.call-list-title { grid-area: title; }
+.call-list-channel { grid-area: channel; }
+.call-list-summary { grid-area: summary; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: color-mix(in oklch, var(--color-ink) 50%, transparent); }
+.call-list-meta { grid-area: meta; display: flex; align-items: center; gap: 8px; margin-left: 4px; }
+.call-list-people { display: flex; justify-content: flex-end; align-items: center; width: 44px; }
+.call-list-people > img { width: 18px; height: 18px; margin-left: -5px; border-radius: 999px; object-fit: cover; box-shadow: 0 0 0 1.5px var(--color-panel); }
+.call-list-people > span { margin-left: 3px; font-size: 11px; color: var(--color-ink-muted); }
+.call-list-time { grid-area: time; text-align: right; font-size: 12px; color: var(--color-ink-extra-muted); white-space: nowrap; }
+@keyframes call-row-in { 0% { background: color-mix(in oklch, var(--color-accent) 22%, transparent); } 100% { background: transparent; } }
+/* CallNarrowBody: title and time, then duration and status, then the summary. */
+@container (max-width: 560px) {
+  .call-list-row { grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-areas: 'icon title time' '. meta meta' '. summary summary'; row-gap: 2px; padding: 8px 10px; }
+  .call-list-channel, .call-list-people { display: none; }
+  .call-list-meta { margin-left: 0; }
+  .call-list-summary { font-size: 12px; font-weight: 400; }
+}
+
+/* CallRecordingBody */
+.call-record-scroll { position: relative; scrollbar-width: none; }
+.call-record-column { max-width: 768px; min-width: 0; margin-inline: auto; padding: 48px 24px 64px; }
+.call-record-compact .call-record-column { padding-top: 36px; }
+.call-summary .md { font-size: 14px; line-height: 24px; }
+.call-summary .md-list { margin-block: 0; }
+.call-chat-history .sample-message-row { margin-bottom: 0; padding: 6px 12px; }
+.call-chat-history .sample-message-row p { font-size: 14px; line-height: 22px; }
+
+/* A frame of the room composite as the poster, with the browser's controls. */
+.call-player { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 4px; background: #000; color: #fff; container-type: inline-size; }
+.call-poster { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 6px; padding: 6px; background: #0c0d0e; }
+.call-poster[data-count='3'] > :nth-child(3) { grid-column: 1 / span 2; justify-self: center; width: calc(50% - 3px); }
+.call-poster-tile { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; background: #1c1d20; }
+.call-poster-tile[data-speaking='true']::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px #5b8def; }
+.call-poster-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 28%; }
+.call-poster-avatar { display: block; height: 42%; aspect-ratio: 1; }
+.call-poster-avatar > img { width: 100%; height: 100%; border-radius: 999px; object-fit: cover; }
+.call-poster-name { position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 3px; background: rgb(0 0 0 / .55); font: 500 11px/18px Inter, sans-serif; }
+.call-player-controls { position: absolute; inset: auto 0 0; padding: 28px 12px 4px; background: linear-gradient(transparent, rgb(0 0 0 / .7)); }
+.call-player-timeline { padding: 6px 0; cursor: pointer; outline: none; }
+.call-player-timeline:focus-visible .call-player-track { box-shadow: 0 0 0 2px rgb(255 255 255 / .5); }
+.call-player-track { position: relative; display: block; height: 4px; border-radius: 2px; background: rgb(255 255 255 / .32); }
+.call-player-fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: #fff; transition: width 250ms ease; }
+.call-player-thumb { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 999px; background: #fff; transform: translate(-50%, -50%); transition: left 250ms ease; }
+.call-player-row { display: flex; align-items: center; gap: 8px; height: 34px; }
+.call-player-button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; }
+.call-player-button:hover { background: rgb(255 255 255 / .12); }
+.call-player-button > svg { width: 18px; height: 18px; }
+.call-player-time { font: 400 13px/1 Inter, sans-serif; font-variant-numeric: tabular-nums; }
+.call-player-icons { display: flex; align-items: center; gap: 16px; margin-left: auto; padding-right: 6px; }
+.call-player-icons > svg { width: 18px; height: 18px; }
+
+@container (max-width: 420px) {
+  .call-player-controls { padding: 14px 4px 0; }
+  .call-player-timeline { padding: 3px 4px; }
+  .call-player-thumb { width: 9px; height: 9px; }
+  .call-player-row { height: 26px; gap: 4px; }
+  .call-player-button { width: 24px; height: 24px; }
+  .call-player-button > svg, .call-player-icons > svg { width: 14px; height: 14px; }
+  .call-player-time { font-size: 11px; }
+  .call-player-icons { gap: 10px; padding-right: 4px; }
+  .call-player-icons > svg:not(:first-child) { display: none; }
+  .call-poster-name { left: 4px; bottom: 4px; font-size: 9px; line-height: 14px; }
+}
+
+/* CallTranscript rows are channel messages: avatar, name, timestamp. */
+.call-transcript-scroll { scrollbar-width: none; }
+.call-transcript-row { display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: start; column-gap: 8px; row-gap: 4px; width: 100%; padding: 10px 8px 6px; border-radius: 6px; text-align: left; color: var(--color-ink); }
+.call-transcript-row:not([data-selected]):hover { background: var(--color-hover); }
+.call-transcript-row[data-selected] { background: var(--color-active); }
+.call-transcript-row[data-grouped='true'] { padding-top: 2px; }
+.call-transcript-avatar { grid-row: span 2; width: 32px; height: 32px; border-radius: 999px; object-fit: cover; }
+.call-transcript-text { grid-column: 2; font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.call-transcript-sync { position: absolute; inset: auto 1px 0; z-index: 20; display: flex; justify-content: center; padding: 16px 8px 8px; pointer-events: none; background-image: linear-gradient(transparent, var(--color-surface) 85%); }
+.call-transcript-sync > button { position: relative; isolation: isolate; display: flex; align-items: center; height: 32px; padding: 0 8px; overflow: hidden; border: 1px solid color-mix(in oklch, var(--color-accent) 30%, transparent); background: var(--color-surface); color: var(--color-accent); font: 500 12px/20px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; white-space: nowrap; pointer-events: auto; }
+.call-transcript-sync > button::before { content: ''; position: absolute; inset: 0; z-index: -1; background: color-mix(in oklch, var(--color-accent) 10%, transparent); transition: background 150ms; }
+.call-transcript-sync > button:hover::before { background: color-mix(in oklch, var(--color-accent) 20%, transparent); }
+
+/* CallOverlay in the channel's Call tab. */
+.call-tab-body { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.call-camera { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 28%; }
+.call-camera-mirror { transform: scaleX(-1); }
+.call-tile[data-speaking='true']::after { content: ''; position: absolute; inset: 0; z-index: 5; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--color-accent); pointer-events: none; }
+.call-tile > [role='status'], .call-tile > div:last-child { z-index: 6; }
+.call-pip .call-tile { min-height: 0; }
+.call-controls-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; padding-inline: 8px; }
+.call-controls-center { display: flex; justify-content: center; min-width: 0; }
+.call-control { border-radius: 999px; }
+.call-control-danger { border: 1px solid var(--color-edge-button); }
+.call-chat-panel { position: absolute; inset: 0 0 0 auto; z-index: 20; display: flex; flex-direction: column; width: 100%; max-width: 360px; min-height: 0; background: var(--color-surface); }
+.call-chat-panel .sample-message-row { margin-bottom: 4px; }
+@container call (min-width: 500px) {
+  .call-controls-row { gap: 12px; padding-inline: 12px; }
+}
+@container call (min-width: 800px) {
+  .call-controls-row { grid-template-columns: minmax(0, 1fr) minmax(0, 36rem) minmax(0, 1fr); }
+  .call-controls-center { grid-column-start: 2; }
+  .call-chat-panel { position: static; width: 360px; flex-shrink: 0; }
+}
+.call-team-share { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border: 1px solid color-mix(in oklch, var(--color-ink-muted) 8%, transparent); border-radius: 6px; background: color-mix(in oklch, var(--color-ink-muted) 2.5%, transparent); color: color-mix(in oklch, var(--color-ink-muted) 70%, transparent); font-size: 12px; user-select: none; }
+.call-team-share:hover { color: var(--color-ink); background: color-mix(in oklch, var(--color-ink-muted) 6%, transparent); }
+.call-team-share[aria-checked='true'] { color: var(--color-ink); }
+.call-checkbox { display: grid; place-items: center; width: 14px; height: 14px; border: 1px solid var(--color-edge); border-radius: 4px; }
+.call-checkbox > svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.call-checkbox[data-checked='true'] { border-color: var(--color-ink); background: var(--color-ink); color: var(--color-panel); }
+.call-checkbox[data-checked='true'] > svg { opacity: 1; }
+.call-screen-share { display: grid; gap: 10px; width: 52%; padding: 20px; border-radius: 6px; background: var(--color-panel); }
+.call-screen-share > span { height: 8px; border-radius: 4px; background: var(--color-edge-muted); }
+.call-screen-share > span:first-child { width: 40%; height: 12px; background: var(--color-edge); }
+.call-screen-share > span:last-child { width: 70%; }
+
+/* Agent session split beside the task it edits. */
+.call-split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); height: 100%; min-height: 0; }
+.call-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.call-task-pane { border-left: 1px solid var(--color-edge-muted); }
+.call-task-pane [data-view-shell-top-bar] > span { white-space: nowrap; }
+.call-agent-log { display: flex; flex-direction: column; gap: 12px; padding: 24px 20px 12px; }
+.call-agent-reply { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.call-agent-text { font-size: 15px; line-height: 24px; color: var(--color-ink); }
+.call-agent-composer { padding: 8px 16px 16px; }
+.call-tool-group { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 0; text-align: left; color: var(--color-ink-extra-muted); }
+.call-tool-group:hover { color: var(--color-ink-muted); }
+.call-tool-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 0; font-size: 14px; line-height: 24px; color: var(--color-ink-extra-muted); animation: call-tool-in 260ms ease both; }
+.call-tool-text { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.call-item-chip { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; vertical-align: middle; color: var(--color-ink); }
+.call-shimmer { background: linear-gradient(90deg, var(--color-ink-extra-muted) 30%, var(--color-ink) 50%, var(--color-ink-extra-muted) 70%) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: call-shimmer 1.6s linear infinite; }
+.call-task-pane[data-updated='true'] [aria-label='Task description'], .call-task-pane[data-updated='true'] .md-check { animation: call-updated 2s ease both; border-radius: 4px; }
+@keyframes call-shimmer { to { background-position: -200% 0; } }
+@keyframes call-tool-in { from { opacity: 0; transform: translateY(3px); } }
+@keyframes call-updated { 0%, 30% { background: color-mix(in oklch, var(--color-accent) 16%, transparent); } 100% { background: transparent; } }
+
+@media (max-width: 699px) {
+  .call-banner { padding-inline: 12px; }
+  .call-participants { padding: 12px 16px; }
+  .call-record-column, .call-record-compact .call-record-column { padding: 24px 14px 40px; }
+  .call-record-column > .flex { gap: 32px; }
+  .call-split { display: flex; flex-direction: column; }
+  .call-agent-pane { flex: none; }
+  .call-agent-composer { display: none; }
+  .call-agent-log { padding: 18px 14px 14px; }
+  .call-task-pane { flex: 1; border-top: 1px solid var(--color-edge-muted); border-left: 0; }
+  .call-task-pane [data-view-shell-top-bar] { display: none; }
+  .call-task-pane .pt-12 { padding-top: 20px; }
+  .call-task-pane .px-6 { padding-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-flow-pointer { display: none; }
+  .call-list-row[data-fresh='true'], .call-tool-row, .call-task-pane[data-updated='true'] [aria-label='Task description'], .call-task-pane[data-updated='true'] .md-check { animation: none; }
+  .call-shimmer { animation: none; color: var(--color-ink-extra-muted); background: none; }
+  .call-player-fill, .call-player-thumb { transition: none; }
+}
+
+/* The hero's first description line is longer than Email's; keep it on one line. */
+@media (min-width: 700px) {
+  .product-page:has(#call-default) .email-page-hero > .email-page-hero-description { max-width: 640px; }
+}

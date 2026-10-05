@@ -17,6 +17,8 @@ export type SearchableOption = {
   id: string;
   label: string;
   icon?: () => JSX.Element;
+  /** Drawn in place of `label`, which still drives search. */
+  content?: () => JSX.Element;
 };
 
 export type SearchableSelectAction = {
@@ -96,7 +98,7 @@ const SearchableMultiSelectItem = (itemProps: {
       )}
     </Show>
     <Combobox.ItemLabel class="flex-1 truncate text-ink">
-      {itemProps.item.rawValue.label}
+      {itemProps.item.rawValue.content?.() ?? itemProps.item.rawValue.label}
     </Combobox.ItemLabel>
     <Show
       when={

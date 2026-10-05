@@ -4,16 +4,20 @@ use super::models::{
     ImageReference, NewGeneratedImage, NewStaticImage, ReadImageError, ReferenceImage,
     SaveImageError, StoredGeneratedImage, StoredImage,
 };
+use ai_usage::{UsageContext, UsageRecorder};
 use model_owner::CreationPrincipal;
 use std::future::Future;
 
 /// Renders an image from a text prompt and optional reference photos.
 #[async_trait::async_trait]
 pub trait ImageGenerator: Send + Sync + 'static {
-    /// Generate one image for `request`.
+    /// Generate one image for `request`, recording provider-reported usage even
+    /// when the response cannot be turned into an image.
     async fn generate_image(
         &self,
         request: &ImageGenerationRequest,
+        usage: &UsageContext,
+        recorder: &dyn UsageRecorder,
     ) -> Result<GeneratedImage, ImageGenerationError>;
 }
 
@@ -27,6 +31,8 @@ impl ImageGenerator for UnconfiguredImageGenerator {
     async fn generate_image(
         &self,
         _request: &ImageGenerationRequest,
+        _usage: &UsageContext,
+        _recorder: &dyn UsageRecorder,
     ) -> Result<GeneratedImage, ImageGenerationError> {
         Err(ImageGenerationError::Unavailable)
     }

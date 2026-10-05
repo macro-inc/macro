@@ -1,5 +1,5 @@
 use super::*;
-use ai_toolset::{RequestContext, ToolSetError};
+use ai_toolset::{RequestContext, ToolSet as _, ToolSetError};
 use macro_user_id::user_id::MacroUserIdStr;
 
 #[tokio::test]
@@ -66,4 +66,45 @@ async fn read_only_never_loads_mutation_tools_or_connectors() {
     )
     .await;
     assert!(Arc::ptr_eq(&actual, &expected));
+}
+
+#[test]
+fn database_formatter_retains_the_registered_sql_reference() {
+    let tools = ai_tools::database_read_only_tools();
+    let schemas = tools.request_schemas().unwrap();
+    let prompt = structured_completion_prompt(
+        &ToolSet::DatabasesReadOnly,
+        &"Unrelated tools",
+        Some("Return the chart configuration."),
+        &schemas,
+    );
+    let query = schemas
+        .iter()
+        .find(|schema| schema.name == "QueryDatabase")
+        .unwrap();
+    assert!(prompt.contains(&format!("{:#}", query.schema.as_value())));
+    for text in [
+        "ListDatabases",
+        "DescribeDatabase",
+        "read-only",
+        "Return the chart configuration.",
+    ] {
+        assert!(prompt.contains(text), "missing {text}");
+    }
+    assert!(!prompt.contains("Unrelated tools"));
+    assert!(!prompt.contains("### SaveDatabaseView"));
+    assert!(!prompt.contains("### SaveDatabaseQuery"));
+}
+
+#[test]
+fn tool_free_completions_do_not_receive_a_database_catalog() {
+    let tools = ai_tools::database_read_only_tools();
+    let prompt = structured_completion_prompt(
+        &ToolSet::None,
+        &"Unrelated tools",
+        Some("Summarize."),
+        &tools.request_schemas().unwrap(),
+    );
+    assert!(prompt.ends_with("Summarize."));
+    assert!(!prompt.contains("Registered database tools"));
 }

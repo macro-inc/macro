@@ -1,4 +1,4 @@
-import type { SplitRouteParams } from '@app/split-router';
+import type { SplitRouteParams } from '@app/lib/split-router';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { z } from 'zod';
 import type { DriveLocation, DriveTab } from '../core/types';

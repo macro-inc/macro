@@ -77,6 +77,10 @@ import {
   markNotificationsSeenHandler,
 } from './Notifications';
 import {
+  editPresentationHandler,
+  readPresentationHandler,
+} from './Presentation';
+import {
   bulkSetEntityPropertyOptionsHandler,
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
@@ -101,6 +105,12 @@ import {
   updateReminderHandler,
 } from './Reminders';
 import { renameDocumentHandler } from './RenameDocument';
+import {
+  createRoutineHandler,
+  listRoutinesHandler,
+  readRoutineHandler,
+  updateRoutineHandler,
+} from './Routines';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
 import { searchToolsHandler } from './SearchTools';
@@ -127,6 +137,10 @@ import { updateThreadLabelsHandler } from './UpdateThreadLabels';
 import { uploadFileHandler } from './UploadFile';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
+import {
+  editWordDocumentHandler,
+  readWordDocumentHandler,
+} from './WordDocument';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
@@ -135,6 +149,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
+  ReadPresentation: readPresentationHandler,
+  EditPresentation: editPresentationHandler,
+  ReadWordDocument: readWordDocumentHandler,
+  EditWordDocument: editWordDocumentHandler,
   ConfigureAgent: configureAgentHandler,
   ListAgents: listAgentsHandler,
   ConfigureBot: configureBotHandler,
@@ -165,6 +183,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ManageChannelParticipants: manageChannelParticipantsHandler,
   ListNotifications: listNotificationsHandler,
   ListReminders: listRemindersHandler,
+  CreateRoutine: createRoutineHandler,
+  ListRoutines: listRoutinesHandler,
+  ReadRoutine: readRoutineHandler,
+  UpdateRoutine: updateRoutineHandler,
   ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,

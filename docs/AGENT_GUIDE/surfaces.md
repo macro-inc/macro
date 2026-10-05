@@ -957,6 +957,19 @@ viewer identity is available, document inserts into Shared are rejected.
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
 
+With `enable-databases` enabled, **My Files** includes owned databases and
+**Shared with me** includes databases shared by other owners. **All files**
+also includes accessible databases owned by others. **Search Drive** matches
+database names and **Filter → Type → Database** narrows the list. **New →
+Database** creates and opens a database from file tabs or the folder overview;
+it is absent inside a folder because databases have no folder membership yet.
+Database rows open their database block, including Enter and Open in new split.
+Use the database block's own actions to rename, share or trash it. The list
+omits unsupported duplicate, delete and move-to-folder actions for databases.
+Databases have no view history and do not appear in **Recent**, folder contents,
+or **Email attachments**. Creation time orders them when the selected sort has
+no corresponding database timestamp.
+
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
 leading filter-drawer button, like Tasks. Touch opens on **Recent** (the first
@@ -1106,6 +1119,63 @@ On phones, event details use inset round action buttons and a transparent RSVP
 footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
+
+Calendar scheduling is on by default in dev. Production uses the PostHog flag
+`enable-calendar-scheduling` and stays off unless enabled remotely. Set
+`VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
+While off, the Calendar settings tab and calendar booking shortcuts are hidden;
+public booking and receipt links show an unavailable page without fetching
+scheduling data. When enabling a production rollout, include anonymous visitors
+so invitees can open those links.
+
+When enabled, calendar scheduling lives in **Settings → Calendar** (`/app/settings/calendar`).
+The scheduling sidebar opens Event types, Bookings, Availability, Teams, Insights,
+and Booking page. Event editors have a grouped settings sidebar; booking status
+filters use the same segmented control as the CRM sidebar.
+In Availability, each weekday has an enable switch, time ranges, an add button,
+and a copy-hours menu; select target days and Apply before saving the schedule.
+Date overrides and the searchable timezone picker sit below the weekly hours.
+Choose Personal or your Macro team in `Calendar owner`. Team owners/admins can
+edit team links; ordinary members can view them. `Event types` creates, edits,
+pauses, duplicates, previews, and copies booking links. Event settings include
+weekly availability, collective/all-host or round-robin/one-host assignment,
+notice, buffers, booking horizon, daily limits, and custom questions. New event
+types stay paused until `Accept bookings` is selected and changes are saved.
+`Availability` manages named weekly schedules and date overrides in an IANA time
+zone. Set a default schedule for new event types; a schedule cannot be deleted
+until its event types use another one. Collective and round-robin team meetings
+respect each host’s personal default hours when configured, plus busy calendars.
+`Teams` uses existing Macro team membership and links to team settings.
+`Booking page` edits the public name and description. `Bookings` shows
+upcoming, unconfirmed, past, and cancelled meetings; admins can confirm requests,
+reschedule, or cancel them. Choose From/Through dates to load bookings (initially 30 days before and after today), then search by guest/title/email and filter by event type. Dates use your browser time zone; shorten the range if more than 5,000 bookings match.
+Cancellation asks for confirmation. After a confirmed meeting ends, an assigned
+host or team admin can mark attendance or a host/guest no-show. Pending requests
+from older configurations appear under Unconfirmed. New approval-only links are disabled;
+new links use automatic confirmation and provider calendar invitations. Existing approval
+links must switch to automatic confirmation before accepting new bookings.
+
+`Insights` reports the selected personal/team owner with 7/30/90-day or custom
+ranges, event/host filters, previous-period comparisons, event trends, meeting
+hours, no-shows, popular events, and host counts. Download exports the filtered
+bookings to CSV. Metrics use booking start dates in the default schedule’s time
+zone; failed/processing requests are excluded. Completed means ended confirmed
+bookings excluding recorded no-shows. Rescheduled counts bookings with recorded
+reschedule history. Ratings/CSAT are not shown because no survey data is collected.
+Oversized result sets return an error instead of silently truncating insights.
+
+The calendar header includes `Copy booking link` and `Open calendar scheduling
+settings`. Copy opens settings when no active personal link exists. Public
+`/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. Uncertain
+calendar writes retain the booking and show its private receipt while automatic recovery runs.
+After a network response cannot be verified, `Check booking status` retries the original request;
+do not create a replacement booking. Receipt pages poll while the calendar update is pending. Visitors
+choose their time zone, date, time, and required details. The private
+`/app/booking/:id#token` receipt supports cancellation and rescheduling; preserve
+that private link. Rescheduling dates are labelled in the availability schedule's
+time zone. Calendar provider failures show an error; they never report a
+confirmed booking. Current integrations check hosts' connected calendars and
+write invitations/Google Meet through the existing calendar service.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
@@ -1814,12 +1884,18 @@ menu opened inside the sheet leaves the sheet itself open. Opening Settings agai
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
-scroll, including with the keyboard open. On desktop, `/app/settings/<tab>`
-opens settings fullscreen, while `/app/home/~/settings/<tab>` docks it beside
-Home. **Open fullscreen** pushes a standalone settings URL; browser Back
-restores the preceding split layout. **Move to split** restores the app layout
-and docks the selected tab, while closing a docked settings pane minimizes it.
-A direct fullscreen link returns to Home when there is no prior app layout.
+scroll, including with the keyboard open. On desktop, Settings is an ordinary
+split view: the rail's gear button (or `Ctrl ;`) opens it in the active split
+like any other rail item, and Shift-click opens it in a new split.
+`/app/settings/<tab>` opens it as the only split with the app rail still
+visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
+sidebar matches Email and Tasks: a **Settings** title bar with the
+**Hide navigation** toggle (`Cmd .`), a rounded **Search settings** field, the
+grouped section pills, and **Log out** pinned to the bottom. Below 720px the
+sidebar becomes an overlay opened from **Show navigation**. Escape closes a
+settings split that shares the layout, or steps back to the previous view when
+it is the only split (Home when there is none). Leave settings by picking any
+other rail item; there is no separate back or fullscreen control.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
@@ -1879,7 +1955,7 @@ Cursor stays in Agents → Runtimes with its API key and default model controls;
 featured or offered in the Connections catalog. Personal Gmail and GitHub account
 links remain in Settings → Integrations. The native-only Connections page remains
 available when `pipedream-mcp` is disabled.
-`Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
 `Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
 `Instructions` field is a Lexical contenteditable textbox, not a textarea. It

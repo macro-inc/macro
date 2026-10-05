@@ -3,6 +3,10 @@
 Choose **Create → Database** to create a database and its first table with a Name
 column. **C → L** opens a new database with its title selected and ready to type.
 Enter saves the title and focuses A1, ready to type without another click.
+Opening **Ctrl-K** refreshes database discovery so a database created by AI or
+another client appears without reloading. **All** and **Documents** categories
+match its name, including databases with no view history.
+
 Creating from Home immediately shows the table tabs, **New table**, **Database
 actions**, and **AI**; no reload is needed to use them.
 Databases open at
@@ -20,6 +24,14 @@ reconciliation; visible rows alone do not mean the network read has completed.
 starts with a mention of the database; the schema and table guidance go to the
 agent privately as session instructions, so the sent bubble shows only what you
 typed. Plans that include the database model run the chat on it.
+
+Database agents discover with `ListDatabases` and `DescribeDatabase`, then use
+`QueryDatabase` for rows and schema commands (`CREATE DATABASE`, `CREATE TABLE`,
+`ALTER`, and `DROP TABLE`). `DescribeDatabase` omits saved-view definitions and
+conversion lists by default; request `includeEditingMetadata: true` when those
+are needed. `SaveDatabaseView` / `DeleteDatabaseView` manage table and kanban
+presentation; `SaveDatabaseQuery` saves a live answer. Document live-answer agents
+remain read-only, including schema commands and database creation.
 
 ## Feature flag
 
@@ -54,6 +66,8 @@ or choose **Rename column** from its arrow or right-click menu to rename it late
 Its type icon stays in place while editing. SQL refers to tables and columns by
 their display names (double-quoted), so a rename changes the name a saved query
 must use.
+
+The current type has a checkmark in **Change type**; selecting it leaves the column unchanged. Types that cannot convert any existing values are omitted, while empty columns can still choose a new type.
 
 The header arrow menu groups schema and view actions. **Change type** checks the
 column's values against Text, Number, Select, Multi-select, Date, Checkbox, URL,
@@ -351,13 +365,11 @@ Its bottom composer contains a database mention and private context identifying
 this database, its current table, and all its tables. Nothing sends automatically.
 Type a question or requested change and send it using the normal chat controls.
 Any chat, not only one opened from a database, can build databases: the assistant
-has `ListDatabases`, `DescribeDatabase`, `QueryDatabase`, `SaveDatabaseQuery`,
-`CreateDatabase`, `RenameDatabase`, `CreateTable`, `RenameTable`, `ReorderTables`,
-`DeleteTable`, `AddColumn` (relation columns via `linkToTableId`, entity
-columns via `specificEntityType`),
-`AddColumnOptions`, `RenameColumn`, `ChangeColumnType`, `DeleteColumn`,
-`ReorderColumns`, and `SaveDatabaseView`. It reads current schema before editing
-and checks actual results before reporting success.
+has six database tools: `ListDatabases`, `DescribeDatabase`, `QueryDatabase`,
+`SaveDatabaseQuery`, `SaveDatabaseView`, and `DeleteDatabaseView`.
+`QueryDatabase` reads and changes rows and handles schema changes through SQL
+(`CREATE`, `ALTER`, and `DROP`). The assistant reads the current schema before
+editing and checks actual results before reporting success.
 
 Query tool rows say what the query did in words (**Read Invites**, **Updated 3
 rows in Guests**, **Changed Price to number**, or **Queried Party Planner**) and
@@ -366,7 +378,7 @@ a scalar answer, or compatible bar, line, area, scatter, and pie charts. A saved
 offers **Open view**, which opens that database/table and selects the created view.
 The same tools are exposed to agent sessions through the Macro MCP server.
 
-In a document, `/database` → **Database** opens the question box with the AI prompt focused
+In a document or channel composer, `/database` → **Database** opens the question box with the AI prompt focused
 immediately. The empty input rotates through example questions; a selected database
 uses its actual table and column names. Typing hides these hints, and reduced-motion
 preferences keep them static. Use the searchable source picker below the question to
@@ -374,7 +386,12 @@ choose a database; the entire chosen database is in scope, without a table
 prerequisite. **Automatic** finds a relevant accessible database from the question
 with the discovery tools and inspects all its tables. The answer's `QueryDatabase`
 runs with view access only, so asking a question never changes data, even for an
-editor. If matching sources are
+editor. Both discovery and final answer formatting receive the registered database
+tool reference, including the current SQL dialect. Verify an Automatic question
+that needs ListDatabases, DescribeDatabase, and QueryDatabase completes with live
+results; repeat with an explicit source and an aggregate using an AS alias. The
+formatting step must preserve tool-call/result names and ids without another tool
+execution. If matching sources are
 ambiguous, the assistant asks for clarification. Type to search the
 source menu, use the arrow keys and Enter to choose, or Escape to return without
 changing it. The displayed source is checked against the query's actual table
@@ -450,3 +467,15 @@ a SQL statement however many rows it touches, or a schema change such as a new
 table or column. Consecutive edits by one person fold into `made N edits`. Changes an
 AI agent made read as the agent acting for the user who asked. The same entries
 appear on `/app/component/activity`; clicking one opens the database.
+
+Database awareness identifies each mounted client with a random peer ID while the
+server supplies its authenticated user. Open the same database in two tabs signed
+in as the same user: each should show the other tab's selection and name. Moving
+or leaving one peer must not overwrite or remove another peer's selection.
+Refresh failures emit a `database.rows.read_refresh` span with the database ID,
+table ID, and failure kind, plus a `database rows could not be refreshed` log.
+
+Schema edits update their UI optimistically and finish after the write commits;
+they do not wait for the background catalog refresh. A refused edit rolls back
+its optimistic state when no newer cache update has replaced it, then refreshes.
+A slow or failed refresh is not a reason to resend a successful mutation.

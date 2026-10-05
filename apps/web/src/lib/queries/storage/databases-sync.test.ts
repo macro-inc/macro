@@ -81,6 +81,7 @@ it('sends the local state debounced, heartbeats it, and announces leaving on dis
   expect(mock.shareAwareness).toHaveBeenCalledWith({
     id: 'db',
     state: {
+      peerId: expect.any(String),
       tableId: 'tasks',
       rowId: 'row-1',
       columnId: 'notes',
@@ -94,6 +95,7 @@ it('sends the local state debounced, heartbeats it, and announces leaving on dis
   expect(mock.shareAwareness).toHaveBeenLastCalledWith({
     id: 'db',
     state: {
+      peerId: expect.any(String),
       tableId: 'tasks',
       rowId: 'row-1',
       columnId: 'notes',
@@ -107,6 +109,7 @@ it('sends the local state debounced, heartbeats it, and announces leaving on dis
   expect(mock.shareAwareness).toHaveBeenLastCalledWith({
     id: 'db',
     state: {
+      peerId: expect.any(String),
       tableId: 'tasks',
     },
   });
@@ -114,6 +117,7 @@ it('sends the local state debounced, heartbeats it, and announces leaving on dis
   expect(mock.shareAwareness).toHaveBeenLastCalledWith({
     id: 'db',
     state: {
+      peerId: expect.any(String),
       tableId: 'tasks',
       left: true,
     },
@@ -121,7 +125,7 @@ it('sends the local state debounced, heartbeats it, and announces leaving on dis
   expect(mock.shareAwareness).toHaveBeenCalledTimes(4);
 });
 
-it('merges remote states per user, drops stale relays, itself, other databases, leavers, and silent viewers', () => {
+it('merges legacy states per user, drops stale relays, itself, other databases, leavers, and silent viewers', () => {
   const { remote, dispose } = createRoot((dispose) => ({
     remote: useDatabaseAwareness(
       () => 'db',
@@ -272,5 +276,47 @@ it('drops an awareness relay without its relay time', () => {
       ]),
     }
   );
+  dispose();
+});
+
+it('keeps same-user tabs separate, suppresses only this peer, and leaves one peer at a time', () => {
+  const { remote, dispose } = createRoot((dispose) => ({
+    remote: useDatabaseAwareness(
+      () => 'db',
+      () => ({ tableId: 'tasks' })
+    ).remote,
+    dispose,
+  }));
+  vi.advanceTimersByTime(150);
+  const peerId = mock.shareAwareness.mock.calls.at(-1)![0].state.peerId;
+  const first = crypto.randomUUID();
+  const second = crypto.randomUUID();
+  relay('me', { peerId, tableId: 'tasks', rowId: 'local' }, 100);
+  relay('me', { peerId: first, tableId: 'tasks', rowId: 'one' }, 101);
+  relay('me', { peerId: second, tableId: 'tasks', rowId: 'two' }, 102);
+  expect(remote().map((state) => [state.userId, state.rowId])).toEqual([
+    ['me', 'one'],
+    ['me', 'two'],
+  ]);
+  relay('me', { peerId: first, tableId: 'tasks', left: true }, 103);
+  expect(remote().map((state) => state.rowId)).toEqual(['two']);
+  relay('me', { peerId: first, tableId: 'tasks', rowId: 'stale' }, 102);
+  expect(remote().map((state) => state.rowId)).toEqual(['two']);
+  // Peer ids do not replace the authenticated identity or collide across users.
+  relay('alex', { peerId: second, tableId: 'tasks', rowId: 'alex' }, 104);
+  expect(remote().map((state) => state.userId)).toEqual(['me', 'alex']);
+  dispose();
+});
+
+it('forgets peers when switching databases', () => {
+  const [database, setDatabase] = createSignal('db');
+  const { remote, dispose } = createRoot((dispose) => ({
+    remote: useDatabaseAwareness(database, () => ({ tableId: 'tasks' })).remote,
+    dispose,
+  }));
+  relay('alex', { peerId: crypto.randomUUID(), tableId: 'tasks' }, 100);
+  expect(remote()).toHaveLength(1);
+  setDatabase('other');
+  expect(remote()).toEqual([]);
   dispose();
 });
