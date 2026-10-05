@@ -24,7 +24,8 @@ export type QueryMethod =
   | 'components'
   | 'inRect'
   | 'exportSvg'
-  | 'vectorNetwork';
+  | 'vectorNetwork'
+  | 'prototype';
 
 export type FigRequest =
   | { id: number; kind: 'open'; bytes: ArrayBuffer }
