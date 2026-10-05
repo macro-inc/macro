@@ -39,7 +39,7 @@ export function AutoReloadView(props: {
     if (
       props.context.summary()?.billingAccess !== 'payer' ||
       props.context.autoReload.preview() ||
-      props.context.developer?.exhausted() ||
+      props.context.developer?.active() ||
       props.context.paymentMethods.pending()
     )
       return;
@@ -68,7 +68,7 @@ export function AutoReloadView(props: {
       canManagePaymentMethods={
         props.context.summary()?.billingAccess === 'payer' &&
         !props.context.autoReload.preview() &&
-        !props.context.developer?.exhausted()
+        !props.context.developer?.active()
       }
       pending={props.context.autoReload.pending()}
       paymentMethodsPending={props.context.paymentMethods.pending()}

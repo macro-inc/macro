@@ -1,5 +1,9 @@
 import type { Accessor } from 'solid-js';
-import type { AutoReloadSettings, UsageSummary } from '../core/usage';
+import type {
+  AutoReloadSettings,
+  UsagePreviewPlan,
+  UsageSummary,
+} from '../core/usage';
 
 /** Capabilities supplied by the app; views can also be mounted with test sources. */
 export type UsageContext = {
@@ -31,10 +35,10 @@ export type UsageContext = {
   navigateToPayment: (url: string) => void;
   openPlans: () => void;
   developer?: {
-    exhausted: Accessor<boolean>;
-    simulateExhausted: () => void;
-    openLimitDialog: () => void;
-    previewAutoReload: () => void;
+    active: Accessor<boolean>;
+    plan: Accessor<UsagePreviewPlan | undefined>;
+    previewPlan: (plan: UsagePreviewPlan) => void;
+    openLimitDialog: (plan: UsagePreviewPlan) => void;
     reset: () => void;
   };
 };

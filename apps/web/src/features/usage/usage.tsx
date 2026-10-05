@@ -35,10 +35,10 @@ export function Usage() {
   const usagePreview = useAiUsagePreview();
   const { showUsageLimit, hideUsageLimit } = useAiUsageLimitState();
   const { openSettings } = useSettingsState();
-  const [autoReloadPreview, setAutoReloadPreview] = createSignal(false);
+  const autoReloadPreview = () => usagePreview.plan() === 'paid';
   const [previewSettings, setPreviewSettings] =
     createSignal<AutoReloadSettings>({ ...DEFAULT_AUTO_RELOAD });
-  const previewing = () => usagePreview.active() || autoReloadPreview();
+  const previewing = usagePreview.active;
   const available = () =>
     isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
   const returnUrl = `${window.location.origin}/app/settings/usage`;
@@ -46,7 +46,8 @@ export function Usage() {
     available,
     summary: () => {
       const snapshot = usagePreview.withPreview(
-        summary.isSuccess ? summary.data : undefined
+        summary.isSuccess ? summary.data : undefined,
+        plans.isSuccess ? plans.data.plans : undefined
       );
       return snapshot ? toUsageSummary(snapshot) : undefined;
     },
@@ -66,6 +67,7 @@ export function Usage() {
           !available() ||
           previewing() ||
           !summary.isSuccess ||
+          summary.data.unlimited ||
           summary.data.tier === 'free' ||
           !summary.data.can_manage_billing
         )
@@ -130,18 +132,24 @@ export function Usage() {
     },
     developer: DEV_MODE_ENV
       ? {
-          exhausted: usagePreview.active,
-          simulateExhausted: () => usagePreview.setActive(true),
-          openLimitDialog: () =>
+          active: usagePreview.active,
+          plan: usagePreview.plan,
+          previewPlan: (plan) => {
+            hideUsageLimit();
+            setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
+            usagePreview.previewPlan(plan);
+          },
+          openLimitDialog: (plan) => {
+            setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
+            usagePreview.previewLimit(plan);
             showUsageLimit(
-              summary.isSuccess && summary.data.tier === 'free'
+              plan === 'free'
                 ? 'ai_free_allowance_exhausted'
                 : 'ai_allowance_exhausted'
-            ),
-          previewAutoReload: () => setAutoReloadPreview(true),
+            );
+          },
           reset: () => {
-            usagePreview.setActive(false);
-            setAutoReloadPreview(false);
+            usagePreview.reset();
             setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
             hideUsageLimit();
           },

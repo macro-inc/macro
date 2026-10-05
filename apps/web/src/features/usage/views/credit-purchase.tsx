@@ -20,10 +20,12 @@ export function CreditPurchaseView(props: {
       : parseDollarInput(customAmount());
   };
   const previewing = () =>
-    props.context.developer?.exhausted() || props.context.autoReload.preview();
+    props.context.developer?.active() || props.context.autoReload.preview();
   const notice = () => {
     if (previewing())
       return 'Credit purchases are disabled during the developer preview.';
+    if (props.context.summary()?.unlimited)
+      return 'Your plan includes unlimited AI usage. No additional credits are needed.';
     if (props.context.summary()?.billingAccess === 'free')
       return 'Subscribe to a paid plan to buy additional usage credits.';
     if (props.context.summary()?.billingAccess !== 'payer')

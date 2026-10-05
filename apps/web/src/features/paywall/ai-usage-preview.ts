@@ -1,38 +1,94 @@
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import type { AiUsageSnapshot } from '@service-auth/ai-billing-types';
+import type {
+  AiPlanCatalogEntry,
+  AiUsageSnapshot,
+} from '@service-auth/ai-billing-types';
 import { createSignal } from 'solid-js';
+import type { UsagePreviewPlan } from '../usage/core/usage';
 
-const [exhaustedPreview, setExhaustedPreview] = createSignal(false);
+const [preview, setPreview] = createSignal<{
+  plan: UsagePreviewPlan;
+  exhausted: boolean;
+}>();
+
+function previewPeriod(
+  snapshot: AiUsageSnapshot | undefined,
+  tier: 'free' | 'premium'
+) {
+  if (tier === 'premium' && snapshot) {
+    return {
+      period_start: snapshot.period_start,
+      period_end: snapshot.period_end,
+    };
+  }
+  const now = new Date();
+  return {
+    period_start: new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+    ).toISOString(),
+    period_end: new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
+    ).toISOString(),
+  };
+}
 
 /** Development-only display state shared by Usage and the usage-limit dialog. */
 export function useAiUsagePreview() {
-  const active = () => DEV_MODE_ENV && exhaustedPreview();
-  const setActive = (value: boolean) =>
-    setExhaustedPreview(DEV_MODE_ENV && value);
+  const state = () => (DEV_MODE_ENV ? preview() : undefined);
+  const active = () => !!state();
+  const plan = () => state()?.plan;
+  const previewPlan = (plan: UsagePreviewPlan) => {
+    if (DEV_MODE_ENV) setPreview({ plan, exhausted: false });
+  };
+  const previewLimit = (plan: UsagePreviewPlan) => {
+    if (DEV_MODE_ENV) setPreview({ plan, exhausted: true });
+  };
+  const reset = () => setPreview(undefined);
 
-  const withPreview = (snapshot: AiUsageSnapshot | undefined) => {
-    if (!snapshot || !active()) return snapshot;
-    // A display-only fallback lets previews work before the metered backend deploys.
+  const withPreview = (
+    snapshot: AiUsageSnapshot | undefined,
+    plans?: readonly AiPlanCatalogEntry[]
+  ): AiUsageSnapshot | undefined => {
+    const selected = state();
+    if (!selected) return snapshot;
+    const tier = selected.plan === 'free' ? 'free' : 'premium';
+    const allowance = plans?.find(
+      (entry) => entry.tier === tier
+    )?.included_ai_cents_per_seat;
+    // The fallback only supplies a denominator for the display preview.
     const included =
-      snapshot.included_cents > 0 ? snapshot.included_cents : 4_000;
+      allowance && allowance > 0
+        ? allowance
+        : snapshot?.tier === tier && snapshot.included_cents > 0
+          ? snapshot.included_cents
+          : 100;
+    const used = selected.exhausted ? included : included / 2;
     return {
       ...snapshot,
+      ...previewPeriod(snapshot, tier),
+      tier,
       unlimited: false,
+      payer: snapshot?.payer ?? 'developer-preview',
+      can_manage_billing: true,
+      seats: 1,
       included_cents: included,
-      used_cents: included,
+      used_cents: used,
       credits_consumed_cents: 0,
-      credit_balance_cents: 0,
+      credit_balance_cents:
+        selected.plan === 'paid' && !selected.exhausted ? 2_500 : 0,
       overage_enabled: false,
+      overage_limit_cents: 0,
       overage_charged_cents: 0,
       overage_suspended: false,
       uncovered_cents: 0,
-      remaining_cents: 0,
-      blocked_reason:
-        snapshot.tier === 'free'
-          ? ('free_allowance_exhausted' as const)
-          : ('allowance_exhausted' as const),
+      remaining_cents: included - used,
+      blocked_reason: selected.exhausted
+        ? tier === 'free'
+          ? 'free_allowance_exhausted'
+          : 'allowance_exhausted'
+        : undefined,
     };
   };
 
-  return { active, setActive, withPreview };
+  return { active, plan, previewPlan, previewLimit, reset, withPreview };
 }

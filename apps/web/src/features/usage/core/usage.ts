@@ -7,6 +7,8 @@ export type UsageSummary = {
   existingUsageBilling?: { limitCents: number; suspended: boolean };
 };
 
+export type UsagePreviewPlan = 'free' | 'paid';
+
 export type AutoReloadSettings = {
   enabled: boolean;
   minimumBalanceCents: number;

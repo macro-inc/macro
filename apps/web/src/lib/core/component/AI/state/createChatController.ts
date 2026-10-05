@@ -139,45 +139,47 @@ export function createChatController(
   }
 
   function watchStream(newStream: ChatMessageStream) {
+    let processedPartCount = 0;
     // Watch stream data for user messages and errors
     createEffect(
       on(
         () => newStream.data(),
         (data) => {
-          const latest = data.at(-1);
-          if (!latest) return;
+          while (processedPartCount < data.length) {
+            const part = data[processedPartCount++];
 
-          match(latest)
-            .with({ type: 'error' }, (r) => {
-              const streamError =
-                'stream_error' in r ? r.stream_error : undefined;
-              dispatch({
-                type: 'stream_error',
-                streamError: streamError as string | undefined,
-              });
-            })
-            .with({ type: 'chat_user_message' }, (r) => {
-              dispatch({
-                type: 'stream_user_message',
-                messageId: r.message_id,
-                content: r.content,
-                attachments: r.attachments,
-              });
-            })
-            .with(
-              {
-                type: 'chat_message_response',
-                content: { type: 'toolCallErr' },
-              },
-              ({ content }) => {
-                // Tool refusals can arrive inside an otherwise successful
-                // stream. The backend prefixes their description with its
-                // stable admission code.
-                const code = content.description.split(':', 1)[0];
-                if (isAiDenyCode(code)) options?.onShowUsageLimit?.(code);
-              }
-            )
-            .otherwise(() => {});
+            match(part)
+              .with({ type: 'error' }, (r) => {
+                const streamError =
+                  'stream_error' in r ? r.stream_error : undefined;
+                dispatch({
+                  type: 'stream_error',
+                  streamError: streamError as string | undefined,
+                });
+              })
+              .with({ type: 'chat_user_message' }, (r) => {
+                dispatch({
+                  type: 'stream_user_message',
+                  messageId: r.message_id,
+                  content: r.content,
+                  attachments: r.attachments,
+                });
+              })
+              .with(
+                {
+                  type: 'chat_message_response',
+                  content: { type: 'toolCallErr' },
+                },
+                ({ content }) => {
+                  // Tool refusals can arrive inside an otherwise successful
+                  // stream. The backend prefixes their description with its
+                  // stable admission code.
+                  const code = content.description.split(':', 1)[0];
+                  if (isAiDenyCode(code)) options?.onShowUsageLimit?.(code);
+                }
+              )
+              .otherwise(() => {});
+          }
         }
       )
     );

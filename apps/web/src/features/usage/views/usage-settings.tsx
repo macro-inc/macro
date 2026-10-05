@@ -24,7 +24,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
   let autoReloadTrigger: HTMLButtonElement | undefined;
   const turnOffUsageBilling = async () => {
     if (
-      props.context.developer?.exhausted() ||
+      props.context.developer?.active() ||
       props.context.autoReload.preview() ||
       props.context.existingUsageBilling.pending()
     )
@@ -118,7 +118,8 @@ export function UsageSettingsView(props: { context: UsageContext }) {
               </Show>
               <Show
                 when={
-                  summary().billingAccess !== 'free' ||
+                  (!summary().unlimited &&
+                    summary().billingAccess !== 'free') ||
                   props.context.autoReload.preview()
                 }
               >
@@ -208,7 +209,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                             size="sm"
                             disabled={
                               props.context.existingUsageBilling.pending() ||
-                              props.context.developer?.exhausted() ||
+                              props.context.developer?.active() ||
                               props.context.autoReload.preview()
                             }
                             onClick={() => void turnOffUsageBilling()}
@@ -239,53 +240,54 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                 <div class="flex flex-col gap-3 p-4">
                   <div class="flex flex-wrap gap-2">
                     <Button
-                      variant="outline"
-                      depth={3}
-                      size="sm"
-                      disabled={
-                        !props.context.summary() || developer().exhausted()
+                      variant={
+                        developer().plan() === 'free' ? 'accent' : 'outline'
                       }
-                      onClick={developer().simulateExhausted}
+                      depth={3}
+                      size="sm"
+                      aria-pressed={developer().plan() === 'free'}
+                      onClick={() => developer().previewPlan('free')}
                     >
-                      Simulate 100% usage
+                      Preview Free plan
+                    </Button>
+                    <Button
+                      variant={
+                        developer().plan() === 'paid' ? 'accent' : 'outline'
+                      }
+                      depth={3}
+                      size="sm"
+                      aria-pressed={developer().plan() === 'paid'}
+                      onClick={() => developer().previewPlan('paid')}
+                    >
+                      Preview paid plan
                     </Button>
                     <Button
                       variant="outline"
                       depth={3}
                       size="sm"
-                      disabled={!developer().exhausted()}
-                      onClick={developer().openLimitDialog}
+                      onClick={() => developer().openLimitDialog('free')}
                     >
-                      Open usage-limit dialog
+                      Open Free usage-limit dialog
                     </Button>
                     <Button
                       variant="outline"
                       depth={3}
                       size="sm"
-                      disabled={props.context.autoReload.preview()}
-                      onClick={developer().previewAutoReload}
+                      onClick={() => developer().openLimitDialog('paid')}
                     >
-                      Preview Auto-Reload
+                      Open paid usage-limit dialog
                     </Button>
                     <Button
                       variant="ghost"
                       depth={3}
                       size="sm"
-                      disabled={
-                        !developer().exhausted() &&
-                        !props.context.autoReload.preview()
-                      }
+                      disabled={!developer().active()}
                       onClick={developer().reset}
                     >
                       Reset preview
                     </Button>
                   </div>
-                  <Show
-                    when={
-                      developer().exhausted() ||
-                      props.context.autoReload.preview()
-                    }
-                  >
+                  <Show when={developer().active()}>
                     <p class="text-xs text-ink-muted" role="status">
                       Developer preview active. No purchases or automatic
                       charges can be made. Reset the preview to restore real

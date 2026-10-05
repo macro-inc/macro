@@ -67,7 +67,9 @@ export function AiUsageLimitDialog() {
 
           <Show when={usagePreview.active()}>
             <p class="text-xs text-ink-muted" role="status">
-              Developer preview: 100% usage. No account billing has changed.
+              Developer preview:{' '}
+              {usagePreview.plan() === 'free' ? 'Free' : 'paid'} plan. No
+              account billing has changed.
             </p>
           </Show>
 
