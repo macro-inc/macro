@@ -121,10 +121,13 @@ or stop.
 **Ask AI** in search (including Tab), the command menu, and mobile search opens
 an agent session. A nonempty search query is sent as the first prompt once the
 session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split, while command-menu and mobile actions open a new split.
+its current split into the Agents workspace, while command-menu and mobile
+actions open a new split.
 
-**Ask Macro** and **Chat with Agent** on documents, PDFs, spreadsheets, email,
-channels, calls, and projects also open agent sessions. Their entity mention stays
+**Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
+code files, images, canvases, spreadsheets, email, channels, calls, and projects
+also open agent sessions. Like command-menu Ask AI, they open the bare session in
+a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
 in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
 and selected range; channel-message actions retain the referenced message.
 Add a question and press Send to submit that context. These actions do not create
