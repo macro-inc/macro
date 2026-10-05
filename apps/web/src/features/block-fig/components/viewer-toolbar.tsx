@@ -16,14 +16,18 @@ import Hash from '@phosphor/hash.svg';
 import Keyboard from '@phosphor/keyboard.svg';
 import LineSegment from '@phosphor/line-segment.svg';
 import NavigationArrow from '@phosphor/navigation-arrow.svg';
+import PenNib from '@phosphor/pen-nib.svg';
 import Square from '@phosphor/square.svg';
 import TextT from '@phosphor/text-t.svg';
+import Unite from '@phosphor/unite.svg';
 import WarningCircle from '@phosphor/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { BooleanOperation } from '../core/boolean';
 import type { SaveState } from '../primitives/create-fig-editor';
 import type { Tool } from '../primitives/create-fig-viewer';
+import { BooleanMenuItems } from './boolean-controls';
 
 interface ToolButton {
   tool: Tool;
@@ -41,6 +45,7 @@ const TOOLS: ToolButton[] = [
   { tool: 'ellipse', label: 'Ellipse', key: 'O', icon: Circle, edit: true },
   { tool: 'line', label: 'Line', key: 'L', icon: LineSegment, edit: true },
   { tool: 'arrow', label: 'Arrow', key: '⇧L', icon: ArrowUpRight, edit: true },
+  { tool: 'pen', label: 'Pen', key: 'P', icon: PenNib, edit: true },
   { tool: 'text', label: 'Text', key: 'T', icon: TextT, edit: true },
   { tool: 'hand', label: 'Hand tool', key: 'H', icon: Hand, edit: false },
 ];
@@ -65,11 +70,17 @@ export function ViewerToolbar(props: {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  /** Boolean operations on the selection (when editable and selected). */
+  onBoolean?: (operation: BooleanOperation) => void;
+  onFlatten?: () => void;
 }) {
   const [open, setOpen] = createSignal(false);
+  const [booleanOpen, setBooleanOpen] = createSignal(false);
   let menu!: HTMLDivElement;
+  let booleanMenu: HTMLDivElement | undefined;
   const onDocumentDown = (e: PointerEvent) => {
     if (!menu.contains(e.target as Node)) setOpen(false);
+    if (!booleanMenu?.contains(e.target as Node)) setBooleanOpen(false);
   };
   document.addEventListener('pointerdown', onDocumentDown);
   onCleanup(() => document.removeEventListener('pointerdown', onDocumentDown));
@@ -101,6 +112,31 @@ export function ViewerToolbar(props: {
         )}
       </For>
       <Show when={props.editable}>
+        <div ref={booleanMenu} class="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="gap-0.5 px-1.5"
+            label="Boolean groups"
+            tooltip="Boolean groups"
+            aria-expanded={booleanOpen()}
+            disabled={!props.onBoolean}
+            data-testid="fig-boolean-menu"
+            onClick={() => setBooleanOpen((o) => !o)}
+          >
+            <Unite class="size-4" />
+            <CaretDown class="size-3" />
+          </Button>
+          <Show when={booleanOpen() && props.onBoolean && props.onFlatten}>
+            <div class="absolute bottom-full left-0 z-50 mb-2 w-48 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg">
+              <BooleanMenuItems
+                onBoolean={(op) => props.onBoolean?.(op)}
+                onFlatten={() => props.onFlatten?.()}
+                onDone={() => setBooleanOpen(false)}
+              />
+            </div>
+          </Show>
+        </div>
         <div aria-hidden="true" class="mx-1 h-5 w-px bg-edge-muted" />
         <Button
           variant="ghost"

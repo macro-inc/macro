@@ -79,6 +79,9 @@ pub struct TextLayout {
     /// Text that does not fit is cut off at this character, and an ellipsis
     /// drawn after what shows (`truncationStartIndex`).
     pub truncated_at: Option<u32>,
+    /// Where Figma puts the first line's baseline (its top plus ascent),
+    /// which auto layout aligns on.
+    pub first_baseline: Option<f32>,
 }
 
 /// The base style of a text node, for the inspector.

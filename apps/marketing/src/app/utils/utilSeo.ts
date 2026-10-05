@@ -27,7 +27,7 @@ export interface PageSeo {
 }
 
 export const SITE_NAME = 'Macro';
-export const DEFAULT_OG_IMAGE = `${APP_BASE_URL}/og-image.jpg`;
+export const DEFAULT_OG_IMAGE = `${APP_BASE_URL}/og/home-2026-10.png`;
 
 export function canonicalUrl(path: string): string {
   return path === '/' ? `${APP_BASE_URL}/` : `${APP_BASE_URL}${path}`;

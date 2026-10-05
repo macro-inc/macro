@@ -93,14 +93,17 @@ export const editPresentationHandler = createToolRenderer({
     announcePresentationChanged(ctx.tool.data.documentId);
   },
   render: (ctx) => {
-    const summary = () =>
-      ctx.response
-        ? `${plural(ctx.tool.data.operations.length, 'change')} saved`
-        : undefined;
+    const copy = () => !!ctx.tool.data.saveAs;
+    const changes = () => ctx.tool.data.operations?.length ?? 0;
+    const summary = () => {
+      if (!ctx.response) return undefined;
+      if (copy() && changes() === 0) return 'Copied';
+      return `${plural(changes(), 'change')} saved`;
+    };
     return (
       <PresentationToolRow
-        verb="Edit"
-        documentId={ctx.tool.data.documentId}
+        verb={copy() ? 'Created' : 'Edit'}
+        documentId={ctx.response?.data.documentId ?? ctx.tool.data.documentId}
         summary={summary()}
         details={ctx.response?.data.changedSlides || undefined}
         renderContext={ctx.renderContext}

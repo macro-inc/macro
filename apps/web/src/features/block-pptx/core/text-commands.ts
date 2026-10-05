@@ -59,12 +59,13 @@ export function advance(at: TextPos, text: string): TextPos {
 /** Normalizes pasted or typed text: `\r\n` → `\n`, tabs kept, other controls dropped. */
 export function normalizeText(text: string): string {
   const unified = text.replace(/\r\n?/g, '\n');
-  // Keep tab, line feed, and the vertical tab used for line breaks.
+  // Keep tab, line feed, and the vertical tab used for line breaks. U+FFFC
+  // stands for an equation in copied text; it is not text to insert.
   const kept = new Set(['\t', '\n', '\u000b']);
   return [...unified]
     .filter((c) => {
       const code = c.codePointAt(0) ?? 0;
-      return kept.has(c) || (code >= 0x20 && code !== 0x7f);
+      return kept.has(c) || (code >= 0x20 && code !== 0x7f && code !== 0xfffc);
     })
     .join('');
 }

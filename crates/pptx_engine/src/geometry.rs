@@ -72,6 +72,50 @@ pub fn preset(name: &str, w: f64, h: f64, adjust: &[Adjust]) -> Option<ShapeGeom
     Some(evaluate(&def.doc, def.node, w, h, adjust))
 }
 
+/// One sub-path of a preset outline as SVG path data, for previews.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct SvgPath {
+    /// SVG path data in points.
+    pub d: String,
+    /// Whether the sub-path is filled.
+    pub fill: bool,
+    /// Whether the sub-path is stroked.
+    pub stroke: bool,
+}
+
+/// The preset `name` at `w`×`h` points as SVG paths. `None` for unknown presets.
+pub fn preset_svg(name: &str, w: f64, h: f64) -> Option<Vec<SvgPath>> {
+    use crate::path::PathEl;
+    use std::fmt::Write;
+    let geometry = preset(name, w * EMU_PER_PT, h * EMU_PER_PT, &[])?;
+    let pt = |p: Point| format!("{:.2} {:.2}", p.x, p.y);
+    Some(
+        geometry
+            .paths
+            .iter()
+            .map(|g| {
+                let mut d = String::new();
+                for el in &g.path.els {
+                    let _ = match el {
+                        PathEl::MoveTo(p) => write!(d, "M{}", pt(*p)),
+                        PathEl::LineTo(p) => write!(d, "L{}", pt(*p)),
+                        PathEl::QuadTo(c, p) => write!(d, "Q{} {}", pt(*c), pt(*p)),
+                        PathEl::CubicTo(a, b, p) => {
+                            write!(d, "C{} {} {}", pt(*a), pt(*b), pt(*p))
+                        }
+                        PathEl::Close => write!(d, "Z"),
+                    };
+                }
+                SvgPath {
+                    d,
+                    fill: g.fill != PathFill::None,
+                    stroke: g.stroke,
+                }
+            })
+            .collect(),
+    )
+}
+
 /// Whether `name` is a known preset geometry.
 pub fn is_preset(name: &str) -> bool {
     presets::definitions().contains_key(name)

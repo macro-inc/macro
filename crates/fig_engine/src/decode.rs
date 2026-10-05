@@ -80,6 +80,12 @@ const NODE_FIELDS: &[&str] = &[
     "stackCounterSizing",
     "stackCounterSpacing",
     "stackReverseZIndex",
+    "bordersTakeSpace",
+    "borderStrokeWeightsIndependent",
+    "borderTopWeight",
+    "borderRightWeight",
+    "borderBottomWeight",
+    "borderLeftWeight",
     "stackChildPrimaryGrow",
     "stackChildAlignSelf",
     "stackPositioning",
@@ -87,6 +93,7 @@ const NODE_FIELDS: &[&str] = &[
     "maxSize",
     "exportSettings",
     "booleanOperation",
+    "vectorData",
     "horizontalConstraint",
     "verticalConstraint",
     "description",
@@ -103,7 +110,6 @@ const NODE_FIELDS: &[&str] = &[
     "backgroundEnabled",
     "derivedImmutableFrameData",
     "nodeGenerationData",
-    "vectorData",
 ];
 
 const PAINT_FIELDS: &[&str] = &[
@@ -174,7 +180,7 @@ pub fn restrict_schema(schema: &mut Schema) {
             "rotation",
         ],
     );
-    schema.keep_only("Baseline", &["firstCharacter"]);
+    schema.keep_only("Baseline", &["firstCharacter", "lineY", "lineAscent"]);
     schema.keep_only("Image", &["hash", "dataBlob"]);
     schema.keep_only(
         "SymbolData",
@@ -192,7 +198,10 @@ pub fn restrict_schema(schema: &mut Schema) {
     schema.keep_only("ComponentPropDef", &["id", "name", "type", "isDeleted"]);
     schema.keep_only("ExportSettings", &["suffix", "imageType", "constraint"]);
     schema.keep_only("NodeGenerationData", &["overrides"]);
-    schema.keep_only("VectorData", &["styleOverrideTable"]);
+    schema.keep_only(
+        "VectorData",
+        &["vectorNetworkBlob", "normalizedSize", "styleOverrideTable"],
+    );
     schema.keep_only("DerivedImmutableFrameData", &["overrides"]);
 }
 
@@ -429,6 +438,10 @@ fn text_layout(m: MsgRef) -> Option<TextLayout> {
         truncated_at: m
             .i32("truncationStartIndex")
             .and_then(|i| u32::try_from(i).ok()),
+        first_baseline: m
+            .msgs("baselines")
+            .next()
+            .and_then(|b| Some(b.f32("lineY").unwrap_or(0.0) + b.f32("lineAscent")?)),
     })
 }
 
@@ -508,6 +521,7 @@ fn auto_layout(m: &MsgRef) -> Option<AutoLayout> {
         counter_sizing: m.enum_name("stackCounterSizing").map(Into::into),
         counter_spacing: m.f32("stackCounterSpacing").unwrap_or(0.0),
         reverse_z: m.bool("stackReverseZIndex").unwrap_or(false),
+        strokes_in_layout: m.bool("bordersTakeSpace").unwrap_or(false),
     })
 }
 
@@ -569,6 +583,15 @@ pub fn props(m: MsgRef) -> Props {
         p.strokes = Some(m.collect_msgs("strokePaints", paint));
     }
     p.stroke_weight = m.f32("strokeWeight");
+    if m.bool("borderStrokeWeightsIndependent") == Some(true) {
+        let side = |f| m.f32(f).unwrap_or(0.0);
+        p.stroke_sides = Some([
+            side("borderTopWeight"),
+            side("borderRightWeight"),
+            side("borderBottomWeight"),
+            side("borderLeftWeight"),
+        ]);
+    }
     p.stroke_align = m.enum_name("strokeAlign").map(|a| match a {
         "INSIDE" => StrokeAlign::Inside,
         "OUTSIDE" => StrokeAlign::Outside,
@@ -690,6 +713,12 @@ pub fn props(m: MsgRef) -> Props {
         );
     }
     p.boolean_operation = m.enum_name("booleanOperation").map(Into::into);
+    p.vector_data = m.msg("vectorData").map(|v| {
+        Arc::new(VectorData {
+            network_blob: v.u32("vectorNetworkBlob"),
+            normalized_size: v.msg("normalizedSize").map(vec2),
+        })
+    });
     let (h, v) = (
         m.enum_name("horizontalConstraint"),
         m.enum_name("verticalConstraint"),

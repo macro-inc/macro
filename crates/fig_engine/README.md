@@ -44,10 +44,16 @@ render           tiles: fills, strokes (inside/outside via clipping), masks,
                  blend modes, isolation, effects (shadows, blurs), images, text
 inspect          layer rows, frames, hit tests, marquee, node info, search, SVG outlines
 edit             edit operations, undo/redo, fractional-index positions;
-                 auto layout (stacks re-laid out after edits)
+                 auto layout (stacks re-laid out after edits); booleans,
+                 flatten, and vectors (edit/shapes); pasting (edit/paste)
 collab           editing together: node states as CRDT map entries
+boolean          path union, subtract, intersect, and exclude
+vector           vector networks: the `vectorNetworkBlob` format, fill
+                 regions and stroke paths, conversion from outlines
+svg              SVG export of a layer, as Figma writes it
 text             text layout for edited text (bundled Inter, kerning, wrapping)
-save             writing `.fig`: patch edited records, splice the rest; blank files
+save             writing `.fig`: patch edited records, splice the rest; blank
+                 files; the clipboard document (save/clipboard)
 wasm             the worker API (`FigFile`)
 ```
 
@@ -66,9 +72,45 @@ and reopened files render identically.
 
 Auto layout frames are laid out again when an edit changes them or their
 children: fill and stretch sizing, gaps (fixed or automatic), padding,
-alignment, min and max sizes, and hugging, which carries the change up
-through hugging parents. `fig_render relayout` re-lays out every stack in a
-file and reports the frames placed differently from Figma's own layout.
+alignment (including text baselines), min and max sizes, strokes included
+in layout, and hugging, which carries the change up through hugging
+parents. Hidden frames keep their layout until shown, as in Figma.
+`fig_render relayout` re-lays out every stack in a file and reports the
+frames placed differently from Figma's own layout.
+
+Boolean layers (`BOOLEAN_OPERATION`) keep their children; the engine
+combines the children's fill outlines (and, for layers with only strokes,
+their stroke outlines) and stores the result as the boolean's fill
+geometry, as Figma does, recomputing it when a child changes. The
+combination flattens curves to an integer grid, splits them where they
+cross, keeps the pieces the operation's winding test selects, and fits
+cubic runs back onto the pieces that came from curves. Flatten (and the pen,
+and editing a shape's points) produces `VECTOR` layers whose
+`vectorData.vectorNetworkBlob` holds the points, segments, and fill
+regions; their geometry is regenerated from the network after each edit.
+Files whose schema predates these fields get them added on save.
+`fig_render booleans` recomputes every boolean in a file and reports how
+much the result overlaps Figma's stored geometry.
+
+Copying writes the selection as a bare `fig-kiwi` document like Figma's
+clipboard (the layers on a page at their page positions, with the
+components and shared styles they show on an internal page) and the images
+it uses as a ZIP. Pasting decodes such a document from any file, translates
+its records into the target file's schema, gives every node a new GUID,
+detaches instances whose components are not in the target, and saves the
+pasted records over their original bytes so unmodeled fields survive
+(peers in a live session receive the pasted nodes and images as ordinary
+entries, so a save from another peer writes their modeled fields). A main
+component pasted into the file that has it becomes an instance, as in
+Figma. `PasteSpec` places the layers by Figma's rules, at a point ("Paste
+here"), or in place of other layers ("Paste to replace").
+`fig_render paste` copies up to eight of a file's top-level layers into a
+blank design and scores the saved, reopened paste against the originals.
+
+`svg::export` writes a layer as SVG the way Figma's export does: paths for
+geometry, gradients and image patterns (with embedded PNGs), masks, clips,
+shadows and layer blur as filters, and text as outlines. `fig_render svg`
+writes SVGs (with matching PNGs) for the first page's top-level layers.
 
 Text the editor changes is laid out again with Inter (`fonts/`, SIL Open
 Font License), embedded in the build, or a font registered at run time;

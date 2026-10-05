@@ -35,6 +35,7 @@ export type Tool =
   | 'ellipse'
   | 'line'
   | 'arrow'
+  | 'pen'
   | 'text';
 
 export interface Selected {

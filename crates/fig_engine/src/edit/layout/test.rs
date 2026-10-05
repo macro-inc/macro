@@ -1,6 +1,6 @@
 use super::super::{History, Op};
 use crate::document::{Document, NodeIdx};
-use crate::model::{Guid, Vec2};
+use crate::model::{Guid, LayoutChild, Vec2};
 use crate::save::{blank, save};
 
 fn apply(doc: &mut Document, h: &mut History, json: &str) -> Vec<String> {
@@ -319,4 +319,516 @@ fn groups_scale_their_layers() {
         &format!(r#"[{{"op":"set","ids":["{group}"],"props":{{"width":280}}}}]"#),
     );
     assert_eq!(bounds(&doc, &kids[1]).2, 120.0);
+}
+
+/// Creates a layer in `parent` from a `create` op's node JSON; returns its id.
+fn make(doc: &mut Document, h: &mut History, parent: &str, node: &str) -> String {
+    apply(
+        doc,
+        h,
+        &format!(r#"[{{"op":"create","parent":"{parent}","node":{node}}}]"#),
+    )[0]
+    .clone()
+}
+
+fn set(doc: &mut Document, h: &mut History, id: &str, props: &str) {
+    apply(
+        doc,
+        h,
+        &format!(r#"[{{"op":"set","ids":["{id}"],"props":{props}}}]"#),
+    );
+}
+
+#[test]
+fn hidden_frames_keep_their_layout_until_shown() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = stack(&mut doc, &mut h);
+    set(&mut doc, &mut h, &frame, r#"{"visible":false}"#);
+    set(&mut doc, &mut h, &kids[0], r#"{"width":100}"#);
+    // Figma leaves a hidden frame's layout as it was.
+    assert_eq!(bounds(&doc, &kids[1]).0, 80.0);
+    assert_eq!(bounds(&doc, &frame).2, 200.0);
+    set(&mut doc, &mut h, &frame, r#"{"visible":true}"#);
+    assert_eq!(bounds(&doc, &kids[1]).0, 140.0);
+    assert_eq!(bounds(&doc, &frame).2, 260.0);
+}
+
+#[test]
+fn the_auto_gap_centres_a_lone_child() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let frame = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":200,"height":100}"#,
+    );
+    let kid = make(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":40,"height":20}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"layoutMode":"HORIZONTAL","primaryAlign":"SPACE_EVENLY","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    assert_eq!(bounds(&doc, &kid).0, 80.0);
+    // Space between leaves it at the start.
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"primaryAlign":"SPACE_BETWEEN","paddingLeft":4}"#,
+    );
+    assert_eq!(bounds(&doc, &kid).0, 4.0);
+}
+
+#[test]
+fn overflowing_children_touch_with_space_between_and_overlap_with_the_auto_gap() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = stack(&mut doc, &mut h);
+    // 40 + 60 + 20 = 120 in 100 less 20 of padding: 40 too much.
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"primaryAlign":"SPACE_BETWEEN","sizingHorizontal":"FIXED","width":100}"#,
+    );
+    assert_eq!(bounds(&doc, &kids[1]).0, 50.0);
+    assert_eq!(bounds(&doc, &kids[2]).0, 110.0);
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"primaryAlign":"SPACE_EVENLY"}"#,
+    );
+    assert_eq!(bounds(&doc, &kids[1]).0, 30.0);
+    assert_eq!(bounds(&doc, &kids[2]).0, 70.0);
+}
+
+#[test]
+fn hugging_respects_the_frames_own_limits() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    // A badge: at least 16 wide, hugging a digit 8 wide with 2 each side.
+    let badge = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":16,"height":16}"#,
+    );
+    let digit = make(
+        &mut doc,
+        &mut h,
+        &badge,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":8,"height":16}"#,
+    );
+    let b = idx(&doc, &badge) as usize;
+    doc.nodes[b].props.layout_child = Some(LayoutChild {
+        min_size: Some(Vec2::new(16.0, 0.0)),
+        ..LayoutChild::default()
+    });
+    set(
+        &mut doc,
+        &mut h,
+        &badge,
+        r#"{"layoutMode":"HORIZONTAL","primaryAlign":"CENTER","paddingLeft":2,"paddingRight":2,"sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
+    );
+    // Centred in the 16 the frame keeps, not the 12 it would hug.
+    assert_eq!(bounds(&doc, &badge).2, 16.0);
+    assert_eq!(bounds(&doc, &digit).0, 4.0);
+}
+
+#[test]
+fn children_align_against_padding_wider_than_the_frame() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    // A key: 34 wide with 22 of padding on each side.
+    let frame = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":34,"height":46}"#,
+    );
+    let kid = make(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":11,"height":24}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"layoutMode":"VERTICAL","primaryAlign":"CENTER","counterAlign":"CENTER","paddingLeft":22,"paddingRight":22,"sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    // Centred on the 10 px the padding overlaps by: 22 + (-10 - 11) / 2.
+    assert_eq!(bounds(&doc, &kid).0, 11.5);
+    assert_eq!(bounds(&doc, &kid).1, 11.0);
+    // Stretched across, it keeps a pixel: 22 + (-10 - 1) / 2.
+    set(&mut doc, &mut h, &kid, r#"{"sizingHorizontal":"FILL"}"#);
+    assert_eq!(bounds(&doc, &kid).2, 1.0);
+    assert_eq!(bounds(&doc, &kid).0, 16.5);
+}
+
+#[test]
+fn lines_keep_no_thickness_when_filling() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let frame = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":600,"height":20}"#,
+    );
+    let line = make(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"type":"LINE","x":0,"y":0,"width":100,"height":0}"#,
+    );
+    let avatar = make(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"type":"RECTANGLE","x":200,"y":0,"width":20,"height":20}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"layoutMode":"HORIZONTAL","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &line,
+        r#"{"sizingHorizontal":"FILL","sizingVertical":"FILL"}"#,
+    );
+    // Stretched across, a line stays flat in the middle of the frame; along
+    // the flow it fills as usual.
+    assert_eq!(bounds(&doc, &line), (0.0, 10.0, 580.0, 0.0));
+    assert_eq!(bounds(&doc, &avatar).0, 580.0);
+
+    // Filling down a column it cannot get taller: it sits in the middle of
+    // its share.
+    let column = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":100,"width":200,"height":31}"#,
+    );
+    let rule = make(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"type":"LINE","x":0,"y":100,"width":200,"height":0}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"layoutMode":"VERTICAL","primaryAlign":"MAX","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    set(&mut doc, &mut h, &rule, r#"{"sizingVertical":"FILL"}"#);
+    assert_eq!(bounds(&doc, &rule), (0.0, 15.5, 200.0, 0.0));
+}
+
+#[test]
+fn turned_lines_fill_like_flat_ones() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let row = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":31,"height":100}"#,
+    );
+    let line = make(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"type":"LINE","x":0,"y":0,"width":100,"height":0}"#,
+    );
+    // Turned a quarter, with the rounding a file stores.
+    let tiny = -8.4e-8;
+    let l = idx(&doc, &line) as usize;
+    let t = doc.nodes[l].props.transform.as_mut().unwrap();
+    (t.m00, t.m01, t.m10, t.m11) = (tiny, -1.0, 1.0, tiny);
+    set(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"layoutMode":"HORIZONTAL","primaryAlign":"MAX","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    set(&mut doc, &mut h, &line, r#"{"sizingHorizontal":"FILL"}"#);
+    let p = doc.props(idx(&doc, &line));
+    assert_eq!(p.size(), Vec2::new(100.0, 0.0));
+    assert!((p.transform().m02 - 15.5).abs() < 1e-3);
+}
+
+#[test]
+fn turned_layers_stretch_along_their_own_axis_and_centre() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let column = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":200,"height":200}"#,
+    );
+    let tile = make(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":100,"height":20}"#,
+    );
+    set(&mut doc, &mut h, &tile, r#"{"rotation":30}"#);
+    set(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"layoutMode":"VERTICAL","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    set(&mut doc, &mut h, &tile, r#"{"sizingHorizontal":"FILL"}"#);
+    let p = doc.props(idx(&doc, &tile));
+    // Its own width takes the frame's; its turned bounds sit in the middle.
+    assert_eq!(p.size(), Vec2::new(200.0, 20.0));
+    let s = p.size();
+    let b = p
+        .transform()
+        .map_rect(&crate::model::Rect::new(0.0, 0.0, s.x, s.y));
+    assert!((b.x - (200.0 - b.w) / 2.0).abs() < 1e-6, "{b:?}");
+    assert!(b.y.abs() < 1e-6, "{b:?}");
+}
+
+#[test]
+fn stretched_stacks_count_when_hugging() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let list = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":100,"height":100}"#,
+    );
+    let title = make(
+        &mut doc,
+        &mut h,
+        &list,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":73,"height":30}"#,
+    );
+    let row = make(
+        &mut doc,
+        &mut h,
+        &list,
+        r#"{"type":"FRAME","x":0,"y":40,"width":50,"height":20}"#,
+    );
+    for (x, w) in [(0, 256), (256, 157)] {
+        make(
+            &mut doc,
+            &mut h,
+            &row,
+            &format!(r#"{{"type":"RECTANGLE","x":{x},"y":40,"width":{w},"height":20}}"#),
+        );
+    }
+    set(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"layoutMode":"HORIZONTAL","sizingHorizontal":"HUG"}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &list,
+        r#"{"layoutMode":"VERTICAL","sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
+    );
+    set(&mut doc, &mut h, &row, r#"{"sizingHorizontal":"FILL"}"#);
+    // Filling, the row keeps a fixed width, and the list is as wide as it,
+    // 256 + 157, not as its title.
+    assert_eq!(super::axis_sizing(&doc, idx(&doc, &row), true), "FILL");
+    let row_al = doc.props(idx(&doc, &row)).auto_layout.clone().unwrap();
+    assert!(!row_al.hugs_primary());
+    assert_eq!(bounds(&doc, &list).2, 413.0);
+    assert_eq!(bounds(&doc, &row).2, 413.0);
+    assert_eq!(bounds(&doc, &title).2, 73.0);
+
+    // A stretched stack that still hugs (as files can have it) needs its
+    // content rather than its size.
+    let r = idx(&doc, &row) as usize;
+    let mut al = (*row_al).clone();
+    al.primary_sizing = None;
+    doc.nodes[r].props.auto_layout = Some(std::sync::Arc::new(al));
+    doc.nodes[r].props.size = Some(Vec2::new(600.0, 20.0));
+    set(&mut doc, &mut h, &title, r#"{"width":80}"#);
+    assert_eq!(bounds(&doc, &list).2, 413.0);
+}
+
+#[test]
+fn fill_children_share_what_limited_ones_leave() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = stack(&mut doc, &mut h);
+    for (k, max) in [(1, 70.0), (2, 100.0)] {
+        let i = idx(&doc, &kids[k]) as usize;
+        doc.nodes[i].props.layout_child = Some(LayoutChild {
+            max_size: Some(Vec2::new(max, 0.0)),
+            ..LayoutChild::default()
+        });
+    }
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"itemSpacing":0,"paddingLeft":0,"paddingRight":0,"sizingHorizontal":"FIXED","width":534}"#,
+    );
+    for k in &kids {
+        set(&mut doc, &mut h, k, r#"{"sizingHorizontal":"FILL"}"#);
+    }
+    // A third each would be 178; the two capped ones leave the rest.
+    assert_eq!(bounds(&doc, &kids[0]).2, 364.0);
+    assert_eq!(bounds(&doc, &kids[1]), (364.0, 10.0, 70.0, 30.0));
+    assert_eq!(bounds(&doc, &kids[2]).0, 434.0);
+    assert_eq!(bounds(&doc, &kids[2]).2, 100.0);
+}
+
+#[test]
+fn sizes_within_float_rounding_are_left_alone() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = stack(&mut doc, &mut h);
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"itemSpacing":0,"paddingLeft":0,"paddingRight":0,"sizingHorizontal":"FIXED","width":300}"#,
+    );
+    set(&mut doc, &mut h, &kids[0], r#"{"sizingHorizontal":"FILL"}"#);
+    assert_eq!(bounds(&doc, &kids[0]).2, 220.0);
+    // As a file stores it, a hair off what the layout computes.
+    let k = idx(&doc, &kids[0]) as usize;
+    doc.nodes[k].props.size = Some(Vec2::new(220.0002, 20.0));
+    set(&mut doc, &mut h, &kids[2], r#"{"height":25}"#);
+    assert_eq!(bounds(&doc, &kids[0]).2, 220.0002);
+}
+
+#[test]
+fn rows_align_baselines() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let row = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":200,"height":100}"#,
+    );
+    let icon = make(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":20,"height":20}"#,
+    );
+    let label = make(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"type":"TEXT","x":30,"y":0,"width":1,"height":1,"props":{"characters":"Days","fontSize":14}}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"layoutMode":"HORIZONTAL","counterAlign":"BASELINE","sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
+    );
+    // The label's baseline sits on the icon's bottom.
+    let p = doc.props(idx(&doc, &label));
+    let base = f64::from(p.text_layout.as_ref().unwrap().glyphs[0].y);
+    assert!(base < 20.0);
+    assert_eq!(bounds(&doc, &icon).1, 0.0);
+    assert!((bounds(&doc, &label).1 + base - 20.0).abs() < 1e-4);
+    let below = bounds(&doc, &label).1 + bounds(&doc, &label).3;
+    assert!((bounds(&doc, &row).3 - below.max(20.0)).abs() < 1e-4);
+}
+
+#[test]
+fn strokes_take_space_when_the_frame_includes_them() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let frame = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":400,"height":200}"#,
+    );
+    let mut kids = Vec::new();
+    for x in [0, 100] {
+        kids.push(make(
+            &mut doc,
+            &mut h,
+            &frame,
+            &format!(r#"{{"type":"RECTANGLE","x":{x},"y":0,"width":80,"height":80}}"#),
+        ));
+    }
+    let outline = r#"{"strokes":[{"color":"000000"}],"strokeWeight":8,"strokeAlign":"OUTSIDE"}"#;
+    for k in &kids {
+        set(&mut doc, &mut h, k, outline);
+    }
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"strokes":[{"color":"000000"}],"strokeWeight":4,"strokeAlign":"INSIDE","layoutMode":"HORIZONTAL","sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
+    );
+    // Without the option strokes take no room.
+    assert_eq!(bounds(&doc, &kids[1]).0, 80.0);
+    let f = idx(&doc, &frame) as usize;
+    let mut al = (**doc.nodes[f].props.auto_layout.as_ref().unwrap()).clone();
+    al.strokes_in_layout = true;
+    doc.nodes[f].props.auto_layout = Some(std::sync::Arc::new(al));
+    set(&mut doc, &mut h, &frame, r#"{"itemSpacing":32}"#);
+    // The frame's inner stroke pads it; each child takes 8 more a side.
+    assert_eq!(bounds(&doc, &kids[0]).0, 12.0);
+    assert_eq!(bounds(&doc, &kids[1]).0, 140.0);
+    assert_eq!(bounds(&doc, &kids[1]).1, 12.0);
+    assert_eq!(bounds(&doc, &frame).2, 4.0 + 96.0 + 32.0 + 96.0 + 4.0);
+    assert_eq!(bounds(&doc, &frame).3, 104.0);
+
+    // A divider: a line takes its stroke's thickness, above it.
+    let column = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":300,"width":320,"height":10}"#,
+    );
+    let line = make(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"type":"LINE","x":0,"y":300,"width":320,"height":0}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &line,
+        r#"{"strokes":[{"color":"000000"}],"strokeWeight":1}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"layoutMode":"VERTICAL","sizingHorizontal":"FIXED","sizingVertical":"HUG"}"#,
+    );
+    let c = idx(&doc, &column) as usize;
+    let mut al = (**doc.nodes[c].props.auto_layout.as_ref().unwrap()).clone();
+    al.strokes_in_layout = true;
+    doc.nodes[c].props.auto_layout = Some(std::sync::Arc::new(al));
+    set(&mut doc, &mut h, &line, r#"{"sizingHorizontal":"FILL"}"#);
+    assert_eq!(bounds(&doc, &column).3, 1.0);
+    assert_eq!(bounds(&doc, &line), (0.0, 1.0, 320.0, 0.0));
 }

@@ -8,6 +8,7 @@
  */
 
 import type {
+  CellRef,
   EditOp,
   ShapeOutline,
   SlideOutline,
@@ -26,10 +27,12 @@ import {
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import {
   lineEdge,
+  logicalArrow,
   moveHorizontal,
   moveVertical,
   moveWord,
   positionAt,
+  textEnd,
   textInRange,
   wordAt,
 } from '../core/caret';
@@ -44,34 +47,55 @@ import {
   rotationToward,
 } from '../core/geometry';
 import {
+  boundsOf,
+  type Rect,
+  rectFromPoints,
+  scaleBox,
+  shapesInRect,
+  unionBounds,
+} from '../core/selection';
+import { type Guides, snapMove } from '../core/snap';
+import {
   clampPos,
   deleteCommand,
   formatRange,
   insertCommand,
   isCollapsed,
-  selectAll,
+  selectAll as selectAll_,
   type TextSelection,
   type TextTarget,
 } from '../core/text-commands';
 import type { PresentationSession } from './create-presentation-session';
 import type { RenderQueue } from './create-render-queue';
 
-export type DragKind = 'move' | 'resize' | 'rotate';
+export type DragKind = 'move' | 'resize' | 'rotate' | 'marquee';
 
 export interface DragState {
   kind: DragKind;
-  shape: number;
+  /** The shapes dragged, with their boxes when the drag began. */
+  shapes: { id: number; origin: Box }[];
+  /** For one shape, its id (layers are rendered for it). */
+  shape?: number;
   handle?: Handle;
   start: Point;
   current: Point;
+  /** The single shape's box, or the selection bounds of several. */
   origin: Box;
   /** Whether the pointer moved far enough to count as a drag. */
   active: boolean;
   keepAspect: boolean;
+  /** Marquee: add to the selection instead of replacing it. */
+  additive?: boolean;
+  /** A click without a drag narrows a multi-selection to this shape. */
+  collapseTo?: number;
 }
 
 export interface EditingState {
   shape: number;
+  /** The table cell being edited, when the shape is a table. */
+  cell?: CellRef;
+  /** The edited cell's box (slide space), for hit testing. */
+  bounds?: Box;
   layout: TextLayoutInfo | null;
   selection: TextSelection;
   /** Column kept while moving vertically (layout space). */
@@ -99,14 +123,21 @@ export interface SlideEditorOptions {
   renderWidth: Accessor<number>;
   /** Slide points per screen pixel, for drag thresholds. */
   pointsPerPixel: Accessor<number>;
+  /**
+   * Smart guides, the grid spacing moves snap to (View ▸ Grid), and the
+   * drawing guides shown (View ▸ Guides).
+   */
+  snap?: Accessor<{ guides: boolean; grid?: number; drawingGuides?: Guides }>;
 }
 
 const DRAG_THRESHOLD_PX = 3;
 
 export function createSlideEditor(options: SlideEditorOptions) {
   const { engine, session, queue } = options;
-  const [selected, setSelected] = createSignal<number | null>(null);
+  const [selectedIds, setSelectedIds] = createSignal<number[]>([]);
   const [drag, setDrag] = createSignal<DragState | null>(null);
+  /** Smart guides shown while shapes are moved. */
+  const [guides, setGuides] = createSignal<Guides | null>(null);
   const [editing, setEditing] = createSignal<EditingState | null>(null);
   const [images, setImages] = createSignal<StageImages>({
     layerOffset: { x: 0, y: 0 },
@@ -118,10 +149,34 @@ export function createSlideEditor(options: SlideEditorOptions) {
   const slide = () => session.currentSlide();
   const index = () => session.slideIndex();
   const shapes = (): ShapeOutline[] => slide()?.shapes ?? [];
+  /** A shape on the slide by id, including shapes inside groups. */
+  const findShape = (id: number): ShapeOutline | undefined => {
+    const walk = (list: ShapeOutline[]): ShapeOutline | undefined => {
+      for (const s of list) {
+        if (s.id === id) return s;
+        const child = s.children && walk(s.children);
+        if (child) return child;
+      }
+      return undefined;
+    };
+    return walk(shapes());
+  };
+  /** The selected shapes, in selection order. */
+  const selection = (): ShapeOutline[] =>
+    selectedIds()
+      .map(findShape)
+      .filter((s): s is ShapeOutline => !!s);
+  /** The one selected shape's id, or null for none or several. */
+  const selected = () => {
+    const ids = selectedIds();
+    return ids.length === 1 ? ids[0] : null;
+  };
   const selectedShape = () => {
     const id = selected();
-    return id === null ? undefined : shapes().find((s) => s.id === id);
+    return id === null ? undefined : findShape(id);
   };
+  const setSelected = (id: number | null) =>
+    setSelectedIds(id === null ? [] : [id]);
 
   // ---- images -------------------------------------------------------------
 
@@ -208,7 +263,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
       setSelectedLayout(null);
       return;
     }
-    const s = shapes().find((x) => x.id === shape);
+    const s = findShape(shape);
     if (!s?.textEditable) {
       setSelectedLayout(null);
       return;
@@ -221,11 +276,37 @@ export function createSlideEditor(options: SlideEditorOptions) {
   }
 
   function select(shape: number | null) {
-    if (shape !== selected()) {
-      if (editing()) stopEditing();
-      setSelected(shape);
-      void loadSelectedLayout(shape);
-    }
+    setSelection(shape === null ? [] : [shape]);
+  }
+
+  /** Replaces the selection. */
+  function setSelection(ids: number[]) {
+    const current = selectedIds();
+    if (
+      ids.length === current.length &&
+      ids.every((id, i) => id === current[i])
+    )
+      return;
+    if (editing()) stopEditing();
+    setSelectedIds(ids);
+    void loadSelectedLayout(ids.length === 1 ? ids[0] : null);
+  }
+
+  /** Adds a shape to the selection, or takes it out. */
+  function toggleSelected(shape: number) {
+    const ids = selectedIds();
+    setSelection(
+      ids.includes(shape) ? ids.filter((id) => id !== shape) : [...ids, shape]
+    );
+  }
+
+  /** Selects every visible shape on the slide. */
+  function selectAll() {
+    setSelection(
+      shapes()
+        .filter((s) => !s.hidden)
+        .map((s) => s.id)
+    );
   }
 
   // Other people's edits to this slide while typing: the backdrop is redrawn
@@ -266,32 +347,44 @@ export function createSlideEditor(options: SlideEditorOptions) {
 
   function beginDrag(
     kind: DragKind,
-    shape: ShapeOutline,
+    list: ShapeOutline[],
     at: Point,
-    handle?: Handle
+    extra: Partial<DragState> = {}
   ) {
+    const one = list.length === 1 ? list[0] : undefined;
+    const bounds = unionBounds(list.map(boxOf));
     setDrag({
       kind,
-      shape: shape.id,
-      handle,
+      shapes: list.map((s) => ({ id: s.id, origin: boxOf(s) })),
+      shape: one?.id,
       start: at,
       current: at,
-      origin: boxOf(shape),
+      origin: one
+        ? boxOf(one)
+        : bounds
+          ? { ...bounds, rotation: 0 }
+          : { x: at.x, y: at.y, w: 0, h: 0, rotation: 0 },
       active: false,
-      keepAspect: shape.kind === 'picture',
+      keepAspect: one?.kind === 'picture' || (!one && kind === 'resize'),
+      ...extra,
     });
   }
 
-  /** Pointer down on the slide (not on a handle). Returns whether it was handled. */
-  function pointerDown(at: Point, opts: { shift: boolean; detail: number }) {
+  /** Pointer down on the slide (not on a handle). */
+  function pointerDown(
+    at: Point,
+    opts: { shift: boolean; toggle?: boolean; detail: number }
+  ) {
     const edit = editing();
     if (edit) {
-      const shape = shapes().find((s) => s.id === edit.shape);
-      if (shape && boxContains(boxOf(shape), at, 2) && edit.layout) {
+      const shape = findShape(edit.shape);
+      const box = edit.bounds ?? (shape && boxOf(shape));
+      const inside = box && boxContains(box, at, 2);
+      if (inside && edit.layout) {
         const pos = positionAt(edit.layout, at);
         if (pos) {
           if (opts.detail >= 3) {
-            setEditingSelection(selectAll(edit.layout));
+            setEditingSelection(selectAll_(edit.layout));
           } else if (opts.detail === 2) {
             const [a, b] = wordAt(edit.layout, pos);
             setEditingSelection({ anchor: a, focus: b });
@@ -309,8 +402,27 @@ export function createSlideEditor(options: SlideEditorOptions) {
       stopEditing();
     }
     const hit = hitTest(shapes(), at);
-    select(hit?.id ?? null);
-    if (hit && options.canEdit()) beginDrag('move', hit, at);
+    if (!hit) {
+      if (!opts.shift && !opts.toggle) setSelection([]);
+      beginDrag('marquee', [], at, {
+        additive: opts.shift || opts.toggle,
+      });
+      return;
+    }
+    const ids = selectedIds();
+    if (opts.shift || opts.toggle) {
+      toggleSelected(hit.id);
+      if (!selectedIds().includes(hit.id) || !options.canEdit()) return;
+      beginDrag('move', selection(), at);
+      return;
+    }
+    if (ids.includes(hit.id) && ids.length > 1) {
+      if (options.canEdit())
+        beginDrag('move', selection(), at, { collapseTo: hit.id });
+      return;
+    }
+    select(hit.id);
+    if (options.canEdit()) beginDrag('move', [hit], at);
   }
 
   let textDragAnchor: TextPos | null = null;
@@ -320,12 +432,13 @@ export function createSlideEditor(options: SlideEditorOptions) {
     handle: Handle | undefined,
     at: Point
   ) {
-    const shape = selectedShape();
-    if (!shape || !options.canEdit()) return;
-    beginDrag(kind, shape, at, handle);
+    const list = selection();
+    if (list.length === 0 || !options.canEdit()) return;
+    if (kind === 'rotate' && list.length !== 1) return;
+    beginDrag(kind, list, at, { handle });
   }
 
-  function pointerMove(at: Point, opts: { shift: boolean }) {
+  function pointerMove(at: Point, opts: { shift: boolean; alt?: boolean }) {
     const edit = editing();
     if (edit && textDragAnchor && edit.layout) {
       const pos = positionAt(edit.layout, at);
@@ -337,21 +450,95 @@ export function createSlideEditor(options: SlideEditorOptions) {
     const distance =
       Math.hypot(at.x - d.start.x, at.y - d.start.y) / options.pointsPerPixel();
     const active = d.active || distance >= DRAG_THRESHOLD_PX;
-    if (active && !d.active && d.kind === 'move') {
-      void renderLayers(d.shape, true);
+    const layered = d.kind === 'move' && d.shape !== undefined;
+    if (active && !d.active && layered) {
+      void renderLayers(d.shape!, true);
+    }
+    let current = at;
+    if (d.kind === 'move' && active) {
+      let dx = at.x - d.start.x;
+      let dy = at.y - d.start.y;
+      // Shift keeps the move horizontal or vertical.
+      if (opts.shift) {
+        if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+        else dx = 0;
+      }
+      // Alt turns smart guides and the grid off, as in PowerPoint.
+      const deck = session.outline();
+      const bounds = unionBounds(d.shapes.map((x) => x.origin));
+      const snapping = options.snap?.() ?? { guides: true };
+      if (
+        !opts.alt &&
+        deck &&
+        bounds &&
+        (snapping.guides ||
+          snapping.grid !== undefined ||
+          snapping.drawingGuides !== undefined)
+      ) {
+        const moving = new Set(d.shapes.map((x) => x.id));
+        const others = shapes()
+          .filter((x) => !x.hidden && !moving.has(x.id))
+          .map((x) => boundsOf(boxOf(x)));
+        const snap = snapMove(
+          { ...bounds, x: bounds.x + dx, y: bounds.y + dy },
+          others,
+          { w: deck.width, h: deck.height },
+          5 * options.pointsPerPixel(),
+          snapping
+        );
+        dx += opts.shift && dx === 0 ? 0 : snap.dx;
+        dy += opts.shift && dy === 0 ? 0 : snap.dy;
+        setGuides(snap.guides);
+      } else {
+        setGuides(null);
+      }
+      current = { x: d.start.x + dx, y: d.start.y + dy };
     }
     setDrag({
       ...d,
-      current: at,
+      current,
       active,
-      keepAspect: d.kind === 'resize' && (opts.shift || d.keepAspect),
+      keepAspect:
+        d.kind === 'resize' &&
+        (opts.shift ||
+          d.shapes.length > 1 ||
+          findShape(d.shape ?? -1)?.kind === 'picture'),
     });
-    if (d.kind === 'move' && active) {
-      setImages((current) => ({
-        ...current,
-        layerOffset: { x: at.x - d.start.x, y: at.y - d.start.y },
+    if (layered && active) {
+      setImages((images) => ({
+        ...images,
+        layerOffset: { x: current.x - d.start.x, y: current.y - d.start.y },
       }));
     }
+  }
+
+  /** The marquee rectangle while one is dragged. */
+  const marquee = (): Rect | undefined => {
+    const d = drag();
+    return d?.kind === 'marquee' && d.active
+      ? rectFromPoints(d.start, d.current)
+      : undefined;
+  };
+
+  /** Where each dragged shape would go. */
+  function dragBoxes(d: DragState): { id: number; box: Box }[] {
+    if (d.kind === 'marquee') return [];
+    if (d.shapes.length === 1) {
+      return [{ id: d.shapes[0].id, box: dragPreview(d) }];
+    }
+    if (d.kind === 'move') {
+      const dx = d.current.x - d.start.x;
+      const dy = d.current.y - d.start.y;
+      return d.shapes.map((s) => ({
+        id: s.id,
+        box: { ...s.origin, x: s.origin.x + dx, y: s.origin.y + dy },
+      }));
+    }
+    const to = dragPreview(d);
+    return d.shapes.map((s) => ({
+      id: s.id,
+      box: scaleBox(s.origin, d.origin, to),
+    }));
   }
 
   /** The box a drag would produce. */
@@ -369,6 +556,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
           : d.origin;
       case 'rotate':
         return { ...d.origin, rotation: rotationToward(d.origin, d.current) };
+      case 'marquee':
+        return { ...rectFromPoints(d.start, d.current), rotation: 0 };
     }
   }
 
@@ -376,32 +565,59 @@ export function createSlideEditor(options: SlideEditorOptions) {
     textDragAnchor = null;
     const d = drag();
     setDrag(null);
-    if (!d?.active) return;
+    setGuides(null);
+    if (!d) return;
+    if (!d.active) {
+      if (d.collapseTo !== undefined) select(d.collapseTo);
+      return;
+    }
     const s = slide();
     if (!s) return;
-    const box = dragPreview(d);
-    const op: EditOp =
-      d.kind === 'rotate'
-        ? {
-            op: 'setTransform',
-            slide: s.id,
-            shape: d.shape,
-            rotation: box.rotation,
-          }
+    if (d.kind === 'marquee') {
+      const picked = shapesInRect(shapes(), rectFromPoints(d.start, d.current));
+      setSelection(
+        d.additive
+          ? [
+              ...selectedIds(),
+              ...picked.filter((id) => !selectedIds().includes(id)),
+            ]
+          : picked
+      );
+      return;
+    }
+    if (d.kind === 'rotate') {
+      await session.apply([
+        {
+          op: 'setTransform',
+          slide: s.id,
+          shape: d.shapes[0].id,
+          rotation: dragPreview(d).rotation,
+        },
+      ]);
+      return;
+    }
+    const ops: EditOp[] = dragBoxes(d).map(({ id, box }) =>
+      d.kind === 'move'
+        ? { op: 'setTransform', slide: s.id, shape: id, x: box.x, y: box.y }
         : {
             op: 'setTransform',
             slide: s.id,
-            shape: d.shape,
+            shape: id,
             x: box.x,
             y: box.y,
             w: box.w,
             h: box.h,
-          };
-    await session.apply([op]);
+          }
+    );
+    // Several shapes moved together render with the base image until saved.
+    if (d.shape === undefined)
+      replaceImages({ backdrop: undefined, layer: undefined });
+    await session.apply(ops);
   }
 
   function cancelDrag() {
     setDrag(null);
+    setGuides(null);
     replaceImages({
       backdrop: undefined,
       layer: undefined,
@@ -412,47 +628,65 @@ export function createSlideEditor(options: SlideEditorOptions) {
   // ---- shape commands -----------------------------------------------------
 
   async function nudge(dx: number, dy: number) {
-    const shape = selectedShape();
+    const list = selection();
     const s = slide();
-    if (!shape || !s || !options.canEdit()) return;
+    if (list.length === 0 || !s || !options.canEdit()) return;
     await session.apply(
-      [
-        {
-          op: 'setTransform',
-          slide: s.id,
-          shape: shape.id,
-          x: shape.x + dx,
-          y: shape.y + dy,
-        },
-      ],
-      `nudge:${s.id}:${shape.id}`
+      list.map((shape) => ({
+        op: 'setTransform' as const,
+        slide: s.id,
+        shape: shape.id,
+        x: shape.x + dx,
+        y: shape.y + dy,
+      })),
+      `nudge:${s.id}:${list.map((x) => x.id).join(',')}`
     );
   }
 
   async function deleteSelected() {
-    const shape = selectedShape();
+    const list = selection();
     const s = slide();
-    if (!shape || !s) return;
-    select(null);
-    await session.apply([{ op: 'deleteShape', slide: s.id, shape: shape.id }]);
+    if (list.length === 0 || !s) return;
+    setSelection([]);
+    await session.apply(
+      list.map((shape) => ({
+        op: 'deleteShape' as const,
+        slide: s.id,
+        shape: shape.id,
+      }))
+    );
   }
 
   async function duplicateSelected() {
-    const shape = selectedShape();
+    const list = selection();
     const s = slide();
-    if (!shape || !s) return;
-    const result = await session.apply([
-      { op: 'duplicateShape', slide: s.id, shape: shape.id, dx: 12, dy: 12 },
-    ]);
-    const created = result?.created[0]?.shape;
-    if (created !== undefined) select(created);
+    if (list.length === 0 || !s) return;
+    const result = await session.apply(
+      list.map((shape) => ({
+        op: 'duplicateShape' as const,
+        slide: s.id,
+        shape: shape.id,
+        dx: 12,
+        dy: 12,
+      }))
+    );
+    const created = (result?.created ?? [])
+      .map((c) => c.shape)
+      .filter((id): id is number => id !== undefined);
+    if (created.length > 0) setSelection(created);
   }
 
   // ---- text editing -------------------------------------------------------
 
   const target = (edit: EditingState): TextTarget | null => {
     const s = slide();
-    return s ? { slide: s.id, shape: edit.shape } : null;
+    return s
+      ? {
+          slide: s.id,
+          shape: edit.shape,
+          ...(edit.cell ? { cell: edit.cell } : {}),
+        }
+      : null;
   };
 
   function setEditingSelection(selection: TextSelection, goalX?: number) {
@@ -468,14 +702,21 @@ export function createSlideEditor(options: SlideEditorOptions) {
   /** Text batches sent but not yet answered; layouts are stale until it is 0. */
   let pendingTextOps = 0;
 
-  async function startEditing(shapeId: number, at?: Point) {
-    const shape = shapes().find((s) => s.id === shapeId);
-    if (!shape?.textEditable || !options.canEdit()) return;
+  async function startEditing(
+    shapeId: number,
+    at?: Point,
+    cell?: { ref: CellRef; bounds: Box }
+  ) {
+    const shape = findShape(shapeId);
+    if (!options.canEdit() || !shape) return;
+    if (!cell && !shape.textEditable) return;
     batch(() => {
-      setSelected(shapeId);
+      setSelectedIds([shapeId]);
       setDrag(null);
       setEditing({
         shape: shapeId,
+        cell: cell?.ref,
+        bounds: cell?.bounds,
         layout: null,
         selection: {
           anchor: { paragraph: 0, offset: 0 },
@@ -485,20 +726,24 @@ export function createSlideEditor(options: SlideEditorOptions) {
     });
     editReady = (async () => {
       const [layout] = await Promise.all([
-        engine.textLayout(index(), shapeId).catch(() => null),
+        engine.textLayout(index(), shapeId, cell?.ref).catch(() => null),
         renderLayers(shapeId, true),
       ]);
       const pos = layout && at ? positionAt(layout, at) : null;
       const selection: TextSelection = pos
         ? { anchor: pos, focus: pos }
         : layout
-          ? selectAll(layout)
+          ? cell
+            ? { anchor: textEnd(layout), focus: textEnd(layout) }
+            : selectAll_(layout)
           : {
               anchor: { paragraph: 0, offset: 0 },
               focus: { paragraph: 0, offset: 0 },
             };
       setEditing((e) =>
-        e && e.shape === shapeId ? { ...e, layout, selection } : e
+        e && e.shape === shapeId && sameCell(e.cell, cell?.ref)
+          ? { ...e, layout, selection }
+          : e
       );
     })();
     await editReady;
@@ -529,14 +774,14 @@ export function createSlideEditor(options: SlideEditorOptions) {
         const edit = editing();
         if (!edit) break;
         const [layout] = await Promise.all([
-          engine.textLayout(index(), edit.shape).catch(() => null),
+          engine.textLayout(index(), edit.shape, edit.cell).catch(() => null),
           renderLayers(edit.shape, false),
         ]);
         // A layout fetched while later keystrokes are still in flight is
         // older than the caret; clamping against it would move the caret back.
         const settled = pendingTextOps === 0;
         setEditing((e) =>
-          e && e.shape === edit.shape
+          e && e.shape === edit.shape && sameCell(e.cell, edit.cell)
             ? {
                 ...e,
                 layout,
@@ -556,6 +801,9 @@ export function createSlideEditor(options: SlideEditorOptions) {
     }
   }
 
+  /** The latest text batch, settled once its layout is read back. */
+  let lastText: Promise<unknown> = Promise.resolve();
+
   async function runText(
     ops: EditOp[],
     caret: TextPos,
@@ -564,16 +812,26 @@ export function createSlideEditor(options: SlideEditorOptions) {
     if (ops.length === 0) return;
     setEditingSelection({ anchor: caret, focus: caret });
     pendingTextOps++;
-    try {
-      await session.apply(ops, group);
-    } finally {
-      pendingTextOps--;
-    }
-    await refreshEditing();
+    const done = (async () => {
+      try {
+        await session.apply(ops, group);
+      } finally {
+        pendingTextOps--;
+      }
+      await refreshEditing();
+    })();
+    lastText = done.catch(() => {});
+    await done;
+  }
+
+  /** Resolves once editing has started and text edits in flight have landed. */
+  async function textSettled() {
+    await editReady;
+    await lastText;
   }
 
   const typingGroup = (edit: EditingState) =>
-    `type:${slide()?.id}:${edit.shape}`;
+    `type:${slide()?.id}:${edit.shape}:${edit.cell ? `${edit.cell.row},${edit.cell.col}` : ''}`;
 
   async function typeText(text: string) {
     await editReady;
@@ -611,13 +869,17 @@ export function createSlideEditor(options: SlideEditorOptions) {
 
   /** Arrow/Home/End handling. */
   async function moveCaret(
-    key: 'left' | 'right' | 'up' | 'down' | 'home' | 'end',
+    pressed: 'left' | 'right' | 'up' | 'down' | 'home' | 'end',
     opts: { extend: boolean; word: boolean; line: boolean }
   ) {
     await editReady;
     const edit = editing();
     if (!edit?.layout) return;
     const { layout, selection } = edit;
+    const key =
+      pressed === 'home' || pressed === 'end'
+        ? pressed
+        : logicalArrow(layout, pressed);
     const collapsedMove =
       !opts.extend &&
       !isCollapsed(selection) &&
@@ -666,9 +928,14 @@ export function createSlideEditor(options: SlideEditorOptions) {
     );
   }
 
+  /** Selects a range of the text being edited. */
+  function selectText(anchor: TextPos, focus: TextPos) {
+    setEditingSelection({ anchor, focus });
+  }
+
   function selectAllText() {
     const edit = editing();
-    if (edit?.layout) setEditingSelection(selectAll(edit.layout));
+    if (edit?.layout) setEditingSelection(selectAll_(edit.layout));
   }
 
   function selectedText(): string {
@@ -681,7 +948,44 @@ export function createSlideEditor(options: SlideEditorOptions) {
     );
   }
 
-  /** Applies formatting to the edited range, the selected shape, or nothing. */
+  /**
+   * Links `start`–`end` of the edited text (`link` `""` unlinks it). With
+   * `text`, the range is first replaced by it (the dialog's "Text to
+   * display"); an empty range takes `text` as new linked text.
+   */
+  async function linkText(
+    start: TextPos,
+    end: TextPos,
+    link: string,
+    tip: string | undefined,
+    text?: string
+  ) {
+    await editReady;
+    const edit = editing();
+    const t = edit && target(edit);
+    if (!edit?.layout || !t) return;
+    const ops: EditOp[] = [];
+    let to = end;
+    if (text !== undefined && text !== textInRange(edit.layout, start, end)) {
+      const cmd = insertCommand(t, { anchor: start, focus: end }, text);
+      ops.push(...cmd.ops);
+      to = cmd.caret;
+    }
+    if (start.paragraph === to.paragraph && start.offset === to.offset) {
+      await runText(ops, to, undefined);
+      return;
+    }
+    ops.push({
+      op: 'formatText',
+      ...t,
+      start,
+      end: to,
+      props: { link, linkTip: link ? (tip ?? '') : undefined },
+    });
+    await runText(ops, to, undefined);
+  }
+
+  /** Applies formatting to the edited range, or to every selected text shape. */
   async function formatWith(
     build: (target: TextTarget, range: [TextPos, TextPos] | null) => EditOp
   ) {
@@ -689,15 +993,19 @@ export function createSlideEditor(options: SlideEditorOptions) {
     if (!s) return;
     const edit = editing();
     if (edit) {
+      const t = target(edit);
+      if (!t) return;
       const range = formatRange(edit.layout, edit.selection);
-      await session.apply([build({ slide: s.id, shape: edit.shape }, range)]);
+      await session.apply([build(t, range)]);
       await refreshEditing();
       return;
     }
-    const shape = selectedShape();
-    if (!shape?.textEditable) return;
-    await session.apply([build({ slide: s.id, shape: shape.id }, null)]);
-    await loadSelectedLayout(shape.id);
+    const list = selection().filter((x) => x.textEditable);
+    if (list.length === 0) return;
+    await session.apply(
+      list.map((shape) => build({ slide: s.id, shape: shape.id }, null))
+    );
+    await loadSelectedLayout(selected());
   }
 
   /** The layout and range toolbar state is computed from. */
@@ -717,28 +1025,42 @@ export function createSlideEditor(options: SlideEditorOptions) {
     return { layout: selectedLayout(), range: null };
   };
 
-  // A shape removed underneath the selection (undo, delete) ends it.
+  // Shapes removed underneath the selection (undo, delete) leave it.
   createEffect(
     on(slide, (s: SlideOutline | undefined) => {
-      const id = untrack(selected);
-      if (id !== null && !s?.shapes.some((x) => x.id === id)) {
-        untrack(() => {
-          setEditing(null);
-          setSelected(null);
-          setSelectedLayout(null);
-        });
-      }
+      const ids = untrack(selectedIds);
+      if (ids.length === 0) return;
+      const kept = ids.filter((id) => s && findShape(id));
+      if (kept.length === ids.length) return;
+      untrack(() => {
+        const edit = editing();
+        if (edit && !kept.includes(edit.shape)) setEditing(null);
+        setSelectedIds(kept);
+        void loadSelectedLayout(kept.length === 1 ? kept[0] : null);
+      });
     })
   );
+
+  const sameCell = (a?: CellRef, b?: CellRef) =>
+    a?.row === b?.row && a?.col === b?.col;
 
   return {
     images,
     selected,
+    selectedIds,
     selectedShape,
+    selection,
+    findShape,
     editing,
     drag,
+    guides,
     dragPreview,
+    dragBoxes,
+    marquee,
     select,
+    setSelection,
+    toggleSelected,
+    selectAll,
     goToSlide,
     pointerDown,
     handleDown,
@@ -751,9 +1073,12 @@ export function createSlideEditor(options: SlideEditorOptions) {
     startEditing,
     stopEditing,
     typeText,
+    linkText,
+    textSettled,
     deleteText,
     moveCaret,
     selectAllText,
+    selectText,
     selectedText,
     formatWith,
     formatSource,

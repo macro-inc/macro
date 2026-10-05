@@ -8,22 +8,35 @@ import {
   applyEdits,
   breakEditGroup,
   closePresentation,
+  copyShapes,
+  copySlides,
   enableCollab,
+  findText,
+  getGeometryPaths,
+  getLinkRegions,
+  getMediaBytes,
   getOutline,
+  getPresetPaths,
   getSlideOutline,
+  getSmartArtCatalog,
+  getSmartArtPreviews,
   getTextLayout,
   openPresentation,
   openPresentationEntries,
   redoEdit,
+  renderEquation,
   renderSlide,
   renderSlideLayer,
+  renderSlideSpan,
   savePresentation,
   undoEdit,
 } from '@core/pptx-engine/client';
 import type {
+  CellRef,
   CollabEntries,
   EditResult,
   EntryChange,
+  FindOptions,
 } from '@core/pptx-engine/types';
 import { type LoroDoc, UndoManager } from 'loro-crdt';
 import type {
@@ -57,10 +70,30 @@ function readers(key: string) {
       mode: 'without' | 'only',
       shape: number
     ) => renderSlideLayer(key, index, width, mode, shape),
-    textLayout: (index: number, shape: number) =>
-      getTextLayout(key, index, shape),
+    renderSpan: (
+      index: number,
+      width: number,
+      start: number,
+      end: number,
+      backdrop: boolean
+    ) => renderSlideSpan(key, index, width, start, end, backdrop),
+    textLayout: (index: number, shape: number, cell?: CellRef) =>
+      getTextLayout(key, index, shape, cell),
+    linkRegions: (index: number) => getLinkRegions(key, index),
+    geometryPaths: (index: number, shape: number) =>
+      getGeometryPaths(key, index, shape),
+    mediaBytes: (part: string) => getMediaBytes(key, part),
+    presetPaths: getPresetPaths,
+    renderEquation,
+    smartArtPreviews: getSmartArtPreviews,
+    smartArtCatalog: getSmartArtCatalog,
     save: () => savePresentation(key),
     close: () => closePresentation(key),
+    copyShapes: (index: number, shapes: number[]) =>
+      copyShapes(key, index, shapes),
+    copySlides: (slides: number[]) => copySlides(key, slides),
+    findText: (query: string, options?: FindOptions) =>
+      findText(key, query, options),
   };
 }
 

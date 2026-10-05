@@ -66,6 +66,10 @@ pub mod flags {
     pub const STROKE_CAP: u32 = 1 << 26;
     /// An instance's derived layout (where its layers are at its size).
     pub const DERIVED: u32 = 1 << 27;
+    /// A boolean layer's operation.
+    pub const BOOLEAN: u32 = 1 << 28;
+    /// A vector layer's network.
+    pub const VECTOR: u32 = 1 << 29;
 }
 
 /// A paint as the editor describes it.
@@ -410,6 +414,33 @@ pub enum Op {
     Ungroup {
         ids: Vec<String>,
     },
+    /// Figma's boolean operations (`UNION`, `SUBTRACT`, `INTERSECT`, or
+    /// `XOR` for Exclude): the layers become the operands of a boolean
+    /// layer; a lone boolean layer takes the operation instead.
+    Boolean {
+        ids: Vec<String>,
+        operation: String,
+    },
+    /// "Flatten" (⌘E): the layers become one vector layer.
+    Flatten {
+        ids: Vec<String>,
+    },
+    /// Creates a vector layer drawing `network` (page coordinates) in
+    /// `parent`, on top unless `index` says otherwise.
+    CreateVector {
+        parent: String,
+        index: Option<usize>,
+        network: crate::vector::Network,
+        name: Option<String>,
+        #[serde(default)]
+        props: Patch,
+    },
+    /// Replaces a layer's network (page coordinates); other shapes become
+    /// vector layers, as editing their points does in Figma.
+    SetVector {
+        id: String,
+        network: crate::vector::Network,
+    },
 }
 
 /// What an applied step changed.
@@ -453,7 +484,10 @@ mod flip;
 mod instance_layout;
 mod overrides;
 mod paint;
+mod paste;
+pub mod shapes;
 pub(crate) use overrides::guid_of;
+pub use paste::{At, PasteSpec, View};
 pub(crate) mod layout;
 
 impl<'a> Txn<'a> {
@@ -635,14 +669,15 @@ impl<'a> Txn<'a> {
     fn resize(&mut self, i: NodeIdx, width: Option<f64>, height: Option<f64>) {
         let props = self.doc.props(i);
         let old = props.size();
-        let w = width.unwrap_or(old.x).max(0.01);
+        // An axis left alone keeps its size (a flat vector stays flat).
+        let w = width.map_or(old.x, |w| w.max(0.01));
         // Lines have no height.
         let min_h = if props.node_type() == NodeType::Line {
             0.0
         } else {
             0.01
         };
-        let h = height.unwrap_or(old.y).max(min_h);
+        let h = height.map_or(old.y, |h| h.max(min_h));
         if (w - old.x).abs() < 1e-9 && (h - old.y).abs() < 1e-9 {
             return;
         }
@@ -675,6 +710,10 @@ impl<'a> Txn<'a> {
         let p = self.edit(i, flags::GEOMETRY);
         p.fill_geometry = fill;
         p.stroke_geometry = stroke;
+        // A network scales with the size; its strokes keep their weight.
+        if self.doc.props(i).vector_data.is_some() {
+            self.vector_geometry(i);
+        }
     }
 
     fn scaled(&mut self, paths: &[PathRef], t: &Affine) -> Arc<[PathRef]> {
@@ -848,7 +887,7 @@ impl<'a> Txn<'a> {
     fn drop_stroke_geometry(&mut self, i: NodeIdx) {
         // Stroke outlines are precomputed for one weight and alignment;
         // without them the stroke is drawn from the shape.
-        if self.doc.props(i).node_type() == NodeType::Text {
+        if self.doc.props(i).node_type() == NodeType::Text || self.redraw_stroke(i) {
             return;
         }
         self.edit(i, flags::GEOMETRY).stroke_geometry = None;
@@ -1332,8 +1371,53 @@ impl<'a> Txn<'a> {
                     }
                 }
             }
+            Op::Boolean { ids, operation } => {
+                let op = crate::boolean::BoolOp::parse(operation).ok_or_else(|| {
+                    FigError::Unsupported(format!("no boolean operation {operation}"))
+                })?;
+                let all = self.layers(ids)?;
+                if let Some(b) = self.boolean(&all, op)? {
+                    // A boolean whose operation changed stays selected too.
+                    let id = self.guid_str(b).unwrap_or_default();
+                    if !self.created.contains(&id) {
+                        self.created.push(id);
+                    }
+                }
+            }
+            Op::Flatten { ids } => {
+                let all = self.layers(ids)?;
+                self.flatten(&all)?;
+            }
+            Op::CreateVector {
+                parent,
+                index,
+                network,
+                name,
+                props,
+            } => {
+                if !network.is_valid() || network.vertices.is_empty() {
+                    return Err(FigError::Unsupported(
+                        "the vector network is malformed".into(),
+                    ));
+                }
+                let parent = self.resolve(parent)?;
+                self.create_vector(parent, *index, network, name.clone(), props)?;
+            }
+            Op::SetVector { id, network } => {
+                if !network.is_valid() || network.vertices.is_empty() {
+                    return Err(FigError::Unsupported(
+                        "the vector network is malformed".into(),
+                    ));
+                }
+                let i = self.resolve(id)?;
+                self.set_vector(i, network)?;
+            }
         }
         Ok(())
+    }
+
+    fn guid_str(&self, i: NodeIdx) -> Option<String> {
+        self.doc.props(i).guid.map(|g| g.to_string())
     }
 
     fn live_pages(&self) -> usize {
@@ -1378,6 +1462,21 @@ impl History {
         ops: &[Op],
         coalesce: Option<&str>,
     ) -> Result<Applied> {
+        self.run(doc, coalesce, |txn| {
+            for op in ops {
+                txn.apply(op)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Runs `step` as one undoable step (see [`History::apply`]).
+    fn run(
+        &mut self,
+        doc: &mut Document,
+        coalesce: Option<&str>,
+        step: impl FnOnce(&mut Txn) -> Result<()>,
+    ) -> Result<Applied> {
         let blobs_before = doc.blobs.len();
         let next_guid = doc.next_guid;
         let mut txn = Txn {
@@ -1388,15 +1487,16 @@ impl History {
             floating: HashSet::new(),
             relayout: Vec::new(),
         };
-        for op in ops {
-            if let Err(e) = txn.apply(op) {
-                let Txn { doc, before, .. } = txn;
-                restore(doc, &before);
-                doc.next_guid = next_guid;
-                let _ = blobs_before;
-                return Err(e);
-            }
+        if let Err(e) = step(&mut txn) {
+            let Txn { doc, before, .. } = txn;
+            restore(doc, &before);
+            doc.next_guid = next_guid;
+            let _ = blobs_before;
+            return Err(e);
         }
+        // Boolean layers follow their operands.
+        txn.refit_booleans(0);
+        let settled = txn.before.len();
         // Auto layout follows what moved, resized, appeared, or went.
         let mut changed: Vec<(NodeIdx, bool)> = txn
             .before
@@ -1406,6 +1506,7 @@ impl History {
         changed.extend(txn.relayout.drain(..).map(|i| (i, false)));
         if !changed.is_empty() {
             txn.reflow_after(&changed);
+            txn.refit_booleans(settled);
         }
         let Txn {
             doc,
@@ -1479,9 +1580,11 @@ impl History {
 /// when its own content changed (its children, size, or settings), and
 /// `Some(false)` when only its place in its parent did.
 fn layout_change(old: &Node, new: &Node) -> Option<bool> {
+    // A frame shown again is laid out again: hidden ones keep their layout.
     let own = old.children != new.children
         || old.props.size != new.props.size
-        || old.props.auto_layout != new.props.auto_layout;
+        || old.props.auto_layout != new.props.auto_layout
+        || old.props.visible != new.props.visible;
     let placed = old.removed != new.removed
         || old.parent != new.parent
         || old.props.transform != new.props.transform

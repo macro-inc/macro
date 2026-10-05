@@ -8,9 +8,11 @@ use crate::error::Result;
 use crate::font::FontDb;
 use crate::model::presentation::Presentation;
 use crate::model::shape::{Inherit, WalkCtx, resolve_shape};
-use crate::model::text::{Autofit, Vert};
+use crate::model::text::Autofit;
 use crate::render::build::shape_geometry;
+use crate::render::table::{layout_table, table_styles_part};
 use crate::render::text::{LayoutParams, layout};
+use crate::units::{emu_to_pt, pt_to_emu};
 use crate::xml::Ns;
 use std::collections::HashSet;
 
@@ -48,6 +50,12 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
     let Some(node) = find_shape(&slide.doc, id) else {
         return Ok(());
     };
+    if slide.doc.local(node) == "graphicFrame" {
+        if super::smartart::is_smart_art(&slide.doc, node) {
+            return super::smartart::refresh(pres, part, id, fonts);
+        }
+        return refit_table(pres, part, id, fonts);
+    }
     if slide.doc.local(node) != "sp" {
         return Ok(());
     }
@@ -62,10 +70,10 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
     let Some(text) = shape.text.as_ref() else {
         return Ok(());
     };
-    if !matches!(text.body.vert, Vert::Horz) {
-        return Ok(());
-    }
     let rect = shape_geometry(&shape).text_rect;
+    // Vertical text stacks its lines across the shape's width.
+    let vertical = text.body.vert.is_vertical();
+    let across = if vertical { rect.w } else { rect.h };
     match text.body.autofit {
         Autofit::Normal {
             font_scale,
@@ -82,7 +90,7 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
                         line_reduction: r,
                     },
                 );
-                lay.content_height <= rect.h + TOLERANCE
+                lay.content_height <= across + TOLERANCE
             };
             let (scale, reduction) = LADDER
                 .iter()
@@ -132,24 +140,72 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
                 return Ok(());
             }
             let lay = layout(text, rect.w, rect.h, fonts, LayoutParams::from_body(text));
-            let h = (lay.content_height + (shape.xfrm.h - rect.h)).max(1.0);
-            let w = if text.body.wrap {
-                shape.xfrm.w
+            // The lines' stack sets the size across them; unwrapped lines
+            // set the size along them.
+            let (stack, length) = (
+                lay.content_height,
+                (!text.body.wrap).then_some(lay.content_width),
+            );
+            let x = shape.xfrm;
+            let (w, h) = if vertical {
+                (
+                    (stack + (x.w - rect.w)).max(1.0),
+                    length.map_or(x.h, |l| (l + (x.h - rect.h)).max(1.0)),
+                )
             } else {
-                (lay.content_width + (shape.xfrm.w - rect.w)).max(1.0)
+                (
+                    length.map_or(x.w, |l| (l + (x.w - rect.w)).max(1.0)),
+                    (stack + (x.h - rect.h)).max(1.0),
+                )
             };
-            if (h - shape.xfrm.h).abs() < TOLERANCE && (w - shape.xfrm.w).abs() < TOLERANCE {
+            if (h - x.h).abs() < TOLERANCE && (w - x.w).abs() < TOLERANCE {
                 return Ok(());
             }
-            let x = shape.xfrm;
+            // The edge the first line starts at stays put: the right edge of
+            // text whose lines stack right to left.
+            let left = if vertical && !text.body.vert.lines_left_to_right() {
+                x.x + x.w - w
+            } else {
+                x.x
+            };
             let doc = pres.xml_mut(part)?;
             let Some(node) = find_shape(doc, id) else {
                 return Ok(());
             };
             let xfrm = ensure_xfrm(doc, node);
-            set_off_ext(doc, xfrm, x.x, x.y, w, h);
+            set_off_ext(doc, xfrm, left, x.y, w, h);
         }
         Autofit::None => {}
     }
+    Ok(())
+}
+
+/// Sizes a table's frame to the table as drawn: its columns, and its rows
+/// grown to fit their text, as PowerPoint keeps the frame in step.
+fn refit_table(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> Result<()> {
+    let slide = pres.part(part)?;
+    let doc = &slide.doc;
+    let Some(node) = find_shape(doc, id) else {
+        return Ok(());
+    };
+    let (Some(tbl), Some(ext)) = (
+        doc.path(node, Ns::A, &["graphic", "graphicData", "tbl"]),
+        doc.child(node, Ns::P, "xfrm")
+            .and_then(|x| doc.child(x, Ns::A, "ext")),
+    ) else {
+        return Ok(());
+    };
+    let ctx = pres.context_for(slide.clone(), 1)?;
+    let styles = table_styles_part(&ctx).and_then(|n| pres.part(&n).ok());
+    let grid = layout_table(&ctx, styles.as_ref(), &slide, tbl, fonts);
+    let size = |v: &[f32]| v.last().copied().unwrap_or(0.0).max(0.0);
+    let (w, h) = (size(&grid.xs), size(&grid.ys));
+    let current = |a: &str| emu_to_pt(doc.attr_f64(ext, a).unwrap_or(0.0));
+    if (current("cx") - w).abs() < TOLERANCE && (current("cy") - h).abs() < TOLERANCE {
+        return Ok(());
+    }
+    let doc = pres.xml_mut(part)?;
+    doc.set_attr(ext, "cx", &pt_to_emu(f64::from(w)).to_string());
+    doc.set_attr(ext, "cy", &pt_to_emu(f64::from(h)).to_string());
     Ok(())
 }

@@ -242,6 +242,35 @@ pub fn find_table_style(
     Some(TableStyle::parse(&doc, doc.root(), &colors, &ctx.theme))
 }
 
+/// The styles a deck's table styles part defines, in file order, as
+/// `(style id, name)`.
+pub fn deck_table_styles(styles_part: Option<&PartRef>) -> Vec<(String, String)> {
+    let Some(p) = styles_part else {
+        return Vec::new();
+    };
+    let doc = &p.doc;
+    doc.children(doc.root())
+        .filter(|&c| doc.local(c) == "tblStyle")
+        .filter_map(|c| {
+            let id = doc.attr(c, "styleId")?.trim().to_owned();
+            let name = doc.attr(c, "styleName").unwrap_or_default().to_owned();
+            (!id.is_empty()).then_some((id, name))
+        })
+        .collect()
+}
+
+/// The display name of table style `id`: PowerPoint's name for a built-in
+/// style, else the name the deck's table styles part gives it.
+pub fn table_style_name(styles_part: Option<&PartRef>, id: &str) -> Option<String> {
+    if let Some(b) = super::table_style::builtin_style(id) {
+        return Some(b.name);
+    }
+    deck_table_styles(styles_part)
+        .into_iter()
+        .find(|(s, _)| s.eq_ignore_ascii_case(id))
+        .map(|(_, name)| name)
+}
+
 /// Parses and resolves a table.
 pub fn resolve_table(
     ctx: &SlideContext,
@@ -343,12 +372,10 @@ pub fn resolve_table(
                 Some("b") => Anchor::Bottom,
                 _ => Anchor::Top,
             };
-            let vert = match tc_pr.and_then(|p| doc.attr(p, "vert")) {
-                Some("vert") => Vert::Vert,
-                Some("vert270") => Vert::Vert270,
-                Some("eaVert") => Vert::EaVert,
-                _ => Vert::Horz,
-            };
+            let vert = tc_pr
+                .and_then(|p| doc.attr(p, "vert"))
+                .and_then(Vert::parse)
+                .unwrap_or_default();
             let mut text_style = CellTextStyle::default();
             if let Some(s) = style {
                 for (n, _) in parts.iter().rev() {

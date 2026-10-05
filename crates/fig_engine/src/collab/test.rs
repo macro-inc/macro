@@ -213,8 +213,44 @@ fn entries_round_trip_every_property() {
     .unwrap();
     h.apply(&mut doc, &ops, None).unwrap();
     for node in &doc.nodes {
+        // Fields the showcase leaves unset are set here, so they round-trip too.
+        let mut props = node.props.clone();
+        props.stroke_sides = Some([1.0, 2.0, 3.0, 4.0]);
+        if let Some(a) = &mut props.auto_layout {
+            Arc::make_mut(a).strokes_in_layout = true;
+        }
+        if let Some(t) = &mut props.text_layout {
+            Arc::make_mut(t).first_baseline = Some(13.5);
+            Arc::make_mut(t).truncated_at = Some(7);
+        }
+        if let Some(g) = &props.fill_geometry {
+            props.fill_geometry = Some(
+                g.iter()
+                    .map(|p| crate::model::PathRef { style: 2, ..*p })
+                    .collect(),
+            );
+        }
+        props.vector_styles = Some(Arc::from([crate::model::StyleRun {
+            id: 2,
+            fills: props.fills.clone(),
+            ..Default::default()
+        }]));
+        props.generated = Some(Arc::from([crate::model::Props {
+            guid_path: Some(Arc::from([crate::model::Guid {
+                session: 40_000_000,
+                local: 1,
+            }])),
+            text_layout: props.text_layout.clone(),
+            fills: props.fills.clone(),
+            ..Default::default()
+        }]));
+        props.boolean_operation = Some("SUBTRACT".into());
+        props.vector_data = Some(Arc::new(crate::model::VectorData {
+            network_blob: Some(3),
+            normalized_size: Some(crate::model::Vec2 { x: 1.5, y: 2.5 }),
+        }));
         let state = NodeState {
-            props: node.props.clone(),
+            props,
             removed: node.removed,
             listed: true,
             edits: node.edits,
@@ -532,6 +568,102 @@ fn shares_images_added_during_the_session() {
     );
     let remote = b.receive(&mut hub);
     assert_eq!(remote.images, vec![hash.to_owned()]);
+    assert_same(&a.doc, &b.doc);
+}
+
+#[test]
+fn booleans_vectors_and_pasted_layers_converge() {
+    let bytes = showcase_file();
+    let mut hub = Hub::default();
+    let mut a = Peer::open(1, &bytes, &mut hub);
+    let mut b = Peer::open(2, &bytes, &mut hub);
+    let shapes = a.edit(
+        &mut hub,
+        r#"[{"op":"create","parent":"1:10","node":{"type":"RECTANGLE","x":10,"y":20,"width":100,"height":50}},
+            {"op":"create","parent":"1:10","node":{"type":"ELLIPSE","x":60,"y":40,"width":60,"height":60}}]"#,
+    );
+    let boolean = a.edit(
+        &mut hub,
+        &format!(
+            r#"[{{"op":"boolean","ids":["{}","{}"],"operation":"SUBTRACT"}}]"#,
+            shapes[0], shapes[1]
+        ),
+    );
+    a.edit(
+        &mut hub,
+        &format!(
+            r#"[{{"op":"set","ids":["{}"],"props":{{"width":80}}}}]"#,
+            shapes[1]
+        ),
+    );
+    let vector = a.edit(
+        &mut hub,
+        r#"[{"op":"createVector","parent":"1:10","network":{
+            "vertices":[{"x":20,"y":30},{"x":80,"y":30},{"x":80,"y":90}],
+            "segments":[{"start":0,"end":1},{"start":1,"end":2,"tangentStart":{"x":20,"y":0}}]}}]"#,
+    );
+    a.edit(
+        &mut hub,
+        &format!(
+            r#"[{{"op":"setVector","id":"{}","network":{{
+            "vertices":[{{"x":0,"y":0}},{{"x":80,"y":30}},{{"x":80,"y":90}}],
+            "segments":[{{"start":0,"end":1}},{{"start":1,"end":2}}]}}}}]"#,
+            vector[0]
+        ),
+    );
+    let flat = a.edit(
+        &mut hub,
+        &format!(r#"[{{"op":"flatten","ids":["{}"]}}]"#, boolean[0]),
+    );
+    // Layers pasted from another file, with an image the file lacks.
+    let mut source = Document::open(&bytes).unwrap();
+    let mut pixmap = tiny_skia::Pixmap::new(2, 2).unwrap();
+    pixmap.fill(tiny_skia::Color::from_rgba8(200, 40, 10, 255));
+    let hash = "fedcba9876543210fedcba9876543210fedcba98";
+    source
+        .add_image(hash, crate::images::encode_png(&pixmap))
+        .unwrap();
+    let ops: Vec<Op> = serde_json::from_str(&format!(
+        r#"[{{"op":"set","ids":["1:13"],"props":{{"fills":[{{"image":"{hash}"}}]}}}}]"#
+    ))
+    .unwrap();
+    History::default().apply(&mut source, &ops, None).unwrap();
+    let ids = ["1:12", "1:13"].map(|id| source.find(Guid::parse(id).unwrap()).unwrap());
+    let copied = crate::save::copy(&source, &bytes, &ids).unwrap();
+    let spec: crate::edit::PasteSpec = serde_json::from_str(r#"{"parent":"1:20"}"#).unwrap();
+    let applied = a
+        .history
+        .paste(
+            &mut a.doc,
+            &bytes,
+            &copied.document,
+            Some(&copied.images),
+            &spec,
+        )
+        .unwrap();
+    assert_eq!(applied.created.len(), 2);
+    let mut touched = applied.touched;
+    a.collab.record(&mut a.doc, &mut touched, false);
+    a.publish(&mut hub);
+
+    let remote = b.receive(&mut hub);
+    assert_eq!(remote.images, vec![hash.to_owned()]);
+    let flat = b.find(&flat[0]);
+    assert_eq!(
+        b.doc.props(flat).node_type(),
+        crate::model::NodeType::Vector
+    );
+    assert!(crate::vector::node_network(&b.doc, b.doc.props(flat)).is_some());
+    assert!(b.doc.node(b.find(&boolean[0])).removed);
+    assert_same(&a.doc, &b.doc);
+    // Undoing the paste and then the flatten brings the boolean back on both.
+    a.undo(&mut hub);
+    a.undo(&mut hub);
+    b.receive(&mut hub);
+    assert_eq!(
+        b.doc.props(b.find(&boolean[0])).node_type(),
+        crate::model::NodeType::BooleanOperation
+    );
     assert_same(&a.doc, &b.doc);
 }
 

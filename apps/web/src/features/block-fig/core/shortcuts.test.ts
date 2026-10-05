@@ -162,6 +162,26 @@ describe('editing shortcuts', () => {
     ).toBe('remove-auto-layout');
   });
 
+  it('combines shapes and flattens them', () => {
+    const boolean = (k: string, code: string) =>
+      shortcutAction(key(k, code, { shiftKey: true, altKey: true }), true);
+    expect(boolean('¨', 'KeyU')).toBe('boolean-union');
+    expect(boolean('Í', 'KeyS')).toBe('boolean-subtract');
+    expect(boolean('ˆ', 'KeyI')).toBe('boolean-intersect');
+    expect(boolean('˛', 'KeyX')).toBe('boolean-exclude');
+    expect(shortcutAction(key('e', 'KeyE', { metaKey: true }), true)).toBe(
+      'flatten'
+    );
+    expect(shortcutAction(key('e', 'KeyE', { ctrlKey: true }), false)).toBe(
+      'flatten'
+    );
+    // ⇧⌘E stays export.
+    expect(
+      shortcutAction(key('E', 'KeyE', { metaKey: true, shiftKey: true }), true)
+    ).toBe('export');
+    expect(shortcutAction(key('p', 'KeyP'), true)).toBe('tool-pen');
+  });
+
   it('nudges with the arrows', () => {
     expect(shortcutAction(key('ArrowLeft', 'ArrowLeft'), true)).toBe(
       'nudge-left'

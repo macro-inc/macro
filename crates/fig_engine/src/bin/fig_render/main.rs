@@ -74,6 +74,29 @@ enum Command {
         verbose: bool,
         files: Vec<PathBuf>,
     },
+    /// Combine every boolean layer's operands again and compare the outline
+    /// with the one Figma stored (the overlap of the two, as a share of
+    /// what either covers).
+    Booleans {
+        /// Print each boolean layer's score.
+        #[arg(long)]
+        verbose: bool,
+        files: Vec<PathBuf>,
+    },
+    /// Copy the first page's top-level layers, paste them into a new design,
+    /// save it, reopen it, and compare the pasted layers' render with the
+    /// originals'.
+    Paste { files: Vec<PathBuf> },
+    /// Export the first page's top-level layers as SVG, each beside the
+    /// engine's PNG of it, to compare in a browser.
+    Svg {
+        #[arg(long, default_value = "out")]
+        out: PathBuf,
+        /// Layers per file.
+        #[arg(long, default_value_t = 4)]
+        limit: usize,
+        files: Vec<PathBuf>,
+    },
 }
 
 fn main() {
@@ -114,6 +137,36 @@ fn main() {
         Command::BenchEdit { files } => {
             for path in files {
                 bench_edit(&path);
+            }
+        }
+        Command::Paste { files } => {
+            let mut scores = Vec::new();
+            for path in files {
+                scores.extend(paste(&path));
+            }
+            if !scores.is_empty() {
+                let mean = scores.iter().sum::<f64>() / scores.len() as f64;
+                println!("mean similarity {mean:.4} over {} files", scores.len());
+            }
+        }
+        Command::Svg { out, limit, files } => {
+            std::fs::create_dir_all(&out).expect("output directory");
+            for path in files {
+                export_svgs(&path, &out, limit);
+            }
+        }
+        Command::Booleans { verbose, files } => {
+            let mut scores = Vec::new();
+            for path in files {
+                scores.extend(booleans(&path, verbose));
+            }
+            if !scores.is_empty() {
+                let mean = scores.iter().sum::<f64>() / scores.len() as f64;
+                let low = scores.iter().filter(|&&s| s < 0.98).count();
+                println!(
+                    "mean overlap {mean:.4} over {} boolean layers; {low} below 0.98",
+                    scores.len()
+                );
             }
         }
         Command::Relayout { verbose, files } => {
@@ -685,6 +738,216 @@ fn bench_edit(path: &Path) {
         resize.0,
         resize.1
     );
+}
+
+/// Copies up to eight of the first page's top-level layers into a new
+/// design and scores the saved and reopened paste against the originals.
+fn paste(path: &Path) -> Option<f64> {
+    use fig_engine::edit::{History, Op, PasteSpec};
+    let (bytes, mut doc) = open(path)?;
+    let started = Instant::now();
+    let roots: Vec<u32> = doc
+        .node(doc.pages[0])
+        .children
+        .iter()
+        .copied()
+        .take(8)
+        .collect();
+    // Only the copied layers show in the originals' render.
+    let others: Vec<String> = doc
+        .node(doc.pages[0])
+        .children
+        .iter()
+        .skip(8)
+        .filter_map(|&c| doc.props(c).guid.map(|g| g.to_string()))
+        .collect();
+    if !others.is_empty() {
+        let hide: Vec<Op> = serde_json::from_value(serde_json::json!([
+            { "op": "set", "ids": others, "props": { "visible": false } }
+        ]))
+        .ok()?;
+        History::default().apply(&mut doc, &hide, None).ok()?;
+    }
+    let copied = match fig_engine::save::copy(&doc, &bytes, &roots) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("{}: COPY ERROR {e}", stem(path));
+            return None;
+        }
+    };
+    let blank = fig_engine::save::blank("Paste");
+    let mut target = Document::open(&blank).ok()?;
+    let spec: PasteSpec = serde_json::from_str(r#"{"parent":"0:1"}"#).ok()?;
+    let pasted = History::default().paste(
+        &mut target,
+        &blank,
+        &copied.document,
+        Some(&copied.images),
+        &spec,
+    );
+    if let Err(e) = pasted {
+        println!("{}: PASTE ERROR {e}", stem(path));
+        return None;
+    }
+    let saved = match fig_engine::save::save(&target, &blank) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("{}: SAVE ERROR {e}", stem(path));
+            return None;
+        }
+    };
+    let took = started.elapsed();
+    let reopened = match Document::open(&saved) {
+        Ok(d) => d,
+        Err(e) => {
+            println!("{}: REOPEN ERROR {e}", stem(path));
+            return None;
+        }
+    };
+    // The same page area, drawn from the original and from the paste.
+    let bounds = roots.iter().fold(Rect::EMPTY, |acc, &r| {
+        let s = doc.props(r).size();
+        acc.union(&doc.world(r).map_rect(&Rect::new(0.0, 0.0, s.x, s.y)))
+    });
+    let draw = |d: &Document| {
+        let scene = Scene::build(d, d.pages[0]);
+        let scale = (512.0 / bounds.w.max(bounds.h)).min(1.0);
+        render::render(
+            d,
+            &scene,
+            &mut ImageStore::default(),
+            &Viewport {
+                x: bounds.x,
+                y: bounds.y,
+                scale,
+                width: ((bounds.w * scale).ceil() as u32).max(1),
+                height: ((bounds.h * scale).ceil() as u32).max(1),
+            },
+            RenderOptions {
+                outline: false,
+                background: Some(fig_engine::model::Color::WHITE),
+            },
+        )
+    };
+    let score = match (draw(&doc), draw(&reopened)) {
+        (Some(a), Some(b)) => similarity(&a, &b),
+        _ => 0.0,
+    };
+    println!(
+        "{}: pasted {} layers ({} nodes) in {took:?}, similarity {score:.4}",
+        stem(path),
+        roots.len(),
+        reopened.nodes.len()
+    );
+    Some(score)
+}
+
+/// Writes `<file>-<n>.svg` and `<file>-<n>.png` for the first page's
+/// top-level layers.
+fn export_svgs(path: &Path, out: &Path, limit: usize) {
+    let Some((_, doc)) = open(path) else {
+        return;
+    };
+    let scene = Scene::build(&doc, doc.pages[0]);
+    let mut images = ImageStore::default();
+    let mut written = 0;
+    for &c in &scene.node(scene.root()).children {
+        if written >= limit {
+            break;
+        }
+        let b = scene.node(c).bounds;
+        if b.is_empty() || b.w * b.h > 4096.0 * 4096.0 {
+            continue;
+        }
+        let Some(svg) = fig_engine::svg::export(&doc, &scene, c) else {
+            continue;
+        };
+        let scale = (1024.0 / b.w.max(b.h)).min(1.0);
+        let Some(png) = render::render_node(
+            &doc,
+            &scene,
+            &mut images,
+            c,
+            scale,
+            RenderOptions::default(),
+        ) else {
+            continue;
+        };
+        let name = format!("{}-{written}", stem(path));
+        let _ = std::fs::write(out.join(format!("{name}.svg")), &svg);
+        let _ = std::fs::write(out.join(format!("{name}.png")), to_straight_png(&png));
+        println!("  {name}: {} bytes of SVG", svg.len());
+        written += 1;
+    }
+}
+
+/// Scores each boolean layer's recombined outline against Figma's.
+fn booleans(path: &Path, verbose: bool) -> Vec<f64> {
+    use fig_engine::model::{NodeType, WindingRule};
+    let Some((_, doc)) = open(path) else {
+        return Vec::new();
+    };
+    let mut scores = Vec::new();
+    let started = Instant::now();
+    for (i, node) in doc.nodes.iter().enumerate() {
+        let p = &node.props;
+        if p.node_type() != NodeType::BooleanOperation || p.fill_geometry().is_empty() {
+            continue;
+        }
+        let size = p.size();
+        if size.x <= 0.0 || size.y <= 0.0 {
+            continue;
+        }
+        let k = 256.0 / size.x.max(size.y);
+        let (w, h) = (
+            ((size.x * k).ceil() as u32).max(1),
+            ((size.y * k).ceil() as u32).max(1),
+        );
+        let ts = tiny_skia::Transform::from_scale(k as f32, k as f32);
+        let (Some(mut stored), Some(mut ours)) =
+            (tiny_skia::Mask::new(w, h), tiny_skia::Mask::new(w, h))
+        else {
+            continue;
+        };
+        for g in p.fill_geometry() {
+            if let Some(path) = doc.blobs.path(g.blob) {
+                let rule = match g.winding {
+                    WindingRule::NonZero => tiny_skia::FillRule::Winding,
+                    WindingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
+                };
+                stored.fill_path(&path.path, rule, true, ts);
+            }
+        }
+        if let Some(path) = fig_engine::edit::shapes::combined(&doc, i as u32) {
+            ours.fill_path(&path, tiny_skia::FillRule::Winding, true, ts);
+        }
+        let (mut both, mut either) = (0u64, 0u64);
+        for (a, b) in stored.data().iter().zip(ours.data()) {
+            both += u64::from((*a).min(*b));
+            either += u64::from((*a).max(*b));
+        }
+        if either == 0 {
+            continue;
+        }
+        let score = both as f64 / either as f64;
+        if verbose || score < 0.9 {
+            println!(
+                "  {:.4} {} {} ({})",
+                score,
+                p.guid.map(|g| g.to_string()).unwrap_or_default(),
+                p.name(),
+                p.boolean_operation.as_deref().unwrap_or("UNION")
+            );
+        }
+        scores.push(score);
+    }
+    println!(
+        "{}: {} boolean layers in {:.0?}",
+        stem(path),
+        scores.len(),
+        started.elapsed()
+    );
+    scores
 }
 
 /// The process's peak resident set size in KB (Linux; 0 elsewhere).

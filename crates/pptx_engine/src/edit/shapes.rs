@@ -1,6 +1,9 @@
 //! Shape operations: transforms, fills, outlines, geometry, insertion,
 //! duplication, deletion, z-order, and picture replacement.
 
+use super::chart;
+use super::chart_new;
+use super::group;
 use super::ops::{FillSpec, LinePatch, NewShape, ZOrder};
 use super::parts;
 use super::xmlutil::{
@@ -19,7 +22,7 @@ const SP_ORDER: &[&str] = &["nvSpPr", "spPr", "style", "txBody", "extLst"];
 /// Child order of `p:graphicFrame`.
 const FRAME_ORDER: &[&str] = &["nvGraphicFramePr", "xfrm", "graphic", "extLst"];
 /// Elements that occupy a z-order slot in a shape tree.
-const TREE_ITEMS: &[&str] = &[
+pub(super) const TREE_ITEMS: &[&str] = &[
     "sp",
     "grpSp",
     "pic",
@@ -32,8 +35,8 @@ const TREE_ITEMS: &[&str] = &[
 const DEFAULT_TABLE_STYLE: &str = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}";
 /// Arrowhead types accepted by [`LinePatch`].
 const LINE_ENDS: &[&str] = &["none", "triangle", "stealth", "diamond", "oval", "arrow"];
-/// Preset dashes accepted by [`LinePatch`].
-const DASHES: &[&str] = &[
+/// Preset dashes accepted by [`LinePatch`] (and table borders).
+pub(super) const DASHES: &[&str] = &[
     "solid",
     "dot",
     "dash",
@@ -110,7 +113,8 @@ fn sp_pr(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
         .find(|&c| matches!(doc.local(c), "spPr" | "grpSpPr"))
 }
 
-fn xfrm_element(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
+/// The shape's own `xfrm` element (`p:xfrm` for graphic frames), if any.
+pub(super) fn xfrm_element(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
     if doc.local(shape) == "graphicFrame" {
         doc.child(shape, Ns::P, "xfrm")
     } else {
@@ -188,6 +192,11 @@ pub fn set_transform(
         let ch_ext = doc.ensure_child(xfrm, Ns::A, "chExt", &["off", "ext", "chOff", "chExt"]);
         doc.set_attr(ch_ext, "cx", &emu(current.w).to_string());
         doc.set_attr(ch_ext, "cy", &emu(current.h).to_string());
+    }
+    if !group::ancestors(doc, node).is_empty() {
+        // Group members store their box in the group's child space.
+        group::set_member_transform(doc, node, xfrm, &current, patch);
+        return Ok(());
     }
     set_off_ext(
         doc,
@@ -400,7 +409,7 @@ fn preset_display_name(preset: &str) -> String {
 }
 
 /// Appends a shape element to the top of the z-order of a shape tree.
-fn append_to_tree(doc: &mut XmlDoc, tree: NodeId, el: NodeId) {
+pub(super) fn append_to_tree(doc: &mut XmlDoc, tree: NodeId, el: NodeId) {
     match doc
         .children(tree)
         .last()
@@ -439,6 +448,7 @@ pub fn add_shape(
         };
         (id, n)
     };
+    let mut media_shapes: Vec<(u32, bool)> = Vec::new();
     let fragment = match new {
         NewShape::TextBox { text } => {
             let xfrm = xfrm_xml(x, y, w, h);
@@ -490,12 +500,84 @@ pub fn add_shape(
                 esc(&image.rid)
             )
         }
+        NewShape::Video {
+            data,
+            content_type,
+            poster,
+            description,
+        }
+        | NewShape::Audio {
+            data,
+            content_type,
+            poster,
+            description,
+        } => {
+            let audio = matches!(new, NewShape::Audio { .. });
+            let (link, embed) =
+                parts::add_media(pres, part, parts::decode_base64(data)?, content_type, audio)?;
+            let image = parts::add_image(pres, part, &parts::decode_base64(poster)?)?;
+            let (pw, ph) = (image.width as f32 * 0.75, image.height as f32 * 0.75);
+            match (w == 0.0, h == 0.0) {
+                (true, true) => (w, h) = (pw, ph),
+                (true, false) if ph > 0.0 => w = h * pw / ph,
+                (false, true) if pw > 0.0 => h = w * ph / pw,
+                _ => {}
+            }
+            let xfrm = xfrm_xml(x, y, w, h);
+            let (file, name) = if audio {
+                ("audioFile", "Audio")
+            } else {
+                ("videoFile", "Video")
+            };
+            media_shapes.push((id, audio));
+            format!(
+                "<p:pic><p:nvPicPr><p:cNvPr id=\"{id}\" name=\"{name} {n}\" descr=\"{}\"><a:hlinkClick r:id=\"\" action=\"ppaction://media\"/></p:cNvPr><p:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></p:cNvPicPr><p:nvPr><a:{file} r:link=\"{}\"/><p:extLst><p:ext uri=\"{{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}}\"><p14:media xmlns:p14=\"http://schemas.microsoft.com/office/powerpoint/2010/main\" r:embed=\"{}\"/></p:ext></p:extLst></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed=\"{}\"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>{xfrm}<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></p:spPr></p:pic>",
+                esc(description),
+                esc(&link),
+                esc(&embed),
+                esc(&image.rid)
+            )
+        }
         NewShape::Table { cells } => table_xml(id, n, cells, [x, y, w, h])?,
+        NewShape::Chart {
+            chart_type,
+            grouping,
+            categories,
+            series,
+            title,
+        } => {
+            let spec = chart_new::NewChart {
+                kind: chart_type,
+                grouping: grouping.as_deref(),
+                categories,
+                series,
+                title: title.as_deref(),
+            };
+            chart_new::create(pres, part, id, n, &spec, [x, y, w, h])?
+        }
+        NewShape::SmartArt {
+            layout,
+            items,
+            colors,
+            style,
+        } => {
+            let spec = super::smartart::NewSmartArt {
+                layout,
+                items: items.as_deref(),
+                colors: colors.as_deref(),
+                style: style.as_deref(),
+            };
+            super::smartart::create(pres, part, id, n, &spec, [x, y, w, h])?
+        }
     };
     let doc = pres.xml_mut(part)?;
     let el = import_fragment(doc, &fragment)?;
     let tree = sp_tree(doc).ok_or_else(|| Error::InvalidEdit("slide has no shape tree".into()))?;
     append_to_tree(doc, tree, el);
+    // Media plays from a time node of its own, as PowerPoint writes it.
+    for (shape, audio) in media_shapes {
+        super::animation::add_media_node(doc, shape, audio)?;
+    }
     Ok(id)
 }
 
@@ -552,23 +634,27 @@ fn table_xml(id: u32, n: u32, cells: &[Vec<String>], [x, y, w, h]: [f32; 4]) -> 
 }
 
 /// The element that occupies the shape's z-order slot (its `mc:AlternateContent`, if wrapped).
-fn tree_item(doc: &XmlDoc, shape: NodeId) -> NodeId {
+pub(super) fn tree_item(doc: &XmlDoc, shape: NodeId) -> NodeId {
     match doc.parent(shape) {
         Some(p) if matches!(doc.local(p), "Choice" | "Fallback") => doc.parent(p).unwrap_or(shape),
         _ => shape,
     }
 }
 
-/// Deletes a shape (and a group it leaves empty).
+/// Deletes a shape (and a group it leaves empty); a group it leaves shrinks
+/// to its remaining members.
 pub fn delete_shape(doc: &mut XmlDoc, shape: NodeId) {
     let item = tree_item(doc, shape);
     let parent = doc.parent(item);
     doc.detach(item);
     if let Some(g) = parent
         && doc.local(g) == "grpSp"
-        && !doc.children(g).any(|c| TREE_ITEMS.contains(&doc.local(c)))
     {
-        delete_shape(doc, g);
+        if doc.children(g).any(|c| TREE_ITEMS.contains(&doc.local(c))) {
+            group::refit_group_and_ancestors(doc, g);
+        } else {
+            delete_shape(doc, g);
+        }
     }
 }
 
@@ -612,22 +698,26 @@ pub fn duplicate_shape(
     check_finite(&[Some(dx), Some(dy)])?;
     let current = effective_xfrm(pres, part, shape)?;
     let ids = pres.pkg.ids().cloned();
+    let rids = {
+        let doc = pres.xml(part)?;
+        let node = find(&doc, shape)?;
+        chart::chart_rids(&doc, tree_item(&doc, node))
+    };
+    let charts = chart::copy_charts(pres, part, &rids)?;
     let doc = pres.xml_mut(part)?;
     let node = find(doc, shape)?;
     let item = tree_item(doc, node);
     let copy = doc.deep_clone(item);
+    chart::retarget_charts(doc, copy, &charts);
     let mut next = fresh_shape_id(doc, ids.as_deref());
     let map = renumber(doc, copy, &mut next);
     let new_id = *map
         .get(&i64::from(shape))
         .ok_or_else(|| Error::InvalidEdit("shape has no id".into()))?;
-    let tops: Vec<NodeId> = if doc.local(copy) == "AlternateContent" {
-        doc.children(copy)
-            .flat_map(|branch| doc.children(branch).collect::<Vec<_>>())
-            .collect()
-    } else {
-        vec![copy]
-    };
+    let tops = group::branch_shapes(doc, copy);
+    doc.insert_after(item, copy);
+    // Offsets are in slide space; group members store child-space positions.
+    let nested = !group::ancestors(doc, copy).is_empty();
     if dx != 0.0 || dy != 0.0 {
         for top in tops {
             let xfrm = match xfrm_element(doc, top) {
@@ -638,7 +728,9 @@ pub fn duplicate_shape(
                     x
                 }
             };
-            if let Some(off) = doc.child(xfrm, Ns::A, "off") {
+            if nested {
+                group::shift_member(doc, top, xfrm, f64::from(dx), f64::from(dy));
+            } else if let Some(off) = doc.child(xfrm, Ns::A, "off") {
                 let ox = doc.attr_i64(off, "x").unwrap_or(0) + emu(dx);
                 let oy = doc.attr_i64(off, "y").unwrap_or(0) + emu(dy);
                 doc.set_attr(off, "x", &ox.to_string());
@@ -646,7 +738,9 @@ pub fn duplicate_shape(
             }
         }
     }
-    doc.insert_after(item, copy);
+    if nested {
+        group::refit_ancestors(doc, copy);
+    }
     Ok(new_id)
 }
 
@@ -725,4 +819,17 @@ fn blip_fill_of(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
         "sp" => sp_pr(doc, shape).and_then(|s| doc.child(s, Ns::A, "blipFill")),
         _ => None,
     }
+}
+
+/// Sets (or, with `None` or `""`, removes) an attribute of a shape's
+/// `cNvPr`: `descr` (alt text), `name`, or `hidden`.
+pub fn set_c_nv_pr(doc: &mut XmlDoc, shape: u32, attr: &str, value: Option<&str>) -> Result<()> {
+    let node = find(doc, shape)?;
+    let c_nv_pr = crate::model::shape::c_nv_pr(doc, node)
+        .ok_or_else(|| Error::InvalidEdit(format!("shape {shape} has no properties")))?;
+    match value.filter(|v| !v.is_empty() || attr == "name") {
+        Some(v) => doc.set_attr(c_nv_pr, attr, v),
+        None => doc.remove_attr(c_nv_pr, attr),
+    }
+    Ok(())
 }

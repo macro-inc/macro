@@ -87,7 +87,9 @@ fn metafile_raster(m: &metafile::Metafile) -> Raster {
 }
 
 impl Presentation {
-    /// The display list of slide `index` (scene units are points).
+    /// The display list of slide `index` (scene units are points). Here and
+    /// below, `index` may instead be the id of a slide master or layout
+    /// (see [`crate::model::masters`]), which draws it as Slide Master view does.
     pub fn slide_display_list(&mut self, index: usize, fonts: &FontDb) -> Result<Vec<Node>> {
         self.layer_display_list(index, Layer::All, fonts)
     }
@@ -99,7 +101,7 @@ impl Presentation {
         layer: Layer,
         fonts: &FontDb,
     ) -> Result<Vec<Node>> {
-        let ctx = self.slide_context(index)?;
+        let ctx = self.page_context(index)?;
         let mut loader = RenderLoader { pres: self, fonts };
         let mut b = Builder {
             fonts,

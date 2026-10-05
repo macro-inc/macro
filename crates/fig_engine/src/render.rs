@@ -11,7 +11,7 @@
 //! so isolated nodes cost what they cover, not a full surface.
 
 mod effects;
-mod paint;
+pub(crate) mod paint;
 mod text;
 
 use crate::document::Document;

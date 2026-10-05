@@ -9,7 +9,7 @@ use crate::model::{
     Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
     Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    Vec2,
+    Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -293,6 +293,7 @@ impl<'a> Reader<'a> {
             layout_size: self.opt(Self::vec2)?,
             lines: self.u32()?,
             truncated_at: self.opt(Self::u32)?,
+            first_baseline: self.opt(Self::f32)?,
         })
     }
 
@@ -331,6 +332,7 @@ impl<'a> Reader<'a> {
             counter_sizing: self.opt_string()?,
             counter_spacing: self.f32()?,
             reverse_z: self.bool()?,
+            strokes_in_layout: self.bool()?,
         })
     }
 
@@ -362,6 +364,7 @@ impl<'a> Reader<'a> {
             fills: self.opt(Self::paints)?,
             strokes: self.opt(Self::paints)?,
             stroke_weight: self.opt(Self::f32)?,
+            stroke_sides: self.opt(|r| Ok([r.f32()?, r.f32()?, r.f32()?, r.f32()?]))?,
             stroke_align: self.opt(|r| Ok(dec_align(r.u8()?)))?,
             stroke_cap: self.opt_arc_str()?,
             stroke_join: self.opt_arc_str()?,
@@ -439,6 +442,12 @@ impl<'a> Reader<'a> {
                 })
             })?,
             boolean_operation: self.opt_arc_str()?,
+            vector_data: self.opt(|r| {
+                Ok(Arc::new(VectorData {
+                    network_blob: r.opt(Self::blob)?,
+                    normalized_size: r.opt(Self::vec2)?,
+                }))
+            })?,
             constraints: self.opt(|r| Ok((r.arc_str()?, r.arc_str()?)))?,
             description: self.opt_arc_str()?,
             is_state_group: self.opt(Self::bool)?,

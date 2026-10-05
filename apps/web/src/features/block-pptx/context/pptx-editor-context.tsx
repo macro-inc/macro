@@ -6,11 +6,21 @@
  */
 
 import type {
+  CellRef,
+  ClipboardPayload,
   DeckOutline,
   EditOp,
   EditResult,
+  FindOptions,
+  LinkRegion,
+  PresetPath,
+  ShapeGeometryInfo,
   SlideOutline,
+  SmartArtCatalog,
+  SmartArtPreviewPath,
+  SmartArtPreviewSpec,
   TextLayoutInfo,
+  TextMatch,
 } from '@core/pptx-engine/types';
 import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 
@@ -39,7 +49,38 @@ export interface PresentationEngine {
     mode: 'without' | 'only',
     shape: number
   ) => Promise<ImageBitmap>;
-  textLayout: (index: number, shape: number) => Promise<TextLayoutInfo | null>;
+  /**
+   * The top-level shapes at z-order positions `start..end`, over the
+   * background and inherited shapes when `backdrop` (slide show layers).
+   */
+  renderSpan?: (
+    index: number,
+    width: number,
+    start: number,
+    end: number,
+    backdrop: boolean
+  ) => Promise<ImageBitmap>;
+  /** The bytes of a video or audio clip (`MediaOutline.part`). */
+  mediaBytes?: (part: string) => Promise<Uint8Array>;
+  /** A slide's clickable link areas (slide shows follow them). */
+  linkRegions?: (index: number) => Promise<LinkRegion[]>;
+  /**
+   * A shape's outline as editable paths in shape-local points, with its
+   * local → slide transform (Edit Points); `null` for groups and frames.
+   */
+  geometryPaths?: (
+    index: number,
+    shape: number
+  ) => Promise<ShapeGeometryInfo | null>;
+  /**
+   * A shape's text laid out for carets, or with `cell` a table cell's (a
+   * merged cell's, for a cell it covers); `null` when it holds no text.
+   */
+  textLayout: (
+    index: number,
+    shape: number,
+    cell?: CellRef
+  ) => Promise<TextLayoutInfo | null>;
   /** Applies a batch atomically; batches sharing `group` merge into one undo step. */
   apply: (ops: EditOp[], group?: string) => Promise<EditOutcome>;
   breakGroup: () => Promise<EditOutcome>;
@@ -47,6 +88,12 @@ export interface PresentationEngine {
   redo: () => Promise<EditOutcome>;
   /** The current presentation as `.pptx` bytes. */
   save: () => Promise<Uint8Array>;
+  /** Copies shapes of slide `index` for a `pasteShapes` op (any presentation). */
+  copyShapes: (index: number, shapes: number[]) => Promise<ClipboardPayload>;
+  /** Copies slides (by id) with their notes for a `pasteSlides` op. */
+  copySlides: (slides: number[]) => Promise<ClipboardPayload>;
+  /** Every occurrence of `query` in slide text, in slide order. */
+  findText: (query: string, options?: FindOptions) => Promise<TextMatch[]>;
   /**
    * Replaces the open presentation with `bytes` (transferred), dropping its
    * undo history. Rejects, keeping the current one, when they can't be read.
@@ -56,6 +103,27 @@ export interface PresentationEngine {
   reopen: (bytes: ArrayBuffer) => Promise<void>;
   /** Releases the engine's memory. */
   close: () => void;
+  /** Outlines of preset shapes at `width`×`height` points, for galleries. */
+  presetPaths?: (
+    names: string[],
+    width: number,
+    height: number
+  ) => Promise<Record<string, PresetPath[]>>;
+  /**
+   * A PNG of an equation in the linear format (`size` points, `scale`
+   * pixels per point, `color` `RRGGBB`), for the equation editor; rejects
+   * with what is wrong with the text.
+   */
+  renderEquation?: (
+    latex: string,
+    options: { display: boolean; size: number; scale: number; color: string }
+  ) => Promise<Uint8Array>;
+  /** SmartArt gallery previews, one per spec (`null` for unknown layouts). */
+  smartArtPreviews?: (
+    specs: SmartArtPreviewSpec[]
+  ) => Promise<(SmartArtPreviewPath[] | null)[]>;
+  /** The SmartArt layouts, color variations, and styles the galleries list. */
+  smartArtCatalog?: () => Promise<SmartArtCatalog>;
   /** Whether other people edit the same presentation live. */
   collaborative?: boolean;
   /**
@@ -101,8 +169,8 @@ export interface PptxEditorContext {
   canEdit: Accessor<boolean>;
   /** File name for downloads (with extension). */
   fileName: Accessor<string>;
-  /** Hands a file to the user (download). */
-  download: (bytes: Uint8Array, fileName: string) => void;
+  /** Hands a file to the user (download); a .pptx unless `mimeType` says otherwise. */
+  download: (bytes: Uint8Array, fileName: string, mimeType?: string) => void;
   /** Reports a failure to the user. */
   notifyError: (message: string) => void;
   /** Tells the user about something that is not a failure. */
@@ -118,6 +186,17 @@ export interface PptxEditorContext {
   autosaveDelay?: number;
   /** Presence of other people, for collaborative presentations. */
   collaboration?: PresentationCollaboration;
+  /**
+   * The person using the editor, as comments they write name them. Hosts
+   * that don't know omit it; the editor then signs comments "Author".
+   */
+  currentUser?: Accessor<CommentAuthor>;
+}
+
+/** Who writes a comment: a display name and optional initials. */
+export interface CommentAuthor {
+  name: string;
+  initials?: string;
 }
 
 const Context = createContext<PptxEditorContext>();

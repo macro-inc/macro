@@ -37,6 +37,40 @@ fn layers_split_a_shape_from_its_backdrop() {
     assert_eq!(px(&without, 350, 150), [0, 0, 255, 255]);
 }
 
+#[test]
+fn span_layers_stack_back_to_front() {
+    let shapes = rect_shape(2, 1_270_000, "FF0000") + &rect_shape(3, 3_810_000, "0000FF");
+    let mut pres = Presentation::open(deck(&[&shapes])).unwrap();
+    let span = |start, end, backdrop| Layer::Span {
+        start,
+        end,
+        backdrop,
+    };
+    let base = pres
+        .render_layer(0, span(0, 1, true), 960, fonts())
+        .unwrap();
+    assert_eq!(px(&base, 150, 150), [255, 0, 0, 255]);
+    assert_eq!(
+        px(&base, 350, 150),
+        [255, 255, 255, 255],
+        "shape 3 is left out"
+    );
+    let top = pres
+        .render_layer(0, span(1, 2, false), 960, fonts())
+        .unwrap();
+    assert_eq!(px(&top, 350, 150), [0, 0, 255, 255]);
+    assert_eq!(px(&top, 150, 150)[3], 0, "earlier shapes are not drawn");
+    assert_eq!(px(&top, 5, 5)[3], 0, "no backdrop");
+    let none = pres
+        .render_layer(0, span(0, 0, true), 960, fonts())
+        .unwrap();
+    assert_eq!(
+        px(&none, 150, 150),
+        [255, 255, 255, 255],
+        "just the backdrop"
+    );
+}
+
 /// Child coordinates in "master units" (576 per inch): the group maps them
 /// to EMU, a scale of 1587.5. Text and outline weights must not scale with it.
 #[test]
