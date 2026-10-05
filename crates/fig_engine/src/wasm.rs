@@ -681,8 +681,7 @@ impl FigFile {
     #[wasm_bindgen(js_name = libraryPackage)]
     pub fn library_package(&self, keys: &str) -> Result<Clipboard, JsError> {
         let keys: Vec<String> = serde_json::from_str(keys).map_err(js_err)?;
-        let copied =
-            crate::library::package(&self.doc, &self.original, &keys).map_err(js_err)?;
+        let copied = crate::library::package(&self.doc, &self.original, &keys).map_err(js_err)?;
         Ok(Clipboard {
             document: copied.document,
             images: copied.images,

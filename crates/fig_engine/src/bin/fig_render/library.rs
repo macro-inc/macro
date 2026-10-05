@@ -39,16 +39,15 @@ fn similarity(a: &(u32, u32, Vec<u8>), b: &(u32, u32, Vec<u8>)) -> f64 {
     if (a.0, a.1) != (b.0, b.1) || a.2.is_empty() {
         return 0.0;
     }
-    let close = a
-        .2
-        .iter()
-        .zip(&b.2)
-        .filter(|(x, y)| x.abs_diff(**y) <= 8)
-        .count();
+    let close =
+        a.2.iter()
+            .zip(&b.2)
+            .filter(|(x, y)| x.abs_diff(**y) <= 8)
+            .count();
     close as f64 / a.2.len() as f64
 }
 
-pub fn check(path: &Path) {
+pub fn check(path: &Path, verbose: bool) {
     let name = path.display();
     let Ok(bytes) = std::fs::read(path) else {
         println!("{name}: unreadable");
@@ -153,7 +152,18 @@ pub fn check(path: &Path) {
         let (Some(a), Some(b)) = (pixels(&reopened, instance), pixels(&lib, component)) else {
             continue;
         };
-        scores.push(similarity(&a, &b));
+        let score = similarity(&a, &b);
+        if score < 0.95 && verbose {
+            print!(
+                " [{component} {}x{} vs {}x{}: {:.0}%]",
+                a.0,
+                a.1,
+                b.0,
+                b.1,
+                score * 100.0
+            );
+        }
+        scores.push(score);
     }
     let mean = scores.iter().sum::<f64>() / scores.len().max(1) as f64;
     let low = scores.iter().filter(|&&s| s < 0.95).count();

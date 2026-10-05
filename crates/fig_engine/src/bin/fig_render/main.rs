@@ -83,7 +83,12 @@ enum Command {
     /// Decode files and print a summary of each.
     Info { files: Vec<PathBuf> },
     /// Publish each file as a library and place its components elsewhere.
-    Library { files: Vec<PathBuf> },
+    Library {
+        /// Name the components drawn differently.
+        #[arg(long)]
+        verbose: bool,
+        files: Vec<PathBuf>,
+    },
     /// Render every page of each file to PNG.
     Render {
         #[arg(long, default_value = "out")]
@@ -204,9 +209,9 @@ fn main() {
                 render_pages(&path, &out, max, outline);
             }
         }
-        Command::Library { files } => {
+        Command::Library { verbose, files } => {
             for path in files {
-                library::check(&path);
+                library::check(&path, verbose);
             }
         }
         Command::Prototype { files } => {

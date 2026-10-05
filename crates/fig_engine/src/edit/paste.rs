@@ -164,6 +164,7 @@ pub(super) fn translate(src: &Schema, dst: &Schema, m: &Msg, dst_def: u32) -> Ms
     for (index, value) in &m.fields {
         let field = &src.def(m.def).fields[*index as usize];
         let Some(di) = dst.def(dst_def).index_of(&field.name) else {
+            legacy_style(src, dst, &mut out, &field.name, value);
             continue;
         };
         let target = &dst.def(dst_def).fields[di as usize];
@@ -175,6 +176,41 @@ pub(super) fn translate(src: &Schema, dst: &Schema, m: &Msg, dst_def: u32) -> Ms
         }
     }
     out
+}
+
+/// A shared style reference older files keep in a legacy field
+/// (`inheritFillStyleID`…), written in the newer one (`styleIdForFill`…)
+/// when the target schema only has that.
+fn legacy_style(src: &Schema, dst: &Schema, out: &mut Msg, name: &str, value: &Value) {
+    let newer = match name {
+        "inheritFillStyleID" => "styleIdForFill",
+        "inheritFillStyleIDForStroke" => "styleIdForStrokeFill",
+        "inheritEffectStyleID" => "styleIdForEffect",
+        "inheritTextStyleID" => "styleIdForText",
+        _ => return,
+    };
+    let Value::Msg(guid) = value else { return };
+    let part = |f| match guid.get(src, f) {
+        Some(Value::Uint(v)) => *v,
+        _ => 0,
+    };
+    let def = dst.def(out.def);
+    let Some(Ty::Def(style_def)) = def.index_of(newer).map(|i| def.fields[i as usize].ty) else {
+        return;
+    };
+    let Some(Ty::Def(guid_def)) = dst
+        .def(style_def)
+        .index_of("guid")
+        .map(|i| dst.def(style_def).fields[i as usize].ty)
+    else {
+        return;
+    };
+    let mut g = Msg::new(guid_def);
+    g.set(dst, "sessionID", Value::Uint(part("sessionID")));
+    g.set(dst, "localID", Value::Uint(part("localID")));
+    let mut id = Msg::new(style_def);
+    id.set(dst, "guid", Value::Msg(Box::new(g)));
+    out.set(dst, newer, Value::Msg(Box::new(id)));
 }
 
 fn translate_value(src: &Schema, dst: &Schema, v: &Value, from: Ty, to: Ty) -> Option<Value> {
