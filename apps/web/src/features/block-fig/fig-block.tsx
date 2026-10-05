@@ -23,10 +23,6 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import {
-  enableFigComments,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { FigEngine } from '@core/fig-engine/client';
 import { blockDataSignal } from '@core/internal/BlockLoader';
@@ -253,15 +249,13 @@ export default function FigBlock(props: { share?: string; present?: string }) {
   const canEdit = useCanEdit();
   const canComment = useCanComment();
   const userId = useUserId();
-  const comments = isFeatureEnabled(enableFigComments)
-    ? useFigComments({
-        documentId,
-        userId,
-        canComment,
-        displayName,
-        email: idToEmail,
-      })
-    : undefined;
+  const comments = useFigComments({
+    documentId,
+    userId,
+    canComment,
+    displayName,
+    email: idToEmail,
+  });
   const openShare = useShareModal(() => ({
     id: documentId,
     blockAlias: 'fig',

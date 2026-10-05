@@ -1138,9 +1138,8 @@ Layout and test hooks:
   `fig-comments-filter-<open|resolved|all>`, rows `fig-comment-row` with
   `data-unread`; a row opens the thread on its page). Escape closes the
   thread, then the tool. In the app, comments are document discussions
-  behind `VITE_ENABLE_FIG_COMMENTS` (off until the document storage
-  service accepts the `fig` thread anchor); the fixture keeps them in
-  memory.
+  with a `fig` thread anchor, on wherever the viewer is; the fixture keeps
+  them in memory.
 - **Present** (`fig-present`): the selection's top-level frame (or the
   first flow's start, or the first frame) scaled to fit
   (`fig-present-screen`, `data-frame`), with the prototype playing: clicks
