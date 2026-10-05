@@ -36,6 +36,7 @@ describe('live preview batching', () => {
     a2.dispose();
     expect(disposers[0]).not.toHaveBeenCalled();
     b.dispose();
+    vi.advanceTimersByTime(0);
     expect(disposers[0]).toHaveBeenCalledTimes(1);
     b.dispose();
     expect(disposers[0]).toHaveBeenCalledTimes(1);
@@ -69,10 +70,29 @@ describe('live preview batching', () => {
     const listener = vi.fn();
     const a = batcher.acquire('a', 'a', listener);
     a.dispose();
+    vi.advanceTimersByTime(0);
     expect(await a.ready).toBeUndefined();
     vi.runAllTimers();
     expect(start).not.toHaveBeenCalled();
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('keeps a settled query alive across a synchronous consumer remount', () => {
+    const { batcher, start, disposers } = setup();
+    const first = batcher.acquire('a', 'a', vi.fn());
+    vi.advanceTimersByTime(30);
+
+    first.dispose();
+    const replacementListener = vi.fn();
+    const replacement = batcher.acquire('a', 'a', replacementListener);
+
+    expect(replacementListener).toHaveBeenCalledExactlyOnceWith(['a']);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(disposers[0]).not.toHaveBeenCalled();
+
+    replacement.dispose();
+    vi.advanceTimersByTime(0);
+    expect(disposers[0]).toHaveBeenCalledTimes(1);
   });
 
   it('keeps query selections and sessions isolated', () => {

@@ -3,7 +3,14 @@ type Entry<Item, Batch> = {
   listeners: Set<(batch: Batch) => void>;
   ready: Promise<Batch | undefined>;
   resolve: (batch: Batch | undefined) => void;
-  group?: { entries: Entry<Item, Batch>[]; value: Batch; dispose: () => void };
+  group?: {
+    entries: Entry<Item, Batch>[];
+    value: Batch;
+    dispose: () => void;
+    disposed?: boolean;
+  };
+  releaseTimer?: ReturnType<typeof setTimeout>;
+  released?: boolean;
 };
 
 /**
@@ -54,6 +61,9 @@ export function createLivePreviewBatcher<Item, Batch>(options: {
         pending.set(key, entry);
       }
       const current = entry;
+      clearTimeout(current.releaseTimer);
+      current.releaseTimer = undefined;
+      current.released = false;
       current.listeners.add(listener);
       if (current.group) listener(current.group.value);
       else if (pending.size >= maxSize) flush();
@@ -67,20 +77,31 @@ export function createLivePreviewBatcher<Item, Batch>(options: {
           disposed = true;
           current.listeners.delete(listener);
           if (current.listeners.size) return;
-          entries.delete(key);
-          pending.delete(key);
-          current.resolve(undefined);
-          if (!pending.size) {
-            clearTimeout(timer);
-            timer = undefined;
-          }
-          const group = current.group;
-          if (
-            group &&
-            group.entries.every((entry) => entry.listeners.size === 0)
-          ) {
-            group.dispose();
-          }
+          // Lexical replaces decorator owners while reconciling adjacent node
+          // changes. Keep the live batch through that synchronous handoff so
+          // the replacement can subscribe to settled data without flashing a
+          // loading state.
+          current.releaseTimer = setTimeout(() => {
+            current.releaseTimer = undefined;
+            if (current.listeners.size) return;
+            current.released = true;
+            if (entries.get(key) === current) entries.delete(key);
+            if (pending.get(key) === current) pending.delete(key);
+            current.resolve(undefined);
+            if (!pending.size) {
+              clearTimeout(timer);
+              timer = undefined;
+            }
+            const group = current.group;
+            if (
+              group &&
+              !group.disposed &&
+              group.entries.every((entry) => entry.released)
+            ) {
+              group.disposed = true;
+              group.dispose();
+            }
+          });
         },
       };
     },
