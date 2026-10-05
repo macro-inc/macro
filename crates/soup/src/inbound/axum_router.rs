@@ -1239,6 +1239,10 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "ccf")]
     #[schema(value_type = serde_json::Value)]
     pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
+    /// Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`).
+    #[serde(default, rename = "crmf")]
+    #[schema(value_type = serde_json::Value)]
+    pub crm_contact_filter: LiteralTree<item_filters::ast::crm_contact::CrmContactLiteral>,
     /// Filters applied to reminders (wire key `remf`). Unlike every other
     /// filter here, empty/omitted returns **no** reminders: they are opt-in,
     /// so the caller must send `inc`, an id, or an entity to get any.
@@ -1353,6 +1357,7 @@ impl ApiEntityFilterAst {
             github_pull_request_filter,
             call_filter,
             crm_company_filter,
+            crm_contact_filter,
             reminder_filter,
             agent_session_filter,
             properties_filter,
@@ -1422,6 +1427,7 @@ impl ApiEntityFilterAst {
             channel_thread_filter,
             call_filter,
             crm_company_filter,
+            crm_contact_filter,
             foreign_entity_filter,
             github_pull_request_filter,
             reminder_filter,

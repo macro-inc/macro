@@ -306,7 +306,7 @@ impl EntityItem {
             },
             // `entity_filter_ast` force-filters CrmCompany and Reminder out —
             // kept loud here so a contract break is obvious, not silent.
-            SoupItem::CrmCompany(_) => {
+            SoupItem::CrmContact(_) | SoupItem::CrmCompany(_) => {
                 unreachable!("ListEntities tool does not surface CrmCompany rows")
             }
             SoupItem::Reminder(_) => {
@@ -370,6 +370,7 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
+            | SoupItem::CrmContact(_)
             | SoupItem::ForeignEntity(_)
             | SoupItem::Reminder(_)
             | SoupItem::AgentSession(_)
@@ -573,6 +574,7 @@ impl ListEntities {
             // CrmCompany not in the tool surface — force-filter so the
             // AI never sees one.
             crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+            crm_contact_filter: None,
             foreign_entity_filter: self.foreign_entity_filter.clone(),
             // Reminders are opt-in in Soup, so leaving this unset is already
             // what keeps them out of the tool surface — no force-filter needed.
@@ -651,6 +653,7 @@ impl ListEntities {
             // Preserve the upstream nil filter — no ItemType::CrmCompany
             // to toggle against.
             crm_company_filter: ast.crm_company_filter,
+            crm_contact_filter: None,
             foreign_entity_filter: if include_types.contains(&ItemType::ForeignEntity) {
                 ast.foreign_entity_filter
             } else {

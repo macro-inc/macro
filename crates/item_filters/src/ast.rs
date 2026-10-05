@@ -12,6 +12,7 @@ use crate::{
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         crm_company::CrmCompanyLiteral,
+        crm_contact::CrmContactLiteral,
         database_row::DatabaseRowLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
@@ -41,6 +42,8 @@ pub mod channel;
 pub mod chat;
 /// contains the ast literal value for crm companies
 pub mod crm_company;
+/// CRM contact filter literals. Contacts are opt-in.
+pub mod crm_contact;
 /// Database row filter literals.
 pub mod database_row;
 /// contains the date comparison literal type
@@ -236,6 +239,10 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "ccf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
+    /// Contact predicates; absent means contacts are excluded.
+    #[serde(default, rename = "crmf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub crm_contact_filter: LiteralTree<CrmContactLiteral>,
     /// the filters that should be applied to foreign entity records
     #[serde(default, rename = "fef")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -307,6 +314,7 @@ impl EntityFilterAst {
             call_filter: CallFilters::expand_ast(entity_filter.call_filters)?.map(Arc::new),
             crm_company_filter: CrmCompanyFilters::expand_ast(entity_filter.crm_company_filters)?
                 .map(Arc::new),
+            crm_contact_filter: None,
             foreign_entity_filter: ForeignEntityFilters::expand_ast(
                 entity_filter.foreign_entity_filters,
             )?
@@ -360,6 +368,7 @@ impl EntityFilterAst {
             channel_thread_filter: None,
             call_filter: None,
             crm_company_filter: None,
+            crm_contact_filter: None,
             foreign_entity_filter: None,
             github_pull_request_filter: None,
             reminder_filter: None,
@@ -399,6 +408,7 @@ impl IsEmpty for EntityFilterAst {
             channel_thread_filter,
             call_filter,
             crm_company_filter,
+            crm_contact_filter,
             foreign_entity_filter,
             github_pull_request_filter,
             reminder_filter,
@@ -417,6 +427,7 @@ impl IsEmpty for EntityFilterAst {
             && channel_thread_filter.is_none()
             && call_filter.is_none()
             && crm_company_filter.is_none()
+            && crm_contact_filter.is_none()
             && foreign_entity_filter.is_none()
             && github_pull_request_filter.is_none()
             && reminder_filter.is_none()

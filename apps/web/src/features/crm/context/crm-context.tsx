@@ -23,6 +23,7 @@ import type {
   ExportDefinitionsSource,
   ItemListSource,
   ListsSource,
+  PeopleSource,
   PersonalViewsSource,
   PropertyCommands,
   TeamConfigSource,
@@ -101,6 +102,7 @@ export type CrmContext = {
   createCompanySource(id: Accessor<string>): CompanySource;
   createContactSource(id: Accessor<string>): ContactSource;
   createTeamSource(): TeamSource;
+  createPeopleSource(enabled: Accessor<boolean>): PeopleSource;
   createTeamConfigSource(): TeamConfigSource;
   createCapabilities(): CrmCapabilities;
   createDealStages(): DealStages;

@@ -10,6 +10,7 @@ use item_filters::ast::{
     channel::{ChannelLiteral, ChannelThreadLiteral},
     chat::ChatLiteral,
     crm_company::CrmCompanyLiteral,
+    crm_contact::CrmContactLiteral,
     database_row::{DatabaseRowLiteral, database_rows_requested},
     date::DateLiteral,
     document::DocumentLiteral,
@@ -397,6 +398,14 @@ fn check_soup_flat(
     // These opt-in partitions are empty when omitted. The UI's confine()
     // also excludes them with a positive nil ID. Accept only proven emptiness,
     // not arbitrary trees over partitions that have no local index.
+    if ast.crm_contact_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, CrmContactLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("crmContact"));
+    }
     if ast.reminder_filter.as_deref().is_some_and(|expr| {
         !proves_none(
             expr,

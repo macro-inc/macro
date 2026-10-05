@@ -1645,7 +1645,13 @@ joining a standalone call never makes its content available to the wider team.
 
 On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
 Board and List share a horizontal segmented toggle at the top of the sidebar; the
-main header has no layout toggle. People is not available. Views include All companies, My companies
+main header has no layout toggle. People lists contacts across every CRM-enabled
+team the viewer belongs to. Duplicate full email addresses (case-insensitive)
+collapse to the visible contact with the most recent interaction; ties use the
+contact ID. Each team's record and existing contact links remain separate. Hidden
+contacts and contacts under hidden companies are excluded. The directory supports
+name/email search and sorting, and its navigation remains available on touch devices.
+Company views include All companies, My companies
 (Owner = current user), Needs follow-up (has a stage other than Churned and last
 interaction at least 14 days ago),
 Recently active (team email activity within 7 days), and Unassigned (no Owner). Existing personal/team

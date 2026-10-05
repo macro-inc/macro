@@ -643,6 +643,16 @@ its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
+With CRM enabled, normal `@` menus include CRM contacts under **People** in
+documents, channels, discussions, and composers. Contact search loads paged
+GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
+and companies, and collapses duplicate full email addresses case-insensitively.
+The most recently active visible team record represents each email. An eligible
+Macro user with the same email takes precedence and keeps normal user-mention
+notifications. External contacts insert a link to their original CRM record;
+they do not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only.
+
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
 time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's

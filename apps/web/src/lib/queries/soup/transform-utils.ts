@@ -20,6 +20,7 @@ import type {
   ChatEntity,
   ContentHitData,
   CrmCompanyEntity,
+  CrmContactEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -95,6 +96,7 @@ type SoupEntity =
   | ChannelThreadEntity
   | CallEntity
   | CrmCompanyEntity
+  | CrmContactEntity
   | ReminderEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -964,6 +966,14 @@ export const mapApiSoupItemToEntity = (
       projectId: item.data.projectId ?? undefined,
       subType: toSubType(item.data.subType) ?? undefined,
       name: resolveDocumentEntityName(item.data),
+    }))
+    .with({ tag: 'crmContact' }, (item) => ({
+      ...item.data,
+      type: 'crm_contact' as const,
+      name: item.data.name?.trim() || item.data.email,
+      ownerId: item.data.teamId,
+      sortTs: item.data.lastInteraction,
+      frecencyScore: item.frecency_score,
     }))
     .with({ tag: 'crmCompany' }, (item) => {
       const primaryDomain = item.data.domains[0]?.domain;

@@ -29,7 +29,7 @@ pub use mutation_thread::{
 pub use objects::{
     GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
     GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany,
-    GraphqlSoupDatabaseRow, GraphqlSoupDocument, GraphqlSoupDocumentSubType,
+    GraphqlSoupCrmContact, GraphqlSoupDatabaseRow, GraphqlSoupDocument, GraphqlSoupDocumentSubType,
     GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupInitiative,
     GraphqlSoupProject, GroupedSoup, SoupCacheProjection, SoupEntityEdges, SoupPage, SoupPatch,
     SoupUpdated,

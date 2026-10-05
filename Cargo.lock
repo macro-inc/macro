@@ -4915,6 +4915,8 @@ dependencies = [
  "call",
  "chrono",
  "entity_access",
+ "filter_ast",
+ "item_filters",
  "kafka_util",
  "macro_authorization",
  "macro_db_migrator",

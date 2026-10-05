@@ -2,6 +2,7 @@ use crate::agent_session::SoupAgentSession;
 use crate::calendar_event::SoupCalendarEvent;
 use crate::call_record::SoupCallRecord;
 use crate::crm_company::SoupCrmCompany;
+use crate::crm_contact::SoupCrmContact;
 use crate::database_row::SoupDatabaseRow;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
@@ -48,6 +49,8 @@ pub enum SoupItem<T = ()> {
     CalendarEvent(SoupCalendarEvent<T>),
     /// CRM company item.
     CrmCompany(SoupCrmCompany<T>),
+    /// Team-owned CRM contact.
+    CrmContact(SoupCrmContact<T>),
     /// Foreign entity item.
     ForeignEntity(SoupForeignEntity),
     /// Reminder item.
@@ -89,6 +92,9 @@ impl<T> SoupItem<T> {
             SoupItem::CalendarEvent(event) => {
                 EntityType::CalendarEvent.with_entity_string(event.id.to_string())
             }
+            SoupItem::CrmContact(contact) => {
+                EntityType::CrmContact.with_entity_string(contact.id.to_string())
+            }
             SoupItem::CrmCompany(company) => {
                 EntityType::CrmCompany.with_entity_string(company.id.to_string())
             }
@@ -125,6 +131,7 @@ impl<T> SoupItem<T> {
                 .last_reminder_fired_at
                 .map_or(event.updated_at, |fired| fired.max(event.updated_at)),
             SoupItem::CrmCompany(company) => company.updated_at,
+            SoupItem::CrmContact(contact) => contact.last_interaction,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
             SoupItem::Reminder(reminder) => reminder.updated_at,
             SoupItem::AgentSession(session) => session.updated_at,
@@ -211,6 +218,16 @@ impl<T> SoupItem<T> {
             (SoupItem::CalendarEvent(event), _) => event
                 .last_reminder_fired_at
                 .map_or(event.updated_at, |fired| fired.max(event.updated_at)),
+            (SoupItem::CrmContact(contact), SimpleSortMethod::CreatedAt) => {
+                contact.first_interaction
+            }
+            (SoupItem::CrmContact(contact), SimpleSortMethod::ViewedAt) => {
+                contact.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::CrmContact(contact), SimpleSortMethod::ViewedUpdated) => {
+                contact.viewed_at.unwrap_or(contact.last_interaction)
+            }
+            (SoupItem::CrmContact(contact), _) => contact.last_interaction,
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
             (SoupItem::CrmCompany(company), SimpleSortMethod::ViewedAt) => {
                 company.viewed_at.unwrap_or_default()
@@ -285,6 +302,7 @@ impl<T> SoupItem<T> {
                 c.id.to_string(),
                 PropertiesEntityType::Company,
             )),
+            SoupItem::CrmContact(_) => None,
             SoupItem::ForeignEntity(_) => None,
             SoupItem::Reminder(_) => None,
             // Agent sessions have no properties entity type yet.
@@ -491,6 +509,35 @@ impl<T> SoupItem<T> {
                 last_reminder_fired_at,
                 extra: f(extra),
             }),
+            SoupItem::CrmContact(SoupCrmContact {
+                id,
+                team_id,
+                company_id,
+                company_name,
+                email,
+                name,
+                hidden,
+                first_interaction,
+                last_interaction,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra,
+            }) => SoupItem::CrmContact(SoupCrmContact {
+                id,
+                team_id,
+                company_id,
+                company_name,
+                email,
+                name,
+                hidden,
+                first_interaction,
+                last_interaction,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra: f(extra),
+            }),
             SoupItem::CrmCompany(SoupCrmCompany {
                 id,
                 team_id,
@@ -623,6 +670,7 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::Call(record) => record.call_id,
             SoupItem::CalendarEvent(event) => event.id,
             SoupItem::CrmCompany(company) => company.id,
+            SoupItem::CrmContact(contact) => contact.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
             SoupItem::Reminder(reminder) => reminder.id,
             SoupItem::AgentSession(session) => session.id,
