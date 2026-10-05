@@ -153,6 +153,21 @@ fn normalize_foreign_id_per_source() {
 }
 
 #[test]
+fn connector_slugs_preserve_single_apps_and_accept_both_slack_aliases() {
+    assert_eq!(ImportSource::Linear.pipedream_app_slugs(), &["linear"]);
+    assert_eq!(ImportSource::Notion.pipedream_app_slugs(), &["notion"]);
+    assert_eq!(
+        ImportSource::Slack.pipedream_app_slugs(),
+        &["slack", "slack_v2"]
+    );
+
+    let slack = ImportSource::Slack.connector_ref();
+    assert!(slack.matches_pipedream_slug("slack"));
+    assert!(slack.matches_pipedream_slug("slack_v2"));
+    assert!(!slack.matches_pipedream_slug("slack_bot"));
+}
+
+#[test]
 fn fixed_entity_type_mapping() {
     assert_eq!(ImportSource::Linear.entity_type(), "task");
     assert_eq!(ImportSource::Notion.entity_type(), "md");

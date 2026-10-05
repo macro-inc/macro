@@ -11670,6 +11670,7 @@ dependencies = [
  "mcp_client",
  "pipedream_mcp",
  "serde_json",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]

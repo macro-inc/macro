@@ -48,19 +48,21 @@ impl ImportSource {
         ]
     }
 
-    /// The Pipedream app slug backing this source's connector.
-    pub fn pipedream_app_slug(self) -> &'static str {
+    /// The Pipedream app slugs backing this source's connector, in preference order.
+    pub fn pipedream_app_slugs(self) -> &'static [&'static str] {
         match self {
-            ImportSource::Linear => "linear",
-            ImportSource::Notion => "notion",
-            ImportSource::Slack => "slack",
+            ImportSource::Linear => &["linear"],
+            ImportSource::Notion => &["notion"],
+            // Keep the canonical fallback from docs/SLACK_LIVE_CHANNEL_IMPORT.md
+            // until live verification supports switching to `slack_v2`.
+            ImportSource::Slack => &["slack", "slack_v2"],
         }
     }
 
     /// This source's connector on both MCP stacks.
     pub fn connector_ref(self) -> mcp_select::ConnectorRef<'static> {
         mcp_select::ConnectorRef {
-            pipedream_app_slug: self.pipedream_app_slug(),
+            pipedream_app_slugs: self.pipedream_app_slugs(),
             native_server_url: self.mcp_server_url(),
         }
     }
