@@ -663,7 +663,7 @@ fn auto_layout(m: &MsgRef) -> Option<AutoLayout> {
 fn layout_child(m: &MsgRef) -> Option<LayoutChild> {
     let child = LayoutChild {
         grow: m.f32("stackChildPrimaryGrow"),
-        align: m.enum_name("stackChildAlignSelf").map(Into::into),
+        align: m.enum_name("stackChildAlignSelf").map(|a| m.intern(a)),
         absolute: m.enum_name("stackPositioning").map(|p| p == "ABSOLUTE"),
         min_size: m.msg("minSize").and_then(|v| v.msg("value")).map(vec2),
         max_size: m.msg("maxSize").and_then(|v| v.msg("value")).map(vec2),
@@ -736,8 +736,8 @@ pub fn props(m: MsgRef) -> Props {
         "OUTSIDE" => StrokeAlign::Outside,
         _ => StrokeAlign::Center,
     });
-    p.stroke_cap = m.enum_name("strokeCap").map(Into::into);
-    p.stroke_join = m.enum_name("strokeJoin").map(Into::into);
+    p.stroke_cap = m.enum_name("strokeCap").map(|c| m.intern(c));
+    p.stroke_join = m.enum_name("strokeJoin").map(|j| m.intern(j));
     p.dash_pattern = m.floats("dashPattern").map(Arc::from);
     if m.has("fillGeometry") {
         p.fill_geometry = Some(path_refs(m.msgs("fillGeometry")));
@@ -877,7 +877,7 @@ pub fn props(m: MsgRef) -> Props {
                 .collect(),
         );
     }
-    p.boolean_operation = m.enum_name("booleanOperation").map(Into::into);
+    p.boolean_operation = m.enum_name("booleanOperation").map(|o| m.intern(o));
     p.vector_data = m.msg("vectorData").map(|v| {
         Arc::new(VectorData {
             network_blob: v.u32("vectorNetworkBlob"),
@@ -889,7 +889,7 @@ pub fn props(m: MsgRef) -> Props {
         m.enum_name("verticalConstraint"),
     );
     if h.is_some() || v.is_some() {
-        p.constraints = Some((h.unwrap_or("MIN").into(), v.unwrap_or("MIN").into()));
+        p.constraints = Some((m.intern(h.unwrap_or("MIN")), m.intern(v.unwrap_or("MIN"))));
     }
     p.description = m
         .str("description")

@@ -17,6 +17,7 @@ use crate::error::{Result, corrupt};
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
 use std::hash::Hasher;
+use std::sync::Arc;
 
 /// A value of a [`Flat`] message: scalars, borrowed strings and bytes, and
 /// indices into the flat tables.
@@ -74,6 +75,8 @@ pub struct Flat<'d> {
     field_stack: Vec<FlatField<'d>>,
     item_stack: Vec<FlatVal<'d>>,
     pub(crate) shared: RefCell<Shared>,
+    /// Strings handed out by [`super::MsgRef::intern`].
+    pub(super) strings: RefCell<super::FxSet<Arc<str>>>,
 }
 
 impl<'d> Flat<'d> {
@@ -89,6 +92,7 @@ impl<'d> Flat<'d> {
             field_stack: Vec::new(),
             item_stack: Vec::new(),
             shared: RefCell::default(),
+            strings: RefCell::default(),
         }
     }
 

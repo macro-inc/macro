@@ -43,6 +43,7 @@ impl Hasher for FxHasher {
 }
 
 type FxMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
+type FxSet<K> = std::collections::HashSet<K, BuildHasherDefault<FxHasher>>;
 
 /// Ids below this are looked up in a dense table; Figma's are all small.
 const DENSE_IDS: u32 = 2048;
@@ -1112,6 +1113,21 @@ impl<'a> MsgRef<'a> {
 
     pub fn enum_name(&self, name: &'static str) -> Option<&'a str> {
         self.get(name).and_then(|v| v.as_enum())
+    }
+
+    /// `s` as a shared string: messages decoded into one [`Flat`] get one
+    /// allocation per distinct string (enum names, mostly) rather than one
+    /// per use.
+    pub fn intern(&self, s: &str) -> Arc<str> {
+        let Src::Flat(flat, _) = self.src else {
+            return s.into();
+        };
+        if let Some(shared) = flat.strings.borrow().get(s) {
+            return Arc::clone(shared);
+        }
+        let shared: Arc<str> = s.into();
+        flat.strings.borrow_mut().insert(Arc::clone(&shared));
+        shared
     }
 
     pub fn bytes(&self, name: &'static str) -> Option<&'a [u8]> {
