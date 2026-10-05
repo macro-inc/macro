@@ -1317,9 +1317,9 @@ and prevent dismissal; canceling leaves the underlying data unchanged.
 
 ## Onboarding bypass — `/app/onboarding`
 
-`@macro.com` accounts see a **Bypass** button on every onboarding step. It
-skips the rest of the flow and leaves onboarding. `gab@macro.com` does not
-see it, and neither does any other domain.
+All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
+skips the rest of the flow and leaves onboarding. Accounts on other domains
+do not see it.
 
 ## Setup plan step — `/app/onboarding`
 

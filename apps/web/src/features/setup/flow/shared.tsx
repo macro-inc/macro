@@ -28,17 +28,9 @@ export function isMacroStaffEmail(address: string | undefined): boolean {
   return emailDomain(address) === MACRO_STAFF_DOMAIN;
 }
 
-/**
- * Staff accounts that must not see the onboarding Bypass button.
- * Hardcoded: gab@macro.com goes through onboarding like everyone else.
- */
-const ONBOARDING_BYPASS_EXCLUDED_EMAILS = ['gab@macro.com'];
-
 /** Whether this account gets the staff Bypass button on the onboarding flow. */
 export function canBypassOnboarding(address: string | undefined): boolean {
-  const normalized = address?.trim().toLowerCase();
-  if (!normalized || !isMacroStaffEmail(normalized)) return false;
-  return !ONBOARDING_BYPASS_EXCLUDED_EMAILS.includes(normalized);
+  return isMacroStaffEmail(address?.trim());
 }
 
 /** "macro.com" → "Macro": the domain root, capitalized. Whether a domain

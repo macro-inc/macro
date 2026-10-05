@@ -8,16 +8,6 @@ describe('canBypassOnboarding', () => {
     expect(canBypassOnboarding('  wolf@macro.com  ')).toBe(true);
   });
 
-  it('hides Bypass from gab@macro.com', () => {
-    expect(canBypassOnboarding('gab@macro.com')).toBe(false);
-    expect(canBypassOnboarding('Gab@Macro.com')).toBe(false);
-    expect(canBypassOnboarding('  gab@macro.com  ')).toBe(false);
-  });
-
-  it('still shows Bypass for other @macro.com addresses', () => {
-    expect(canBypassOnboarding('gab+alias@macro.com')).toBe(true);
-  });
-
   it('hides Bypass from everyone else', () => {
     expect(canBypassOnboarding('ada@gmail.com')).toBe(false);
     expect(canBypassOnboarding('ada@notmacro.com')).toBe(false);
