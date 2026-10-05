@@ -371,6 +371,9 @@ impl Builder<'_, '_> {
     /// Adds a node to the tree under `parent` (it gets the next id).
     fn insert(&mut self, mut node: Node, parent: NodeIdx) -> NodeIdx {
         node.id = self.doc.allocate_id();
+        if let Some(source) = node.source.as_mut().and_then(Arc::get_mut) {
+            source.origin = node.id;
+        }
         node.parent = Some(parent);
         node.artboard = self.artboard;
         if self.hidden > 0 {
@@ -407,6 +410,7 @@ impl Builder<'_, '_> {
                 .collect(),
             resources: self.table.index(resources),
             transform,
+            origin: 0,
         })
     }
 

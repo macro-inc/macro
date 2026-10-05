@@ -25,8 +25,9 @@
 //! (`layers:<fingerprint>`), so someone opening it starts from the same
 //! grid and applies the same entries.
 
-pub mod position;
 pub mod tile;
+
+pub use fig_engine::collab::position;
 
 use crate::edit::Applied;
 use crate::model::{

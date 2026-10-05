@@ -456,3 +456,13 @@ opt-level = "s"
 inherits = "release"
 lto = "fat"
 codegen-units = 1
+
+[profile.psd-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.ai-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

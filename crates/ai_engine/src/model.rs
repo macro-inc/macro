@@ -498,6 +498,9 @@ pub struct Source {
     /// The node's transform when it was read: after a move, the operators
     /// are written with the change in front of them.
     pub transform: Affine,
+    /// The id of the node read with it (copies share their original's
+    /// source).
+    pub origin: u32,
 }
 
 /// Edit flags: what changed in a node since the file was opened.

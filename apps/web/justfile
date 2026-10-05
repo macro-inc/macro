@@ -118,9 +118,11 @@ database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wa
 pptx_engine_wasm_target := justfile_directory() / "../../target/pptx-engine-wasm"
 docx_engine_wasm_target := justfile_directory() / "../../target/docx-engine-wasm"
 fig_engine_wasm_target := justfile_directory() / "../../target/fig-engine-wasm"
+psd_engine_wasm_target := justfile_directory() / "../../target/psd-engine-wasm"
+ai_engine_wasm_target := justfile_directory() / "../../target/ai-engine-wasm"
 
 [parallel]
-build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm
+build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
 
 build-dev: build-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
@@ -356,6 +358,42 @@ ensure-fig-engine-wasm:
     CRATE="{{justfile_directory()}}/../../crates/fig_engine"
     if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-fig-engine-wasm
+    fi
+
+# Build the psd-engine wasm module (.psd reading, editing, and tile
+# compositing, hosted in workers by the psd block) into
+# src/lib/core/psd-engine/wasm (gitignored).
+build-psd-engine-wasm:
+    CARGO_TARGET_DIR="{{psd_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/psd_engine --target web --profile psd-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/psd-engine/wasm
+
+# Dev fast path: build the psd-engine wasm pkg only when it is missing or any
+# engine source (or the fig engine it draws text with) is newer than it.
+ensure-psd-engine-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/psd-engine/wasm/psd_engine_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/psd_engine"
+    FIG="{{justfile_directory()}}/../../crates/fig_engine"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$FIG/src" "$FIG/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-psd-engine-wasm
+    fi
+
+# Build the ai-engine wasm module (.ai/PDF reading, editing, and tile
+# rendering, hosted in workers by the ai block) into
+# src/lib/core/ai-engine/wasm (gitignored).
+build-ai-engine-wasm:
+    CARGO_TARGET_DIR="{{ai_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/ai_engine --target web --profile ai-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/ai-engine/wasm
+
+# Dev fast path: build the ai-engine wasm pkg only when it is missing or any
+# engine source (or the fig engine it draws text with) is newer than it.
+ensure-ai-engine-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/ai-engine/wasm/ai_engine_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/ai_engine"
+    FIG="{{justfile_directory()}}/../../crates/fig_engine"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$FIG/src" "$FIG/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-ai-engine-wasm
     fi
 
 # Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts

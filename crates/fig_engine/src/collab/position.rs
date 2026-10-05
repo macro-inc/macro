@@ -9,7 +9,7 @@ fn digit(c: u8) -> usize {
     DIGITS.iter().position(|&d| d == c).unwrap_or(0)
 }
 
-/// Evenly spread positions for a stack of `n` layers.
+/// Evenly spread positions for a stack of `n` items.
 pub fn spread(n: usize) -> Vec<String> {
     let base = DIGITS.len();
     let span = base.pow(4);
