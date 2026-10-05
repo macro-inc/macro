@@ -15,7 +15,7 @@ import Copy from '@phosphor/copy.svg';
 import DotsThree from '@phosphor/dots-three.svg';
 import Minus from '@phosphor/minus.svg';
 import { Button } from '@ui/components/Button';
-import { createSignal, For, Index, onCleanup, Show } from "solid-js";
+import { createSignal, For, Index, onCleanup, Show } from 'solid-js';
 import {
   EXPORT_FORMATS,
   EXPORT_SIZES,
@@ -27,9 +27,6 @@ import {
 } from '../core/export-settings';
 import { isCommitKey } from '../core/shortcuts';
 import { Section } from './panel-section';
-
-const fieldClass =
-  'min-w-0 rounded-md bg-inset px-1.5 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent';
 
 /** A text field that commits on Enter or blur (empty is a value). */
 function DraftInput(props: {
@@ -49,7 +46,7 @@ function DraftInput(props: {
   };
   return (
     <input
-      class={`${fieldClass} ${props.class ?? ''}`}
+      class={`min-w-0 rounded-md bg-inset px-1.5 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent ${props.class ?? ''}`}
       aria-label={props.ariaLabel}
       placeholder={props.placeholder}
       list={props.list}
@@ -84,7 +81,11 @@ function ExportRow(props: {
       <div class="flex items-center gap-1">
         <Show
           when={hasSize(s().format)}
-          fallback={<span class={`${fieldClass} w-16 text-ink-muted`}>1x</span>}
+          fallback={
+            <span class="min-w-0 rounded-md bg-inset px-1.5 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent w-16 text-ink-muted">
+              1x
+            </span>
+          }
         >
           <DraftInput
             class="w-16 tabular-nums"
@@ -107,7 +108,7 @@ function ExportRow(props: {
           onCommit={(suffix) => props.onChange({ ...s(), suffix })}
         />
         <select
-          class={`${fieldClass} w-16`}
+          class="min-w-0 rounded-md bg-inset px-1.5 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent w-16"
           aria-label="Format"
           data-testid={`fig-export-format-${k()}`}
           value={s().format}
@@ -117,7 +118,7 @@ function ExportRow(props: {
             props.onChange(
               hasSize(format)
                 ? { ...s(), format }
-                : { ...s(), format, constraint: "CONTENT_SCALE", value: 1 }
+                : { ...s(), format, constraint: 'CONTENT_SCALE', value: 1 }
             );
           }}
         >

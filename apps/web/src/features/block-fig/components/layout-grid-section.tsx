@@ -9,7 +9,7 @@ import type { LayoutGridInfo } from '@core/fig-engine/handoff-types';
 import Eye from '@phosphor/eye.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
 import Minus from '@phosphor/minus.svg';
-import { createSignal, For, Index, Show } from "solid-js";
+import { createSignal, For, Index, Show } from 'solid-js';
 import { ColorPicker } from './color-picker';
 import { NumberField, ParsedField } from './design-fields';
 import { Section } from './panel-section';
