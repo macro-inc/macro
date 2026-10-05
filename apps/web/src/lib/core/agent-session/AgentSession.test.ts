@@ -29,21 +29,43 @@ const logSource = vi.hoisted(() => {
       super(`agent session log is ${reason}: ${sessionId}`);
     }
   }
+  type Follow = {
+    rows: (rows: AgentSessionLogEntryDto[]) => void;
+    gap: () => void;
+  };
   const source = {
     Unavailable,
     cached: vi.fn(),
     fetched: vi.fn(),
-    append: vi.fn(),
     forget: vi.fn(),
     watch: vi.fn(),
+    stop: vi.fn(),
+    /** Whether the client can follow the log over GraphQL. */
+    following: false,
+    /** The follow the latest watch was opened with, when following. */
+    follow: undefined as Follow | undefined,
   };
-  source.watch.mockImplementation(() => ({
-    cached: source.cached(),
-    fetched: source.fetched(),
-    stop: () => {},
-  }));
+  source.watch.mockImplementation(
+    (_id: string, _policy?: string, follow?: Follow) => {
+      source.follow = follow;
+      return {
+        cached: source.cached(),
+        fetched: source.fetched(),
+        stop: source.stop,
+      };
+    }
+  );
   return source;
 });
+const soupSocket = vi.hoisted(() => ({
+  listeners: new Set<() => void>(),
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  subscribeGraphqlSoupReconnected: (listener: () => void) => {
+    soupSocket.listeners.add(listener);
+    return () => soupSocket.listeners.delete(listener);
+  },
+}));
 const socket = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
   subscribeSocketSessionStarted: vi.fn((listener: () => void) => {
@@ -117,7 +139,7 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
 vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: logSource.Unavailable,
   watchAgentSessionLog: logSource.watch,
-  appendAgentSessionLogRows: logSource.append,
+  canFollowAgentSessionLog: () => logSource.following,
   forgetAgentSessionLog: logSource.forget,
 }));
 
@@ -185,7 +207,9 @@ beforeEach(() => {
   harness.get.mockResolvedValue(ok(session));
   logSource.cached.mockResolvedValue(undefined);
   logSource.fetched.mockResolvedValue(logOf([row(1)]));
-  logSource.append.mockResolvedValue(undefined);
+  logSource.following = false;
+  logSource.follow = undefined;
+  soupSocket.listeners.clear();
   logSource.forget.mockResolvedValue(undefined);
   harness.control.mockImplementation(
     async (_id: string, request: { actionId: string }) =>
@@ -843,30 +867,13 @@ describe('AgentSession', () => {
       live.release();
     });
 
-    it('appends every row delivered after the fetched log to the cached copy, once', async () => {
+    it('stops the watch, and what it owes the cache, on the last release', async () => {
       const live = AgentSession.acquire(SESSION);
       await live.load();
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
-      await settle();
-      // Debounced: nothing written yet.
-      expect(logSource.append).not.toHaveBeenCalled();
+      expect(logSource.stop).not.toHaveBeenCalled();
 
       live.release();
-      // The exchange wrote the fetched log itself; only the new row goes.
-      expect(logSource.append).toHaveBeenCalledWith(SESSION, [row(2)]);
-    });
-
-    it('appends rows that waited behind the fetched log too', async () => {
-      const log = deferred<LogSnapshot>();
-      logSource.fetched.mockReturnValue(log.promise);
-      const live = AgentSession.acquire(SESSION);
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
-      log.resolve(logOf([row(1)]));
-      await live.load();
-      live.release();
-      // The buffered row is folded after the snapshot, and appended too.
-      expect(logSource.append).toHaveBeenCalledWith(SESSION, [row(2)]);
+      expect(logSource.stop).toHaveBeenCalledOnce();
     });
 
     it('forgets the cached log when the viewer is refused', async () => {
@@ -878,7 +885,96 @@ describe('AgentSession', () => {
         AgentSessionAccessDenied
       );
       expect(logSource.forget).toHaveBeenCalledWith(SESSION);
-      expect(logSource.append).not.toHaveBeenCalled();
+      live.release();
+    });
+  });
+
+  describe('followed over GraphQL', () => {
+    beforeEach(() => {
+      logSource.following = true;
+    });
+
+    it('folds the rows the subscription delivers and ignores the gateway', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const follow = logSource.follow;
+      expect(follow).toBeDefined();
+
+      follow?.rows([row(2), row(3)]);
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(4)] });
+      await settle();
+
+      expect(inputs()).toEqual([
+        { kind: 'snapshot', rows: [row(1)] },
+        { kind: 'confirmed', row: row(2) },
+        { kind: 'confirmed', row: row(3) },
+      ]);
+      live.release();
+    });
+
+    it('holds rows delivered before the fetched log behind it', async () => {
+      const log = deferred<LogSnapshot>();
+      logSource.fetched.mockReturnValue(log.promise);
+      const live = AgentSession.acquire(SESSION);
+      // The subscription is open before the query goes out.
+      expect(logSource.watch).toHaveBeenCalledWith(
+        SESSION,
+        'cache-and-network',
+        expect.objectContaining({ rows: expect.any(Function) })
+      );
+      logSource.follow?.rows([row(2)]);
+      log.resolve(logOf([row(1)]));
+      await live.load();
+
+      expect(inputs()).toEqual([
+        { kind: 'snapshot', rows: [row(1)] },
+        { kind: 'confirmed', row: row(2) },
+      ]);
+      live.release();
+    });
+
+    it('refetches the log on a gap in the subscription', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      logSource.fetched.mockResolvedValue(logOf([row(1), row(2)]));
+
+      logSource.follow?.gap();
+      await settle();
+
+      expect(inputs().at(-1)).toEqual({
+        kind: 'snapshot',
+        rows: [row(1), row(2)],
+      });
+      live.release();
+    });
+
+    it('refetches the log when the Soup websocket reconnects', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      logSource.fetched.mockResolvedValue(logOf([row(1), row(2)]));
+
+      for (const listener of soupSocket.listeners) listener();
+      await settle();
+
+      expect(inputs().at(-1)).toEqual({
+        kind: 'snapshot',
+        rows: [row(1), row(2)],
+      });
+      live.release();
+      expect(soupSocket.listeners.size).toBe(0);
+    });
+
+    it('opens a fresh watch, and stops the old one, when a failed load re-runs', async () => {
+      logSource.fetched.mockRejectedValueOnce(
+        new logSource.Unavailable(SESSION, 'failed')
+      );
+      const live = AgentSession.acquire(SESSION);
+      await expect(live.load()).rejects.toThrow('log could not be fetched');
+      expect(logSource.watch).toHaveBeenCalledTimes(1);
+
+      await live.load();
+      expect(logSource.stop).toHaveBeenCalledTimes(1);
+      expect(logSource.watch).toHaveBeenCalledTimes(2);
       live.release();
     });
   });

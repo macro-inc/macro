@@ -28,7 +28,7 @@ import {
 } from '@core/agent-fold/client';
 import {
   AgentSessionLogUnavailable,
-  appendAgentSessionLogRows,
+  canFollowAgentSessionLog,
   forgetAgentSessionLog,
   type SessionLogWatch,
   watchAgentSessionLog,
@@ -43,17 +43,13 @@ import type {
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentAction,
-  AgentSessionLogEntryDto,
   AgentSessionResponse,
   ControlRequest,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
+import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { v7 as uuidv7 } from 'uuid';
-import {
-  SessionLoadTrace,
-  traceAcquire,
-  traceCacheWrite,
-} from './load-telemetry';
+import { SessionLoadTrace, traceAcquire } from './load-telemetry';
 import { PromptTrace } from './prompt-telemetry';
 import { publishSessionTurn } from './session-turn';
 
@@ -117,12 +113,6 @@ function occupiesTurn(action: AgentAction): boolean {
 
 const RESYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
 
-/**
- * How long appended rows wait before the cached log is extended. A streaming
- * turn delivers rows many times a second, and each append re-reads the list.
- */
-const CACHE_WRITE_DEBOUNCE_MS = 1_000;
-
 export class AgentSession {
   private static readonly open = new Map<string, AgentSession>();
 
@@ -146,15 +136,19 @@ export class AgentSession {
   }
 
   /**
-   * Realtime ingress: a run of persisted rows in log order, addressed by
-   * session. The socket dispatch and the replay driver both call this; a
-   * session nobody has open ignores it. The run reaches the machine as one
-   * push, so a flush of many frames costs one worker round trip.
+   * Realtime ingress over the connection gateway: a run of persisted rows
+   * in log order, addressed by session. The socket dispatch and the replay
+   * driver both call this; a session nobody has open ignores it, and so
+   * does one following its log over GraphQL, which hears the same rows
+   * there. The run reaches the machine as one push, so a flush of many
+   * frames costs one worker round trip.
    */
   static ingest(event: AgentSessionLogEvent): void {
-    AgentSession.open
-      .get(event.agentSessionId)
-      ?.enqueueAll(event.entries.map((row) => ({ kind: 'confirmed', row })));
+    const session = AgentSession.open.get(event.agentSessionId);
+    if (!session || session.followed) return;
+    void session.enqueueAll(
+      event.entries.map((row) => ({ kind: 'confirmed', row }))
+    );
   }
 
   readonly id: string;
@@ -170,13 +164,15 @@ export class AgentSession {
    */
   private settled = false;
   /**
-   * Rows the socket delivered since the fetched log, not yet appended to
-   * the cached copy; `knownIds` is everything the cache already holds.
+   * Live rows come from the GraphQL log subscription rather than the
+   * gateway. Decided once, when the session opens: the client either
+   * carries subscriptions or it does not.
    */
-  private pendingAppend: AgentSessionLogEntryDto[] = [];
-  private knownIds: Set<string> | undefined;
-  private cacheWriteTimer?: ReturnType<typeof setTimeout>;
-  /** The log query in flight for the current load: cached copy, then fetched. */
+  private readonly followed = canFollowAgentSessionLog();
+  /**
+   * The log query in flight for the current load: cached copy, then
+   * fetched; and, when followed, the subscription delivering live rows.
+   */
   private watch: SessionLogWatch;
   /** The session row, fetched alongside the log and shared by warm and load. */
   private sessionRow: Promise<
@@ -187,6 +183,7 @@ export class AgentSession {
   private readonly listeners = new Set<AgentSessionListener>();
   private readonly unsubscribeSocket: () => void;
   private readonly unsubscribeUpdated: () => void;
+  private readonly unsubscribeReconnected: () => void;
   private syncing = false;
   private resyncRequested = false;
   private resyncRetry = 0;
@@ -226,8 +223,13 @@ export class AgentSession {
     this.unsubscribeUpdated = subscribeAgentSessionUpdated((event) => {
       if (event.agentSessionId === this.id) void this.resync();
     });
+    // The subscription survives a reconnect, but not the rows published
+    // while the socket was down.
+    this.unsubscribeReconnected = this.followed
+      ? subscribeGraphqlSoupReconnected(() => void this.resync())
+      : () => undefined;
     this.trace = new SessionLoadTrace(id);
-    this.watch = watchAgentSessionLog(id);
+    this.watch = this.openWatch();
     this.sessionRow = agentHarnessServiceClient.get(id);
     this.warming = this.startWarm();
     this.loading = this.startLoad();
@@ -235,6 +237,28 @@ export class AgentSession {
     // fast failure lands, and an unobserved rejection is reported as
     // unhandled. The failure still reaches every caller of `load`.
     this.loading.catch(() => undefined);
+  }
+
+  /**
+   * The log query for a load, following the session when the client can:
+   * each run the subscription delivers folds like a gateway run would, and
+   * a gap in it is a reason to refetch.
+   */
+  private openWatch(): SessionLogWatch {
+    return watchAgentSessionLog(
+      this.id,
+      'cache-and-network',
+      this.followed
+        ? {
+            rows: (rows) => {
+              void this.enqueueAll(
+                rows.map((row) => ({ kind: 'confirmed', row }))
+              );
+            },
+            gap: () => void this.resync(),
+          }
+        : undefined
+    );
   }
 
   /**
@@ -256,7 +280,8 @@ export class AgentSession {
     if (this.loadFailed) {
       this.loadFailed = false;
       this.trace = new SessionLoadTrace(this.id);
-      this.watch = watchAgentSessionLog(this.id);
+      this.watch.stop();
+      this.watch = this.openWatch();
       this.sessionRow = agentHarnessServiceClient.get(this.id);
       this.loading = this.startLoad();
     }
@@ -470,8 +495,9 @@ export class AgentSession {
     this.listeners.clear();
     this.unsubscribeSocket();
     this.unsubscribeUpdated();
+    this.unsubscribeReconnected();
     clearTimeout(this.resyncTimer);
-    this.flushCacheWrite();
+    this.watch.stop();
     closeSession(this.id);
   }
 
@@ -538,6 +564,9 @@ export class AgentSession {
         (error: unknown) => ({ ok: false as const, error })
       ),
     ]);
+    // Released mid-fetch: the stopped watch answers with a failure that is
+    // not one.
+    if (this.closed) throw new AgentSessionReleased(this.id);
     if (session.isErr()) {
       if (accessDenied(session.error)) {
         this.forgetCached();
@@ -554,7 +583,6 @@ export class AgentSession {
         cause: log.error,
       });
     }
-    if (this.closed) throw new AgentSessionReleased(this.id);
     this.trace.fetched(fetchStartedAt, log.log.rows.length);
 
     const foldStartedAt = performance.now();
@@ -575,59 +603,6 @@ export class AgentSession {
     void forgetAgentSessionLog(this.id).catch((error: unknown) => {
       console.warn('[agent-session] cached log could not be removed', error);
     });
-  }
-
-  /**
-   * Keep the cached log in step with what the machine was given, once the
-   * fetched log is what it holds. The exchange already wrote each fetched
-   * snapshot; only confirmed rows after one need appending. The machine
-   * dedupes by row id on its side; this does the same so a row delivered
-   * twice is stored once.
-   */
-  private remember(inputs: FoldInput[]): void {
-    if (!this.settled) return;
-    let changed = false;
-    for (const input of inputs) {
-      if (input.kind === 'snapshot') {
-        this.knownIds = new Set(input.rows.map((row) => row.id));
-        this.pendingAppend = [];
-      } else if (input.kind === 'confirmed' && this.knownIds) {
-        if (this.knownIds.has(input.row.id)) continue;
-        this.knownIds.add(input.row.id);
-        this.pendingAppend.push(input.row);
-        changed = true;
-      }
-    }
-    if (changed) this.scheduleCacheWrite();
-  }
-
-  private scheduleCacheWrite(): void {
-    if (this.cacheWriteTimer !== undefined) return;
-    this.cacheWriteTimer = setTimeout(() => {
-      this.cacheWriteTimer = undefined;
-      this.writeCache();
-    }, CACHE_WRITE_DEBOUNCE_MS);
-  }
-
-  /** Write now what a pending timer would have: the session is going away. */
-  private flushCacheWrite(): void {
-    if (this.cacheWriteTimer === undefined) return;
-    clearTimeout(this.cacheWriteTimer);
-    this.cacheWriteTimer = undefined;
-    this.writeCache();
-  }
-
-  private writeCache(): void {
-    const rows = this.pendingAppend;
-    if (rows.length === 0) return;
-    this.pendingAppend = [];
-    const startedAt = performance.now();
-    void appendAgentSessionLogRows(this.id, rows).then(
-      () => traceCacheWrite(this.id, startedAt, rows.length),
-      (error: unknown) => {
-        console.warn('[agent-session] log rows could not be cached', error);
-      }
-    );
   }
 
   /**
@@ -703,7 +678,6 @@ export class AgentSession {
   }
 
   private apply(inputs: FoldInput[]): Promise<void> {
-    this.remember(inputs);
     const run = this.chain.then(async () => {
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);
