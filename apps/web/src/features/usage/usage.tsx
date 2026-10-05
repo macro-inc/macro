@@ -1,5 +1,11 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  enableAiUsageBilling,
+  LOCAL_ONLY,
+  PROD_MODE_ENV,
+} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import {
   useAiBillingPlansQuery,
@@ -11,13 +17,18 @@ import {
 import { createSignal, Suspense } from 'solid-js';
 import { useAiUsagePreview } from '../paywall/ai-usage-preview';
 import type { UsageContext } from './context/usage-context';
-import { type AutoReloadSettings, DEFAULT_AUTO_RELOAD } from './core/usage';
+import {
+  type AutoReloadSettings,
+  DEFAULT_AUTO_RELOAD,
+  isUsageAvailable,
+} from './core/usage';
 import { toUsageSummary } from './queries/usage-summary';
 import { UsageSettingsView } from './views/usage-settings';
 
 export function Usage() {
   const summary = useAiBillingSummaryQuery();
   const plans = useAiBillingPlansQuery();
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const checkout = useCreateAiCreditCheckoutMutation();
   const portal = useCreateBillingPortalMutation();
   const overage = useUpdateAiOverageMutation();
@@ -28,8 +39,11 @@ export function Usage() {
   const [previewSettings, setPreviewSettings] =
     createSignal<AutoReloadSettings>({ ...DEFAULT_AUTO_RELOAD });
   const previewing = () => usagePreview.active() || autoReloadPreview();
+  const available = () =>
+    isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
   const returnUrl = `${window.location.origin}/app/settings/usage`;
   const context: UsageContext = {
+    available,
     summary: () => {
       const snapshot = usagePreview.withPreview(
         summary.isSuccess ? summary.data : undefined
@@ -49,6 +63,7 @@ export function Usage() {
           : [1_000, 2_500, 5_000, 10_000],
       start: async (amountCents) => {
         if (
+          !available() ||
           previewing() ||
           !summary.isSuccess ||
           summary.data.tier === 'free' ||
@@ -65,12 +80,12 @@ export function Usage() {
     autoReload: {
       settings: () =>
         autoReloadPreview() ? previewSettings() : DEFAULT_AUTO_RELOAD,
-      available: () => DEV_MODE_ENV && autoReloadPreview(),
+      available: () => available() && DEV_MODE_ENV && autoReloadPreview(),
       pending: () => false,
       preview: autoReloadPreview,
       save: async (settings) => {
         // No auto-reload API exists yet. Only the explicit development preview can save.
-        if (!DEV_MODE_ENV || !autoReloadPreview())
+        if (!available() || !DEV_MODE_ENV || !autoReloadPreview())
           throw new Error('Auto-Reload unavailable');
         setPreviewSettings(settings);
       },
@@ -79,6 +94,7 @@ export function Usage() {
       pending: () => portal.isPending,
       open: async () => {
         if (
+          !available() ||
           previewing() ||
           !summary.isSuccess ||
           summary.data.tier === 'free' ||
@@ -89,13 +105,17 @@ export function Usage() {
       },
     },
     navigateToPayment: (url) => {
+      if (!available()) return;
       window.location.href = url;
     },
-    openPlans: () => openSettings('Billing'),
+    openPlans: () => {
+      if (available()) openSettings('Billing');
+    },
     existingUsageBilling: {
       pending: () => overage.isPending,
       turnOff: async () => {
         if (
+          !available() ||
           previewing() ||
           !summary.isSuccess ||
           summary.data.tier === 'free' ||

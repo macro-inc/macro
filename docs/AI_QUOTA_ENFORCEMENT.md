@@ -110,7 +110,11 @@ together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
-dialog are visible for all plans. Foreground AI actions recognize the four quota
+dialog support all plans. Production activation follows the
+`enable-ai-usage-billing` PostHog flag: while off or loading, Usage shows the
+October 8, 2026 announcement with disabled controls and the dialog stays closed.
+Dev and local stay active regardless of the flag. No backend rollout endpoint is
+required. Foreground AI actions recognize the four quota
 codes below; clients return typed errors, and presentation happens in the app's
 mutation subscription or direct session/edit action handlers. Generic HTTP errors
 and background queries do not open dialogs. Free refusals offer a paid plan;

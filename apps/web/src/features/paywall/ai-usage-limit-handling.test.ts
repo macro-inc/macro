@@ -91,10 +91,7 @@ test.each(
   '$name returns a typed $reason refusal without opening UI in the client',
   async ({ action, reason }) => {
     fetch.mockResolvedValueOnce(
-      Response.json(
-        { code: reason, error: 'Usage blocked' },
-        { status: 402 }
-      )
+      Response.json({ code: reason, error: 'Usage blocked' }, { status: 402 })
     );
     const result = await action();
     expect(result._unsafeUnwrapErr()).toEqual([

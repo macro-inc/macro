@@ -21,6 +21,14 @@ export const DEFAULT_AUTO_RELOAD: AutoReloadSettings = {
   monthlySpendLimitCents: null,
 };
 
+/** Development remains interactive; production follows the UI rollout flag. */
+export function isUsageAvailable(
+  production: boolean,
+  flagEnabled: boolean | undefined
+) {
+  return !production || flagEnabled === true;
+}
+
 export function monthlyUsagePercent(usedCents: number, includedCents: number) {
   if (includedCents <= 0) return usedCents > 0 ? 100 : 0;
   return Math.min(100, Math.max(0, (usedCents / includedCents) * 100));

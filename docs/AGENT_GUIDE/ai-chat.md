@@ -535,7 +535,10 @@ than treating it as approval or repeatedly sending the prompt.
 
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
-Settings → Usage and the AI usage-limit dialog are available for every plan.
+Settings → Usage is visible for every plan. In production,
+`enable-ai-usage-billing` activates its controls and the AI usage-limit dialog;
+until then Usage shows the October 8, 2026 announcement and disabled controls.
+Dev and local remain active regardless of the flag.
 Usage displays the current period as a **Monthly limit** percentage; its info
 button explains that AI agent chat and AI document editing count toward the limit.
 Plan allowance copy and comparisons still follow `enable-ai-usage-billing`.
@@ -592,7 +595,8 @@ toast. Legacy chat tool errors carrying a recognized quota code also open it.
 Use an isolated local backend with local billing fixtures, not real hosted
 accounts. See [quota rollout and coverage](../AI_QUOTA_ENFORCEMENT.md) for setup
 and the full matrix. Record both browser behavior and the Network/protocol result;
-recognized foreground quota refusals open the shared dialog in every frontend environment.
+recognized foreground quota refusals open the shared dialog when the frontend
+rollout is active (always in dev and local; flag-controlled in production).
 
 1. With the flag absent/false across all hosts, send a legacy chat and a managed
    session prompt. Confirm ordinary behavior and new uncounted usage rows.

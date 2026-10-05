@@ -1,11 +1,17 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
+import {
+  enableAiUsageBilling,
+  LOCAL_ONLY,
+  PROD_MODE_ENV,
+} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import type { AiDenyCode } from '@service-auth/ai-billing-types';
 import { Button, Dialog, Surface } from '@ui';
 import { Show, Suspense } from 'solid-js';
 import { MonthlyLimit } from '../usage/components/monthly-limit';
-import { monthlyUsagePercent } from '../usage/core/usage';
+import { isUsageAvailable, monthlyUsagePercent } from '../usage/core/usage';
 import { useAiUsagePreview } from './ai-usage-preview';
 
 const TITLES: Record<AiDenyCode, string> = {
@@ -25,6 +31,9 @@ export function AiUsageLimitDialog() {
     useAiUsageLimitState();
   const { openSettings } = useSettingsState();
   const summary = useAiBillingSummaryQuery({ enabled: usageLimitOpen });
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const available = () =>
+    isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
   const usagePreview = useAiUsagePreview();
   const usageSnapshot = () =>
     usagePreview.withPreview(summary.isSuccess ? summary.data : undefined);
@@ -36,7 +45,7 @@ export function AiUsageLimitDialog() {
 
   return (
     <Dialog
-      open={usageLimitOpen()}
+      open={usageLimitOpen() && available()}
       onOpenChange={(open) => !open && hideUsageLimit()}
       position="center"
       class="w-160"

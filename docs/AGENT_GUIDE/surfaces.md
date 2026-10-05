@@ -2032,7 +2032,12 @@ retains theme search, editing, copying, and custom theme creation.
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` opens Agent connections, and `harness` aliases Runtimes.
 
-`Usage` appears directly above Billing, including for Free accounts. Its
+`Usage` appears directly above Billing, including for Free accounts. In
+production, the `enable-ai-usage-billing` PostHog flag controls activation. While
+it is off or loading, the page shows **AI billing changes take effect on October
+8, 2026.** and all Usage controls are disabled. Turning the flag on activates the
+page and removes the announcement. Dev and local remain interactive even with
+the flag off. The production usage-limit dialog follows the same flag. Its
 **Monthly limit** meter displays a percentage using the backend's current-period
 usage and allowance. The info button explains AI agent chat and AI document
 editing. **Usage Credits** shows the dollar balance and `Add more`, which opens

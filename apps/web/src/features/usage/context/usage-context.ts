@@ -3,6 +3,7 @@ import type { AutoReloadSettings, UsageSummary } from '../core/usage';
 
 /** Capabilities supplied by the app; views can also be mounted with test sources. */
 export type UsageContext = {
+  available: Accessor<boolean>;
   summary: Accessor<UsageSummary | undefined>;
   loading: Accessor<boolean>;
   failed: Accessor<boolean>;

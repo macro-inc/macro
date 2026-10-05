@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { monthlyUsagePercent, parseDollarInput } from './usage';
+import {
+  isUsageAvailable,
+  monthlyUsagePercent,
+  parseDollarInput,
+} from './usage';
 
 describe('monthly usage', () => {
   it('measures included usage and clamps usage beyond the allowance', () => {
@@ -27,4 +31,20 @@ describe('dollar inputs', () => {
       expect(parseDollarInput(value)).toBeUndefined();
     }
   });
+});
+
+describe('Usage rollout', () => {
+  it.each([
+    { production: false, flag: false, available: true },
+    { production: false, flag: true, available: true },
+    { production: false, flag: undefined, available: true },
+    { production: true, flag: false, available: false },
+    { production: true, flag: true, available: true },
+    { production: true, flag: undefined, available: false },
+  ])(
+    'production=$production flag=$flag yields available=$available',
+    ({ production, flag, available }) => {
+      expect(isUsageAvailable(production, flag)).toBe(available);
+    }
+  );
 });
