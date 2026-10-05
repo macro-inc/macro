@@ -16,6 +16,7 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { DesignPanel } from '../components/design-panel';
+import { FigContextMenu } from '../components/fig-context-menu';
 import { ShortcutsDialog } from '../components/shortcuts-dialog';
 import { ViewerToolbar } from '../components/viewer-toolbar';
 import { useFigViewerContext } from '../context/fig-viewer-context';
@@ -27,6 +28,7 @@ import {
   shortcutAction,
   type ViewerAction,
 } from '../core/shortcuts';
+import { createFigContextMenu } from '../primitives/create-fig-context-menu';
 import { createFigEditor } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { AssetsPanel } from './assets-panel';
@@ -223,6 +225,8 @@ export function FigViewer() {
         const locked = info()?.locked ?? false;
         void editor.setProps({ locked: !locked });
       })
+      .with('flip-horizontal', () => void editor.flip(false))
+      .with('flip-vertical', () => void editor.flip(true))
       .with('rename', () => viewer.requestRename())
       .with('nudge-left', () => void editor.nudge(-1, 0))
       .with('nudge-right', () => void editor.nudge(1, 0))
@@ -248,6 +252,15 @@ export function FigViewer() {
   };
 
   const [textEditing, setTextEditing] = createSignal<string>();
+
+  const contextMenu = createFigContextMenu({
+    viewer,
+    engine,
+    editor,
+    mac: IS_MAC,
+    run,
+    focus: () => root.focus({ preventScroll: true }),
+  });
 
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
@@ -382,7 +395,10 @@ export function FigViewer() {
       onPaste={onPaste}
     >
       <Show when={showLayers()}>
-        <aside class="flex w-60 shrink-0 flex-col border-edge-muted border-r bg-panel">
+        <aside
+          class="flex w-60 shrink-0 flex-col border-edge-muted border-r bg-panel"
+          onContextMenu={contextMenu.onLayers}
+        >
           <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2 text-xs">
             <For each={['layers', 'assets'] as const}>
               {(t) => (
@@ -418,7 +434,7 @@ export function FigViewer() {
           </Show>
         </aside>
       </Show>
-      <div class="relative min-w-0 flex-1">
+      <div class="relative min-w-0 flex-1" onContextMenu={contextMenu.onCanvas}>
         <ViewerCanvas
           viewer={viewer}
           engine={engine}
@@ -472,6 +488,13 @@ export function FigViewer() {
               onClose={() => setShowShortcuts(false)}
             />
           </Show>
+          <FigContextMenu
+            at={contextMenu.menu()?.at}
+            entries={contextMenu.menu()?.entries ?? []}
+            mac={IS_MAC}
+            onSelect={contextMenu.choose}
+            onClose={contextMenu.close}
+          />
         </ViewerCanvas>
       </div>
       <Show when={showDesign()}>

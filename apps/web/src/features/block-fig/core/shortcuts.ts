@@ -60,6 +60,8 @@ export type ViewerAction =
   | 'send-to-back'
   | 'toggle-visible'
   | 'toggle-locked'
+  | 'flip-horizontal'
+  | 'flip-vertical'
   | 'rename'
   | 'nudge-left'
   | 'nudge-right'
@@ -155,6 +157,10 @@ export function shortcutAction(
         return 'previous-frame';
       case 'KeyA':
         return 'add-auto-layout';
+      case 'KeyH':
+        return 'flip-horizontal';
+      case 'KeyV':
+        return 'flip-vertical';
       case 'KeyL':
         return 'tool-arrow';
       case 'KeyR':
@@ -260,6 +266,8 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'send-to-back',
   'toggle-visible',
   'toggle-locked',
+  'flip-horizontal',
+  'flip-vertical',
   'rename',
   'nudge-left',
   'nudge-right',
@@ -322,6 +330,8 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
       { action: 'Send to back', keys: ['mod', '⌥', '['] },
       { action: 'Show/hide', keys: ['mod', '⇧', 'H'] },
       { action: 'Lock/unlock', keys: ['mod', '⇧', 'L'] },
+      { action: 'Flip horizontal', keys: ['⇧', 'H'] },
+      { action: 'Flip vertical', keys: ['⇧', 'V'] },
     ],
   },
   {
