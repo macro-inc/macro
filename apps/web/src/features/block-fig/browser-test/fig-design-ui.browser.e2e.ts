@@ -285,3 +285,15 @@ test('edits several layers at once, with mixed values', async ({ page }) => {
   // It did not move the layer.
   await expect(page.getByTestId('fig-field-y')).toHaveValue('100');
 });
+
+test('sets the canvas color from the picker', async ({ page }) => {
+  await openNew(page);
+  await page.getByTestId('fig-page-color').click();
+  await expect(page.getByTestId('fig-color-alpha')).toBeHidden();
+  await page.getByTestId('fig-color-field-0').fill('202020');
+  await page.getByTestId('fig-color-field-0').press('Enter');
+  await expect
+    .poll(async () => (await pixelAt(page, 300, 300)).join(','))
+    .toBe('32,32,32');
+  await expect(page.getByTestId('fig-design-panel')).toContainText('202020');
+});
