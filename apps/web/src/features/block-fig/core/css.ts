@@ -108,7 +108,9 @@ export function cssFor(info: NodeInfo): string[] {
       );
     }
     if (t.alignHorizontal && t.alignHorizontal !== 'LEFT')
-      lines.push(`text-align: ${t.alignHorizontal.toLowerCase()};`);
+      lines.push(
+        `text-align: ${t.alignHorizontal === 'JUSTIFIED' ? 'justify' : t.alignHorizontal.toLowerCase()};`
+      );
     if (t.decoration === 'UNDERLINE') lines.push('text-decoration: underline;');
     if (t.decoration === 'STRIKETHROUGH')
       lines.push('text-decoration: line-through;');

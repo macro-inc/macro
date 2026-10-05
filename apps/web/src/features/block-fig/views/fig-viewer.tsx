@@ -22,6 +22,7 @@ import { useFigViewerContext } from '../context/fig-viewer-context';
 import { zoomLabel } from '../core/camera';
 import { stepPage } from '../core/pages';
 import {
+  controlOwnsKey,
   EDIT_ACTIONS,
   shortcutAction,
   type ViewerAction,
@@ -251,6 +252,9 @@ export function FigViewer() {
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, [contenteditable="true"]')) return;
+    // A focused select or button keeps the keys it uses itself.
+    const control = target.closest('select, button, a[href]');
+    if (control && controlOwnsKey(control.tagName, e)) return;
     if (e.key === ' ') {
       e.preventDefault();
       setSpaceHeld(true);

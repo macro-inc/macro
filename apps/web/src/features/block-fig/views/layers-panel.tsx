@@ -26,6 +26,7 @@ import {
 import { VList, type VListHandle } from 'virtua/solid';
 import { isComponentType, LayerIcon } from '../components/layer-icon';
 import { isPageDivider } from '../core/pages';
+import { isCommitKey } from '../core/shortcuts';
 import type { FigEditor } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
 
@@ -411,7 +412,7 @@ export function LayersPanel(props: {
                         }
                         onKeyDown={(e) => {
                           e.stopPropagation();
-                          if (e.key === 'Enter') e.currentTarget.blur();
+                          if (isCommitKey(e)) e.currentTarget.blur();
                           if (e.key === 'Escape') setRenamingPage(undefined);
                         }}
                       />
@@ -577,7 +578,7 @@ export function LayersPanel(props: {
                     onBlur={(e) => rename(item.row, e.currentTarget.value)}
                     onKeyDown={(e) => {
                       e.stopPropagation();
-                      if (e.key === 'Enter') e.currentTarget.blur();
+                      if (isCommitKey(e)) e.currentTarget.blur();
                       if (e.key === 'Escape') setRenaming(undefined);
                     }}
                   />

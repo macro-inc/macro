@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { type KeyInput, shortcutAction } from './shortcuts';
+import {
+  controlOwnsKey,
+  isCommitKey,
+  type KeyInput,
+  shortcutAction,
+} from './shortcuts';
 
 const key = (
   k: string,
@@ -165,5 +170,36 @@ describe('editing shortcuts', () => {
       shortcutAction(key('ArrowDown', 'ArrowDown', { shiftKey: true }), true)
     ).toBe('nudge-down-10');
     expect(shortcutAction(key('Backspace', 'Backspace'), true)).toBe('delete');
+  });
+});
+
+describe('focused controls and text fields', () => {
+  it('commits on Enter, but not while an input method composes', () => {
+    expect(isCommitKey({ key: 'Enter', isComposing: false, keyCode: 13 })).toBe(
+      true
+    );
+    expect(isCommitKey({ key: 'Enter', isComposing: true, keyCode: 13 })).toBe(
+      false
+    );
+    expect(
+      isCommitKey({ key: 'Enter', isComposing: false, keyCode: 229 })
+    ).toBe(false);
+    expect(isCommitKey({ key: 'a', isComposing: false, keyCode: 65 })).toBe(
+      false
+    );
+  });
+
+  it('leaves selects their keys, and buttons Space and Enter', () => {
+    const k = (key: string, mod = false) => ({
+      key,
+      metaKey: mod,
+      ctrlKey: false,
+    });
+    expect(controlOwnsKey('SELECT', k('ArrowDown'))).toBe(true);
+    expect(controlOwnsKey('SELECT', k('Backspace'))).toBe(true);
+    expect(controlOwnsKey('BUTTON', k(' '))).toBe(true);
+    expect(controlOwnsKey('BUTTON', k('Enter'))).toBe(true);
+    expect(controlOwnsKey('BUTTON', k('Delete'))).toBe(false);
+    expect(controlOwnsKey('SELECT', k('z', true))).toBe(false);
   });
 });

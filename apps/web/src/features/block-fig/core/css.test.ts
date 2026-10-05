@@ -120,6 +120,30 @@ describe('css', () => {
     expect(lines).toContain('text-align: center;');
   });
 
+  it('writes justified text as CSS justify', () => {
+    const lines = cssFor({
+      ...base,
+      type: 'TEXT',
+      text: {
+        characters: 'Hi',
+        truncated: false,
+        fontFamily: 'Inter',
+        fontStyle: 'Regular',
+        fontSize: 16,
+        lineHeight: null,
+        letterSpacing: null,
+        paragraphSpacing: null,
+        alignHorizontal: 'JUSTIFIED',
+        alignVertical: 'TOP',
+        decoration: null,
+        case: null,
+        autoResize: null,
+        fonts: [],
+      },
+    });
+    expect(lines).toContain('text-align: justify;');
+  });
+
   it('maps font styles to weights', () => {
     expect(fontWeight('Bold Italic')).toBe(700);
     expect(fontWeight('ExtraLight')).toBe(200);

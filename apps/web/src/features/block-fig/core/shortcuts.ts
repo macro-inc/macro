@@ -379,3 +379,31 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
     ],
   },
 ];
+
+/**
+ * Whether a key commits a text field: Enter, except while an input method
+ * is composing (Enter then confirms the composition).
+ */
+export function isCommitKey(e: {
+  key: string;
+  isComposing: boolean;
+  keyCode: number;
+}): boolean {
+  return e.key === 'Enter' && !e.isComposing && e.keyCode !== 229;
+}
+
+/**
+ * Whether a focused control uses a key itself, so it is not a canvas
+ * shortcut: selects take their keys (arrows, typing), buttons and links
+ * Space and Enter. Shortcuts with ⌘/Ctrl still apply.
+ */
+export function controlOwnsKey(
+  tag: string,
+  e: Pick<KeyInput, 'key' | 'metaKey' | 'ctrlKey'>
+): boolean {
+  if (e.metaKey || e.ctrlKey) return false;
+  if (tag === 'SELECT') return true;
+  if (tag === 'BUTTON' || tag === 'A')
+    return e.key === ' ' || e.key === 'Enter';
+  return false;
+}

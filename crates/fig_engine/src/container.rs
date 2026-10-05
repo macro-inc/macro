@@ -122,22 +122,30 @@ impl Container {
     }
 }
 
+/// The largest a decompressed schema or message may be, so a small crafted
+/// chunk cannot exhaust memory.
+const MAX_CHUNK: usize = 1 << 30;
+
 /// Inflates a chunk: zstd (current files), raw deflate (older files), or
 /// zlib-wrapped deflate.
 pub(crate) fn decompress(chunk: &[u8]) -> Result<Vec<u8>> {
     if chunk.starts_with(&ZSTD_MAGIC) {
         let mut out = Vec::new();
         let mut cursor = chunk;
-        let mut decoder = ruzstd::decoding::StreamingDecoder::new(&mut cursor)
+        let decoder = ruzstd::decoding::StreamingDecoder::new(&mut cursor)
             .map_err(|e| corrupt(format!("zstd: {e}")))?;
         decoder
+            .take(MAX_CHUNK as u64 + 1)
             .read_to_end(&mut out)
             .map_err(|e| corrupt(format!("zstd: {e}")))?;
+        if out.len() > MAX_CHUNK {
+            return Err(corrupt("zstd: chunk too large".to_owned()));
+        }
         return Ok(out);
     }
-    if let Ok(out) = miniz_oxide::inflate::decompress_to_vec(chunk) {
+    if let Ok(out) = miniz_oxide::inflate::decompress_to_vec_with_limit(chunk, MAX_CHUNK) {
         return Ok(out);
     }
-    miniz_oxide::inflate::decompress_to_vec_zlib(chunk)
+    miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(chunk, MAX_CHUNK)
         .map_err(|e| corrupt(format!("deflate: {e:?}")))
 }

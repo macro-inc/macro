@@ -67,7 +67,10 @@ impl Txn<'_> {
             return Ok(());
         }
 
-        // The temporary copy, detached from the page.
+        // The temporary copy, detached from the page. It is the last thing
+        // added to the document, so it can be taken off the end afterwards.
+        let first_temp = self.doc.nodes.len() as NodeIdx;
+        let guid_before = self.doc.next_guid;
         let mut root_props = self.doc.props(inst).clone();
         root_props.guid = Some(self.doc.new_guid());
         root_props.node_type = Some(NodeType::Frame);
@@ -165,12 +168,27 @@ impl Txn<'_> {
             }
         }
         let size = self.doc.props(temp).size();
-        self.remove_tree(temp);
+        self.discard_from(first_temp);
+        self.doc.next_guid = guid_before;
         let p = self.edit(inst, flags::DERIVED);
         p.derived = Some(derived.into());
         if size != target {
             self.edit(inst, flags::SIZE).size = Some(size);
         }
         Ok(())
+    }
+
+    /// Removes the nodes from `first` on (temporary ones) from the document
+    /// and from this step's bookkeeping: they are never saved or undone.
+    fn discard_from(&mut self, first: NodeIdx) {
+        self.before.retain(|(i, _)| *i < first);
+        self.seen.retain(|i| *i < first);
+        self.floating.retain(|i| *i < first);
+        self.relayout.retain(|i| *i < first);
+        for node in self.doc.nodes.drain(first as usize..) {
+            if let Some(g) = node.props.guid {
+                self.doc.by_guid.remove(&g);
+            }
+        }
     }
 }

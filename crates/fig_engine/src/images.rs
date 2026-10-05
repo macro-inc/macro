@@ -241,6 +241,9 @@ fn decode_gif(bytes: &[u8]) -> Option<Pixmap> {
     options.set_color_output(gif::ColorOutput::RGBA);
     let mut decoder = options.read_info(std::io::Cursor::new(bytes)).ok()?;
     let (w, h) = (u32::from(decoder.width()), u32::from(decoder.height()));
+    if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE {
+        return None;
+    }
     let frame = decoder.read_next_frame().ok()??;
     // Composite the first frame onto a canvas of the logical screen size.
     let mut rgba = vec![0u8; (w as usize) * (h as usize) * 4];
@@ -249,6 +252,9 @@ fn decode_gif(bytes: &[u8]) -> Option<Pixmap> {
         usize::from(frame.top),
         usize::from(frame.width),
     );
+    if fw == 0 {
+        return from_rgba(w, h, rgba);
+    }
     for (row, line) in frame.buffer.chunks_exact(fw * 4).enumerate() {
         let y = fy + row;
         if y >= h as usize {

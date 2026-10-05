@@ -11,6 +11,7 @@ import Minus from '@phosphor/minus.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { evaluate } from '../core/arith';
 import { formatMeasure } from '../core/measure';
+import { isCommitKey } from '../core/shortcuts';
 
 const inputClass =
   'min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none';
@@ -89,7 +90,7 @@ export function NumberField(props: {
         onBlur={commit}
         onKeyDown={(e) => {
           e.stopPropagation();
-          if (e.key === 'Enter') e.currentTarget.blur();
+          if (isCommitKey(e)) e.currentTarget.blur();
           if (e.key === 'Escape') {
             setDraft(undefined);
             e.currentTarget.blur();
@@ -132,7 +133,7 @@ export function TextField(props: {
       onBlur={commit}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === 'Enter') e.currentTarget.blur();
+        if (isCommitKey(e)) e.currentTarget.blur();
         if (e.key === 'Escape') {
           setDraft(undefined);
           e.currentTarget.blur();
@@ -286,7 +287,7 @@ export function ParsedField<T>(props: {
         onBlur={commit}
         onKeyDown={(e) => {
           e.stopPropagation();
-          if (e.key === 'Enter') e.currentTarget.blur();
+          if (isCommitKey(e)) e.currentTarget.blur();
           if (e.key === 'Escape') {
             setDraft(undefined);
             e.currentTarget.blur();

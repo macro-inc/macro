@@ -353,8 +353,13 @@ impl Schema {
         let key = (name.as_ptr() as usize, name.len(), def);
         let slot = ((key.0 >> 3) ^ key.0 >> 11 ^ (def as usize).wrapping_mul(31)) % NAME_CACHE;
         let cached = self.name_cache[slot].get();
-        if cached.0 == key {
-            return cached.1;
+        // The key is the name's address; a different name can later reuse
+        // a freed one, so a hit is checked against the field's name.
+        if cached.0 == key
+            && let Some(index) = cached.1
+            && self.defs[def as usize].fields[index as usize].name == name
+        {
+            return Some(index);
         }
         let index = self.defs[def as usize].index_of(name);
         self.name_cache[slot].set((key, index));

@@ -245,10 +245,16 @@ fn resized_instances_follow_constraints() {
         ),
     )[0]
     .clone();
+    let nodes = doc.nodes.len();
     apply(
         &mut doc,
         &mut h,
         &format!(r#"[{{"op":"set","ids":["{instance}"],"props":{{"width":200,"height":80}}}}]"#),
+    );
+    assert_eq!(
+        doc.nodes.len(),
+        nodes,
+        "the layout's temporary layers are gone"
     );
     let f = sublayer(&doc, &instance, &fill);
     assert_eq!(f.transform().m02, 110.0, "kept 70 from the right");

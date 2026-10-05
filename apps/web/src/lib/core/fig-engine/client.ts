@@ -344,14 +344,29 @@ export class FigEngine {
   private async edit(
     body: Extract<Body, { kind: 'edit' }>
   ): Promise<EditResult> {
-    for (const h of [...this.helpers, ...this.starting]) {
-      h.request(body).catch(() => {
-        const at = this.helpers.indexOf(h);
-        if (at >= 0) this.helpers.splice(at, 1);
-        h.terminate();
-      });
+    // Every worker holds the same document, so an edit the engine rejects
+    // fails in all of them; a helper is dropped only when its result
+    // differs from the primary's.
+    const fanned = [...this.helpers, ...this.starting].map((h) => ({
+      h,
+      done: h.request(body).then(
+        () => true,
+        () => false
+      ),
+    }));
+    const drop = (h: EngineWorker) => {
+      const at = this.helpers.indexOf(h);
+      if (at >= 0) this.helpers.splice(at, 1);
+      h.terminate();
+    };
+    let r: Ok;
+    try {
+      r = await this.primary.request(body);
+    } catch (error) {
+      for (const { h, done } of fanned) void done.then((ok) => ok && drop(h));
+      throw error;
     }
-    const r = await this.primary.request(body);
+    for (const { h, done } of fanned) void done.then((ok) => !ok && drop(h));
     if (r.kind !== 'edit') throw new Error('unexpected response');
     return JSON.parse(r.json) as EditResult;
   }
