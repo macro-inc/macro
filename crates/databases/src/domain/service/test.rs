@@ -43,6 +43,7 @@ mod fakes;
 mod infer_column_type;
 mod ops;
 mod options;
+mod reads;
 mod relations;
 mod rename_column;
 mod row_writes;

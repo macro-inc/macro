@@ -498,3 +498,36 @@ pub trait DatabasesService: Send + Sync + 'static {
         id: QueryId,
     ) -> impl Future<Output = Result<SavedQuery, SavedQueryError>> + Send;
 }
+
+/// Plain reads of a table's cells for a domain that decides access itself
+/// (forms, for a respondent's own answers and a poll's tallies), so it
+/// never reaches a databases adapter. A port of its own, like sharing, so
+/// the many `DatabasesService` stand-ins need not grow reads they never use.
+pub trait DatabaseRowReads: Send + Sync + 'static {
+    /// The cells of those of `rows` that belong to the table, each as the
+    /// op writing it would name it, in column order; a row of the table with
+    /// no cells maps to none, and a row not in the table is left out.
+    fn cells_of_rows(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        table_id: TableId,
+        rows: &[RowId],
+    ) -> impl Future<
+        Output = Result<HashMap<RowId, Vec<models_databases::CellWrite>>, DatabaseError>,
+    > + Send;
+
+    /// One column's nonempty cells, by row, across the whole table.
+    fn column_cells(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        table_id: TableId,
+        column_id: ColumnId,
+    ) -> impl Future<Output = Result<HashMap<RowId, models_databases::CellValue>, DatabaseError>> + Send;
+
+    /// How many rows the table has.
+    fn row_count(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        table_id: TableId,
+    ) -> impl Future<Output = Result<u64, DatabaseError>> + Send;
+}

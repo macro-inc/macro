@@ -5,6 +5,7 @@ mod casts;
 mod column_types;
 mod infer_column_type;
 mod ops;
+mod reads;
 mod saved_queries;
 mod sharing;
 #[cfg(test)]

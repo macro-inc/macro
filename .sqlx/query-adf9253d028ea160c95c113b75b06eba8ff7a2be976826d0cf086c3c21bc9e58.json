@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE forms SET audience = 'public' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "adf9253d028ea160c95c113b75b06eba8ff7a2be976826d0cf086c3c21bc9e58"
+}
