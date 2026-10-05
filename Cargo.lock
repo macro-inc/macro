@@ -6384,6 +6384,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "ai_billing",
+ "ai_engine",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -6443,6 +6444,7 @@ dependencies = [
  "models_properties",
  "non_empty",
  "pptx_engine",
+ "psd_engine",
  "rdkafka",
  "redis",
  "reqwest 0.13.4",

@@ -1,9 +1,12 @@
 //! Files of single-file documents kept as document versions: the newest
 //! version's bytes in the document storage bucket, and new versions written
 //! the way the storage service's `simple_save` writes them. Presentations
-//! are read and written; designs are read.
+//! are read and written; designs, Photoshop documents, and Illustrator
+//! documents are read.
 
 use crate::domain::design::DesignFiles;
+use crate::domain::illustrator::IllustratorFiles;
+use crate::domain::photoshop::PhotoshopFiles;
 use crate::domain::presentation::PresentationFiles;
 use anyhow::Context;
 use aws_sdk_s3::primitives::ByteStream;
@@ -31,18 +34,21 @@ impl S3DocumentFiles {
         }
     }
 
-    /// The latest version's bytes of a document of type `expected`.
+    /// The latest version's bytes of a document of one of the `expected`
+    /// types.
     async fn read_latest(
         &self,
         document_id: &str,
-        expected: FileType,
+        expected: &[FileType],
         kind: &str,
     ) -> anyhow::Result<Vec<u8>> {
         let document = macro_db_client::document::get_basic_document(&self.db, document_id)
             .await
             .context("loading the document")?;
         anyhow::ensure!(
-            document.file_type.as_deref() == Some(expected.as_str()),
+            expected
+                .iter()
+                .any(|file_type| document.file_type.as_deref() == Some(file_type.as_str())),
             "the document is not a {kind}"
         );
         let (version, _) =
@@ -74,7 +80,7 @@ impl PresentationFiles for S3DocumentFiles {
     async fn read(&self, document_id: &str) -> anyhow::Result<Vec<u8>> {
         self.read_latest(
             document_id,
-            FileType::Pptx,
+            &[FileType::Pptx],
             "PowerPoint (.pptx) presentation",
         )
         .await
@@ -128,7 +134,29 @@ impl PresentationFiles for S3DocumentFiles {
 impl DesignFiles for S3DocumentFiles {
     #[tracing::instrument(err, skip(self))]
     async fn read(&self, document_id: &str) -> anyhow::Result<Vec<u8>> {
-        self.read_latest(document_id, FileType::Fig, "Figma (.fig) design")
+        self.read_latest(document_id, &[FileType::Fig], "Figma (.fig) design")
+            .await
+    }
+}
+
+#[async_trait::async_trait]
+impl PhotoshopFiles for S3DocumentFiles {
+    #[tracing::instrument(err, skip(self))]
+    async fn read(&self, document_id: &str) -> anyhow::Result<Vec<u8>> {
+        self.read_latest(
+            document_id,
+            &[FileType::Psd, FileType::Psb],
+            "Photoshop (.psd or .psb) document",
+        )
+        .await
+    }
+}
+
+#[async_trait::async_trait]
+impl IllustratorFiles for S3DocumentFiles {
+    #[tracing::instrument(err, skip(self))]
+    async fn read(&self, document_id: &str) -> anyhow::Result<Vec<u8>> {
+        self.read_latest(document_id, &[FileType::Ai], "Illustrator (.ai) document")
             .await
     }
 }
