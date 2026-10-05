@@ -16,7 +16,6 @@ import {
 } from '@app/features/drive-view/route-views';
 import { EmailDetailRouteView } from '@app/features/email-view/components/EmailDetailView';
 import { MailRouteView } from '@app/features/email-view/route-views';
-import { GettingStartedRouteView } from '@app/features/getting-started/route-views';
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { HomeEntityDetailRouteView } from '@app/features/home/components/HomeEntityDetailRouteView';
@@ -111,7 +110,6 @@ import {
   emailSplitRoute,
   emailThreadRoute,
   foldersRoute,
-  gettingStartedRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
@@ -281,10 +279,6 @@ export function AppRouterView() {
             component={HomeDetailRouteView}
           />
         </Route>
-        <Route
-          definition={gettingStartedRoute}
-          component={GettingStartedRouteView}
-        />
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
         <Route

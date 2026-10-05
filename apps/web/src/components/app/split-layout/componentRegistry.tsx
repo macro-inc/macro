@@ -10,7 +10,6 @@ import { CompaniesRouteView } from '@app/features/crm/route-views';
 import { DriveRouteView } from '@app/features/drive-view/route-views';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
 import { MailRouteView } from '@app/features/email-view/route-views';
-import { GettingStartedRouteView } from '@app/features/getting-started/route-views';
 import { HomeRouteView } from '@app/features/home/route-views';
 import {
   CallsRouteView,
@@ -152,6 +151,12 @@ registerComponent('unified-list', () => (
   <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
+// Retired Getting Started checklist: restored layouts and old
+// `/component/getting-started` links land on Home.
+registerComponent('getting-started', () => (
+  <RedirectSplit to={{ type: 'component', id: 'home' }} />
+));
+
 function DisabledProjectsRoute() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {
@@ -223,7 +228,6 @@ registerComponent(
   () => <HomeRouteView />,
   () => composableLayout(true)
 );
-registerComponent('getting-started', () => <GettingStartedRouteView />);
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);

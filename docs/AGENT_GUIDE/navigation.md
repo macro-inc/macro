@@ -443,7 +443,7 @@ Settings opens its own glass sheet with a grouped main page. Select a settings
 section, use **Back to settings** to return, or **Close settings** in the top
 right to dismiss without changing the underlying app view.
 Opening Settings again starts at the grouped main page. In-app actions that
-request a specific section, including Getting Started actions, open that section
+request a specific section open that section
 directly in the sheet without replacing the current view or changing its URL.
 If a requested section is unavailable, the sheet shows an unavailable message
 and a **Back to settings** button that returns to the grouped main page.

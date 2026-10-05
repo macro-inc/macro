@@ -427,13 +427,6 @@ export const homeSplitRoute = defineRoute({
   search: '*' as const,
 });
 
-export const gettingStartedRoute = defineRoute({
-  id: 'view-getting-started',
-  path: 'getting-started',
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'getting-started' }),
-});
-
 export const recentRoute = defineRoute({
   id: 'view-recent',
   path: 'recent',

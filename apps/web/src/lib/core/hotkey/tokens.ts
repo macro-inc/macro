@@ -118,7 +118,6 @@ export const TOKENS = {
     goToLeader: 'sidebar.goToLeader',
     goTo: {
       home: 'sidebar.goTo.home',
-      gettingStarted: 'sidebar.goTo.gettingStarted',
       recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',

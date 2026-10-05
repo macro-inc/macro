@@ -156,12 +156,9 @@ describe('onboarding flow', () => {
       world: { webhookPollsRemaining: 1 },
     });
     await heading('Free Claude & GPT for 30 days.');
-    await waitFor(
-      () => expect(navigate).toHaveBeenCalledWith('/getting-started'),
-      {
-        timeout: 3_000,
-      }
-    );
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'), {
+      timeout: 3_000,
+    });
   });
 
   it('starts hosted checkout from the trial offer', async () => {

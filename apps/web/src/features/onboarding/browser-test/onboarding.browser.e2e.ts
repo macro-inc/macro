@@ -60,7 +60,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await page.getByRole('button', { name: 'Start 30 day trial' }).click();
 
   // Stripe returns on the success leg; the flow waits for the webhook's license.
-  await expectLanded(page, 'Entered Macro at /getting-started');
+  await expectLanded(page, 'Entered Macro at /home');
   const world = await fakeWorld(page);
   expect(world.viewer).toMatchObject({
     tutorialComplete: true,
@@ -182,7 +182,7 @@ test('an invite’s free months replace the trial and keep its promotion', async
     page.getByRole('button', { name: 'Start 30 day trial' })
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Claim your free months' }).click();
-  await expectLanded(page, 'Entered Macro at /getting-started');
+  await expectLanded(page, 'Entered Macro at /home');
   expect((await fakeWorld(page)).viewer?.licensed).toBe(true);
 });
 

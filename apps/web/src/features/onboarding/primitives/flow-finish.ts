@@ -5,11 +5,7 @@ import type {
   OnboardingContext,
 } from '../context/onboarding-context';
 import type { CheckoutTerms } from '../core/checkout';
-import {
-  afterOnboardingTarget,
-  bypassTarget,
-  sanitizeNext,
-} from '../core/next-target';
+import { afterOnboardingTarget, sanitizeNext } from '../core/next-target';
 import { clearFlowProgress, readSavedNext, saveNext } from './flow-storage';
 
 type FinishCapabilities = Pick<
@@ -19,7 +15,7 @@ type FinishCapabilities = Pick<
 
 /**
  * The "leave onboarding" workflow: complete onboarding, then land in the app
- * (the preserved `?next` deep link, or the Getting Started checklist).
+ * (the preserved `?next` deep link, or Home).
  */
 export function createFlowFinish(
   context: FinishCapabilities,
@@ -126,7 +122,7 @@ export function createFlowFinish(
     bypass: (step: string) =>
       leave({
         skipped: true,
-        target: bypassTarget(options.next(), readSavedNext()),
+        target: afterTarget(),
         onCompleted: () => context.track('onboarding_v4_bypassed', { step }),
       }),
   };

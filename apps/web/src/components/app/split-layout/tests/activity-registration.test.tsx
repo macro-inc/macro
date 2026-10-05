@@ -105,7 +105,6 @@ vi.mock('@app/features/email-view/email-view', () => ({}));
 vi.mock('@app/features/email-view/components/EmailDetailView', () => ({
   EmailDetailRouteView: () => null,
 }));
-vi.mock('@app/features/getting-started', () => ({}));
 vi.mock('@app/features/home/home-view', () => ({
   HomeDetailRouteView: () => null,
   HomeCalendarRouteView: () => null,

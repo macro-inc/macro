@@ -1205,17 +1205,6 @@ export const storageServiceClient = {
     }));
   },
 
-  /** Ids of the starter documents seeded at signup. */
-  async getStarterDocs() {
-    return (
-      await dssFetch<{
-        how_to_guide_id: string;
-      }>('/documents/starter_docs')
-    ).map((result) => ({
-      howToGuideId: result.how_to_guide_id,
-    }));
-  },
-
   async initializeUserDocuments() {
     return (
       await dssFetch<{ success: boolean }>(
