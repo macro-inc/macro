@@ -12,7 +12,7 @@ exists.
 
 - **Create → Form** (shortcut **C → Q**, **Shift** opens it in a new split)
   creates "Untitled form" with a new database whose table is "Responses",
-  and opens it at `/app/form/<uuid>`.
+  and opens the builder at `/app/form/<uuid>`.
 - On a database page you own, **+ view** offers **Form** beside Table and
   Board while no form writes to the current table, and the control after the
   table tabs is **+ Form**; both make a form with a question per existing
@@ -31,8 +31,36 @@ team). The header badge follows the form's own access.
 
 ### Build
 
-The sections ("Section 1 of 2", gates as "Gate 1") with each question's name,
-type and help text; required questions are starred. It is read-only.
+A centered column of sections, each a card of question rows, with the rail
+(Add, Outline, Stores to) at the right on wide splits.
+
+- Add question goes after the selected question; after **Add section** (or
+  focusing a section's title, which outlines it) it goes to the end of that
+  section. An empty section has its own **Add question** menu.
+- Click a row to select it: the title input renames the column, the type chip
+  opens the type menu (Short answer … Database row), choice questions edit
+  their options in place, and the footer has Duplicate, **Remove from form**
+  (keeps the column), **Required**, and the ⋯ menu (Move up / Move down / Move
+  to section / **Delete column and answers…**, which confirms with the row
+  count).
+- Drag by the six-dot handle (mouse: move 4 px; touch: hold 200 ms). A line
+  shows where it lands; a red line with a note means a gate checks that
+  question and it must stay above the gate. Escape cancels; nothing saves
+  until the drop. Keyboard: focus a handle, **Space**, **↑/↓**, **Space** to
+  drop, **Escape** to cancel, **Tab** leaves (cancelling).
+- Sections drag by their own handle. A gate section's **Add rule / Edit rules**
+  opens the grid's condition editor over questions of earlier sections only;
+  **Add condition** adds a row that saves once it is complete (pick a value).
+  Rules are sent to respondents' browsers, so keep confidential criteria out.
+  A gate whose rule tests a question that is gone shows **Remove broken
+  rules**.
+- "N columns not on this form" at the bottom lists table columns that are not
+  questions; **Add** puts one on the form.
+- The **Saved / Saving… / Not saved** label tracks layout saves (400 ms
+  after the last edit). A refused save shows a toast and reloads the form.
+- A type change that existing answers do not fit shows **Convert into a new
+  question**: a new column gets the answers that convert and the question
+  moves to it; the old column stays (listed under columns not on the form).
 
 ### Responses
 
@@ -64,5 +92,5 @@ while still checking, or when the check failed, instead of saying nothing).
 ## Reading responses as an agent
 
 Open the database (`/app/database/<uuid>`) the
-form belongs to (**Open database** on the Responses tab). Each submission is a row; the `Submitted` and
+form names under **Stores to**. Each submission is a row; the `Submitted` and
 `Respondent` columns are written by the form.

@@ -148,9 +148,12 @@ function renderPage(
   ));
 }
 
-describe('FormPageView before the builder', () => {
-  it('summarizes sections and questions on the Build tab', () => {
-    renderPage(offsite('owner'), 'build');
+describe('FormPageView before the responses grid', () => {
+  it('shows viewers the sections and questions without tabs or counts', () => {
+    renderPage(offsite('view'), 'build');
+
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Response counts' })).toBeNull();
 
     const sections = screen.getAllByRole('region');
     expect(
@@ -173,15 +176,15 @@ describe('FormPageView before the builder', () => {
     );
     expect(sections[2].textContent).toContain('Arrival');
     expect(screen.getByText('2 sections · 3 questions · 1 gate')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Responses/ }).textContent).toBe(
-      'Responses12'
-    );
   });
 
   it('counts responses on the Responses tab and opens the database', () => {
     const onOpenDatabase = vi.fn();
     renderPage(offsite('edit'), 'responses', { onOpenDatabase });
 
+    expect(screen.getByRole('tab', { name: /Responses/ }).textContent).toBe(
+      'Responses12'
+    );
     const counts = screen.getByRole('list', { name: 'Response counts' });
     expect(
       Array.from(counts.querySelectorAll('li')).map((item) => item.textContent)
@@ -196,10 +199,10 @@ describe('FormPageView before the builder', () => {
 
   it('switches tabs from the tab strip', () => {
     const onTabChange = vi.fn();
-    renderPage(offsite('owner'), 'build', { onTabChange });
+    renderPage(offsite('owner'), 'share', { onTabChange });
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Share' }));
-    expect(onTabChange).toHaveBeenCalledWith('share');
+    fireEvent.click(screen.getByRole('tab', { name: 'Build' }));
+    expect(onTabChange).toHaveBeenCalledWith('build');
   });
 
   it('shows who can respond on the Share tab', () => {
@@ -209,15 +212,5 @@ describe('FormPageView before the builder', () => {
       screen.getByRole('heading', { name: 'Who can respond' })
     ).toBeTruthy();
     expect(screen.queryByRole('region', { name: /Section 1/ })).toBeNull();
-  });
-
-  it('shows viewers the questions without tabs or counts', () => {
-    renderPage(offsite('view'), 'build');
-
-    expect(screen.queryByRole('tablist')).toBeNull();
-    expect(screen.queryByRole('list', { name: 'Response counts' })).toBeNull();
-    expect(
-      screen.getByRole('region', { name: 'Section 1 of 2: About you' })
-    ).toBeTruthy();
   });
 });

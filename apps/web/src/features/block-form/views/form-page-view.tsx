@@ -11,6 +11,7 @@ import {
 import type { FormDetail, FormSection } from '../core/form-model';
 import { availabilityLine, formAvailability } from '../core/form-status';
 import { questionTypeLabel, questionTypeOf } from '../core/question-types';
+import { BuilderView } from './builder-view';
 import { ShareTabView } from './share-tab-view';
 
 export function FormLoadFailureView(props: {
@@ -285,8 +286,8 @@ function ResponseCounts(props: {
 
 /**
  * The form page (RFC 02 §2): editors get Build, Responses and Share with the
- * status at the right; viewers see the questions. Build and Responses are
- * read-only summaries until the builder and the responses grid exist.
+ * status at the right; viewers see the questions. Responses is a read-only
+ * summary until the responses grid exists.
  */
 export function FormPageView(props: {
   source: FormDetailSource;
@@ -333,7 +334,12 @@ export function FormPageView(props: {
             >
               <Switch>
                 <Match when={props.tab === 'build'}>
-                  <FormSummary detail={detail()} />
+                  <BuilderView
+                    source={props.source}
+                    detail={detail()}
+                    onOpenResponses={() => props.onTabChange('responses')}
+                    onOpenDatabase={props.onOpenDatabase}
+                  />
                 </Match>
                 <Match when={props.tab === 'responses'}>
                   <ResponseCounts

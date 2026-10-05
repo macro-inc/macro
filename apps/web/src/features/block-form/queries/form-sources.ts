@@ -1,6 +1,8 @@
 /** Adapters from the shared form and database queries to the feature's sources. */
 import { ThrownResultError } from '@core/util/result';
+import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import {
+  putFormLayout,
   updateForm,
   useFormDetailQuery,
   useResponseSummaryQuery,
@@ -20,11 +22,14 @@ import type {
   FormLoadFailure,
   FormMetadataPatch,
   FormRefusal,
+  FormTableSource,
   FormWriteFailure,
   ReadSource,
 } from '../context/form-context';
+import type { FormDetail, FormLayout } from '../core/form-model';
 import type { ResponseCounts } from '../core/response-stats';
-import { toFormDetail } from './form-detail';
+import { toFormDetail, toLayoutDocument } from './form-detail';
+import { toFormColumn } from './table-columns';
 
 function isFormsError(error: unknown): error is FormsError {
   return (
@@ -124,6 +129,51 @@ export function createFormDetailSource(
       return !read.isError;
     },
   };
+}
+
+export function createFormTableSource(
+  databaseId: Accessor<string | undefined>,
+  tableId: Accessor<string | undefined>
+): FormTableSource {
+  const query = useDatabaseDetailQuery(databaseId);
+  const table = () =>
+    query.isSuccess
+      ? query.data.tables.find((entry) => entry.table.id === tableId())
+      : undefined;
+  const columns = createMemo(() => {
+    const found = table();
+    return found
+      ? found.columns.flatMap((column) => {
+          const projected = toFormColumn(column);
+          return projected ? [projected] : [];
+        })
+      : undefined;
+  });
+  return {
+    columns,
+    databaseName: () =>
+      query.isSuccess ? query.data.database.name : undefined,
+    tableName: () => table()?.table.name,
+    tables: () =>
+      query.isSuccess
+        ? query.data.tables.map((entry) => ({
+            id: entry.table.id,
+            name: entry.table.name,
+          }))
+        : [],
+    refetch: async () => {
+      await query.refetch();
+    },
+  };
+}
+
+export function saveFormLayout(
+  formId: string,
+  layout: FormLayout
+): ResultAsync<FormDetail, FormWriteFailure> {
+  return putFormLayout(formId, toLayoutDocument(layout))
+    .map(toFormDetail)
+    .mapErr(writeFailureOf);
 }
 
 export function updateFormMetadata(
