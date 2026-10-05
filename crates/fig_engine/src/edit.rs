@@ -66,6 +66,12 @@ pub mod flags {
     pub const STROKE_CAP: u32 = 1 << 26;
     /// An instance's derived layout (where its layers are at its size).
     pub const DERIVED: u32 = 1 << 27;
+    /// Component properties and variants: a component's (or set's)
+    /// property definitions and variant value orders, a variant's values,
+    /// a layer's bindings to properties, and nested instances' exposure.
+    pub const COMPONENT: u32 = 1 << 28;
+    /// Shared styles: the styles a layer uses, and a style node's kind.
+    pub const STYLES: u32 = 1 << 29;
 }
 
 /// A paint as the editor describes it.
@@ -410,6 +416,132 @@ pub enum Op {
     Ungroup {
         ids: Vec<String>,
     },
+    // ---- design systems (see `edit::design`) ------------------------------
+    /// Sets a component property of instances (`I…` ids for nested ones):
+    /// a boolean, text, or instance swap property by its definition id, or
+    /// a variant property by name, which switches to the matching variant.
+    SetProperty {
+        ids: Vec<String>,
+        property: String,
+        value: PropertyInput,
+    },
+    /// "Swap instance": instances show another component, keeping the
+    /// overrides that still apply.
+    SwapInstance {
+        ids: Vec<String>,
+        component: String,
+    },
+    /// "Reset all changes" of instances, or one property's value.
+    ResetInstance {
+        ids: Vec<String>,
+        property: Option<String>,
+    },
+    /// "Combine as variants": components become the variants of a new
+    /// component set.
+    CombineAsVariants {
+        ids: Vec<String>,
+    },
+    /// Adds a variant to a component set, copying `from` (or its last).
+    AddVariant {
+        set: String,
+        from: Option<String>,
+    },
+    /// Adds a variant property to a component set; every variant takes
+    /// `value`.
+    AddVariantProperty {
+        set: String,
+        name: String,
+        value: String,
+    },
+    /// Renames a component set's variant property.
+    RenameVariantProperty {
+        set: String,
+        from: String,
+        to: String,
+    },
+    /// Removes a variant property from a component set.
+    RemoveVariantProperty {
+        set: String,
+        name: String,
+    },
+    /// Sets variants' value of a variant property.
+    SetVariantValue {
+        ids: Vec<String>,
+        property: String,
+        value: String,
+    },
+    /// "Create component property" on a component (or its set): `BOOL`,
+    /// `TEXT`, or `INSTANCE_SWAP`, bound to `layer` when given (its value
+    /// becomes the default).
+    AddComponentProperty {
+        component: String,
+        name: String,
+        kind: String,
+        value: Option<PropertyInput>,
+        layer: Option<String>,
+    },
+    /// Renames a component property or changes its default (which the
+    /// component's bound layers show).
+    EditComponentProperty {
+        component: String,
+        property: String,
+        name: Option<String>,
+        value: Option<PropertyInput>,
+    },
+    DeleteComponentProperty {
+        component: String,
+        property: String,
+    },
+    /// Binds a field (`VISIBLE`, `TEXT`, or `INSTANCE_SWAP`) of layers in a
+    /// main component to a property, or unbinds it (`property` absent).
+    BindProperty {
+        ids: Vec<String>,
+        field: String,
+        property: Option<String>,
+    },
+    /// Shows (or stops showing) nested instances' properties on the
+    /// instances of the component holding them.
+    ExposeInstance {
+        ids: Vec<String>,
+        exposed: bool,
+    },
+    /// Applies a shared style (`FILL`, `STROKE`, `TEXT`, or `EFFECT`) to
+    /// layers, or detaches it (`style` absent), keeping the values.
+    ApplyStyle {
+        ids: Vec<String>,
+        kind: String,
+        style: Option<String>,
+    },
+    /// Creates a local style from a layer's fills (`FILL`), strokes
+    /// (`STROKE`, a color style too), type (`TEXT`), or effects (`EFFECT`),
+    /// and applies it to the layer.
+    CreateStyle {
+        kind: String,
+        name: String,
+        from: String,
+    },
+    /// Changes a style; every layer using it follows.
+    EditStyle {
+        style: String,
+        name: Option<String>,
+        #[serde(default)]
+        props: Patch,
+    },
+    /// Deletes local styles; layers using them keep their values.
+    DeleteStyle {
+        ids: Vec<String>,
+    },
+}
+
+/// A component property value as the editor sends it: `{"bool": true}`,
+/// `{"text": "Label"}`, `{"component": "12:34"}`, or `{"variant": "Large"}`.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PropertyInput {
+    Bool(bool),
+    Text(String),
+    Component(String),
+    Variant(String),
 }
 
 /// What an applied step changed.
@@ -449,10 +581,12 @@ struct Txn<'a> {
 }
 
 mod components;
+mod design;
 mod flip;
 mod instance_layout;
 mod overrides;
 mod paint;
+pub(crate) use design::parse_variant_name;
 pub(crate) use overrides::guid_of;
 pub(crate) mod layout;
 
@@ -820,6 +954,7 @@ impl<'a> Txn<'a> {
             self.set_position(i, patch.x, patch.y);
         }
         if text {
+            self.detach_text_style(i, patch);
             let mut change = patch.text_change();
             if let Some(auto) = text_sizing {
                 change.get_or_insert_with(Default::default).auto_resize = Some(auto);
@@ -1336,6 +1471,24 @@ impl<'a> Txn<'a> {
                     }
                 }
             }
+            Op::SetProperty { .. }
+            | Op::SwapInstance { .. }
+            | Op::ResetInstance { .. }
+            | Op::CombineAsVariants { .. }
+            | Op::AddVariant { .. }
+            | Op::AddVariantProperty { .. }
+            | Op::RenameVariantProperty { .. }
+            | Op::RemoveVariantProperty { .. }
+            | Op::SetVariantValue { .. }
+            | Op::AddComponentProperty { .. }
+            | Op::EditComponentProperty { .. }
+            | Op::DeleteComponentProperty { .. }
+            | Op::BindProperty { .. }
+            | Op::ExposeInstance { .. }
+            | Op::ApplyStyle { .. }
+            | Op::CreateStyle { .. }
+            | Op::EditStyle { .. }
+            | Op::DeleteStyle { .. } => self.apply_design(op)?,
         }
         Ok(())
     }

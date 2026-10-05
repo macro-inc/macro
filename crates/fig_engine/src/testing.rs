@@ -6,6 +6,8 @@
 
 use crate::kiwi::{Kind, Schema, Ty};
 
+pub mod design_system;
+
 /// A Figma-shaped schema covering what the tests use.
 pub const SCHEMA: &str = "
 enum NodeType DOCUMENT CANVAS GROUP FRAME RECTANGLE ROUNDED_RECTANGLE ELLIPSE VECTOR TEXT SYMBOL INSTANCE SECTION

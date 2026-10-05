@@ -48,6 +48,19 @@ impl Txn<'_> {
         from: Vec2,
         changed: &[Vec<Guid>],
     ) -> Result<()> {
+        self.relayout_instance_with(inst, from, changed, &[])
+    }
+
+    /// [`Txn::relayout_instance`], laying out the text of the layers at
+    /// `retext` paths again first (text a property or a swap changed,
+    /// whose stored layout is for other characters or another style).
+    pub(super) fn relayout_instance_with(
+        &mut self,
+        inst: NodeIdx,
+        from: Vec2,
+        changed: &[Vec<Guid>],
+        retext: &[Vec<Guid>],
+    ) -> Result<()> {
         if self.doc.props(inst).node_type() != NodeType::Instance {
             return Ok(());
         }
@@ -102,6 +115,22 @@ impl Txn<'_> {
             self.attach(i, parent, index, false);
             made.push(i);
         }
+        for ((_, props, path), &i) in plan.iter().zip(&made) {
+            if props.node_type() == NodeType::Text
+                && retext.iter().any(|r| r.as_slice() == path.as_ref())
+            {
+                let chars = props
+                    .text_content
+                    .as_ref()
+                    .map(|c| c.characters.clone())
+                    .unwrap_or_else(|| "".into());
+                let change = crate::text::Change {
+                    characters: Some(&chars),
+                    ..Default::default()
+                };
+                crate::text::edit(self.doc, i, &change)?;
+            }
+        }
 
         // Lay it out.
         let target = self.doc.props(inst).size();
@@ -116,7 +145,12 @@ impl Txn<'_> {
         let mut touched: Vec<(NodeIdx, bool)> = plan
             .iter()
             .zip(&made)
-            .filter(|((_, _, path), _)| changed.iter().any(|c| c.as_slice() == path.as_ref()))
+            .filter(|((_, _, path), _)| {
+                changed
+                    .iter()
+                    .chain(retext)
+                    .any(|c| c.as_slice() == path.as_ref())
+            })
             .map(|(_, &i)| (i, true))
             .collect();
         touched.push((temp, true));
