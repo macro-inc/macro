@@ -365,7 +365,8 @@ impl Collab {
         let mut placed = Vec::new();
         let mut listed = HashMap::new();
         for (g, h, state) in states {
-            let i = match doc.find(g) {
+            let existing = doc.find(g);
+            let i = match existing {
                 Some(i) => i,
                 None => {
                     let i = doc.nodes.len() as NodeIdx;
@@ -381,18 +382,28 @@ impl Collab {
                     i
                 }
             };
+            // Only nodes that changed place need their parents' children
+            // derived again (most remote edits change properties alone).
+            let old = doc.node(i);
+            let moved = existing.is_none()
+                || old.removed != state.removed
+                || old.props.parent != state.props.parent
+                || old.props.position != state.props.position
+                || old
+                    .parent
+                    .is_some_and(|p| doc.node(p).children.contains(&i))
+                    != state.listed;
             let f = self.flags.entry(g).or_default();
             *f |= state.edits & !flags::CREATED;
             let node = &mut doc.nodes[i as usize];
             // Whether the node is new to this peer's file decides how saving
             // writes it, whichever file the sender opened.
             let created = node.edits & flags::CREATED;
-            if let Some(p) = node.parent {
+            if moved && let Some(p) = node.parent {
                 affected.insert(p);
             }
             node.props = state.props;
             node.removed = state.removed;
-            listed.insert(i, state.listed);
             node.edits = ((node.edits | *f) & !flags::CREATED) | created;
             if created != 0 {
                 node.source = state.source;
@@ -401,7 +412,10 @@ impl Collab {
                 doc.by_override_key.insert(key, g);
             }
             self.synced.insert(g, h);
-            placed.push(i);
+            if moved {
+                listed.insert(i, state.listed);
+                placed.push(i);
+            }
             remote.touched.push(i);
         }
         // Earlier nodes whose parent may have arrived now.
