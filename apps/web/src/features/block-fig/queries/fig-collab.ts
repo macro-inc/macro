@@ -1,0 +1,362 @@
+/**
+ * A shared design on the sync stack: a Loro document with a local
+ * snapshot, write-ahead log, live transport, and presence. The first
+ * person who can edit seeds it (an empty set of changes); the stored
+ * `.fig` stays the base every person opens.
+ */
+
+import { schema } from '@loro-mirror/core';
+import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
+import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
+import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
+import { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import {
+  IDBSnapshotStore,
+  LORO_SNAPSHOT_DB_NAME,
+  loadCachedState,
+  type SnapshotStore,
+} from '@macro-inc/collaboration/collab/snapshot-store';
+import {
+  type InitialSync,
+  type LiveSyncSource,
+  SyncError,
+  type SyncSourceEvent,
+  SyncSourceStatus,
+} from '@macro-inc/collaboration/collab/source';
+import {
+  BrowserWALStore,
+  LORO_WAL_DB_NAME,
+  type WALStore,
+  WALSyncer,
+} from '@macro-inc/collaboration/collab/wal';
+import { LoroDoc } from 'loro-crdt';
+import { errAsync, type ResultAsync } from 'neverthrow';
+import {
+  type Accessor,
+  createSignal,
+  getOwner,
+  onCleanup,
+  runWithOwner,
+} from 'solid-js';
+import { match } from 'ts-pattern';
+import type { FigCollaboration } from '../context/fig-viewer-context';
+import {
+  designFormat,
+  FIG_CONTAINERS,
+  FIG_FORMAT_VERSION,
+  seedDesign,
+} from '../core/collab-entries';
+import {
+  type FigPeer,
+  type FigPresence,
+  isPresence,
+  NOWHERE,
+} from '../core/presence';
+
+const strings = () =>
+  schema.LoroMap({} as Record<string, ReturnType<typeof schema.String>>);
+
+/** Mirror schema for the design's maps (see `FIG_CONTAINERS`). */
+const FIG_LORO_SCHEMA = schema(
+  Object.fromEntries(FIG_CONTAINERS.map((name) => [name, strings()]))
+);
+
+/** Presence goes out at most this often while the pointer moves. */
+const PRESENCE_INTERVAL_MS = 50;
+
+/** Awareness expires on the server; idle presence is sent again this often. */
+const HEARTBEAT_MS = 3_000;
+
+export type DesignCollabState =
+  | { t: 'loading' }
+  | { t: 'ready'; doc: LoroDoc }
+  /** Nobody who can edit has opened it yet: show the stored file. */
+  | { t: 'unshared' }
+  | { t: 'error'; message: string };
+
+export type DesignConnection = {
+  source: LiveSyncSource;
+  doInitialSync: () => ResultAsync<InitialSync, SyncError>;
+};
+
+export interface DesignCollabOptions {
+  documentId: string;
+  userId?: string;
+  canEdit: Accessor<boolean>;
+  /** A display name for a user id. */
+  displayName: (userId: string | undefined) => string;
+  /** Whether the sync service already holds this design. */
+  exists: () => Promise<boolean>;
+  /** Stores the first snapshot. Rejects when it could not be stored. */
+  initialize: (snapshot: Uint8Array) => Promise<void>;
+  /** Opens the live transport. Called once, after the design exists. */
+  connect: () => DesignConnection;
+  persistence?: {
+    snapshots: SnapshotStore<Uint8Array>;
+    wal: WALStore<Uint8Array>;
+    makeChatter?: (documentId: string) => Chatter;
+  };
+}
+
+export interface DesignCollabSession {
+  state: Accessor<DesignCollabState>;
+  collaboration: FigCollaboration;
+}
+
+/** The first shared snapshot: the format version and nothing changed yet. */
+export function buildDesignSeed(): Uint8Array {
+  const doc = new LoroDoc();
+  seedDesign(doc);
+  return doc.export({ mode: 'snapshot' });
+}
+
+export function createDesignCollabSession(
+  options: DesignCollabOptions
+): DesignCollabSession {
+  const manager = new LoroManager(FIG_LORO_SCHEMA, {
+    documentId: options.documentId,
+  });
+  const snapshots =
+    options.persistence?.snapshots ??
+    new IDBSnapshotStore<Uint8Array>(LORO_SNAPSHOT_DB_NAME, options.documentId);
+  const walStore =
+    options.persistence?.wal ??
+    new BrowserWALStore<Uint8Array>(LORO_WAL_DB_NAME, options.documentId);
+  const [state, setState] = createSignal<DesignCollabState>({ t: 'loading' });
+  const [connection, setConnection] = createSignal<DesignConnection>();
+  // The transport opens after async work; it still belongs to this owner.
+  const owner = getOwner();
+  let disposed = false;
+  let started = false;
+
+  const wal = new WALSyncer(
+    walStore,
+    (updates) =>
+      connection()?.source.pushUpdate(updates) ?? Promise.resolve(false),
+    options.documentId
+  );
+
+  const awareness = createAwareness<FigPresence, FigPresence>(
+    manager.peerIdStr,
+    options.userId,
+    {
+      encode: (presence) => presence,
+      decode: (presence) => (isPresence(presence) ? presence : NOWHERE),
+    }
+  );
+  let presence: FigPresence | undefined;
+  let presenceTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastSent = 0;
+  const sendPresence = () => {
+    presenceTimer = undefined;
+    lastSent = Date.now();
+    awareness.updateLocalAwareness(presence ?? NOWHERE);
+  };
+  // Awareness expires; keep an idle presence visible while connected.
+  const heartbeat = setInterval(() => {
+    if (
+      presence &&
+      connection()?.source.status() === SyncSourceStatus.Connected
+    )
+      sendPresence();
+  }, HEARTBEAT_MS);
+
+  // The engine starts before the transport exists when a cached copy opens
+  // offline-first, so it talks to a source that forwards to the connection.
+  const liveListeners = new Set<(event: SyncSourceEvent) => void>();
+  let peerId: bigint | undefined;
+  const notConnected = () => errAsync(SyncError.connectionFailed());
+  const live: LiveSyncSource = {
+    documentId: options.documentId,
+    status: () => connection()?.source.status() ?? SyncSourceStatus.Connecting,
+    listen: (listener) => {
+      liveListeners.add(listener);
+      return () => liveListeners.delete(listener);
+    },
+    pushUpdate: (updates) =>
+      connection()?.source.pushUpdate(updates) ?? Promise.resolve(false),
+    pushAwareness: (value) => connection()?.source.pushAwareness(value),
+    registerPeerId: (value) => {
+      peerId = value;
+      connection()?.source.registerPeerId(value);
+    },
+    requestUpdatesSince: (version) =>
+      connection()?.source.requestUpdatesSince(version) ?? notConnected(),
+    requestSnapshot: () =>
+      connection()?.source.requestSnapshot() ?? notConnected(),
+    reconnect: () => connection()?.source.reconnect(),
+    cleanup: () => connection()?.source.cleanup(),
+  };
+
+  const engine = createSyncEngine({
+    loroManager: manager,
+    awareness,
+    syncs: { live, wal },
+    // The editor reads remote changes from the document's own events.
+    bindings: { onRemoteState: () => {} },
+    readonly: () => !options.canEdit(),
+    snapshotStore: snapshots,
+    makeChatter: options.persistence?.makeChatter,
+  });
+
+  // The engine swaps its LoroDoc when it recovers from an invalid update.
+  const unsubscribeManager = manager.onStateChange(() => {
+    const current = state();
+    if (current.t === 'ready' && current.doc !== manager.doc)
+      setState({ t: 'ready', doc: manager.doc });
+  });
+
+  async function start() {
+    if (disposed) return;
+    const version = designFormat(manager.doc);
+    if (version === undefined) {
+      setState({ t: 'error', message: 'This design is empty.' });
+      return;
+    }
+    if (version > FIG_FORMAT_VERSION) {
+      setState({
+        t: 'error',
+        message:
+          'This design was edited by a newer version of Macro. Reload to open it.',
+      });
+      return;
+    }
+    if (!started) {
+      // Persist the base before accepting edits so a crash can always replay
+      // WAL entries against a valid snapshot.
+      await snapshots.save(manager.doc.export({ mode: 'snapshot' }));
+      if (disposed) return;
+      engine.start();
+      started = true;
+    }
+    setState({ t: 'ready', doc: manager.doc });
+    if (options.canEdit()) void wal.flush();
+  }
+
+  async function accept(initial: InitialSync) {
+    if (initial.awareness.length)
+      awareness.importRemoteAwareness(initial.awareness);
+    const result = manager.initialized
+      ? manager.importUpdate(initial.snapshot)
+      : await manager.initializeFromSnapshot(initial.snapshot);
+    if (disposed) return;
+    if (result.isErr()) {
+      setState({ t: 'error', message: 'This design could not be shared.' });
+      return;
+    }
+    if (!started) await start();
+  }
+
+  /** Seeds the shared design; `false` when this viewer can't. */
+  async function seed(): Promise<boolean> {
+    if (!options.canEdit()) {
+      setState({ t: 'unshared' });
+      return false;
+    }
+    try {
+      await options.initialize(buildDesignSeed());
+    } catch (cause) {
+      // Another editor may have seeded it first.
+      if (!(await options.exists())) throw cause;
+    }
+    return true;
+  }
+
+  async function hydrate() {
+    await wal.ready();
+    const cached = await loadCachedState(manager, snapshots, walStore).catch(
+      () => false
+    );
+    if (disposed) return;
+    if (cached && designFormat(manager.doc) !== undefined) await start();
+    else if (!(await options.exists()) && !(await seed())) return;
+    if (disposed) return;
+    const opened = runWithOwner(owner, () => options.connect());
+    if (!opened) return;
+    setConnection(opened);
+    opened.source.listen((event) => {
+      for (const listener of liveListeners) listener(event);
+      if (event.type === 'reconnect') void resync(event);
+    });
+    if (peerId !== undefined) opened.source.registerPeerId(peerId);
+    const initial = await opened.doInitialSync();
+    if (disposed) return;
+    if (initial.isErr()) {
+      if (!started)
+        setState({ t: 'error', message: 'Unable to connect to this design.' });
+      return;
+    }
+    await accept(initial.value);
+  }
+
+  /** Takes the server's state again after a reconnect. */
+  async function resync(initial: InitialSync) {
+    try {
+      await accept(initial);
+      await wal.flush();
+    } catch (cause) {
+      console.error('[fig] collaboration failed to resync', cause);
+      if (!disposed)
+        setState({ t: 'error', message: 'This design could not be shared.' });
+    }
+  }
+
+  async function open() {
+    try {
+      await hydrate();
+    } catch (cause) {
+      console.error('[fig] collaboration failed to open', cause);
+      if (!disposed)
+        setState({ t: 'error', message: 'Unable to share this design.' });
+    }
+  }
+  void open();
+
+  onCleanup(() => {
+    disposed = true;
+    clearInterval(heartbeat);
+    clearTimeout(presenceTimer);
+    unsubscribeManager();
+    engine.stop();
+    wal.destroy();
+    connection()?.source.cleanup();
+    manager.dispose();
+  });
+
+  const peers = (): FigPeer[] =>
+    awareness.remote().flatMap((peer) =>
+      peer.selection && peer.selection.page !== ''
+        ? [
+            {
+              peerId: peer.user.peerId,
+              userId: peer.user.userId,
+              name: options.displayName(peer.user.userId),
+              color: peer.user.color,
+              presence: peer.selection,
+            },
+          ]
+        : []
+    );
+
+  return {
+    state,
+    collaboration: {
+      peerId: manager.peerIdStr,
+      color: () => awareness.local().user.color,
+      peers,
+      setPresence: (next) => {
+        presence = next;
+        // Pointer moves are frequent: send at most one per interval.
+        if (presenceTimer !== undefined) return;
+        const wait = PRESENCE_INTERVAL_MS - (Date.now() - lastSent);
+        if (wait <= 0) sendPresence();
+        else presenceTimer = setTimeout(sendPresence, wait);
+      },
+      status: () =>
+        match(connection()?.source.status())
+          .with(SyncSourceStatus.Connected, () => 'connected' as const)
+          .with(SyncSourceStatus.Disconnected, () => 'offline' as const)
+          .otherwise(() => 'connecting' as const),
+    },
+  };
+}

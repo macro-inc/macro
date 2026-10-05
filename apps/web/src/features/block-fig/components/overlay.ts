@@ -7,6 +7,7 @@
 import type { FrameRow, NodeGeometry, Rect } from '@core/fig-engine/types';
 import { type Camera, pageToScreen, type Size } from '../core/camera';
 import { formatMeasure, type MeasureLine } from '../core/measure';
+import type { PeerOverlay } from '../core/presence';
 import { rulerStep, rulerTicks } from '../core/rulers';
 import type { Guide } from '../core/snap';
 
@@ -39,6 +40,8 @@ export interface OverlayModel {
   pixelGrid: boolean;
   /** Whether the canvas color is dark (labels switch to light). */
   darkCanvas: boolean;
+  /** Other people on the page: their selections and pointers. */
+  peers?: PeerOverlay[];
 }
 
 const LABEL_TYPES = new Set(['FRAME', 'SYMBOL', 'SECTION', 'INSTANCE']);
@@ -301,6 +304,27 @@ function drawRulers(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   ctx.fillRect(0, 0, RULER_SIZE, RULER_SIZE);
 }
 
+/**
+ * What other people selected, outlined in their colors (their pointers
+ * are drawn by `PeerCursors`).
+ */
+function drawPeers(ctx: CanvasRenderingContext2D, m: OverlayModel) {
+  for (const peer of m.peers ?? []) {
+    ctx.strokeStyle = peer.color;
+    ctx.lineWidth = peer.editing ? 2 : 1.5;
+    for (const g of peer.selection) {
+      ctx.beginPath();
+      g.corners.forEach((c, i) => {
+        const p = pageToScreen(m.camera, c);
+        if (i === 0) ctx.moveTo(Math.round(p.x) + 0.5, Math.round(p.y) + 0.5);
+        else ctx.lineTo(Math.round(p.x) + 0.5, Math.round(p.y) + 0.5);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+}
+
 /** Draws the overlay; the context is in device pixels. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -313,5 +337,6 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   drawMeasurements(ctx, m);
   drawGuides(ctx, m);
   drawMarquee(ctx, m);
+  drawPeers(ctx, m);
   drawRulers(ctx, m);
 }

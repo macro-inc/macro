@@ -3,8 +3,41 @@
  * itself has no app dependencies.
  */
 
-import type { FigEngine } from '@core/fig-engine/client';
-import { createContext, type JSX, useContext } from 'solid-js';
+import type { EditResult, FigEngine } from '@core/fig-engine/client';
+import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
+import type { FigPeer, FigPresence, Version } from '../core/presence';
+
+/** Presence of the other people in a shared design. */
+export interface FigCollaboration {
+  /** This person's peer id. */
+  peerId: string;
+  /** This person's color (a palette color name). */
+  color: Accessor<string>;
+  peers: Accessor<FigPeer[]>;
+  /** Shares where this person is; frequent calls are throttled. */
+  setPresence: (presence: FigPresence) => void;
+  status: Accessor<'connected' | 'connecting' | 'offline'>;
+}
+
+/**
+ * Edits shared with other people (`queries/fig-sharing.ts`). The editor
+ * calls it in order with its own edits.
+ */
+export interface FigSharing {
+  /** Applies other people's changes that arrived; `null` when none did. */
+  pull: (page: number) => Promise<EditResult | null>;
+  /** Shares this person's edits (and undo or redo) since the last call. */
+  push: () => Promise<void>;
+  /** Calls `listener` when other people's changes arrive. */
+  onIncoming: (listener: () => void) => () => void;
+  /** The shared version the engine holds, recorded with a stored file. */
+  appliedVersion: () => Version;
+  /** Tells everyone a file holding `version` was stored. */
+  markStored: (version: Version) => void;
+  /** Calls `listener` when someone else stored everything seen here. */
+  onStoredElsewhere: (listener: () => void) => () => void;
+  close: () => void;
+}
 
 export interface FigViewerContext {
   engine: FigEngine;
@@ -16,6 +49,10 @@ export interface FigViewerContext {
   canEdit?: () => boolean;
   /** Stores the edited `.fig` as a new version. */
   save?: (bytes: Uint8Array) => Promise<void>;
+  /** Other people in the design, when it is shared live. */
+  collaboration?: FigCollaboration;
+  /** The live edits of a shared design. */
+  sharing?: FigSharing;
 }
 
 const Context = createContext<FigViewerContext>();

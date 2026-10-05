@@ -16,11 +16,13 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { DesignPanel } from '../components/design-panel';
+import { FollowFrame, PeerAvatars } from '../components/peer-presence';
 import { ShortcutsDialog } from '../components/shortcuts-dialog';
 import { ViewerToolbar } from '../components/viewer-toolbar';
 import { useFigViewerContext } from '../context/fig-viewer-context';
-import { zoomLabel } from '../core/camera';
+import { type Point, zoomLabel } from '../core/camera';
 import { stepPage } from '../core/pages';
+import { type FigPeer, storesFile } from '../core/presence';
 import {
   controlOwnsKey,
   EDIT_ACTIONS,
@@ -29,6 +31,7 @@ import {
 } from '../core/shortcuts';
 import { createFigEditor } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
+import { createPeerOverlays } from '../primitives/create-peer-overlays';
 import { AssetsPanel } from './assets-panel';
 import { LayersPanel } from './layers-panel';
 import { TextEditor } from './text-editor';
@@ -45,6 +48,7 @@ export function FigViewer() {
     notifyError: context.notifyError,
   });
   let invalidate: ((rect: Rect) => void) | undefined;
+  const collab = context.collaboration;
   const editor = createFigEditor({
     engine,
     viewer,
@@ -52,6 +56,14 @@ export function FigViewer() {
     save: context.save,
     onDirty: (rect) => invalidate?.(rect),
     notifyError: context.notifyError,
+    sharing: context.sharing,
+    stores: collab
+      ? () =>
+          storesFile(
+            { peerId: collab.peerId, editor: context.canEdit?.() ?? false },
+            collab.peers()
+          )
+      : undefined,
   });
 
   const [spaceHeld, setSpaceHeld] = createSignal(false);
@@ -249,6 +261,58 @@ export function FigViewer() {
 
   const [textEditing, setTextEditing] = createSignal<string>();
 
+  // ---- other people -------------------------------------------------------
+
+  const [pointer, setPointer] = createSignal<Point | null>(null);
+  const [following, setFollowing] = createSignal<string>();
+  const peerOverlays = collab
+    ? createPeerOverlays(engine, viewer, collab.peers)
+    : undefined;
+  const followed = () => collab?.peers().find((p) => p.peerId === following());
+
+  // Presence goes to the sync service (an external system).
+  createEffect(() => {
+    if (!collab) return;
+    const c = viewer.camera();
+    const v = viewer.viewport();
+    collab.setPresence({
+      page: viewer.pages[viewer.page()]?.id ?? '',
+      selection: viewer.selected().map((s) => s.id),
+      cursor: pointer(),
+      editing: textEditing() ?? null,
+      editor: editor.enabled(),
+      view:
+        v.w > 0 ? { x: c.x, y: c.y, w: v.w / c.zoom, h: v.h / c.zoom } : null,
+    });
+  });
+
+  /** Shows what a followed person sees: their page and view. */
+  let shownView = '';
+  const showPeerView = async (peer: FigPeer) => {
+    const { page, view } = peer.presence;
+    const key = `${page}|${view?.x}|${view?.y}|${view?.w}|${view?.h}`;
+    if (key === shownView) return;
+    shownView = key;
+    const index = viewer.pages.findIndex((p) => p.id === page);
+    if (index >= 0 && index !== viewer.page()) await viewer.openPage(index);
+    if (view) viewer.zoomToRect(view);
+  };
+  createEffect(
+    on(followed, (peer) => {
+      if (!peer) {
+        shownView = '';
+        if (following()) setFollowing(undefined);
+        return;
+      }
+      void showPeerView(peer);
+    })
+  );
+  /** Panning, zooming, or clicking the canvas stops following. */
+  const stopFollowing = (e: Event) => {
+    if ((e.target as Element).closest?.('[data-follow-control]')) return;
+    if (following()) setFollowing(undefined);
+  };
+
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, [contenteditable="true"]')) return;
@@ -418,7 +482,11 @@ export function FigViewer() {
           </Show>
         </aside>
       </Show>
-      <div class="relative min-w-0 flex-1">
+      <div
+        class="relative min-w-0 flex-1"
+        onPointerDown={stopFollowing}
+        onWheel={stopFollowing}
+      >
         <ViewerCanvas
           viewer={viewer}
           engine={engine}
@@ -431,6 +499,8 @@ export function FigViewer() {
           onInvalidator={(fn) => {
             invalidate = fn;
           }}
+          peers={peerOverlays}
+          onPointer={collab ? setPointer : undefined}
         >
           <Show when={textEditing()}>
             {(id) => (
@@ -465,6 +535,34 @@ export function FigViewer() {
               zoomItems={zoomItems()}
               onShortcuts={() => setShowShortcuts((s) => !s)}
             />
+          </Show>
+          <Show when={collab}>
+            {(c) => (
+              <div
+                data-follow-control
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <PeerAvatars
+                  peers={c().peers()}
+                  following={following()}
+                  onFollow={setFollowing}
+                  status={c().status()}
+                />
+              </div>
+            )}
+          </Show>
+          <Show when={followed()}>
+            {(peer) => (
+              <div
+                data-follow-control
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <FollowFrame
+                  peer={peer()}
+                  onStop={() => setFollowing(undefined)}
+                />
+              </div>
+            )}
           </Show>
           <Show when={showShortcuts()}>
             <ShortcutsDialog

@@ -16,10 +16,13 @@ import {
   on,
   onCleanup,
   onMount,
+  Show,
 } from 'solid-js';
 import { drawOverlay, type OverlayModel } from '../components/overlay';
+import { PeerCursors } from '../components/peer-presence';
 import { type Point, screenToPage } from '../core/camera';
 import { measure } from '../core/measure';
+import type { PeerOverlay } from '../core/presence';
 import { rotationFor } from '../core/rotation';
 import { type Guide, snapMove } from '../core/snap';
 import type { FigEditor, ShapeTool } from '../primitives/create-fig-editor';
@@ -175,6 +178,10 @@ export function ViewerCanvas(props: {
   onEditText?: (id: string) => void;
   /** Called by the canvas with its invalidation hook. */
   onInvalidator?: (invalidate: (rect: Rect) => void) => void;
+  /** Other people on the page, when the design is shared. */
+  peers?: () => PeerOverlay[];
+  /** The pointer in page coordinates (`null` when it leaves the canvas). */
+  onPointer?: (page: Point | null) => void;
   children?: JSX.Element;
 }) {
   const viewer = props.viewer;
@@ -316,6 +323,7 @@ export function ViewerCanvas(props: {
       rulers: viewer.rulers(),
       pixelGrid: viewer.pixelGrid(),
       darkCanvas: luminance(background()) < 0.35,
+      peers: props.peers?.(),
     };
   };
 
@@ -328,6 +336,7 @@ export function ViewerCanvas(props: {
         viewer.pixelGrid,
         props.altHeld,
         viewer.hoverBounds,
+        () => props.peers?.(),
       ],
       requestDraw
     )
@@ -598,6 +607,7 @@ export function ViewerCanvas(props: {
   const onPointerMove = (e: PointerEvent) => {
     const p = local(e);
     if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
+    if (e.pointerType !== 'touch') props.onPointer?.(pageAt(p));
     if (!drag) {
       if (e.pointerType !== 'touch' && !panning()) {
         const handle = handleAt(p);
@@ -842,6 +852,7 @@ export function ViewerCanvas(props: {
       onPointerCancel={onPointerUp}
       onPointerLeave={() => {
         if (!drag) hoverAt(undefined);
+        props.onPointer?.(null);
       }}
       onDblClick={(e) => void onDoubleClick(e)}
       onDragOver={(e) => {
@@ -866,6 +877,9 @@ export function ViewerCanvas(props: {
         ref={overlayCanvas}
         class="pointer-events-none absolute inset-0 size-full"
       />
+      <Show when={props.peers}>
+        {(peers) => <PeerCursors peers={peers()()} camera={viewer.camera()} />}
+      </Show>
       {props.children}
     </div>
   );
