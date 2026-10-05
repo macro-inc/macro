@@ -5,6 +5,7 @@ pub mod history;
 pub mod inbox_sync;
 pub mod labels;
 pub mod operations;
+pub mod send_as;
 
 use serde::{Deserialize, Serialize};
 

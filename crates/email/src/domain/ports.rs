@@ -469,6 +469,29 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<LinkEmailSettings, EmailErr>> + Send {
         async { Ok(LinkEmailSettings::default()) }
     }
+
+    /// Fetch all send-as aliases for an inbox.
+    ///
+    /// Returns verified aliases only (unverified aliases cannot send).
+    /// The primary inbox address is not included — it's always available.
+    fn list_send_as_aliases(
+        &self,
+        _link_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<crate::domain::models::SendAsAlias>, Self::Err>> + Send
+    {
+        async { Ok(Vec::new()) }
+    }
+
+    /// Sync send-as aliases from Gmail for an inbox.
+    ///
+    /// Upserts verified aliases and removes any that are no longer present.
+    fn sync_send_as_aliases(
+        &self,
+        _link_id: Uuid,
+        _aliases: Vec<crate::domain::models::SyncSendAsInput>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+        async { Ok(()) }
+    }
 }
 
 /// Read-only capability for fetching email thread previews. The composition

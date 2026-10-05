@@ -8,6 +8,7 @@ pub(crate) mod convert;
 mod labels;
 mod messages;
 mod send;
+mod send_as;
 mod subscription;
 mod sync;
 

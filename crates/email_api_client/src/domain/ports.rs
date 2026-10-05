@@ -220,6 +220,39 @@ pub trait MailboxBlocklistClient: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
 }
 
+/// Send-as alias configuration for an email provider account.
+///
+/// Provider-neutral representation of a send-as alias that can be used
+/// to send email from an alternative address.
+#[derive(Debug, Clone)]
+pub struct ProviderSendAsAlias {
+    /// The email address to send as.
+    pub send_as_email: String,
+    /// Display name shown in the From header.
+    pub display_name: Option<String>,
+    /// Reply-to address if different from send_as_email.
+    pub reply_to_address: Option<String>,
+    /// Provider-assigned HTML signature.
+    pub signature: Option<String>,
+    /// Whether this is the default send-as for the account.
+    pub is_default: bool,
+    /// Whether this alias has been verified.
+    pub is_verified: bool,
+    /// Whether this is the primary address for the account.
+    pub is_primary: bool,
+}
+
+/// Send-as alias capabilities.
+pub trait MailboxSendAsClient: Send + Sync + 'static {
+    /// Lists all send-as aliases for the authenticated user.
+    ///
+    /// Returns the complete list of send-as configurations.
+    fn list_send_as(
+        &self,
+        access_token: &AccessToken,
+    ) -> impl Future<Output = Result<Vec<ProviderSendAsAlias>, EmailApiError>> + Send;
+}
+
 /// Provider repository assembled from the eight core mailbox capabilities.
 ///
 /// [`MailboxCalendarClient`] is deliberately not part of this bound: calendar
@@ -473,6 +506,15 @@ impl MailboxBlocklistClient for NoOpMailboxClient {
     }
 
     async fn list_blocked_senders(&self, _: &AccessToken) -> Result<Vec<String>, EmailApiError> {
+        Err(unavailable())
+    }
+}
+
+impl MailboxSendAsClient for NoOpMailboxClient {
+    async fn list_send_as(
+        &self,
+        _: &AccessToken,
+    ) -> Result<Vec<ProviderSendAsAlias>, EmailApiError> {
         Err(unavailable())
     }
 }

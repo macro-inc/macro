@@ -7,6 +7,7 @@ pub(crate) mod history;
 pub(crate) mod labels;
 pub(crate) mod messages;
 pub(crate) mod profile;
+pub(crate) mod send_as;
 pub(crate) mod threads;
 pub(crate) mod watch;
 
@@ -356,5 +357,27 @@ impl GmailClient {
         filter_id: &str,
     ) -> Result<(), GmailApiHttpError> {
         filters::delete_filter(self, access_token, filter_id).await
+    }
+
+    /// Lists all send-as aliases for the authenticated user.
+    ///
+    /// Returns the complete list of send-as configurations, including the
+    /// primary address. Each entry can be used to send email from that address.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn list_send_as(
+        &self,
+        access_token: &str,
+    ) -> Result<Vec<models_email::gmail::send_as::SendAsResource>, GmailApiHttpError> {
+        send_as::list_send_as(self, access_token).await
+    }
+
+    /// Gets a single send-as alias configuration by email address.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn get_send_as(
+        &self,
+        access_token: &str,
+        send_as_email: &str,
+    ) -> Result<Option<models_email::gmail::send_as::SendAsResource>, GmailApiHttpError> {
+        send_as::get_send_as(self, access_token, send_as_email).await
     }
 }

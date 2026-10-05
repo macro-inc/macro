@@ -10,6 +10,7 @@ pub mod mail_projection;
 pub mod message;
 pub mod parsed_message;
 pub mod preview;
+pub mod send_as;
 pub mod sender_policy;
 pub mod thread;
 
@@ -43,5 +44,6 @@ pub use preview::{
     EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery,
     PreviewView, PreviewViewStandardLabel,
 };
+pub use send_as::{SendAsAlias, SendAsOption, SyncSendAsInput};
 pub use sender_policy::SenderPolicy;
 pub use thread::{EmailThreadMetadata, Thread, ThreadRow};
