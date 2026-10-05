@@ -335,10 +335,11 @@ pub trait PaymentGateway: Send + Sync + 'static {
         scope: SubscriptionScope,
     ) -> impl Future<Output = Result<bool>> + Send;
 
-    /// The current period of the customer's active or trialing subscription in
-    /// `scope`. `Ok(None)` when no such subscription exists or the gateway cannot
-    /// read subscriptions. Matching subscriptions that disagree on the period are
-    /// a [`BillingError::Payment`](super::BillingError::Payment).
+    /// The current period of the customer's subscription in `scope`. Active or
+    /// trialing subscriptions win over past-due or unpaid ones. `Ok(None)` when
+    /// no non-canceled subscription exists or the gateway cannot read
+    /// subscriptions. Chosen subscriptions that disagree on the period are a
+    /// [`BillingError::Payment`](super::BillingError::Payment).
     fn subscription_period(
         &self,
         customer_id: &str,

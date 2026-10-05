@@ -53,8 +53,8 @@ impl AuthServiceClient {
     }
 
     /// The current Stripe subscription period for `customer_id` in the personal
-    /// scope (`team_id` is `None`) or the team scope. `Ok(None)` when no active
-    /// or trialing subscription matches. The caller picks `timeout` because it
+    /// scope (`team_id` is `None`) or the team scope. `Ok(None)` when no
+    /// non-canceled subscription matches. The caller picks `timeout` because it
     /// knows what is waiting on the answer.
     #[tracing::instrument(skip(self), err)]
     pub async fn ai_subscription_period(

@@ -876,6 +876,81 @@ async fn subscription_period_rejects_disagreeing_subscriptions() {
 }
 
 #[tokio::test]
+async fn subscription_period_reads_a_past_due_subscription_when_none_is_billable() {
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![subscription_in_period(
+                "sub_past_due",
+                stripe::SubscriptionStatus::PastDue,
+                None,
+                BillingPeriod {
+                    start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+                    end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+                },
+            )],
+            false,
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        gateway(&server)
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+            .await
+            .unwrap(),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn subscription_period_prefers_the_billable_subscription_to_an_unpaid_one() {
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![
+                subscription_in_period(
+                    "sub_unpaid",
+                    stripe::SubscriptionStatus::Unpaid,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 1, 15, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+                    },
+                ),
+                subscription_in_period(
+                    "sub_active",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+                    },
+                ),
+            ],
+            false,
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        gateway(&server)
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+            .await
+            .unwrap(),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+        })
+    );
+}
+
+#[tokio::test]
 async fn subscription_period_reports_provider_errors() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

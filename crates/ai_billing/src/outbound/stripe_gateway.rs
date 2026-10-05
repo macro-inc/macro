@@ -182,24 +182,38 @@ fn billable(subscription: &Subscription) -> bool {
     )
 }
 
+/// Billable subscriptions decide the period. Without one, any subscription in
+/// scope does, because a payer whose subscription fell past due can still be
+/// metered and the webhook stores periods whatever the status.
 fn scoped_period(
     subscriptions: &[Subscription],
     scope: SubscriptionScope,
 ) -> Result<Option<BillingPeriod>> {
-    let mut periods = subscriptions
-        .iter()
-        .filter(|subscription| billable(subscription) && in_scope(subscription, scope))
-        .filter_map(|subscription| {
-            let start = DateTime::from_timestamp(subscription.current_period_start, 0)?;
-            let end = DateTime::from_timestamp(subscription.current_period_end, 0)?;
-            (start < end).then_some(BillingPeriod { start, end })
-        });
+    let scoped = || {
+        subscriptions
+            .iter()
+            .filter(move |subscription| in_scope(subscription, scope))
+    };
+    if let Some(period) = agreed_period(scoped().filter(|subscription| billable(subscription)))? {
+        return Ok(Some(period));
+    }
+    agreed_period(scoped())
+}
+
+fn agreed_period<'a>(
+    subscriptions: impl Iterator<Item = &'a Subscription>,
+) -> Result<Option<BillingPeriod>> {
+    let mut periods = subscriptions.filter_map(|subscription| {
+        let start = DateTime::from_timestamp(subscription.current_period_start, 0)?;
+        let end = DateTime::from_timestamp(subscription.current_period_end, 0)?;
+        (start < end).then_some(BillingPeriod { start, end })
+    });
     let Some(period) = periods.next() else {
         return Ok(None);
     };
     if periods.any(|other| other != period) {
         return Err(BillingError::Payment(anyhow::anyhow!(
-            "active subscriptions disagree on the billing period"
+            "subscriptions in scope disagree on the billing period"
         )));
     }
     Ok(Some(period))

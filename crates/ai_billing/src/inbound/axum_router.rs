@@ -455,10 +455,10 @@ pub async fn settle_handler<B: BillingService, Auth: MacroAuthorizationService>(
     }
 }
 
-/// The current period of a Stripe customer's active or trialing subscription
-/// in the personal or team scope. Internal services only; hosts that gate AI
-/// requests without owning Stripe read it when a payer's stored period is
-/// missing or ended.
+/// The current period of a Stripe customer's non-canceled subscription in the
+/// personal or team scope, preferring an active or trialing one. Internal
+/// services only; hosts that gate AI requests without owning Stripe read it
+/// when a payer's stored period is missing or ended.
 #[utoipa::path(
     get,
     path = "/internal/ai-billing/subscription-period",
@@ -466,7 +466,7 @@ pub async fn settle_handler<B: BillingService, Auth: MacroAuthorizationService>(
     params(SubscriptionPeriodQuery),
     responses(
         (status = 200, description = "Current subscription period", body = SubscriptionPeriodResponse),
-        (status = 204, description = "No active or trialing subscription in scope"),
+        (status = 204, description = "No non-canceled subscription in scope"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error", body = AiBillingErrorBody),
     ),
