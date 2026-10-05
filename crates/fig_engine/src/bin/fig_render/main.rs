@@ -12,9 +12,63 @@ use fig_engine::images::ImageStore;
 use fig_engine::model::Rect;
 use fig_engine::render::{self, RenderOptions, Viewport};
 use fig_engine::{Document, Scene};
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 use tiny_skia::Pixmap;
+
+/// The system allocator, counting the bytes allocated now and at most, so
+/// `bench` can say how much of the heap opening a file takes.
+struct Counting;
+
+static HEAP: AtomicUsize = AtomicUsize::new(0);
+static HEAP_PEAK: AtomicUsize = AtomicUsize::new(0);
+
+fn grew(by: usize) {
+    let now = HEAP.fetch_add(by, Ordering::Relaxed) + by;
+    HEAP_PEAK.fetch_max(now, Ordering::Relaxed);
+}
+
+// SAFETY: every call forwards to the system allocator with the caller's
+// arguments; only the counters are added.
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        // SAFETY: as the caller guarantees for `alloc`.
+        let p = unsafe { System.alloc(layout) };
+        if !p.is_null() {
+            grew(layout.size());
+        }
+        p
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        // SAFETY: as the caller guarantees for `dealloc`.
+        unsafe { System.dealloc(ptr, layout) };
+        HEAP.fetch_sub(layout.size(), Ordering::Relaxed);
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        // SAFETY: as the caller guarantees for `realloc`.
+        let p = unsafe { System.realloc(ptr, layout, new_size) };
+        if !p.is_null() {
+            // A move holds both blocks for a moment.
+            grew(new_size);
+            HEAP.fetch_sub(layout.size(), Ordering::Relaxed);
+        }
+        p
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: Counting = Counting;
+
+/// The heap now and its peak since the last call, in MB.
+fn heap_mb() -> (usize, usize) {
+    let now = HEAP.load(Ordering::Relaxed);
+    let peak = HEAP_PEAK.swap(now, Ordering::Relaxed);
+    (now >> 20, peak >> 20)
+}
 
 #[derive(Parser)]
 #[command(about = "Inspect and render Figma (.fig) files")]
@@ -64,6 +118,9 @@ enum Command {
         /// Tiles per side of the square grid rendered at each scale.
         #[arg(long, default_value_t = 4)]
         grid: i32,
+        /// Only open each file.
+        #[arg(long)]
+        open: bool,
         files: Vec<PathBuf>,
     },
     /// Edit each file as one person and check that a second person, both
@@ -159,9 +216,14 @@ fn main() {
                 override_text(&path);
             }
         }
-        Command::Bench { tile, grid, files } => {
+        Command::Bench {
+            tile,
+            grid,
+            open,
+            files,
+        } => {
             for path in files {
-                bench(&path, tile, grid);
+                bench(&path, tile, grid, open);
             }
             println!("peak rss {} MB", peak_rss_kb() / 1024);
         }
@@ -1023,11 +1085,12 @@ fn peak_rss_kb() -> u64 {
         .unwrap_or(0)
 }
 
-fn bench(path: &Path, tile: u32, grid: i32) {
+fn bench(path: &Path, tile: u32, grid: i32, open_only: bool) {
     let Ok(bytes) = std::fs::read(path).map(std::sync::Arc::new) else {
         eprintln!("{}: unreadable", path.display());
         return;
     };
+    heap_mb();
     let t = Instant::now();
     let Ok(container) = Container::open_shared(&bytes) else {
         println!("{}: not a .fig file", stem(path));
@@ -1043,6 +1106,15 @@ fn bench(path: &Path, tile: u32, grid: i32) {
         }
     };
     let decode = t.elapsed();
+    // What the open file holds (the file's bytes included) and the most it
+    // held while opening.
+    let (heap, heap_peak) = heap_mb();
+    let opened =
+        format!("unpack {unpack:?} decode {decode:?} heap {heap} MB (peak {heap_peak} MB)");
+    if open_only {
+        println!("{}: {opened}", stem(path));
+        return;
+    }
     // The page with the most layers, and how long its first build took.
     let (mut page, mut most, mut first_build) = (doc.pages[0], 0, std::time::Duration::ZERO);
     for &p in &doc.pages {
@@ -1146,7 +1218,7 @@ fn bench(path: &Path, tile: u32, grid: i32) {
         ));
     }
     println!(
-        "{}: unpack {unpack:?} decode {decode:?}; page {:?} ({most} layers) first build \
+        "{}: {opened}; page {:?} ({most} layers) first build \
          {first_build:?}, again {rebuild:?}; fit {}x{} cold {fit_cold:?} warm {fit_warm:?}; {}",
         stem(path),
         doc.props(page).name(),

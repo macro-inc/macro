@@ -3,11 +3,8 @@
  * the store markdown, PDF, and spreadsheet comments share: a thread is a
  * root message with replies, resolved on the thread, and mentions notify
  * through the inbox. A pinned thread's anchor is
- * `{ type: 'fig', pageId, nodeId, x, y }`. The document storage service
- * does not accept that anchor kind yet (its `NewThreadAnchor` and
- * `ThreadAnchor` in `crates/messages` are closed enums, and the
- * `comms_message_threads_anchor_check` constraint lists the allowed
- * types), so the block wires this store only behind `enableFigComments`.
+ * `{ type: 'fig', pageId, nodeId, x, y }`, the `fig` variant of the
+ * storage service's thread anchors; it accepts one only on a design.
  * Whole-document discussions show unpinned.
  */
 
@@ -18,6 +15,7 @@ import {
   useMessageRootsQuery,
 } from '@queries/messages/document-messages';
 import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
+import type { ThreadAnchor } from '@service-storage/generated/schemas/threadAnchor';
 import type {
   Message,
   MessageListItem,
@@ -34,21 +32,17 @@ import type {
 
 const MENTION = /<m-user-mention>(.*?)<\/m-user-mention>/g;
 
-/** The thread anchor a design's comments carry. */
-interface FigThreadAnchor extends FigCommentAnchor {
-  type: 'fig';
-}
-
-function figAnchor(value: unknown): FigCommentAnchor | null {
-  const a = value as Partial<FigThreadAnchor> | null | undefined;
-  if (
-    a?.type !== 'fig' ||
-    typeof a.pageId !== 'string' ||
-    typeof a.x !== 'number' ||
-    typeof a.y !== 'number'
-  )
-    return null;
-  return { pageId: a.pageId, nodeId: a.nodeId ?? null, x: a.x, y: a.y };
+/** The pin a thread carries, or none for any other kind of anchor. */
+function figAnchor(
+  anchor: ThreadAnchor | null | undefined
+): FigCommentAnchor | null {
+  if (anchor?.type !== 'fig') return null;
+  return {
+    pageId: anchor.pageId,
+    nodeId: anchor.nodeId ?? null,
+    x: anchor.x,
+    y: anchor.y,
+  };
 }
 
 /** Macro Markdown with user mentions → `@Name` text and the people. */
@@ -177,7 +171,7 @@ export function useFigComments(options: {
     async create(anchor, text, mentions) {
       const created = await post({
         ...toContent(text, mentions, options.email),
-        anchor: { type: 'fig', ...anchor } as unknown as PostMessage['anchor'],
+        anchor: { type: 'fig', ...anchor },
       });
       return created.id;
     },

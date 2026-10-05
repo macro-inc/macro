@@ -5,7 +5,7 @@ use crate::container::{Container, Encoded};
 use crate::decode;
 use crate::error::{FigError, Result, corrupt};
 use crate::geometry::{self, ParsedPath};
-use crate::kiwi::{Decoder, Kind, MsgRef, Reader, Schema};
+use crate::kiwi::{Decoder, Flat, Kind, MsgRef, Reader, Schema};
 use crate::model::{Guid, NodeType, Props};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -334,6 +334,26 @@ impl Document {
     }
 }
 
+/// In the browser, makes sure the heap has `bytes` free, growing it at once
+/// if not. The wasm allocator otherwise grows memory a page at a time as
+/// nodes arrive, and every growth costs the browser a new view of all of
+/// memory: a large file paid seconds for them.
+fn reserve_heap(bytes: usize) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Freed at once: the allocator keeps the memory and hands it out
+        // again (wasm memory never shrinks).
+        drop(std::hint::black_box(Vec::<u8>::with_capacity(bytes)));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = bytes;
+}
+
+/// How often decoding makes room ahead ([`reserve_heap`]), in node changes,
+/// and how much.
+const RESERVE_EVERY: usize = 1024;
+const RESERVE_BYTES: usize = 8 << 20;
+
 /// Nodes that use shared styles show the styles' paints and effects, which
 /// is what Figma draws: a node's own copy can be stale or empty (when the
 /// style's paints came from a library).
@@ -421,6 +441,7 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<M
     let mut r = Reader::new(data);
     let mut ranges = Vec::new();
     let mut images = Vec::new();
+    let mut flat = Flat::new(data);
     let def = schema.def(root);
     loop {
         let id = r.var_uint()?;
@@ -434,9 +455,13 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<M
             ("nodeChanges", crate::kiwi::Ty::Def(node_def)) if field.array => {
                 let count = r.var_uint()? as usize;
                 table.reserve(count.min(1 << 20));
-                for _ in 0..count {
-                    let msg = decoder.decode(&mut r, node_def)?;
-                    let m = MsgRef::new(schema, &msg);
+                for i in 0..count {
+                    if i % RESERVE_EVERY == 0 {
+                        reserve_heap(RESERVE_BYTES);
+                    }
+                    flat.clear();
+                    let slot = flat.decode(schema, &mut r, node_def)?;
+                    let m = MsgRef::flat(schema, &flat, slot);
                     if !decode::is_removed(&m) {
                         decode::embedded_images(&m, &mut images);
                         table.add(decode::props(m));

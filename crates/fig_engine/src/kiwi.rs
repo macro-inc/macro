@@ -13,6 +13,10 @@ use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 
+mod flat;
+pub use flat::Flat;
+use flat::{FlatVal, Shared};
+
 /// FxHash: field names are short and trusted-shape, so a multiply-rotate
 /// hash beats SipHash several times over on the lookups decoding does.
 #[derive(Default)]
@@ -39,6 +43,7 @@ impl Hasher for FxHasher {
 }
 
 type FxMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
+type FxSet<K> = std::collections::HashSet<K, BuildHasherDefault<FxHasher>>;
 
 /// Ids below this are looked up in a dense table; Figma's are all small.
 const DENSE_IDS: u32 = 2048;
@@ -72,6 +77,25 @@ pub struct Field {
     /// The field id in messages, the value in enums.
     pub id: u32,
     keep: bool,
+    /// `ty` with definitions resolved to their kind.
+    wire: Wire,
+}
+
+/// How a value is laid out: a field's type with the kind of definition it
+/// names looked up once, when the schema is read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Wire {
+    Bool,
+    Byte,
+    Int,
+    Uint,
+    Float,
+    String,
+    Int64,
+    Uint64,
+    Enum(u32),
+    Struct(u32),
+    Message(u32),
 }
 
 #[derive(Debug)]
@@ -97,7 +121,9 @@ pub struct Schema {
 
 /// `((name address, name length, def), field index)`.
 type NameCacheEntry = ((usize, usize, u32), Option<u16>);
-const NAME_CACHE: usize = 1024;
+const NAME_CACHE: usize = 4096;
+/// Slots tried before a lookup gives up on the table.
+const NAME_PROBES: usize = 8;
 
 /// A bounds-checked cursor over kiwi bytes.
 pub struct Reader<'a> {
@@ -122,6 +148,17 @@ impl<'a> Reader<'a> {
 
     #[inline]
     pub fn var_uint(&mut self) -> Result<u32> {
+        // Most varints (field ids, lengths, small values) are one byte.
+        if let Some(&b) = self.bytes.get(self.at)
+            && b < 128
+        {
+            self.at += 1;
+            return Ok(u32::from(b));
+        }
+        self.var_uint_long()
+    }
+
+    fn var_uint_long(&mut self) -> Result<u32> {
         let mut shift = 0;
         let mut result: u32 = 0;
         loop {
@@ -181,6 +218,32 @@ impl<'a> Reader<'a> {
         self.at += len + 1;
         // Figma writes UTF-8; anything else is replaced rather than rejected.
         Ok(std::str::from_utf8(s).unwrap_or("\u{fffd}"))
+    }
+
+    /// Steps over a varint of at most `max` bytes.
+    #[inline]
+    fn skip_var(&mut self, max: usize) -> Result<()> {
+        let rest = &self.bytes[self.at.min(self.bytes.len())..];
+        match rest.iter().take(max).position(|&b| b < 128) {
+            Some(i) => {
+                self.at += i + 1;
+                Ok(())
+            }
+            None if rest.len() >= max => {
+                self.at += max;
+                Ok(())
+            }
+            None => Err(corrupt("kiwi: unexpected end of data")),
+        }
+    }
+
+    #[inline]
+    fn advance(&mut self, len: usize) -> Result<()> {
+        if len > self.bytes.len() - self.at.min(self.bytes.len()) {
+            return Err(corrupt("kiwi: unexpected end of data"));
+        }
+        self.at += len;
+        Ok(())
     }
 
     fn skip_string(&mut self) -> Result<()> {
@@ -294,20 +357,35 @@ impl Schema {
                     array,
                     id,
                     keep: true,
+                    wire: Wire::Bool,
                 });
             }
             defs.push(Def::new(name, kind, fields));
         }
-        for def in &defs {
-            for field in &def.fields {
-                if let Ty::Def(i) = field.ty
-                    && i as usize >= defs.len()
-                {
-                    return Err(corrupt(format!(
-                        "kiwi: {}.{} refers to a missing type",
-                        def.name, field.name
-                    )));
-                }
+        let kinds: Vec<Kind> = defs.iter().map(|d| d.kind).collect();
+        for def in &mut defs {
+            for field in &mut def.fields {
+                field.wire = match field.ty {
+                    Ty::Bool => Wire::Bool,
+                    Ty::Byte => Wire::Byte,
+                    Ty::Int => Wire::Int,
+                    Ty::Uint => Wire::Uint,
+                    Ty::Float => Wire::Float,
+                    Ty::String => Wire::String,
+                    Ty::Int64 => Wire::Int64,
+                    Ty::Uint64 => Wire::Uint64,
+                    Ty::Def(i) => match kinds.get(i as usize) {
+                        Some(Kind::Enum) => Wire::Enum(i),
+                        Some(Kind::Struct) => Wire::Struct(i),
+                        Some(Kind::Message) => Wire::Message(i),
+                        None => {
+                            return Err(corrupt(format!(
+                                "kiwi: {}.{} refers to a missing type",
+                                def.name, field.name
+                            )));
+                        }
+                    },
+                };
             }
         }
         let by_name = defs
@@ -347,21 +425,47 @@ impl Schema {
     }
 
     /// The index of `def`'s field named `name`. Callers pass the same
-    /// literal names over and over, so a small cache keyed by the name's
-    /// address answers most lookups without hashing the name.
+    /// literal names over and over, so a table keyed by the name's address
+    /// answers most lookups without hashing the name: open addressing, so
+    /// names used together never evict each other.
     #[inline]
     pub fn field_index(&self, def: u32, name: &'static str) -> Option<u16> {
         let key = (name.as_ptr() as usize, name.len(), def);
-        let slot = ((key.0 >> 3) ^ key.0 >> 11 ^ (def as usize).wrapping_mul(31)) % NAME_CACHE;
-        let cached = self.name_cache[slot].get();
+        // Short literals sit a byte apart (`"x"`, `"y"`), so every bit of the
+        // address counts: a multiplicative hash, top bits.
+        let h = (key.0 as u64 ^ (u64::from(def) << 40) ^ ((key.1 as u64) << 56))
+            .wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        let first = (h >> (64 - NAME_CACHE.trailing_zeros())) as usize;
         // Static names are never freed, so an address and length name one
         // string: a hit (or a known miss) needs no comparison.
+        let cached = self.name_cache[first].get();
         if cached.0 == key {
             return cached.1;
         }
-        let index = self.defs[def as usize].index_of(name);
-        self.name_cache[slot].set((key, index));
-        index
+        self.field_index_slow(key, first, name)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn field_index_slow(
+        &self,
+        key: (usize, usize, u32),
+        first: usize,
+        name: &'static str,
+    ) -> Option<u16> {
+        for probe in 0..NAME_PROBES {
+            let slot = &self.name_cache[(first + probe) % NAME_CACHE];
+            let cached = slot.get();
+            if cached.0 == key {
+                return cached.1;
+            }
+            if cached.0.0 == 0 {
+                let index = self.defs[key.2 as usize].index_of(name);
+                slot.set((key, index));
+                return index;
+            }
+        }
+        self.defs[key.2 as usize].index_of(name)
     }
 
     /// The name of an enum value, if the schema defines it.
@@ -774,100 +878,205 @@ impl<'s> Decoder<'s> {
 
     pub fn skip_field(&self, r: &mut Reader, field: &Field, depth: u32) -> Result<()> {
         if !field.array {
-            return self.skip(r, field.ty, depth);
+            return self.skip_wire(r, field.wire, depth);
         }
         let len = r.var_uint()? as usize;
-        if field.ty == Ty::Byte {
-            r.take(len)?;
-            return Ok(());
+        match field.wire {
+            Wire::Bool | Wire::Byte => r.advance(len),
+            wire => {
+                for _ in 0..len {
+                    self.skip_wire(r, wire, depth)?;
+                }
+                Ok(())
+            }
         }
-        for _ in 0..len {
-            self.skip(r, field.ty, depth)?;
-        }
-        Ok(())
     }
 
     pub fn skip(&self, r: &mut Reader, ty: Ty, depth: u32) -> Result<()> {
-        match ty {
-            Ty::Bool | Ty::Byte => {
-                r.byte()?;
+        let wire = match ty {
+            Ty::Bool => Wire::Bool,
+            Ty::Byte => Wire::Byte,
+            Ty::Int => Wire::Int,
+            Ty::Uint => Wire::Uint,
+            Ty::Float => Wire::Float,
+            Ty::String => Wire::String,
+            Ty::Int64 => Wire::Int64,
+            Ty::Uint64 => Wire::Uint64,
+            Ty::Def(i) => match self.schema.def(i).kind {
+                Kind::Enum => Wire::Enum(i),
+                Kind::Struct => Wire::Struct(i),
+                Kind::Message => Wire::Message(i),
+            },
+        };
+        self.skip_wire(r, wire, depth)
+    }
+
+    fn skip_wire(&self, r: &mut Reader, wire: Wire, depth: u32) -> Result<()> {
+        match wire {
+            Wire::Bool | Wire::Byte => r.advance(1),
+            Wire::Int | Wire::Uint | Wire::Enum(_) => r.skip_var(5),
+            Wire::Int64 | Wire::Uint64 => r.skip_var(10),
+            Wire::Float => {
+                if r.byte()? != 0 {
+                    r.advance(3)?;
+                }
+                Ok(())
             }
-            Ty::Int | Ty::Uint => {
-                r.var_uint()?;
+            Wire::String => r.skip_string(),
+            Wire::Struct(i) => {
+                if depth > MAX_DEPTH {
+                    return Err(corrupt("kiwi: nesting too deep"));
+                }
+                for field in &self.schema.def(i).fields {
+                    self.skip_field(r, field, depth + 1)?;
+                }
+                Ok(())
             }
-            Ty::Float => {
-                r.float()?;
-            }
-            Ty::String => r.skip_string()?,
-            Ty::Int64 | Ty::Uint64 => {
-                r.var_uint64()?;
-            }
-            Ty::Def(i) => {
+            Wire::Message(i) => {
                 if depth > MAX_DEPTH {
                     return Err(corrupt("kiwi: nesting too deep"));
                 }
                 let def = self.schema.def(i);
-                match def.kind {
-                    Kind::Enum => {
-                        r.var_uint()?;
+                loop {
+                    let id = r.var_uint()?;
+                    if id == 0 {
+                        return Ok(());
                     }
-                    Kind::Struct => {
-                        for field in &def.fields {
-                            self.skip_field(r, field, depth + 1)?;
-                        }
-                    }
-                    Kind::Message => loop {
-                        let id = r.var_uint()?;
-                        if id == 0 {
-                            break;
-                        }
-                        let index = def.index_of_id(id).ok_or_else(|| {
-                            corrupt(format!("kiwi: {} has no field {id}", def.name))
-                        })?;
-                        self.skip_field(r, &def.fields[index as usize], depth + 1)?;
-                    },
+                    let index = def
+                        .index_of_id(id)
+                        .ok_or_else(|| corrupt(format!("kiwi: {} has no field {id}", def.name)))?;
+                    self.skip_field(r, &def.fields[index as usize], depth + 1)?;
                 }
             }
         }
-        Ok(())
     }
 }
 
-/// Typed, by-name access to a decoded message.
+/// Typed, by-name access to a decoded message: an owned [`Msg`] or one in a
+/// [`Flat`] table.
 #[derive(Clone, Copy)]
 pub struct MsgRef<'a> {
     pub schema: &'a Schema,
-    pub msg: &'a Msg,
+    src: Src<'a>,
+}
+
+#[derive(Clone, Copy)]
+enum Src<'a> {
+    Owned(&'a Msg),
+    Flat(&'a Flat<'a>, u32),
 }
 
 /// A value together with the schema needed to interpret it.
 #[derive(Clone, Copy)]
 pub struct ValRef<'a> {
     pub schema: &'a Schema,
-    pub value: &'a Value,
+    value: Val<'a>,
 }
+
+#[derive(Clone, Copy)]
+enum Val<'a> {
+    Owned(&'a Value),
+    Flat(&'a Flat<'a>, FlatVal<'a>),
+}
+
+/// The items of a list field.
+pub struct ListIter<'a> {
+    schema: &'a Schema,
+    items: Items<'a>,
+}
+
+enum Items<'a> {
+    Owned(std::slice::Iter<'a, Value>),
+    Flat(&'a Flat<'a>, std::slice::Iter<'a, FlatVal<'a>>),
+}
+
+impl<'a> Iterator for ListIter<'a> {
+    type Item = ValRef<'a>;
+
+    #[inline]
+    fn next(&mut self) -> Option<ValRef<'a>> {
+        let value = match &mut self.items {
+            Items::Owned(it) => Val::Owned(it.next()?),
+            Items::Flat(flat, it) => Val::Flat(flat, *it.next()?),
+        };
+        Some(ValRef {
+            schema: self.schema,
+            value,
+        })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match &self.items {
+            Items::Owned(it) => it.size_hint(),
+            Items::Flat(_, it) => it.size_hint(),
+        }
+    }
+}
+
+impl ExactSizeIterator for ListIter<'_> {}
 
 impl<'a> MsgRef<'a> {
     pub fn new(schema: &'a Schema, msg: &'a Msg) -> Self {
-        Self { schema, msg }
+        Self {
+            schema,
+            src: Src::Owned(msg),
+        }
     }
 
+    /// Message `slot` of `flat` (from [`Flat::decode`]).
+    pub fn flat(schema: &'a Schema, flat: &'a Flat<'a>, slot: u32) -> Self {
+        Self {
+            schema,
+            src: Src::Flat(flat, slot),
+        }
+    }
+
+    fn def(&self) -> u32 {
+        match self.src {
+            Src::Owned(m) => m.def,
+            Src::Flat(flat, slot) => flat.msgs[slot as usize].def,
+        }
+    }
+
+    #[inline]
     pub fn get(&self, name: &'static str) -> Option<ValRef<'a>> {
-        if self.msg.fields.is_empty() {
+        match self.src {
+            Src::Flat(flat, slot) => {
+                // Most lookups are for absent fields: answer those from the
+                // presence bits before touching the fields.
+                let m = &flat.msgs[slot as usize];
+                if m.present == 0 {
+                    return None;
+                }
+                let index = self.schema.field_index(m.def, name)?;
+                if m.present & (1u128 << (index & 127)) == 0 {
+                    return None;
+                }
+                let fields = &flat.fields[m.start as usize..(m.start + m.len) as usize];
+                let at = fields.binary_search_by_key(&index, |f| f.index).ok()?;
+                Some(ValRef {
+                    schema: self.schema,
+                    value: Val::Flat(flat, fields[at].value),
+                })
+            }
+            Src::Owned(msg) => self.get_owned(msg, name),
+        }
+    }
+
+    fn get_owned(&self, msg: &'a Msg, name: &'static str) -> Option<ValRef<'a>> {
+        if msg.fields.is_empty() {
             return None;
         }
-        let index = self.schema.field_index(self.msg.def, name)?;
-        if !self.msg.may_have(index) {
+        let index = self.schema.field_index(msg.def, name)?;
+        if !msg.may_have(index) {
             return None;
         }
-        let fields = &self.msg.fields;
-        fields
-            .binary_search_by_key(&index, |(i, _)| *i)
-            .ok()
-            .map(|at| ValRef {
-                schema: self.schema,
-                value: &fields[at].1,
-            })
+        let fields = &msg.fields;
+        let at = fields.binary_search_by_key(&index, |(i, _)| *i).ok()?;
+        Some(ValRef {
+            schema: self.schema,
+            value: Val::Owned(&fields[at].1),
+        })
     }
 
     pub fn has(&self, name: &'static str) -> bool {
@@ -875,7 +1084,7 @@ impl<'a> MsgRef<'a> {
     }
 
     pub fn def_name(&self) -> &'a str {
-        &self.schema.def(self.msg.def).name
+        &self.schema.def(self.def()).name
     }
 
     pub fn msg(&self, name: &'static str) -> Option<MsgRef<'a>> {
@@ -906,20 +1115,33 @@ impl<'a> MsgRef<'a> {
         self.get(name).and_then(|v| v.as_enum())
     }
 
+    /// `s` as a shared string: messages decoded into one [`Flat`] get one
+    /// allocation per distinct string (enum names, mostly) rather than one
+    /// per use.
+    pub fn intern(&self, s: &str) -> Arc<str> {
+        let Src::Flat(flat, _) = self.src else {
+            return s.into();
+        };
+        if let Some(shared) = flat.strings.borrow().get(s) {
+            return Arc::clone(shared);
+        }
+        let shared: Arc<str> = s.into();
+        flat.strings.borrow_mut().insert(Arc::clone(&shared));
+        shared
+    }
+
     pub fn bytes(&self, name: &'static str) -> Option<&'a [u8]> {
         self.get(name).and_then(|v| v.as_bytes())
     }
 
-    pub fn list(&self, name: &'static str) -> impl Iterator<Item = ValRef<'a>> + 'a {
-        let schema = self.schema;
-        self.get(name)
-            .and_then(|v| match v.value {
-                Value::List(items) => Some(items.iter()),
-                _ => None,
-            })
-            .into_iter()
-            .flatten()
-            .map(move |value| ValRef { schema, value })
+    pub fn list(&self, name: &'static str) -> ListIter<'a> {
+        match self.get(name) {
+            Some(v) => v.as_list(),
+            None => ListIter {
+                schema: self.schema,
+                items: Items::Owned([].iter()),
+            },
+        }
     }
 
     pub fn msgs(&self, name: &'static str) -> impl Iterator<Item = MsgRef<'a>> + 'a {
@@ -935,107 +1157,189 @@ impl<'a> MsgRef<'a> {
         mut f: impl FnMut(MsgRef<'a>) -> T,
     ) -> Arc<[T]> {
         let schema = self.schema;
-        let items = match self.get(name).map(|v| v.value) {
-            Some(Value::List(items)) => items.as_slice(),
-            _ => &[],
-        };
-        if items.iter().all(|v| matches!(v, Value::Msg(_))) {
-            items
-                .iter()
-                .map(|v| match v {
-                    Value::Msg(msg) => f(MsgRef { schema, msg }),
-                    _ => unreachable!("checked above"),
-                })
-                .collect()
-        } else {
-            self.msgs(name).map(f).collect()
+        match self.get(name).map(|v| v.value) {
+            Some(Val::Owned(Value::List(items)))
+                if items.iter().all(|v| matches!(v, Value::Msg(_))) =>
+            {
+                items
+                    .iter()
+                    .map(|v| match v {
+                        Value::Msg(msg) => f(MsgRef::new(schema, msg)),
+                        _ => unreachable!("checked above"),
+                    })
+                    .collect()
+            }
+            Some(Val::Flat(flat, FlatVal::List(start, len))) => {
+                let items = &flat.items[start as usize..(start + len) as usize];
+                if items.iter().all(|v| matches!(v, FlatVal::Msg(_))) {
+                    items
+                        .iter()
+                        .map(|v| match *v {
+                            FlatVal::Msg(slot) => f(MsgRef::flat(schema, flat, slot)),
+                            _ => unreachable!("checked above"),
+                        })
+                        .collect()
+                } else {
+                    self.msgs(name).map(f).collect()
+                }
+            }
+            _ => self.msgs(name).map(f).collect(),
         }
+    }
+
+    /// `f()`, which builds something from the field `name` alone, shared
+    /// with every other message of this type whose field is encoded the
+    /// same (when decoded into a [`Flat`]); `None` when the field is absent.
+    /// `f` must depend on nothing but the field's value: it is told apart
+    /// from other builders of the same field only by the type it returns.
+    pub fn shared<R: Clone + 'static>(
+        &self,
+        name: &'static str,
+        f: impl FnOnce() -> R,
+    ) -> Option<R> {
+        let (flat, slot) = match self.src {
+            Src::Owned(_) => return self.has(name).then(f),
+            Src::Flat(flat, slot) => (flat, slot),
+        };
+        let def = flat.msgs[slot as usize].def;
+        let index = self.schema.field_index(def, name)?;
+        let span = flat.field_of(slot, index)?.span;
+        let key = Shared::key::<R>(def, index, &flat.data[span.0 as usize..span.1 as usize]);
+        if let Some(v) = flat.shared.borrow().get(key, def, index, flat.data, span) {
+            return Some(v);
+        }
+        // Built without holding the table: `f` may share nested fields.
+        let v = f();
+        flat.shared
+            .borrow_mut()
+            .insert(key, def, index, span, v.clone());
+        Some(v)
     }
 
     pub fn floats(&self, name: &'static str) -> Option<&'a [f32]> {
         match self.get(name)?.value {
-            Value::Floats(v) => Some(v),
+            Val::Owned(Value::Floats(v)) => Some(v),
+            Val::Flat(flat, FlatVal::Floats(start, len)) => {
+                Some(&flat.floats[start as usize..(start + len) as usize])
+            }
             _ => None,
         }
     }
 
     pub fn uints(&self, name: &'static str) -> Option<&'a [u32]> {
         match self.get(name)?.value {
-            Value::Uints(v) => Some(v),
+            Val::Owned(Value::Uints(v)) => Some(v),
+            Val::Flat(flat, FlatVal::Uints(start, len)) => {
+                Some(&flat.uints[start as usize..(start + len) as usize])
+            }
             _ => None,
         }
     }
 }
 
 impl<'a> ValRef<'a> {
+    /// An owned value.
+    pub fn new(schema: &'a Schema, value: &'a Value) -> Self {
+        Self {
+            schema,
+            value: Val::Owned(value),
+        }
+    }
+
     pub fn as_msg(&self) -> Option<MsgRef<'a>> {
         match self.value {
-            Value::Msg(m) => Some(MsgRef {
-                schema: self.schema,
-                msg: m,
-            }),
+            Val::Owned(Value::Msg(m)) => Some(MsgRef::new(self.schema, m)),
+            Val::Flat(flat, FlatVal::Msg(slot)) => Some(MsgRef::flat(self.schema, flat, slot)),
             _ => None,
         }
     }
 
+    /// The items of a list value (none for other values).
+    pub fn as_list(&self) -> ListIter<'a> {
+        let items = match self.value {
+            Val::Owned(Value::List(items)) => Items::Owned(items.iter()),
+            Val::Flat(flat, FlatVal::List(start, len)) => Items::Flat(
+                flat,
+                flat.items[start as usize..(start + len) as usize].iter(),
+            ),
+            _ => Items::Owned([].iter()),
+        };
+        ListIter {
+            schema: self.schema,
+            items,
+        }
+    }
+
     pub fn as_f32(&self) -> Option<f32> {
-        match *self.value {
-            Value::Float(f) => Some(f),
-            Value::Int(i) => Some(i as f32),
-            Value::Uint(u) => Some(u as f32),
+        match self.value {
+            Val::Owned(&Value::Float(f)) | Val::Flat(_, FlatVal::Float(f)) => Some(f),
+            Val::Owned(&Value::Int(i)) | Val::Flat(_, FlatVal::Int(i)) => Some(i as f32),
+            Val::Owned(&Value::Uint(u)) | Val::Flat(_, FlatVal::Uint(u)) => Some(u as f32),
             _ => None,
         }
     }
 
     pub fn as_u32(&self) -> Option<u32> {
-        match *self.value {
-            Value::Uint(u) => Some(u),
-            Value::Int(i) if i >= 0 => Some(i as u32),
-            Value::Enum(_, v) => Some(v),
+        match self.value {
+            Val::Owned(&Value::Uint(u)) | Val::Flat(_, FlatVal::Uint(u)) => Some(u),
+            Val::Owned(&Value::Int(i)) | Val::Flat(_, FlatVal::Int(i)) if i >= 0 => Some(i as u32),
+            Val::Owned(&Value::Enum(_, v)) | Val::Flat(_, FlatVal::Enum(_, v)) => Some(v),
             _ => None,
         }
     }
 
     pub fn as_i32(&self) -> Option<i32> {
-        match *self.value {
-            Value::Int(i) => Some(i),
-            Value::Uint(u) => i32::try_from(u).ok(),
+        match self.value {
+            Val::Owned(&Value::Int(i)) | Val::Flat(_, FlatVal::Int(i)) => Some(i),
+            Val::Owned(&Value::Uint(u)) | Val::Flat(_, FlatVal::Uint(u)) => i32::try_from(u).ok(),
             _ => None,
         }
     }
 
     pub fn as_u64(&self) -> Option<u64> {
-        match *self.value {
-            Value::Uint64(u) => Some(u),
-            Value::Uint(u) => Some(u64::from(u)),
+        match self.value {
+            Val::Owned(&Value::Uint64(u)) | Val::Flat(_, FlatVal::Uint64(u)) => Some(u),
+            Val::Owned(&Value::Uint(u)) | Val::Flat(_, FlatVal::Uint(u)) => Some(u64::from(u)),
+            _ => None,
+        }
+    }
+
+    pub fn as_i64(&self) -> Option<i64> {
+        match self.value {
+            Val::Owned(&Value::Int64(i)) | Val::Flat(_, FlatVal::Int64(i)) => Some(i),
+            Val::Owned(&Value::Int(i)) | Val::Flat(_, FlatVal::Int(i)) => Some(i64::from(i)),
             _ => None,
         }
     }
 
     pub fn as_bool(&self) -> Option<bool> {
-        match *self.value {
-            Value::Bool(b) => Some(b),
+        match self.value {
+            Val::Owned(&Value::Bool(b)) | Val::Flat(_, FlatVal::Bool(b)) => Some(b),
             _ => None,
         }
     }
 
     pub fn as_str(&self) -> Option<&'a str> {
         match self.value {
-            Value::Str(s) => Some(s),
+            Val::Owned(Value::Str(s)) => Some(s),
+            Val::Flat(_, FlatVal::Str(s)) => Some(s),
             _ => None,
         }
     }
 
     pub fn as_enum(&self) -> Option<&'a str> {
-        match *self.value {
-            Value::Enum(def, v) => self.schema.enum_name(def, v),
+        match self.value {
+            Val::Owned(&Value::Enum(def, v)) | Val::Flat(_, FlatVal::Enum(def, v)) => {
+                self.schema.enum_name(def, v)
+            }
             _ => None,
         }
     }
 
     pub fn as_bytes(&self) -> Option<&'a [u8]> {
         match self.value {
-            Value::Bytes(b) => Some(b),
+            Val::Owned(Value::Bytes(b)) => Some(b),
+            Val::Flat(_, FlatVal::Bytes(b)) => Some(b),
             _ => None,
         }
     }

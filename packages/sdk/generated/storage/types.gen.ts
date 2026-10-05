@@ -8688,6 +8688,25 @@ export type NewThreadAnchor = {
      */
     sheetName: string;
     type: 'spreadsheet';
+} | {
+    /**
+     * Layer the pin follows; absent or null for a pin on the bare canvas.
+     */
+    nodeId?: string | null;
+    /**
+     * Page (canvas) the pin is on.
+     */
+    pageId: string;
+    type: 'fig';
+    /**
+     * Horizontal offset from the layer's origin, or the page's when
+     * the pin is on no layer, in design units.
+     */
+    x: number;
+    /**
+     * Vertical offset, measured like `x`.
+     */
+    y: number;
 };
 
 /**
@@ -12422,6 +12441,25 @@ export type ThreadAnchor = {
      */
     sheetName: string;
     type: 'spreadsheet';
+} | {
+    /**
+     * Layer the pin follows; absent for a pin on the bare canvas.
+     */
+    nodeId?: string | null;
+    /**
+     * Page (canvas) the pin is on.
+     */
+    pageId: string;
+    type: 'fig';
+    /**
+     * Horizontal offset from the layer's origin, or the page's when
+     * the pin is on no layer, in design units.
+     */
+    x: number;
+    /**
+     * Vertical offset, measured like `x`.
+     */
+    y: number;
 };
 
 /**

@@ -1304,7 +1304,14 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
 
     let data = container.message.as_slice();
     let mut r = Reader::new(data);
-    let mut out = Writer::default();
+    // The archive is written in place: the message is deflated into its
+    // `canvas.fig` entry as records are copied, so neither the new message
+    // nor the compressed document is held apart from it.
+    let images: usize = doc.images.values().map(|i| i.len()).sum();
+    let mut zip = crate::zip::ZipWriter::with_capacity(data.len() / 2 + images + (1 << 20));
+    let canvas = zip.begin("canvas.fig");
+    let at = document_header(container.version, &container.schema, zip.data());
+    let mut out = Deflated::new(zip.data());
     let def = schema.def(message_def);
     let mut wrote_blobs = false;
     let new_blobs = || -> Vec<u8> {
@@ -1322,6 +1329,12 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
         }
         w.bytes
     };
+    let created = doc
+        .nodes
+        .iter()
+        .filter(|n| n.edits & flags::CREATED != 0 && !n.removed && n.props.guid.is_some())
+        .count();
+    let drops = plans.values().any(|p| matches!(p, Plan::Drop));
     loop {
         let start = r.at;
         let id = r.var_uint()?;
@@ -1333,8 +1346,24 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
             .ok_or_else(|| corrupt(format!("kiwi: Message has no field {id}")))?;
         if field.array && field.name == "nodeChanges" {
             let count = r.var_uint()? as usize;
-            let mut records = Writer::default();
-            let mut written = 0u32;
+            // The count goes before the records: those deleted are counted
+            // out first (when there are any).
+            let mut dropped = 0;
+            if drops {
+                let mut scan = Reader::new(data);
+                scan.at = r.at;
+                for _ in 0..count {
+                    let guid = scan_guid(&decoder, &schema, &mut scan, node_def)?;
+                    if guid
+                        .and_then(|g| plans.get(&g))
+                        .is_some_and(|p| matches!(p, Plan::Drop))
+                    {
+                        dropped += 1;
+                    }
+                }
+            }
+            out.w.var_uint(id);
+            out.w.var_uint((count - dropped + created) as u32);
             for _ in 0..count {
                 let rs = r.at;
                 let guid = scan_guid(&decoder, &schema, &mut r, node_def)?;
@@ -1361,14 +1390,11 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
                         let mut m = decode()?;
                         let node = &doc.nodes[*k];
                         b.patch(&mut m, node, doc, node.edits);
-                        schema.encode(&m, &mut records);
-                        written += 1;
+                        schema.encode(&m, &mut out.w);
                     }
-                    None => {
-                        records.bytes.extend_from_slice(raw);
-                        written += 1;
-                    }
+                    None => out.w.bytes.extend_from_slice(raw),
                 }
+                out.flush_full();
             }
             for node in &doc.nodes {
                 if node.edits & flags::CREATED == 0 || node.removed {
@@ -1379,12 +1405,9 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
                 }
                 let source = node.source.and_then(|s| sources.get(&s).cloned().flatten());
                 let record = created_record(&b, &decoder, node_def, node, doc, source);
-                schema.encode(&record, &mut records);
-                written += 1;
+                schema.encode(&record, &mut out.w);
+                out.flush_full();
             }
-            out.var_uint(id);
-            out.var_uint(written);
-            out.bytes.extend_from_slice(&records.bytes);
         } else if field.array && field.name == "blobs" {
             let count = r.var_uint()?;
             let rs = r.at;
@@ -1392,27 +1415,33 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
                 decoder.skip(&mut r, field.ty, 0)?;
             }
             let added = (doc.blobs.len() - doc.original_blobs) as u32;
-            out.var_uint(id);
-            out.var_uint(count + added);
-            out.bytes.extend_from_slice(&data[rs..r.at]);
-            out.bytes.extend_from_slice(&new_blobs());
+            out.w.var_uint(id);
+            out.w.var_uint(count + added);
+            out.write(&data[rs..r.at]);
+            out.write(&new_blobs());
             wrote_blobs = true;
         } else {
             decoder.skip_field(&mut r, field, 0)?;
-            out.bytes.extend_from_slice(&data[start..r.at]);
+            out.write(&data[start..r.at]);
         }
     }
     if !wrote_blobs
         && doc.blobs.len() > doc.original_blobs
         && let Some(f) = def.fields.iter().find(|f| f.name == "blobs")
     {
-        out.var_uint(f.id);
-        out.var_uint((doc.blobs.len() - doc.original_blobs) as u32);
-        out.bytes.extend_from_slice(&new_blobs());
+        out.w.var_uint(f.id);
+        out.w
+            .var_uint((doc.blobs.len() - doc.original_blobs) as u32);
+        out.write(&new_blobs());
     }
-    out.var_uint(0);
-    let canvas = document_bytes(container.version, &container.schema, &out.bytes);
-    Ok(package(doc, &canvas, container.meta.as_ref()))
+    out.w.var_uint(0);
+    out.finish();
+    end_chunk(zip.data(), at);
+    zip.end(canvas, "canvas.fig");
+    // The decoded original is no longer needed: release it before the
+    // thumbnail is drawn (big files' messages are hundreds of megabytes).
+    container.message = Vec::new();
+    Ok(package(zip, doc, container.meta.as_ref()))
 }
 
 /// The schema with the boolean and vector fields this engine writes, when
@@ -1537,19 +1566,111 @@ fn with_fields(bytes: &[u8], shapes: bool, handoff: bool) -> Result<Option<Vec<u
 
 /// `fig-kiwi` header and the deflated schema and message chunks.
 fn document_bytes(version: u32, schema: &[u8], message: &[u8]) -> Vec<u8> {
-    let mut out = b"fig-kiwi".to_vec();
-    out.extend_from_slice(&version.to_le_bytes());
-    for chunk in [schema, message] {
-        // Fast deflate: big files' messages are tens of megabytes.
-        let compressed = miniz_oxide::deflate::compress_to_vec(chunk, 1);
-        out.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
-        out.extend_from_slice(&compressed);
-    }
+    let mut out = Vec::with_capacity(16 + schema.len() / 2 + message.len() / 2);
+    let at = document_header(version, schema, &mut out);
+    deflate_into(message, &mut out);
+    end_chunk(&mut out, at);
     out
 }
 
-/// The ZIP around a document: meta, thumbnail, and images.
-fn package(doc: &Document, canvas: &[u8], meta: Option<&serde_json::Value>) -> Vec<u8> {
+/// Writes the `fig-kiwi` header and the deflated schema chunk, and starts
+/// the message chunk; returns where its length goes ([`end_chunk`]).
+fn document_header(version: u32, schema: &[u8], out: &mut Vec<u8>) -> usize {
+    out.extend_from_slice(b"fig-kiwi");
+    out.extend_from_slice(&version.to_le_bytes());
+    let at = out.len();
+    out.extend_from_slice(&[0; 4]);
+    deflate_into(schema, out);
+    end_chunk(out, at);
+    let at = out.len();
+    out.extend_from_slice(&[0; 4]);
+    at
+}
+
+/// Fills in the length of the chunk started at `at`, now complete.
+fn end_chunk(out: &mut [u8], at: usize) {
+    let len = (out.len() - at - 4) as u32;
+    out[at..at + 4].copy_from_slice(&len.to_le_bytes());
+}
+
+/// Appends `input`, raw-deflated at level 1, to `out`: the stream
+/// `miniz_oxide::deflate::compress_to_vec` makes, without its own buffer.
+fn deflate_into(input: &[u8], out: &mut Vec<u8>) {
+    Deflated::new(out).compress_from(input, TDEFLFlush::Finish);
+}
+
+use miniz_oxide::deflate::core::{
+    CompressorOxide, TDEFLFlush, TDEFLStatus, compress, create_comp_flags_from_zip_params,
+};
+
+/// What is written to `w`, raw-deflated at level 1 into `out` a megabyte at
+/// a time (fast: big files' messages are hundreds of megabytes).
+struct Deflated<'o> {
+    compressor: Box<CompressorOxide>,
+    out: &'o mut Vec<u8>,
+    w: Writer,
+}
+
+/// Uncompressed bytes gathered before they are compressed.
+const DEFLATE_STEP: usize = 1 << 20;
+
+impl<'o> Deflated<'o> {
+    fn new(out: &'o mut Vec<u8>) -> Self {
+        Self {
+            compressor: Box::new(CompressorOxide::new(create_comp_flags_from_zip_params(
+                1, 0, 0,
+            ))),
+            out,
+            w: Writer::default(),
+        }
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for piece in bytes.chunks(DEFLATE_STEP) {
+            self.w.bytes.extend_from_slice(piece);
+            self.flush_full();
+        }
+    }
+
+    fn flush_full(&mut self) {
+        if self.w.bytes.len() >= DEFLATE_STEP {
+            self.compress(TDEFLFlush::None);
+        }
+    }
+
+    fn finish(mut self) {
+        self.compress(TDEFLFlush::Finish);
+    }
+
+    fn compress(&mut self, flush: TDEFLFlush) {
+        let mut pending = std::mem::take(&mut self.w.bytes);
+        self.compress_from(&pending, flush);
+        pending.clear();
+        self.w.bytes = pending;
+    }
+
+    fn compress_from(&mut self, mut input: &[u8], flush: TDEFLFlush) {
+        loop {
+            let start = self.out.len();
+            self.out.resize(start + (input.len() / 2).max(1 << 16), 0);
+            let (status, read, wrote) =
+                compress(&mut self.compressor, input, &mut self.out[start..], flush);
+            self.out.truncate(start + wrote);
+            input = &input[read.min(input.len())..];
+            match status {
+                TDEFLStatus::Okay if !input.is_empty() || flush == TDEFLFlush::Finish => {}
+                _ => break,
+            }
+        }
+    }
+}
+
+/// Finishes the archive: meta, thumbnail, and images after the document.
+fn package(
+    mut zip: crate::zip::ZipWriter,
+    doc: &Document,
+    meta: Option<&serde_json::Value>,
+) -> Vec<u8> {
     let mut meta = meta.cloned().unwrap_or_else(|| serde_json::json!({}));
     if let Some(obj) = meta.as_object_mut() {
         obj.insert(
@@ -1557,22 +1678,20 @@ fn package(doc: &Document, canvas: &[u8], meta: Option<&serde_json::Value>) -> V
             serde_json::Value::String(doc.file_name.clone().unwrap_or_else(|| "Untitled".into())),
         );
     }
-    let meta_bytes = serde_json::to_vec(&sorted(meta)).unwrap_or_default();
+    zip.add(
+        "meta.json",
+        &serde_json::to_vec(&sorted(meta)).unwrap_or_default(),
+    );
     let thumb = thumbnail(doc).unwrap_or_default();
-    let mut names: Vec<(String, &[u8])> = vec![
-        ("canvas.fig".into(), canvas),
-        ("meta.json".into(), meta_bytes.as_slice()),
-    ];
     if !thumb.is_empty() {
-        names.push(("thumbnail.png".into(), thumb.as_slice()));
+        zip.add("thumbnail.png", &thumb);
     }
     let mut hashes: Vec<&String> = doc.images.keys().collect();
     hashes.sort();
     for h in hashes {
-        names.push((format!("images/{h}"), &doc.images[h]));
+        zip.add(&format!("images/{h}"), &doc.images[h]);
     }
-    let entries: Vec<(&str, &[u8])> = names.iter().map(|(n, b)| (n.as_str(), *b)).collect();
-    crate::zip::write_stored(&entries)
+    zip.finish()
 }
 
 /// `value` with object keys in sorted order at every level, so saved bytes

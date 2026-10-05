@@ -23,10 +23,6 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import {
-  enableFigComments,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { FigEngine } from '@core/fig-engine/client';
 import { blockDataSignal } from '@core/internal/BlockLoader';
@@ -57,6 +53,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { FigOpening } from './components/fig-opening';
 import type { FigCommentStore } from './context/fig-comments';
 import {
   type FigCollaboration,
@@ -125,16 +122,7 @@ function FigHost(props: {
   });
 
   return (
-    <Switch
-      fallback={
-        <div
-          class="flex size-full items-center justify-center text-ink-muted text-sm"
-          data-testid="fig-opening"
-        >
-          Opening design…
-        </div>
-      }
-    >
+    <Switch fallback={<FigOpening bytes={props.bytes} />}>
       <Match when={failure()}>
         {(message) => (
           <div class="flex size-full items-center justify-center p-6 text-center text-ink-muted text-sm">
@@ -253,15 +241,13 @@ export default function FigBlock(props: { share?: string; present?: string }) {
   const canEdit = useCanEdit();
   const canComment = useCanComment();
   const userId = useUserId();
-  const comments = isFeatureEnabled(enableFigComments)
-    ? useFigComments({
-        documentId,
-        userId,
-        canComment,
-        displayName,
-        email: idToEmail,
-      })
-    : undefined;
+  const comments = useFigComments({
+    documentId,
+    userId,
+    canComment,
+    displayName,
+    email: idToEmail,
+  });
   const openShare = useShareModal(() => ({
     id: documentId,
     blockAlias: 'fig',

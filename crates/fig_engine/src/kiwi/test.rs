@@ -213,3 +213,126 @@ fn caches_field_lookups_per_definition() {
     assert_eq!(s.field_index(paint, "type"), Some(b));
     assert_eq!(s.field_index(paint, "noSuchField"), None);
 }
+
+/// Decodes `bytes` (one or more messages of `def_name`, back to back) into
+/// one table, calling `f` on each as it is read.
+fn read_flat(s: &Schema, def_name: &str, bytes: &[u8], mut f: impl FnMut(MsgRef)) {
+    let def = s.def_index(def_name).unwrap();
+    let mut flat = Flat::new(bytes);
+    let mut r = Reader::new(bytes);
+    while r.at < bytes.len() {
+        flat.clear();
+        let slot = flat.decode(s, &mut r, def).unwrap();
+        f(MsgRef::flat(s, &flat, slot));
+    }
+}
+
+#[test]
+fn reads_in_place_as_the_owned_decoder_does() {
+    let mut s = schema();
+    s.keep_only(
+        "NodeChange",
+        &["guid", "type", "name", "opacity", "fillPaints"],
+    );
+    let bytes = encode(
+        &s,
+        "NodeChange",
+        &[
+            ("visible", V::Bool(false)),
+            ("name", V::Str("Box".into())),
+            ("guid", guid(7)),
+            ("type", V::Enum("RECTANGLE")),
+            ("opacity", V::Float(0.5)),
+            (
+                "fillPaints",
+                V::List(vec![solid(1.0, 0.0, 0.0), solid(0.0, 0.0, 1.0)]),
+            ),
+        ],
+    );
+    let mut seen = 0;
+    read_flat(&s, "NodeChange", &bytes, |m| {
+        seen += 1;
+        assert_eq!(m.msg("guid").and_then(|g| g.u32("localID")), Some(7));
+        assert_eq!(m.enum_name("type"), Some("RECTANGLE"));
+        assert_eq!(m.str("name"), Some("Box"));
+        assert_eq!(m.f32("opacity"), Some(0.5));
+        assert!(!m.has("visible"), "skipped: not kept");
+        assert_eq!(m.list("fillPaints").len(), 2);
+        let blues: Vec<_> = m
+            .collect_msgs("fillPaints", |p| p.msg("color").and_then(|c| c.f32("b")))
+            .to_vec();
+        assert_eq!(blues, [Some(0.0), Some(1.0)]);
+    });
+    assert_eq!(
+        seen, 1,
+        "the whole message, skipped fields included, is read"
+    );
+}
+
+#[test]
+fn reading_in_place_rejects_damage() {
+    let s = schema();
+    let node = s.def_index("NodeChange").unwrap();
+    let bytes = encode(&s, "NodeChange", &[("name", V::Str("Cut".into()))]);
+    let cut = &bytes[..bytes.len() - 3];
+    let mut flat = Flat::new(cut);
+    assert!(flat.decode(&s, &mut Reader::new(cut), node).is_err());
+}
+
+#[test]
+fn shares_what_identical_fields_build() {
+    let s = schema();
+    let red = || ("fillPaints", V::List(vec![solid(1.0, 0.0, 0.0)]));
+    let mut bytes = encode(&s, "NodeChange", &[("guid", guid(1)), red()]);
+    bytes.extend(encode(&s, "NodeChange", &[("guid", guid(2)), red()]));
+    bytes.extend(encode(
+        &s,
+        "NodeChange",
+        &[
+            ("guid", guid(3)),
+            ("fillPaints", V::List(vec![solid(0.0, 1.0, 0.0)])),
+        ],
+    ));
+    let mut built = 0;
+    let mut lists = Vec::new();
+    read_flat(&s, "NodeChange", &bytes, |m| {
+        let paints = m
+            .shared("fillPaints", || {
+                built += 1;
+                m.collect_msgs("fillPaints", |p| p.msg("color").and_then(|c| c.f32("g")))
+            })
+            .unwrap();
+        assert!(m.shared("noSuchField", || 0).is_none());
+        lists.push(paints);
+    });
+    assert_eq!(built, 2, "the second red fill is the first one's");
+    assert!(Arc::ptr_eq(&lists[0], &lists[1]));
+    assert_eq!(*lists[2], [Some(1.0)]);
+}
+
+#[test]
+fn skips_every_kind_of_value() {
+    // Nothing kept: every field of a node change is stepped over.
+    let mut s = schema();
+    s.keep_only("NodeChange", &[]);
+    let bytes = encode(
+        &s,
+        "NodeChange",
+        &[
+            ("guid", guid(9)),
+            ("name", V::Str("Skipped".into())),
+            ("opacity", V::Float(0.25)),
+            ("visible", V::Bool(true)),
+            ("type", V::Enum("FRAME")),
+            ("fillPaints", V::List(vec![solid(0.5, 0.5, 0.5)])),
+        ],
+    );
+    read_flat(&s, "NodeChange", &bytes, |m| {
+        assert!(!m.has("guid") && !m.has("name") && !m.has("fillPaints"));
+    });
+    let mut r = Reader::new(&bytes);
+    Decoder::new(&s)
+        .skip(&mut r, Ty::Def(s.def_index("NodeChange").unwrap()), 0)
+        .unwrap();
+    assert_eq!(r.at, bytes.len());
+}

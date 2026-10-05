@@ -3341,6 +3341,26 @@ export type CommentAnchor =
        */
       anchorId: string;
       type: 'pdfPin';
+    }
+  | {
+      /**
+       * The page (canvas) the pin is on.
+       */
+      pageId: string;
+      /**
+       * The layer the pin follows; absent for a pin on the bare canvas.
+       */
+      nodeId?: string | null;
+      /**
+       * Horizontal offset from the layer's origin, or the page's when the
+       * pin is on no layer, in design units.
+       */
+      x: number;
+      /**
+       * Vertical offset, measured like `x`.
+       */
+      y: number;
+      type: 'fig';
     };
 /**
  * API-visible content lifecycle state derived from current document metadata.

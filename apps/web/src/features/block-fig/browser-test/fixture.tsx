@@ -14,6 +14,7 @@ import '../../../index.css';
 import { FigEngine } from '@core/fig-engine/client';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { FigOpening } from '../components/fig-opening';
 import { FigViewerProvider } from '../context/fig-viewer-context';
 import type { FigCommentAnchor, FigPerson } from '../core/comments';
 import { FigViewer } from '../views/fig-viewer';
@@ -64,6 +65,7 @@ function Fixture() {
     { name: string; size: number }[]
   >([]);
   const [saves, setSaves] = createSignal<Uint8Array[]>([]);
+  const [opening, setOpening] = createSignal<ArrayBuffer>();
   const editable = params.has('edit') || params.has('new');
   const comments = createMemoryComments();
 
@@ -103,6 +105,7 @@ function Fixture() {
     setEngine(undefined);
     setError(undefined);
     setName(fileName.replace(/\.fig$/, ''));
+    setOpening(bytes);
     try {
       const started = performance.now();
       const e = await FigEngine.open(bytes);
@@ -113,6 +116,7 @@ function Fixture() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+    setOpening(undefined);
   };
 
   const file = params.get('file');
@@ -154,6 +158,9 @@ function Fixture() {
               {message()}
             </div>
           )}
+        </Show>
+        <Show when={opening()} keyed>
+          {(bytes) => <FigOpening bytes={bytes} />}
         </Show>
         <Show when={engine()} keyed>
           {(e) => (

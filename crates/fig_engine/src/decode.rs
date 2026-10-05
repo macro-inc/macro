@@ -666,7 +666,7 @@ fn auto_layout(m: &MsgRef) -> Option<AutoLayout> {
 fn layout_child(m: &MsgRef) -> Option<LayoutChild> {
     let child = LayoutChild {
         grow: m.f32("stackChildPrimaryGrow"),
-        align: m.enum_name("stackChildAlignSelf").map(Into::into),
+        align: m.enum_name("stackChildAlignSelf").map(|a| m.intern(a)),
         absolute: m.enum_name("stackPositioning").map(|p| p == "ABSOLUTE"),
         min_size: m.msg("minSize").and_then(|v| v.msg("value")).map(vec2),
         max_size: m.msg("maxSize").and_then(|v| v.msg("value")).map(vec2),
@@ -691,7 +691,9 @@ pub fn props(m: MsgRef) -> Props {
         .enum_name("type")
         .or_else(|| m.str("type"))
         .map(NodeType::parse);
-    p.name = m.str("name").map(Into::into);
+    p.name = m
+        .shared("name", || m.str("name").map(Arc::<str>::from))
+        .flatten();
     p.visible = m.bool("visible");
     p.locked = m.bool("locked");
     p.opacity = m.f32("opacity");
@@ -712,13 +714,15 @@ pub fn props(m: MsgRef) -> Props {
         }),
     };
     if m.has("fillPaints") {
-        p.fills = Some(m.collect_msgs("fillPaints", paint));
+        p.fills = m.shared("fillPaints", || m.collect_msgs("fillPaints", paint));
     } else if m.has("backgroundPaints") && m.bool("backgroundEnabled") != Some(false) {
         // Frames in older files keep their fill as a background.
-        p.fills = Some(m.collect_msgs("backgroundPaints", paint));
+        p.fills = m.shared("backgroundPaints", || {
+            m.collect_msgs("backgroundPaints", paint)
+        });
     }
     if m.has("strokePaints") {
-        p.strokes = Some(m.collect_msgs("strokePaints", paint));
+        p.strokes = m.shared("strokePaints", || m.collect_msgs("strokePaints", paint));
     }
     p.stroke_weight = m.f32("strokeWeight");
     if m.bool("borderStrokeWeightsIndependent") == Some(true) {
@@ -735,8 +739,8 @@ pub fn props(m: MsgRef) -> Props {
         "OUTSIDE" => StrokeAlign::Outside,
         _ => StrokeAlign::Center,
     });
-    p.stroke_cap = m.enum_name("strokeCap").map(Into::into);
-    p.stroke_join = m.enum_name("strokeJoin").map(Into::into);
+    p.stroke_cap = m.enum_name("strokeCap").map(|c| m.intern(c));
+    p.stroke_join = m.enum_name("strokeJoin").map(|j| m.intern(j));
     p.dash_pattern = m.floats("dashPattern").map(Arc::from);
     if m.has("fillGeometry") {
         p.fill_geometry = Some(path_refs(m.msgs("fillGeometry")));
@@ -745,7 +749,7 @@ pub fn props(m: MsgRef) -> Props {
         p.stroke_geometry = Some(path_refs(m.msgs("strokeGeometry")));
     }
     if m.has("effects") {
-        p.effects = Some(m.collect_msgs("effects", effect));
+        p.effects = m.shared("effects", || m.collect_msgs("effects", effect));
     }
     p.corner_radius = m.f32("cornerRadius");
     if m.bool("rectangleCornerRadiiIndependent") == Some(true)
@@ -766,30 +770,47 @@ pub fn props(m: MsgRef) -> Props {
     p.clip_disabled = m.bool("frameMaskDisabled");
     p.background_color = m.msg("backgroundColor").map(color);
     p.internal_only = m.bool("internalOnly");
-    if let Some(text) = m.msg("textData") {
-        p.text_content = Some(Arc::new(text_content(text)));
-        if let Some(layout) = text_layout(text) {
-            p.text_layout = Some(Arc::new(layout));
+    // Text, overrides, and derived layout repeat across instances of a
+    // component; what is built from them is shared.
+    if let Some((content, layout)) = m
+        .shared("textData", || {
+            let text = m.msg("textData")?;
+            Some((
+                Arc::new(text_content(text)),
+                text_layout(text).map(Arc::new),
+            ))
+        })
+        .flatten()
+    {
+        p.text_content = Some(content);
+        if layout.is_some() {
+            p.text_layout = layout;
         }
     }
-    if let Some(derived) = m.msg("derivedTextData")
-        && let Some(layout) = text_layout(derived)
+    if let Some(layout) = m
+        .shared("derivedTextData", || {
+            m.msg("derivedTextData").and_then(text_layout).map(Arc::new)
+        })
+        .flatten()
     {
-        p.text_layout = Some(Arc::new(layout));
+        p.text_layout = Some(layout);
     }
     if let Some(style) = text_style(&m) {
         p.text_style = Some(Arc::new(style));
     }
-    if let Some(symbol) = m.msg("symbolData") {
-        p.symbol = Some(Arc::new(SymbolData {
-            symbol_id: symbol.msg("symbolID").and_then(guid),
-            overrides: symbol.collect_msgs("symbolOverrides", props),
-            uniform_scale: symbol.f32("uniformScaleFactor"),
-        }));
-    }
-    if m.has("derivedSymbolData") {
-        p.derived = Some(m.collect_msgs("derivedSymbolData", props));
-    }
+    p.symbol = m
+        .shared("symbolData", || {
+            let symbol = m.msg("symbolData")?;
+            Some(Arc::new(SymbolData {
+                symbol_id: symbol.msg("symbolID").and_then(guid),
+                overrides: symbol.collect_msgs("symbolOverrides", props),
+                uniform_scale: symbol.f32("uniformScaleFactor"),
+            }))
+        })
+        .flatten();
+    p.derived = m.shared("derivedSymbolData", || {
+        m.collect_msgs("derivedSymbolData", props)
+    });
     p.swapped_symbol = m.msg("overriddenSymbolID").and_then(guid);
     if m.has("componentPropAssignments") {
         p.prop_assignments = Some(prop_assignments(&m, "componentPropAssignments"));
@@ -842,7 +863,7 @@ pub fn props(m: MsgRef) -> Props {
     p.auto_layout = auto_layout(&m).map(Arc::new);
     p.layout_child = layout_child(&m);
     handoff::read(&m, &mut p);
-    p.boolean_operation = m.enum_name("booleanOperation").map(Into::into);
+    p.boolean_operation = m.enum_name("booleanOperation").map(|o| m.intern(o));
     p.vector_data = m.msg("vectorData").map(|v| {
         Arc::new(VectorData {
             network_blob: v.u32("vectorNetworkBlob"),
@@ -854,7 +875,7 @@ pub fn props(m: MsgRef) -> Props {
         m.enum_name("verticalConstraint"),
     );
     if h.is_some() || v.is_some() {
-        p.constraints = Some((h.unwrap_or("MIN").into(), v.unwrap_or("MIN").into()));
+        p.constraints = Some((m.intern(h.unwrap_or("MIN")), m.intern(v.unwrap_or("MIN"))));
     }
     p.description = m
         .str("description")
@@ -1036,10 +1057,5 @@ pub fn is_removed(m: &MsgRef) -> bool {
 
 /// A list value's message elements (helper for the top-level message).
 pub fn list_msgs<'a>(v: ValRef<'a>) -> impl Iterator<Item = MsgRef<'a>> + 'a {
-    let schema = v.schema;
-    match v.value {
-        crate::kiwi::Value::List(items) => items.iter(),
-        _ => [].iter(),
-    }
-    .filter_map(move |value| crate::kiwi::ValRef { schema, value }.as_msg())
+    v.as_list().filter_map(|v| v.as_msg())
 }

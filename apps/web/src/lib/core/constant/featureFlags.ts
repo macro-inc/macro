@@ -765,16 +765,6 @@ export const enableFigViewer = defineFlag({
   default: onInDev,
 });
 
-/**
- * Comments pinned on designs (`.fig`), stored as document discussions with
- * a `fig` thread anchor. Off until the document storage service accepts
- * that anchor kind; `VITE_ENABLE_FIG_COMMENTS=true` turns it on.
- */
-export const enableFigComments = defineFlag({
-  env: 'ENABLE_FIG_COMMENTS',
-  default: false,
-});
-
 // PostHog controls the internal pilot and team targeting in every environment.
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',

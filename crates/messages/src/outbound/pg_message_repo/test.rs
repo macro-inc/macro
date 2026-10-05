@@ -1358,6 +1358,90 @@ async fn spreadsheet_threads_round_trip_resolve_and_delete(pool: PgPool) {
     );
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fig_threads_round_trip_on_layers_and_the_canvas(pool: PgPool) {
+    // The repository stores what the service validated; the service owns the
+    // design-file check, so the document's file type does not matter here.
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let mut threads = Vec::new();
+    for (text, node_id, x, y) in [
+        ("On the button", Some("12:34"), 18.5, -4.25),
+        ("On the canvas", None, 1024.0, 768.0),
+    ] {
+        let mut create = command("message-doc-a", None, text);
+        create.input.anchor = Some(NewThreadAnchor::Fig {
+            page_id: "0:1".into(),
+            node_id: node_id.map(str::to_owned),
+            x,
+            y,
+        });
+        let anchor = create.input.anchor.as_ref().unwrap().reference();
+        let root = repo.create(create).await.unwrap();
+        let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
+        assert_eq!(state.anchor.as_ref(), Some(&anchor));
+        threads.push((root, anchor));
+    }
+    let stored = sqlx::query_scalar!(
+        r#"SELECT anchor AS "anchor!" FROM comms_message_threads WHERE root_id = $1"#,
+        threads[1].0.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored,
+        serde_json::json!({
+            "type": "fig", "pageId": "0:1", "nodeId": null, "x": 1024.0, "y": 768.0
+        })
+    );
+
+    let (root, anchor) = &threads[0];
+    repo.create(command("message-doc-a", Some(root.id), "Fixed"))
+        .await
+        .unwrap();
+    let page = repo
+        .timeline(
+            &root.parent,
+            MessageTimelineQuery {
+                anchored: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 2);
+    let item = page
+        .items
+        .iter()
+        .find(|item| item.message.id == root.id)
+        .unwrap();
+    assert_eq!(item.state.anchor.as_ref(), Some(anchor));
+    assert_eq!(item.thread.reply_count, 1);
+    let state = repo
+        .patch_thread(
+            &root.parent,
+            root.id,
+            ThreadPatch {
+                resolved: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(state.resolved);
+    assert_eq!(state.anchor.as_ref(), Some(anchor));
+    let state = repo.delete_thread(&root.parent, root.id).await.unwrap();
+    assert!(state.deleted_at.is_some());
+    let remaining = repo
+        .timeline(&root.parent, MessageTimelineQuery::default())
+        .await
+        .unwrap()
+        .items;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].state.anchor.as_ref(), Some(&threads[1].1));
+}
+
 async fn setup_call_chat(pool: &PgPool) -> Uuid {
     setup(pool).await;
     let call_id = macro_uuid::generate_uuid_v7();
