@@ -31,8 +31,8 @@ import {
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
   parseCellAddress,
+  parseColumnName,
   resizeSpreadsheetColumn,
-  SPREADSHEET_COLUMNS,
   SPREADSHEET_DEFAULT_STYLE,
   SPREADSHEET_MAX_CELL_LENGTH,
   SPREADSHEET_MAX_ROWS,
@@ -86,7 +86,7 @@ function address(value: string) {
   const position = parseCellAddress(normalized);
   if (!position)
     throw new Error(
-      `Invalid cell address “${value}”. Use A1:Z1000 addresses without a sheet prefix.`
+      `Invalid cell address “${value}”. Use A1-style addresses (columns A–XFD, rows 1–${SPREADSHEET_MAX_ROWS}) without a sheet prefix.`
     );
   return { normalized, position };
 }
@@ -147,27 +147,24 @@ function usedRange(
   sheet: SpreadsheetWorkbookSheet,
   result: Record<string, CalculatedCell>
 ) {
-  const positions = [
-    ...new Set([
-      ...Object.keys(sheet.cells).filter(
-        (key) => sheet.cells[key].value !== ''
-      ),
-      ...Object.keys(result),
-    ]),
-  ]
-    .map((key) => parseCellAddress(key))
-    .filter((item) => item !== undefined);
-  if (!positions.length) return null;
-  return rangeName({
-    anchor: {
-      row: Math.min(...positions.map((item) => item.row)),
-      column: Math.min(...positions.map((item) => item.column)),
-    },
-    focus: {
-      row: Math.max(...positions.map((item) => item.row)),
-      column: Math.max(...positions.map((item) => item.column)),
-    },
-  });
+  // Large sheets exceed the argument limit of Math.min(...positions).
+  let bounds: CellSelection | undefined;
+  const include = (key: string) => {
+    const position = parseCellAddress(key);
+    if (!position) return;
+    if (!bounds) {
+      bounds = { anchor: { ...position }, focus: { ...position } };
+      return;
+    }
+    bounds.anchor.row = Math.min(bounds.anchor.row, position.row);
+    bounds.anchor.column = Math.min(bounds.anchor.column, position.column);
+    bounds.focus.row = Math.max(bounds.focus.row, position.row);
+    bounds.focus.column = Math.max(bounds.focus.column, position.column);
+  };
+  for (const [key, cell] of Object.entries(sheet.cells))
+    if (cell.value !== '') include(key);
+  for (const key of Object.keys(result)) include(key);
+  return bounds ? rangeName(bounds) : null;
 }
 
 function summaries(
@@ -178,7 +175,7 @@ function summaries(
     id: sheet.id,
     name: sheet.name,
     rowCount: sheet.layout.rowCount,
-    columnCount: SPREADSHEET_COLUMNS,
+    columnCount: sheet.layout.columnCount,
     usedRange: usedRange(sheet, results[sheet.id] ?? {}),
     populatedCells: Object.values(sheet.cells).filter(
       (cell) => cell.value !== ''
@@ -334,7 +331,7 @@ export function calculateSpreadsheetForAi(
       id: scratchId,
       name,
       cells: { A1: { value: qualifyScratchFormula(formula, sheet.name) } },
-      layout: { rowCount: 200, columnWidths: {} },
+      layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
       metadata: {
         definedNames: sheet.metadata?.definedNames?.filter(
           (entry) => entry.local
@@ -512,27 +509,20 @@ export function prepareSpreadsheetEdit(
             summary = `Added ${operation.count} rows to “${sheet.name}”.`;
             break;
           case 'resize_columns':
-            if (
-              !operation.columns.length ||
-              operation.columns.length > SPREADSHEET_COLUMNS
-            )
-              throw new Error('Resize between 1 and 26 columns.');
+            if (!operation.columns.length || operation.columns.length > 100)
+              throw new Error('Resize between 1 and 100 columns.');
             for (const column of operation.columns) {
+              const index = parseColumnName(column.column.toUpperCase());
               if (
-                !/^[A-Z]$/i.test(column.column) ||
+                index === undefined ||
                 !Number.isInteger(column.width) ||
                 column.width < MIN_COLUMN_WIDTH ||
                 column.width > MAX_COLUMN_WIDTH
               )
                 throw new Error(
-                  `Columns must be A–Z and widths must be ${MIN_COLUMN_WIDTH}–${MAX_COLUMN_WIDTH} pixels.`
+                  `Columns must be A–XFD and widths must be ${MIN_COLUMN_WIDTH}–${MAX_COLUMN_WIDTH} pixels.`
                 );
-              resizeSpreadsheetColumn(
-                fork,
-                column.column.toUpperCase().charCodeAt(0) - 65,
-                column.width,
-                sheet.id
-              );
+              resizeSpreadsheetColumn(fork, index, column.width, sheet.id);
             }
             summary = `Resized ${operation.columns.length} column(s) in “${sheet.name}”.`;
             break;

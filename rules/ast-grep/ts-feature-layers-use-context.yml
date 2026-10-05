@@ -15,11 +15,24 @@ note: |-
   `files` in each ts-/tsx-feature-* rule. Block-agent uses `ui/` for
   presentation and `component/` for composition.
 files:
+  - apps/web/src/features/routines/queries/**
+  - apps/web/src/features/routines/primitives/**
+  - apps/web/src/features/routines/components/**
+  - apps/web/src/features/routines/views/**
+  - apps/web/src/features/scheduling/context/**
+  - apps/web/src/features/scheduling/queries/**
+  - apps/web/src/features/scheduling/primitives/**
+  - apps/web/src/features/scheduling/components/**
+  - apps/web/src/features/scheduling/views/**
   - apps/web/src/features/crm/queries/**
   - apps/web/src/features/crm/primitives/**
   - apps/web/src/features/crm/components/**
   - apps/web/src/features/crm/views/**
   - apps/web/src/features/crm/context/**
+  - apps/web/src/features/slack-import/queries/**
+  - apps/web/src/features/slack-import/primitives/**
+  - apps/web/src/features/slack-import/components/**
+  - apps/web/src/features/slack-import/views/**
   - apps/web/src/features/channels-view/queries/channel-detail-source*
   - apps/web/src/features/channels-view/primitives/create-channel-detail*
   - apps/web/src/features/channels-view/context/channel-detail-source*
@@ -79,6 +92,11 @@ files:
   - apps/web/src/features/agent-changes/queries/**
   - apps/web/src/features/agent-changes/primitives/**
   - apps/web/src/features/agent-changes/views/**
+  - apps/web/src/features/block-write/queries/**
+  - apps/web/src/features/block-write/primitives/**
+  - apps/web/src/features/block-write/components/**
+  - apps/web/src/features/block-write/views/**
+  - apps/web/src/features/block-write/context/**
 rule:
   kind: string
   regex: ^['"](@service-storage/graphql-soup|@core/context/user|@core/user|@property/hooks|@property/editor/hooks|@core/component/LexicalMarkdown/component/core/BlockLink|@app/lib/analytics/posthog)

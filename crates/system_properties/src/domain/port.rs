@@ -3,6 +3,8 @@
 //! These traits define the interfaces that the domain layer uses.
 //! Implementations live in the outbound module.
 
+use uuid::Uuid;
+
 use crate::{StatusOption, domain::model::SystemPropertyError};
 
 /// Repository trait for system property database operations.
@@ -35,4 +37,17 @@ pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
         task_id: &str,
         status: StatusOption,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Tasks whose Project property names `project_id`, in id order.
+    fn project_task_ids(
+        &self,
+        project_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
+
+    /// The project each listed task's Project property names, as raw ids;
+    /// tasks without a project are absent.
+    fn task_projects(
+        &self,
+        task_ids: &[String],
+    ) -> impl Future<Output = Result<Vec<(String, String)>, SystemPropertyError>> + Send;
 }

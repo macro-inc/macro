@@ -1,3 +1,4 @@
+import type { GenerateImageResponse } from '@service-cognition/generated/tools/types';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,11 +11,14 @@ const result = {
   mimeType: 'image/png',
   sizeBytes: 132421,
   note: 'A frog under a leaf.',
+  width: 1536,
+  height: 1024,
 };
 
 function imageTool(
   response = true,
-  error?: string | (() => string | undefined)
+  error?: string | (() => string | undefined),
+  data: GenerateImageResponse = result
 ) {
   const failure = () => (typeof error === 'function' ? error() : error);
   return render(() => (
@@ -26,15 +30,17 @@ function imageTool(
           data: { prompt: 'A frog under a leaf' },
         }}
         response={
-          response
-            ? { id: 'call-1', name: 'GenerateImage', data: result }
-            : undefined
+          response ? { id: 'call-1', name: 'GenerateImage', data } : undefined
         }
         chat_id="chat-1"
         message_id="message-1"
         part_index={0}
         isComplete={response || !!failure()}
-        renderContext={{ isStreaming: !response, grouped: false }}
+        renderContext={{
+          isStreaming: !response,
+          grouped: false,
+          followedBy: () => false,
+        }}
       />
     </ToolErrorContext.Provider>
   ));
@@ -59,6 +65,29 @@ describe('generated image result', () => {
     expect(view.getByText('Preview unavailable')).toBeTruthy();
     expect(view.queryByRole('img')).toBeNull();
     expect(view.queryByRole('button')).toBeNull();
+  });
+
+  it('reserves the same responsive box before load and after a load failure', () => {
+    const view = imageTool();
+    const image = view.getByRole('img');
+    const frame = image.parentElement!;
+    expect(image.getAttribute('width')).toBe('576');
+    expect(image.getAttribute('height')).toBe('384');
+    expect(frame.style.width).toBe('576px');
+    expect(frame.style.aspectRatio).toBe('576 / 384');
+    const style = frame.getAttribute('style');
+    fireEvent.load(image);
+    expect(frame.getAttribute('style')).toBe(style);
+    fireEvent.error(image);
+    expect(frame.getAttribute('style')).toBe(style);
+    expect(view.getByText('Preview unavailable')).toBeTruthy();
+  });
+
+  it('still renders historical results without dimensions', () => {
+    const { width: _, height: __, ...historical } = result;
+    const view = imageTool(true, undefined, historical);
+    expect(view.getByRole('img').getAttribute('src')).toBe(result.url);
+    expect(view.getByRole('img').hasAttribute('width')).toBe(false);
   });
 
   it('shows a status while generation is pending', () => {

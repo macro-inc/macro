@@ -57,8 +57,8 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
       type: 'call' as const,
       id: e.id,
     }))
-    .with({ type: 'automation' }, (e) => ({
-      type: 'automation' as const,
+    .with({ type: 'routine' }, (e) => ({
+      type: 'routine' as const,
       id: e.id,
     }))
     .with({ type: 'foreign' }, () => {
@@ -75,6 +75,9 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     })
     .with({ type: 'calendar_event' }, () => {
       throw new Error('calendar events are not openable as attachments');
+    })
+    .with({ type: 'database' }, () => {
+      throw new Error('databases are not openable as attachments');
     })
     .exhaustive();
 }

@@ -7,7 +7,6 @@ mod test;
 mod app_jwt;
 mod installation_state;
 mod link;
-mod pull_request;
 mod repository;
 mod sync;
 
@@ -15,20 +14,21 @@ mod sync;
 pub use app_jwt::AppJwt;
 #[cfg(feature = "sync")]
 pub(crate) use app_jwt::app_jwt;
+pub use github_pull_requests::domain::models::{
+    EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
+    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef, GithubKey,
+    GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
+    GithubPullRequestLabel, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser, latest_reviews,
+};
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
 };
 pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
-pub use pull_request::{
-    EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-    GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
-    GithubPullRequestRef, GithubPullRequestStatus,
-};
-pub use repository::GithubRepository;
+pub use repository::{GithubRepository, PullRequestIndexPage, PullRequestIndexRequest};
 pub use sync::{
     GithubAppInstallationSource, GithubAuthenticatedUser, GithubInstallationAccessToken,
-    GithubInstallationSetupAction, GithubKey, GithubSetupAccessToken, GithubUserInstallation,
+    GithubInstallationSetupAction, GithubSetupAccessToken, GithubUserInstallation,
     GithubUserInstallationsPage, GithubWebhookEventType, MacroTaskId, ResolvedTeamTaskReference,
     TeamTaskReference, ValidatedGithubWebhookEvent, extract_github_mentions, strip_markdown_code,
 };

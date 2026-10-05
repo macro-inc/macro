@@ -22,16 +22,21 @@ export function createCalculationClient(
   let worker: CalculationWorker | undefined;
   let initialized = false;
   let sequence = 0;
+  // Counts stopped workers; a new worker has none of the previous one's state.
+  let epoch = 0;
   let pending:
     | {
         id: number;
         timer: ReturnType<typeof setTimeout>;
+        /** This request's calculation budget, once the engine has started. */
+        budgetMs: number;
         resolve: (result: CalculationResponse) => void;
         reject: (error: Error) => void;
       }
     | undefined;
 
   function stop(error = new Error('Calculation cancelled.')) {
+    if (worker) epoch++;
     worker?.terminate();
     worker = undefined;
     initialized = false;
@@ -42,7 +47,10 @@ export function createCalculationClient(
     }
   }
 
-  function run(operation: CalculationOperation): Promise<CalculationResponse> {
+  function run(
+    operation: CalculationOperation,
+    budgetMs = timeoutMs
+  ): Promise<CalculationResponse> {
     if (pending) stop();
     return new Promise((resolve, reject) => {
       try {
@@ -54,14 +62,15 @@ export function createCalculationClient(
             clearTimeout(current.timer);
             if (event.data.type === 'started') {
               initialized = true;
+              // The handler outlives the request that created the worker.
               current.timer = setTimeout(
                 () =>
                   stop(
                     new Error(
-                      'Calculation exceeded 3 seconds. Simplify or undo the last formula, then retry.'
+                      `Calculation exceeded ${Math.round(current.budgetMs / 1000)} seconds. Simplify or undo the last formula, then retry.`
                     )
                   ),
-                timeoutMs
+                current.budgetMs
               );
               return;
             }
@@ -84,6 +93,7 @@ export function createCalculationClient(
         const id = ++sequence;
         pending = {
           id,
+          budgetMs,
           resolve,
           reject,
           timer: setTimeout(
@@ -91,11 +101,11 @@ export function createCalculationClient(
               stop(
                 new Error(
                   initialized
-                    ? 'Calculation exceeded 3 seconds. Simplify or undo the last formula, then retry.'
+                    ? `Calculation exceeded ${Math.round(budgetMs / 1000)} seconds. Simplify or undo the last formula, then retry.`
                     : 'The calculation engine took too long to load. Check your connection and retry.'
                 )
               ),
-            initialized ? timeoutMs : ENGINE_LOAD_TIMEOUT_MS
+            initialized ? budgetMs : ENGINE_LOAD_TIMEOUT_MS
           ),
         };
         const request: CalculationRequest = { ...operation, id };
@@ -110,5 +120,5 @@ export function createCalculationClient(
       }
     });
   }
-  return { run, dispose: stop };
+  return { run, dispose: stop, epoch: () => epoch, busy: () => !!pending };
 }

@@ -92,3 +92,50 @@ describe('batched entity Soup inputs', () => {
     ).toBeUndefined();
   });
 });
+
+describe('database rows', () => {
+  it('join a batch by their own ids', () => {
+    expect(
+      buildGraphqlEntitiesSoupInput([
+        { entityType: 'DATABASE_ROW', entityId: 'row-2' },
+        { entityType: 'DATABASE_ROW', entityId: 'row-1' },
+      ])?.initial?.filters?.databaseRowFilter
+    ).toEqual({
+      or: {
+        left: { literal: { id: 'row-1' } },
+        right: { literal: { id: 'row-2' } },
+      },
+    });
+  });
+
+  it('are looked up one at a time by id with every other kind excluded', () => {
+    expect(
+      buildGraphqlEntitySoupInput(
+        'DATABASE_ROW',
+        '70000000-0000-0000-0000-000000000001'
+      )
+    ).toEqual({
+      initial: {
+        limit: 1,
+        expand: true,
+        sortMethod: 'UPDATED_AT',
+        emailView: 'ALL',
+        filters: {
+          databaseRowFilter: {
+            literal: { id: '70000000-0000-0000-0000-000000000001' },
+          },
+          calendarEventFilter: { literal: { id: nil } },
+          documentFilter: { literal: { id: nil } },
+          projectFilter: { literal: { projectIdSelf: nil } },
+          chatFilter: { literal: { chatId: nil } },
+          emailFilter: { tree: { literal: { threadId: nil } } },
+          channelFilter: { literal: { channelId: nil } },
+          channelThreadFilter: { literal: { threadId: nil } },
+          callFilter: { literal: { callId: nil } },
+          crmCompanyFilter: { literal: { id: nil } },
+          foreignEntityFilter: { literal: { id: nil } },
+        },
+      },
+    });
+  });
+});

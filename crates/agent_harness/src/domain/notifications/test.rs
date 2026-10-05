@@ -242,6 +242,29 @@ fn a_chat_agents_announced_turn_waits_silently() {
     assert!(actions.is_empty(), "{actions:#?}");
 }
 
+#[test]
+fn assignment_session_links_keep_completion_and_question_notifications() {
+    let mut identity = identity();
+    identity.origin = Some(ThreadOrigin::new(
+        messages::domain::models::MessageParent::parse("document", "task-1").unwrap(),
+        Uuid::from_u128(4),
+        Uuid::from_u128(4),
+    ));
+    assert!(matches!(
+        plan(&settled(identity.clone(), 0), false).as_slice(),
+        [PlannedNotification::Settled(_)]
+    ));
+    let AgentSessionLifecycleEvent::WaitingForInput(mut event) = waiting(Some(Uuid::from_u128(4)))
+    else {
+        unreachable!();
+    };
+    event.identity = identity;
+    assert!(matches!(
+        plan(&AgentSessionLifecycleEvent::WaitingForInput(event), false).as_slice(),
+        [PlannedNotification::WaitingForInput(_)]
+    ));
+}
+
 /// Only the announced turn has a reply to speak through: a chat session
 /// asking from the session view still notifies its audience, and a coding
 /// agent's chip says nothing about a question.

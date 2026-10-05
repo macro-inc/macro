@@ -68,6 +68,20 @@ export function createChangesModel(options: {
     () => changeset()?.id,
     () => options.changesVisible() && hasPatch()
   );
+  // Keep the last displayed patch during exit without reading or fetching it
+  // while closed. A new changeset drops the retained text, even while closed.
+  const displayedPatch = createMemo<{
+    id: string | undefined;
+    text: string | undefined;
+  }>((previous) => {
+    const id = changeset()?.id;
+    if (!options.changesVisible()) {
+      return previous && previous.id === id
+        ? previous
+        : { id, text: undefined };
+    }
+    return { id, text: patch.text() };
+  });
 
   const [refreshing, setRefreshing] = createSignal(false);
   const [refreshError, setRefreshError] = createSignal<string>();
@@ -88,7 +102,7 @@ export function createChangesModel(options: {
     state,
     changeset,
     files,
-    patch: () => (hasPatch() ? patch.text() : ''),
+    patch: () => (hasPatch() ? displayedPatch().text : ''),
     patchStatus: patch.status,
     retryPatch: patch.retry,
     refresh,

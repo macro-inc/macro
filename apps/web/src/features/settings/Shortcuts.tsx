@@ -1,11 +1,7 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { cn, Hotkey, ToggleSwitch } from '@ui';
-import {
-  enableScreencastHotkeys,
-  setEnableScreencastHotkeys,
-} from '@ui/components/ScreencastHotkeys';
-import { createMemo, createSignal, For, Index, type JSX } from 'solid-js';
-import { SettingsCard, SettingsPage } from './primitives';
+import { cn, Hotkey } from '@ui';
+import { createMemo, createSignal, For, Index, type JSX, Show } from 'solid-js';
+import { SettingsPage, SettingsSection, SettingsSurface } from './primitives';
 
 interface ShortcutItem {
   description: JSX.Element;
@@ -1011,9 +1007,7 @@ function Kbd(props: { shortcut: string; class?: string }) {
   return (
     <span
       class={cn(
-        'inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm uppercase transition-colors',
-        'border border-edge-muted bg-ink/4 text-ink-muted',
-        'group-hover:border-accent/30 group-hover:bg-accent/10 group-hover:text-accent',
+        'inline-flex items-center rounded-md px-2 py-1 text-sm uppercase text-ink/60',
         props.class
       )}
     >
@@ -1025,43 +1019,38 @@ function Kbd(props: { shortcut: string; class?: string }) {
 function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
   return (
     <div
-      class="group flex items-center gap-2 py-1.5 rounded-md hover:bg-hover transition-colors"
+      class="group flex min-h-13 items-center justify-between gap-6 py-3 hover:bg-ink/3"
       onMouseEnter={() => setHoveredCodes(props.item.codes)}
       onMouseLeave={() => setHoveredCodes([])}
     >
-      <div class="shrink-0 flex items-center gap-1 uppercase">
+      <span class="min-w-0 text-base text-ink">{props.item.description}</span>
+      <div class="flex shrink-0 flex-wrap justify-end items-center gap-2 uppercase">
         <Index each={props.item.keys}>
           {(key, index) => (
             <>
-              <Kbd shortcut={key()} />
-              {props.spacer && index < props.item.keys.length - 1 && (
-                <span class="text-ink-muted text-xs lowercase px-1">
+              <Show when={index > 0 && props.spacer}>
+                <span class="text-xs lowercase text-ink/40">
                   {props.spacer}
                 </span>
-              )}
+              </Show>
+              <Kbd shortcut={key()} />
             </>
           )}
         </Index>
       </div>
-      <span class="text-sm text-ink-muted group-hover:text-accent transition-colors">
-        {props.item.description}
-      </span>
     </div>
   );
 }
 
 function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   return (
-    <div class="mb-4">
-      <h3 class="text-sm font-semibold text-ink mb-1.5 flex items-center gap-2">
-        {props.section.title}
-      </h3>
-      <div class="flex flex-col">
+    <SettingsSection title={props.section.title}>
+      <div class="divide-y divide-ink/5">
         <For each={props.section.items}>
           {(item) => <ShortcutRow item={item} spacer="or" />}
         </For>
       </div>
-    </div>
+    </SettingsSection>
   );
 }
 
@@ -1069,42 +1058,19 @@ export function Shortcuts() {
   return (
     <SettingsPage
       title="Keyboard shortcuts"
-      actions={
-        <div class="flex items-center gap-2">
-          <span class="text-sm text-ink-muted">Screencast keys</span>
-          <ToggleSwitch
-            size="md"
-            onChange={setEnableScreencastHotkeys}
-            checked={enableScreencastHotkeys()}
-          />
-        </div>
-      }
+      description="Quick ways to navigate, search, and work in Macro."
     >
-      <SettingsCard class="px-5 py-4">
-        <Keyboard keys={hoveredCodes()} />
-      </SettingsCard>
-
-      <div class="@container">
-        <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-8">
-          {/* Core - left column */}
-          <ShortcutSectionComponent section={shortcutSections[0]} />
-
-          {/* Splits - right column */}
-          <ShortcutSectionComponent section={shortcutSections[1]} />
-
-          {/* Unified List - spans both columns with its own 2-column layout */}
-          <div class="@[600px]:col-span-2">
-            <h3 class="text-sm font-semibold text-ink mb-1.5 flex items-center gap-2">
-              {shortcutSections[2].title}
-            </h3>
-            <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-8">
-              <For each={shortcutSections[2].items}>
-                {(item) => <ShortcutRow item={item} spacer="or" />}
-              </For>
-            </div>
+      <SettingsSurface class="px-5 py-4">
+        <details>
+          <summary class="text-sm text-ink/60">Keyboard preview</summary>
+          <div class="pt-4">
+            <Keyboard keys={hoveredCodes()} />
           </div>
-        </div>
-      </div>
+        </details>
+      </SettingsSurface>
+      <For each={shortcutSections}>
+        {(section) => <ShortcutSectionComponent section={section} />}
+      </For>
     </SettingsPage>
   );
 }

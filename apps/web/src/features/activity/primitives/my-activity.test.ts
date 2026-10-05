@@ -57,6 +57,54 @@ describe('createMyActivityState', () => {
     ).toEqual(['evt-1']);
   });
 
+  it('leaves out rows and top entities of kinds the viewer cannot see', () => {
+    const context = createMockActivityContext({
+      entityTypeShown: (entityType) => entityType !== 'database',
+    });
+    let state!: MyActivityState;
+    disposals.push(
+      createRoot((dispose) => {
+        state = createMyActivityState(context);
+        return dispose;
+      })
+    );
+
+    context.graphqlMock.latest('MyActivity').resolve(
+      feedPage(
+        [
+          createdEvent,
+          {
+            ...editedEvent,
+            id: 'evt-database',
+            entityType: 'DATABASE',
+            entityId: 'database-1',
+          },
+        ],
+        null
+      )
+    );
+    context.graphqlMock.latest('MyActivityOverview').resolve(
+      overviewPage({
+        total: 2,
+        topEntities: [
+          { entityType: 'DOCUMENT', entityId: 'doc-1', count: 1 },
+          { entityType: 'DATABASE', entityId: 'database-1', count: 1 },
+        ],
+      })
+    );
+
+    const feed = state.feed();
+    if (feed.t !== 'ready') throw new Error(feed.t);
+    expect(
+      feed.groups.flatMap((g) => g.entries.map((e) => entryHead(e).id))
+    ).toEqual(['evt-1']);
+    const overview = state.overview();
+    if (overview.t !== 'ready') throw new Error(overview.t);
+    expect(overview.overview.topEntities).toEqual([
+      { entityType: 'document', entityId: 'doc-1', count: 1 },
+    ]);
+  });
+
   it('appends the next page on loadMore', () => {
     const { state, graphql } = setup();
     graphql.latest('MyActivity').resolve(feedPage([createdEvent], 'c2'));

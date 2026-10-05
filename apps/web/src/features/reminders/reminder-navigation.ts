@@ -1,3 +1,4 @@
+import { paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type {
   OpenSplitResult,
@@ -61,9 +62,10 @@ export function reminderDetailContent(reminderId: string): SplitContent {
     id: REMINDER_DETAIL_COMPONENT_ID,
     params: { reminderId },
     entryMetadata: {
-      route: {
-        matches: [{ id: REMINDER_DETAIL_ROUTE_ID, params: { reminderId } }],
-      },
+      route: paneRoute({
+        id: REMINDER_DETAIL_ROUTE_ID,
+        params: { reminderId },
+      }),
     },
   };
 }

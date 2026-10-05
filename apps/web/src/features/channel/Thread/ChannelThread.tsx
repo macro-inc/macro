@@ -43,6 +43,7 @@ export function ChannelThread(props: ThreadProps) {
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = createThreadRepliesFetchGate({
     threadId: () => props.data().id,
+    replyCount: () => thread().reply_count,
     isExpanded: props.isExpanded,
     isFindBarOpen: props.isFindBarOpen,
     targetThreadId: () => props.targetNavigation?.targetThreadId(),

@@ -1,3 +1,5 @@
+import ArrowUp from '@phosphor/arrow-up.svg';
+import { Button } from '@ui';
 /**
  * The block's composer container: reads the session from context and drives
  * the dumb `AgentInput` with derived props. Every in-flight state it shows
@@ -63,6 +65,7 @@ export function AgentComposer(props: {
     pending,
     queue,
     sendNext,
+    steer,
     turn,
     registerQuoteInsert,
     initialInput,
@@ -189,20 +192,54 @@ export function AgentComposer(props: {
     <>
       <Show when={queuedItems().length > 0}>
         <div class="pb-1.5">
-          <QueuedPrompts
-            items={queuedItems()}
-            disabled={readOnly()}
-            onEdit={(actionId, prompt) => {
-              if (!readOnly()) void queue.edit(actionId, prompt);
-            }}
-            onRemove={(actionId) => {
-              if (!readOnly()) void queue.remove(actionId);
-            }}
-            onNavigateBelow={() => focusInput?.()}
-            registerFocusFromBelow={(focus) => {
-              focusQueueBottom = focus;
-            }}
-          />
+          <div class="mb-1 flex items-center justify-between gap-2 px-1">
+            <span class="text-xs text-ink-muted">
+              {queuedItems().length} queued
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              class="touch:min-h-11"
+              aria-label="Send next queued message now"
+              disabled={
+                readOnly() ||
+                loadFailed() ||
+                pending() ||
+                turn() === 'stopping' ||
+                turn() === 'starting'
+              }
+              onClick={() => {
+                if (!readOnly()) sendNext();
+              }}
+            >
+              <ArrowUp class="size-4" />
+              Send next
+            </Button>
+          </div>
+          <div class="max-h-[25dvh] overflow-y-auto overscroll-contain">
+            <QueuedPrompts
+              items={queuedItems()}
+              disabled={readOnly()}
+              onEdit={(actionId, prompt) => {
+                if (!readOnly()) void queue.edit(actionId, prompt);
+              }}
+              onRemove={(actionId) => {
+                if (!readOnly()) void queue.remove(actionId);
+              }}
+              onSteer={
+                busy() &&
+                !readOnly() &&
+                turn() !== 'stopping' &&
+                turn() !== 'starting'
+                  ? (actionId) => steer(actionId)
+                  : undefined
+              }
+              onNavigateBelow={() => focusInput?.()}
+              registerFocusFromBelow={(focus) => {
+                focusQueueBottom = focus;
+              }}
+            />
+          </div>
         </div>
       </Show>
       <Show when={resuming()}>

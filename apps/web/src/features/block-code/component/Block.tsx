@@ -17,6 +17,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
 import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
@@ -58,7 +59,7 @@ export default function BlockCode() {
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
         <div class="size-full select-none overscroll-none overflow-hidden flex flex-col items-end relative">
-          <SidePanel.Layout defaultOpen={false}>
+          <SidePanel.Layout defaultOpen={false} floating>
             <FileSidePanelSections />
             <div class="flex size-full min-w-0 flex-col items-end overflow-hidden">
               <TopBar />
@@ -79,11 +80,7 @@ export default function BlockCode() {
                     />
                   }
                 >
-                  <Suspense
-                    fallback={
-                      <div class="p-6 text-ink-muted">Opening spreadsheet…</div>
-                    }
-                  >
+                  <Suspense fallback={<SpreadsheetSkeleton />}>
                     <UploadedWorkbook />
                   </Suspense>
                 </Show>

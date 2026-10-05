@@ -112,4 +112,12 @@ export const SPREADSHEET_LORO_SCHEMA = schema({
   spreadsheetRowAdditions: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
   ),
+  spreadsheetColumnAdditions: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  // Images drawn over sheets, as data URLs keyed by a hash of their content,
+  // so each is stored once and sheet metadata stays small.
+  spreadsheetImages: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
 });

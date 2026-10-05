@@ -123,7 +123,7 @@ export function CrmCompanyDetail(props: {
           </ViewBreadcrumbs.Item>
         )}
       </Show>
-      <SidePanel.Root persistKey="crm-company">
+      <SidePanel.Root floating defaultOpen={false}>
         <div
           ref={container}
           tabindex={-1}
@@ -135,7 +135,7 @@ export function CrmCompanyDetail(props: {
               aria-label="CRM record location"
               class="min-w-0 shrink"
             />
-            <div class="ml-auto flex shrink-0 items-center gap-2">
+            <div class="ml-auto flex shrink-0 items-center gap-1">
               <CrmCopyLinkButton
                 type={selectedContact() ? 'contact' : 'company'}
                 id={selectedContact()?.id ?? props.company.id}

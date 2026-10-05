@@ -3,7 +3,6 @@
             'initiative' as "item_type",
             i.id::text as "id",
             NULL::text as "document_version_id",
-            i.description_document_id as "description_document_id",
             i.owner_user_id as "user_id",
             i.name as "name",
             NULL::text as "branched_from_id",
@@ -22,6 +21,7 @@
             NULL::boolean as "is_completed",
             NULL::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"

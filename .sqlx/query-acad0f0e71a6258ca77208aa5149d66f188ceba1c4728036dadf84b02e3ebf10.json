@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.table_id, c.version, c.actor, c.acting_bot, c.at, c.ops, c.inverse, c.payload_version,\n                  r.kind, r.columns\n           FROM database_change_rows r\n           JOIN database_changes c ON c.id = r.change_id\n           WHERE r.row_id = $1 AND c.table_id = $2 AND c.database_id = $3\n           ORDER BY r.change_id DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "actor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "acting_bot",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "ops",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "inverse",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "payload_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "columns",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "acad0f0e71a6258ca77208aa5149d66f188ceba1c4728036dadf84b02e3ebf10"
+}

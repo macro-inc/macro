@@ -12,6 +12,8 @@ export function WorkspaceDesktopDemo(props: {
   label: string;
   caption: string;
   initialDocument?: string;
+  /** Open this sample agent conversation instead of a new one. */
+  initialAgent?: string;
   children?: JSX.Element;
 }) {
   return (
@@ -49,6 +51,7 @@ export function WorkspaceDesktopDemo(props: {
                   <Workspace
                     initialView={props.view}
                     initialDocument={props.initialDocument}
+                    initialAgent={props.initialAgent}
                     embedded
                   />
                 </DeferredDemo>

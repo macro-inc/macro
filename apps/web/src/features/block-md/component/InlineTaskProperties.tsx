@@ -1,4 +1,8 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
+import { enableProjects } from '@core/constant/featureFlags';
+import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
+import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
@@ -9,14 +13,22 @@ import { useEntityProperties } from '@property/hooks';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { createMemo, For, Show, Suspense } from 'solid-js';
+import { useTagsQuery } from '@queries/properties/tags';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { createPinnedProperties } from '../primitives/create-pinned-properties';
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 /**
- * Inline task properties shown below the title when the side panel is closed.
- * Displays status, priority, and assignees in a single row, editable like in list view.
+ * Inline document metadata and the task's status, priority, and assignees.
  */
 export function InlineTaskProperties() {
   const { documentId, kind, permissions, state } = useMarkdownDocument();
@@ -26,22 +38,67 @@ export function InlineTaskProperties() {
   const { displayName: documentName } = useMarkdownName();
   const entityType = documentKind === 'task' ? 'TASK' : 'DOCUMENT';
 
-  const { properties, refetch } = useEntityProperties(
-    blockId,
-    entityType,
-    false
-  );
+  const { properties, refetch, addProperty, removeProperty } =
+    useEntityProperties(blockId, entityType, false);
+  const pins = createPinnedProperties(() => state.editor.md.editor);
+  const projects = useFeatureFlag(enableProjects);
+  const tagSets = useTagsQuery();
+  const tagDefinitionIds = () =>
+    new Set(
+      tagSets.isSuccess ? tagSets.data.map((set) => set.definition?.id) : []
+    );
+  const [pendingPins, setPendingPins] = createSignal(new Set<string>());
+  const propertyAdded = (definitionIds?: string[]) => {
+    if (definitionIds?.length) {
+      setPendingPins((pending) => new Set([...pending, ...definitionIds]));
+    }
+    refetch();
+  };
+  const clearPendingPin = (definitionId: string) => {
+    setPendingPins((pending) => {
+      const next = new Set(pending);
+      next.delete(definitionId);
+      return next;
+    });
+  };
+  // Property assignment IDs arrive from the server; persist each requested pin
+  // to the editor once its assignment exists and the editor is ready.
+  createEffect(() => {
+    if (pendingPins().size === 0 || !state.editor.md.editor) return;
+    for (const property of properties()) {
+      if (!pendingPins().has(property.propertyDefinitionId)) continue;
+      pins.pin(property.propertyId);
+      clearPendingPin(property.propertyDefinitionId);
+    }
+  });
 
   const inlineProperties = createMemo(() => {
     const props = properties();
+    if (documentKind === 'document') {
+      return props.filter(
+        (property) =>
+          pins.ids().includes(property.propertyId) &&
+          !property.isMetadata &&
+          !tagDefinitionIds().has(property.propertyDefinitionId)
+      );
+    }
     const ids = [
       SYSTEM_PROPERTY_IDS.STATUS,
       SYSTEM_PROPERTY_IDS.PRIORITY,
       SYSTEM_PROPERTY_IDS.ASSIGNEES,
     ];
-    return ids
+    const task = ids
       .map((id) => props.find((p) => p.propertyDefinitionId === id))
       .filter((p): p is Property => p !== undefined);
+    if (!projects().enabled) return task;
+    // A task carries Project only once it joins one; the placeholder lets the
+    // same pill and editor set it.
+    return [
+      ...task,
+      props.find(
+        (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+      ) ?? buildTaskProjectDefaultProperty(),
+    ];
   });
   const shouldShowRow = createMemo(
     () =>
@@ -67,29 +124,41 @@ export function InlineTaskProperties() {
     <Suspense>
       <Show when={shouldShowRow()}>
         <PropertiesProvider
+          entityId={blockId}
           entityType={entityType}
           canEdit={canEdit()}
           documentName={documentName()}
-          properties={inlineProperties}
+          properties={properties}
+          addProperty={addProperty}
+          removeProperty={removeProperty}
+          pinnedPropertyIds={pins.ids}
+          onPropertyPinned={pins.pin}
+          onPropertyUnpinned={pins.unpin}
           onRefresh={refetch}
-          onPropertyAdded={refetch}
+          onPropertyAdded={propertyAdded}
+          onPropertyAddFailed={clearPendingPin}
           onPropertyDeleted={refetch}
           saveHandler={saveHandler}
         >
+          <InlineFetchedEntityTagsPill
+            entityId={blockId}
+            entityType={entityType}
+            class="bg-surface-2"
+            showAddButton={documentKind === 'document' && canEdit()}
+          />
           <For each={inlineProperties()}>
             {(property) => (
               <InlinePropertyValue
                 property={property}
                 entityId={blockId}
                 class="bg-surface-2 border border-edge"
+                canManage={documentKind === 'document'}
               />
             )}
           </For>
-          <InlineFetchedEntityTagsPill
-            entityId={blockId}
-            entityType={entityType}
-            class="bg-surface-2"
-          />
+          <Show when={documentKind === 'document' && canEdit()}>
+            <AddPropertyButton class="gap-1.5 bg-surface-2" />
+          </Show>
           <Show when={documentKind === 'task' && state.editor.md.progressStats}>
             {(progressStats) => (
               <Show when={progressStats().total > 0}>

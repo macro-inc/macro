@@ -11,6 +11,7 @@ pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
 pub mod connected_toolsets;
+pub mod databases;
 pub mod do_not;
 pub mod document_content_links;
 pub mod email;
@@ -42,6 +43,7 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
+    .compose(&databases::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
@@ -52,6 +54,7 @@ pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// own chain so the email section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
+    .compose(&databases::PROMPT)
     .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
@@ -63,10 +66,18 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
+    .compose(&databases::PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
+
+/// Database-only agent instructions, without unrelated tool capabilities.
+pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&databases::PROMPT);
+
+/// Database question instructions for hosts that only discover and read data.
+pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
+    BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);
 
 /// Citation, do-not, Macro-terms, and document-content-linking rules surfaced
 /// to external MCP clients, composed together. These are static; the
@@ -85,6 +96,7 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
+    .compose(&databases::PROMPT)
     .compose(&document_content_links::PROMPT);
 
 /// Builds the instructions surfaced to external MCP clients via the server
@@ -204,13 +216,17 @@ mod tests {
         assert!(session.contains("quoted verbatim"));
         assert!(session.contains("`userConfirmation`"));
         assert!(session.contains("`AskUser`"));
-        assert!(session.contains("`SendConfirmedEmail` is never right here"));
+        assert!(session.contains(
+            "`SendConfirmedEmail` and `CreateConfirmedCalendarEvent` are never right here"
+        ));
 
         // The thread rule is to restate what the tool would have done, whole,
         // so the user can approve it without opening the session - and it
-        // covers every user tool, not just email.
+        // covers every user tool, not just email: an approved event goes
+        // through the calendar twin of the confirmed send.
         assert!(session.contains("written out verbatim"));
         assert!(session.contains("the whole calendar event"));
+        assert!(session.contains("`CreateConfirmedCalendarEvent` for the event"));
 
         // Which prompt is being answered decides it, not the session.
         assert!(session.contains("decided per"));
@@ -231,18 +247,17 @@ mod tests {
     }
 
     #[test]
-    fn chat_prompt_names_the_confirmed_send_only_to_rule_it_out() {
+    fn chat_prompt_names_the_confirmed_tools_only_to_rule_them_out() {
         // The chat host has the same toolset and a composer, so the direct
-        // tool is visible there and must be steered away from; the direct
-        // prompt's hosts do not register it and say nothing about it.
+        // tools are visible there and must be steered away from; the direct
+        // prompt's hosts do not register them and say nothing about them.
         let chat = TOOL_USE_PROMPT.to_string();
         assert!(chat.contains("`SendConfirmedEmail`"));
-        assert!(chat.contains("never use it here"));
-        assert!(
-            !DIRECT_TOOL_USE_PROMPT
-                .to_string()
-                .contains("SendConfirmedEmail")
-        );
+        assert!(chat.contains("`CreateConfirmedCalendarEvent`"));
+        assert!(chat.contains("never use them here"));
+        let direct = DIRECT_TOOL_USE_PROMPT.to_string();
+        assert!(!direct.contains("SendConfirmedEmail"));
+        assert!(!direct.contains("CreateConfirmedCalendarEvent"));
     }
 
     #[test]

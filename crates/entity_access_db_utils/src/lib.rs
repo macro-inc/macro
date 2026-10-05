@@ -8,6 +8,7 @@ mod test;
 pub mod channel_share;
 pub mod team_share;
 
+pub use channel_share::get_direct_channel_grants;
 use macro_user_id::user_id::MacroUserIdStr;
 pub use model_entity::EntityType;
 use model_owner::Owner;
@@ -398,7 +399,10 @@ pub async fn update_entity_access_channel_share_permissions(
             // Reminders and scheduled actions are never channel-shared: they
             // are private to one user.
             | EntityType::Reminder
-            | EntityType::ScheduledAction => {
+            | EntityType::ScheduledAction
+            // A database row is shared only through its database.
+            | EntityType::DatabaseRow
+            => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "received unexpected entity type {entity_type:?}"
                 )));
@@ -432,7 +436,8 @@ pub async fn update_entity_access_channel_share_permissions(
                 .execute(transaction.as_mut())
                 .await?;
             }
-            EntityType::AgentSession
+            EntityType::Database
+            | EntityType::AgentSession
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
@@ -470,7 +475,10 @@ pub async fn update_entity_access_channel_share_permissions(
             // Reminders and scheduled actions are never channel-shared: they
             // are private to one user.
             | EntityType::Reminder
-            | EntityType::ScheduledAction => {
+            | EntityType::ScheduledAction
+            // A database row is shared only through its database.
+            | EntityType::DatabaseRow
+            => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "Received invalid EntityType {entity_type:?}"
                 )));
@@ -546,7 +554,8 @@ pub async fn update_entity_access_channel_share_permissions(
                     qb.build().execute(transaction.as_mut()).await?;
                 }
             }
-            EntityType::AgentSession
+            EntityType::Database
+            | EntityType::AgentSession
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread

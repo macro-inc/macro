@@ -10,6 +10,7 @@ import { CognitionV2Endpoint } from './endpoints/cognition-v2';
 import { CommentMarkEndpoint } from './endpoints/comment-mark';
 import { ExtractReplyEndpoint } from './endpoints/extract-reply';
 import { HtmlEndpoint } from './endpoints/html';
+import { ImageMarkdownEndpoint } from './endpoints/image-markdown';
 import { MarkdownEndpoint } from './endpoints/markdown';
 import { MarkdownSnapshotEndpoint } from './endpoints/markdown-snapshot';
 import { MentionsEndpoint } from './endpoints/mentions';
@@ -50,6 +51,7 @@ app.use('/mentions', internalAuth);
 app.use('/extract-reply', internalAuth);
 app.use('/agent-announcement', internalAuth);
 app.use('/agent-context', internalAuth);
+app.use('/image-markdown', internalAuth);
 app.use('/internal/health', internalAuth);
 
 const openapi = fromHono(app, {
@@ -78,6 +80,7 @@ openapi.post('/mentions', MentionsEndpoint);
 openapi.post('/extract-reply', ExtractReplyEndpoint);
 openapi.post('/agent-announcement', AgentAnnouncementEndpoint);
 openapi.post('/agent-context', AgentContextEndpoint);
+openapi.post('/image-markdown', ImageMarkdownEndpoint);
 openapi.get('/internal/health', (c) => c.json({ status: 'healthy' }));
 
 export default app;

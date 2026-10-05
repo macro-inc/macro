@@ -61,6 +61,8 @@ export type ChangesHost = {
   pullRequestChangeCounts?: Accessor<
     { additions: number; deletions: number } | undefined
   >;
+  /** The PR title from the host's existing query, when known. */
+  pullRequestTitle?: Accessor<string | undefined>;
   /** The pull request represented by the source. */
   pullRequestUrl: Accessor<string | undefined>;
   openExternal: (url: string) => void;

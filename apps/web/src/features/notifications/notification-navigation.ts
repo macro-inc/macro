@@ -5,9 +5,9 @@ import {
   getChannelParams,
   navigateToChannelMessage,
 } from '@block-channel/utils/link';
+import { contentReference } from '@components/app/split-layout/content-reference';
 import type {
   OpenSplitResult,
-  SplitContent,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -84,17 +84,13 @@ function openSplitIfNotOpen(
     existing.activate();
     reportApplied();
   } else {
-    const result = layoutManager.openWithSplit(
-      // A union of more than 25 content types no longer narrows per member.
-      { type, id } as SplitContent,
-      {
-        activate: true,
-        referredFrom: null,
-        preferNewSplit: options.newSplit,
-        handle: options.sourceHandle,
-        ...(options.onApplied ? { onApplied: reportApplied } : {}),
-      }
-    );
+    const result = layoutManager.openWithSplit(contentReference(type, id), {
+      activate: true,
+      referredFrom: null,
+      preferNewSplit: options.newSplit,
+      handle: options.sourceHandle,
+      ...(options.onApplied ? { onApplied: reportApplied } : {}),
+    });
     reportImmediateResult(result);
   }
   if (options.params && type !== 'component') {

@@ -208,14 +208,15 @@ type PromptCompositionCall = (String, Option<String>, Option<ConversationContext
 #[derive(Clone, Default)]
 struct PromptComposerMock {
     calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
+    parents: Arc<Mutex<Vec<Option<MessageParent>>>>,
     failure: Arc<Mutex<Option<String>>>,
 }
 
 impl PromptComposerMock {
     fn failing(message: &str) -> Self {
         Self {
-            calls: Arc::default(),
             failure: Arc::new(Mutex::new(Some(message.to_owned()))),
+            ..Default::default()
         }
     }
 
@@ -229,9 +230,10 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
-        _parent: Option<&MessageParent>,
+        parent: Option<&MessageParent>,
         context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
+        self.parents.lock().unwrap().push(parent.cloned());
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
             instructions.map(str::to_owned),
@@ -2556,6 +2558,64 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
         .await
         .expect_err("a removed prompt is gone");
     assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
+}
+
+#[tokio::test]
+async fn steering_a_later_queued_prompt_runs_it_ahead_of_earlier_ones() {
+    let ((service, _repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let prompt = |text: &str| ControlEvent {
+        action: AgentAction::prompt(text),
+        action_id: None,
+        actor: Some(sender()),
+    };
+    let first = service
+        .control_event(id, prompt("first waiting"))
+        .await
+        .expect("the first mid-turn prompt queues");
+    let steered = service
+        .control_event(id, prompt("steer this"))
+        .await
+        .expect("the second mid-turn prompt queues");
+
+    service
+        .steer_queued_control(id, steered.action_id, Some(sender()))
+        .await
+        .expect("a waiting prompt can be steered");
+
+    assert_eq!(
+        cancel_count(&agent),
+        1,
+        "steering cancels the turn in flight"
+    );
+    assert_eq!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .iter()
+            .map(|entry| entry.action_id)
+            .collect::<Vec<_>>(),
+        [steered.action_id, first.action_id]
+    );
+
+    agent.completes_prompt().await;
+    agent.wait_for_requests(4).await;
+    assert_eq!(
+        prompts(&agent)[1],
+        vec![ContentBlock::from("steer this")],
+        "the steered prompt flushes ahead of the one queued before it"
+    );
+
+    let missing = service
+        .steer_queued_control(id, steered.action_id, Some(sender()))
+        .await
+        .expect_err("a prompt that already flushed is not waiting");
+    assert!(matches!(missing, AgentSessionError::QueuedControlNotFound));
 }
 
 #[tokio::test]

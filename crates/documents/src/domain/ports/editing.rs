@@ -81,6 +81,15 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         request: &crate::domain::spreadsheet::SpreadsheetRequest,
     ) -> impl Future<Output = anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse>> + Send;
 
+    /// Read or edit the live collaborative copy of an uploaded Word document.
+    #[cfg(feature = "ai_tools")]
+    fn word_document(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        request: &crate::domain::word_document::WordDocumentRequest,
+    ) -> impl Future<Output = anyhow::Result<crate::domain::word_document::WordDocumentResponse>> + Send;
+
     /// Wrap the `occurrence`th (1-based) appearance of `text` in `document_id`
     /// in comment mark `mark_id`, merged into the live collaborative document.
     #[cfg(feature = "ai_tools")]

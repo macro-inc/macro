@@ -38,6 +38,7 @@ pub type ToolImageGenerationToolContext =
 pub fn build_image_generation_tool_context(
     documents: &ToolDocumentToolContext,
     generator: Arc<dyn image_generation::domain::ports::ImageGenerator>,
+    recorder: Arc<dyn ai_usage::UsageRecorder>,
 ) -> anyhow::Result<ToolImageGenerationToolContext> {
     // Local service URLs address the API container, while public file bytes
     // live in the static-file bucket. Providers receive bytes from this reader.
@@ -54,12 +55,15 @@ pub fn build_image_generation_tool_context(
         InternalApiKey::new()?.to_string(),
         macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
     );
-    Ok(build_with_cdn(documents, generator, cdn_base, storage))
+    Ok(build_with_cdn(
+        documents, generator, recorder, cdn_base, storage,
+    ))
 }
 
 fn build_with_cdn(
     documents: &ToolDocumentToolContext,
     generator: Arc<dyn image_generation::domain::ports::ImageGenerator>,
+    recorder: Arc<dyn ai_usage::UsageRecorder>,
     cdn_base: String,
     storage: static_file_service_client::StaticFileServiceClient,
 ) -> ToolImageGenerationToolContext {
@@ -77,6 +81,12 @@ fn build_with_cdn(
         image_generation::domain::service::ImageGenerationServiceImpl::new(
             generator,
             image_generation::outbound::static_files::StaticFileImageStore::new(storage),
+            Arc::new(
+                image_generation::outbound::lexical::LexicalImageMarkdownComposer::new(
+                    documents.lexical_client.clone(),
+                ),
+            ),
+            recorder,
         )
         .with_reference_reader(references),
         documents.actor,
@@ -91,6 +101,7 @@ pub fn build_image_generation_tool_context_test(
     build_with_cdn(
         documents,
         Arc::new(image_generation::domain::ports::UnconfiguredImageGenerator),
+        Arc::new(ai_usage::NoOpUsageRecorder),
         "https://static.example.test".to_string(),
         static_file_service_client::StaticFileServiceClient::new(
             "test-key".to_string(),

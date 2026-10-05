@@ -18,6 +18,7 @@ import {
   type ConnectAppNode,
   type ContactMentionNode,
   type CursorSystemNotificationNode,
+  type DatabaseQueryNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
   type DocumentCardNode,
@@ -84,6 +85,7 @@ import { Await as AwaitDecorator } from '../decorator/Await';
 import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { CursorSystemNotification as CursorSystemNotificationDecorator } from '../decorator/CursorSystemNotification';
+import { DatabaseQuery as DatabaseQueryDecorator } from '../decorator/DatabaseQuery';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
 import {
@@ -441,6 +443,18 @@ const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
         theme: props.theme,
       })}
     </span>
+  ),
+};
+
+const DatabaseQuery: TypedRenderableEntity<DatabaseQueryNode> = {
+  guard: (node: LexicalNode): node is DatabaseQueryNode =>
+    node.__type === 'database-query',
+  render: (props) => (
+    <DatabaseQueryDecorator
+      {...props.node.exportComponentProps()}
+      key={props.node.getKey()}
+      theme={props.theme}
+    />
   ),
 };
 
@@ -952,6 +966,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(ThemeMention),
   eraseRenderableEntity(TagMention),
   eraseRenderableEntity(ConnectApp),
+  eraseRenderableEntity(DatabaseQuery),
   eraseRenderableEntity(UnknownMention),
   eraseRenderableEntity(Watermark),
   eraseRenderableEntity(Paste),

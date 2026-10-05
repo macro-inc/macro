@@ -27,7 +27,7 @@ export {
   ReviewNotesDock,
 } from './views/SessionChangesControls';
 
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;
@@ -58,12 +58,13 @@ export function AgentChangesProvider(props: ParentProps) {
       toast.failure('The review notes could not be sent');
     }
   };
-  const pullRequestChangeCounts = createPullRequestStatsSource(
+  const pullRequestStats = createPullRequestStatsSource(
     () => (coding() && session.userId() ? pullRequestUrl() : undefined),
     () => source.summary()?.changeset?.id
   );
   const host: ChangesHost = {
-    pullRequestChangeCounts,
+    pullRequestChangeCounts: () => pullRequestStats()?.counts,
+    pullRequestTitle: () => pullRequestStats()?.title,
     scopeKey: session.sessionId,
     agent: {
       send: (markdown) => void sendPrompt(markdown),

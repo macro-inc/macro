@@ -44,7 +44,7 @@ export type AgentChangesController = {
   /** The handoff card was dismissed for the changeset on screen. */
   handoffDismissed: Accessor<boolean>;
   dismissHandoff: () => void;
-  copyPath: (path: string) => void;
+  copyPath: (path: string) => Promise<boolean>;
 };
 
 export function createAgentChanges(options: {
@@ -87,6 +87,7 @@ export function createAgentChanges(options: {
       copied ? 'Path copied' : 'The path could not be copied',
       copied ? 'success' : 'failure'
     );
+    return copied;
   };
 
   const consumeSendableNotes = () => {
@@ -126,6 +127,6 @@ export function createAgentChanges(options: {
       return id !== undefined && dismissed() === id;
     },
     dismissHandoff: () => setDismissed(model.changeset()?.id),
-    copyPath: (path) => void copyPath(path),
+    copyPath,
   };
 }

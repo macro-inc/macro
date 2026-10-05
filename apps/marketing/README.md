@@ -34,6 +34,18 @@ channel-based sharing. Verify claims against the implementation. Avoid vague
 “context,” “move work forward,” and “all in one place” headlines, demo narration
 as feature prose, and unqualified superiority claims. Explain technical terms
 once in plain language; keep demo disclosures in captions and relevant FAQs.
+Write it the way the founder talks to another founder: plain words, “we,” the
+competitor by name when the comparison is specific, and why we built it.
+
+Demos are faithful to the signed-in app: its labels, layout, icons, and
+hover-only controls (the message toolbar appears on hover, as in the app).
+Don't invent chrome such as step chips or explanatory labels inside a mock, and
+don't show features the app doesn't have. Every animated cursor is
+`DemoCursor`, the homepage CRM pipeline's pointer and name tag: label it
+“Claude” when an agent acts and with the person's first name otherwise. Size
+each `ProductDemo` to its scene with `height`/`mobileHeight` so a window is
+never mostly empty, and seed enough content that the first frame already
+reads as a real workspace.
 
 Product stories live in their feature's `components/*/*Stories.tsx` files.
 They reuse frozen product presentation and local workspace data. Call records

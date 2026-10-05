@@ -8,9 +8,12 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+routines = { path = "../routines" }
+macro_auth = { path = "../macro_auth" }
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
+collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
-initiative_documents = { path = "../initiative_documents" }
+initiative_description = { path = "../initiative_description" }
 activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
@@ -39,6 +42,8 @@ contacts = { path = "../contacts", default-features = false, features = [
   "outbound",
 ] }
 crm = { path = "../crm" }
+databases = { path = "../databases", default-features = false, features = ["ai_tools", "gateway", "postgres"] }
+databases_sql = { path = "../databases_sql", features = ["ai_tools"] }
 documents = { path = "../documents", features = ["ai_tools", "attachment", "purge"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
@@ -47,6 +52,7 @@ entity_access_management = { path = "../entity_access_management" }
 entity_registry = { path = "../entity_registry/entity_registry" }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
 foreign_entity = { path = "../foreign_entity" }
+github_pull_requests = { path = "../github_pull_requests" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 futures.workspace = true
 image_generation = { path = "../image_generation" }

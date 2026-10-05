@@ -17,6 +17,7 @@ use models_soup::{
     chat::SoupChat,
     comms::{ChannelMessage, ChannelParticipant, ChannelType, SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
+    database_row::SoupDatabaseRow,
     document::{SoupDocument, SoupDocumentSubType},
     email_thread::{
         SoupAttachment, SoupContact, SoupEnrichedEmailThreadPreview, SoupLabelListVisibility,
@@ -287,6 +288,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::CalendarEvent(_) => {}
             Self::Reminder(entity) => entity.2 = score,
             Self::AgentSession(entity) => entity.2 = score,
+            Self::DatabaseRow(entity) => entity.2 = score,
         }
         self
     }
@@ -306,7 +308,8 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::CrmCompany(_)
             | Self::ForeignEntity(_)
             | Self::Reminder(_)
-            | Self::AgentSession(_) => {}
+            | Self::AgentSession(_)
+            | Self::DatabaseRow(_) => {}
         }
         self
     }
@@ -436,6 +439,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     Reminder(GraphqlSoupReminder<E>),
     /// Agent session entity.
     AgentSession(GraphqlSoupAgentSession<E>),
+    /// Database row entity.
+    DatabaseRow(GraphqlSoupDatabaseRow<E>),
 }
 
 impl<E> GraphqlSoupEntity<E>
@@ -462,6 +467,7 @@ where
                 GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
                 GraphqlSoupEntityType::Reminder => GraphqlSoupReminder::<E>::type_name(),
                 GraphqlSoupEntityType::AgentSession => GraphqlSoupAgentSession::<E>::type_name(),
+                GraphqlSoupEntityType::DatabaseRow => GraphqlSoupDatabaseRow::<E>::type_name(),
             }
             .into_owned(),
         )
@@ -578,6 +584,12 @@ where
                     model_entity::EntityType::AgentSession.with_entity_string(item.id.to_string()),
                 );
                 Self::AgentSession(GraphqlSoupAgentSession(item, edges, None))
+            }
+            SoupItem::DatabaseRow(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::DatabaseRow.with_entity_string(item.id.to_string()),
+                );
+                Self::DatabaseRow(GraphqlSoupDatabaseRow(item, edges, None))
             }
         }
     }
@@ -1012,11 +1024,6 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
         }
     }
 
-    /// Document backing the project's description, when one exists.
-    async fn description_document_id(&self) -> Option<ID> {
-        self.0.description_document_id.map(|id| ID(id.to_string()))
-    }
-
     /// Common entity edges, including properties and viewer permissions.
     #[graphql(flatten)]
     async fn edges(&self) -> E {
@@ -1027,6 +1034,94 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
     #[graphql(flatten)]
     async fn initiative_edges(&self) -> E::InitiativeEdges {
         E::initiative_edges(self.0.id)
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
+/// GraphQL database row entity.
+pub struct GraphqlSoupDatabaseRow<E: SoupEntityEdges>(SoupDatabaseRow<()>, E, Option<f64>);
+
+/// A row of a Macro database table. Its cells are its `properties`, keyed
+/// by the columns' property definitions.
+#[Object(name = "GraphqlSoupDatabaseRow")]
+impl<E: SoupEntityEdges> GraphqlSoupDatabaseRow<E> {
+    /// The row identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::DatabaseRow
+    }
+
+    /// Server-only projection facts are unavailable for rows.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// Rows have no name of their own.
+    async fn display_name(&self) -> Option<String> {
+        None
+    }
+
+    /// Common row metadata; the owner is the database's.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.principal_id()),
+            owner_type: Some(self.0.owner_id.owner_type().into()),
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The table the row belongs to.
+    async fn table_id(&self) -> ID {
+        ID(self.0.table_id.to_string())
+    }
+
+    /// The database the table belongs to.
+    async fn database_id(&self) -> ID {
+        ID(self.0.database_id.to_string())
+    }
+
+    /// Fractional index ordering the row within its table.
+    async fn position(&self) -> &str {
+        &self.0.position
+    }
+
+    /// The principal identifier of the owner: the database's owner.
+    async fn owner_id(&self) -> String {
+        self.0.owner_id.principal_id()
+    }
+
+    /// Who created the row, when they still exist. Named apart from other
+    /// entities' non-null `createdBy` so one selection can hold both.
+    async fn creator_id(&self) -> Option<&str> {
+        self.0.created_by.as_deref()
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    /// Common entity edges, including properties and viewer permissions.
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 
     /// The viewer's frecency score for this entity, when loaded.
@@ -2609,6 +2704,7 @@ impl_common_interface_edges!(
     GraphqlSoupForeignEntity,
     GraphqlSoupReminder,
     GraphqlSoupAgentSession,
+    GraphqlSoupDatabaseRow,
 );
 
 /// Realtime Soup patch represented as exactly one update or cache deletion.

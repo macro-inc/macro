@@ -207,8 +207,10 @@ pub struct ConnectedStream<Records> {
 /// Why one connect did not produce a stream.
 ///
 /// The domain acts differently on each: an unavailable stream is retried, an
-/// invalid resume position is retried without one, and an expired stream is
-/// gone for good and leaves polling as the only way to learn the outcome.
+/// invalid resume position is retried without one, an expired stream is
+/// gone for good and leaves polling as the only way to learn the outcome,
+/// and a stalled connect is checked against the run's record before it is
+/// tried again.
 #[derive(Debug)]
 pub enum StreamConnectError {
     /// `stream_unavailable`: the stream is not there (yet). Carries the
@@ -218,6 +220,16 @@ pub enum StreamConnectError {
     InvalidResumePosition(String),
     /// `stream_expired`: the retention window closed behind us.
     Expired(String),
+    /// The provider accepted the connection but sent no response headers
+    /// within the adapter's patience.
+    ///
+    /// Observed live (prod, 2026-09-26): a resume after a mid-run body
+    /// failure was held for 6m43s with no headers, then answered with every
+    /// record since the break in one burst, the moment the run finished. A
+    /// connect that waits indefinitely turns that into a turn nobody can see
+    /// working; this variant is what lets the domain keep polling the run's
+    /// record in the meantime.
+    Stalled(String),
     /// Every other failure.
     Other(rootcause::Report),
 }
@@ -230,6 +242,12 @@ impl std::fmt::Display for StreamConnectError {
                 write!(formatter, "Cursor rejected the resume position: {message}")
             }
             Self::Expired(message) => write!(formatter, "Cursor stream expired: {message}"),
+            Self::Stalled(message) => {
+                write!(
+                    formatter,
+                    "Cursor stream stalled before its headers: {message}"
+                )
+            }
             Self::Other(report) => write!(formatter, "{report}"),
         }
     }

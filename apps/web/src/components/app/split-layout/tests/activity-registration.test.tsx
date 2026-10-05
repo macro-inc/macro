@@ -29,7 +29,7 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
-  useSplitRouter: () => ({ location: () => undefined }),
+  useSplitRouter: () => ({ entry: () => undefined }),
 }));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
@@ -134,7 +134,7 @@ vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => state.touch(),
 }));
-vi.mock('@queries/agent-schedule/entities', () => ({}));
+vi.mock('@app/features/routines/queries/entities', () => ({}));
 vi.mock('@ui', () => ({
   createVariants: () => () => '',
 }));

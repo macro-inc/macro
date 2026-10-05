@@ -218,7 +218,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 &announcement.origin_parent,
             )
             .await?;
-        let content = if announcement.is_coding {
+        let content = if announcement.shows_session_link() {
             self.lexical
                 .compose_agent_announcement(
                     (!announcement.reuse_origin_message)

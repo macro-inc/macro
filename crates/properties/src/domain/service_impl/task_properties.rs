@@ -13,6 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
+use models_properties::shared::EntityReference;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
@@ -40,19 +41,24 @@ where
         let Some(PropertyValue::EntityRef(references)) = value else {
             return Ok(());
         };
-        let assignee_ids = references
-            .iter()
-            .map(|reference| {
-                if reference.entity_type != EntityType::User {
-                    return Err(PropertiesErr::Validation(
-                        "Assignees must reference users".to_string(),
-                    ));
-                }
+        let mut assignee_ids = Vec::new();
+        for reference in references {
+            if reference.entity_type != EntityType::User {
+                return Err(PropertiesErr::Validation(
+                    "Assignees must reference users or agents".to_string(),
+                ));
+            }
+            // Agents act with the delegating user's access; only human
+            // assignees receive direct project collaboration grants.
+            if BotIdStr::parse_from_str(&reference.entity_id).is_ok() {
+                continue;
+            }
+            assignee_ids.push(
                 MacroUserIdStr::parse_from_str(&reference.entity_id)
                     .map(|user_id| user_id.into_owned())
-                    .map_err(|error| PropertiesErr::Validation(error.to_string()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                    .map_err(|error| PropertiesErr::Validation(error.to_string()))?,
+            );
+        }
         if assignee_ids.is_empty() {
             return Ok(());
         }
@@ -72,6 +78,22 @@ where
         access: &EditReceipt,
         referenced_task_ids: &[Uuid],
     ) -> Result<(), PropertiesErr> {
+        self.check_referenced_edit_access(
+            access,
+            entity_access::domain::models::EntityType::Document,
+            referenced_task_ids,
+        )
+        .await
+    }
+
+    /// Require the acting user's edit access to every referenced entity.
+    /// Internal (machine) callers are trusted and skip the check.
+    async fn check_referenced_edit_access(
+        &self,
+        access: &EditReceipt,
+        entity_type: entity_access::domain::models::EntityType,
+        referenced_ids: &[impl std::fmt::Display],
+    ) -> Result<(), PropertiesErr> {
         let user_id = match access.auth() {
             EntityAccessAuth::Internal => return Ok(()),
             EntityAccessAuth::Unauthenticated => {
@@ -81,21 +103,55 @@ where
                 .acting_user_id()
                 .ok_or(PropertiesErr::PermissionDenied)?,
         };
-        if referenced_task_ids.is_empty() {
+        if referenced_ids.is_empty() {
             return Ok(());
         }
         let permission_service = self.permission_service()?;
-        for task_id in referenced_task_ids {
+        for id in referenced_ids {
             permission_service
-                .mint_edit_receipt(
-                    user_id,
-                    &task_id.to_string(),
-                    entity_access::domain::models::EntityType::Document,
-                )
+                .mint_edit_receipt(user_id, &id.to_string(), entity_type)
                 .await
                 .map_err(|_| PropertiesErr::PermissionDenied)?;
         }
         Ok(())
+    }
+
+    /// A task belongs to at most one project. Joining one changes what the
+    /// project shows, so it also needs edit access to the project; leaving
+    /// needs task edit access alone. Returns the value with the project id
+    /// in canonical form, which project task lists match on.
+    pub(crate) async fn validate_task_project(
+        &self,
+        access: &EditReceipt,
+        value: Option<PropertyValue>,
+    ) -> Result<Option<PropertyValue>, PropertiesErr> {
+        let Some(PropertyValue::EntityRef(references)) = &value else {
+            return Ok(value);
+        };
+        let project_id = match references.as_slice() {
+            [] => return Ok(value),
+            [reference] if reference.entity_type == EntityType::Initiative => {
+                Uuid::parse_str(&reference.entity_id).map_err(|_| {
+                    PropertiesErr::Validation("Project must reference a project id".to_string())
+                })?
+            }
+            _ => {
+                return Err(PropertiesErr::Validation(
+                    "Project must reference one project".to_string(),
+                ));
+            }
+        };
+        self.check_referenced_edit_access(
+            access,
+            entity_access::domain::models::EntityType::Initiative,
+            &[project_id],
+        )
+        .await?;
+        Ok(Some(PropertyValue::EntityRef(vec![EntityReference {
+            entity_id: project_id.to_string(),
+            entity_type: EntityType::Initiative,
+            specific_message_id: None,
+        }])))
     }
 
     /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.

@@ -105,6 +105,22 @@ export function isFeatureEnabled(flag: Flag): boolean {
   return flag.enabled;
 }
 
+/** Databases rollout. Local HMR is on; deployed environments defer to PostHog. */
+export const enableDatabases = defineFlag({
+  key: 'enable-databases',
+  env: 'ENABLE_DATABASES',
+  default: LOCAL_ONLY || undefined,
+});
+
+/**
+ * Shows the SQL behind database answers and tool results. Off everywhere;
+ * turn on locally with VITE_SHOW_DATABASE_SQL=true.
+ */
+export const showDatabaseSql = defineFlag({
+  env: 'SHOW_DATABASE_SQL',
+  default: false,
+});
+
 /**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *
@@ -113,6 +129,13 @@ export function isFeatureEnabled(flag: Flag): boolean {
 export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
+
+// Leave the production PostHog flag disabled until archive-import rollout.
+export const enableSlackArchiveImport = defineFlag({
+  key: 'enable-slack-archive-import',
+  env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
+  default: onInDev,
+});
 
 /** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
 export const enableTasksReviews = defineFlag({
@@ -200,6 +223,16 @@ export const ENABLE_DOCX_TO_PDF = defineFlag({
   env: 'ENABLE_DOCX_TO_PDF',
   default: true,
 }).enabled;
+
+/**
+ * Open DOCX files in the collaborative DOCX editor instead of the converted
+ * PDF. On in development; deployed environments defer to PostHog.
+ */
+export const enableDocxEditor = defineFlag({
+  key: 'enable-docx-editor',
+  env: 'ENABLE_DOCX_EDITOR',
+  default: DEV_MODE_ENV || undefined,
+});
 
 export const ENABLE_MARKDOWN_LIVE_COLLABORATION = defineFlag({
   env: 'ENABLE_MARKDOWN_LIVE_COLLABORATION',
@@ -573,6 +606,14 @@ export function isCalendarSearchUiEnabled(): boolean {
   );
 }
 
+// Scheduling settings, calendar shortcuts, and public booking/receipt pages.
+// On in dev; production defers to PostHog.
+export const enableCalendarScheduling = defineFlag({
+  key: 'enable-calendar-scheduling',
+  env: 'ENABLE_CALENDAR_SCHEDULING',
+  default: onInDev,
+});
+
 // The "Enable calendar" prompt on phones. Off by default everywhere,
 // including dev: the mobile toast layout drops the body and the close button,
 // so the prompt lands as an undismissable one-line bar over the composer.
@@ -702,6 +743,28 @@ export const enableNotificationSettings = defineFlag({
   default: onInDev,
 });
 
+/**
+ * The in-browser PowerPoint editor (`block-pptx`). Off shows uploaded
+ * `.pptx` files as before: download only. On in dev; deployed environments
+ * follow PostHog.
+ */
+export const enablePptxEditor = defineFlag({
+  key: 'enable-pptx-editor',
+  env: 'ENABLE_PPTX_EDITOR',
+  default: onInDev,
+});
+
+/**
+ * The in-browser Figma file viewer (`block-fig`). Off shows uploaded `.fig`
+ * files as before: download only. On in dev; deployed environments follow
+ * PostHog.
+ */
+export const enableFigViewer = defineFlag({
+  key: 'enable-fig-viewer',
+  env: 'ENABLE_FIG_VIEWER',
+  default: onInDev,
+});
+
 // PostHog controls the internal pilot and team targeting in every environment.
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
@@ -718,6 +781,20 @@ export const enableSpreadsheets = defineFlag({
 export const enableDictation = defineFlag({
   key: 'enable-dictation',
   env: 'ENABLE_DICTATION',
+  default: onInDev,
+});
+
+/**
+ * AI usage billing UI: the Billing settings usage meter, credit packs and
+ * usage-billing controls, the out-of-credits dialog, the "$N of AI usage"
+ * plan copy, and the model picker's usage multipliers. Presentation only:
+ * backend quota admission and settlement are gated separately by
+ * `ENABLE_AI_USAGE_ENFORCEMENT` and `ENABLE_AI_USAGE_BILLING`. On in dev;
+ * production follows PostHog. Override with VITE_ENABLE_AI_USAGE_BILLING.
+ */
+export const enableAiUsageBilling = defineFlag({
+  key: 'enable-ai-usage-billing',
+  env: 'ENABLE_AI_USAGE_BILLING',
   default: onInDev,
 });
 

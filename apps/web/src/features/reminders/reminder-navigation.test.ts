@@ -1,3 +1,4 @@
+import { paneRoute } from '@app/routes/app-route';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
   SplitHandle,
@@ -39,14 +40,10 @@ describe('reminder detail destination', () => {
         id: REMINDER_DETAIL_COMPONENT_ID,
         params: { reminderId: 'reminder-1' },
         entryMetadata: {
-          route: {
-            matches: [
-              {
-                id: REMINDER_DETAIL_ROUTE_ID,
-                params: { reminderId: 'reminder-1' },
-              },
-            ],
-          },
+          route: paneRoute({
+            id: REMINDER_DETAIL_ROUTE_ID,
+            params: { reminderId: 'reminder-1' },
+          }),
         },
       },
     });

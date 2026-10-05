@@ -178,6 +178,9 @@ alone does not prove kickstart ran. Do not disable SELinux, change host permissi
 or delete the FusionAuth database. Diagnose other bind-mount denials separately;
 private labels must not be applied to directories shared by several containers.
 
+For the synthetic Slack recovery harness and separate browser/native coverage,
+see [the Slack import runbook](SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
+
 ### Seeding sample data (recommended)
 
 A bare stack has no content to click through. The seed CLI creates a realistic

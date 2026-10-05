@@ -5,29 +5,39 @@ use super::models::{
     StoredGeneratedImage,
 };
 use super::ports::{
-    ImageGenerationService, ImageGenerator, ImageReferenceReader, ImageStore,
-    UnconfiguredImageReferenceReader,
+    ImageGenerationService, ImageGenerator, ImageMarkdownComposer, ImageReferenceReader,
+    ImageStore, UnconfiguredImageReferenceReader,
 };
+use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use model_owner::CreationPrincipal;
 use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
 
-/// Image generation use case composed from a model provider and static file store.
+/// Image generation use case composed from a provider, static file store, and markup composer.
 pub struct ImageGenerationServiceImpl<Store, References = UnconfiguredImageReferenceReader> {
     generator: Arc<dyn ImageGenerator>,
     store: Store,
+    composer: Arc<dyn ImageMarkdownComposer>,
     references: References,
+    recorder: Arc<dyn UsageRecorder>,
 }
 
 impl<Store> ImageGenerationServiceImpl<Store> {
-    /// Compose the provider and image-saving capability.
-    pub fn new(generator: Arc<dyn ImageGenerator>, store: Store) -> Self {
+    /// Compose the provider, image-saving capability, and markup serializer.
+    pub fn new(
+        generator: Arc<dyn ImageGenerator>,
+        store: Store,
+        composer: Arc<dyn ImageMarkdownComposer>,
+        recorder: Arc<dyn UsageRecorder>,
+    ) -> Self {
         Self {
             generator,
             store,
+            composer,
             references: UnconfiguredImageReferenceReader,
+            recorder,
         }
     }
 }
@@ -38,7 +48,9 @@ impl<Store, References> ImageGenerationServiceImpl<Store, References> {
         ImageGenerationServiceImpl {
             generator: self.generator,
             store: self.store,
+            composer: self.composer,
             references,
+            recorder: self.recorder,
         }
     }
 }
@@ -98,13 +110,21 @@ impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
             references.push(image);
         }
 
+        let usage = match principal.user() {
+            Some(user) => UsageContext::new(AiFeature::ImageGeneration, user.clone()),
+            None => UsageContext::system(AiFeature::ImageGeneration),
+        };
         let generated = self
             .generator
-            .generate_image(&ImageGenerationRequest {
-                prompt: prompt.to_string(),
-                aspect_ratio,
-                reference_images: references,
-            })
+            .generate_image(
+                &ImageGenerationRequest {
+                    prompt: prompt.to_string(),
+                    aspect_ratio,
+                    reference_images: references,
+                },
+                &usage,
+                self.recorder.as_ref(),
+            )
             .await?;
         generated.file_type().ok_or_else(|| {
             ImageGenerationError::Provider(anyhow::anyhow!(
@@ -128,10 +148,18 @@ impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
             })
             .await?;
 
+        let markdown = self
+            .composer
+            .compose_image(&static_file, generated.width, generated.height)
+            .await?;
+
         Ok(StoredGeneratedImage {
+            markdown,
             static_file,
             mime_type: generated.mime_type,
             size_bytes,
+            width: generated.width,
+            height: generated.height,
             note: generated.note,
         })
     }

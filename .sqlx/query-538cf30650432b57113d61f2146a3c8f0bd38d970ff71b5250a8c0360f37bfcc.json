@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_import_conversation\n                        (job_id, slack_channel_id, kind, name, folder, member_ids,\n                         creator_id, source_created_at, archived, message_count)\n                       SELECT j.id, m.slack_channel_id, m.kind, m.name, m.folder, m.member_ids,\n                              m.creator_id, m.source_created_at, m.archived, m.message_count\n                       FROM slack_import_job j CROSS JOIN jsonb_to_recordset($3) AS m(\n                           slack_channel_id text, kind text, name text, folder text,\n                           member_ids text[], creator_id text, source_created_at bigint,\n                           archived boolean, message_count bigint)\n                       WHERE j.team_id = $1 AND j.id = $2\n                       ON CONFLICT (job_id, slack_channel_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "538cf30650432b57113d61f2146a3c8f0bd38d970ff71b5250a8c0360f37bfcc"
+}

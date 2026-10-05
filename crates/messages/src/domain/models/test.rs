@@ -165,3 +165,54 @@ fn spreadsheet_anchor_round_trips_without_legacy_metadata() {
         .is_err()
     );
 }
+
+#[test]
+fn fig_anchor_round_trips_with_and_without_a_layer() {
+    let value = serde_json::json!({
+        "type": "fig", "pageId": "0:1", "nodeId": "12:34", "x": 18.5, "y": -4.25
+    });
+    let input: NewThreadAnchor = serde_json::from_value(value.clone()).unwrap();
+    let stored: ThreadAnchor = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(input.reference(), stored);
+    assert_eq!(serde_json::to_value(&stored).unwrap(), value);
+
+    let canvas = serde_json::json!({
+        "type": "fig", "pageId": "0:1", "nodeId": null, "x": 100.0, "y": 200.0
+    });
+    let input: NewThreadAnchor = serde_json::from_value(canvas.clone()).unwrap();
+    assert_eq!(
+        input.reference(),
+        ThreadAnchor::Fig {
+            page_id: "0:1".into(),
+            node_id: None,
+            x: 100.0,
+            y: 200.0,
+        }
+    );
+    assert_eq!(serde_json::to_value(input.reference()).unwrap(), canvas);
+    let without_node: NewThreadAnchor = serde_json::from_value(
+        serde_json::json!({ "type": "fig", "pageId": "0:1", "x": 1, "y": 2 }),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(without_node.reference()).unwrap()["nodeId"],
+        serde_json::Value::Null
+    );
+
+    for invalid in [
+        serde_json::json!({ "type": "fig", "nodeId": "1:2", "x": 1, "y": 2 }),
+        serde_json::json!({ "type": "fig", "pageId": "0:1", "x": 1 }),
+        serde_json::json!({ "type": "fig", "pageId": "0:1", "x": "1", "y": 2 }),
+        serde_json::json!({ "type": "fig", "page_id": "0:1", "x": 1, "y": 2 }),
+        serde_json::json!({ "type": "fig", "pageId": "0:1", "x": 1, "y": 2, "zoom": 2 }),
+    ] {
+        assert!(
+            serde_json::from_value::<NewThreadAnchor>(invalid.clone()).is_err(),
+            "{invalid}"
+        );
+        assert!(
+            serde_json::from_value::<ThreadAnchor>(invalid.clone()).is_err(),
+            "{invalid}"
+        );
+    }
+}

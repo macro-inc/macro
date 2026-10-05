@@ -14,11 +14,16 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ModelOption, ModelSelector } from './ModelSelector';
 
-const state = vi.hoisted(() => ({ dev: false, mobile: false }));
+const state = vi.hoisted(() => ({ aiUsageBilling: false, mobile: false }));
 vi.mock('@core/constant/featureFlags', () => ({
-  get DEV_MODE_ENV() {
-    return state.dev;
-  },
+  enableAiUsageBilling: { key: 'enable-ai-usage-billing', override: undefined },
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: state.aiUsageBilling,
+    payload: undefined,
+    loading: false,
+  }),
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => state.mobile }));
 vi.mock('@components/app/mobile/MobileDrawer', () => {
@@ -41,7 +46,7 @@ vi.mock('@components/app/mobile/MobileDrawer', () => {
 });
 
 beforeEach(() => {
-  state.dev = false;
+  state.aiUsageBilling = false;
   state.mobile = false;
 });
 afterEach(cleanup);
@@ -115,29 +120,32 @@ describe('ModelSelector: availability', () => {
     );
   });
 
-  it('does not list Fable', () => {
+  it('does not list retired Anthropic models', () => {
     const { container } = render(() => (
       <ModelSelector models={ALL_PAID} onSelect={() => {}} />
     ));
-    expect(container.textContent).not.toContain(
-      MODEL_PRETTYNAME[Model.fable51]
-    );
+    for (const retired of ['Fable', 'Sonnet 5 ', 'Opus 5 ']) {
+      expect(container.textContent).not.toContain(retired);
+    }
+    expect(container.textContent).toContain('Sonnet 5.5');
+    expect(container.textContent).toContain('Opus 5.5');
+    expect(container.textContent).toContain('Haiku 4.5');
   });
 
   it.each([
-    { dev: false, mobile: false },
-    { dev: true, mobile: false },
-    { dev: false, mobile: true },
-    { dev: true, mobile: true },
+    { aiUsageBilling: false, mobile: false },
+    { aiUsageBilling: true, mobile: false },
+    { aiUsageBilling: false, mobile: true },
+    { aiUsageBilling: true, mobile: true },
   ])(
-    'gates usage multipliers on dev ($dev), mobile=$mobile',
-    ({ dev, mobile }) => {
-      state.dev = dev;
+    'gates usage multipliers on enable-ai-usage-billing ($aiUsageBilling), mobile=$mobile',
+    ({ aiUsageBilling, mobile }) => {
+      state.aiUsageBilling = aiUsageBilling;
       state.mobile = mobile;
       const { container } = render(() => (
         <ModelSelector models={ALL_PAID} onSelect={() => {}} />
       ));
-      expect(container.textContent?.includes('× usage')).toBe(dev);
+      expect(container.textContent?.includes('× usage')).toBe(aiUsageBilling);
     }
   );
 
@@ -156,7 +164,7 @@ describe('ModelSelector: availability', () => {
     expect(available.className).not.toContain('opacity-50');
     expect(available.querySelector('[data-testid="lock-icon"]')).toBeNull();
 
-    const locked = itemFor(container, Model.opus5);
+    const locked = itemFor(container, Model.opus55);
     expect(locked.className).toContain('opacity-50');
     expect(locked.querySelector('[data-testid="lock-icon"]')).not.toBeNull();
   });
@@ -191,8 +199,8 @@ describe('ModelSelector: selection routing', () => {
       <ModelSelector models={options} onSelect={onSelect} onLocked={onLocked} />
     ));
 
-    fireEvent.click(itemFor(container, Model.opus5)); // locked for a free user
-    expect(onLocked).toHaveBeenCalledWith(Model.opus5);
+    fireEvent.click(itemFor(container, Model.opus55)); // locked for a free user
+    expect(onLocked).toHaveBeenCalledWith(Model.opus55);
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
@@ -202,7 +210,7 @@ describe('ModelSelector: what is shown is what is sent', () => {
   // model accessor. Picking a model updates that single source, so the request
   // can never diverge from what the selector displays.
   function Harness() {
-    const [model, setModel] = createSignal<TModel>(Model.opus5);
+    const [model, setModel] = createSignal<TModel>(Model.opus55);
     return (
       <>
         {/* stand-in for the value sendMessage() reads */}
@@ -221,14 +229,14 @@ describe('ModelSelector: what is shown is what is sent', () => {
 
     // Initial state: trigger shows the selected model.
     const trigger = container.querySelector('[data-trigger]')!;
-    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.opus5]);
-    expect(getByTestId('would-send').textContent).toBe(Model.opus5);
+    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.opus55]);
+    expect(getByTestId('would-send').textContent).toBe(Model.opus55);
 
     // Select a different model -> both the trigger and the would-send value move
     // together to exactly that model.
-    fireEvent.click(itemFor(container, Model.sonnet5));
-    expect(getByTestId('would-send').textContent).toBe(Model.sonnet5);
-    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.sonnet5]);
+    fireEvent.click(itemFor(container, Model.sonnet55));
+    expect(getByTestId('would-send').textContent).toBe(Model.sonnet55);
+    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.sonnet55]);
   });
 
   it('a free user cannot select an inaccessible model into the would-send value', () => {
@@ -254,10 +262,10 @@ describe('ModelSelector: what is shown is what is sent', () => {
     }
     const { container, getByTestId } = render(() => <FreeHarness />);
 
-    fireEvent.click(itemFor(container, Model.opus5)); // locked
+    fireEvent.click(itemFor(container, Model.opus55)); // locked
     // The would-send value is unchanged; only the paywall fired.
     expect(getByTestId('would-send').textContent).toBe(Model.haiku45);
-    expect(onLocked).toHaveBeenCalledWith(Model.opus5);
+    expect(onLocked).toHaveBeenCalledWith(Model.opus55);
   });
 });
 

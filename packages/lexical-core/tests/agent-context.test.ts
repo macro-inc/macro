@@ -155,6 +155,64 @@ const origin =
   'This prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.';
 
 describe('composeAgentContextPrompt', () => {
+  it('preserves task and project references and reading guidance in an assignment prompt', () => {
+    const taskId = '019a048e-3664-77a4-b76b-02b9d67db5e8';
+    const projectId = '019a048e-3664-77a4-b76b-02b9d67db5e9';
+    const task = `<m-document-mention>${JSON.stringify({
+      documentId: taskId,
+      documentName: 'Fix the launch checklist',
+      blockName: 'task',
+      blockParams: {},
+    })}</m-document-mention>`;
+    const project = `<m-document-mention>${JSON.stringify({
+      documentId: projectId,
+      documentName: 'Task project',
+      blockName: 'initiative',
+      blockParams: {},
+    })}</m-document-mention>`;
+    const guidance =
+      "Read the project's current description before starting. Call ReadInitiative with the linked project's initiativeId; its description field holds the project's description.";
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: `You were assigned ${task}.\n\nProject: ${project}. ${guidance}`,
+    });
+    const serialized = markdownToSerializedEditorStateWithIds(composed);
+    expect(serialized.root.children).toMatchObject([
+      {
+        children: [
+          { type: 'text', text: 'You were assigned ' },
+          {
+            type: 'document-mention',
+            documentId: taskId,
+            blockName: 'task',
+          },
+          { type: 'text', text: '.' },
+        ],
+      },
+      {
+        children: [
+          { type: 'text', text: 'Project: ' },
+          {
+            type: 'document-mention',
+            documentId: projectId,
+            documentName: 'Task project',
+            blockName: 'initiative',
+          },
+          { type: 'text', text: `. ${guidance}` },
+        ],
+      },
+    ]);
+    const editor = createHeadlessEditor({
+      nodes: [...SupportedNodeTypes, ...NodeReplacements],
+    });
+    const state = editor.parseEditorState(serialized);
+
+    const exported = state.read(() =>
+      $convertToMarkdownString(EXTERNAL_TRANSFORMERS)
+    );
+    expect(exported).toBe(composed);
+    expect(exported).toContain(guidance);
+  });
+
   it('keeps the prompt thread whole and the rest of the channel as grouped background', () => {
     expect(
       composedContext({

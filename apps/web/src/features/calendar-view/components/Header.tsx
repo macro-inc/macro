@@ -7,6 +7,7 @@ import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
+import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -289,6 +290,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
               <Show when={!isMobile()}>
                 <CalendarSearch />
               </Show>
+              <CalendarSchedulingActions />
               <Show when={props.presentation === 'preview' || isMobile()}>
                 <CalendarSettingsDropdown isNarrow={isNarrow()} />
               </Show>
@@ -368,6 +370,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                 {headerCreateMenu()}
               </div>
             </Show>
+            <CalendarSchedulingActions />
             {todayButton(!breakpoints.labeledToday())}
             <PeriodSelector isNarrow={isNarrow()} />
             {previous()}

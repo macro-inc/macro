@@ -91,6 +91,25 @@ workspace-members = [
     "macro_uuid",
     "non_empty",
     "cowlike",
+    # database_sql: the SQL-subset parser/compiler for Macro databases runs in
+    # the browser (cache worker) as well as in services, so it must stay
+    # wasm-safe.
+    "database_sql",
+    # models_databases: the typed write ops the SQL engine will emit, so it
+    # joins database_sql in the browser and must stay wasm-safe too.
+    "models_databases",
+    # pptx_engine: the presentation engine runs in the browser (a wasm32
+    # module in the editor's worker) as well as in the AI tools, so it must
+    # stay wasm-safe.
+    "pptx_engine",
+    # docx_engine: the Word engine runs in the browser (a wasm32 module in the
+    # document editor's worker) on top of pptx_engine, so it must stay
+    # wasm-safe too.
+    "docx_engine",
+    # fig_engine: the .fig design viewer's parser and rasterizer runs in the
+    # browser (a wasm32 module in the viewer's workers), so it must stay
+    # wasm-safe.
+    "fig_engine",
     # soup-filter-projection is intentionally absent: its wasm-facing adapter
     # disables the native-only default `models` feature, so the crate itself
     # does not pull workspace-hack into wasm dependency traversal.

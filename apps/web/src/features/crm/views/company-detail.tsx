@@ -24,7 +24,7 @@ import { useCompanyQuery } from './use-crm';
  * Root of the company detail view, laid out like a project: the host's top
  * tab row picks the section, Overview shows the company with its description and
  * discussion, and the other sections list its team, emails, files, tasks and
- * calls. Properties and sharing stay in the right-hand SidePanel.
+ * calls. Properties and sharing open in the floating information panel.
  */
 export function Company(props: {
   companyId: string;
@@ -53,7 +53,11 @@ export function Company(props: {
   );
 
   return (
-    <SidePanel.Layout headerToggle={props.headerToggle}>
+    <SidePanel.Layout
+      headerToggle={props.headerToggle}
+      floating
+      defaultOpen={false}
+    >
       <div class="size-full min-h-0 min-w-0">
         <Switch>
           <Match when={section() === 'overview'}>

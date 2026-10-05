@@ -19,6 +19,9 @@ env:
     - crates/client/cache-turso/**
     - crates/client/cache-wasm/**
     - crates/client/turso-opfs/**
+    - crates/database_sql/**
+    - crates/filter_ast/**
+    - crates/item_filters/**
     - static_assets/schema.graphql
     - Cargo.toml
     - Cargo.lock

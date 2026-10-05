@@ -64,6 +64,16 @@ const TARGET_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
 // Height consumed by Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
+const DEFAULT_DOCUMENT_BUCKETS: EntityBucket[] = [
+  'note',
+  'task',
+  'snippet',
+  'document',
+  'project',
+  'chat',
+  'database',
+  'initiative',
+];
 
 type MentionsMenuProps = {
   menu: MenuOperations;
@@ -84,6 +94,10 @@ type MentionsMenuProps = {
   showOpenTabs?: boolean;
   /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
   sources?: MentionBucketId[];
+  /** Restrict the document bucket at the query source (e.g. task-only reference fields). */
+  documentBuckets?: EntityBucket[];
+  /** Scalar person fields cannot store group mentions. Defaults to true. */
+  includeGroups?: boolean;
 } & (
   | { editor: LexicalEditor; onPick?: never }
   | { editor?: never; anchor: HTMLElement; onPick: (item: MentionItem) => void }
@@ -96,17 +110,6 @@ export function MentionsMenu(props: MentionsMenuProps) {
     </Suspense>
   );
 }
-
-/** The entity buckets listed under "Documents, Agents, & Tasks". */
-const DOCUMENT_MENTION_BUCKETS: EntityBucket[] = [
-  'note',
-  'task',
-  'snippet',
-  'document',
-  'project',
-  'chat',
-  'initiative',
-];
 
 function MentionsMenuInner(props: MentionsMenuProps) {
   const analytics = useAnalytics();
@@ -147,7 +150,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const customDocs = props.entities
     ? useEntityMentionFromList({
         items: props.entities,
-        buckets: DOCUMENT_MENTION_BUCKETS,
+        buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
         searchTerm,
       })
     : undefined;
@@ -172,7 +175,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const docsMention =
     customDocs ??
     useEntityMention({
-      buckets: DOCUMENT_MENTION_BUCKETS,
+      buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
       searchTerm: activeSearchTerm,
     });
   const docs = docsMention.entities;
@@ -271,16 +274,22 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
+  const mentionUsers = () =>
+    (usersAndGroups() ?? []).filter(
+      (item) => props.includeGroups !== false || item.kind !== 'group'
+    );
+  const sourceEnabled = (source: MentionBucketId) =>
+    !props.sources || props.sources.includes(source);
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
-    const users = usersAndGroups() ?? [];
+    const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
       ...users,
-      ...(docs() ?? []),
-      ...(channels() ?? []),
-      ...agentSessions(),
-      ...(companies() ?? []),
-      ...(emails() ?? []),
-      ...(dates() ?? []),
+      ...(sourceEnabled('documents') ? (docs() ?? []) : []),
+      ...(sourceEnabled('channels') ? (channels() ?? []) : []),
+      ...(sourceEnabled('agentSessions') ? agentSessions() : []),
+      ...(sourceEnabled('companies') ? (companies() ?? []) : []),
+      ...(sourceEnabled('emails') ? (emails() ?? []) : []),
+      ...(sourceEnabled('dates') ? (dates() ?? []) : []),
     ];
     return sortMobileMentions(combined, searchTerm(), users);
   });
@@ -293,29 +302,33 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           label: 'All',
           getData: mobileAllItems,
           getFullCount: () =>
-            (usersAndGroups()?.length ?? 0) +
-            docsMention.totalCount() +
-            agentSessions().length +
-            channelsMention.totalCount() +
-            (companyMention?.totalCount() ?? 0) +
-            totalEmailCount() +
-            (dates()?.length ?? 0),
+            (sourceEnabled('users') ? mentionUsers().length : 0) +
+            (sourceEnabled('documents') ? docsMention.totalCount() : 0) +
+            (sourceEnabled('agentSessions') ? agentSessions().length : 0) +
+            (sourceEnabled('channels') ? channelsMention.totalCount() : 0) +
+            (sourceEnabled('companies')
+              ? (companyMention?.totalCount() ?? 0)
+              : 0) +
+            (sourceEnabled('emails') ? totalEmailCount() : 0) +
+            (sourceEnabled('dates') ? (dates()?.length ?? 0) : 0),
           hasMore: () =>
-            docsMention.hasMore() ||
-            channelsMention.hasMore() ||
-            (companyMention?.hasMore() ?? false) ||
-            hasMoreEmails(),
+            (sourceEnabled('documents') && docsMention.hasMore()) ||
+            (sourceEnabled('channels') && channelsMention.hasMore()) ||
+            (sourceEnabled('companies') &&
+              (companyMention?.hasMore() ?? false)) ||
+            (sourceEnabled('emails') && hasMoreEmails()),
           isLoadingMore: () =>
-            docsMention.isLoadingMore() ||
-            channelsMention.isLoadingMore() ||
-            (companyMention?.isLoadingMore() ?? false) ||
-            isLoadingMoreEmails(),
+            (sourceEnabled('documents') && docsMention.isLoadingMore()) ||
+            (sourceEnabled('channels') && channelsMention.isLoadingMore()) ||
+            (sourceEnabled('companies') &&
+              (companyMention?.isLoadingMore() ?? false)) ||
+            (sourceEnabled('emails') && isLoadingMoreEmails()),
           loadMore: async () => {
             await Promise.all([
-              docsMention.loadMore(),
-              channelsMention.loadMore(),
-              companyMention?.loadMore(),
-              loadMoreEmails(),
+              sourceEnabled('documents') && docsMention.loadMore(),
+              sourceEnabled('channels') && channelsMention.loadMore(),
+              sourceEnabled('companies') && companyMention?.loadMore(),
+              sourceEnabled('emails') && loadMoreEmails(),
             ]);
           },
         },
@@ -325,9 +338,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const buckets: BucketConfig[] = [
       {
         id: 'users',
-        label: groups().length > 0 ? 'People & Groups' : 'People',
-        getData: () => usersAndGroups() ?? [],
-        getFullCount: () => usersAndGroups()?.length ?? 0,
+        label:
+          props.includeGroups !== false && groups().length > 0
+            ? 'People & Groups'
+            : 'People',
+        getData: mentionUsers,
+        getFullCount: () => mentionUsers().length,
       },
       {
         id: 'documents',

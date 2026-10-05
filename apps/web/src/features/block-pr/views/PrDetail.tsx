@@ -1,4 +1,9 @@
 import { ViewShell } from '@app/components/view-shell';
+import {
+  AgentChangesSplit,
+  ChangesToggle,
+} from '@app/features/agent-changes/agent-changes';
+import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanel } from '@components/app/split-panel';
@@ -6,11 +11,17 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { openExternalUrl } from '@core/util/url';
+import { GithubLabelPills } from '@entity/components/GithubLabelPill';
 import { DebouncedNotificationReadMarker } from '@notifications';
-import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
+import {
+  type GithubPullRequestWithDetails,
+  useRefreshGithubPullRequest,
+} from '@queries/storage/github-pull-requests';
+import { githubPullRequestChangesKeys } from '@queries/storage/keys';
+import { useQueryClient } from '@tanstack/solid-query';
 import { Button, cn, Layer, Scroll } from '@ui';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
+import { PrChangesProvider } from '../component/PrChanges';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
@@ -27,6 +38,7 @@ import { PrSidePanelSections } from '../component/sidepanel/PrSidePanelSections'
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
 import {
   type PrForeignEntityData,
+  prForeignEntityQueryKey,
   usePrForeignEntityQuery,
 } from '../data/queries';
 import {
@@ -39,12 +51,43 @@ import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
 /** Share PR query state without coupling the host's header to the detail body. */
 export function usePrDetail(foreignEntityId: Accessor<string>) {
+  const queryClient = useQueryClient();
   const query = usePrForeignEntityQuery(foreignEntityId);
   // Detail-lifetime local Macro discussion (prototype-only, lost on reload).
   const discussionSource = createPrDiscussionSource();
   const data = (): PrForeignEntityData | undefined =>
     query.isPending ? undefined : query.data;
-  return { query, data, discussionSource };
+  const changeCounts = () => {
+    const pullRequest = data()?.pullRequest;
+    return pullRequest?.additions != null && pullRequest.deletions != null
+      ? { additions: pullRequest.additions, deletions: pullRequest.deletions }
+      : undefined;
+  };
+  const invalidateRefreshedPullRequest = async () => {
+    const id = foreignEntityId();
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: prForeignEntityQueryKey(id) }),
+      queryClient.invalidateQueries({
+        queryKey: githubPullRequestChangesKeys.summary(id).queryKey,
+      }),
+    ]);
+  };
+  useRefreshGithubPullRequest(
+    () => {
+      const pullRequest = data()?.pullRequest;
+      if (!pullRequest) return undefined;
+      return {
+        displayName: pullRequest.displayName,
+        githubKey: pullRequest.githubKey,
+        number: pullRequest.number,
+        owner: pullRequest.owner,
+        repo: pullRequest.repo,
+        url: pullRequest.url,
+      };
+    },
+    () => void invalidateRefreshedPullRequest()
+  );
+  return { query, data, discussionSource, changeCounts };
 }
 
 type PrDetailBodyProps = {
@@ -115,7 +158,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
   );
 }
 
-/** Native hosts own their header and place this content below it. */
+/** Native hosts place this content below their header inside `PrChangesProvider`. */
 export function PrDetailContent(props: PrDetailBodyProps) {
   return (
     <div class="relative min-h-0 min-w-0 flex-1">
@@ -128,8 +171,11 @@ export function PrDetailContent(props: PrDetailBodyProps) {
           </Scroll>
         }
       >
-        <SidePanel.Layout headerToggle={false}>
-          <PrSidePanelSections enrichment={props.data?.pullRequest} />
+        <SidePanel.Layout headerToggle={false} floating>
+          <PrSidePanelSections
+            enrichment={props.data?.pullRequest}
+            status={props.status}
+          />
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
             <PrDetailBody
               foreignEntityId={props.foreignEntityId}
@@ -145,20 +191,10 @@ export function PrDetailContent(props: PrDetailBodyProps) {
   );
 }
 
-export function PrDetailActions(props: { url?: string }) {
+export function PrDetailActions() {
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
-      <Show when={props.url}>
-        {(url) => (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => openExternalUrl(url())}
-          >
-            Open on GitHub
-          </Button>
-        )}
-      </Show>
+      <ChangesToggle />
       <SidePanel.Toggle />
     </div>
   );
@@ -178,24 +214,35 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
     return data ? (data.pullRequest.url ?? prHtmlUrl(data.prRef)) : undefined;
   };
   return (
-    <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-        <ViewShell.TopBar class="touch:flex">
-          <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-          <Show when={detail.data()?.pullRequest.status}>
-            {(status) => <PrStatusIcon status={status()} />}
-          </Show>
-          <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
-          <PrDetailActions url={githubUrl()} />
-        </ViewShell.TopBar>
-        <PrDetailContent
-          foreignEntityId={props.foreignEntityId}
-          data={detail.data()}
-          status={detail.query.status}
-          discussionSource={detail.discussionSource}
-          onRetry={() => void detail.query.refetch()}
-        />
-      </div>
+    <SidePanel.Root floating persistKey={`pr:${props.foreignEntityId}`}>
+      <PrChangesProvider
+        foreignEntityId={props.foreignEntityId}
+        pullRequestUrl={githubUrl()}
+        pullRequestTitle={detail.data()?.pullRequest.name ?? undefined}
+        pullRequestChangeCounts={detail.changeCounts()}
+      >
+        <AgentChangesSplit>
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+            <ViewShell.TopBar class="touch:flex">
+              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+              <Show when={detail.data()?.pullRequest.status}>
+                {(status) => <PrStatusIcon status={status()} />}
+              </Show>
+              <span class="min-w-0 truncate text-sm font-semibold">
+                {name()}
+              </span>
+              <PrDetailActions />
+            </ViewShell.TopBar>
+            <PrDetailContent
+              foreignEntityId={props.foreignEntityId}
+              data={detail.data()}
+              status={detail.query.status}
+              discussionSource={detail.discussionSource}
+              onRetry={() => void detail.query.refetch()}
+            />
+          </div>
+        </AgentChangesSplit>
+      </PrChangesProvider>
     </SidePanel.Root>
   );
 }
@@ -215,6 +262,7 @@ function PrMetadata(props: {
   prRef: PrRef;
   pullRequest?: GithubPullRequestWithDetails;
 }) {
+  const changes = useOptionalAgentChanges();
   return (
     <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
       <Show when={props.pullRequest?.status}>
@@ -257,16 +305,41 @@ function PrMetadata(props: {
         }
       >
         <Layer depth={2}>
-          <span class={PR_PILL_CLASS}>
-            <span class="text-success">
-              +{props.pullRequest?.additions ?? 0}
-            </span>
-            <span class="text-failure">
-              −{props.pullRequest?.deletions ?? 0}
-            </span>
-          </span>
+          <Show
+            when={changes?.available()}
+            fallback={
+              <span class={PR_PILL_CLASS}>
+                <span class="text-success">
+                  +{props.pullRequest?.additions ?? 0}
+                </span>
+                <span class="text-failure">
+                  −{props.pullRequest?.deletions ?? 0}
+                </span>
+              </span>
+            }
+          >
+            <button
+              type="button"
+              class={PR_PILL_CLASS}
+              aria-label="Open Changes pane"
+              aria-expanded={changes?.layout.changesVisible()}
+              onClick={() => changes?.layout.open()}
+            >
+              <span class="text-success">
+                +{props.pullRequest?.additions ?? 0}
+              </span>
+              <span class="text-failure">
+                −{props.pullRequest?.deletions ?? 0}
+              </span>
+            </button>
+          </Show>
         </Layer>
       </Show>
+      <GithubLabelPills
+        labels={props.pullRequest?.labels ?? []}
+        class="contents"
+        pillClass="h-auto px-2 py-1 text-sm leading-tight"
+      />
     </div>
   );
 }

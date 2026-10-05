@@ -2,7 +2,6 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   type CronParts,
   DEFAULT_WEEKDAYS,
-  describeCron,
   getDefaultTimezone,
   isCronRepresentable,
   isValidCronParts,
@@ -36,7 +35,10 @@ import {
   EventDateField,
   EventTimeInput,
 } from '../calendar/components/composer/EventDateTimeInputs';
+import { describeReminderRecurrence } from './core/recurrence-label';
+import { formatReminderOccurrence } from './core/schedule-instant';
 import {
+  describeReminderSchedule,
   formatReminderInstant,
   isRecurring,
   onceSchedule,
@@ -169,10 +171,6 @@ function sameDays(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((day) => b.includes(day));
 }
 
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 /** Compact but exact enough to compare the quick choices before selecting one. */
 function formatQuickPreset(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -181,19 +179,6 @@ function formatQuickPreset(date: Date, timezone: string): string {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date);
-}
-
-/** Human-readable zone without awkward output such as `UTC (UTC)`. */
-function formatTimezoneSummary(zone: string): string {
-  const readable = zone.replace(/_/g, ' ');
-  const abbreviation = shortZone(zone);
-  if (
-    abbreviation === readable ||
-    (abbreviation === 'UTC' && (zone === 'UTC' || zone === 'Etc/UTC'))
-  ) {
-    return abbreviation;
-  }
-  return `${readable} (${abbreviation})`;
 }
 
 /** The control values to open with, derived from the reminder (or the defaults). */
@@ -245,15 +230,6 @@ function gmtOffset(
   const sign = match[1] === '-' ? -1 : 1;
   const minutes = sign * (Number(match[2]) * 60 + Number(match[3]));
   return { minutes, text: `${match[1]}${match[2]}:${match[3]}` };
-}
-
-/** A short zone tag ("EDT", "GMT+5:30") for the schedule summary and once view. */
-function shortZone(zone: string, instant = new Date()): string {
-  return (
-    new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' })
-      .formatToParts(instant)
-      .find((part) => part.type === 'timeZoneName')?.value ?? zone
-  );
 }
 
 /**
@@ -624,13 +600,41 @@ export function ReminderForm(props: ReminderFormProps) {
       if (!typedWhenIsValid()) return;
       const date = onceDateTime();
       return date
-        ? formatReminderInstant(date, localZone, openedAt)
+        ? {
+            label: date.getTime() <= openedAt.getTime() ? 'Due' : 'Scheduled',
+            text:
+              formatReminderOccurrence(date, localZone) ??
+              'Schedule unavailable',
+          }
         : undefined;
     }
-    if (storedCronIsCustom && !customScheduleReplaced()) {
-      return `Custom repeating schedule · ${formatTimezoneSummary(timezone())}`;
+    if (
+      storedCronIsCustom &&
+      !customScheduleReplaced() &&
+      props.initialSchedule?.type === 'recurring'
+    ) {
+      const recurrence = describeReminderRecurrence(
+        props.initialSchedule.cron
+      ).cadence;
+      if (!props.initialRemindAt) return { label: undefined, text: recurrence };
+      const date = new Date(props.initialRemindAt);
+      const instant = formatReminderOccurrence(
+        date,
+        props.initialSchedule.timezone
+      );
+      return instant
+        ? {
+            label: date.getTime() <= openedAt.getTime() ? 'Due' : 'Next',
+            text: `${instant} · ${recurrence}`,
+          }
+        : { label: undefined, text: 'Schedule unavailable' };
     }
-    return `${capitalize(describeCron(repeatParts()))} · ${formatTimezoneSummary(timezone())}`;
+    return {
+      label: undefined,
+      text: describeReminderSchedule(
+        recurringSchedule(repeatParts(), timezone())
+      ),
+    };
   });
 
   const submit = () => {
@@ -849,7 +853,7 @@ export function ReminderForm(props: ReminderFormProps) {
                           fullWidth
                           class="h-auto min-h-12 min-w-0 flex-col items-start gap-0.5 rounded-[10px] px-3 py-2 text-left whitespace-normal"
                           data-reminder-quick-preset={preset.id}
-                          aria-label={`${preset.label}, ${formatReminderInstant(preset.date, localZone, openedAt)}`}
+                          aria-label={`${preset.label}, ${formatReminderInstant(preset.date, localZone)}`}
                           aria-pressed={
                             onceDateTime()?.getTime() === preset.date.getTime()
                           }
@@ -961,8 +965,12 @@ export function ReminderForm(props: ReminderFormProps) {
                 >
                   <CalendarBlankIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
                   <span class="min-w-0">
-                    <span class="font-medium text-ink">Scheduled:</span>{' '}
-                    {preview()}
+                    <Show when={preview().label}>
+                      {(label) => (
+                        <span class="font-medium text-ink">{label()}: </span>
+                      )}
+                    </Show>
+                    {preview().text}
                   </span>
                 </p>
               )}
@@ -1024,9 +1032,9 @@ export function ReminderForm(props: ReminderFormProps) {
             </Dropdown>
 
             <Show when={storedCronIsCustom && !customScheduleReplaced()}>
-              <p class="rounded-lg bg-alert/10 px-3 py-2 text-xs text-alert-ink">
-                This reminder uses a custom repeat schedule. It will stay
-                unchanged unless you choose a replacement.
+              <p class="text-xs text-ink-muted">
+                This repeat schedule stays unchanged unless you choose a
+                replacement.
               </p>
             </Show>
 

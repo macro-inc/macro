@@ -27,6 +27,7 @@ import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
+import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import {
   Badge,
   CommandMenuEmptyState,
@@ -165,6 +166,8 @@ export function CommandMenuInner(props: {
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
   const query = debouncedDependent(CommandState.query, 60);
+
+  useDatabaseDiscoverySync(() => !props.items && CommandState.isOpen());
 
   const defaultCommandItems = props.items
     ? undefined

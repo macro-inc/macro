@@ -1,0 +1,21 @@
+query DatabaseRows {
+  user {
+    id
+    soup(input: {initial: {limit: 100}}) {
+      items {
+        __typename id isFavorited cacheProjection notifications { id entityId entityType state }
+        ... on GraphqlSoupDatabaseRow {
+          tableId databaseId ownerId createdAt updatedAt
+          properties {
+            id propertyDefinitionId
+            value {
+              __typename
+              ... on GraphqlSelectOptionPropertyValue { optionIds }
+              ... on GraphqlEntityReferencePropertyValue { references { entityId } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

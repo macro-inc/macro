@@ -2,6 +2,7 @@ import { EmailUserTooltip } from '@app/features/email-message/components/email-u
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
 import { Key } from '@solid-primitives/keyed';
+import { Badge, Button, badgeTriggerClasses } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
@@ -16,7 +17,8 @@ const DEFAULT_VISIBLE_COUNT = 5;
 
 export function EmailParticipants() {
   const context = useEmailThreadState();
-  const currentUserEmail = useEmailThreadViewContext().thread.viewerEmail;
+  const viewContext = useEmailThreadViewContext();
+  const currentUserEmail = viewContext.thread.viewerEmail;
   const [expanded, setExpanded] = createSignal(false);
 
   const participants = createMemo(() => {
@@ -75,16 +77,27 @@ export function EmailParticipants() {
   };
 
   return (
-    <div class="flex flex-wrap gap-1.5" role="list">
+    <div class="flex flex-wrap items-center gap-2" role="list">
+      <Show
+        when={context.permissions().isOwner && viewContext.rendering.renderTags}
+      >
+        {(renderTags) => (
+          <div role="listitem" class="inline-flex">
+            {renderTags()()}
+          </div>
+        )}
+      </Show>
       <Key each={visibleParticipants()} by="email">
         {(participant) => (
           <EmailUserTooltip
             recipient={{ email: participant().email, name: participant().name }}
             photoUrl={participant().photoUrl}
           >
-            <div
+            <Badge
               role="listitem"
-              class="inline-flex items-center gap-1.5 rounded-full border border-ink-muted/8 bg-ink-muted/[0.025] py-1 pr-2.5 pl-1.5 text-sm text-ink hover:bg-ink-muted/[0.06] cursor-default"
+              variant="outline"
+              size="sm"
+              class="gap-1.5 bg-surface-2 border-edge"
             >
               <UserIcon
                 {...getIconProps(participant())}
@@ -96,18 +109,24 @@ export function EmailParticipants() {
               <span class="truncate max-w-32">
                 {getDisplayName(participant())}
               </span>
-            </div>
+            </Badge>
           </EmailUserTooltip>
         )}
       </Key>
       <Show when={hiddenCount() > 0}>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
+          noTouchResize
           onClick={() => setExpanded((v) => !v)}
-          class="inline-flex items-center rounded-full border border-ink-muted/8 bg-ink-muted/[0.025] px-3 py-1 text-sm text-ink-muted hover:text-ink hover:bg-ink-muted/[0.06] tabular-nums"
+          class={badgeTriggerClasses({
+            variant: 'outline',
+            size: 'sm',
+            class: 'bg-surface-2 border-edge tabular-nums',
+          })}
         >
           {expanded() ? 'Show less' : `+${hiddenCount()} more`}
-        </button>
+        </Button>
       </Show>
     </div>
   );

@@ -98,7 +98,7 @@ const MACRO_AGENT: AgentSummary = {
   tag: 'macro',
   instructions: '',
   harness: MACRO_HARNESS_NAME,
-  defaultModel: MODEL_PRETTYNAME[Model.sonnet5],
+  defaultModel: MODEL_PRETTYNAME[Model.sonnet55],
   channelSummary: 'All channels',
   share: 'Team',
 };
@@ -1220,15 +1220,9 @@ function AgentFormSection(props: {
   children: import('solid-js').JSX.Element;
 }) {
   return (
-    <section>
-      <div class="mb-2 px-1">
-        <h2 class="text-sm font-semibold text-ink">{props.title}</h2>
-        <p class="mt-0.5 text-xs text-ink-muted">{props.description}</p>
-      </div>
-      <div class="rounded-xl border border-ink/[0.06] bg-surface-2 p-4">
-        {props.children}
-      </div>
-    </section>
+    <SettingsSection title={props.title} description={props.description}>
+      <div class="pt-2">{props.children}</div>
+    </SettingsSection>
   );
 }
 

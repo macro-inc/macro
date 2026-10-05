@@ -44,124 +44,126 @@ export function SalesCalculator(props: { onBook: () => void }) {
 
   return (
     <div class="sales-calc">
-      <div class="sales-calc-controls glass">
-        <div class="sales-calc-row">
-          <span id="sales-calc-seats-label" class="sales-calc-label">
-            People on your team
-          </span>
-          <div class="sales-calc-stepper">
-            <button
-              type="button"
-              aria-label="Remove a person"
-              disabled={seats() <= 1}
-              onClick={() => stepSeats(-1)}
-            >
-              <MinusIcon aria-hidden="true" />
-            </button>
-            <input
-              type="number"
-              inputmode="numeric"
-              min="1"
-              max={MAX_SEATS}
-              value={seats()}
-              aria-labelledby="sales-calc-seats-label"
-              onInput={(event) => {
-                const next = parseSeats(event.currentTarget.value);
-                if (next !== null) setSeats(next);
-              }}
-              onBlur={(event) => {
-                event.currentTarget.value = String(seats());
-              }}
-            />
-            <button
-              type="button"
-              aria-label="Add a person"
-              disabled={seats() >= MAX_SEATS}
-              onClick={() => stepSeats(1)}
-            >
-              <PlusIcon aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-        <div
-          class="sales-calc-tiers"
-          role="group"
-          aria-label="Plan you pay for"
-        >
-          <For each={TIERS}>
-            {(option) => (
+      <div class="sales-calc-card">
+        <div class="sales-calc-controls glass">
+          <div class="sales-calc-row">
+            <span id="sales-calc-seats-label" class="sales-calc-label">
+              People on your team
+            </span>
+            <div class="sales-calc-stepper">
               <button
                 type="button"
-                aria-pressed={tier() === option.id}
-                onClick={() => setTier(option.id)}
+                aria-label="Remove a person"
+                disabled={seats() <= 1}
+                onClick={() => stepSeats(-1)}
               >
-                {option.label}
+                <MinusIcon aria-hidden="true" />
               </button>
-            )}
-          </For>
+              <input
+                type="number"
+                inputmode="numeric"
+                min="1"
+                max={MAX_SEATS}
+                value={seats()}
+                aria-labelledby="sales-calc-seats-label"
+                onInput={(event) => {
+                  const next = parseSeats(event.currentTarget.value);
+                  if (next !== null) setSeats(next);
+                }}
+                onBlur={(event) => {
+                  event.currentTarget.value = String(seats());
+                }}
+              />
+              <button
+                type="button"
+                aria-label="Add a person"
+                disabled={seats() >= MAX_SEATS}
+                onClick={() => stepSeats(1)}
+              >
+                <PlusIcon aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div
+            class="sales-calc-tiers"
+            role="group"
+            aria-label="Plan you pay for"
+          >
+            <For each={TIERS}>
+              {(option) => (
+                <button
+                  type="button"
+                  aria-pressed={tier() === option.id}
+                  onClick={() => setTier(option.id)}
+                >
+                  {option.label}
+                </button>
+              )}
+            </For>
+          </div>
+          <p class="sales-calc-label">Tap everything you pay for</p>
+          <ul class="sales-calc-tools" aria-label="Tools you pay for">
+            <For each={SAVINGS_TOOLS}>
+              {(tool) => {
+                const Icon = toolIcons[tool.id];
+                return (
+                  <li>
+                    <button
+                      type="button"
+                      aria-pressed={isSelected(tool.id)}
+                      aria-label={`${tool.name} ${tierPlan(tool, tier()).name}`}
+                      onClick={() => toggle(tool.id)}
+                    >
+                      <span class="sales-calc-check" aria-hidden="true">
+                        <CheckIcon />
+                      </span>
+                      <Icon class="sales-calc-icon" aria-hidden="true" />
+                      <span class="sales-calc-name">{tool.name}</span>
+                      <span class="sales-calc-price">
+                        {formatWholeUsd(tierMonthlyCents(tool, tier()))}
+                      </span>
+                    </button>
+                  </li>
+                );
+              }}
+            </For>
+          </ul>
         </div>
-        <p class="sales-calc-label">Tap everything you pay for</p>
-        <ul class="sales-calc-tools" aria-label="Tools you pay for">
-          <For each={SAVINGS_TOOLS}>
-            {(tool) => {
-              const Icon = toolIcons[tool.id];
-              return (
-                <li>
-                  <button
-                    type="button"
-                    aria-pressed={isSelected(tool.id)}
-                    aria-label={`${tool.name} ${tierPlan(tool, tier()).name}`}
-                    onClick={() => toggle(tool.id)}
-                  >
-                    <span class="sales-calc-check" aria-hidden="true">
-                      <CheckIcon />
-                    </span>
-                    <Icon class="sales-calc-icon" aria-hidden="true" />
-                    <span class="sales-calc-name">{tool.name}</span>
-                    <span class="sales-calc-price">
-                      {formatWholeUsd(tierMonthlyCents(tool, tier()))}
-                    </span>
-                  </button>
-                </li>
-              );
-            }}
-          </For>
-        </ul>
-      </div>
-      <div class="sales-calc-result glass" aria-live="polite">
-        <div class="sales-calc-lines">
-          <p>
-            <span>What you pay now</span>
-            <s>{formatWholeUsd(result().toolsCents)}/yr</s>
-          </p>
-          <p>
-            <span>Macro</span>
-            <strong>{formatWholeUsd(result().macroCents)}/yr</strong>
-          </p>
-        </div>
-        <Show
-          when={result().savedCents > 0}
-          fallback={
-            <p class="sales-calc-even">
-              Macro replaces all of it for{' '}
-              {formatWholeUsd(result().macroCents / seats() / 12)} a person per
-              month.
+        <div class="sales-calc-result glass" aria-live="polite">
+          <div class="sales-calc-lines">
+            <p>
+              <span>What you pay now</span>
+              <s>{formatWholeUsd(result().toolsCents)}/yr</s>
             </p>
-          }
-        >
-          <p class="sales-calc-saved">
-            <span>You save</span>
-            <strong>{formatWholeUsd(result().savedCents)}</strong>
-            <span>every year</span>
-          </p>
-        </Show>
-        <button
-          type="button"
-          class="site-nav-start homepage-hero-cta"
-          onClick={() => props.onBook()}
-        >
-          Book a demo
-        </button>
+            <p>
+              <span>Macro</span>
+              <strong>{formatWholeUsd(result().macroCents)}/yr</strong>
+            </p>
+          </div>
+          <Show
+            when={result().savedCents > 0}
+            fallback={
+              <p class="sales-calc-even">
+                Macro replaces all of it for{' '}
+                {formatWholeUsd(result().macroCents / seats() / 12)} a person
+                per month.
+              </p>
+            }
+          >
+            <p class="sales-calc-saved">
+              <span>You save</span>
+              <strong>{formatWholeUsd(result().savedCents)}</strong>
+              <span>every year</span>
+            </p>
+          </Show>
+          <button
+            type="button"
+            class="site-nav-start homepage-hero-cta"
+            onClick={() => props.onBook()}
+          >
+            Book a demo
+          </button>
+        </div>
       </div>
       <p class="sales-calc-note">
         Monthly per-seat prices, billed yearly, from each tool’s pricing page in{' '}

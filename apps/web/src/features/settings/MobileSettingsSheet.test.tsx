@@ -18,6 +18,7 @@ vi.mock('@core/mobile/virtualKeyboard', () => ({
 vi.mock('@ui', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
+  Surface: (props: ParentProps) => <div>{props.children}</div>,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),

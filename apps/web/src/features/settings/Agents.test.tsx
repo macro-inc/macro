@@ -318,8 +318,8 @@ beforeEach(() => {
   );
   modelMocks.queries = {
     'in-memory:': successfulModels([
-      { id: Model.sonnet5, name: 'Claude Sonnet 4.5' },
-      { id: Model.opus5, name: 'Claude Opus 4.5' },
+      { id: Model.sonnet55, name: 'Claude Sonnet 4.5' },
+      { id: Model.opus55, name: 'Claude Opus 4.5' },
     ]),
   };
 });
@@ -532,7 +532,7 @@ describe('Agents', () => {
           expect.objectContaining({
             agentId: 'agent-1',
             harness: 'in-memory',
-            defaultModel: Model.sonnet5,
+            defaultModel: Model.sonnet55,
           })
         )
       );
@@ -580,7 +580,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'all',
         channel_ids: [],
       },
@@ -598,7 +598,7 @@ describe('Agents', () => {
         },
         instructions: 'Keep releases moving.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -646,7 +646,7 @@ describe('Agents', () => {
         },
         instructions: 'Review pull requests.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -673,7 +673,7 @@ describe('Agents', () => {
         },
         instructions: 'Help the other team.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -699,7 +699,7 @@ describe('Agents', () => {
       },
       instructions: 'Help the team.',
       harness: 'in-memory',
-      default_model: Model.sonnet5,
+      default_model: Model.sonnet55,
       channel_scope: 'all',
       channel_ids: [],
     };
@@ -805,7 +805,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -844,7 +844,7 @@ describe('Agents', () => {
         avatarUrl: undefined,
         channelIds: ['channel-engineering'],
         channelScope: 'selected',
-        defaultModel: Model.sonnet5,
+        defaultModel: Model.sonnet55,
         description: 'Finds and fixes bugs.',
         handle: 'bug-fixer',
         harness: 'in-memory',
@@ -875,7 +875,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'all',
         channel_ids: [],
       },
@@ -920,7 +920,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'all',
         channel_ids: [],
       },
@@ -959,7 +959,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -1071,7 +1071,7 @@ describe('Agents', () => {
         isCoding: false,
         channelIds: [],
         channelScope: 'all',
-        defaultModel: Model.sonnet5,
+        defaultModel: Model.sonnet55,
         handle: 'bug-fixer',
         harness: 'in-memory',
         name: 'Bug fixer',
@@ -1546,7 +1546,7 @@ describe('Agents', () => {
     },
     instructions: '',
     harness: 'in-memory',
-    default_model: Model.sonnet5,
+    default_model: Model.sonnet55,
     channel_scope: 'all',
     channel_ids: [],
     mcp: {

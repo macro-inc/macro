@@ -8,6 +8,7 @@ import {
   useUpsertToHistoryMutation,
 } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { Project } from '@service-storage/generated/schemas/project';
@@ -117,6 +118,12 @@ export async function createProject(params: {
     await storageServiceClient.upsertItemToUserHistory({
       itemId: projectId,
       itemType: 'project',
+    });
+    // Drive's folder contents are a Soup list, not the projects list: insert
+    // the new folder there too so it appears in its parent without a reload.
+    void refetchSoupEntity(projectId, 'project', {
+      ownTouch: true,
+      refreshGraphql: true,
     });
     await Promise.all([invalidateProjects(), refetchHistory()]);
     return projectId;

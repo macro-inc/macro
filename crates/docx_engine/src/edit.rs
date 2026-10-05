@@ -1,0 +1,3468 @@
+//! Editing: a [`Session`] holds a document, its layout and a selection.
+//!
+//! Edit operations ([`EditOp`]) run as transactions over the body's blocks.
+//! Each returns an [`EditResult`]: the collaborative changes it made (text
+//! deltas and block fields for the shared maps), the selection afterwards
+//! with its geometry, the formatting at the selection, and page
+//! fingerprints so the caller repaints only pages that changed.
+
+mod clip;
+mod comments;
+mod find;
+mod format;
+mod geometry;
+mod lists;
+mod notes;
+mod revise;
+mod table;
+mod text;
+mod txn;
+mod xmledit;
+
+#[cfg(test)]
+mod test;
+#[cfg(test)]
+mod test_util;
+
+pub use clip::{Clip, ClipParagraph, ClipRun};
+pub use comments::DocComment;
+pub use find::{FindMatch, FindOptions, FindResult};
+pub use format::{Alignment, ParaPatch, RunPatch, Spacing, Toggle};
+pub use geometry::{CaretRect, PageRect, ViewIndex};
+pub use txn::{BlockRecord, Change, Step, content_delta};
+
+use crate::document::{Document, StoryTarget};
+use crate::layout::format::{Formats, ParaFormat, TableCtx};
+use crate::layout::{Item, Layout, LayoutCache, LayoutOptions, Page, ParaBox};
+use crate::model::block::{BlockId, BlockKind, Story};
+use crate::model::content::{Attrs, OBJECT_CHAR, key, utf16_len};
+use crate::model::props::Align;
+use crate::xml::SnippetContext;
+use pptx_engine::font::FontDb;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+use txn::Txn;
+use xmledit::Element;
+
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
+/// A position in the body: a paragraph and a UTF-16 offset in its content.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pos {
+    /// The paragraph.
+    pub block: BlockId,
+    /// Offset in its content (UTF-16 code units).
+    pub offset: usize,
+    /// At a line wrap, show the caret at the end of the earlier line.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub upstream: bool,
+}
+
+impl Pos {
+    /// A position.
+    pub fn new(block: BlockId, offset: usize) -> Self {
+        Self {
+            block,
+            offset,
+            upstream: false,
+        }
+    }
+
+    fn same_place(&self, other: &Pos) -> bool {
+        self.block == other.block && self.offset == other.offset
+    }
+}
+
+/// A selection: the anchor stays put while the focus moves.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Selection {
+    /// Where the selection started.
+    pub anchor: Pos,
+    /// Where the caret is.
+    pub focus: Pos,
+}
+
+impl Selection {
+    /// A caret.
+    pub fn caret(pos: Pos) -> Self {
+        Self {
+            anchor: pos.clone(),
+            focus: pos,
+        }
+    }
+
+    /// Whether the selection is a caret.
+    pub fn is_collapsed(&self) -> bool {
+        self.anchor.same_place(&self.focus)
+    }
+}
+
+/// How far a caret movement or deletion goes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Unit {
+    /// One character.
+    #[default]
+    Char,
+    /// One word.
+    Word,
+    /// One line up or down.
+    Line,
+    /// To the start or end of the line.
+    LineBoundary,
+    /// To the start of the paragraph (or the next one).
+    Paragraph,
+    /// To the start or end of the document.
+    Document,
+}
+
+/// A manual break.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BreakKind {
+    /// A line break within the paragraph.
+    Line,
+    /// A page break.
+    Page,
+    /// A column break.
+    Column,
+}
+
+/// A kind of list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ListKind {
+    /// Bullets.
+    Bullet,
+    /// Numbers.
+    Number,
+}
+
+/// One edit operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum EditOp {
+    /// Sets the selection.
+    Select {
+        /// Anchor.
+        anchor: Pos,
+        /// Focus.
+        focus: Pos,
+    },
+    /// Moves the caret, or extends the selection.
+    Move {
+        /// How far.
+        #[serde(default)]
+        unit: Unit,
+        /// Forward (right/down) or backward.
+        forward: bool,
+        /// Extend the selection instead of moving the caret.
+        #[serde(default)]
+        extend: bool,
+        /// `forward` means rightwards on the page (arrow keys): in a
+        /// right-to-left paragraph that is backwards in the text.
+        #[serde(default)]
+        visual: bool,
+    },
+    /// Selects the whole body.
+    SelectAll,
+    /// Selects the word at a position.
+    SelectWord {
+        /// Where.
+        at: Pos,
+    },
+    /// Selects the paragraph at a position.
+    SelectParagraph {
+        /// Where.
+        at: Pos,
+    },
+    /// Types text over the selection (newlines start paragraphs).
+    InsertText {
+        /// The text.
+        text: String,
+    },
+    /// Splits the paragraph at the caret (Enter).
+    InsertParagraph,
+    /// Inserts a manual break.
+    InsertBreak {
+        /// Which.
+        kind: BreakKind,
+    },
+    /// Inserts a footnote (or endnote) at the caret: its reference in the
+    /// text and a new note, which the caret moves into, as in Word.
+    InsertNote {
+        /// An endnote (else a footnote).
+        #[serde(default)]
+        endnote: bool,
+    },
+    /// Deletes the selection, or one unit beside the caret.
+    Delete {
+        /// Forward (Delete) or backward (Backspace).
+        forward: bool,
+        /// How much, for a caret.
+        #[serde(default)]
+        unit: Unit,
+    },
+    /// Turns a character format on or off for the selection.
+    ToggleFormat {
+        /// Which format.
+        format: Toggle,
+    },
+    /// Sets character formatting on the selection.
+    SetFormat {
+        /// The change.
+        #[serde(flatten)]
+        patch: RunPatch,
+    },
+    /// Removes direct character formatting from the selection.
+    ClearFormat,
+    /// Sets paragraph formatting on the selected paragraphs.
+    SetParagraph {
+        /// The change.
+        #[serde(flatten)]
+        patch: ParaPatch,
+    },
+    /// Applies a paragraph style to the selected paragraphs.
+    SetStyle {
+        /// Style id.
+        style: String,
+    },
+    /// Makes the selected paragraphs a list of `kind`, or plain paragraphs
+    /// when they already are one.
+    ToggleList {
+        /// Bullets or numbers.
+        kind: ListKind,
+    },
+    /// Moves list items a level deeper (or out), or changes the left indent.
+    Indent {
+        /// Deeper (true) or shallower.
+        forward: bool,
+    },
+    /// Inserts a table at the caret.
+    InsertTable {
+        /// Rows.
+        rows: usize,
+        /// Columns.
+        cols: usize,
+    },
+    /// Inserts a row next to the caret's.
+    InsertRow {
+        /// Below (true) or above.
+        below: bool,
+    },
+    /// Inserts a column next to the caret's.
+    InsertColumn {
+        /// Right (true) or left.
+        right: bool,
+    },
+    /// Deletes the caret's table row.
+    DeleteRow,
+    /// Deletes the caret's table column.
+    DeleteColumn,
+    /// Deletes the caret's table.
+    DeleteTable,
+    /// Starts editing the header, footer or body at a point on a page, with
+    /// the caret there.
+    EnterStory {
+        /// Page index.
+        page: usize,
+        /// X (points).
+        x: f32,
+        /// Y (points).
+        y: f32,
+    },
+    /// Leaves a header or footer for the body, where the caret was.
+    ExitStory,
+    /// Turns tracking changes on or off for the document (everyone's edits
+    /// are recorded as revisions while it is on).
+    SetTracking {
+        /// On or off.
+        on: bool,
+    },
+    /// Accepts the tracked changes in the selection (the one at a caret),
+    /// or all of them.
+    AcceptChanges {
+        /// Every change in the story.
+        #[serde(default)]
+        all: bool,
+    },
+    /// Rejects the tracked changes in the selection (the one at a caret),
+    /// or all of them.
+    RejectChanges {
+        /// Every change in the story.
+        #[serde(default)]
+        all: bool,
+    },
+    /// Pastes paragraphs over the selection.
+    Paste {
+        /// What to paste.
+        paragraphs: Vec<ClipParagraph>,
+        /// They were copied from this document (pictures, links and list
+        /// numbering then stay as they were).
+        #[serde(default)]
+        same_document: bool,
+    },
+    /// Replaces matches of a search in the body. With `all`, every match;
+    /// otherwise the match the selection holds, then selects the next one
+    /// (when the selection holds no match, selects the next one only).
+    Replace {
+        /// What to search for.
+        query: String,
+        /// How to compare.
+        #[serde(default)]
+        options: FindOptions,
+        /// The replacement text.
+        with: String,
+        /// Replace every match.
+        #[serde(default)]
+        all: bool,
+    },
+}
+
+/// A page's size and a fingerprint of what it shows.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageInfo {
+    /// Width (points).
+    pub width: f32,
+    /// Height (points).
+    pub height: f32,
+    /// Changes whenever the page's content does (hex).
+    pub fingerprint: String,
+    /// The header area.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header: Option<Area>,
+    /// The footer area.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub footer: Option<Area>,
+    /// The area of the footnotes and endnotes on the page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<Area>,
+}
+
+/// A page's header or footer area (points).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Area {
+    /// Top.
+    pub top: f32,
+    /// Bottom.
+    pub bottom: f32,
+    /// Whether the section has a part here to edit.
+    pub editable: bool,
+}
+
+impl Area {
+    fn of(chrome: &crate::layout::Chrome) -> Self {
+        Self {
+            top: chrome.top,
+            bottom: chrome.bottom,
+            editable: chrome.part.is_some(),
+        }
+    }
+}
+
+/// How far (points) outside the notes' lines a click still lands in a note.
+const NOTE_SLOP: f32 = 4.0;
+
+/// The layout story of a footnote or endnote.
+fn note_story(endnote: bool, id: i64) -> crate::layout::StoryRef {
+    if endnote {
+        crate::layout::StoryRef::Endnote(id)
+    } else {
+        crate::layout::StoryRef::Footnote(id)
+    }
+}
+
+/// The story edits to a note's text go to.
+fn note_target(story: &crate::layout::StoryRef) -> Option<StoryTarget> {
+    match story {
+        crate::layout::StoryRef::Footnote(id) => Some(StoryTarget::Note {
+            endnote: false,
+            id: *id,
+        }),
+        crate::layout::StoryRef::Endnote(id) => Some(StoryTarget::Note {
+            endnote: true,
+            id: *id,
+        }),
+        _ => None,
+    }
+}
+
+/// The band of a page its footnotes' and endnotes' lines take up.
+fn notes_area(page: &Page) -> Option<Area> {
+    let mut band: Option<(f32, f32)> = None;
+    for item in &page.items {
+        // The separator and continuation notice (negative ids) are not notes.
+        if let Item::Line(l) = item
+            && matches!(
+                l.para.story,
+                crate::layout::StoryRef::Footnote(id) | crate::layout::StoryRef::Endnote(id) if id >= 0
+            )
+        {
+            let (top, bottom) = (l.y, l.y + l.line().height);
+            band = Some(band.map_or((top, bottom), |(t, b)| (t.min(top), b.max(bottom))));
+        }
+    }
+    band.map(|(top, bottom)| Area {
+        top,
+        bottom,
+        editable: true,
+    })
+}
+
+/// Which story the selection is in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StoryKind {
+    /// The body.
+    #[default]
+    Body,
+    /// A header.
+    Header,
+    /// A footer.
+    Footer,
+    /// A footnote.
+    Footnote,
+    /// An endnote.
+    Endnote,
+}
+
+/// The story being edited.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryState {
+    /// Body, header or footer.
+    pub kind: StoryKind,
+    /// The page whose header or footer is being edited.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<usize>,
+}
+
+/// Formatting at the selection, for toolbars.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatState {
+    /// Bold.
+    pub bold: bool,
+    /// Italic.
+    pub italic: bool,
+    /// Underlined.
+    pub underline: bool,
+    /// Struck through.
+    pub strike: bool,
+    /// Superscript.
+    pub superscript: bool,
+    /// Subscript.
+    pub subscript: bool,
+    /// Font family.
+    pub font: Option<String>,
+    /// Size (points).
+    pub size: Option<f32>,
+    /// Text color (`RRGGBB`), when not automatic.
+    pub color: Option<String>,
+    /// Highlight color name (`yellow`, `green`...), when highlighted.
+    pub highlight: Option<String>,
+    /// Paragraph style id.
+    pub style: Option<String>,
+    /// Paragraph style name.
+    pub style_name: Option<String>,
+    /// Paragraph alignment.
+    pub align: Option<Alignment>,
+    /// Whether the paragraph is in a list.
+    pub list: bool,
+    /// Line spacing as a multiple of single spacing, when it is one.
+    pub line_spacing: Option<f32>,
+    /// Whether the selection starts in a table.
+    pub table: bool,
+    /// Whether the document tracks changes.
+    pub tracking: bool,
+    /// Whether the selection (or the caret) touches a tracked change.
+    pub revision: bool,
+    /// Whether undo is possible.
+    pub can_undo: bool,
+    /// Whether redo is possible.
+    pub can_redo: bool,
+}
+
+/// What an operation did.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditResult {
+    /// Whether the document changed.
+    pub changed: bool,
+    /// The changes for the collaborative maps.
+    pub changes: Vec<Change>,
+    /// The selection afterwards.
+    pub selection: Selection,
+    /// The selection's ends in document order.
+    pub range: Range,
+    /// The caret (at the focus).
+    pub caret: Option<CaretRect>,
+    /// Selection highlight rectangles.
+    pub rects: Vec<PageRect>,
+    /// Pages, when the layout changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pages: Option<Vec<PageInfo>>,
+    /// Where pages changed since the previous result, when the layout changed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub bands: Vec<Band>,
+    /// Formatting at the selection.
+    pub format: FormatState,
+    /// The story being edited.
+    pub story: StoryState,
+}
+
+/// A selection's ends in document order.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Range {
+    /// The start.
+    pub from: Pos,
+    /// The end.
+    pub to: Pos,
+}
+
+/// A change other peers made, as the shared containers now hold it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "t", rename_all = "camelCase")]
+pub enum RemoteChange {
+    /// A block as it now is (new or changed).
+    Block {
+        /// The block.
+        block: BlockRecord,
+        /// The text changes from this session's copy of the paragraph to
+        /// the new one, in order, when the caller knows them: carets follow
+        /// them exactly instead of being placed by comparing texts.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        deltas: Vec<Vec<crate::model::content::DeltaOp>>,
+    },
+    /// A block that no longer exists.
+    Remove {
+        /// Block id.
+        id: BlockId,
+    },
+    /// An entry of the parts, relationships or content types maps.
+    Entry {
+        /// The map.
+        container: String,
+        /// The key.
+        key: String,
+        /// The value (`None` = deleted).
+        value: Option<String>,
+    },
+}
+
+/// A paragraph's id and text (object characters included), for anchoring
+/// comments and searching.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ParagraphText {
+    /// Block id.
+    pub id: BlockId,
+    /// Text.
+    pub text: String,
+}
+
+/// Where an offset moves through a text delta. Text inserted exactly at
+/// the offset goes after it, so someone typing there keeps typing in one
+/// piece while another person's text arrives next to it.
+fn map_through(offset: usize, delta: &[crate::model::content::DeltaOp]) -> usize {
+    use crate::model::content::DeltaOp;
+    let mut index = offset;
+    let mut at = 0;
+    for op in delta {
+        if at > index {
+            break;
+        }
+        match op {
+            DeltaOp::Delete { delete } => {
+                index -= (*delete).min(index - at);
+            }
+            DeltaOp::Retain { retain, .. } => at += retain,
+            DeltaOp::Insert { insert, .. } => {
+                let len = crate::model::content::utf16_len(insert);
+                if at < index {
+                    index += len;
+                }
+                at += len;
+            }
+        }
+    }
+    index
+}
+
+/// `text` (UTF-16 units) with a delta applied, ignoring attributes;
+/// `None` when the delta does not fit the text.
+fn apply_text_delta(text: &[u16], delta: &[crate::model::content::DeltaOp]) -> Option<Vec<u16>> {
+    use crate::model::content::DeltaOp;
+    let mut out = Vec::with_capacity(text.len());
+    let mut at = 0;
+    for op in delta {
+        match op {
+            DeltaOp::Insert { insert, .. } => out.extend(insert.encode_utf16()),
+            DeltaOp::Delete { delete } => {
+                at += delete;
+                if at > text.len() {
+                    return None;
+                }
+            }
+            DeltaOp::Retain { retain, .. } => {
+                let end = at + retain;
+                out.extend_from_slice(text.get(at..end)?);
+                at = end;
+            }
+        }
+    }
+    out.extend_from_slice(text.get(at..)?);
+    Some(out)
+}
+
+/// Where an offset moves when a paragraph's text changes from `old` to
+/// `new`: text kept at both ends keeps its place, an offset inside the
+/// replaced middle goes to the end of the new middle.
+fn map_offset(old: &str, new: &str, offset: usize) -> usize {
+    let a: Vec<char> = old.chars().collect();
+    let b: Vec<char> = new.chars().collect();
+    let mut prefix = 0;
+    while prefix < a.len() && prefix < b.len() && a[prefix] == b[prefix] {
+        prefix += 1;
+    }
+    let mut suffix = 0;
+    while suffix < a.len() - prefix
+        && suffix < b.len() - prefix
+        && a[a.len() - 1 - suffix] == b[b.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+    let units = |cs: &[char]| cs.iter().map(|c| c.len_utf16()).sum::<usize>();
+    let p16 = units(&a[..prefix]);
+    let old_len = units(&a);
+    let new_len = units(&b);
+    let s16 = units(&a[a.len() - suffix..]);
+    if offset <= p16 {
+        offset
+    } else if offset >= old_len - s16 {
+        offset + new_len - old_len
+    } else {
+        new_len - s16
+    }
+}
+
+/// Paragraphs in document order.
+#[derive(Debug, Default)]
+struct ParaOrder {
+    list: Vec<BlockId>,
+    index: HashMap<BlockId, usize>,
+}
+
+/// One undoable step.
+#[derive(Clone, Debug)]
+struct UndoEntry {
+    step: Step,
+    before: Selection,
+    after: Selection,
+    group: Option<String>,
+}
+
+/// A document open for editing.
+pub struct Session {
+    doc: Document,
+    cache: LayoutCache,
+    options: LayoutOptions,
+    layout: Arc<Layout>,
+    index: Arc<ViewIndex>,
+    stale: bool,
+    sel: Selection,
+    /// Formatting for the next typed text at a caret (Ctrl+B with nothing selected).
+    pending: Option<Attrs>,
+    goal_x: Option<f32>,
+    undo: Vec<UndoEntry>,
+    redo: Vec<UndoEntry>,
+    /// The last step may absorb the next one in this group (typing).
+    open_group: Option<String>,
+    /// Undo history is kept by the caller (collaborative editing).
+    external_undo: bool,
+    order: Option<(u64, Arc<ParaOrder>)>,
+    /// Changed strips since the last result.
+    bands: Vec<Band>,
+    line_hashes: LineHashes,
+    keys: PageKeys,
+    fingerprints: Vec<u64>,
+    /// The story being edited.
+    active: StoryTarget,
+    /// The page whose header or footer is being edited.
+    story_page: usize,
+    /// The body's lines (the same as `index` while editing the body).
+    body_index: Arc<ViewIndex>,
+    /// Where the body selection was when a header or footer was entered.
+    body_sel: Option<Selection>,
+    /// The name tracked changes are recorded under.
+    author: String,
+    /// When tracked changes are recorded (ISO 8601; empty leaves it out).
+    now: String,
+}
+
+impl std::fmt::Debug for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Session")
+            .field("doc", &self.doc)
+            .field("selection", &self.sel)
+            .finish()
+    }
+}
+
+/// A horizontal strip of a page that changed (points).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct Band {
+    /// Page index.
+    pub page: usize,
+    /// Top.
+    pub top: f32,
+    /// Bottom.
+    pub bottom: f32,
+}
+
+/// Hashes of a paragraph's lines (glyphs, positions and run styles),
+/// remembered per laid-out paragraph: cached paragraphs keep theirs between
+/// layouts, so fingerprinting a page after an edit costs little. Entries
+/// are found by the box's address, which the weak reference keeps from
+/// being taken by another box while the entry exists.
+#[derive(Default)]
+struct LineHashes {
+    map: crate::hash::FxMap<usize, (std::sync::Weak<ParaBox>, Vec<u64>)>,
+}
+
+fn rgba_bits(c: &pptx_engine::model::color::Rgba) -> [u32; 4] {
+    [c.r.to_bits(), c.g.to_bits(), c.b.to_bits(), c.a.to_bits()]
+}
+
+fn run_hash(r: &crate::layout::inline::RunStyle) -> u64 {
+    let mut h = crate::hash::FxHasher::default();
+    let p = &r.props;
+    (r.size.to_bits(), r.shift.to_bits(), rgba_bits(&r.color)).hash(&mut h);
+    (p.bold, p.italic, p.strike, p.dstrike, p.caps, p.small_caps).hash(&mut h);
+    match &p.underline {
+        Some(u) => {
+            std::mem::discriminant(&u.style).hash(&mut h);
+            u.color.as_ref().map(rgba_bits).hash(&mut h);
+        }
+        None => 0u8.hash(&mut h),
+    }
+    p.highlight.as_ref().map(rgba_bits).hash(&mut h);
+    p.shading.as_ref().map(rgba_bits).hash(&mut h);
+    r.revision.hash(&mut h);
+    h.finish()
+}
+
+fn para_line_hashes(pb: &ParaBox) -> Vec<u64> {
+    let runs: Vec<u64> = pb.inline.runs.iter().map(run_hash).collect();
+    pb.lines
+        .lines
+        .iter()
+        .map(|line| {
+            let mut h = crate::hash::FxHasher::default();
+            (line.width.to_bits(), line.hyphen, line.height.to_bits()).hash(&mut h);
+            for ci in line.start..line.end {
+                let c = &pb.inline.clusters[ci];
+                (c.ch, c.glyph, pb.lines.x[ci].to_bits()).hash(&mut h);
+                if let Some(f) = &c.font {
+                    f.face.hash(&mut h);
+                }
+                runs.get(c.run as usize).hash(&mut h);
+            }
+            h.finish()
+        })
+        .collect()
+}
+
+impl LineHashes {
+    /// The hash of a paragraph's line.
+    fn line(&mut self, pb: &Arc<ParaBox>, line: usize) -> Option<u64> {
+        let (_, hashes) = self
+            .map
+            .entry(Arc::as_ptr(pb) as usize)
+            .or_insert_with(|| (Arc::downgrade(pb), para_line_hashes(pb)));
+        hashes.get(line).copied()
+    }
+
+    /// Forgets paragraphs no layout holds any more.
+    fn prune(&mut self) {
+        self.map.retain(|_, (weak, _)| weak.strong_count() > 0);
+    }
+}
+
+/// A hash of one item and the vertical extent it paints.
+fn item_key(item: &Item, lines: &mut LineHashes) -> (u64, f32, f32) {
+    let mut h = crate::hash::FxHasher::default();
+    let (top, bottom) = match item {
+        Item::Line(l) => {
+            0u8.hash(&mut h);
+            (l.x.to_bits(), l.y.to_bits()).hash(&mut h);
+            if let Some(c) = &l.clip {
+                (c.x.to_bits(), c.y.to_bits(), c.w.to_bits(), c.h.to_bits()).hash(&mut h);
+            }
+            lines.line(&l.para, l.line).hash(&mut h);
+            // Glyphs can reach a little past the line box.
+            (l.y - 3.0, l.y + l.line().height + 3.0)
+        }
+        Item::Fill { rect, color } => {
+            1u8.hash(&mut h);
+            (
+                rect.x.to_bits(),
+                rect.y.to_bits(),
+                rect.w.to_bits(),
+                rect.h.to_bits(),
+            )
+                .hash(&mut h);
+            rgba_bits(color).hash(&mut h);
+            (rect.y - 1.0, rect.y + rect.h + 1.0)
+        }
+        Item::Rule {
+            x0,
+            y0,
+            x1,
+            y1,
+            border,
+        } => {
+            2u8.hash(&mut h);
+            (x0.to_bits(), y0.to_bits(), x1.to_bits(), y1.to_bits()).hash(&mut h);
+            (
+                std::mem::discriminant(&border.style),
+                border.width.to_bits(),
+                border.space.to_bits(),
+            )
+                .hash(&mut h);
+            match border.color {
+                crate::model::props::ColorRef::Auto => 0u8.hash(&mut h),
+                crate::model::props::ColorRef::Rgb(c) => (1u8, rgba_bits(&c)).hash(&mut h),
+            }
+            let pad = border.width * 3.0 + 2.0;
+            (y0.min(*y1) - pad, y0.max(*y1) + pad)
+        }
+        Item::Drawing(d) => {
+            3u8.hash(&mut h);
+            (Arc::as_ptr(&d.drawing) as usize).hash(&mut h);
+            (
+                d.rect.x.to_bits(),
+                d.rect.y.to_bits(),
+                d.rect.w.to_bits(),
+                d.rect.h.to_bits(),
+            )
+                .hash(&mut h);
+            // Rotated or effect-extended drawings can reach further.
+            let pad = d.rect.w.max(d.rect.h) * 0.5;
+            (d.rect.y - pad, d.rect.y + d.rect.h + pad)
+        }
+        Item::LineNumber {
+            text,
+            right,
+            baseline,
+            size,
+            ..
+        } => {
+            4u8.hash(&mut h);
+            text.hash(&mut h);
+            (right.to_bits(), baseline.to_bits()).hash(&mut h);
+            (baseline - size * 1.2, baseline + size * 0.5)
+        }
+    };
+    (h.finish(), top, bottom)
+}
+
+/// Item keys of every page.
+type PageKeys = Vec<Vec<(u64, f32, f32)>>;
+
+fn page_keys(layout: &Layout, lines: &mut LineHashes) -> PageKeys {
+    layout
+        .pages
+        .iter()
+        .map(|p| p.all_items().map(|i| item_key(i, lines)).collect())
+        .collect()
+}
+
+/// A page's fingerprint from its item keys.
+fn fingerprint(page: &Page, keys: &[(u64, f32, f32)]) -> u64 {
+    let mut h = crate::hash::FxHasher::default();
+    (page.width.to_bits(), page.height.to_bits(), page.number).hash(&mut h);
+    for k in keys {
+        k.0.hash(&mut h);
+    }
+    h.finish()
+}
+
+/// Strips of each page that differ between two layouts; a page whose size
+/// changed (or that is new) is dirty from top to bottom.
+fn dirty_bands(old: &Layout, old_keys: &PageKeys, new: &Layout, new_keys: &PageKeys) -> Vec<Band> {
+    let mut out = Vec::new();
+    for (i, page) in new.pages.iter().enumerate() {
+        let (Some(before), Some(a)) = (old.pages.get(i), old_keys.get(i)) else {
+            out.push(Band {
+                page: i,
+                top: 0.0,
+                bottom: page.height,
+            });
+            continue;
+        };
+        if before.width != page.width
+            || before.height != page.height
+            || before.number != page.number
+        {
+            out.push(Band {
+                page: i,
+                top: 0.0,
+                bottom: page.height,
+            });
+            continue;
+        }
+        let b = &new_keys[i];
+        if a == b {
+            continue;
+        }
+        let mut count: crate::hash::FxMap<u64, i64> = crate::hash::FxMap::default();
+        for k in a {
+            *count.entry(k.0).or_default() += 1;
+        }
+        for k in b {
+            *count.entry(k.0).or_default() -= 1;
+        }
+        // Items rarely swap paint order without moving; compare as multisets.
+        let mut spans: Vec<(f32, f32)> = a
+            .iter()
+            .chain(b)
+            .filter(|k| count.get(&k.0).is_some_and(|c| *c != 0))
+            .map(|k| (k.1.max(0.0), k.2.min(page.height)))
+            .collect();
+        spans.sort_by(|x, y| x.0.total_cmp(&y.0));
+        let mut merged: Vec<(f32, f32)> = Vec::new();
+        for (t, bt) in spans {
+            match merged.last_mut() {
+                Some(last) if t <= last.1 + 2.0 => last.1 = last.1.max(bt),
+                _ => merged.push((t, bt)),
+            }
+        }
+        for (top, bottom) in merged {
+            if bottom > top {
+                out.push(Band {
+                    page: i,
+                    top,
+                    bottom,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Kinds of characters for word movement.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CharClass {
+    Space,
+    Word,
+    Punct,
+}
+
+fn class(c: char) -> CharClass {
+    if c.is_whitespace() || c == OBJECT_CHAR {
+        CharClass::Space
+    } else if c.is_alphanumeric() || c == '_' || c == '\'' || c == '\u{2019}' {
+        CharClass::Word
+    } else {
+        CharClass::Punct
+    }
+}
+
+/// UTF-16 offsets of each char of `text` (plus the end).
+fn char_offsets(text: &str) -> Vec<usize> {
+    let mut out = Vec::with_capacity(text.len() + 1);
+    let mut at = 0;
+    for c in text.chars() {
+        out.push(at);
+        at += c.len_utf16();
+    }
+    out.push(at);
+    out
+}
+
+/// The next word boundary after `offset` (Ctrl+Right: past the word, then
+/// past the spaces after it).
+fn word_forward(text: &str, offset: usize) -> usize {
+    let chars: Vec<char> = text.chars().collect();
+    let offs = char_offsets(text);
+    let mut i = offs
+        .iter()
+        .position(|&o| o >= offset)
+        .unwrap_or(chars.len());
+    if i < chars.len() {
+        let k = class(chars[i]);
+        if k != CharClass::Space {
+            while i < chars.len() && class(chars[i]) == k {
+                i += 1;
+            }
+        }
+        while i < chars.len() && class(chars[i]) == CharClass::Space {
+            i += 1;
+        }
+    }
+    offs[i.min(chars.len())]
+}
+
+/// The previous word boundary before `offset` (Ctrl+Left).
+fn word_backward(text: &str, offset: usize) -> usize {
+    let chars: Vec<char> = text.chars().collect();
+    let offs = char_offsets(text);
+    let mut i = offs
+        .iter()
+        .position(|&o| o >= offset)
+        .unwrap_or(chars.len());
+    while i > 0 && class(chars[i - 1]) == CharClass::Space {
+        i -= 1;
+    }
+    if i > 0 {
+        let k = class(chars[i - 1]);
+        while i > 0 && class(chars[i - 1]) == k {
+            i -= 1;
+        }
+    }
+    offs[i]
+}
+
+/// The word around `offset`.
+fn word_at(text: &str, offset: usize) -> (usize, usize) {
+    let chars: Vec<char> = text.chars().collect();
+    let offs = char_offsets(text);
+    if chars.is_empty() {
+        return (0, 0);
+    }
+    let mut i = offs
+        .iter()
+        .position(|&o| o >= offset)
+        .unwrap_or(chars.len())
+        .min(chars.len() - 1);
+    // At the end of a word, select that word.
+    if i > 0 && class(chars[i]) == CharClass::Space && class(chars[i - 1]) != CharClass::Space {
+        i -= 1;
+    }
+    let k = class(chars[i]);
+    let mut s = i;
+    while s > 0 && class(chars[s - 1]) == k {
+        s -= 1;
+    }
+    let mut e = i + 1;
+    while e < chars.len() && class(chars[e]) == k {
+        e += 1;
+    }
+    (offs[s], offs[e])
+}
+
+impl Session {
+    /// Opens a session over a document; the caret starts at the beginning.
+    pub fn new(doc: Document) -> Self {
+        let first = doc.body().paragraphs().into_iter().next();
+        let mut s = Self {
+            doc,
+            cache: LayoutCache::new(),
+            options: LayoutOptions::default(),
+            layout: Arc::new(Layout::default()),
+            index: Arc::new(ViewIndex::default()),
+            stale: true,
+            sel: Selection::caret(Pos::new(BlockId::new(""), 0)),
+            pending: None,
+            goal_x: None,
+            undo: Vec::new(),
+            redo: Vec::new(),
+            open_group: None,
+            external_undo: false,
+            order: None,
+            bands: Vec::new(),
+            line_hashes: LineHashes::default(),
+            keys: Vec::new(),
+            fingerprints: Vec::new(),
+            active: StoryTarget::Body,
+            story_page: 0,
+            body_index: Arc::new(ViewIndex::default()),
+            body_sel: None,
+            author: "Author".to_owned(),
+            now: String::new(),
+        };
+        let first = first.unwrap_or_else(|| s.ensure_paragraph());
+        s.sel = Selection::caret(Pos::new(first, 0));
+        s
+    }
+
+    /// An empty body gets one paragraph so there is somewhere to type.
+    fn ensure_paragraph(&mut self) -> BlockId {
+        let id = self.doc.next_block_id();
+        let order = self.doc.body.key_after(None, None);
+        self.doc.body.insert(crate::model::block::Block::new(
+            id.clone(),
+            BlockKind::Paragraph,
+            None,
+            order,
+        ));
+        id
+    }
+
+    /// The document.
+    pub fn document(&self) -> &Document {
+        &self.doc
+    }
+
+    /// The document, for changes made outside edit operations (the caller
+    /// must keep the selection valid; the layout is recomputed).
+    pub fn document_mut(&mut self) -> &mut Document {
+        self.stale = true;
+        self.order = None;
+        &mut self.doc
+    }
+
+    /// Leaves undo history to the caller (collaborative editing keeps it
+    /// in the shared document instead).
+    pub fn set_external_undo(&mut self, external: bool) {
+        self.external_undo = external;
+        self.undo.clear();
+        self.redo.clear();
+    }
+
+    /// The name tracked changes are recorded under.
+    pub fn set_author(&mut self, author: &str) {
+        if !author.trim().is_empty() {
+            self.author = author.trim().to_owned();
+        }
+    }
+
+    /// The time tracked changes made from now on are recorded at.
+    pub fn set_now(&mut self, now: &str) {
+        self.now = now.to_owned();
+    }
+
+    /// Who records the next tracked change, when the document tracks them.
+    fn revisor(&self) -> Option<revise::Revisor> {
+        if !self.doc.parts().settings.track_revisions {
+            return None;
+        }
+        Some(revise::Revisor {
+            author: self.author.clone(),
+            date: self.now.clone(),
+            w: self.doc.w_prefix().to_owned(),
+            id: revise::revision_id(self.doc.next_block_id().as_str()),
+        })
+    }
+
+    /// Shows tracked changes inline (`true`) or the document as if they
+    /// were accepted.
+    pub fn set_markup(&mut self, markup: bool) {
+        if self.options.markup != markup {
+            self.options.markup = markup;
+            self.stale = true;
+        }
+    }
+
+    /// Layout choices.
+    pub fn set_options(&mut self, options: LayoutOptions) {
+        self.options = options;
+        self.stale = true;
+    }
+
+    /// The selection.
+    pub fn selection(&self) -> &Selection {
+        &self.sel
+    }
+
+    /// The current layout (recomputed if the document changed).
+    pub fn layout(&mut self, fonts: &FontDb) -> Arc<Layout> {
+        self.ensure_layout(fonts);
+        Arc::clone(&self.layout)
+    }
+
+    /// Pages with their fingerprints.
+    pub fn pages(&mut self, fonts: &FontDb) -> Vec<PageInfo> {
+        self.ensure_layout(fonts);
+        self.page_infos()
+    }
+
+    fn page_infos(&self) -> Vec<PageInfo> {
+        self.layout
+            .pages
+            .iter()
+            .zip(&self.fingerprints)
+            .map(|(p, f)| PageInfo {
+                width: p.width,
+                height: p.height,
+                fingerprint: format!("{f:016x}"),
+                header: p.header.as_ref().map(Area::of),
+                footer: p.footer.as_ref().map(Area::of),
+                notes: notes_area(p),
+            })
+            .collect()
+    }
+
+    fn ensure_layout(&mut self, fonts: &FontDb) -> bool {
+        if !self.stale {
+            return false;
+        }
+        let layout = self.doc.layout_cached(fonts, &self.options, &self.cache);
+        self.body_index = Arc::new(ViewIndex::build(&layout));
+        let keys = page_keys(&layout, &mut self.line_hashes);
+        let bands = dirty_bands(&self.layout, &self.keys, &layout, &keys);
+        self.bands.extend(bands);
+        self.fingerprints = layout
+            .pages
+            .iter()
+            .zip(&keys)
+            .map(|(p, k)| fingerprint(p, k))
+            .collect();
+        self.keys = keys;
+        self.layout = Arc::new(layout);
+        self.reindex();
+        // The old layout is gone: forget its paragraphs' hashes.
+        self.line_hashes.prune();
+        self.stale = false;
+        true
+    }
+
+    /// Indexes the active story's lines: the body's, or a header's or
+    /// footer's on the page being edited.
+    fn reindex(&mut self) {
+        self.index = match &self.active {
+            StoryTarget::Body => Arc::clone(&self.body_index),
+            StoryTarget::Part(name) => {
+                self.story_page = self
+                    .story_page
+                    .min(self.layout.pages.len().saturating_sub(1));
+                Arc::new(ViewIndex::for_story(
+                    &self.layout,
+                    &crate::layout::StoryRef::Part(name.clone()),
+                    Some(self.story_page),
+                ))
+            }
+            // A note can run on over the next page.
+            StoryTarget::Note { endnote, id } => Arc::new(ViewIndex::for_story(
+                &self.layout,
+                &note_story(*endnote, *id),
+                None,
+            )),
+        };
+    }
+
+    /// The header or footer area at a point, and the part it shows.
+    fn chrome_at(&self, page: usize, y: f32) -> Option<(StoryKind, Option<String>)> {
+        let p = self.layout.pages.get(page)?;
+        if let Some(h) = &p.header
+            && y < h.bottom
+        {
+            return Some((StoryKind::Header, h.part.clone()));
+        }
+        if let Some(f) = &p.footer
+            && y >= f.top
+        {
+            return Some((StoryKind::Footer, f.part.clone()));
+        }
+        None
+    }
+
+    /// The footnote or endnote whose text is nearest a point in a page's
+    /// notes area.
+    fn note_at(&self, page: usize, x: f32, y: f32) -> Option<StoryTarget> {
+        let p = self.layout.pages.get(page)?;
+        let area = notes_area(p)?;
+        if y < area.top - NOTE_SLOP || y > area.bottom + NOTE_SLOP {
+            return None;
+        }
+        let distance = |l: &crate::layout::PlacedLine| {
+            let line = l.line();
+            let dy = if y < l.y {
+                l.y - y
+            } else {
+                (y - (l.y + line.height)).max(0.0)
+            };
+            let left = l.x + line.left;
+            let dx = if x < left {
+                left - x
+            } else {
+                (x - (l.x + line.right)).max(0.0)
+            };
+            (dy, dx)
+        };
+        p.items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Line(l) => {
+                    let target = note_target(&l.para.story)?;
+                    self.doc.has_story(&target).then(|| (distance(l), target))
+                }
+                _ => None,
+            })
+            .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(_, target)| target)
+    }
+
+    /// The first page showing a note.
+    fn note_page(&self, note: &StoryTarget) -> Option<usize> {
+        let StoryTarget::Note { endnote, id } = note else {
+            return None;
+        };
+        let story = note_story(*endnote, *id);
+        self.layout.pages.iter().position(|p| {
+            p.items
+                .iter()
+                .any(|i| matches!(i, Item::Line(l) if l.para.story == story))
+        })
+    }
+
+    /// What the selection is in, for the caller.
+    fn story_state(&self) -> StoryState {
+        if let StoryTarget::Note { endnote, .. } = &self.active {
+            return StoryState {
+                kind: if *endnote {
+                    StoryKind::Endnote
+                } else {
+                    StoryKind::Footnote
+                },
+                page: self.note_page(&self.active).or(Some(self.story_page)),
+            };
+        }
+        let StoryTarget::Part(name) = &self.active else {
+            return StoryState::default();
+        };
+        let page = self.layout.pages.get(self.story_page);
+        let kind = if page
+            .and_then(|p| p.footer.as_ref())
+            .is_some_and(|f| f.part.as_ref() == Some(name))
+        {
+            StoryKind::Footer
+        } else {
+            StoryKind::Header
+        };
+        StoryState {
+            kind,
+            page: Some(self.story_page),
+        }
+    }
+
+    /// Switches to editing a header or footer on a page.
+    fn enter_part(&mut self, part: String, page: usize) {
+        self.enter(StoryTarget::Part(part), page);
+    }
+
+    /// Switches to editing a story other than the body, shown on a page.
+    fn enter(&mut self, target: StoryTarget, page: usize) {
+        if self.active == StoryTarget::Body {
+            self.body_sel = Some(self.sel.clone());
+        }
+        self.active = target;
+        self.story_page = page;
+        self.order = None;
+        self.pending = None;
+        self.goal_x = None;
+        self.open_group = None;
+        self.reindex();
+    }
+
+    /// Back to the body, with the selection it had.
+    fn leave_story(&mut self) {
+        if self.active == StoryTarget::Body {
+            return;
+        }
+        self.active = StoryTarget::Body;
+        self.story_page = 0;
+        self.order = None;
+        self.pending = None;
+        self.goal_x = None;
+        self.open_group = None;
+        self.sel = self.body_sel.take().unwrap_or_else(|| {
+            let first = self.doc.body().paragraphs().into_iter().next();
+            Selection::caret(Pos::new(first.unwrap_or_else(|| BlockId::new("")), 0))
+        });
+        self.reindex();
+    }
+
+    /// Takes a selection, switching to the story it is in.
+    fn adopt(&mut self, sel: Selection) {
+        match self.doc.story_of(&sel.focus.block) {
+            Some(StoryTarget::Body) => self.leave_story(),
+            Some(StoryTarget::Part(name)) if self.active != StoryTarget::Part(name.clone()) => {
+                // Show it on the first page that has it.
+                let page = self
+                    .layout
+                    .pages
+                    .iter()
+                    .position(|p| {
+                        [&p.header, &p.footer]
+                            .into_iter()
+                            .flatten()
+                            .any(|c| c.part.as_ref() == Some(&name))
+                    })
+                    .unwrap_or(0);
+                self.enter_part(name, page);
+            }
+            Some(note @ StoryTarget::Note { .. }) if self.active != note => {
+                let page = self.note_page(&note).unwrap_or(0);
+                self.enter(note, page);
+            }
+            _ => {}
+        }
+        self.sel = sel;
+        self.clamp_selection();
+    }
+
+    /// Positions in the active story as (paragraph index, offset), to find
+    /// them again after the story is read anew.
+    fn story_positions(&self) -> Option<[(usize, usize); 2]> {
+        if self.active == StoryTarget::Body {
+            return None;
+        }
+        let list = self.story().paragraphs();
+        let at = |p: &Pos| {
+            (
+                list.iter().position(|id| *id == p.block).unwrap_or(0),
+                p.offset,
+            )
+        };
+        Some([at(&self.sel.anchor), at(&self.sel.focus)])
+    }
+
+    /// The story being edited.
+    fn story(&self) -> &Story {
+        self.doc.story(&self.active)
+    }
+
+    fn order(&mut self) -> Arc<ParaOrder> {
+        // Paragraph order changes only with the story's structure.
+        let rev = self.story().structure();
+        if let Some((r, o)) = &self.order
+            && *r == rev
+        {
+            return Arc::clone(o);
+        }
+        let list = self.story().paragraphs();
+        let index = list
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id.clone(), i))
+            .collect();
+        let o = Arc::new(ParaOrder { list, index });
+        self.order = Some((rev, Arc::clone(&o)));
+        o
+    }
+
+    /// The selection's ends in document order.
+    fn ordered(&mut self) -> (Pos, Pos) {
+        let o = self.order();
+        let a = &self.sel.anchor;
+        let f = &self.sel.focus;
+        let ia = o.index.get(&a.block).copied().unwrap_or(0);
+        let ifo = o.index.get(&f.block).copied().unwrap_or(0);
+        if (ia, a.offset) <= (ifo, f.offset) {
+            (a.clone(), f.clone())
+        } else {
+            (f.clone(), a.clone())
+        }
+    }
+
+    /// Paragraphs from `a` to `b` inclusive, in document order.
+    fn paras_between(&mut self, a: &BlockId, b: &BlockId) -> Vec<BlockId> {
+        let o = self.order();
+        let (Some(&i), Some(&j)) = (o.index.get(a), o.index.get(b)) else {
+            return vec![a.clone()];
+        };
+        let (i, j) = if i <= j { (i, j) } else { (j, i) };
+        o.list[i..=j].to_vec()
+    }
+
+    fn para_len(&self, id: &BlockId) -> usize {
+        self.story().get(id).map_or(0, |b| b.content.len())
+    }
+
+    /// Keeps the selection on existing paragraphs and in range.
+    fn clamp_selection(&mut self) {
+        if self.active != StoryTarget::Body
+            && (!self.doc.has_story(&self.active) || self.story().paragraphs().is_empty())
+        {
+            // The header or footer went away: back to the body.
+            self.leave_story();
+        }
+        let fix = |s: &mut Self, p: Pos| -> Pos {
+            match s.story().get(&p.block) {
+                Some(b) if b.kind == BlockKind::Paragraph => {
+                    let len = b.content.len();
+                    Pos {
+                        offset: p.offset.min(len),
+                        ..p
+                    }
+                }
+                _ => {
+                    let first = s.story().paragraphs().into_iter().next();
+                    let id = first.unwrap_or_else(|| s.ensure_paragraph());
+                    Pos::new(id, 0)
+                }
+            }
+        };
+        let a = fix(self, self.sel.anchor.clone());
+        let f = fix(self, self.sel.focus.clone());
+        self.sel = Selection {
+            anchor: a,
+            focus: f,
+        };
+    }
+
+    /// The shared parts and namespace declarations, detached from the
+    /// document so formatting can be resolved while it is being changed.
+    fn style_env(&self) -> (crate::document::Parts, Arc<Vec<crate::xml::Decl>>) {
+        (self.doc.parts().clone(), Arc::clone(self.doc.decls()))
+    }
+
+    /// A paragraph's format as laid out (falls back to resolving it).
+    fn para_format(&self, formats: &Formats<'_>, id: &BlockId) -> Option<Arc<ParaFormat>> {
+        if let Some(entries) = self.index.lines.get(id)
+            && let Some(&(p, i)) = entries.first()
+            && let Some(Item::Line(l)) = self.layout.pages.get(p).and_then(|pg| pg.items.get(i))
+        {
+            return Some(Arc::clone(&l.para.format));
+        }
+        let b = self.story().get(id)?;
+        Some(formats.paragraph(&b.props, &TableCtx::default()))
+    }
+
+    fn snippets(&self) -> SnippetContext {
+        SnippetContext::new(self.doc.decls())
+    }
+
+    fn typing_attrs_at(&self, pos: &Pos) -> Attrs {
+        if let Some(p) = &self.pending {
+            return p.clone();
+        }
+        let Some(b) = self.story().get(&pos.block) else {
+            return Attrs::empty();
+        };
+        text::typing_attrs(b, pos.offset, self.doc.w_prefix(), &self.snippets())
+    }
+
+    // ----- results -------------------------------------------------------
+
+    fn format_state(&mut self) -> FormatState {
+        let (start, end) = self.ordered();
+        let paras = self.paras_between(&start.block, &end.block);
+        let (parts, decls) = self.style_env();
+        let formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            &decls,
+        );
+        let Some(para) = self.para_format(&formats, &start.block) else {
+            return FormatState::default();
+        };
+        let attrs = if self.sel.is_collapsed() {
+            self.typing_attrs_at(&start)
+        } else {
+            self.doc
+                .body
+                .get(&start.block)
+                .and_then(|b| {
+                    // The first character of the selection.
+                    let at = if start.offset < b.content.len() {
+                        start.offset
+                    } else {
+                        start.offset.saturating_sub(1)
+                    };
+                    b.content.attrs_at(at).cloned()
+                })
+                .unwrap_or_default()
+        };
+        let props = formats.run(&attrs, &para);
+        let mut state = FormatState {
+            bold: props.bold,
+            italic: props.italic,
+            underline: props.underline.is_some(),
+            strike: props.strike,
+            superscript: props.vert_align == crate::model::props::VertAlign::Super,
+            subscript: props.vert_align == crate::model::props::VertAlign::Sub,
+            font: Some(props.ascii.clone()),
+            size: Some(props.size),
+            color: props
+                .color
+                .map(|c| c.to_hex().trim_start_matches('#').to_uppercase()),
+            ..FormatState::default()
+        };
+        // Toggles show as on only when the whole selection has them.
+        if !self.sel.is_collapsed() {
+            let mut checked = 0usize;
+            'outer: for (k, id) in paras.iter().enumerate() {
+                let Some(b) = self.story().get(id) else {
+                    continue;
+                };
+                let Some(pf) = self.para_format(&formats, id) else {
+                    continue;
+                };
+                let s = if k == 0 { start.offset } else { 0 };
+                let e = if k + 1 == paras.len() {
+                    end.offset
+                } else {
+                    usize::MAX
+                };
+                for (at, span) in b.content.spans_at() {
+                    let len = utf16_len(&span.text);
+                    if at + len <= s || at >= e || span.attrs.is_object() {
+                        continue;
+                    }
+                    let p = formats.run(&span.attrs, &pf);
+                    state.bold &= p.bold;
+                    state.italic &= p.italic;
+                    state.underline &= p.underline.is_some();
+                    state.strike &= p.strike;
+                    checked += 1;
+                    if checked > 500 {
+                        break 'outer;
+                    }
+                }
+            }
+        }
+        let styles = &self.doc.parts().styles;
+        let style_id = para
+            .props
+            .style
+            .clone()
+            .or_else(|| styles.default_paragraph_id().map(str::to_owned));
+        state.style_name = style_id
+            .as_deref()
+            .and_then(|id| styles.get(id))
+            .map(|s| s.name.clone());
+        state.style = style_id;
+        state.align = Some(match para.props.jc {
+            Align::Center => Alignment::Center,
+            Align::Right => Alignment::Right,
+            Align::Justify | Align::Distribute => Alignment::Justify,
+            Align::Left => Alignment::Left,
+        });
+        state.list = para.props.num.is_some();
+        state.line_spacing = match para.props.line {
+            crate::model::props::LineSpacing::Auto(m) => Some((m * 100.0).round() / 100.0),
+            _ => None,
+        };
+        state.table = self.story().ancestors(&start.block).iter().any(|id| {
+            self.story()
+                .get(id)
+                .is_some_and(|b| b.kind == BlockKind::Cell)
+        });
+        state.highlight = attrs
+            .run_props()
+            .find(|(q, _)| q.ends_with(":highlight") || *q == "highlight")
+            .and_then(|(_, xml)| revise::attribute(xml, "val"))
+            .filter(|v| v != "none");
+        state.tracking = self.doc.parts().settings.track_revisions;
+        state.revision = self.touches_revision(&start, &end, &paras);
+        state.can_undo = !self.undo.is_empty();
+        state.can_redo = !self.redo.is_empty();
+        state
+    }
+
+    /// Whether the selection (or the caret) touches a tracked change.
+    fn touches_revision(&self, start: &Pos, end: &Pos, paras: &[BlockId]) -> bool {
+        let w = self.doc.w_prefix();
+        let decls = self.doc.decls();
+        if start.same_place(end) {
+            let Some(b) = self.story().get(&start.block) else {
+                return false;
+            };
+            let mark = revise::mark_revision(&b.props, w, decls).and_then(|(_, _, id)| id);
+            return !revise::ids_at(&b.content, start.offset, mark).is_empty()
+                || revise::ppr_change_id(&b.props, w, decls).is_some();
+        }
+        let last = paras.len().saturating_sub(1);
+        paras.iter().take(400).enumerate().any(|(k, id)| {
+            let Some(b) = self.story().get(id) else {
+                return false;
+            };
+            let s = if k == 0 { start.offset } else { 0 };
+            let e = if k == last {
+                end.offset
+            } else {
+                b.content.len()
+            };
+            revise::has_revisions(&b.content, s, e)
+                || (k < last && revise::mark_revision(&b.props, w, decls).is_some())
+                || revise::ppr_change_id(&b.props, w, decls).is_some()
+        })
+    }
+
+    fn result(&mut self, changes: Vec<Change>, relaid: bool) -> EditResult {
+        let (start, end) = self.ordered();
+        let paras = self.paras_between(&start.block, &end.block);
+        let caret = geometry::caret(&self.layout, &self.index, &self.sel.focus);
+        let rects =
+            geometry::selection_rects(&self.layout, &self.index, &self.sel, (&start, &end), &paras);
+        let format = self.format_state();
+        EditResult {
+            changed: !changes.is_empty(),
+            changes,
+            selection: self.sel.clone(),
+            range: Range {
+                from: start.clone(),
+                to: end.clone(),
+            },
+            caret,
+            rects,
+            pages: relaid.then(|| self.page_infos()),
+            bands: std::mem::take(&mut self.bands),
+            format,
+            story: self.story_state(),
+        }
+    }
+
+    /// The selection's current state without changing anything.
+    pub fn state(&mut self, fonts: &FontDb) -> EditResult {
+        let relaid = self.ensure_layout(fonts);
+        self.clamp_selection();
+        self.result(Vec::new(), relaid)
+    }
+
+    /// Opens a session over a shared document; undo history stays with
+    /// the caller.
+    pub fn from_collab(state: &crate::collab::CollabState, seed: u64) -> crate::Result<Self> {
+        let doc = Document::from_collab_state(state, seed)?;
+        let mut s = Self::new(doc);
+        s.external_undo = true;
+        Ok(s)
+    }
+
+    /// The shared state of the document.
+    pub fn collab_state(&self) -> crate::Result<crate::collab::CollabState> {
+        self.doc.collab_state()
+    }
+
+    /// The selected text, paragraphs separated by newlines (objects such
+    /// as pictures and field markers left out), for the clipboard.
+    pub fn selected_text(&mut self) -> String {
+        let (s, e) = self.ordered();
+        if s.same_place(&e) {
+            return String::new();
+        }
+        let paras = self.paras_between(&s.block, &e.block);
+        let mut out = String::new();
+        for (k, id) in paras.iter().enumerate() {
+            let Some(b) = self.story().get(id) else {
+                continue;
+            };
+            if k > 0 {
+                out.push('\n');
+            }
+            let from = if k == 0 { s.offset } else { 0 };
+            let to = if k + 1 == paras.len() {
+                e.offset
+            } else {
+                b.content.len()
+            };
+            for (at, span) in b.content.spans_at() {
+                let len = utf16_len(&span.text);
+                if at + len <= from || at >= to || span.attrs.is_object() || span.attrs.is_instr() {
+                    continue;
+                }
+                let lo = from.saturating_sub(at);
+                let hi = (to - at).min(len);
+                let text = &span.text;
+                let a = crate::model::content::byte_at(text, lo);
+                let b = crate::model::content::byte_at(text, hi);
+                out.push_str(&text[a..b]);
+            }
+        }
+        out
+    }
+
+    /// The comments stored in the document (Word's), in the order of the
+    /// text they are on.
+    pub fn document_comments(&self) -> Vec<DocComment> {
+        comments::comments(&self.doc)
+    }
+
+    /// Paragraph ids and texts in document order.
+    pub fn paragraphs(&self) -> Vec<ParagraphText> {
+        self.doc
+            .body
+            .paragraphs()
+            .into_iter()
+            .filter_map(|id| {
+                let text = self.doc.body.get(&id)?.content.text();
+                Some(ParagraphText { id, text })
+            })
+            .collect()
+    }
+
+    /// Applies changes other peers made (or the shared undo history
+    /// replayed), keeping the selection on the same text.
+    pub fn apply_remote(
+        &mut self,
+        changes: &[RemoteChange],
+        fonts: &FontDb,
+    ) -> crate::Result<EditResult> {
+        let mut entries: Vec<(String, String, Option<String>)> = Vec::new();
+        let mut old_texts: HashMap<BlockId, String> = HashMap::new();
+        let mut deltas_of: HashMap<BlockId, &[Vec<crate::model::content::DeltaOp>]> =
+            HashMap::new();
+        for c in changes {
+            match c {
+                RemoteChange::Block { block, deltas } => {
+                    let Some(b) = block.to_block() else {
+                        continue;
+                    };
+                    if let Some(old) = self.doc.body.get(&b.id) {
+                        old_texts
+                            .entry(b.id.clone())
+                            .or_insert_with(|| old.content.text());
+                    }
+                    if !deltas.is_empty() {
+                        deltas_of.insert(b.id.clone(), deltas);
+                    }
+                    self.doc.body.insert(b);
+                    self.doc.body_dirty = true;
+                }
+                RemoteChange::Remove { id } => {
+                    if self.doc.body.contains(id) {
+                        self.doc.body.remove_one(id);
+                        self.doc.body_dirty = true;
+                    }
+                }
+                RemoteChange::Entry {
+                    container,
+                    key,
+                    value,
+                } => entries.push((container.clone(), key.clone(), value.clone())),
+            }
+        }
+        if !entries.is_empty() {
+            let kept = self.story_positions();
+            if self.doc.apply_entries(&entries)? {
+                // Headers and footers were read anew (with fresh blocks).
+                self.order = None;
+                if let Some(kept) = kept {
+                    let list = self.story().paragraphs();
+                    let at = |(i, offset): (usize, usize)| {
+                        list.get(i)
+                            .or(list.last())
+                            .map(|id| Pos::new(id.clone(), offset))
+                    };
+                    if let (Some(a), Some(f)) = (at(kept[0]), at(kept[1])) {
+                        self.sel = Selection {
+                            anchor: a,
+                            focus: f,
+                        };
+                    }
+                }
+            }
+        }
+        // Keep the caret on the same text: through the changes made when
+        // they are known (and fit), else by comparing the texts.
+        for pos in [&mut self.sel.anchor, &mut self.sel.focus] {
+            let (Some(old), Some(b)) = (old_texts.get(&pos.block), self.doc.body.get(&pos.block))
+            else {
+                continue;
+            };
+            let new = b.content.text();
+            let exact = deltas_of.get(&pos.block).and_then(|deltas| {
+                let mut text: Vec<u16> = old.encode_utf16().collect();
+                let mut offset = pos.offset;
+                for d in deltas.iter() {
+                    text = apply_text_delta(&text, d)?;
+                    offset = map_through(offset, d);
+                }
+                (text == new.encode_utf16().collect::<Vec<u16>>()).then_some(offset)
+            });
+            pos.offset = exact.unwrap_or_else(|| map_offset(old, &new, pos.offset));
+        }
+        self.stale = true;
+        self.order = None;
+        self.pending = None;
+        let relaid = self.ensure_layout(fonts);
+        self.clamp_selection();
+        Ok(self.result(Vec::new(), relaid))
+    }
+
+    // ----- geometry ------------------------------------------------------
+
+    /// The position at a point on a page (points).
+    pub fn hit_test(&mut self, page: usize, x: f32, y: f32, fonts: &FontDb) -> Option<Pos> {
+        self.ensure_layout(fonts);
+        geometry::hit_test(&self.layout, &self.index, page, x, y)
+    }
+
+    /// Whether a position is in the body while a header or footer is being
+    /// edited (comments and other people's carets stay on the body).
+    fn body_pos_elsewhere(&self, pos: &Pos) -> bool {
+        self.active != StoryTarget::Body && self.doc.body().contains(&pos.block)
+    }
+
+    /// The caret for a position.
+    pub fn caret_at(&mut self, pos: &Pos, fonts: &FontDb) -> Option<CaretRect> {
+        self.ensure_layout(fonts);
+        let index = if self.body_pos_elsewhere(pos) {
+            &self.body_index
+        } else {
+            &self.index
+        };
+        geometry::caret(&self.layout, index, pos)
+    }
+
+    /// Highlight rectangles of a range in one paragraph or across several
+    /// (comments, search results, other people's selections).
+    pub fn range_rects(&mut self, a: &Pos, b: &Pos, fonts: &FontDb) -> Vec<PageRect> {
+        self.ensure_layout(fonts);
+        if self.body_pos_elsewhere(a) {
+            let list = self.doc.body().paragraphs();
+            let at = |p: &Pos| list.iter().position(|id| *id == p.block).unwrap_or(0);
+            let (ia, ib) = (at(a), at(b));
+            let (s, e, i, j) = if (ia, a.offset) <= (ib, b.offset) {
+                (a, b, ia, ib)
+            } else {
+                (b, a, ib, ia)
+            };
+            return geometry::range_rects(
+                &self.layout,
+                &self.body_index,
+                s,
+                e,
+                &list[i..=j.max(i)],
+            );
+        }
+        let o = self.order();
+        let ia = o.index.get(&a.block).copied().unwrap_or(0);
+        let ib = o.index.get(&b.block).copied().unwrap_or(0);
+        let (s, e) = if (ia, a.offset) <= (ib, b.offset) {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        let paras = self.paras_between(&s.block, &e.block);
+        geometry::range_rects(&self.layout, &self.index, s, e, &paras)
+    }
+
+    /// The matches of a search in the body, with their highlight
+    /// rectangles, and the match at or after the selection.
+    pub fn find(&mut self, query: &str, options: &FindOptions, fonts: &FontDb) -> FindResult {
+        self.ensure_layout(fonts);
+        let paras = self.doc.body().paragraphs();
+        let (found, truncated) = find::find(self.doc.body(), &paras, query, options, find::LIMIT);
+        let order: HashMap<&BlockId, usize> =
+            paras.iter().enumerate().map(|(i, id)| (id, i)).collect();
+        let key = |p: &Pos| (order.get(&p.block).copied().unwrap_or(0), p.offset);
+        let sel = if self.active == StoryTarget::Body {
+            Some(&self.sel)
+        } else {
+            self.body_sel.as_ref()
+        };
+        let current = sel.and_then(|sel| {
+            let (a, f) = (key(&sel.anchor), key(&sel.focus));
+            let (start, end) = if a <= f { (a, f) } else { (f, a) };
+            found
+                .iter()
+                .position(|(from, to)| key(from) == start && key(to) == end)
+                .or_else(|| found.iter().position(|(from, _)| key(from) >= start))
+                .or((!found.is_empty()).then_some(0))
+        });
+        let index = if self.active == StoryTarget::Body {
+            &self.index
+        } else {
+            &self.body_index
+        };
+        let matches = found
+            .into_iter()
+            .map(|(from, to)| {
+                let rects = geometry::range_rects(
+                    &self.layout,
+                    index,
+                    &from,
+                    &to,
+                    std::slice::from_ref(&from.block),
+                );
+                FindMatch { from, to, rects }
+            })
+            .collect();
+        FindResult {
+            matches,
+            current,
+            truncated,
+        }
+    }
+
+    // ----- operations ----------------------------------------------------
+
+    /// Applies operations in order as one undo step (merged into the
+    /// previous step when both carry the same `group`, as typing does).
+    pub fn apply(
+        &mut self,
+        ops: &[EditOp],
+        group: Option<&str>,
+        fonts: &FontDb,
+    ) -> crate::Result<EditResult> {
+        let mut relaid = self.ensure_layout(fonts);
+        self.clamp_selection();
+        let before = self.sel.clone();
+        let snapshot = self.doc.snapshot();
+        // One step per story the operations changed, in order (inserting a
+        // note and typing in it changes the body, then the note).
+        let mut steps: Vec<Step> = Vec::new();
+        for op in ops {
+            if self.stale {
+                relaid |= self.ensure_layout(fonts);
+            }
+            if let Some(s) = self.run_op(op)? {
+                match steps.last_mut() {
+                    Some(last) if last.story == s.story => last.merge(s),
+                    _ => steps.push(s),
+                }
+                self.stale = true;
+            }
+        }
+        relaid |= self.ensure_layout(fonts);
+        self.clamp_selection();
+        let mut changes: Vec<Change> = steps.iter().flat_map(Step::changes).collect();
+        changes.extend(self.doc.entry_changes(&snapshot)?);
+        steps.retain(|s| !s.is_empty());
+        if !steps.is_empty() {
+            for step in steps {
+                self.record_undo(step, before.clone(), group);
+            }
+        } else if ops.iter().any(|op| {
+            matches!(
+                op,
+                EditOp::Select { .. } | EditOp::Move { .. } | EditOp::SelectAll
+            )
+        }) {
+            self.open_group = None;
+        }
+        Ok(self.result(changes, relaid))
+    }
+
+    fn record_undo(&mut self, step: Step, before: Selection, group: Option<&str>) {
+        if self.external_undo {
+            return;
+        }
+        self.redo.clear();
+        let after = self.sel.clone();
+        if let (Some(g), Some(last)) = (group, self.undo.last_mut())
+            && self.open_group.as_deref() == Some(g)
+            && last.group.as_deref() == Some(g)
+        {
+            last.step.merge(step);
+            last.after = after;
+            return;
+        }
+        self.undo.push(UndoEntry {
+            step,
+            before,
+            after,
+            group: group.map(str::to_owned),
+        });
+        self.open_group = group.map(str::to_owned);
+        if self.undo.len() > 500 {
+            self.undo.remove(0);
+        }
+    }
+
+    /// Ends the current typing group.
+    pub fn break_group(&mut self) {
+        self.open_group = None;
+    }
+
+    /// Undoes the last step.
+    pub fn undo(&mut self, fonts: &FontDb) -> Option<EditResult> {
+        let entry = self.undo.pop()?;
+        let inverse = entry.step.inverse();
+        let snapshot = self.doc.snapshot();
+        txn::apply_step(&mut self.doc, &inverse);
+        self.stale = true;
+        self.order = None;
+        self.pending = None;
+        self.open_group = None;
+        let mut changes = inverse.changes();
+        changes.extend(self.doc.entry_changes(&snapshot).unwrap_or_default());
+        let sel = entry.before.clone();
+        self.redo.push(entry);
+        let relaid = self.ensure_layout(fonts);
+        self.adopt(sel);
+        Some(self.result(changes, relaid))
+    }
+
+    /// Redoes the last undone step.
+    pub fn redo(&mut self, fonts: &FontDb) -> Option<EditResult> {
+        let entry = self.redo.pop()?;
+        let snapshot = self.doc.snapshot();
+        txn::apply_step(&mut self.doc, &entry.step);
+        self.stale = true;
+        self.order = None;
+        self.pending = None;
+        self.open_group = None;
+        let mut changes = entry.step.changes();
+        changes.extend(self.doc.entry_changes(&snapshot).unwrap_or_default());
+        let sel = entry.after.clone();
+        self.undo.push(entry);
+        let relaid = self.ensure_layout(fonts);
+        self.adopt(sel);
+        Some(self.result(changes, relaid))
+    }
+
+    /// Whether undo is possible.
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    /// Whether redo is possible.
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    /// Serializes the document.
+    pub fn save(&self) -> crate::Result<Vec<u8>> {
+        self.doc.save()
+    }
+
+    fn set_caret(&mut self, pos: Pos) {
+        self.sel = Selection::caret(pos);
+    }
+
+    /// Runs one operation; returns the transaction step when it changed
+    /// the document.
+    fn run_op(&mut self, op: &EditOp) -> crate::Result<Option<Step>> {
+        if !matches!(
+            op,
+            EditOp::Move {
+                unit: Unit::Line,
+                ..
+            }
+        ) {
+            self.goal_x = None;
+        }
+        match op {
+            EditOp::Select { anchor, focus } => {
+                self.adopt(Selection {
+                    anchor: anchor.clone(),
+                    focus: focus.clone(),
+                });
+                self.pending = None;
+                Ok(None)
+            }
+            EditOp::EnterStory { page, x, y } => {
+                match self.chrome_at(*page, *y) {
+                    Some((_, Some(part))) => {
+                        self.enter_part(part, *page);
+                        let first = self.story().paragraphs().into_iter().next();
+                        let pos = geometry::hit_test(&self.layout, &self.index, *page, *x, *y)
+                            .or_else(|| first.map(|id| Pos::new(id, 0)));
+                        if let Some(pos) = pos {
+                            self.sel = Selection::caret(pos);
+                        }
+                        self.clamp_selection();
+                    }
+                    // No header or footer to edit on this page.
+                    Some((_, None)) => {}
+                    None => match self.note_at(*page, *x, *y) {
+                        // Already in it: the selection stays.
+                        Some(note) if note == self.active => {}
+                        Some(note) => {
+                            self.enter(note, *page);
+                            if let Some(pos) =
+                                geometry::hit_test(&self.layout, &self.index, *page, *x, *y)
+                            {
+                                self.sel = Selection::caret(pos);
+                            }
+                            self.clamp_selection();
+                        }
+                        None => {
+                            self.leave_story();
+                            if let Some(pos) =
+                                geometry::hit_test(&self.layout, &self.index, *page, *x, *y)
+                            {
+                                self.sel = Selection::caret(pos);
+                            }
+                        }
+                    },
+                }
+                self.pending = None;
+                Ok(None)
+            }
+            EditOp::ExitStory => {
+                self.leave_story();
+                Ok(None)
+            }
+            EditOp::SetTracking { on } => {
+                if revise::set_tracking(&mut self.doc, *on)? {
+                    self.order = None;
+                    self.stale = true;
+                }
+                Ok(None)
+            }
+            EditOp::Paste {
+                paragraphs,
+                same_document,
+            } => self.paste(paragraphs, *same_document),
+            EditOp::Replace {
+                query,
+                options,
+                with,
+                all,
+            } => Ok(self.replace(query, options, with, *all)),
+            EditOp::AcceptChanges { all } => Ok(self.resolve(true, *all)),
+            EditOp::RejectChanges { all } => Ok(self.resolve(false, *all)),
+            EditOp::SelectAll => {
+                let o = self.order();
+                if let (Some(first), Some(last)) = (o.list.first(), o.list.last()) {
+                    let len = self.para_len(last);
+                    self.sel = Selection {
+                        anchor: Pos::new(first.clone(), 0),
+                        focus: Pos::new(last.clone(), len),
+                    };
+                }
+                self.pending = None;
+                Ok(None)
+            }
+            EditOp::SelectWord { at } => {
+                let text = self
+                    .story()
+                    .get(&at.block)
+                    .map(|b| b.content.text())
+                    .unwrap_or_default();
+                let (s, e) = word_at(&text, at.offset);
+                self.sel = Selection {
+                    anchor: Pos::new(at.block.clone(), s),
+                    focus: Pos::new(at.block.clone(), e),
+                };
+                self.pending = None;
+                Ok(None)
+            }
+            EditOp::SelectParagraph { at } => {
+                let len = self.para_len(&at.block);
+                self.sel = Selection {
+                    anchor: Pos::new(at.block.clone(), 0),
+                    focus: Pos::new(at.block.clone(), len),
+                };
+                self.pending = None;
+                Ok(None)
+            }
+            EditOp::Move {
+                unit,
+                forward,
+                extend,
+                visual,
+            } => {
+                let flip = *visual && self.right_to_left(&self.sel.focus.clone());
+                self.move_caret(*unit, *forward != flip, *extend);
+                self.pending = None;
+                Ok(None)
+            }
+            EditOp::InsertText { text } => Ok(Some(self.insert_text(text))),
+            EditOp::InsertParagraph => Ok(Some(self.insert_paragraph())),
+            EditOp::InsertBreak { kind } => Ok(Some(self.insert_break(*kind))),
+            EditOp::InsertNote { endnote } => self.insert_note(*endnote),
+            EditOp::Delete { forward, unit } => Ok(self.delete(*forward, *unit)),
+            EditOp::ToggleFormat { format } => Ok(self.toggle(*format)),
+            EditOp::SetFormat { patch } => {
+                let w = self.doc.w_prefix().to_owned();
+                let patch = patch.clone();
+                Ok(self.map_runs(move |a| patch.apply(a, &w)))
+            }
+            EditOp::ClearFormat => Ok(self.map_runs(format::cleared)),
+            EditOp::SetParagraph { patch } => {
+                let decls = Arc::clone(self.doc.decls());
+                let patch = patch.clone();
+                Ok(self.map_paragraphs(move |e| patch.apply(e, &decls)))
+            }
+            EditOp::SetStyle { style } => {
+                if self.doc.parts().styles.get(style).is_none() {
+                    return Err(crate::Error::InvalidEdit(format!("no style `{style}`")));
+                }
+                let style = style.clone();
+                Ok(self.map_paragraphs(move |e| e.set_val("pStyle", Some(&style))))
+            }
+            EditOp::ToggleList { kind } => self.toggle_list(*kind),
+            EditOp::Indent { forward } => Ok(self.indent(*forward)),
+            EditOp::InsertTable { rows, cols } => Ok(self.insert_table(*rows, *cols)),
+            EditOp::InsertRow { below } => {
+                let below = *below;
+                Ok(self.table_op(move |txn, p| table::insert_row(txn, p, below)))
+            }
+            EditOp::InsertColumn { right } => {
+                let right = *right;
+                Ok(self.table_op(move |txn, p| table::insert_column(txn, p, right)))
+            }
+            EditOp::DeleteRow => Ok(self.table_op(table::delete_row)),
+            EditOp::DeleteColumn => Ok(self.table_op(table::delete_column)),
+            EditOp::DeleteTable => Ok(self.table_op(table::delete_table)),
+        }
+    }
+
+    // ----- lists and tables ----------------------------------------------
+
+    /// The list kind each paragraph has (from its formatting).
+    fn list_kinds(&self, paras: &[BlockId]) -> Vec<Option<(ListKind, i64, u8)>> {
+        let (parts, decls) = self.style_env();
+        let formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            &decls,
+        );
+        paras
+            .iter()
+            .map(|id| {
+                let pf = self.para_format(&formats, id)?;
+                let (num, ilvl) = pf.props.num?;
+                if num <= 0 {
+                    return None;
+                }
+                let level = parts.numbering.level(num, ilvl, &parts.styles)?;
+                Some((lists::kind_of(&level.fmt)?, num, ilvl))
+            })
+            .collect()
+    }
+
+    fn toggle_list(&mut self, kind: ListKind) -> crate::Result<Option<Step>> {
+        let (s, e) = self.ordered();
+        let paras = self.paras_between(&s.block, &e.block);
+        let kinds = self.list_kinds(&paras);
+        let all = kinds.iter().all(|k| k.is_some_and(|(k, _, _)| k == kind));
+        let w = self.doc.w_prefix().to_owned();
+        let q = |l: &str| {
+            if w.is_empty() {
+                l.to_owned()
+            } else {
+                format!("{w}:{l}")
+            }
+        };
+        let list_style = self
+            .doc
+            .parts()
+            .styles
+            .id_by_name("List Paragraph")
+            .map(str::to_owned);
+        let default_style = self
+            .doc
+            .parts()
+            .styles
+            .default_paragraph_id()
+            .map(str::to_owned);
+        let rev = self.revisor();
+        if all {
+            // Back to plain paragraphs.
+            let styles = std::sync::Arc::clone(&self.doc.parts().styles);
+            let mut txn = Txn::new(&mut self.doc, &self.active);
+            for id in &paras {
+                format::edit_ppr(&mut txn, id, rev.as_ref(), |e| {
+                    let style = e.get("pStyle").map(str::to_owned);
+                    let style_id = style.as_deref().and_then(|x| {
+                        let at = x.find("val=\"")? + 5;
+                        x[at..].split('"').next().map(str::to_owned)
+                    });
+                    let style_numbered = style_id
+                        .as_deref()
+                        .and_then(|id| styles.get(id))
+                        .is_some_and(|st| st.ppr.num.num_id.is_some_and(|n| n > 0));
+                    if style_numbered {
+                        e.set(
+                            "numPr",
+                            Some(format!(
+                                "<{np}><{nid} {val}=\"0\"/></{np}>",
+                                np = q("numPr"),
+                                nid = q("numId"),
+                                val = q("val")
+                            )),
+                        );
+                    } else {
+                        e.set("numPr", None);
+                    }
+                    if style_id.is_some() && style_id == list_style {
+                        e.set("pStyle", None);
+                    }
+                });
+            }
+            return Ok(Some(txn.finish()));
+        }
+        // Continue the list just before the selection, if it is this kind.
+        let prev = self.neighbour_para(&paras[0], false);
+        let continued = prev
+            .map(|p| self.list_kinds(&[p]))
+            .and_then(|k| k.into_iter().next().flatten())
+            .filter(|(k, _, _)| *k == kind);
+        let (num, base_level) = match continued {
+            Some((_, num, ilvl)) => (num, ilvl),
+            None => (lists::instance_for(&mut self.doc, kind)?, 0),
+        };
+        self.stale = true;
+        let current = self.list_kinds(&paras);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        for (id, k) in paras.iter().zip(current) {
+            let ilvl = k.map_or(base_level, |(_, _, l)| l);
+            format::edit_ppr(&mut txn, id, rev.as_ref(), |e| {
+                e.set(
+                    "numPr",
+                    Some(format!(
+                        "<{np}><{il} {val}=\"{ilvl}\"/><{nid} {val}=\"{num}\"/></{np}>",
+                        np = q("numPr"),
+                        il = q("ilvl"),
+                        nid = q("numId"),
+                        val = q("val")
+                    )),
+                );
+                // Word gives new list items the List Paragraph style.
+                let plain = e.get("pStyle").is_none_or(|x| {
+                    default_style
+                        .as_deref()
+                        .is_some_and(|d| x.contains(&format!("\"{d}\"")))
+                });
+                if plain && let Some(ls) = &list_style {
+                    e.set_val("pStyle", Some(ls));
+                }
+            });
+        }
+        Ok(Some(txn.finish()))
+    }
+
+    fn indent(&mut self, forward: bool) -> Option<Step> {
+        let (s, e) = self.ordered();
+        let paras = self.paras_between(&s.block, &e.block);
+        let kinds = self.list_kinds(&paras);
+        let w = self.doc.w_prefix().to_owned();
+        let decls = std::sync::Arc::clone(self.doc.decls());
+        let q = |l: &str| {
+            if w.is_empty() {
+                l.to_owned()
+            } else {
+                format!("{w}:{l}")
+            }
+        };
+        let (parts, pdecls) = self.style_env();
+        let formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            &pdecls,
+        );
+        let lefts: Vec<f32> = paras
+            .iter()
+            .map(|id| {
+                self.para_format(&formats, id)
+                    .map_or(0.0, |pf| pf.props.ind_left)
+            })
+            .collect();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        for ((id, k), left) in paras.iter().zip(kinds).zip(lefts) {
+            match k {
+                Some((_, num, ilvl)) => {
+                    let next = if forward {
+                        (ilvl + 1).min(8)
+                    } else {
+                        ilvl.saturating_sub(1)
+                    };
+                    format::edit_ppr(&mut txn, id, rev.as_ref(), |e| {
+                        e.set(
+                            "numPr",
+                            Some(format!(
+                                "<{np}><{il} {val}=\"{next}\"/><{nid} {val}=\"{num}\"/></{np}>",
+                                np = q("numPr"),
+                                il = q("ilvl"),
+                                nid = q("numId"),
+                                val = q("val")
+                            )),
+                        );
+                    });
+                }
+                None => {
+                    // Half an inch at a time, to the next multiple.
+                    let step = 36.0;
+                    let target = if forward {
+                        ((left / step).floor() + 1.0) * step
+                    } else {
+                        (((left / step).ceil() - 1.0) * step).max(0.0)
+                    };
+                    let twips = ((target * 20.0).round() as i64).to_string();
+                    format::edit_ppr(&mut txn, id, rev.as_ref(), |e| {
+                        e.set_attrs(
+                            "ind",
+                            &[("left", Some(twips.clone())), ("start", None)],
+                            &decls,
+                        );
+                    });
+                }
+            }
+        }
+        Some(txn.finish())
+    }
+
+    fn insert_table(&mut self, rows: usize, cols: usize) -> Option<Step> {
+        let at = self.sel.focus.clone();
+        let width = {
+            let section = self.doc.final_section();
+            ((section.text_width() * 20.0).round() as i64).max(1440)
+        };
+        let grid_style = self
+            .doc
+            .parts()
+            .styles
+            .id_by_name("Table Grid")
+            .map(str::to_owned);
+        let sel = self.sel.clone();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = if sel.is_collapsed() {
+            at
+        } else {
+            delete_selection(&mut txn, &sel)
+        };
+        // Nested tables get two thirds of the page width.
+        let nested = table::enclosing(&txn, &at.block).is_some();
+        let width = if nested { width * 2 / 3 } else { width };
+        let caret = table::insert_table(&mut txn, &at, rows, cols, width, grid_style.as_deref());
+        let step = txn.finish();
+        if let Some(c) = caret {
+            self.set_caret(c);
+        }
+        Some(step)
+    }
+
+    fn table_op(&mut self, f: impl FnOnce(&mut Txn<'_>, &BlockId) -> Option<Pos>) -> Option<Step> {
+        let at = self.sel.focus.block.clone();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let caret = f(&mut txn, &at);
+        let step = txn.finish();
+        if let Some(c) = caret {
+            self.set_caret(c);
+        }
+        Some(step)
+    }
+
+    // ----- movement ------------------------------------------------------
+
+    fn stops(&self, block: &BlockId) -> Vec<usize> {
+        geometry::para_stops(&self.layout, &self.index, block).unwrap_or_else(|| {
+            let len = self.para_len(block);
+            let text = self
+                .story()
+                .get(block)
+                .map(|b| b.content.text())
+                .unwrap_or_default();
+            let mut offs = char_offsets(&text);
+            offs.retain(|&o| o <= len);
+            offs
+        })
+    }
+
+    fn neighbour_para(&mut self, id: &BlockId, forward: bool) -> Option<BlockId> {
+        let o = self.order();
+        let i = *o.index.get(id)?;
+        if forward {
+            o.list.get(i + 1).cloned()
+        } else {
+            i.checked_sub(1).and_then(|j| o.list.get(j).cloned())
+        }
+    }
+
+    fn step_char(&mut self, from: &Pos, forward: bool) -> Pos {
+        let stops = self.stops(&from.block);
+        if forward {
+            if let Some(&n) = stops.iter().find(|&&s| s > from.offset) {
+                return Pos::new(from.block.clone(), n);
+            }
+            if let Some(next) = self.neighbour_para(&from.block, true) {
+                let first = self.stops(&next).first().copied().unwrap_or(0);
+                return Pos::new(next, first);
+            }
+        } else {
+            if let Some(&p) = stops.iter().rev().find(|&&s| s < from.offset) {
+                return Pos::new(from.block.clone(), p);
+            }
+            if let Some(prev) = self.neighbour_para(&from.block, false) {
+                let len = self.para_len(&prev);
+                return Pos::new(prev, len);
+            }
+        }
+        from.clone()
+    }
+
+    fn step_word(&mut self, from: &Pos, forward: bool) -> Pos {
+        let text = self
+            .story()
+            .get(&from.block)
+            .map(|b| b.content.text())
+            .unwrap_or_default();
+        let len = self.para_len(&from.block);
+        if forward {
+            if from.offset >= len {
+                return self.step_char(from, true);
+            }
+            Pos::new(
+                from.block.clone(),
+                word_forward(&text, from.offset).min(len),
+            )
+        } else {
+            if from.offset == 0 {
+                return self.step_char(from, false);
+            }
+            Pos::new(from.block.clone(), word_backward(&text, from.offset))
+        }
+    }
+
+    /// Whether the paragraph at a position reads right to left.
+    fn right_to_left(&self, pos: &Pos) -> bool {
+        geometry::locate(&self.layout, &self.index, pos)
+            .is_some_and(|(_, pl, _)| pl.para.inline.levels.last().is_some_and(|l| l % 2 == 1))
+    }
+
+    fn move_caret(&mut self, unit: Unit, forward: bool, extend: bool) {
+        let focus = self.sel.focus.clone();
+        // Arrow keys collapse a selection to its edge.
+        if !extend && !self.sel.is_collapsed() && matches!(unit, Unit::Char) {
+            let (s, e) = self.ordered();
+            self.set_caret(if forward { e } else { s });
+            return;
+        }
+        let target = match unit {
+            Unit::Char => self.step_char(&focus, forward),
+            Unit::Word => self.step_word(&focus, forward),
+            Unit::Line => {
+                let Some(caret) = geometry::caret(&self.layout, &self.index, &focus) else {
+                    return;
+                };
+                let goal = *self.goal_x.get_or_insert(caret.x);
+                match geometry::vertical(&self.layout, &self.index, &caret, goal, forward) {
+                    Some(p) => p,
+                    None => {
+                        // Past the first or last line: go to the end.
+                        let o = self.order();
+                        if forward {
+                            let last = o.list.last().cloned().unwrap_or(focus.block.clone());
+                            let len = self.para_len(&last);
+                            Pos::new(last, len)
+                        } else {
+                            Pos::new(o.list.first().cloned().unwrap_or(focus.block.clone()), 0)
+                        }
+                    }
+                }
+            }
+            Unit::LineBoundary => match geometry::line_bounds(&self.layout, &self.index, &focus) {
+                Some((s, e)) => {
+                    if forward {
+                        e
+                    } else {
+                        s
+                    }
+                }
+                None => focus.clone(),
+            },
+            Unit::Paragraph => {
+                if forward {
+                    match self.neighbour_para(&focus.block, true) {
+                        Some(n) => Pos::new(n, 0),
+                        None => Pos::new(focus.block.clone(), self.para_len(&focus.block)),
+                    }
+                } else if focus.offset > 0 {
+                    Pos::new(focus.block.clone(), 0)
+                } else {
+                    match self.neighbour_para(&focus.block, false) {
+                        Some(p) => Pos::new(p, 0),
+                        None => focus.clone(),
+                    }
+                }
+            }
+            Unit::Document => {
+                let o = self.order();
+                if forward {
+                    let last = o.list.last().cloned().unwrap_or(focus.block.clone());
+                    let len = self.para_len(&last);
+                    Pos::new(last, len)
+                } else {
+                    Pos::new(o.list.first().cloned().unwrap_or(focus.block.clone()), 0)
+                }
+            }
+        };
+        if extend {
+            self.sel.focus = target;
+        } else {
+            self.set_caret(target);
+        }
+    }
+
+    // ----- editing -------------------------------------------------------
+
+    fn insert_text(&mut self, text: &str) -> Step {
+        let pending = self.pending.take();
+        let sel = self.sel.clone();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = match &rev {
+            // Typing over a selection while tracking goes after the
+            // deleted text.
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let mut attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        if let Some(r) = &rev {
+            attrs = revise::inserted(&attrs, char_before(&txn, &at).as_ref(), r);
+        }
+        let end = text::insert_text(&mut txn, &at, text, &attrs, rev.as_ref());
+        let step = txn.finish();
+        self.set_caret(end);
+        step
+    }
+
+    fn insert_paragraph(&mut self) -> Step {
+        self.pending = None;
+        let sel = self.sel.clone();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let empty_list_item = txn
+            .get(&at.block)
+            .is_some_and(|b| b.content.is_empty() && text::has_direct_numbering(&b.props));
+        let caret = if empty_list_item {
+            // Enter on an empty list item ends the list.
+            format::edit_ppr(&mut txn, &at.block, rev.as_ref(), |e| e.set("numPr", None));
+            at.clone()
+        } else {
+            text::split_tracked(&mut txn, &at, rev.as_ref()).unwrap_or(at.clone())
+        };
+        let step = txn.finish();
+        self.set_caret(caret);
+        step
+    }
+
+    fn insert_note(&mut self, endnote: bool) -> crate::Result<Option<Step>> {
+        // Notes are referenced from the body, as in Word.
+        if self.active != StoryTarget::Body {
+            return Ok(None);
+        }
+        let note = notes::add_note(&mut self.doc, endnote)?;
+        self.stale = true;
+        let w = self.doc.w_prefix().to_owned();
+        let q = |l: &str| {
+            if w.is_empty() {
+                l.to_owned()
+            } else {
+                format!("{w}:{l}")
+            }
+        };
+        let local = if endnote {
+            "endnoteReference"
+        } else {
+            "footnoteReference"
+        };
+        let object = format!("<{} {}=\"{}\"/>", q(local), q("id"), note.id);
+        let pending = self.pending.take();
+        let sel = self.sel.clone();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let mut attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        attrs = match &note.reference_style {
+            Some(id) => attrs.with(
+                &format!("{}{}", key::RUN_PROP, q("rStyle")),
+                Some(&format!("<{} {}=\"{id}\"/>", q("rStyle"), q("val"))),
+            ),
+            None => attrs.with(
+                &format!("{}{}", key::RUN_PROP, q("vertAlign")),
+                Some(&format!(
+                    "<{} {}=\"superscript\"/>",
+                    q("vertAlign"),
+                    q("val")
+                )),
+            ),
+        };
+        if let Some(r) = &rev {
+            attrs = revise::inserted(&attrs, char_before(&txn, &at).as_ref(), r);
+        }
+        attrs = attrs.with(key::OBJ, Some(&object));
+        let mut after = at.clone();
+        if let Some(b) = txn.block_mut(&at.block) {
+            let o = at.offset.min(b.content.len());
+            b.content.insert(o, &OBJECT_CHAR.to_string(), attrs);
+            after = Pos::new(at.block.clone(), o + 1);
+        }
+        let step = txn.finish();
+        // Into the new note, after its mark and space; leaving it comes
+        // back to just after the reference.
+        let target = StoryTarget::Note {
+            endnote,
+            id: note.id,
+        };
+        let first = self.doc.story(&target).paragraphs().into_iter().next();
+        if let Some(first) = first
+            && self.doc.has_story(&target)
+        {
+            let len = self
+                .doc
+                .story(&target)
+                .get(&first)
+                .map_or(0, |b| b.content.len());
+            self.enter(target, 0);
+            self.body_sel = Some(Selection::caret(after));
+            self.sel = Selection::caret(Pos::new(first, len));
+        } else {
+            self.set_caret(after);
+        }
+        Ok(Some(step))
+    }
+
+    fn insert_break(&mut self, kind: BreakKind) -> Step {
+        let w = self.doc.w_prefix().to_owned();
+        let q = |l: &str| {
+            if w.is_empty() {
+                l.to_owned()
+            } else {
+                format!("{w}:{l}")
+            }
+        };
+        let object = match kind {
+            BreakKind::Line => None,
+            BreakKind::Page => Some(format!("<{} {}=\"page\"/>", q("br"), q("type"))),
+            BreakKind::Column => Some(format!("<{} {}=\"column\"/>", q("br"), q("type"))),
+        };
+        let pending = self.pending.take();
+        let sel = self.sel.clone();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let mut attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        if let Some(r) = &rev {
+            attrs = revise::inserted(&attrs, char_before(&txn, &at).as_ref(), r);
+        }
+        let ch = match &object {
+            Some(xml) => {
+                attrs = attrs.with(key::OBJ, Some(xml));
+                OBJECT_CHAR.to_string()
+            }
+            // A line break is a newline inside the paragraph.
+            None => "\n".to_owned(),
+        };
+        let mut end = at.clone();
+        if let Some(b) = txn.block_mut(&at.block) {
+            let o = at.offset.min(b.content.len());
+            b.content.insert(o, &ch, attrs);
+            end.offset = o + utf16_len(&ch);
+            end.upstream = false;
+        }
+        let step = txn.finish();
+        self.set_caret(end);
+        step
+    }
+
+    fn delete(&mut self, forward: bool, unit: Unit) -> Option<Step> {
+        self.pending = None;
+        let rev = self.revisor();
+        if !self.sel.is_collapsed() {
+            let sel = self.sel.clone();
+            let mut txn = Txn::new(&mut self.doc, &self.active);
+            let caret = match &rev {
+                Some(r) => {
+                    let (start, end) = tracked_delete_selection(&mut txn, &sel, r);
+                    if forward { end } else { start }
+                }
+                None => delete_selection(&mut txn, &sel),
+            };
+            let step = txn.finish();
+            self.set_caret(caret);
+            return Some(step);
+        }
+        let at = self.sel.focus.clone();
+        let len = self.para_len(&at.block);
+        let at_edge = if forward {
+            at.offset >= len
+        } else {
+            at.offset == 0
+        };
+        if at_edge {
+            return self.delete_at_edge(&at, forward);
+        }
+        let other = match unit {
+            Unit::Word => self.step_word(&at, forward),
+            Unit::LineBoundary => match geometry::line_bounds(&self.layout, &self.index, &at) {
+                Some((s, e)) => {
+                    if forward {
+                        e
+                    } else {
+                        s
+                    }
+                }
+                None => at.clone(),
+            },
+            _ => self.step_char(&at, forward),
+        };
+        if other.block != at.block {
+            return self.delete_at_edge(&at, forward);
+        }
+        let (s, e) = if forward {
+            (at.offset, other.offset)
+        } else {
+            (other.offset, at.offset)
+        };
+        if s >= e {
+            return None;
+        }
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let mut caret = s;
+        if let Some(b) = txn.block_mut(&at.block) {
+            match &rev {
+                // Deleted text stays (marked); the caret steps past it.
+                Some(r) => {
+                    let end = revise::delete_in(&mut b.content, s, e, r);
+                    if forward {
+                        caret = end;
+                    }
+                }
+                None => b.content.delete(s, e),
+            }
+        }
+        let step = txn.finish();
+        self.set_caret(Pos::new(at.block.clone(), caret));
+        Some(step)
+    }
+
+    /// Backspace at a paragraph's start or Delete at its end.
+    fn delete_at_edge(&mut self, at: &Pos, forward: bool) -> Option<Step> {
+        let numbered = self
+            .story()
+            .get(&at.block)
+            .is_some_and(|b| text::has_direct_numbering(&b.props));
+        if !forward && numbered {
+            // Backspace at a list item's start removes its number first.
+            let rev = self.revisor();
+            let mut txn = Txn::new(&mut self.doc, &self.active);
+            format::edit_ppr(&mut txn, &at.block, rev.as_ref(), |e| e.set("numPr", None));
+            return Some(txn.finish());
+        }
+        let other = self.neighbour_para(&at.block, forward)?;
+        let (first, second) = if forward {
+            (at.block.clone(), other.clone())
+        } else {
+            (other.clone(), at.block.clone())
+        };
+        let parent = |s: &Self, id: &BlockId| s.story().get(id).and_then(|b| b.parent.clone());
+        let siblings = parent(self, &first) == parent(self, &second);
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let caret = if siblings && let Some(r) = &rev {
+            // The mark between them is marked deleted (or goes, when the
+            // author inserted it); the caret steps over it.
+            let len = txn.get(&first).map_or(0, |b| b.content.len());
+            if revise::delete_mark(&mut txn, &first, &second, r) {
+                Some(Pos::new(first.clone(), len))
+            } else if forward {
+                Some(Pos::new(second.clone(), 0))
+            } else {
+                Some(Pos::new(first.clone(), len))
+            }
+        } else if siblings {
+            text::join(&mut txn, &first, &second)
+        } else if rev.is_some() {
+            let len = txn.get(&other).map_or(0, |b| b.content.len());
+            Some(Pos::new(other.clone(), if forward { 0 } else { len }))
+        } else {
+            // Across a table edge: an empty paragraph goes, otherwise the
+            // caret just moves.
+            let empty = txn.get(&at.block).is_some_and(|b| b.content.is_empty());
+            let in_cell = txn
+                .get(&at.block)
+                .and_then(|b| b.parent.as_ref())
+                .and_then(|p| txn.get(p))
+                .is_some_and(|p| p.kind == BlockKind::Cell);
+            if empty && !in_cell {
+                txn.remove(&at.block);
+                let len = txn.get(&other).map_or(0, |b| b.content.len());
+                Some(Pos::new(other.clone(), if forward { 0 } else { len }))
+            } else {
+                let len = txn.get(&other).map_or(0, |b| b.content.len());
+                Some(Pos::new(other.clone(), if forward { 0 } else { len }))
+            }
+        };
+        let step = txn.finish();
+        if let Some(c) = caret {
+            self.set_caret(c);
+        }
+        Some(step)
+    }
+
+    /// Replaces the match the selection holds and selects the next one, or
+    /// every match, keeping the caret on its text.
+    fn replace(
+        &mut self,
+        query: &str,
+        options: &FindOptions,
+        with: &str,
+        all: bool,
+    ) -> Option<Step> {
+        self.leave_story();
+        self.pending = None;
+        let matches = |s: &Self| {
+            let paras = s.doc.body().paragraphs();
+            find::find(s.doc.body(), &paras, query, options, usize::MAX).0
+        };
+        let found = matches(self);
+        if found.is_empty() {
+            return None;
+        }
+        let (start, end) = self.ordered();
+        if all {
+            let mut caret = start;
+            let mut step = Step::default();
+            // Last to first, so the earlier matches stay where they were.
+            for (from, to) in found.iter().rev() {
+                let before = self.para_len(&from.block);
+                step.merge(self.replace_range(from, to, with));
+                if caret.block == from.block {
+                    if caret.offset >= to.offset {
+                        caret.offset =
+                            (caret.offset + self.para_len(&from.block)).saturating_sub(before);
+                    } else if caret.offset > from.offset {
+                        caret.offset = from.offset;
+                    }
+                }
+            }
+            self.set_caret(caret);
+            return Some(step);
+        }
+        let held = found
+            .iter()
+            .find(|(from, to)| from.same_place(&start) && to.same_place(&end))
+            .cloned();
+        let Some((from, to)) = held else {
+            self.select_match(&found, &start);
+            return None;
+        };
+        let step = self.replace_range(&from, &to, with);
+        let caret = self.sel.focus.clone();
+        let found = matches(self);
+        if found.is_empty() {
+            self.set_caret(caret);
+        } else {
+            self.select_match(&found, &caret);
+        }
+        Some(step)
+    }
+
+    /// Replaces a range with text in the formatting of its first character.
+    fn replace_range(&mut self, from: &Pos, to: &Pos, with: &str) -> Step {
+        let attrs = self.story().get(&from.block).map(|b| {
+            text::typing_attrs(
+                b,
+                from.offset + 1,
+                self.doc.w_prefix(),
+                &SnippetContext::new(self.doc.decls()),
+            )
+        });
+        self.sel = Selection {
+            anchor: from.clone(),
+            focus: to.clone(),
+        };
+        if with.is_empty() {
+            self.pending = None;
+            return self.delete(true, Unit::Char).unwrap_or_default();
+        }
+        self.pending = attrs;
+        self.insert_text(with)
+    }
+
+    /// Selects the first match at or after a position (or the first).
+    fn select_match(&mut self, found: &[(Pos, Pos)], at: &Pos) {
+        let o = self.order();
+        let key = |p: &Pos| (o.index.get(&p.block).copied().unwrap_or(0), p.offset);
+        let next = found
+            .iter()
+            .find(|(from, _)| key(from) >= key(at))
+            .or(found.first());
+        if let Some((from, to)) = next {
+            self.sel = Selection {
+                anchor: from.clone(),
+                focus: to.clone(),
+            };
+        }
+    }
+
+    /// Pastes paragraphs over the selection.
+    fn paste(
+        &mut self,
+        paragraphs: &[ClipParagraph],
+        same_document: bool,
+    ) -> crate::Result<Option<Step>> {
+        if paragraphs.is_empty() {
+            return Ok(None);
+        }
+        let pending = self.pending.take();
+        let sel = self.sel.clone();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let base = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        let before = char_before(&txn, &at);
+        let end = clip::paste(
+            &mut txn,
+            &at,
+            paragraphs,
+            &base,
+            before,
+            same_document,
+            rev.as_ref(),
+        )?;
+        let step = txn.finish();
+        self.set_caret(end);
+        Ok(Some(step))
+    }
+
+    /// The selection for the clipboard: Macro's own form, HTML and text.
+    pub fn copy_selection(&mut self) -> Clip {
+        let (s, e) = self.ordered();
+        if s.same_place(&e) {
+            return Clip::default();
+        }
+        let paras = self.paras_between(&s.block, &e.block);
+        let kinds = self.list_kinds(&paras);
+        let (parts, decls) = self.style_env();
+        let formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            &decls,
+        );
+        let w = self.doc.w_prefix().to_owned();
+        let mut out = Clip::default();
+        let mut html = String::from("<meta charset=\"utf-8\">");
+        let mut open_list: Option<ListKind> = None;
+        let last = paras.len().saturating_sub(1);
+        for (k, id) in paras.iter().enumerate() {
+            let Some(b) = self.story().get(id) else {
+                continue;
+            };
+            if b.kind != BlockKind::Paragraph {
+                continue;
+            }
+            let from = if k == 0 { s.offset } else { 0 };
+            let to = if k == last { e.offset } else { b.content.len() };
+            let runs = clip::copy_spans(&b.content, from, to);
+            let Some(pf) = self.para_format(&formats, id) else {
+                continue;
+            };
+            let heading = pf.props.outline_lvl.filter(|l| *l < 9).map(|l| l + 1);
+            let list = kinds.get(k).copied().flatten();
+            // The mark's revision and the section break stay behind.
+            let mut props = revise::set_mark_revision(&b.props, None, &w, &decls);
+            if props.contains("sectPr") {
+                let mut el = xmledit::Element::open(&props, "pPr", &w, &decls, xmledit::PPR_ORDER);
+                el.set("sectPr", None);
+                props = el.finish(true);
+            }
+            match (list, open_list) {
+                (Some((kind, _, _)), Some(open)) if kind == open => {}
+                (list, open) => {
+                    if let Some(open) = open {
+                        html.push_str(if open == ListKind::Bullet {
+                            "</ul>"
+                        } else {
+                            "</ol>"
+                        });
+                    }
+                    if let Some((kind, _, _)) = list {
+                        html.push_str(if kind == ListKind::Bullet {
+                            "<ul>"
+                        } else {
+                            "<ol>"
+                        });
+                    }
+                    open_list = list.map(|(kind, _, _)| kind);
+                }
+            }
+            let tag = match (list, heading) {
+                (Some(_), _) => "li".to_owned(),
+                (None, Some(h)) if h <= 6 => format!("h{h}"),
+                _ => "p".to_owned(),
+            };
+            clip::paragraph_html(&mut html, &runs, &formats, &pf, &tag);
+            out.paragraphs.push(ClipParagraph {
+                runs,
+                props: Some(props),
+                heading,
+                list: list.map(|(kind, _, _)| kind),
+                level: list.map_or(0, |(_, _, l)| l),
+            });
+        }
+        if let Some(open) = open_list {
+            html.push_str(if open == ListKind::Bullet {
+                "</ul>"
+            } else {
+                "</ol>"
+            });
+        }
+        out.html = html;
+        out.text = self.selected_text();
+        out
+    }
+
+    /// Accepts or rejects tracked changes: every one in the story, those in
+    /// the selection, or the one at the caret.
+    fn resolve(&mut self, accept: bool, all: bool) -> Option<Step> {
+        self.pending = None;
+        let (start, end) = self.ordered();
+        let scope = if all {
+            revise::Scope::All
+        } else if start.same_place(&end) {
+            let b = self.story().get(&start.block)?;
+            let (w, decls) = (self.doc.w_prefix(), self.doc.decls());
+            let mark = revise::mark_revision(&b.props, w, decls).and_then(|(_, _, id)| id);
+            let mut ids = revise::ids_at(&b.content, start.offset, mark);
+            // The paragraph's property change applies wherever the caret is in it.
+            ids.extend(revise::ppr_change_id(&b.props, w, decls));
+            if ids.is_empty() {
+                return None;
+            }
+            revise::Scope::Ids(ids)
+        } else {
+            revise::Scope::Range {
+                paras: self.paras_between(&start.block, &end.block),
+                from: start.offset,
+                to: end.offset,
+            }
+        };
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        revise::resolve(&mut txn, &scope, accept);
+        let step = txn.finish();
+        // The selection's start survives; text after it may be gone.
+        self.sel = Selection::caret(Pos {
+            upstream: false,
+            ..start
+        });
+        self.clamp_selection();
+        Some(step)
+    }
+
+    /// Applies `f` to the attributes of every selected span (or to the
+    /// formatting the next typed text gets, at a caret).
+    fn map_runs(&mut self, f: impl Fn(&Attrs) -> Attrs) -> Option<Step> {
+        if self.sel.is_collapsed() {
+            let at = self.sel.focus.clone();
+            let base = self.typing_attrs_at(&at);
+            self.pending = Some(f(&base));
+            return None;
+        }
+        let (s, e) = self.ordered();
+        let paras = self.paras_between(&s.block, &e.block);
+        // While tracking, each run keeps a record of its formatting before.
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        for (k, id) in paras.iter().enumerate() {
+            let Some(len) = txn.get(id).map(|b| b.content.len()) else {
+                continue;
+            };
+            let from = if k == 0 { s.offset } else { 0 };
+            let to = if k + 1 == paras.len() { e.offset } else { len };
+            if from >= to {
+                continue;
+            }
+            let before = txn.get(id).map(|b| b.content.clone()).unwrap_or_default();
+            let mut content = before.clone();
+            // Markers between runs (bookmarks, comment ranges) have no formatting.
+            content.map_attrs(from, to, |a| {
+                if a.marker().is_some() {
+                    a.clone()
+                } else {
+                    let new = f(a);
+                    match &rev {
+                        Some(r) => r.format_change(a, &new),
+                        None => new,
+                    }
+                }
+            });
+            if content != before
+                && let Some(b) = txn.block_mut(id)
+            {
+                b.content = content;
+            }
+        }
+        Some(txn.finish())
+    }
+
+    fn toggle(&mut self, t: Toggle) -> Option<Step> {
+        let w = self.doc.w_prefix().to_owned();
+        let (parts, decls) = self.style_env();
+        let formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            &decls,
+        );
+        let (s, e) = self.ordered();
+        let paras = self.paras_between(&s.block, &e.block);
+        let mut fmts: HashMap<BlockId, Arc<ParaFormat>> = HashMap::new();
+        for id in &paras {
+            if let Some(pf) = self.para_format(&formats, id) {
+                fmts.insert(id.clone(), pf);
+            }
+        }
+        // On unless the whole selection already has it.
+        let mut all_on = true;
+        if self.sel.is_collapsed() {
+            let attrs = self.typing_attrs_at(&s);
+            if let Some(pf) = fmts.get(&s.block) {
+                all_on = t.is_on(&formats.run(&attrs, pf));
+            }
+        } else {
+            for (k, id) in paras.iter().enumerate() {
+                let (Some(b), Some(pf)) = (self.story().get(id), fmts.get(id)) else {
+                    continue;
+                };
+                let from = if k == 0 { s.offset } else { 0 };
+                let to = if k + 1 == paras.len() {
+                    e.offset
+                } else {
+                    b.content.len()
+                };
+                for (at, span) in b.content.spans_at() {
+                    let len = utf16_len(&span.text);
+                    if at + len <= from || at >= to || span.attrs.marker().is_some() {
+                        continue;
+                    }
+                    if !t.is_on(&formats.run(&span.attrs, pf)) {
+                        all_on = false;
+                    }
+                }
+            }
+        }
+        let on = !all_on;
+        let apply = |a: &Attrs, pf: &Arc<ParaFormat>| {
+            let inh = format::inherited(&formats, a, pf, t, &w);
+            format::toggled(a, t, on, inh, &w)
+        };
+        if self.sel.is_collapsed() {
+            let base = self.typing_attrs_at(&s);
+            if let Some(pf) = fmts.get(&s.block) {
+                self.pending = Some(apply(&base, pf));
+            }
+            return None;
+        }
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        for (k, id) in paras.iter().enumerate() {
+            let Some(pf) = fmts.get(id) else {
+                continue;
+            };
+            let Some(len) = txn.get(id).map(|b| b.content.len()) else {
+                continue;
+            };
+            let from = if k == 0 { s.offset } else { 0 };
+            let to = if k + 1 == paras.len() { e.offset } else { len };
+            if from >= to {
+                continue;
+            }
+            let before = txn.get(id).map(|b| b.content.clone()).unwrap_or_default();
+            let mut content = before.clone();
+            content.map_attrs(from, to, |a| {
+                if a.marker().is_some() {
+                    a.clone()
+                } else {
+                    let new = apply(a, pf);
+                    match &rev {
+                        Some(r) => r.format_change(a, &new),
+                        None => new,
+                    }
+                }
+            });
+            if content != before
+                && let Some(b) = txn.block_mut(id)
+            {
+                b.content = content;
+            }
+        }
+        Some(txn.finish())
+    }
+
+    /// Applies `f` to the `w:pPr` of every selected paragraph.
+    fn map_paragraphs(&mut self, f: impl Fn(&mut Element)) -> Option<Step> {
+        let (s, e) = self.ordered();
+        let paras = self.paras_between(&s.block, &e.block);
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        for id in &paras {
+            format::edit_ppr(&mut txn, id, rev.as_ref(), &f);
+        }
+        Some(txn.finish())
+    }
+}
+
+/// Deletes the selection inside a transaction; returns the caret.
+fn delete_selection(txn: &mut Txn<'_>, sel: &Selection) -> Pos {
+    if sel.is_collapsed() {
+        return sel.anchor.clone();
+    }
+    let list = txn.story().paragraphs();
+    let index: HashMap<&BlockId, usize> = list.iter().enumerate().map(|(i, id)| (id, i)).collect();
+    let (a, f) = (&sel.anchor, &sel.focus);
+    let ia = index.get(&a.block).copied().unwrap_or(0);
+    let ifo = index.get(&f.block).copied().unwrap_or(0);
+    let (s, e) = if (ia, a.offset) <= (ifo, f.offset) {
+        (a.clone(), f.clone())
+    } else {
+        (f.clone(), a.clone())
+    };
+    if s.same_place(&e) {
+        return s;
+    }
+    text::delete_range(txn, &s, &e)
+}
+
+/// Deletes the selection while tracking changes; returns its ends after.
+fn tracked_delete_selection(
+    txn: &mut Txn<'_>,
+    sel: &Selection,
+    rev: &revise::Revisor,
+) -> (Pos, Pos) {
+    if sel.is_collapsed() {
+        return (sel.anchor.clone(), sel.anchor.clone());
+    }
+    let list = txn.story().paragraphs();
+    let index: HashMap<&BlockId, usize> = list.iter().enumerate().map(|(i, id)| (id, i)).collect();
+    let (a, f) = (&sel.anchor, &sel.focus);
+    let ia = index.get(&a.block).copied().unwrap_or(0);
+    let ifo = index.get(&f.block).copied().unwrap_or(0);
+    let (s, e) = if (ia, a.offset) <= (ifo, f.offset) {
+        (a.clone(), f.clone())
+    } else {
+        (f.clone(), a.clone())
+    };
+    if s.same_place(&e) {
+        return (s.clone(), s);
+    }
+    revise::delete_range(txn, &s, &e, rev)
+}
+
+/// The attributes of the character before a position.
+fn char_before(txn: &Txn<'_>, at: &Pos) -> Option<Attrs> {
+    let b = txn.get(&at.block)?;
+    b.content.attrs_at(at.offset.checked_sub(1)?).cloned()
+}
+
+/// The formatting text typed at a position inside a transaction gets.
+fn typing_in(txn: &Txn<'_>, at: &Pos) -> Attrs {
+    txn.get(&at.block)
+        .map(|b| {
+            text::typing_attrs(
+                b,
+                at.offset,
+                txn.doc.w_prefix(),
+                &SnippetContext::new(txn.doc.decls()),
+            )
+        })
+        .unwrap_or_default()
+}

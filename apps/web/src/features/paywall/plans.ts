@@ -1,5 +1,3 @@
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-
 export type PlanTier = 'free' | 'premium' | 'max';
 export type Plan = {
   tier: PlanTier;
@@ -54,13 +52,14 @@ export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
 interface PlanFeature {
   label: string;
   values: Record<PlanTier, string>;
-  devOnly?: boolean;
+  /** Shown only while the `enable-ai-usage-billing` flag is on. */
+  aiUsageBilling?: boolean;
 }
 
-const planFeatures: PlanFeature[] = [
+const PLAN_FEATURE_ROWS: PlanFeature[] = [
   {
     label: 'AI usage included',
-    devOnly: true,
+    aiUsageBilling: true,
     values: {
       free: 'Limited',
       premium: '$40 / mo',
@@ -77,7 +76,7 @@ const planFeatures: PlanFeature[] = [
   },
   {
     label: 'Beyond included',
-    devOnly: true,
+    aiUsageBilling: true,
     values: {
       free: '—',
       premium: 'Credits or usage billing',
@@ -94,6 +93,13 @@ const planFeatures: PlanFeature[] = [
   },
 ];
 
-export const PLAN_FEATURES = planFeatures.filter(
-  (feature) => !feature.devOnly || DEV_MODE_ENV
-);
+/**
+ * The plan comparison rows. The AI usage rows (included allowance and what
+ * covers usage beyond it) appear only while AI usage billing is on; callers
+ * read `enableAiUsageBilling` and pass its value.
+ */
+export function planFeatures(aiUsageBilling: boolean) {
+  return PLAN_FEATURE_ROWS.filter(
+    (feature) => !feature.aiUsageBilling || aiUsageBilling
+  );
+}

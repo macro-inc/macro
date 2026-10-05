@@ -14,7 +14,7 @@ export function McpConnections() {
       when={pipedreamMcp()}
       fallback={
         <SettingsPage
-          title="Connections"
+          title="Agent connections"
           description="Connect the tools your team already uses so Macro's agent can work in them."
         >
           <Suspense>

@@ -6,6 +6,7 @@ use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod historical;
 mod timeline;
 
 #[cfg(test)]
@@ -414,7 +415,7 @@ impl PgMessageRepository {
             Some(NewThreadAnchor::PdfHighlight { anchor_id }) => {
                 let changed = sqlx::query!(
                     r#"UPDATE "PdfHighlightAnchor" SET root_id = $1
-                    WHERE uuid = $2 AND "documentId" = $3 AND root_id IS NULL AND "threadId" IS NULL
+                    WHERE uuid = $2 AND "documentId" = $3 AND root_id IS NULL
                         AND "deletedAt" IS NULL"#,
                     root_id,
                     anchor_id,
@@ -444,8 +445,12 @@ impl PgMessageRepository {
                     anchor_id, command.parent.entity_id(), command.actor.as_ref(), root_id, page,
                     x_pct, y_pct, width_pct, height_pct).execute(&mut **tx).await.map_err(database_error)?;
             }
-            Some(NewThreadAnchor::Markdown { .. } | NewThreadAnchor::Spreadsheet { .. }) | None => {
-            }
+            Some(
+                NewThreadAnchor::Markdown { .. }
+                | NewThreadAnchor::Spreadsheet { .. }
+                | NewThreadAnchor::Fig { .. },
+            )
+            | None => {}
         }
         Ok(())
     }

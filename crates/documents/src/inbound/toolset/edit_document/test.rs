@@ -526,6 +526,15 @@ impl EditingWorkerService for FakeEditingWorker {
         panic!("unexpected spreadsheet call")
     }
 
+    async fn word_document(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _request: &crate::domain::word_document::WordDocumentRequest,
+    ) -> anyhow::Result<crate::domain::word_document::WordDocumentResponse> {
+        panic!("unexpected word document call")
+    }
+
     async fn add_comment_mark(
         &self,
         document_id: &str,
@@ -916,4 +925,10 @@ fn only_markdown_is_editable() {
         ensure_markdown(&document_with_file_type(None)).is_err(),
         "a document with no file type must be rejected"
     );
+}
+
+#[test]
+fn word_documents_are_pointed_at_the_word_tools() {
+    let error = ensure_markdown(&document_with_file_type(Some("docx"))).unwrap_err();
+    assert!(error.description.contains("EditWordDocument"));
 }

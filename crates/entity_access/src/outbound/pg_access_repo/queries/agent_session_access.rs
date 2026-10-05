@@ -51,7 +51,8 @@ pub async fn accessible_session_ids(
 ///
 /// A session's grants are written when it is created: the owner with
 /// owner, and - when the session was opened by a mention - the channel that
-/// mention was posted in as editor. Channel membership is not copied into
+/// mention was posted in, as editor, or as viewer when the bot is a user's
+/// private agent. Channel membership is not copied into
 /// `entity_access`; it arrives here through `source_ids`, so adding someone
 /// to that channel gives them the session on their next request.
 ///

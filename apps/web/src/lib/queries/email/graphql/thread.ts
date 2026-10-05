@@ -28,7 +28,9 @@ import {
   createSignal,
   on,
   onCleanup,
+  untrack,
 } from 'solid-js';
+import { registerActiveGraphqlSoupQuery } from '../../soup/graphql/active-queries';
 import { mapGraphqlEmailThreadPage } from './mapper';
 
 /** REST-compatible pages exposed to the email query facade. */
@@ -95,8 +97,19 @@ export function mapGraphqlThreadError(error: CombinedError): ThrownResultError {
   );
 }
 
+type ThreadIdentity = {
+  requested: string;
+  canonical: string;
+  /** A failed lookup is not proof of a local draft. Only `local` forbids
+   * network reads after the session has abandoned its normalized cache. */
+  kind: 'remote' | 'local' | 'unknown';
+};
+
 /** Resolve a durable local route before contacting the server with its ID. */
-async function cachedThreadIdentity(threadId: string) {
+async function cachedThreadIdentity(
+  threadId: string,
+  previous?: ThreadIdentity
+): Promise<ThreadIdentity> {
   const cacheRequired = graphqlCacheEnabled();
   const host = cacheRequired ? getGraphqlCacheHost() : undefined;
   if (cacheRequired && !host) {
@@ -114,6 +127,16 @@ async function cachedThreadIdentity(threadId: string) {
         return undefined;
       })
     : undefined;
+  // Cache fallback must not discard positive knowledge of an unsynced draft
+  // or an already-resolved server alias, even if the latest lookup failed.
+  if (
+    !result &&
+    !graphqlCacheEnabled() &&
+    previous?.requested === threadId &&
+    previous.kind !== 'unknown'
+  ) {
+    return previous;
+  }
   const selected = result?.records[0];
   return {
     requested: threadId,
@@ -121,10 +144,12 @@ async function cachedThreadIdentity(threadId: string) {
     // Pending edits do not make an existing server identity local again.
     // Every authoritative Mail thread carries a projection capsule; only a
     // newly created optimistic thread has no server capsule yet.
-    localOnly:
+    kind:
       selected?.identity?.pending === true &&
       selected.record.id === threadId &&
-      selected.record.cacheProjection === null,
+      selected.record.cacheProjection === null
+        ? 'local'
+        : 'remote',
   };
 }
 
@@ -144,6 +169,14 @@ export async function fetchGraphqlEmailThread(
   // An asynchronous cache initialization failure can replace the client while
   // resolving identity. Use the session's current transport after that read.
   const client = getGraphqlSoupClient();
+  if (identity.kind === 'local' && !graphqlCacheEnabled()) {
+    throw new ThrownResultError([
+      {
+        code: 'UNKNOWN',
+        message: 'Email cache is unavailable for this local draft',
+      },
+    ]);
+  }
   const variables: EmailThreadPageQueryVariables = {
     threadId: identity.canonical,
     offset,
@@ -153,7 +186,10 @@ export async function fetchGraphqlEmailThread(
     .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
       EmailThreadPageDocument,
       variables,
-      { requestPolicy: identity.localOnly ? 'cache-only' : 'cache-and-network' }
+      {
+        requestPolicy:
+          identity.kind === 'local' ? 'cache-only' : 'cache-and-network',
+      }
     )
     .toPromise();
 
@@ -199,20 +235,19 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   // settlement cannot leave a reopened local thread stuck on cache-only.
   getGraphqlSoupClient();
   const host = getGraphqlCacheHost();
-  const [identity, setIdentity] =
-    createSignal<Awaited<ReturnType<typeof cachedThreadIdentity>>>();
+  const [identity, setIdentity] = createSignal<ThreadIdentity>();
   let request = 0;
   let disposed = false;
   const refreshIdentity = async () => {
     const id = threadId();
     const generation = ++request;
     try {
-      const result = await cachedThreadIdentity(id);
+      const result = await cachedThreadIdentity(id, untrack(identity));
       if (disposed || generation !== request || id !== threadId()) return;
       setIdentity((previous) =>
         previous?.requested === result.requested &&
         previous.canonical === result.canonical &&
-        previous.localOnly === result.localOnly
+        previous.kind === result.kind
           ? previous
           : result
       );
@@ -220,11 +255,15 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       // An initially unreadable identity may still be a local draft. Preserve
       // any known identity and policy; otherwise wait for resolution in cache.
       if (!disposed && generation === request && id === threadId())
-        setIdentity((previous) => ({
-          requested: id,
-          canonical: previous?.requested === id ? previous.canonical : id,
-          localOnly: previous?.requested === id ? previous.localOnly : true,
-        }));
+        setIdentity((previous) =>
+          previous?.requested === id
+            ? previous
+            : {
+                requested: id,
+                canonical: id,
+                kind: 'unknown',
+              }
+        );
     }
   };
   // The memo re-reads identity only when the id value changes, not whenever
@@ -266,10 +305,16 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     },
     enabled:
       options().enabled &&
-      (!graphqlCacheEnabled() || !!getGraphqlCacheHost()) &&
+      (graphqlCacheEnabled()
+        ? !!getGraphqlCacheHost()
+        : identity()?.kind !== 'local') &&
       threadId().length > 0 &&
       identity()?.requested === threadId(),
-    requestPolicy: identity()?.localOnly ? 'cache-only' : 'cache-and-network',
+    requestPolicy:
+      identity()?.kind === 'local' ||
+      (identity()?.kind === 'unknown' && graphqlCacheEnabled())
+        ? 'cache-only'
+        : 'cache-and-network',
     keepPreviousData: false,
     select: ({ pages, pageParams }) => {
       const mapped = {
@@ -281,5 +326,23 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       return options().select?.(mapped) ?? (mapped as TData);
     },
   }));
+  // Cached threads observe the shared email record. Fetch-only readers instead
+  // opt into their own archive/unarchive completion, never generic Soup or
+  // read/unread refreshes (which can disrupt a successfully opened thread).
+  onCleanup(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () =>
+        query.isEnabled &&
+        !graphqlCacheEnabled() &&
+        identity()?.kind !== 'local',
+      target: () => ({ kind: 'email-archive', threadId: resolvedThreadId() }),
+      refresh: async () => {
+        await query.refetch({
+          requestPolicy: 'network-only',
+          throwOnError: true,
+        });
+      },
+    })
+  );
   return { query, resolvedThreadId };
 }

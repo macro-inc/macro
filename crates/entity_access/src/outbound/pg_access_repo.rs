@@ -303,6 +303,77 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_database_access(
+        &self,
+        database_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let database_uuid = database_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid database ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::database_access::get_database_access(&self.pool, &database_uuid, &source_ids)
+                .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn list_database_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::database_access::list_database_access(&self.pool, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_database_row_access(
+        &self,
+        row_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let row_uuid = row_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid database row ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::database_row_access::get_database_row_access(
+            &self.pool,
+            &row_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(row_count = row_ids.len()))]
+    async fn get_database_rows_access(
+        &self,
+        row_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<std::collections::HashMap<Uuid, AccessLevel>, AccessError> {
+        if row_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::database_row_access::get_database_rows_access(
+                &self.pool,
+                row_ids,
+                &source_ids,
+            )
+            .await?,
+        )
+    }
+
     async fn get_scheduled_action_access(
         &self,
         scheduled_action_id: &str,
@@ -426,6 +497,22 @@ impl AccessRepository for PgAccessRepository {
             }
             EntityType::Initiative => {
                 queries::initiative_access::get_initiative_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
+            }
+            EntityType::Database => {
+                queries::database_access::get_database_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
+            }
+            EntityType::DatabaseRow => {
+                queries::database_row_access::get_database_row_access(
                     &self.pool,
                     &entity_uuid,
                     &source_ids,
@@ -694,6 +781,11 @@ impl AccessRepository for PgAccessRepository {
             channel_id: r.channel_id,
             share_permission_id: r.share_permission_id,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_database_row_database(&self, row_id: &Uuid) -> Result<Option<Uuid>, AccessError> {
+        Ok(queries::database_row_access::get_database_row_database(&self.pool, row_id).await?)
     }
 
     #[tracing::instrument(err, skip(self))]

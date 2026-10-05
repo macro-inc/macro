@@ -276,6 +276,9 @@ export const MobileSoupViewTabs = () => {
 
   return (
     <Switch>
+      <Match when={listView() === 'reminders'}>
+        <MobileFilterDrawer />
+      </Match>
       <Match when={listView() === 'search'}>
         {/* The search view has no tab pills — its header hosts only the
             facet-filter drawer button (the desktop SearchFiltersRow's

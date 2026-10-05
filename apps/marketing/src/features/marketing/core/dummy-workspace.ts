@@ -34,6 +34,8 @@ export type WorkspaceComment = {
   time: string;
   emailId?: string;
   taskId?: string;
+  /** An agent reply can reference several tasks it created. */
+  taskIds?: string[];
   documentId?: string;
   replyTo?: string;
   reactions?: string[];

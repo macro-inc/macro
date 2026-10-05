@@ -14,13 +14,9 @@ import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import { queryClient } from '@queries/client';
-import {
-  getGraphqlSoupCacheHost,
-  getGraphqlSoupClient,
-} from '@service-storage/graphql-soup';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { initiativeClient } from '@service-storage/initiative';
 import { Button } from '@ui';
-import type { Accessor } from 'solid-js';
 import {
   createSignal,
   ErrorBoundary,
@@ -44,6 +40,10 @@ import { projectKeys } from './queries/keys';
 import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
+import {
+  ProjectsSidebar,
+  type ProjectsSidebarProps,
+} from './views/projects-sidebar';
 
 function createProjectReadGate() {
   // Each source invokes this under its own owner, which can outlive this view.
@@ -66,7 +66,7 @@ function createProjectsContext() {
   );
   return createProjectSources(
     initiativeClient,
-    { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
+    { client: getGraphqlSoupClient },
     queryClient,
     userId,
     createProjectReadGate
@@ -110,6 +110,14 @@ export function ProjectsTab(props: {
   return (
     <Projects>
       <ProjectsCollectionHost {...props} />
+    </Projects>
+  );
+}
+
+export function ProjectsSidebarSection(props: ProjectsSidebarProps) {
+  return (
+    <Projects>
+      <ProjectsSidebar {...props} />
     </Projects>
   );
 }
@@ -190,8 +198,4 @@ export function ProjectAssignmentDialog(props: {
       <ProjectAssignment taskIds={props.taskIds} onClose={props.onClose} />
     </Projects>
   );
-}
-
-export function useTaskProjectReferences(ids: Accessor<readonly string[]>) {
-  return createProjectsContext().createReferencesSource(ids);
 }

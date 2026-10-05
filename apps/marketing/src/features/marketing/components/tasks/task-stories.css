@@ -1,0 +1,33 @@
+/* A native Macro document with a checklist selected (MarkdownPopup). */
+.task-checklist-doc { position: relative; padding: 40px 56px 32px; text-align: left; }
+.task-checklist-doc h1 { font: 600 24px/1.4 'Inter Variable', Inter, sans-serif; margin-bottom: 20px; }
+.task-checklist-doc h2 { font: 600 17px/1.5 'Inter Variable', Inter, sans-serif; margin: 8px 0 10px; }
+.task-checklist-block { position: relative; border-radius: 6px; }
+.task-checklist-list { list-style: none; margin: 0; padding: 0; }
+.task-checklist-list > li { display: flex; align-items: center; gap: 10px; min-height: 34px; font-size: 15px; }
+.task-checklist-box { flex: 0 0 auto; width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--color-ink-muted); }
+.task-checklist-block[data-selected='true'] .task-checklist-text { background: color-mix(in srgb, var(--color-accent) 32%, transparent); }
+.task-checklist-list[data-converted='true'] > li { min-height: 38px; }
+.task-checklist-list[data-converted='true'] .dummy-entity-link { margin-top: 0; }
+.task-checklist-after { margin-top: 22px; font-size: 15px; line-height: 1.7; color: var(--color-ink); }
+
+/* Toolbar: rounded-xl border-edge-frame bg-control p-1.5, groups split by dividers. */
+.task-checklist-toolbar { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 3; display: inline-flex; align-items: center; gap: 4px; padding: 6px; border-radius: 12px; border: 1px solid color-mix(in oklch, var(--color-content-0) 8%, transparent); background: var(--color-surface-2); box-shadow: 0 10px 28px rgb(0 0 0 / 0.45); white-space: nowrap; }
+.task-checklist-toolbar > button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--color-ink); }
+.task-checklist-toolbar > button[aria-label] { width: 28px; padding: 0; justify-content: center; color: var(--color-ink-muted); }
+.task-checklist-toolbar > button:hover { background: var(--color-hover); }
+.task-checklist-divider { width: 1px; height: 16px; margin: 0 2px; background: var(--color-edge-muted); }
+.task-checklist-toolbar > [data-convert-tasks] { position: relative; }
+.task-checklist-cursor { top: 62%; left: 55%; }
+
+/* InlineTaskGithubPullRequests pill in the task's property row. */
+.task-pr-pill { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--color-edge-muted); background: var(--color-surface-0); font-size: 12px; animation: task-pr-in 400ms ease both; }
+.task-pr-pill[data-status='open'] svg { color: var(--color-success); }
+.task-pr-pill[data-status='merged'] svg { color: var(--color-purple); }
+@keyframes task-pr-in { from { opacity: 0; transform: translateY(4px); } }
+
+@media (max-width: 699px) {
+  .task-checklist-doc { padding: 28px 18px; }
+  .task-checklist-toolbar > button:not([data-convert-tasks]):not(:first-child), .task-checklist-divider { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .task-pr-pill { animation: none; } }

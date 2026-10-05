@@ -118,7 +118,8 @@ export function setDoneOverride(
   ids: readonly string[],
   done: boolean | undefined
 ) {
-  if (ids.length === 0) return () => undefined;
+  if (ids.length === 0)
+    return Object.assign(() => undefined, { release: () => {} });
   const previous = untrack(
     () => new Map(ids.map((id) => [id, doneOverrides().get(id)]))
   );
@@ -139,17 +140,22 @@ export function setDoneOverride(
     return next;
   });
   // A failed older mutation must not undo a newer local action.
-  return () =>
+  const finish = (restorePrevious: boolean) =>
     setDoneOverrides((current) => {
       const next = new Map(current);
       for (const id of ids) {
         if (current.get(id) !== applied.get(id)) continue;
-        const before = previous.get(id);
+        const before = restorePrevious ? previous.get(id) : undefined;
         if (before === undefined) next.delete(id);
         else next.set(id, before);
       }
       return next;
     });
+  return Object.assign(() => finish(true), {
+    // A partially committed reversal needs authoritative state, not a guessed
+    // all-or-nothing rollback. Only release this operation's own contribution.
+    release: () => finish(false),
+  });
 }
 
 // Client-asserted seen state, the `doneOverrides` twin for `viewed_at`. Seen

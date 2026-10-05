@@ -22,7 +22,7 @@ const workbook = (): SpreadsheetWorkbookSheet[] => [
       B2: { value: '=SUM($A$1:A2)' },
       C1: { value: '=A1', format: 'text' },
     },
-    layout: { rowCount: 200, columnWidths: { 0: 180, 1: 90 } },
+    layout: { rowCount: 200, columnCount: 26, columnWidths: { 0: 180, 1: 90 } },
     metadata: {
       hiddenRows: [1],
       hiddenColumns: [1],
@@ -37,7 +37,7 @@ const workbook = (): SpreadsheetWorkbookSheet[] => [
     id: 'two',
     name: 'Model',
     cells: { A1: { value: '=Inputs!A2+Inputs!$A$1' }, A2: { value: '="A2"' } },
-    layout: { rowCount: 200, columnWidths: {} },
+    layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
   },
 ];
 describe('row and column structure', () => {
@@ -103,7 +103,7 @@ describe('row and column structure', () => {
   });
   it('refuses to push occupied trailing cells beyond limits without modifying input', () => {
     const sheets = workbook();
-    sheets[0].cells.Z1 = { value: 'Keep me' };
+    sheets[0].cells.XFD1 = { value: 'Keep me' };
     const before = JSON.stringify(sheets);
     expect(() =>
       changeWorkbookAxis(sheets, {
@@ -129,6 +129,214 @@ describe('row and column structure', () => {
     expect(next[0].metadata?.merges).toEqual(['C2:D4']);
     expect(next[0].metadata?.hiddenRows).toEqual([3]);
   });
+  it('moves notes, rule ranges and rule formulas with their cells', () => {
+    const sheets = workbook();
+    sheets[0].metadata = {
+      notes: { A1: 'Header', A3: 'Removed', B5: 'Kept' },
+      conditionalFormats: [
+        {
+          range: 'A2:A10 C4',
+          type: 'expression',
+          formulas: ['$A2>$B$1'],
+        },
+        { range: 'D3', type: 'containsBlanks' },
+        {
+          range: 'E1:E9',
+          type: 'colorScale',
+          thresholds: [{ type: 'min' }, { type: 'num', value: '$B$6' }],
+          colors: ['#FFFFFF', '#00FF00'],
+        },
+      ],
+      validations: [
+        { range: 'F2:F99999', type: 'list', formulas: ['Model!$A$1:$A$4'] },
+        { range: 'G6', type: 'whole', formulas: ['$B$6', '100'] },
+      ],
+      drawings: [
+        {
+          id: 'chart',
+          type: 'chart',
+          from: { row: 4, column: 2, x: 5, y: 6 },
+          to: { row: 9, column: 6, x: 7, y: 8 },
+          chart: {
+            plots: [{ kind: 'column', series: [{ values: 1, categories: 0 }] }],
+            references: ['Inputs!$A$4:$A$9', "'Inputs'!$B$4:$B$9"],
+          },
+        },
+        {
+          id: 'logo',
+          type: 'image',
+          image: '0123456789abcdef',
+          from: { row: 2, column: 0, x: 3, y: 4 },
+          width: 120,
+          height: 40,
+        },
+      ],
+    };
+    const deleted = changeWorkbookAxis(sheets, {
+      sheetId: 'one',
+      axis: 'row',
+      index: 2,
+      count: 1,
+      kind: 'delete',
+    });
+    expect(deleted[0].metadata).toMatchObject({
+      notes: { A1: 'Header', B4: 'Kept' },
+      conditionalFormats: [
+        { range: 'A2:A9 C3', formulas: ['$A2>$B$1'] },
+        {
+          range: 'E1:E8',
+          thresholds: [{ type: 'min' }, { type: 'num', value: '$B$5' }],
+        },
+      ],
+      validations: [
+        { range: 'F2:F99998', formulas: ['Model!$A$1:$A$4'] },
+        { range: 'G5', formulas: ['$B$5', '100'] },
+      ],
+    });
+    expect(deleted[0].metadata?.conditionalFormats).toHaveLength(2);
+    // The image's row was deleted: it moves to where the row was.
+    expect(deleted[0].metadata?.drawings).toMatchObject([
+      {
+        id: 'chart',
+        from: { row: 3, column: 2, x: 5, y: 6 },
+        to: { row: 8, column: 6, x: 7, y: 8 },
+        chart: { references: ['Inputs!$A$3:$A$8', 'Inputs!$B$3:$B$8'] },
+      },
+      { id: 'logo', from: { row: 2, column: 0, x: 3, y: 0 } },
+    ]);
+    // Rows inserted above move a rule; its range is clipped at the sheet's
+    // last row instead of blocking the insertion.
+    const inserted = changeWorkbookAxis(sheets, {
+      sheetId: 'one',
+      axis: 'row',
+      index: 0,
+      count: 2,
+      kind: 'insert',
+    });
+    expect(inserted[0].metadata?.conditionalFormats?.[0]).toMatchObject({
+      range: 'A4:A12 C6',
+      formulas: ['$A4>$B$3'],
+    });
+    expect(inserted[0].metadata?.validations?.[0].range).toBe('F4:F100000');
+    expect(inserted[0].metadata?.drawings?.[0]).toMatchObject({
+      from: { row: 6 },
+      to: { row: 11 },
+      chart: { references: ['Inputs!$A$6:$A$11', 'Inputs!$B$6:$B$11'] },
+    });
+    // Another sheet's rows move rules that refer to them.
+    const model = changeWorkbookAxis(sheets, {
+      sheetId: 'two',
+      axis: 'row',
+      index: 0,
+      count: 1,
+      kind: 'insert',
+    });
+    expect(model[0].metadata?.validations?.[0]).toMatchObject({
+      range: 'F2:F99999',
+      formulas: ['Model!$A$2:$A$5'],
+    });
+  });
+});
+
+it('moves the cells shapes show with them, and keeps the text of deleted ones', () => {
+  const sheets = workbook();
+  const linked = (link: string) => ({
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    text: { paragraphs: [{ runs: [{ text: '42' }] }], link },
+  });
+  sheets[0].metadata = {
+    drawings: [
+      {
+        id: 'total',
+        type: 'shape',
+        from: { row: 0, column: 3, x: 0, y: 0 },
+        width: 100,
+        height: 40,
+        shape: { parts: [linked('$B$2'), linked('Model!$A$3')] },
+      },
+    ],
+  };
+  const inserted = changeWorkbookAxis(sheets, {
+    sheetId: 'one',
+    axis: 'row',
+    index: 0,
+    count: 2,
+    kind: 'insert',
+  });
+  const links = (result: typeof sheets) =>
+    result[0].metadata?.drawings?.flatMap((drawing) =>
+      drawing.type === 'shape'
+        ? drawing.shape.parts.map((part) => part.text?.link)
+        : []
+    );
+  expect(links(inserted)).toEqual(['$B$4', 'Model!$A$3']);
+  // A shape whose cell is deleted keeps the text it showed.
+  const deleted = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'row',
+    index: 2,
+    count: 1,
+    kind: 'delete',
+  });
+  expect(links(deleted)).toEqual(['$B$2', undefined]);
+  expect(deleted[0].metadata?.drawings?.[0]).toMatchObject({
+    shape: {
+      parts: [{}, { text: { paragraphs: [{ runs: [{ text: '42' }] }] } }],
+    },
+  });
+});
+
+it('moves pivot tables with their cells and source, and drops ones without a source', () => {
+  const sheets = workbook();
+  const pivot = (location: string, source: string) => ({
+    table: '<pivotTableDefinition name="Summary"/>',
+    cache: '<pivotCacheDefinition/>',
+    location,
+    source,
+  });
+  sheets[0].metadata = {
+    pivotTables: [
+      pivot('H3:I8', 'Model!$A$1:$B$4'),
+      pivot('K1', "'Inputs'!$A:$B"),
+    ],
+  };
+  // Rows of the source's sheet move the source; the table stays.
+  const model = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'row',
+    index: 0,
+    count: 1,
+    kind: 'insert',
+  });
+  expect(model[0].metadata?.pivotTables).toMatchObject([
+    { location: 'H3:I8', source: 'Model!$A$2:$B$5' },
+    { location: 'K1', source: 'Inputs!$A:$B' },
+  ]);
+  // Rows of the table's sheet move it; one whose cells all go is removed.
+  const deleted = changeWorkbookAxis(sheets, {
+    sheetId: 'one',
+    axis: 'row',
+    index: 0,
+    count: 2,
+    kind: 'delete',
+  });
+  expect(deleted[0].metadata?.pivotTables).toMatchObject([
+    { location: 'H1:I6', source: 'Model!$A$1:$B$4' },
+  ]);
+  // Without its source cells, a pivot table keeps only its values.
+  const gone = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'column',
+    index: 0,
+    count: 2,
+    kind: 'delete',
+  });
+  expect(gone[0].metadata?.pivotTables).toMatchObject([
+    { location: 'K1', source: 'Inputs!$A:$B' },
+  ]);
 });
 
 it.each([

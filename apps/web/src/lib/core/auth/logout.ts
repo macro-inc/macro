@@ -10,6 +10,7 @@ import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { notificationKeys } from '@queries/notification/keys';
 import { propertiesKeys } from '@queries/properties/keys';
+import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
@@ -44,6 +45,7 @@ export async function clearLocalAuthSession() {
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
   queryClient.removeQueries({ queryKey: notificationKeys._def });
+  resetGraphqlSoupDoneSession();
   queryClient.removeQueries({ queryKey: propertiesKeys._def });
   // The billing position (usage, credits, overage settings) belongs to the
   // account that fetched it; never let it render for the next sign-in.

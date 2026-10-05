@@ -17,8 +17,25 @@ off-topic text) keep the typed text and show a red error there instead. The box 
 focus while you type even if the pointer drifts over the rows; ArrowDown moves into
 the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
 AI box.
-Task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
-sidebar has a collapsible `Tags` section listing every personal and team tag, with a
+Task creation is available from the `New` button in the Tasks sidebar. With Projects
+enabled, `My projects` appears below the tabs and favorites, above Tags. It lists
+accessible projects by most recently updated, with a capped height and its own scroll
+area. Click a project to open its overview within the current Tasks view, keeping
+the sidebar mounted, or Shift-click to open it in a new split.
+The current project is highlighted. Collapse the heading to hide the list; this
+preference persists. `Load more projects` fetches the next page when available.
+The plus button beside `My projects` opens the project composer, even while the
+section is collapsed or loading. Its rows use the shared project query/cache and
+load inside a local Suspense boundary, leaving sidebar controls available.
+Opening a project shows a content-shaped skeleton while its data loads: title,
+wrapping property pills, description, and discussion for Overview; toolbar and
+rows for Tasks. The mobile skeleton uses the same compact insets as the content.
+The description has its own subtle three-line skeleton while its collaborative
+editor initializes; the project title, properties, and discussion stay visible.
+Project task lists automatically fetch all matching pages in every group, without
+per-group `Load More` rows. A failed continuation stops automatic requests and shows
+`Try again` above the list; already fetched group rows remain available.
+The sidebar also has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
 carrying it (the same selection as the `Tags` group of the `Filter` menu); clicking it again
 clears it, and switching tabs clears it like any other filter. On mobile, the tabs
@@ -34,6 +51,13 @@ does nothing. Typing H in a text field remains ordinary input.
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).
 
+The Project column shows the linked project's name when one project is assigned,
+and `Project` when empty. Multiple linked projects show an item count.
+Long assignee and project names truncate within their columns; hover the cell
+to read the full value.
+The project pill beneath a task title shows the project icon and name without
+a `Project:` prefix.
+
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,
 followed by the task name and actions, Share, and the Details/Properties side-panel
@@ -47,18 +71,27 @@ instead. Keyboard list navigation only moves focus; press Enter to open the focu
 
 With `enable-tasks-reviews` enabled (on by default in development), a
 `Reviews` shortcut appears above `My Tasks` in the Tasks sidebar and mobile tabs.
-It opens a separate `/app/reviews` shell with `Involving me` first and selected
-by default, followed by `All PRs` and `Authored by me`. The selected tab is
-stored in the URL and survives opening a PR and returning through the breadcrumb.
-The list contains accessible GitHub pull requests of any status. `Involving me`
+It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
+`Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
+`Involves me` is selected by default. The selected tab is stored in the URL and
+survives opening a PR and returning through the breadcrumb.
+The list contains accessible GitHub pull requests of any status. `Involves me`
 uses the server's participant filter for your linked GitHub account: author,
 requested reviewer, assignee, commenter, or reviewer. Participant IDs are retained
 across partial GitHub refreshes, so this is not strictly a list of current
 review requests.
-`Authored by me` matches the linked GitHub login or user ID. If the link-status
-endpoint has no identity, the list explains why Authored by me is unavailable.
-Search, repository and author filters, and Updated/Created sort controls appear
-above the list. PR rows use the shared entity layout with selection checkboxes,
+`Authored by me`, `Assigned to me`, and `Review requests` match the linked
+GitHub user ID. If the link-status endpoint has no identity, the list explains
+why the tab is unavailable.
+Search, filter, and sort controls appear above the list. Filters cover
+repository, author, assignee, label, and, when a GitHub identity is linked,
+reviews (Reviewed by you, Not reviewed by you, and Awaiting review from you).
+Saved review selections stay inactive, including their filter badge and empty-state
+copy, while the GitHub identity is unavailable; they resume when it returns.
+Sort offers Recently updated, Least recently updated, Newest, and Oldest. When visible PRs
+have GitHub labels, a Labels section below Favorites lists them with their
+colors; choosing a label shows only PRs with it, and choosing it again clears
+it. PR rows use the shared entity layout with selection checkboxes,
 author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
 authors fall back to GitHub names. The virtualized list fetches more pages as
@@ -72,17 +105,38 @@ context menu can remove the favorite. PR favorites also open in Reviews from the
 global Favorites sidebar or command menu.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
+Opening a PR refreshes it from GitHub in the background for viewers with a
+linked GitHub account, so labels, reviewers, and review state catch up without
+waiting for GitHub's next webhook. A successful refresh also reloads the Changes
+summary, so new commits replace the previous diff range.
 Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` links redirect
 to the Reviews detail. When the flag is off, the Reviews shortcut is hidden and
 opening `/app/reviews` redirects to `/app/tasks` after flags load. Copied PR
 detail links still work; check both URLs with the flag off.
 
-Check all three tab URLs, author avatars and display names, row selection and
+The PR header has a **Changes** toggle (`aria-pressed`) with the diff's `+N −M`
+at the PR's current base and head. It opens the same resizable Changes pane as
+an agent session (see "Reviewing a linked GitHub pull request" in
+[AI chat](ai-chat.md)) beside the PR, read-only: there is no review-note gutter,
+notes chip, or hand-off card. The PR's split stores the pane in
+`s<N>.changes.pane` and `s<N>.changes.style`, the same as a session, until you
+leave the PR or close its split. The first view of a base and head reads GitHub; later
+views, and agent sessions linked to the same PR, reuse the stored diff. An
+unavailable or oversized PR is explained in the pane.
+
+The Agent sessions side-panel section distinguishes loading PR details, loading
+sessions, failed requests, and an empty result. Failed session requests offer Retry.
+Hover a truncated session name to see its full name.
+
+Check all five tab URLs, the Labels section, author avatars and display names, row selection and
 context menu, favorites add/remove and collapse/empty visibility, filters, sort,
 illustrated empty states, loading, errors, and pagination after filtering. Use
 Open in new split from a PR row's context menu; verify the Reviews list stays in
 the original split and the PR appears beside it. Open a favorite from the global
 sidebar, return through the breadcrumb, and open a copied link in a second split.
+Open a PR's Changes pane; check the file tree, a file's diff, **Unified / Split**,
+refresh after new commits, and that reloading with `s<N>.changes.pane` in the URL
+restores the pane. Check session loading/error/empty copy and full-name tooltips.
 Use existing PRs and do not modify hosted data.
 
 ## Create a task
@@ -95,8 +149,10 @@ filter sheets. Desktop uses the centered composer dialog.
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
-   chip (defaults to you), `Due Date`, `Change or select tags`, `Attach image or video`,
-   a `Create More` switch, and `Create Task Ctrl ↵`.
+   chip (defaults to you), `Due Date`, `Project` (when Projects is enabled; the standard
+   property dropdown, listing projects), `Change or select tags`, `Attach image or video`,
+   a `Create More` switch, and `Create Task Ctrl ↵`. If the chosen project can't be
+   set, the task is still created and a toast says it wasn't added to the project.
    The `Shared with Team` row defaults to on and remembers your choice in local
    storage across composer openings and page reloads. Its hint explains whether
    the task will be visible to your whole team or only to you and the people you
@@ -176,9 +232,13 @@ bubble-tab row below that top bar. Opening an associated task extends the breadc
 the project breadcrumb to return, or Projects to restore the collection and its
 filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/component/initiative-view~<project-id>~overview` (or `tasks`).
-Project properties live in the shared Details/Properties side panel and honor
+Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
+
+Project information panels start closed and float over the content at every
+width, both in the Tasks project view and standalone initiative blocks. Opening
+the panel does not resize the content; use its toggle or click outside to close.
 
 Share (or Cmd+S) opens the same Share menu as tasks and documents: the
 `To: Email or group` field, optional message, access choice, and `Share`
@@ -193,30 +253,73 @@ Assigning a person to a project also adds them as a collaborator with edit acces
 Clearing the assignee leaves that access in place; the owner can remove it through
 Manage collaborators in Share. Removing a collaborator does not clear assignees.
 
-Overview's Description uses the shared collaborative Markdown editor and saves
-automatically to the existing backing document. Edit/owner access allows typing;
-view/comment access is read-only. The description is part of the native project
-view and does not open a separate document block. Discussion appears below the
-description, using the same discussion component as tasks.
-Backing descriptions remain available through direct reads, but are omitted from
-ordinary document search, history, and Soup lists.
+Project Assignees also offers the same agents as task Assignees. Choose an agent
+in the project composer, Overview property pills, project list, or Properties
+side panel; dismiss the picker to save. The picker explains that assigned agents
+automatically take on tasks created in or moved into the project. People and
+agents can remain assigned together. Existing agent permissions still apply:
+private agents run for their owner, and shared team agents run for team members.
+Assigning an agent to the project does not start work on tasks already in it.
+Removing the project agent stops assignment to future tasks; it does not cancel
+sessions already started for its tasks.
+For verification, create a task from the project's Tasks tab, then move another
+task into the project through `Add to project…`; both should start the assigned
+agent's normal task session and show its message in the task's Discussion.
+
+Overview's Description uses the shared collaborative Markdown editor on the
+project's collab surface and saves automatically; its access follows project
+access. Edit/owner access allows typing; view/comment access is read-only. Two
+tabs on the same project see each other's edits live. The description is part
+of the native project view and does not open a separate document block.
+It edits like a markdown document body: `/` opens the commands menu (headings,
+lists, checklists, quotes, code blocks, tables, equations, links, images,
+video, dividers, and creating a task), `@` mentions, `:` emoji, `;` snippets,
+and markdown shortcuts work. Tables have the document's insert, resize, move,
+and delete controls; blocks have drag handles; files and images can be pasted
+or dropped in, and items dragged from lists insert mentions. Mentions in a
+description are not tracked as document references, so mentioned users are not
+notified. Document-only tools (comments, tags, AI writing, find and replace) are
+not available in descriptions.
+Discussion appears below the description, using the same discussion component
+as tasks. The surface has the project's id and is created on first open, or at
+creation when one is given (agents can pass a description). Projects no longer
+have description documents; older ones are ignored and stay hidden from document
+search, history, and Soup lists.
 An unavailable connection shows `Retry description` without clearing saved content.
+
+A task's project is its `Project` system property: one reference to the project,
+set only on tasks. Setting it needs edit access to the task and the project;
+removing it needs edit access to the task. The project's Tasks tab lists the
+tasks whose Project property names the project.
 
 The project's Tasks tab starts with the task search, controls, and unified list;
 the project title and property pills appear only on Overview. Use
-`New task` to create a task associated with the project. The normal task row is
-inserted into the query cache before the composer closes, including its selected
-properties and project chip. It stays in its group while saving and assigning,
-then uses the saved task ID. Failed creations or assignments roll back that row.
-Verify this with GraphQL Soup both enabled and disabled. The section tabs
-use the same control as Channels. Existing tasks can be assigned through their
-`Set project…` context menu; there is no bulk-add dialog in the project view.
-The regular Tasks list includes a Project column; clicking a project chip opens
-that project. Right-click a task and choose `Set project…` to choose or clear its
-project. On mobile the same action is in the long-press menu. Selecting several
-tasks exposes `Set project` in the selection toolbar, and a context action on a
-selected row applies to the selection. Partial assignment failures leave only
-failed tasks in the picker for retry.
+`New task` to create a task in the project: the composer opens with its Project
+set to this project (change or clear it like any property), and the create
+request carries it, so there is no separate assignment step. The new row appears
+once the task is created. Verify this with GraphQL Soup both enabled and
+disabled. The section tabs
+use the same control as Channels. Editors can choose `Add existing tasks` beside
+`New task`; both actions use bordered buttons with a background. `Add existing
+tasks` opens an anchored task-selector dropdown: search, select several, and
+confirm `Add N tasks`. Escape or Cancel dismisses without assigning tasks. Tasks
+already in this project are excluded. Adding a task moves it from its previous
+project. A partial failure keeps only
+failed tasks selected for retry, and a request failure preserves the selection.
+
+The regular Tasks list includes a Project column. Its cell is a regular property
+cell: clicking it opens the same entity dropdown as the other property columns,
+listing projects. Narrow lists show Project as a compact pill after the row's
+Status, Priority and Assignees pills. Right-click a task and choose `Add to project…` to choose or clear
+its project. On mobile the same action is in the long-press menu. For a selection,
+choose `Actions → Add to project…`; there is no separate assignment button in the
+selection toolbar. A context action on a selected row applies to the selection.
+Inside an open task, Project is a regular property: a pill beside Status,
+Priority and Assignees below the title, and a row in the Properties side panel.
+Both open the standard property dropdown, which searches projects; clear the
+value there to remove the task from its project. `Add to project…` in the
+title's actions menu does the same. Tasks show Project even before it's set,
+and the `Add property` picker doesn't list it.
 
 Discussion at the bottom of Overview uses the new discussions system. Comments
 appear from oldest to newest, with the comment input below them. The Discussion
@@ -277,8 +380,14 @@ name or handle to find one. Built-in session agents follow the same availability
 as message mentions, alongside your own and team agents.
 Select an agent in the task composer, then create the task to start its session.
 For an existing task, add an agent to Assignees and dismiss the picker to save and
-start the session. Discussion gains one message from the assigned agent, which
-updates with its session or answer. The assignment instructions and task details
+start the session. Discussion gains one message linking to the assigned agent's
+session; progress and final answers stay in that session. The agent retains the
+original task reference in its session instructions and updates the task's
+description or status as appropriate. It must not post or edit discussion messages
+unless explicitly asked. This also applies to task assignments inherited from a
+project. When the task belongs to a project the assigning user can view, the
+startup prompt links that project and tells the agent to read its current
+description before starting work. The assignment instructions and task details
 are private startup context; no message is posted as you. People and agents
 can remain assigned together. Removing an agent and saving, then assigning it
 again starts a new session; saving an unchanged assignment does not restart it.

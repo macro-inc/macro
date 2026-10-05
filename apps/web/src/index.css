@@ -720,7 +720,7 @@ html[data-theme-light='false'] {
    say), so the flattening stops at an island boundary. */
 @utility header-actions {
   & [data-button]:is([data-variant="ghost"], [data-variant="outline"]):not([data-header-island] *) {
-    @apply glass-none rounded-xl border-0 bg-transparent;
+    @apply glass-none border-0 bg-transparent;
 
     &:not(:hover):not(:active) {
       background-image: none;
@@ -903,7 +903,7 @@ html[data-theme-light='false'] {
 
 /* Shared flat menu appearance, on the existing menu elements. */
 @utility menu-surface {
-  @apply relative min-h-0 rounded-xl border border-edge-frame bg-menu text-ink shadow-none;
+  @apply relative min-h-0 rounded-xl border border-edge-frame bg-menu text-ink shadow-none light-mode:shadow-menu;
   --color-surface: var(--color-menu);
 }
 
