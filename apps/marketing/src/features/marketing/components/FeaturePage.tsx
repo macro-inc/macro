@@ -16,9 +16,12 @@ const scopedUi = uiStyles
   .replace(/@(font-face|property)[^{]*\{[^}]*\}/g, '')
   .replaceAll(':root', ':scope');
 
-export function FeaturePage(props: { children: JSX.Element }) {
+export function FeaturePage(props: { children: JSX.Element; light?: boolean }) {
   return (
-    <main class="feature-page" data-theme-light="false">
+    <main
+      class="feature-page"
+      data-theme-light={props.light ? 'true' : 'false'}
+    >
       <style>{uiProperties}</style>
       <style>{`@scope (.feature-page) { ${scopedUi} ${palette.replaceAll(':root', ':scope')} }`}</style>
       {props.children}
