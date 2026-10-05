@@ -41,7 +41,7 @@ export function useCompleteTutorialMutation(
           queryClient.setQueryData<UserInfoData>(
             authKeys.userInfo.queryKey,
             (user) =>
-              user?.userId === context.userId
+              user && user.userId === context.userId
                 ? { ...user, tutorialComplete: true }
                 : user
           );

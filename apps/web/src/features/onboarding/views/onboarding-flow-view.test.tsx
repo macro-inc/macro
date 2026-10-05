@@ -284,9 +284,7 @@ describe('onboarding flow', () => {
       screen.getByRole('heading', { name: 'Built for teams.' })
     ).toBeTruthy();
     expect(
-      screen
-        .getByRole('button', { name: 'Continue', exact: true })
-        .hasAttribute('disabled')
+      screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')
     ).toBe(false);
     expect(navigate).not.toHaveBeenCalled();
     fake.update((world) => {
