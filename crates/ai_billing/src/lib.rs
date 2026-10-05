@@ -4,21 +4,25 @@
 //!
 //! # The pricing model
 //!
-//! Every paid seat includes a monthly AI allowance measured **at cost**: the
-//! provider's public price for what was consumed. Usage past the allowance is
-//! covered, in order, by prepaid credits (bought in one-off Stripe Checkout
-//! payments) and then by opt-in overage, billed to the payer's Stripe customer
-//! in chunks. Both are priced at cost plus a small markup:
+//! Every seat includes a monthly AI allowance measured **at cost**: the
+//! provider's public price for what was consumed. Each plan has its own
+//! allowance. Paid usage past the allowance is covered, in order, by prepaid
+//! credits (bought in one-off Stripe Checkout payments) and then by opt-in
+//! overage, billed to the payer's Stripe customer in chunks. Both are priced
+//! at cost plus a small markup. The free plan is a hard cap: once its
+//! allowance is used, only an upgrade (or the next calendar month) helps.
 //!
 //! ```text
-//! allowance = AI_USAGE_INCLUDED_ALLOWANCE_CENTS   (provider cost per seat per period)
+//! free cap  = AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS  (provider cost per user per month)
+//! premium   = AI_USAGE_INCLUDED_ALLOWANCE_CENTS       (provider cost per seat per period)
+//! max       = AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS   (provider cost per seat per period)
 //! extra     = cost x (100 + AI_USAGE_OVERAGE_MARKUP_PERCENT) / 100
 //! ```
 //!
-//! Neither number lives in code. Both are mandatory Doppler values that every
-//! host loads at startup ([`config`]) into one [`AiPricing`] and injects into
-//! each billing component it composes ([`domain::pricing`]). Change them in
-//! Doppler and redeploy. Usage and allowance are **cost cents**; credits,
+//! None of the numbers live in code. All are mandatory Doppler values that
+//! every host loads at startup ([`config`]) into one [`AiPricing`] and injects
+//! into each billing component it composes ([`domain::pricing`]). Change them
+//! in Doppler and redeploy. Usage and allowances are **cost cents**; credits,
 //! charges, caps and packs are **customer cents**. The conversions on
 //! [`AiPricing`] are the only place the two units meet.
 //!
@@ -51,6 +55,6 @@ pub use domain::{
     AdmissionFuture, AiAdmissionError, AiAdmissionService, AiPricing, AiUsageBilling,
     AllowanceDecision, BillingAdmissionService, BillingError, BillingPeriod, BillingService,
     BillingSettings, CREDIT_PACKS_CENTS, DenyReason, DisabledAiAdmissionService, Entitlement,
-    IncludedAllowanceCents, OverageMarkupPercent, PayerScope, PlanTier, PricingError,
-    UsageSnapshot, cost_cents,
+    IncludedAllowanceCents, OverageMarkupPercent, PayerScope, PlanAllowances, PlanTier,
+    PricingError, UsageSnapshot, cost_cents,
 };

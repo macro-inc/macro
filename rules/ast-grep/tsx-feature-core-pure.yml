@@ -17,6 +17,7 @@ note: |-
 files:
   - apps/web/src/features/routines/core/**
   - apps/web/src/features/scheduling/core/**
+  - apps/web/src/features/usage/core/**
   - apps/web/src/features/crm/core/**
   - apps/web/src/features/slack-import/core/**
   - apps/web/src/features/channel/core/channel-invite*

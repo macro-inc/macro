@@ -1,4 +1,3 @@
-import LogoIcon from '@icon/macro-logo.svg';
 import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
 import {
@@ -7,6 +6,7 @@ import {
 } from '../components/motion/step-change';
 import { OnboardingShell } from '../components/onboarding-shell';
 import { PlanComparison } from '../components/plan-comparison';
+import { StepFallback } from '../components/step-fallback';
 import { OnboardingTrustDetails } from '../components/trust-details';
 import { useOnboardingContext } from '../context/onboarding-context';
 import type { CheckoutReturn } from '../core/checkout';
@@ -24,18 +24,6 @@ import { type InviteOfferSlot, PlanStep } from './plan-step';
 import { StoryStageView } from './story-stage-view';
 import { TeamStep } from './team-step';
 import { ToolsStep } from './tools-step';
-
-function StepFallback() {
-  return (
-    <div
-      role="status"
-      aria-label="Loading setup"
-      class="flex justify-center py-10"
-    >
-      <LogoIcon class="size-6 animate-pulse text-ink/30" />
-    </div>
-  );
-}
 
 /** The signed-in onboarding steps, from the workspace slides to the trial offer. */
 export function OnboardingFlowView(props: {

@@ -20,7 +20,9 @@
  * they already handle while the GET is in flight.
  */
 
+import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { AgentSession } from '@core/agent-session/AgentSession';
+import { PromptTrace } from '@core/agent-session/prompt-telemetry';
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -29,6 +31,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
+import { issueSessionAction } from '../queries/issue-session-action';
 import { effortConfigOption } from '../state/session-config';
 import { confirmSessionControl } from './confirm-session-control';
 
@@ -92,8 +95,19 @@ export function startPendingSession(
   options: StartPendingSessionOptions = {}
 ): string {
   const id = uuidv7();
+  const prompt = options.prompt?.trim() ?? '';
+  // Started before the create so the whole wait up to the first output,
+  // and every request on the way, lands in one trace.
+  const trace =
+    prompt || options.attachments?.length
+      ? new PromptTrace(id, { newSession: true })
+      : undefined;
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
+  const fail = (message: string, cause?: unknown) => {
+    trace?.end('failed', cause ?? new Error(message));
+    setError(message);
+  };
   pending.set(id, {
     sessionId,
     failed: () => error() !== undefined,
@@ -102,105 +116,119 @@ export function startPendingSession(
     initialInput: options.initialInput,
   });
 
-  void agentHarnessServiceClient
-    .create({
-      id,
-      ...(options.botId ? { botId: options.botId } : {}),
-      ...(options.modelOverride ? { model: options.modelOverride } : {}),
-      ...(options.instructions ? { instructions: options.instructions } : {}),
-      ...(options.repoUrl
-        ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
-        : {}),
-    } satisfies CreateAgentSessionRequest)
-    .then(async (result) => {
-      if (result.isErr()) {
-        setError(
-          result.error.map((error) => error.message).join(' ') ||
-            'The agent session could not be created.'
-        );
-        return;
-      }
-      // Normally the id this tab minted; an older service may mint its own.
-      const created = result.value.session.id;
-      void refetchSoupEntity(created, 'agentSession', { created: true });
-      // Hold the block in preflight while selected settings are confirmed,
-      // then adopt the session before issuing the first prompt so that prompt
-      // is folded speculatively while its POST is in flight.
-      const prompt = options.prompt?.trim() ?? '';
-      if (
-        options.modelOverride ||
-        options.effortOverride ||
-        prompt ||
-        options.attachments?.length
-      ) {
-        const session = AgentSession.acquire(created);
-        try {
-          if (options.modelOverride || options.effortOverride) {
-            await session.load();
-            if (options.modelOverride) {
-              await confirmSessionControl(session, {
-                type: 'setModel',
-                model: options.modelOverride,
-              });
+  const traced = <T>(operation: () => T): T =>
+    trace ? trace.run(operation) : operation();
+
+  void traced(() =>
+    agentHarnessServiceClient
+      .create({
+        id,
+        ...(options.botId ? { botId: options.botId } : {}),
+        ...(options.modelOverride ? { model: options.modelOverride } : {}),
+        ...(options.instructions ? { instructions: options.instructions } : {}),
+        ...(options.repoUrl
+          ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
+          : {}),
+      } satisfies CreateAgentSessionRequest)
+      .then(async (result) => {
+        if (result.isErr()) {
+          handleAiUsageLimitError(result.error);
+          fail(
+            result.error.map((error) => error.message).join(' ') ||
+              'The agent session could not be created.'
+          );
+          return;
+        }
+        trace?.stage('created');
+        // Normally the id this tab minted; an older service may mint its own.
+        const created = result.value.session.id;
+        void refetchSoupEntity(created, 'agentSession', { created: true });
+        // Hold the block in preflight while selected settings are confirmed,
+        // then adopt the session before issuing the first prompt so that prompt
+        // is folded speculatively while its POST is in flight.
+        if (
+          options.modelOverride ||
+          options.effortOverride ||
+          prompt ||
+          options.attachments?.length
+        ) {
+          const session = AgentSession.acquire(created);
+          try {
+            if (options.modelOverride || options.effortOverride) {
+              await session.load();
+              trace?.stage('loaded');
+              if (options.modelOverride) {
+                await confirmSessionControl(session, {
+                  type: 'setModel',
+                  model: options.modelOverride,
+                });
+              }
+              if (options.effortOverride) {
+                const snapshot = await session.snapshot();
+                const effort = effortConfigOption(
+                  snapshot.metadata.configOptions
+                );
+                if (
+                  effort?.id !== options.effortOverride.configId ||
+                  !effort.options.some(
+                    (option) => option.value === options.effortOverride?.value
+                  )
+                ) {
+                  throw new Error(
+                    'The selected effort is no longer available for this model.'
+                  );
+                }
+                await confirmSessionControl(session, {
+                  type: 'setConfigOption',
+                  ...options.effortOverride,
+                });
+              }
+              trace?.stage('configured');
             }
-            if (options.effortOverride) {
-              const snapshot = await session.snapshot();
-              const effort = effortConfigOption(
-                snapshot.metadata.configOptions
+            setSessionId(created);
+            if (prompt || options.attachments?.length) {
+              const delivered = await issueSessionAction(
+                session,
+                {
+                  type: 'prompt',
+                  prompt,
+                  ...(options.attachments?.length
+                    ? { attachments: options.attachments }
+                    : {}),
+                },
+                {
+                  userId: options.userId ?? result.value.session.ownerId,
+                  trace,
+                }
               );
-              if (
-                effort?.id !== options.effortOverride.configId ||
-                !effort.options.some(
-                  (option) => option.value === options.effortOverride?.value
-                )
-              ) {
-                throw new Error(
-                  'The selected effort is no longer available for this model.'
+              if (delivered.isErr()) {
+                setError(
+                  delivered.error.map((error) => error.message).join(' ') ||
+                    'The first message could not be sent.'
                 );
               }
-              await confirmSessionControl(session, {
-                type: 'setConfigOption',
-                ...options.effortOverride,
-              });
             }
-          }
-          setSessionId(created);
-          if (prompt || options.attachments?.length) {
-            const delivered = await session.issue(
-              {
-                type: 'prompt',
-                prompt,
-                ...(options.attachments?.length
-                  ? { attachments: options.attachments }
-                  : {}),
-              },
-              { userId: options.userId ?? result.value.session.ownerId }
+          } catch (error) {
+            fail(
+              error instanceof Error
+                ? error.message
+                : 'The selected settings could not be applied.',
+              error
             );
-            if (delivered.isErr()) {
-              setError(
-                delivered.error.map((error) => error.message).join(' ') ||
-                  'The first message could not be sent.'
-              );
-            }
+          } finally {
+            session.release();
           }
-        } catch (error) {
-          setError(
-            error instanceof Error
-              ? error.message
-              : 'The selected settings could not be applied.'
-          );
-        } finally {
-          session.release();
+        } else {
+          setSessionId(created);
         }
-      } else {
-        setSessionId(created);
-      }
-    })
-    .catch(() =>
-      setError(
-        'Could not reach the agent service. Check your connection and try again.'
+      })
+      .catch((error: unknown) =>
+        fail(
+          'Could not reach the agent service. Check your connection and try again.',
+          error
+        )
       )
-    );
+  );
 
   return id;
 }

@@ -52,6 +52,46 @@ const socket = vi.hoisted(() => ({
   }),
 }));
 
+type RecordedSpan = {
+  name: string;
+  attributes: Record<string, unknown>;
+  ends: number;
+};
+const telemetry = vi.hoisted(() => ({
+  spans: [] as RecordedSpan[],
+  /** The span whose `run` is on the stack, if any. */
+  active: undefined as RecordedSpan | undefined,
+}));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    span: (name: string) => {
+      const record: RecordedSpan = { name, attributes: {}, ends: 0 };
+      telemetry.spans.push(record);
+      return {
+        setAttr: (key: string, value: unknown) => {
+          record.attributes[key] = value;
+        },
+        event: () => {},
+        error: () => {},
+        run: <T>(operation: () => T) => {
+          const outer = telemetry.active;
+          telemetry.active = record;
+          try {
+            return operation();
+          } finally {
+            telemetry.active = outer;
+          }
+        },
+        end: () => {
+          record.ends += 1;
+        },
+      };
+    },
+  },
+}));
+const promptSpans = () =>
+  telemetry.spans.filter((span) => span.name === 'agent.prompt');
+
 const updates = vi.hoisted(() => ({
   listeners: new Set<(event: { agentSessionId: string }) => void>(),
 }));
@@ -128,6 +168,7 @@ function deferred<T>() {
 beforeEach(() => {
   vi.clearAllMocks();
   resetSessionTurns();
+  telemetry.spans.length = 0;
   socket.listeners.clear();
   updates.listeners.clear();
   // Instances are shared and refcounted, so a test that fails before its
@@ -855,5 +896,97 @@ describe('AgentSession', () => {
     await live.load();
     expect(logSource.watch).toHaveBeenCalledTimes(2);
     live.release();
+  });
+
+  describe('prompt telemetry', () => {
+    it('posts a prompt inside its span and ends it at the first agent output', async () => {
+      let postedUnder: RecordedSpan | undefined;
+      harness.control.mockImplementation(
+        async (_id: string, request: { actionId: string }) => {
+          postedUnder = telemetry.active;
+          return ok({ actionId: request.actionId, status: 'sent' });
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+
+      await live.issue(
+        { type: 'prompt', prompt: 'hi' },
+        { userId: 'macro|wolf@macro.com' }
+      );
+      await settle();
+      const actionId = (
+        harness.control.mock.calls[0][1] as { actionId: string }
+      ).actionId;
+      expect(promptSpans()).toHaveLength(1);
+      const [span] = promptSpans();
+      expect(postedUnder).toBe(span);
+      expect(span.ends).toBe(0);
+
+      fold.pushSession.mockResolvedValueOnce([
+        {
+          kind: 'update',
+          message: {
+            agentSessionId: SESSION,
+            turn: 1,
+            author: { kind: 'user', userId: 'macro|wolf@macro.com' },
+            requestId: actionId,
+            parts: [{ kind: 'text', text: 'hi' }],
+            stop: null,
+            pending: false,
+          },
+        },
+        {
+          kind: 'new',
+          message: {
+            agentSessionId: SESSION,
+            turn: 1,
+            author: { kind: 'agent' },
+            requestId: null,
+            parts: [{ kind: 'thought', text: 'thinking' }],
+            stop: null,
+            pending: false,
+          },
+        },
+      ] satisfies FoldedStreamEvent[]);
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+      await settle();
+
+      expect(span.ends).toBe(1);
+      expect(span.attributes).toMatchObject({
+        'agent.session.id': SESSION,
+        'agent.prompt.new_session': false,
+        'agent.prompt.action_id': actionId,
+        'agent.prompt.turn': 1,
+        'agent.prompt.first_output_part': 'thought',
+        'agent.prompt.outcome': 'output',
+      });
+      live.release();
+      expect(span.ends).toBe(1);
+      expect(span.attributes['agent.prompt.outcome']).toBe('output');
+    });
+
+    it('traces no action but a prompt', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+
+      await live.issue({ type: 'stop' });
+      await live.issue({ type: 'setModel', model: 'a-model' });
+
+      expect(promptSpans()).toEqual([]);
+      live.release();
+    });
+
+    it('ends a prompt still waiting for output as released', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      await live.issue({ type: 'prompt', prompt: 'hi' });
+
+      live.release();
+
+      const [span] = promptSpans();
+      expect(span.ends).toBe(1);
+      expect(span.attributes['agent.prompt.outcome']).toBe('released');
+    });
   });
 });

@@ -325,7 +325,7 @@ export function CrmWorkspaceView(props: {
         </Show>
         <Show when={!selectedCompany()}>
           <Show when={!isTouchDevice() || peopleActive()}>
-            <div class="flex h-12 shrink-0 items-center gap-3 border-b border-edge-muted px-4">
+            <div class="flex h-12 shrink-0 items-center gap-3 px-4">
               <NavigationToggle onExpand={() => setCollapsed(false)}>
                 <Suspense>{sidebar()}</Suspense>
               </NavigationToggle>
@@ -340,10 +340,10 @@ export function CrmWorkspaceView(props: {
               <ViewShell.Header>
                 <div class="flex min-w-0 items-center justify-between gap-3">
                   <CrmSearchBar />
-                  <div class="ml-auto flex shrink-0 items-center gap-2 [&_button]:h-8 [&_button]:min-w-8 [&_button]:rounded-lg [&_button>svg]:size-4!">
+                  <div class="ml-auto flex shrink-0 items-center gap-2 [&_button]:h-8 [&_button]:min-w-8 [&_button>svg]:size-4!">
                     <SoupViewContextSort />
-                    <SoupViewContextGroup hideLabel />
-                    <UnifiedFilterDropdown hideLabel />
+                    <SoupViewContextGroup hideLabel variant="ghost" />
+                    <UnifiedFilterDropdown hideLabel variant="ghost" />
                     <CompanyDisplayMenu />
                     <Suspense>
                       <CompanyViewsMenu hideLabel />

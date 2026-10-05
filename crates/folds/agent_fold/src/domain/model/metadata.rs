@@ -86,7 +86,7 @@ impl SessionMetadata {
             .iter()
             .find_map(|pending| match pending {
                 PendingInteraction::Elicitation(question) => Some(question),
-                PendingInteraction::Permission(_) => None,
+                PendingInteraction::Permission(_) | PendingInteraction::ToolApproval(_) => None,
             })
     }
 }
@@ -106,7 +106,8 @@ pub enum TurnState {
     Running,
     /// A stop was issued against the open turn and no stop reason has arrived.
     Stopping,
-    /// The open turn is waiting on a permission or elicitation response.
+    /// The open turn is waiting on a permission, elicitation, or tool
+    /// approval response.
     Blocked,
     /// The runtime reported `disconnected`; whatever was open is not moving.
     Disconnected,

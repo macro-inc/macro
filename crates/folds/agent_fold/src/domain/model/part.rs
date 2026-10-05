@@ -13,6 +13,7 @@ use super::permission::{PermissionOption, PermissionOutcome};
 use super::plan::PlanEntry;
 use super::tool::{ToolDetail, ToolName, ToolStatus};
 use super::user_tool::UserToolOutcome;
+use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
 use agent_runtime_protocol::domain::turn::FailureNotice;
 
 /// A unit of renderable content.
@@ -71,6 +72,36 @@ pub enum MessagePart {
         options: Vec<PermissionOption>,
         /// How the request has resolved so far.
         outcome: PermissionOutcome,
+    },
+    /// An MCP tool call the egress proxy is holding, or held, until the
+    /// session's owner approved it: made in a turn somebody else prompted.
+    ToolApproval {
+        /// The approval an answer names.
+        #[serde(rename = "approvalId")]
+        approval_id: String,
+        /// `macro`, or the connected app's slug.
+        #[serde(rename = "serverSlug")]
+        server_slug: String,
+        /// What a person calls the server the tool is on.
+        #[serde(rename = "serverName")]
+        server_name: String,
+        /// The tool called.
+        #[serde(rename = "toolName")]
+        tool_name: String,
+        /// What it was called with.
+        #[specta(type = specta_typescript::Unknown)]
+        arguments: serde_json::Value,
+        /// Who prompted the turn; absent for a bot on nobody's behalf.
+        #[serde(rename = "requestedBy")]
+        requested_by: Option<String>,
+        /// Where it stands.
+        status: ToolApprovalStatus,
+        /// Who resolved it, when a person did.
+        #[serde(rename = "resolvedBy")]
+        resolved_by: Option<String>,
+        /// Approved for good: the person who asked may make the calls it
+        /// covers without the owner being asked again.
+        remembered: bool,
     },
     /// A user-issued control operation on the session.
     Control {

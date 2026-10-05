@@ -5,6 +5,7 @@ import {
   focusStepHeading,
 } from '../components/motion/step-change';
 import { OnboardingShell } from '../components/onboarding-shell';
+import { SignInInstead } from '../components/sign-in-instead';
 import { OnboardingTrustDetails } from '../components/trust-details';
 import {
   nextSignupStep,
@@ -19,6 +20,8 @@ export function SignupJourneyView(props: {
   /** Starts Google sign-up; on web the page navigates away. */
   onGoogle: () => Promise<void>;
   onBackFromEmail: () => void;
+  /** Sends a returning user to sign in. */
+  onSignIn: () => void;
   /** The host's email sign-up form, shown in place of Google when chosen. */
   emailForm?: JSX.Element;
   showingEmail: boolean;
@@ -52,6 +55,11 @@ export function SignupJourneyView(props: {
               if (props.showingEmail) props.onBackFromEmail();
               else goTo(previousSignupStep(journey.step()));
             }
+      }
+      heroFooter={
+        journey.step() === 'welcome' && !props.showingEmail ? (
+          <SignInInstead onSignIn={props.onSignIn} />
+        ) : undefined
       }
       explainer={
         journey.step() === 'security' || journey.step() === 'work' ? (

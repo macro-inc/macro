@@ -3,11 +3,10 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { useBotsQuery } from '@queries/bots/bots';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { Surface } from '@ui';
+import { Button, inputClasses, Surface } from '@ui';
 import {
   type Component,
   createEffect,
@@ -98,8 +97,8 @@ export function BotInviteSelect(props: {
   };
 
   return (
-    <div class="flex flex-col gap-2 md:flex-row md:items-center">
-      <div class="min-w-0 flex-1">
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="min-w-0 flex-1 basis-60">
         <Combobox<Bot>
           multiple={false}
           options={availableBots()}
@@ -111,7 +110,9 @@ export function BotInviteSelect(props: {
           }
           onChange={(bot) => setSelectedBot(bot ?? undefined)}
           placeholder={
-            botsQuery.isLoading ? 'Loading bots…' : 'Search existing bots…'
+            botsQuery.isLoading
+              ? 'Loading bots…'
+              : 'Search bots by name or handle'
           }
           itemComponent={BotInviteItem}
           placement="bottom-start"
@@ -119,15 +120,14 @@ export function BotInviteSelect(props: {
           disabled={botsQuery.isLoading || addBotMutation.isPending}
         >
           <Combobox.Control<Bot> class="block w-full">
-            <div class="flex w-full items-center rounded-lg border border-edge-muted bg-surface px-3 py-2 text-sm text-ink outline-none focus-within:border-accent">
-              <Combobox.Input
-                ref={inputRef}
-                class="min-h-7 min-w-0 flex-1 bg-transparent p-1 outline-none placeholder:text-ink-placeholder"
-              />
-              <Combobox.Trigger class="ml-2 rounded p-0.5 text-ink-extra-muted outline-none hover:bg-hover hover:text-ink">
-                <CaretDownIcon class="size-3.5" />
-              </Combobox.Trigger>
-            </div>
+            <Combobox.Input
+              ref={inputRef}
+              aria-label="Search existing bots"
+              class={inputClasses({
+                size: 'lg',
+                class: 'rounded-full px-4',
+              })}
+            />
           </Combobox.Control>
           <Combobox.Portal>
             <Combobox.Content
@@ -135,28 +135,23 @@ export function BotInviteSelect(props: {
               depth={3}
               class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 rounded-xl p-1.5 glass bg-menu-glass"
             >
-              <Show
-                when={availableBots().length > 0}
-                fallback={
-                  <div class="px-3 py-5 text-center text-xs text-ink-muted">
-                    No bots available to invite
-                  </div>
-                }
-              >
-                <Combobox.Listbox class="max-h-64 overflow-y-auto" />
-              </Show>
+              <Combobox.Listbox class="peer max-h-64 overflow-y-auto empty:hidden" />
+              <div class="hidden px-3 py-5 text-center text-xs text-ink-muted peer-empty:block">
+                {availableBots().length > 0
+                  ? 'No matching bots'
+                  : 'No bots available to invite'}
+              </div>
             </Combobox.Content>
           </Combobox.Portal>
         </Combobox>
       </div>
-      <button
-        type="button"
-        class="w-full shrink-0 rounded-xs bg-accent px-3 py-1.5 text-sm font-medium text-surface transition-colors hover:bg-accent/90 disabled:opacity-50 md:w-[127px]"
+      <Button
+        variant="outline"
         disabled={!selectedBot() || addBotMutation.isPending}
         onClick={() => void inviteBot()}
       >
         {addBotMutation.isPending ? 'Inviting…' : 'Invite bot'}
-      </button>
+      </Button>
     </div>
   );
 }

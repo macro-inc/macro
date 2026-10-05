@@ -24,6 +24,7 @@ import {
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
+import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
 import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
@@ -43,11 +44,7 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import {
-  enableAiUsageBilling,
-  enableDatabases,
-  enableReminders,
-} from '@core/constant/featureFlags';
+import { enableDatabases, enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -56,6 +53,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { useUserInfoQuery } from '@queries/auth/user-info';
+import { queryClient } from '@queries/client';
 import {
   type RouteSectionProps,
   useLocation,
@@ -171,6 +169,8 @@ function LayoutInner(props: RouteSectionProps) {
   const { usageLimitOpen } = useAiUsageLimitState();
   const location = useLocation();
 
+  onCleanup(observeAiUsageLimitMutations(queryClient));
+
   useAppSquishHandlers();
 
   // save last_path to cookie
@@ -265,11 +265,9 @@ function LayoutInner(props: RouteSectionProps) {
           <Paywall />
         </Suspense>
       </Show>
-      <ShowFeatureFlag flag={enableAiUsageBilling}>
-        <Show when={usageLimitOpen()}>
-          <AiUsageLimitDialog />
-        </Show>
-      </ShowFeatureFlag>
+      <Show when={usageLimitOpen()}>
+        <AiUsageLimitDialog />
+      </Show>
       <div class="max-h-full grow flex">
         <ItemDndProvider>
           <Show when={isSidebarVisible()}>

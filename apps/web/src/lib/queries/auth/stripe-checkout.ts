@@ -1,3 +1,5 @@
+import { throwOnErr } from '@core/util/result';
+import { authServiceClient } from '@service-auth/client';
 import { stripeServiceClient } from '@service-stripe/client';
 import { useMutation } from '@tanstack/solid-query';
 
@@ -20,5 +22,15 @@ export function useCreateCheckoutSessionMutation() {
       }
       return url;
     },
+  }));
+}
+
+/** Open Stripe's hosted payment-method management, returning to the calling settings page. */
+export function useCreateBillingPortalMutation() {
+  return useMutation(() => ({
+    mutationFn: async (args: { returnUrl: string }) =>
+      await throwOnErr(
+        async () => await authServiceClient.createPortalSession(args)
+      ),
   }));
 }

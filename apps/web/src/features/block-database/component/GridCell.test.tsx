@@ -20,9 +20,8 @@ import {
   GridCell,
 } from './GridCell';
 
-// The date selector's focus helper waits on IntersectionObserver, and the
-// property utils barrel pulls in live clients; neither exists under jsdom.
-vi.mock('@property/utils', () => ({
+// JSDOM has no intersection observer to drive the date selector's focus.
+vi.mock('@property/utils/focus', () => ({
   // Like the real helper, focus after the menu has taken focus on open.
   useSearchInputFocus: (input: () => HTMLElement | undefined) =>
     setTimeout(() => input()?.focus(), 100),

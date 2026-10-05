@@ -7,6 +7,7 @@ import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import EmailIcon from '@phosphor/envelope-simple.svg';
+import GaugeIcon from '@phosphor/gauge.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
@@ -129,6 +130,12 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         keywords: ['keyboard', 'hotkey', 'keybinding'],
       },
       {
+        tab: 'Usage',
+        label: 'Usage',
+        icon: GaugeIcon,
+        keywords: ['ai', 'limit', 'credits', 'reload', 'usage'],
+      },
+      {
         tab: 'Billing',
         label: 'Billing',
         icon: CreditCardIcon,
@@ -216,6 +223,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',
   'API Keys': 'api-keys',
   Notifications: 'notifications',
+  Usage: 'usage',
   Billing: 'billing',
   Subscription: 'subscription',
   Organization: 'organization',
@@ -279,6 +287,7 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
+      case 'Usage':
       case 'Billing':
         return true;
       case 'Email':

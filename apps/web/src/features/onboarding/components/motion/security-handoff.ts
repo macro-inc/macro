@@ -1,3 +1,6 @@
+/** When the incoming step starts to fade in (the 180ms delay at the 1.5× pace below). */
+const CONTENT_FADE_DELAY_MS = 180 * 1.5;
+
 /** Fade the slide and carry its visual anchors downward into the next proof row. */
 export function animateSecurityHandoff(
   content: HTMLElement,
@@ -116,16 +119,26 @@ export function animateSecurityHandoff(
   const scroller = content.closest('[data-onboarding-scroll]');
   const animations: Animation[] = [];
   let finished = false;
+  let released = false;
+  let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+  // Hand the new step back to the user as soon as it starts to appear; the
+  // decorative flight keeps running, and a click on the new step cancels it.
+  const release = () => {
+    if (released) return;
+    released = true;
+    clearTimeout(releaseTimer);
+    content.inert = originalInert;
+    if (originalBusy === null) content.removeAttribute('aria-busy');
+    else content.setAttribute('aria-busy', originalBusy);
+    delete content.dataset.securityHandoff;
+  };
   const finish = (focus: boolean) => {
     if (finished) return;
     finished = true;
     animations.forEach((animation) => animation.cancel());
     overlay.remove();
     content.style.opacity = originalOpacity;
-    content.inert = originalInert;
-    if (originalBusy === null) content.removeAttribute('aria-busy');
-    else content.setAttribute('aria-busy', originalBusy);
-    delete content.dataset.securityHandoff;
+    release();
     window.removeEventListener('resize', settle);
     scroller?.removeEventListener('scroll', settleScroll);
     if (focus && content.isConnected)
@@ -178,6 +191,8 @@ export function animateSecurityHandoff(
 
     animate(snapshot, [{ opacity: 1 }, { opacity: 0 }], 200);
     animate(content, [{ opacity: 0 }, { opacity: 1 }], 300, 180);
+    // Blocking until the fade-in starts still swallows a double-click.
+    releaseTimer = setTimeout(release, CONTENT_FADE_DELAY_MS);
     ghosts.forEach((ghost, index) => {
       const source = sourceBounds[index];
       const to = targetBounds[index % targetBounds.length];

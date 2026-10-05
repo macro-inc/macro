@@ -9,9 +9,13 @@ import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableSoupGroupBy } from '@core/constant/featureFlags';
+import type { ButtonVariant } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 
-export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
+export const SoupViewContextGroup = (props: {
+  hideLabel?: boolean;
+  variant?: ButtonVariant;
+}) => {
   const panel = useSplitPanelOrThrow();
   const { soup, extensions } = useSoupView();
   const groupByEnabled = useFeatureFlag(enableSoupGroupBy);
@@ -52,6 +56,7 @@ export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
           open={groupOpen()}
           onOpenChange={setGroupOpen}
           hideLabel={props.hideLabel}
+          variant={props.variant}
         />
       </Show>
       {/* The board is inherently grouped by stage columns, so grouping only
@@ -64,6 +69,7 @@ export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
           open={groupOpen()}
           onOpenChange={setGroupOpen}
           hideLabel={props.hideLabel}
+          variant={props.variant}
         />
       </Show>
       <Show when={component() === 'tag'}>
@@ -74,6 +80,7 @@ export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
           open={groupOpen()}
           onOpenChange={setGroupOpen}
           hideLabel={props.hideLabel}
+          variant={props.variant}
         />
       </Show>
     </Show>

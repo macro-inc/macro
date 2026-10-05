@@ -28,18 +28,18 @@ fn state(used: i64, included: i64, consumed: i64, charged: i64, balance: i64) ->
 }
 
 #[test]
-fn included_allowance_is_the_same_at_cost_for_every_paid_seat() {
+fn included_allowance_is_each_plans_configured_amount_at_cost() {
     assert_eq!(
         PlanTier::Premium.included_ai_cents_per_seat(AiPricing::testing()),
         2_000
     );
     assert_eq!(
         PlanTier::Max.included_ai_cents_per_seat(AiPricing::testing()),
-        2_000
+        10_000
     );
     assert_eq!(
         PlanTier::Free.included_ai_cents_per_seat(AiPricing::testing()),
-        0
+        500
     );
 
     let mut team = Entitlement::personal(user("owner@x.com"), PlanTier::Premium);
@@ -81,13 +81,13 @@ fn mixed_seat_plans_keep_one_allowance_per_seat() {
             .collect::<Vec<_>>(),
         vec!["macro|owner@x.com", "macro|a@x.com", "macro|b@x.com"]
     );
-    // Max has no allowance of its own yet: every paid seat gets the same at-cost amount.
+    // Each seat gets its own plan's at-cost allowance.
     assert_eq!(
         allowances
             .into_iter()
             .map(|seat| seat.included_cents)
             .collect::<Vec<_>>(),
-        vec![2_000, 2_000, 2_000]
+        vec![2_000, 10_000, 2_000]
     );
     assert_eq!(team.tier, PlanTier::Premium);
 }
@@ -331,16 +331,44 @@ fn gate_reports_failed_payment_when_suspended() {
 }
 
 #[test]
-fn free_and_unlimited_are_never_blocked() {
+fn free_users_are_hard_capped_at_the_free_allowance() {
     let s = snapshot_for(
         PlanTier::Free,
         BillingSettings::default(),
-        99_999,
+        499,
         PeriodLedger::default(),
         0,
     );
+    assert_eq!(s.included_cents, 500);
+    assert_eq!(s.remaining_cents, 1);
     assert_eq!(decide(&s), AllowanceDecision::Allow);
 
+    // Leftover credits or an (impossible) overage setting never extend the cap.
+    let s = snapshot_for(
+        PlanTier::Free,
+        BillingSettings {
+            overage_enabled: true,
+            overage_limit_cents: 10_000,
+            ..Default::default()
+        },
+        500,
+        PeriodLedger::default(),
+        5_000,
+    );
+    assert_eq!(s.remaining_cents, 0);
+    assert_eq!(
+        decide(&s),
+        AllowanceDecision::Deny(DenyReason::FreeAllowanceExhausted)
+    );
+    assert_eq!(s.blocked_reason, Some(DenyReason::FreeAllowanceExhausted));
+    assert_eq!(
+        DenyReason::FreeAllowanceExhausted.code(),
+        "ai_free_allowance_exhausted"
+    );
+}
+
+#[test]
+fn unlimited_is_never_blocked() {
     let u = user("ent@x.com");
     let mut ent = Entitlement::personal(u.clone(), PlanTier::Premium);
     ent.unlimited = true;
@@ -386,7 +414,7 @@ fn team_member_is_not_the_payer() {
     );
     assert!(!s.can_manage_billing);
     assert_eq!(s.seats, 2);
-    assert_eq!(s.included_cents, 2_000);
+    assert_eq!(s.included_cents, 10_000);
 }
 
 #[test]

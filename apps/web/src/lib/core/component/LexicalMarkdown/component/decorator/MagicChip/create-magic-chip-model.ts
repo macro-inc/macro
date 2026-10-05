@@ -10,8 +10,11 @@ import {
 } from '@app/features/block-agent/component/parts/shared';
 import type { InteractionController } from '@app/features/block-agent/context/interaction';
 import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
+import { issueSessionAction } from '@app/features/block-agent/queries/issue-session-action';
+import { describeToolCall } from '@app/features/block-agent/state/tool-approval-wording';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -115,6 +118,7 @@ export function createMagicChipModel(props: MagicChipData): {
   const session = () =>
     queryReadyGate(sessionQuery) ? sessionQuery.data : undefined;
   const canEdit = () => session()?.canEdit;
+  const userId = useUserId();
   const persistedStatus = () => {
     const status = session()?.status;
     return (status ? magicChipStatus(status) : undefined) ?? props.status;
@@ -178,12 +182,25 @@ export function createMagicChipModel(props: MagicChipData): {
     sessionId: () => props.agentSessionId,
     pending: pendingForTurn,
     canEdit,
-    issue: (action) => live.issue(action),
+    issue: (action) => issueSessionAction(live, action),
     onFailure: toast.failure,
   });
   const asking = (): MagicChipInteraction | undefined => {
     const request = pendingForTurn()[0];
     if (!request) return undefined;
+    // A held tool call is answered in the session, where its arguments are.
+    if (request.kind === 'tool_approval') {
+      return {
+        request,
+        canAnswer: false,
+        answering: false,
+        action: `Wants to ${describeToolCall(
+          { slug: request.serverSlug, name: request.serverName },
+          request.toolName,
+          session()?.ownerId === userId() ? 'your' : "the owner's"
+        )}`,
+      };
+    }
     const tool = messages()
       .find(
         (message) =>

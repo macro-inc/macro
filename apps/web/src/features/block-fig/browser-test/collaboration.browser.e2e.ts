@@ -119,6 +119,44 @@ test('edits, selections, and pointers reach the other person', async ({
     .toEqual(expect.arrayContaining([true, false]));
 });
 
+test('the other person sees a layer move while it is dragged', async ({
+  page,
+}) => {
+  await open(page);
+  const alice = person(page, 'Alice').getByTestId('fig-canvas');
+  await drawRectangle(page, alice, [0.1, 0.72], [0.4, 0.8]);
+  await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(1);
+  /** Where a person's engine has the rectangle. */
+  const left = (who: number) =>
+    page.evaluate(async (index) => {
+      const engine = window.figFixture.collab?.people()[index]?.engine();
+      if (!engine) return undefined;
+      const row = (await engine.layers(0)).find(
+        (r) => r.name === 'Rectangle 1'
+      );
+      const [g] = row ? await engine.geometry(0, [row.id]) : [];
+      return g?.bounds.x;
+    }, who);
+  const start = (await left(1)) ?? 0;
+  // Alice drags it right (her canvas draws the move itself) and holds it.
+  const box = await alice.boundingBox();
+  if (!box) throw new Error('no canvas');
+  const y = box.y + box.height * 0.76;
+  await page.mouse.move(box.x + box.width * 0.25, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.25 + 120, y, { steps: 8 });
+  // Bob sees it move before she lets go …
+  await expect.poll(() => left(1)).toBeGreaterThan(start + 10);
+  await page.mouse.up();
+  // … and they agree where it landed.
+  await expect
+    .poll(async () => {
+      const [a, b] = [await left(0), await left(1)];
+      return a !== undefined && a === b && a > start + 10;
+    })
+    .toBe(true);
+});
+
 test('both people’s layers appear on both sides, and following shows the other view', async ({
   page,
 }) => {

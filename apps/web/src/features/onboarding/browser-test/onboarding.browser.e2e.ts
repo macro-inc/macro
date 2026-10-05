@@ -60,7 +60,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await page.getByRole('button', { name: 'Start 30 day trial' }).click();
 
   // Stripe returns on the success leg; the flow waits for the webhook's license.
-  await expectLanded(page, 'Entered Macro at /getting-started');
+  await expectLanded(page, 'Entered Macro at /home');
   const world = await fakeWorld(page);
   expect(world.viewer).toMatchObject({
     tutorialComplete: true,
@@ -182,7 +182,7 @@ test('an invite’s free months replace the trial and keep its promotion', async
     page.getByRole('button', { name: 'Start 30 day trial' })
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Claim your free months' }).click();
-  await expectLanded(page, 'Entered Macro at /getting-started');
+  await expectLanded(page, 'Entered Macro at /home');
   expect((await fakeWorld(page)).viewer?.licensed).toBe(true);
 });
 
@@ -229,6 +229,29 @@ test('a finished user is sent straight into the app', async ({ page }) => {
 
 test.describe('with motion', () => {
   test.use({ contextOptions: { reducedMotion: 'no-preference' } });
+
+  test('a click lands as soon as the next slide appears, not after its animation', async ({
+    page,
+  }) => {
+    await openFixture(page, '/?view=signup', { viewer: null });
+    const steps: [string, string | RegExp][] = [
+      ['Get started', 'Which features do you want to try first?'],
+      ['Continue', 'A workspace built to earn your trust.'],
+      ['Continue', /Connect your work/],
+    ];
+    await expect(heading(page, 'Create your workspace')).toBeVisible();
+    for (const [button, next] of steps) {
+      // A person clicks once the slide is visible, well before its flight ends.
+      await page.waitForTimeout(400);
+      const box = await page
+        .getByRole('button', { name: button })
+        .last()
+        .boundingBox();
+      if (!box) throw new Error(`${button} is not on screen`);
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(heading(page, next)).toBeVisible({ timeout: 1_000 });
+    }
+  });
 
   test('the story handoffs finish and leave the next step interactive', async ({
     page,

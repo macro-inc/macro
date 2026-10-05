@@ -44,7 +44,7 @@ bunx playwright test --config src/features/block-fig/browser-test/playwright.con
 They cover rendering, the layers and pages lists, Figma's selection rules
 (top-level frames select their child, double-click into instances), Escape,
 frame and page navigation, zoom shortcuts, export, the shortcuts dialog,
-and editing: drawing, moving, and saving shapes, lines and arrows, fills
+and editing: drawing, moving (lifted off the page while dragged, one edit at the drop, also when let go before the drag starts), and saving shapes, lines and arrows, fills
 and shadows from the design panel with undo and redo, typing and styling
 text, auto layout (adding it, gap and padding, sizing, drag to reorder),
 constraints, resizing several layers and rotating one, components
@@ -104,7 +104,7 @@ service's transport implements), which also holds the stored file;
 status, and peers, and `storeOutside()`, `reopen(name)`, and
 `setReachable(bool)` replace the stored file, reopen a person, and take the
 server down. `collaboration.browser.e2e.ts` covers edits and undo reaching
-the other person, remote pointers, selections and avatars, one person
+the other person, a dragged layer reaching them while it moves, remote pointers, selections and avatars, one person
 storing the merged file, following someone's view, a file stored outside
 the session, and an unreachable sync service.
 

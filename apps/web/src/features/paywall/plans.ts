@@ -54,7 +54,7 @@ const MAX_PLAN = {
 export const PLANS = [
   FREE_PLAN,
   PREMIUM_PLAN,
-  // MAX_PLAN,
+  MAX_PLAN,
 ] as const satisfies Plan[];
 
 export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
@@ -70,7 +70,10 @@ interface PlanFeature {
   aiUsageBilling?: boolean;
 }
 
-/** The allowance row; amounts come from the plan catalog, "—" until it loads. */
+/**
+ * The allowance row; amounts come from the plan catalog, "—" until it loads.
+ * Free's amount is its monthly hard cap.
+ */
 function includedAiRow(includedAi: IncludedAiCentsByTier): PlanFeature {
   const perMonth = (tier: PlanTier) => {
     const amount = formatIncludedAi(includedAi[tier]);
@@ -80,7 +83,7 @@ function includedAiRow(includedAi: IncludedAiCentsByTier): PlanFeature {
     label: 'AI usage included',
     aiUsageBilling: true,
     values: {
-      free: 'Limited',
+      free: perMonth('free'),
       premium: perMonth('premium'),
       max: perMonth('max'),
     },
@@ -100,7 +103,7 @@ const PLAN_FEATURE_ROWS: PlanFeature[] = [
     label: 'Beyond included',
     aiUsageBilling: true,
     values: {
-      free: '—',
+      free: 'Upgrade to continue',
       premium: 'Credits or usage billing',
       max: 'Credits or usage billing',
     },

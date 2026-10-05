@@ -28,6 +28,7 @@ use url::Url;
 use crate::domain::error::EgressError;
 
 pub use agent_fold::domain::log::AgentSessionId;
+pub use agent_session::domain::model::TurnPrompter;
 
 #[cfg(test)]
 mod test;
@@ -240,9 +241,21 @@ pub struct SessionGrant {
     pub repo: Option<RepoSlug>,
     /// The apps the agent listed for this session, for naming only.
     pub mcp_servers: Vec<McpServerListing>,
+    /// Who prompted the turn the session is running; `None` before its
+    /// first dispatch.
+    pub prompter: Option<TurnPrompter>,
 }
 
 impl SessionGrant {
+    /// The prompter of a turn whose MCP tool calls must wait for the
+    /// owner's approval: anyone but the owner, a bot on nobody's behalf
+    /// included. `None` when the owner prompted it, or nobody has yet.
+    pub fn held_prompter(&self) -> Option<&TurnPrompter> {
+        self.prompter
+            .as_ref()
+            .filter(|prompter| prompter.user.as_ref() != Some(&self.owner))
+    }
+
     /// What to call `slug` when speaking to the model: the agent's own name
     /// for it when the agent listed it, otherwise the slug made readable
     /// (`google_sheets` → `Google Sheets`).

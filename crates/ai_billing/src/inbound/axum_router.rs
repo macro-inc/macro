@@ -39,7 +39,8 @@ pub struct PlanCatalogEntry {
     pub tier: PlanTier,
     /// Monthly subscription price per seat, cents.
     pub monthly_price_cents: i64,
-    /// Included AI per seat per period, in cents at provider cost.
+    /// Included AI per seat per period, in cents at provider cost. For the
+    /// free plan this is its monthly hard cap.
     pub included_ai_cents_per_seat: i64,
     /// Whether a new purchase or plan move may pick this plan today.
     pub purchasable: bool,

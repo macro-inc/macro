@@ -11,6 +11,8 @@ use rmcp::transport::streamable_http_client::{
     StreamableHttpClient, StreamableHttpClientTransportConfig,
 };
 
+use tracing::Instrument as _;
+
 use crate::domain::mcp::McpToolConnector;
 
 #[cfg(test)]
@@ -65,6 +67,7 @@ where
         Self { client }
     }
 
+    #[tracing::instrument(skip_all, fields(server = %server.name))]
     async fn connect_one(&self, server: McpServerHttp) -> Option<ConnectedServer> {
         let mut config = StreamableHttpClientTransportConfig::with_uri(server.url.clone());
         let mut custom = HashMap::new();
@@ -84,7 +87,11 @@ where
         config.custom_headers = custom;
 
         let transport = StreamableHttpClientTransport::with_client(self.client.clone(), config);
-        match client_info().serve(transport).await {
+        match client_info()
+            .serve(transport)
+            .instrument(tracing::info_span!("agent.mcp.initialize", server = %server.name))
+            .await
+        {
             Ok(client) => Some(ConnectedServer {
                 name: server.name,
                 client,
@@ -103,21 +110,34 @@ impl<Client> McpToolConnector for AcpMcpConnector<Client>
 where
     Client: StreamableHttpClient + Send + Sync,
 {
-    #[tracing::instrument(skip_all, fields(servers = servers.len()))]
+    #[tracing::instrument(skip_all, fields(servers = servers.len(), dialed = tracing::field::Empty, failed = tracing::field::Empty, elapsed_ms = tracing::field::Empty))]
     async fn connect(&self, servers: Vec<McpServerHttp>) -> Option<RemoteMcpToolSet> {
         if servers.is_empty() {
             return None;
         }
+        let started = std::time::Instant::now();
+        let requested = servers.len();
         let connected: Vec<ConnectedServer> =
             futures::future::join_all(servers.into_iter().map(|server| self.connect_one(server)))
                 .await
                 .into_iter()
                 .flatten()
                 .collect();
+        let span = tracing::Span::current();
+        span.record("dialed", connected.len());
+        span.record("failed", requested - connected.len());
         if connected.is_empty() {
+            span.record(
+                "elapsed_ms",
+                u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            );
             return None;
         }
         let tools = RemoteMcpToolSet::from_connected(connected, None).await;
+        span.record(
+            "elapsed_ms",
+            u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        );
         if tools.is_empty() {
             return None;
         }

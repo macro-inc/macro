@@ -54,6 +54,7 @@ import {
   traceAcquire,
   traceCacheWrite,
 } from './load-telemetry';
+import { PromptTrace } from './prompt-telemetry';
 import { publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
@@ -206,6 +207,8 @@ export class AgentSession {
    * wait in the server's queue.
    */
   private turn: TurnState = 'idle';
+  /** Prompts issued here still waiting for their first output. */
+  private readonly prompts = new Set<PromptTrace>();
 
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
@@ -273,13 +276,18 @@ export class AgentSession {
    * nowhere else.
    *
    * `userId` is the caller, so the pending bubble is attributed exactly as
-   * the confirmed row will be.
+   * the confirmed row will be. A prompt is traced until its first output,
+   * under `trace` when the caller started one earlier.
    */
   async issue(
     action: AgentAction,
-    options: { userId?: string } = {}
+    options: { userId?: string; trace?: PromptTrace } = {}
   ): Promise<IssueResult> {
     const actionId = uuidv7();
+    const trace =
+      action.type === 'prompt'
+        ? (options.trace ?? new PromptTrace(this.id, { newSession: false }))
+        : undefined;
     const speculated = this.reaches(action);
     if (speculated) {
       // A prompt we just folded opens a turn, so the next one belongs in the
@@ -299,7 +307,9 @@ export class AgentSession {
     // The harness adopts the id the client speculated under; the response
     // names the id it was accepted under and `issue` reconciles the two.
     const request: ControlRequest = { ...action, actionId };
-    const result = await agentHarnessServiceClient.control(this.id, request);
+    const result = trace
+      ? await this.sendPrompt(trace, actionId, request)
+      : await agentHarnessServiceClient.control(this.id, request);
 
     if (!speculated) return result;
     if (result.isErr()) {
@@ -328,6 +338,41 @@ export class AgentSession {
       ]);
     }
     return result;
+  }
+
+  /**
+   * Post a prompt inside its trace, and watch the fold for its output.
+   * Watched from before the POST: the confirmed row can reach the socket
+   * before the POST's answer does.
+   */
+  private async sendPrompt(
+    trace: PromptTrace,
+    actionId: string,
+    request: ControlRequest
+  ): Promise<IssueResult> {
+    trace.expect(actionId);
+    this.prompts.add(trace);
+    try {
+      const result = await trace.run(() =>
+        agentHarnessServiceClient.control(this.id, request)
+      );
+      if (result.isErr()) {
+        trace.end(
+          'failed',
+          new Error(result.error.map((error) => error.message).join(' '))
+        );
+      } else {
+        trace.accepted(result.value.actionId, result.value.status === 'queued');
+      }
+      return result;
+    } catch (error) {
+      trace.end('failed', error);
+      throw error;
+    } finally {
+      // Released while the POST was out: nothing will observe the turn.
+      if (this.closed) trace.end('released');
+      if (trace.ended) this.prompts.delete(trace);
+    }
   }
 
   /**
@@ -420,6 +465,8 @@ export class AgentSession {
     // Ended here rather than where the load notices: a fetch that never
     // answers never reaches that check, and an unended span never reports.
     this.trace.end('released');
+    for (const prompt of this.prompts) prompt.end('released');
+    this.prompts.clear();
     this.listeners.clear();
     this.unsubscribeSocket();
     this.unsubscribeUpdated();
@@ -664,6 +711,10 @@ export class AgentSession {
       const metadata = events.findLast((event) => event.kind === 'metadata');
       if (metadata) this.setTurn(metadata.metadata.turn);
       for (const listener of this.listeners) listener(events);
+      for (const prompt of this.prompts) {
+        prompt.observe(events);
+        if (prompt.ended) this.prompts.delete(prompt);
+      }
     });
     // A failed push must not poison the chain for every input after it.
     this.chain = run.catch((error: unknown) => {

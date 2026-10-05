@@ -4,6 +4,13 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
+when the backend refuses a request with a usage-limit code. Free users can choose
+**View plans**; paid users can choose **Open usage settings** to add credits. The
+failed edit leaves the document unchanged and clears its running state. Other edit
+failures still show **AI edit failed**. The dialog also opens for usage-limit failures
+from live document-editing tools in chat.
+
 Snippet owners manage team sharing under **Share → Team access**. The details
 panel has no separate Sharing section. Choose **Edit** to grant the access the
 old snippet toggle provided, or **None** to remove team access.
@@ -1089,7 +1096,10 @@ Layout and test hooks:
   zooms, Space-drag or middle-drag pans. When editing: drag a layer to move it
   (⌥ drags a copy, ⇧ constrains, edges and centers snap to siblings and the
   parent frame with red guides; in an auto layout frame the dragged layer
-  takes the slot it is dropped over), drag the selection's corners or edges to
+  takes the slot it is dropped over; the canvas draws the moving layers
+  itself while they are dragged, the design panel's X and Y follow them, and
+  the move is one undo step, which the others in a live design see as it
+  goes), drag the selection's corners or edges to
   resize (⇧ keeps proportions; several selected layers scale together), drag
   just beyond a corner of one layer to rotate it (⇧ snaps to 15°), draw with the frame, rectangle, ellipse, and
   text tools (a click places a default size; new layers go into the frame
@@ -1615,7 +1625,8 @@ With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemP
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
-fetch cascade.
+fetch cascade. Adding or changing a direct sibling of a document reference must
+leave the reference mounted without flashing or restarting its preview query.
 
 ## Embedded document cards
 
@@ -1977,6 +1988,13 @@ An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:
 reread and reconsider the change instead of blindly retrying. Unsynced edits
 still follow normal CRDT collaboration semantics when they reconnect.
+
+## HTML preview tabs
+
+HTML documents show `Render` and `Code` bubble tabs in a left-aligned row above
+the content, below the header, in both standalone desktop blocks and Drive
+detail views. Switch to Code to inspect or edit the source, then back to Render
+to see the current preview. Other code file types do not show this row.
 
 ## Large-document undo checks
 

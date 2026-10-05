@@ -94,6 +94,10 @@ export function createFakeOnboarding(
     onChange?: (world: FakeOnboardingWorld) => void;
     roundTrip?: (apply: () => void) => Promise<void>;
     checkoutUrl?: (tier: PaidPlanTier) => string;
+    /** Report the sources as loading this long, like a cold page load. */
+    latencyMs?: number;
+    /** The viewer's own delay; a host that just resolved sign-in already has it. */
+    viewerLatencyMs?: number;
   } = {}
 ) {
   const [world, setWorld] = createStore<FakeOnboardingWorld>({
@@ -115,18 +119,29 @@ export function createFakeOnboarding(
     if (message === undefined) return;
     throw new Error(message);
   };
+  const [settled, setSettled] = createSignal(!options.latencyMs);
+  if (options.latencyMs) setTimeout(() => setSettled(true), options.latencyMs);
   const loadable = <T>(
     failure: keyof FakeOnboardingWorld['failures'],
     value: () => T
   ): Loadable<T> =>
-    world.failures[failure] !== undefined
-      ? { t: 'error' }
-      : { t: 'ready', value: value() };
+    !settled()
+      ? { t: 'loading' }
+      : world.failures[failure] !== undefined
+        ? { t: 'error' }
+        : { t: 'ready', value: value() };
 
+  const [viewerSettled, setViewerSettled] = createSignal(
+    !options.viewerLatencyMs
+  );
+  if (options.viewerLatencyMs)
+    setTimeout(() => setViewerSettled(true), options.viewerLatencyMs);
   const viewerState = (): ViewerState =>
-    world.viewer
-      ? { t: 'signed-in', viewer: { ...world.viewer } }
-      : { t: 'signed-out' };
+    !viewerSettled()
+      ? { t: 'loading' }
+      : world.viewer
+        ? { t: 'signed-in', viewer: { ...world.viewer } }
+        : { t: 'signed-out' };
 
   const context: OnboardingContext = {
     viewer: viewerState,
@@ -141,7 +156,8 @@ export function createFakeOnboarding(
         });
       return viewerState();
     },
-    createOnboardingRecord: () => () => ({ t: 'ready', value: world.record }),
+    createOnboardingRecord: () => () =>
+      settled() ? { t: 'ready', value: world.record } : { t: 'loading' },
     createEmailAccounts: () => ({
       accounts: () => loadable('emailAccounts', () => world.emailAccounts),
       refresh: async () => {},

@@ -24,8 +24,9 @@ export function AssetsPanel(props: {
   fileName?: string;
 }) {
   const [query, setQuery] = createSignal('');
+  // File-wide, so once per pause in a stream of edits (a drag's steps).
   const [components] = createResource(
-    () => props.viewer.editVersion(),
+    () => props.viewer.editsSettled(),
     () => props.engine.components(),
     { initialValue: [] }
   );

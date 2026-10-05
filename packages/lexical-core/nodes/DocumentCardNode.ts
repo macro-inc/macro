@@ -96,6 +96,8 @@ export class DocumentCardNode extends DecoratorBlockNode<
   __previewBox: PreviewBox;
   __previewData: PreviewData | undefined;
   __mentionUuid: string | undefined;
+  __cachedDecoratorSignature?: string;
+  __cachedDecoratorComponent?: DecoratorComponent<DocumentCardDecoratorProps>;
 
   static getType() {
     return 'document-card';
@@ -106,7 +108,7 @@ export class DocumentCardNode extends DecoratorBlockNode<
   }
 
   static clone(node: DocumentCardNode) {
-    return new DocumentCardNode(
+    const clone = new DocumentCardNode(
       node.__documentId,
       node.__documentName,
       node.__blockName,
@@ -116,6 +118,9 @@ export class DocumentCardNode extends DecoratorBlockNode<
       node.__mentionUuid,
       node.__key
     );
+    clone.__cachedDecoratorSignature = node.__cachedDecoratorSignature;
+    clone.__cachedDecoratorComponent = node.__cachedDecoratorComponent;
+    return clone;
   }
 
   constructor(
@@ -329,28 +334,30 @@ export class DocumentCardNode extends DecoratorBlockNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const key = $getId(this);
-    const previewComponent = key
-      ? documentCardNodeKeyToPreviewComponent.get(key)?.component
-      : undefined;
+    const componentProps = this.exportComponentProps();
+    const signature = JSON.stringify(componentProps);
+    if (
+      this.__cachedDecoratorComponent &&
+      this.__cachedDecoratorSignature === signature
+    )
+      return this.__cachedDecoratorComponent;
 
-    const decorator =
+    const Component =
       getDecorator<DocumentCardDecoratorProps>(DocumentCardNode);
-    if (decorator) {
-      return () =>
-        decorator({
-          documentId: this.__documentId,
-          documentName: this.__documentName,
-          blockName: this.__blockName,
-          blockParams: this.__blockParams,
-          previewBox: this.__previewBox,
-          previewData: this.__previewData,
-          mentionUuid: this.__mentionUuid,
-          key: this.getKey(),
-          theme: config.theme,
-          previewComponent,
-        });
-    }
+    if (!Component) return undefined;
+
+    const nodeId = $getId(this);
+    this.__cachedDecoratorSignature = signature;
+    this.__cachedDecoratorComponent = () =>
+      Component({
+        ...componentProps,
+        key: this.getKey(),
+        theme: config.theme,
+        previewComponent: nodeId
+          ? documentCardNodeKeyToPreviewComponent.get(nodeId)?.component
+          : undefined,
+      });
+    return this.__cachedDecoratorComponent;
   }
 }
 

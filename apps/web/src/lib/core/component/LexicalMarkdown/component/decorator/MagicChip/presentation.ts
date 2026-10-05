@@ -204,6 +204,22 @@ function partActivity(part: MessagePart): MagicChipActivity {
         label: 'Permission unavailable',
         busy: false,
       }))
+      .with({ kind: 'tool_approval', status: 'pending' }, () => ({
+        label: 'Waiting for approval',
+        busy: false,
+        tone: 'attention' as const,
+      }))
+      .with({ kind: 'tool_approval', status: 'approved' }, () => ({
+        label: 'Resuming work',
+        busy: true,
+      }))
+      .with(
+        {
+          kind: 'tool_approval',
+          status: P.union('denied', 'cancelled', 'expired'),
+        },
+        () => ({ label: 'Tool call not approved', busy: true })
+      )
       .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
         label: 'Model changed',
         detail: modelLabel(part.control.model),
@@ -465,9 +481,11 @@ export function presentationStatus(
     .with({ kind: 'asking' }, ({ asking }) => ({
       label: asking.answering
         ? 'Sending answer'
-        : asking.canAnswer
-          ? 'Waiting for you'
-          : 'Waiting for an editor',
+        : asking.request.kind === 'tool_approval'
+          ? 'Waiting for approval'
+          : asking.canAnswer
+            ? 'Waiting for you'
+            : 'Waiting for an editor',
       busy: false,
     }))
     .with({ kind: 'settled' }, () => ({ label: 'Done', busy: false }))

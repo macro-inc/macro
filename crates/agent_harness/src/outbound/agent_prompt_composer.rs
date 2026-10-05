@@ -2,13 +2,14 @@
 
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{
-    AgentContext, AgentContextAnchor, AgentContextMessage, AgentContextReplyTarget,
-    AgentContextThread,
+    AgentContext, AgentContextAnchor, AgentContextMessage, AgentContextPeople, AgentContextPerson,
+    AgentContextReplyTarget, AgentContextThread,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    CommentAnchor, ContextMessage, ContextThread, ConversationContext, ReplyTarget,
+    CommentAnchor, ContextMessage, ContextThread, ConversationContext, PromptPeople, ReplyTarget,
 };
 use crate::domain::ports::AgentPromptComposer;
 
@@ -30,8 +31,13 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
         prompt_markdown: &str,
         instructions: Option<&str>,
         parent: Option<&messages::domain::models::MessageParent>,
+        people: Option<&PromptPeople>,
         context: Option<&ConversationContext>,
     ) -> Result<String> {
+        let people = people.map(|people| AgentContextPeople {
+            owner: person(&people.owner),
+            sender: people.sender.as_ref().map(person),
+        });
         let context = context.map(|context| AgentContext {
             anchor: context.anchor.as_ref().map(anchor),
             reply_target: context.reply_target.as_ref().map(reply_target),
@@ -41,9 +47,23 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
         });
 
         self.lexical
-            .compose_agent_context(prompt_markdown, instructions, parent, context.as_ref())
+            .compose_agent_context(
+                prompt_markdown,
+                instructions,
+                parent,
+                people.as_ref(),
+                context.as_ref(),
+            )
             .await
             .map_err(|error| HarnessError::PromptComposition(rootcause::report!(error).into()))
+    }
+}
+
+/// A user as the context names them: by email, the way message authors are.
+fn person<'a>(user: &'a MacroUserIdStr<'static>) -> AgentContextPerson<'a> {
+    AgentContextPerson {
+        id: user.as_ref(),
+        name: user.email_str(),
     }
 }
 

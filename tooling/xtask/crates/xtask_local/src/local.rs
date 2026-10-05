@@ -572,7 +572,7 @@ fn run_rebuild(
         recreate_aux_service_containers(stage, instance, env)?;
     }
     if !changed.is_empty() {
-        reload_services(stage, instance, &changed)?;
+        reload_services(stage, instance, env, &changed)?;
     }
     Ok(())
 }
@@ -1106,37 +1106,42 @@ fn disconnect_tracing_network(instance: &Instance) {
     }
 }
 
-/// Restart the given services' containers so they re-exec their freshly built
-/// binaries (bind-mounted at `/app/out`). Uses plain `docker restart -t 0` by
-/// container name — no `docker compose` config parse, no graceful-stop grace,
-/// and only the changed containers — so a reload after a small change is ~1s
-/// rather than bouncing all twelve. Restarting only the changed subset also
-/// avoids the `depends_on` race a full restart hits (a service coming back
-/// before a peer it depends on).
+/// Recreate the given services' containers so they re-exec their freshly built
+/// binaries (bind-mounted at `/app/out`) under the current env file. No
+/// graceful-stop grace, and only the changed containers, so a reload after a
+/// small change bounces one or two services rather than all twelve. Touching
+/// only the changed subset also avoids the `depends_on` race a full restart
+/// hits (a service coming back before a peer it depends on).
 fn reload_services(
     stage: &Stage,
     instance: &Instance,
+    env: &env_layer::ResolvedEnv,
     services: &[&inventory::RustService],
 ) -> Result<()> {
     if stage.is_dry_run() {
         return Ok(());
     }
-    let mut cmd = Command::new("docker");
-    cmd.arg("restart").arg("-t").arg("0");
+    // Recreate rather than `docker restart`: a restart keeps the env the
+    // container was created with, so a build that needs a newly required var
+    // would crash-loop even though the regenerated env file carries it.
+    let mut up = compose_cmd(instance, env);
+    up.args([
+        "up",
+        "-d",
+        "--force-recreate",
+        "--no-deps",
+        "--timeout",
+        "0",
+    ]);
     for svc in services {
-        // Compose names containers `<project>-<service>-1`.
-        cmd.arg(format!(
-            "{}-{}-1",
-            instance.project_name(),
-            svc.compose_name
-        ));
+        up.arg(svc.compose_name);
     }
     let names = services
         .iter()
         .map(|s| s.compose_name)
         .collect::<Vec<_>>()
         .join(", ");
-    stage.run(&format!("Reloading {names}"), &mut cmd)
+    stage.run(&format!("Reloading {names}"), &mut up)
 }
 
 /// Every Docker volume an instance owns: the app DB/cache/search/Kafka plus the

@@ -535,12 +535,15 @@ than treating it as approval or repeatedly sending the prompt.
 
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
-Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
-are shown only when the `enable-ai-usage-billing` PostHog flag is on (default on
-in frontend development builds). Normal paid-model access rules
-still apply everywhere. Backend enforcement does not depend on those frontend
-controls, and enabling it does not enable credit collection; that needs
-`ENABLE_AI_USAGE_BILLING`. There is no new upgrade prompt in this rollout.
+Settings → Usage is visible for every plan. In production,
+`enable-ai-usage-billing` activates its controls and the AI usage-limit dialog;
+until then Usage shows the October 8, 2026 announcement and disabled controls.
+Dev and local remain active regardless of the flag.
+Usage displays the current period as a **Monthly limit** percentage; its info
+button explains that AI agent chat and AI document editing count toward the limit.
+Plan allowance copy and comparisons still follow `enable-ai-usage-billing`.
+Model pickers have no usage multipliers. Normal paid-model access rules still
+apply. Backend enforcement and credit collection remain independent policies.
 
 Session creation and spending controls also return 402/503 for admission failures.
 Waiting prompts are checked again before execution: exhaustion removes rejected
@@ -560,26 +563,40 @@ must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
 quota, but Macro-funded tools and helpers still check independently.
 
-Paid plans include a monthly AI allowance per seat, measured at provider cost;
-usage beyond it is billed at a markup. Both numbers come from Doppler
-(`AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and `AI_USAGE_OVERAGE_MARKUP_PERCENT`; $20 and
-5% in dev), never from code. When the allowance is used up and no credits or usage billing cover the
-request, sending a message answers HTTP 402 and the app opens the
-**AI usage limit** dialog (title `You've used this month's included AI`, or the
-spending-limit / failed-charge variants). It shows the same meter and controls
-as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
-`Open billing settings` button, and no Max purchase or upgrade control. Team
-members who are not the payer see a note to ask the team owner to add credits
-or turn on usage billing.
+Every plan includes a monthly AI allowance per seat, measured at provider cost;
+paid usage beyond it is billed at a markup. All of the numbers come from Doppler
+(`AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
+for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
+`AI_USAGE_OVERAGE_MARKUP_PERCENT`), never from code. When a paid allowance is
+used up and no credits or usage billing cover the request, sending a message
+answers HTTP 402 and the app opens the **AI usage limit** dialog (title
+`You've used this month's included AI`, or the spending-limit / failed-charge
+variants). It shows **Monthly limit**, the message `Add additional credits to
+keep going.`, and an `Open usage settings` button. Credit purchases live in
+Settings → Usage; subscription changes live in Settings → Billing.
+
+The free plan is a hard cap: when its monthly allowance is used up, requests
+answer 402 with code `ai_free_allowance_exhausted`. The dialog title is
+`You've used this month's free AI`; it says `Subscribe to a paid plan to keep
+going.` and offers `View plans`, which opens Billing. This upgrade path remains
+available while the usage summary loads or fails. Free users cannot buy credits
+or enable Auto-Reload. The cap resets with the UTC calendar month.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
+
+AI service clients return typed quota errors without opening UI. Foreground
+mutation failures and direct session/edit actions present the shared dialog;
+ordinary HTTP failures and background queries do not. Document AI-edit refusals
+apply no edits and open this dialog instead of the generic `AI edit failed`
+toast. Legacy chat tool errors carrying a recognized quota code also open it.
 
 ### Quota manual checks
 
 Use an isolated local backend with local billing fixtures, not real hosted
 accounts. See [quota rollout and coverage](../AI_QUOTA_ENFORCEMENT.md) for setup
 and the full matrix. Record both browser behavior and the Network/protocol result;
-existing UI does not promise a dedicated quota dialog outside development mode.
+recognized foreground quota refusals open the shared dialog when the frontend
+rollout is active (always in dev and local; flag-controlled in production).
 
 1. With the flag absent/false across all hosts, send a legacy chat and a managed
    session prompt. Confirm ordinary behavior and new uncounted usage rows.
@@ -596,12 +613,20 @@ existing UI does not promise a dedicated quota dialog outside development mode.
    work remains without a retry loop and that Stop still works.
 4. Invoke AI editing on an editable document and an independent AI tool with the
    exhausted fixture. Confirm failed results and unchanged document content. Check
-   manual editing and dictation still work. A successful chat whose optional rename
+   the usage-limit dialog opens, with a subscription CTA for Free or a Usage
+   settings CTA for paid accounts. Check manual editing and dictation still work. A successful chat whose optional rename
    is refused keeps its existing/default title rather than failing the chat.
 5. Set false consistently and restart/redeploy all local processes. Retry refused
    work explicitly and confirm recovery, new uncounted rows, and unchanged counted
    history. Do not erase history to simulate rollback or claim that rollback is a
    quota reset. Check cancellation in both flag states.
+
+For frontend-only checks against dev, use Settings → Usage → **Developer tools**
+to open the Free or paid usage-limit dialog directly, then reset the preview. This is
+a display override, not a quota change. To test actual refusal handling without
+hosted AI spending, intercept only the tested AI request in Chrome DevTools and
+return the matching 402 body; restore the response afterward. Backend admission
+and settlement tests still require the isolated backend fixtures above.
 
 ## Start a doc-scoped chat
 
@@ -747,6 +772,28 @@ answer; viewers see the form locked with `Waiting for an editor`. The owner and 
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
+
+## Tool calls waiting for the session owner
+
+An agent session always runs with its owner's access. When someone else prompts it (a
+second person replying in the session's channel thread, or a bot), every tool call that
+uses that access - Macro's own tools on the owner's email, calendar, documents and so on,
+and any connected app - waits for the owner to approve it. Public lookups (`WebSearch`,
+`WebFetch`, `SelfKnowledge`) and the owner's own turns are never held. The session view
+shows a card over the composer that says what the agent wants to do, e.g. `Dave Seed asked
+the agent to read your email.` The owner sees `Approval needed` with `Decline` /
+`Always allow` / `Approve`; everyone else sees `Waiting for <owner> to approve` (`…to read
+Alice Seed's email`) and, with edit access, a `Cancel` button for when the owner is away.
+`Always allow` approves the call and stops asking about the same person's calls for the
+rest of the session: the same tool on Macro (the card says `Always allow lets Dave Seed
+read your email in this session without asking you.`), every tool of a connected app. It
+also approves that person's other waiting calls it covers, and is not offered for a bot.
+The owner also gets an `agent_session_waiting_for_input` notification. Once answered the
+transcript shows the same action (`Read your email`) with `Approved by …`, `Always allowed
+by …`, `Declined by …`, `Cancelled`, or `Not approved in time` (30 minutes for the
+in-process agent; sandboxed ones wait as long when their MCP client accepts progress, about
+four minutes otherwise). A declined or cancelled call does not run and the agent says so. The Magic Chip
+reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
 
 ## In channels
 
