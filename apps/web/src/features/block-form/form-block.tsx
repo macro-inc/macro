@@ -263,9 +263,7 @@ export default function FormBlock(props: { view?: unknown }) {
       <DocumentBlockContainer>
         <div class="size-full">
           <FormBlockContent
-            respondOnly={
-              props.view === 'respond' || (!flag().enabled && !flag().loading)
-            }
+            respondOnly={props.view === 'respond' || !flag().enabled}
             initialTab={
               props.view === 'responses' || props.view === 'share'
                 ? props.view

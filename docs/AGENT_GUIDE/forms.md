@@ -4,7 +4,8 @@ A form is a questionnaire whose answers land as rows of one database table.
 Every question is a column of that table; the form stores only presentation
 (sections, order, help text, required, gates). Authoring is behind the
 `enable-forms` flag (`VITE_ENABLE_FORMS=true|false`; on under `bun run dev`
-and HMR, PostHog otherwise). With it off, `/app/form/<uuid>` opens on the
+and HMR, PostHog otherwise). Until the flag is enabled, including while remote
+flags are loading, `/app/form/<uuid>` opens on the
 respond view (no builder), and no Create entry, mention bucket, `/poll`,
 `/form` or database form control exists. Responding (the respond route, form
 cards and mentions in messages) does not depend on the flag: the service
