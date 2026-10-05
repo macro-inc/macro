@@ -7,6 +7,7 @@
 
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
+mod realtime;
 /// Complete schema types and construction helpers.
 mod schema;
 #[cfg(test)]
@@ -69,6 +70,7 @@ pub use graphql_properties::{
     PropertiesEntityPropertyReader, PropertiesEntityPropertyWriter, PropertiesMutationRoot,
     entity_properties_loader,
 };
+pub use realtime::{AgentSessionLogSubscriptions, agent_session_log_subscriptions};
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,
     SoupSchema, SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,

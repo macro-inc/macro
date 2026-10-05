@@ -661,6 +661,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_session_realtime"
+version = "0.1.0"
+dependencies = [
+ "agent_runtime_protocol",
+ "agent_session",
+ "broadcast",
+ "chrono",
+ "kafka_util",
+ "macro_event_broker",
+ "macro_uuid",
+ "rdkafka",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tokio-retry",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
@@ -4393,10 +4413,13 @@ name = "complete_graph"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_runtime_protocol",
  "agent_session",
+ "agent_session_realtime",
  "anyhow",
  "apollo-compiler",
  "async-graphql",
+ "async-stream",
  "axum",
  "bots",
  "chrono",
@@ -6119,6 +6142,7 @@ dependencies = [
  "activity",
  "agent_changes",
  "agent_session",
+ "agent_session_realtime",
  "ai_billing",
  "ai_tools",
  "ai_usage",
