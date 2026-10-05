@@ -76,6 +76,8 @@ describe('layer context menu', () => {
     expect(labels(instance)).toContain('Detach instance');
     const component = layerMenu(facts({ types: ['SYMBOL'] }));
     expect(labels(component)).not.toContain('Create component');
+    expect(labels(component)).toContain('Combine as variants');
+    expect(labels(instance)).not.toContain('Combine as variants');
     const several = layerMenu(facts({ count: 2 }));
     expect(labels(several)).not.toContain('Rename');
   });
