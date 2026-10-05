@@ -239,3 +239,49 @@ test('adds, hides, reorders, and dashes paints', async ({ page }) => {
   await page.getByTestId('fig-field-dash').press('Enter');
   await expect.poll(dashes).toBeNull();
 });
+
+test('edits several layers at once, with mixed values', async ({ page }) => {
+  await openNew(page);
+  await drawRectangle(page, [100, 100], [150, 150]);
+  await drawRectangle(page, [200, 100], [300, 200]);
+  await drawRectangle(page, [400, 100], [450, 150]);
+  await page.getByTestId('fig-fill-0-hex').fill('0000FF');
+  await page.getByTestId('fig-fill-0-hex').press('Enter');
+
+  // Shift-click selects the rows between; ⌘/Ctrl-click toggles one.
+  await rows(page).filter({ hasText: 'Rectangle 3' }).click();
+  await rows(page)
+    .filter({ hasText: 'Rectangle 1' })
+    .click({ modifiers: ['Shift'] });
+  await expect(page.getByTestId('fig-mixed')).toContainText(
+    '3 layers selected'
+  );
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('Mixed');
+  await expect(page.getByTestId('fig-field-y')).toHaveValue('100');
+  await expect(page.getByTestId('fig-fills')).toContainText('Mixed');
+
+  // Typing sets every layer; "+" replaces mixed fills with one.
+  await page.getByTestId('fig-field-w').fill('80');
+  await page.getByTestId('fig-field-w').press('Enter');
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('80');
+  await page.getByRole('button', { name: 'Add fill' }).click();
+  await expect(page.getByTestId('fig-fill-0-hex')).toHaveValue('D9D9D9');
+
+  await rows(page)
+    .filter({ hasText: 'Rectangle 2' })
+    .click({ modifiers: ['ControlOrMeta'] });
+  await expect(page.getByTestId('fig-mixed')).toContainText(
+    '2 layers selected'
+  );
+
+  // Arrow keys move through the layer tree after a row is clicked.
+  await rows(page).filter({ hasText: 'Rectangle 3' }).click();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 2');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 2');
+  // It did not move the layer.
+  await expect(page.getByTestId('fig-field-y')).toHaveValue('100');
+});

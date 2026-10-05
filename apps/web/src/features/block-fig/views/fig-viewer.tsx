@@ -21,6 +21,7 @@ import { ShortcutsDialog } from '../components/shortcuts-dialog';
 import { ViewerToolbar } from '../components/viewer-toolbar';
 import { useFigViewerContext } from '../context/fig-viewer-context';
 import { zoomLabel } from '../core/camera';
+import { type MixedInfo, mergeInfos } from '../core/mixed';
 import { stepPage } from '../core/pages';
 import {
   controlOwnsKey,
@@ -92,6 +93,31 @@ export function FigViewer() {
   );
 
   // ---- design panel ---------------------------------------------------------
+
+  // Several selected layers: their shared and mixed values.
+  const [mixed, setMixed] = createSignal<MixedInfo>();
+  let mixedRequest = 0;
+  const loadMixed = async (ids: string[], request: number) => {
+    try {
+      const infos = await Promise.all(
+        ids.slice(0, 200).map((id) => engine.nodeInfo(viewer.page(), id))
+      );
+      if (request === mixedRequest) setMixed(mergeInfos(infos));
+    } catch {
+      if (request === mixedRequest) setMixed(undefined);
+    }
+  };
+  createEffect(
+    on([viewer.selected, viewer.editVersion], ([selected]) => {
+      const request = ++mixedRequest;
+      if (selected.length < 2) setMixed(undefined);
+      else
+        void loadMixed(
+          selected.map((s) => s.id),
+          request
+        );
+    })
+  );
 
   // A drag in the design panel (scrubbing a value, a color) sends live
   // edits and commits on release: one undo step per drag.
@@ -553,6 +579,7 @@ export function FigViewer() {
             onPatch={editor.enabled() ? patchSelection : undefined}
             onPageColor={editor.enabled() ? setPageColor : undefined}
             swatches={swatches()}
+            mixed={mixed()}
             onPickerOpen={() => void loadSwatches()}
             onAddImage={editor.enabled() ? addImage : undefined}
             onAddAutoLayout={

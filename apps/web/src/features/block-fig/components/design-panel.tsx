@@ -19,13 +19,12 @@ import AlignRight from '@phosphor/align-right.svg';
 import AlignTop from '@phosphor/align-top.svg';
 import Copy from '@phosphor/copy.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
-import Minus from '@phosphor/minus.svg';
-import Plus from '@phosphor/plus.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
 import { cssFor } from '../core/css';
 import { formatMeasure } from '../core/measure';
+import type { MixedInfo } from '../core/mixed';
 import { formatDashes, parseDashes } from '../core/paint';
 import { formatLetterSpacing, formatLineHeight } from '../core/type';
 import type { Patch } from '../primitives/create-fig-editor';
@@ -37,55 +36,11 @@ import {
 import { ColorPicker } from './color-picker';
 import { NumberField, ParsedField, TextField } from './design-fields';
 import { EffectList } from './effect-controls';
+import { MixedFields } from './mixed-fields';
 import { PaintList, paintLabel, paintSwatch } from './paint-controls';
+import { Section } from './panel-section';
 import { SwatchPopover } from './swatch-popover';
 import { TypeControls } from './type-controls';
-
-function Section(props: {
-  title: string;
-  children: JSX.Element;
-  /** A "+" action in the header (add a fill, say). */
-  onAdd?: () => void;
-  /** A "−" action in the header (remove auto layout, say). */
-  onRemove?: () => void;
-  testId?: string;
-}) {
-  return (
-    <section
-      class="border-edge-muted border-b px-3 py-3"
-      data-testid={props.testId}
-    >
-      <div class="mb-2 flex items-center justify-between">
-        <h3 class="font-semibold text-ink text-xs">{props.title}</h3>
-        <Show when={props.onAdd}>
-          {(add) => (
-            <button
-              type="button"
-              aria-label={`Add ${props.title.toLowerCase()}`}
-              class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
-              onClick={() => add()()}
-            >
-              <Plus class="size-3.5" />
-            </button>
-          )}
-        </Show>
-        <Show when={props.onRemove}>
-          {(remove) => (
-            <button
-              type="button"
-              aria-label={`Remove ${props.title.toLowerCase()}`}
-              class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
-              onClick={() => remove()()}
-            >
-              <Minus class="size-3.5" />
-            </button>
-          )}
-        </Show>
-      </div>
-      <div class="flex flex-col gap-1.5">{props.children}</div>
-    </section>
-  );
-}
 
 function Field(props: { label: string; value: string | number }) {
   return (
@@ -272,6 +227,8 @@ export function DesignPanel(props: {
   onAddImage?: (file: File) => Promise<string | undefined>;
   /** Sets the page's canvas color; absent when read-only. */
   onPageColor?: (hex: string, live: boolean) => void;
+  /** Several selected layers' shared and mixed values. */
+  mixed?: MixedInfo;
 }) {
   const [tab, setTab] = createSignal<'design' | 'code'>('design');
   return (
@@ -305,49 +262,64 @@ export function DesignPanel(props: {
         <Show
           when={props.info}
           fallback={
-            <Show when={props.page}>
-              {(page) => (
-                <Section title="Page">
-                  <Field label="Name" value={page().name} />
-                  <div class="flex items-center gap-2 rounded-md bg-inset px-2 py-1">
-                    <Show
-                      when={props.onPageColor}
-                      fallback={
-                        <span
-                          class="size-4 rounded-sm border border-edge-muted"
-                          style={{ background: `#${pageHex(page())}` }}
-                        />
-                      }
-                    >
-                      {(onColor) => (
-                        <SwatchPopover
-                          swatch={`#${pageHex(page())}`}
-                          label="Canvas color"
-                          testId="fig-page-color"
-                          onOpenChange={(open) => {
-                            if (open) props.onPickerOpen?.();
-                          }}
+            <Show
+              when={props.selectionCount > 1 && props.mixed}
+              fallback={
+                <Show when={props.page}>
+                  {(page) => (
+                    <Section title="Page">
+                      <Field label="Name" value={page().name} />
+                      <div class="flex items-center gap-2 rounded-md bg-inset px-2 py-1">
+                        <Show
+                          when={props.onPageColor}
+                          fallback={
+                            <span
+                              class="size-4 rounded-sm border border-edge-muted"
+                              style={{ background: `#${pageHex(page())}` }}
+                            />
+                          }
                         >
-                          <ColorPicker
-                            value={pageHex(page())}
-                            opaque
-                            swatches={props.swatches}
-                            onChange={(hex, live) => onColor()(hex, live)}
-                          />
-                        </SwatchPopover>
-                      )}
-                    </Show>
-                    <span class="text-ink-muted">Canvas color</span>
-                    <span class="ml-auto font-mono text-ink-muted">
-                      {pageHex(page())}
-                    </span>
-                  </div>
-                  <Show when={props.selectionCount > 1}>
-                    <span class="text-ink-muted">
-                      {props.selectionCount} layers selected
-                    </span>
-                  </Show>
-                </Section>
+                          {(onColor) => (
+                            <SwatchPopover
+                              swatch={`#${pageHex(page())}`}
+                              label="Canvas color"
+                              testId="fig-page-color"
+                              onOpenChange={(open) => {
+                                if (open) props.onPickerOpen?.();
+                              }}
+                            >
+                              <ColorPicker
+                                value={pageHex(page())}
+                                opaque
+                                swatches={props.swatches}
+                                onChange={(hex, live) => onColor()(hex, live)}
+                              />
+                            </SwatchPopover>
+                          )}
+                        </Show>
+                        <span class="text-ink-muted">Canvas color</span>
+                        <span class="ml-auto font-mono text-ink-muted">
+                          {pageHex(page())}
+                        </span>
+                      </div>
+                      <Show when={props.selectionCount > 1}>
+                        <span class="text-ink-muted">
+                          {props.selectionCount} layers selected
+                        </span>
+                      </Show>
+                    </Section>
+                  )}
+                </Show>
+              }
+            >
+              {(mixed) => (
+                <MixedFields
+                  mixed={mixed()}
+                  onPatch={props.onPatch}
+                  swatches={props.swatches}
+                  onPickerOpen={props.onPickerOpen}
+                  onAddImage={props.onAddImage}
+                />
               )}
             </Show>
           }
