@@ -6,7 +6,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { ImperativeDialogHost } from '@ui/components/ImperativeDialog';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openDatabaseTemplatePicker } from './database-template-picker';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
@@ -25,9 +25,22 @@ vi.mock('@queries/storage/databases', () => ({
   }),
 }));
 
+beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn());
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 function setup() {
@@ -53,17 +66,22 @@ function setup() {
 }
 
 describe('database template picker focus', () => {
-  it.each(['Blank', 'Project tracker'])(
+  it.each(['No template', 'Project tracker'])(
     'keeps focus on the new database after choosing %s',
     async (option) => {
       const { onChoose } = setup();
       await waitFor(() =>
         expect(document.activeElement).toBe(
-          screen.getByRole('option', { name: 'Blank' })
+          screen.getByRole('radio', { name: 'No template' })
         )
       );
       vi.useFakeTimers();
-      fireEvent.click(screen.getByRole('option', { name: option }));
+      fireEvent.click(screen.getByRole('radio', { name: option }));
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: option === 'No template' ? 'Create database' : 'Use template',
+        })
+      );
       await vi.runAllTimersAsync();
 
       expect(onChoose).toHaveBeenCalledOnce();
@@ -74,15 +92,20 @@ describe('database template picker focus', () => {
     }
   );
 
-  it('restores the opener on dismissal and focuses Blank again on reopening', async () => {
+  it('restores the opener on dismissal and resets to no template on reopening', async () => {
     const { trigger, onChoose } = setup();
     for (let attempt = 0; attempt < 2; attempt++) {
       if (attempt > 0) fireEvent.click(trigger);
       await waitFor(() =>
         expect(document.activeElement).toBe(
-          screen.getByRole('option', { name: 'Blank' })
+          screen.getByRole('radio', { name: 'No template' })
         )
       );
+      expect(screen.getByRole('radio', { name: 'No template' })).toHaveProperty(
+        'checked',
+        true
+      );
+      fireEvent.click(screen.getByRole('radio', { name: 'Project tracker' }));
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
       await waitFor(() => expect(document.activeElement).toBe(trigger));
     }
