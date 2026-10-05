@@ -5,13 +5,6 @@ fn config_values() -> Value {
     json!({
         "ENVIRONMENT": "local",
         "DATABASE_URL": "postgres://localhost/macro",
-        "DOCUMENT_STORAGE_SERVICE_AUTH_KEY": "test",
-        "SYNC_SERVICE_AUTH_KEY": "test",
-        "DOCUMENT_STORAGE_BUCKET": "test",
-        "DOCX_DOCUMENT_UPLOAD_BUCKET": "test",
-        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL": "test",
-        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID": "test",
-        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME": "test",
         "KAFKA_BROKERS": "existing-broker:9092",
         "INTERNAL_API_KEY": "test"
     })

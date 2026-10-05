@@ -51,15 +51,14 @@ impl<Sessions> TargetValidation<Sessions> {
 impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Sessions> {
     async fn validate_task(&self, task: &Value, owner: &MacroUserIdStr<'static>) -> Result<()> {
         let task = parse_task(task, self.agents_enabled)?;
-        if let ResolvedTaskTarget::Agent { bot_id, model } = task.resolve_target()? {
-            self.sessions
-                .validate(ValidateRoutineSession {
-                    owner: owner.clone(),
-                    bot_id,
-                    model: model.map(|model| model.as_str().to_owned()),
-                })
-                .await?;
-        }
+        let (bot_id, model) = task.resolve_target()?.session_target();
+        self.sessions
+            .validate(ValidateRoutineSession {
+                owner: owner.clone(),
+                bot_id,
+                model: model.map(|model| model.as_str().to_owned()),
+            })
+            .await?;
         Ok(())
     }
 }

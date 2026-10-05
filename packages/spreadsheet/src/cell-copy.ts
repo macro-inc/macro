@@ -8,8 +8,8 @@ import {
 } from './grid-selection';
 import {
   isSpreadsheetCellStyle,
-  SPREADSHEET_COLUMNS,
   SPREADSHEET_MAX_CELL_LENGTH,
+  SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
   type SpreadsheetCell,
   type SpreadsheetCells,
@@ -72,7 +72,7 @@ export function readCopiedRange(text: string): CopiedRange | undefined {
     )
       return;
     const width = Array.isArray(cells[0]) ? cells[0].length : 0;
-    if (!width || left + width > SPREADSHEET_COLUMNS) return;
+    if (!width || left + width > SPREADSHEET_MAX_COLUMNS) return;
     const valid = cells.every(
       (row: unknown) =>
         Array.isArray(row) &&

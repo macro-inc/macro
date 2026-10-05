@@ -353,10 +353,10 @@ export function routineStatus(facts: {
   return { kind: 'unscheduled' };
 }
 
-export type AutomationEntity = EntityBase & {
-  type: 'automation';
-  /** Cron expression controlling when the automation runs. */
-  cron: string;
+export type RoutineEntity = EntityBase & {
+  type: 'routine';
+  /** Legacy single schedule, when the routine has exactly one cron trigger. */
+  cron?: string;
   /** Running is derived from the server claim and the backend's stale-claim
    *  window; claims update live via the connection-gateway websocket. */
   status: RoutineStatus;
@@ -489,7 +489,6 @@ export type CalendarEventEntity = EntityBase & {
 /** A native project, distinct from folder entities. */
 export type InitiativeEntity = EntityBase & {
   type: 'initiative';
-  descriptionDocumentId: string;
   properties?: SoupProperty[];
 };
 
@@ -509,7 +508,7 @@ export type EntityData =
   | CrmCompanyEntity
   | CrmContactEntity
   | DatabaseEntity
-  | AutomationEntity
+  | RoutineEntity
   | ReminderEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -528,7 +527,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_company',
   'crm_contact',
   'database',
-  'automation',
+  'routine',
   'reminder',
   'calendar_event',
   'foreign',
@@ -639,10 +638,10 @@ export const isReminderEntity = (
   return entity.type === 'reminder';
 };
 
-export const isAutomationEntity = (
+export const isRoutineEntity = (
   entity: EntityData
-): entity is AutomationEntity => {
-  return entity.type === 'automation';
+): entity is RoutineEntity => {
+  return entity.type === 'routine';
 };
 
 export const isCrmCompanyEntity = (

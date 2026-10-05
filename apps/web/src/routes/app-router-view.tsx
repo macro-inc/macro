@@ -41,6 +41,7 @@ import {
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
 } from '@app/features/reviews-view/route-views';
+import { RoutineCreateRouteView } from '@app/features/routines/route-views';
 import { SettingsRouteView } from '@app/features/settings/route-views';
 import { TasksDetailRouteView } from '@app/features/tasks-view/components/TasksDetailView';
 import {
@@ -137,6 +138,9 @@ import {
   remindersRoute,
   reviewsPrRoute,
   reviewsSplitRoute,
+  routineCreateRoute,
+  routineDetailRoute,
+  routinesRoute,
   searchRoute,
   settingsRoute,
   setupRoute,
@@ -248,6 +252,12 @@ export function AppRouterView() {
           />
         </Route>
         <Route definition={settingsRoute} component={SettingsRouteView} />
+        <Route
+          definition={routineCreateRoute}
+          component={RoutineCreateRouteView}
+        />
+        <Route definition={routineDetailRoute} component={AgentsRouteView} />
+        <Route definition={routinesRoute} component={AgentsRouteView} />
         <Route definition={agentsRoute} component={AgentsRouteView} />
         <Route definition={codersRoute} component={AgentsRouteView} />
         <Route definition={agentChatsRoute} component={AgentsRouteView} />

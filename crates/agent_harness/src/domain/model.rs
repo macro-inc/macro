@@ -517,6 +517,14 @@ pub enum HarnessCommand {
         /// The user responsible, as on [`Self::EditQueued`].
         actor: Option<MacroUserIdStr<'static>>,
     },
+    /// Run a queued action next: move it to the front and, when a turn is in
+    /// flight, cancel that turn so this entry flushes ahead of the rest.
+    SteerQueued {
+        /// The queue entry to run next.
+        action_id: AgentActionId,
+        /// The user responsible, as on [`Self::EditQueued`].
+        actor: Option<MacroUserIdStr<'static>>,
+    },
     /// The session's fold reported a turn fact: an ended turn clears the
     /// busy mark and dispatches the next queued action; a raised or cleared
     /// question is published as is. Internal - enqueued by the turn observer

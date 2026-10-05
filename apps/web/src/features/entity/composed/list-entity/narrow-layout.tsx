@@ -116,6 +116,7 @@ export function NarrowLayout(props: LayoutProps) {
                     entity={props.entity}
                     maxUserStackUsers={0}
                     showCaret={false}
+                    includeProject={props.showProject}
                   />
                 }
               >

@@ -86,9 +86,12 @@ together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
 The frontend is not tied to this flag. The usage meter, credit packs,
-usage-billing controls, the out-of-credits dialog, and model usage multipliers
-keep their existing development-mode gate (`DEV_MODE_ENV`), so they show on
-`dev.macro.com` and local dev builds regardless of backend settlement.
+usage-billing controls, the out-of-credits dialog, the "$N of AI usage" plan
+copy, and model usage multipliers are gated by the frontend's
+`enable-ai-usage-billing` PostHog flag (`enableAiUsageBilling` in
+`apps/web/src/lib/core/constant/featureFlags.ts`). It defaults on in
+development builds and follows PostHog elsewhere, independent of backend
+settlement; `VITE_ENABLE_AI_USAGE_BILLING` overrides it locally.
 
 ## Public failure contracts
 

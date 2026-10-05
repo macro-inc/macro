@@ -22,7 +22,7 @@ function Actions() {
   const copy = async () => {
     const profile = source.isSuccess ? source.data : undefined;
     if (!profile?.revision || !profile.eventTypes.some((e) => e.enabled)) {
-      settings.openSettings('Calendar');
+      settings.openSettings('Booking links');
       return;
     }
     if (
@@ -48,8 +48,8 @@ function Actions() {
       <Button
         variant="ghost"
         size="icon-sm"
-        label="Open calendar scheduling settings"
-        onClick={() => settings.openSettings('Calendar')}
+        label="Open booking link settings"
+        onClick={() => settings.openSettings('Booking links')}
       >
         <GearIcon class="size-3.5" />
       </Button>

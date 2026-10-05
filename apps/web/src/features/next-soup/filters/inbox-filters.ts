@@ -128,8 +128,8 @@ export function signalFilter(entity: EntityData): boolean {
     case 'crm_contact':
       // CRM contacts only show in CRM views, not Inbox.
       return false;
-    case 'automation':
-      // Automations only show in the Agents > Scheduled tab, not Inbox.
+    case 'routine':
+      // Routines only show in the Agents > Scheduled tab, not Inbox.
       return false;
     case 'foreign':
       // Foreign entities (e.g. GitHub PRs) are gated by the inbox query on the

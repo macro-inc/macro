@@ -286,6 +286,9 @@ async fn anchor(
                 anchor_id: anchor_id.to_string(),
             });
         }
+        // The lexical prompt composer has no design anchor kind yet, so a
+        // design pin reaches the agent as an unanchored thread on the design.
+        ThreadAnchor::Fig { .. } => return None,
         ThreadAnchor::Markdown {
             mark_id,
             marked_text,

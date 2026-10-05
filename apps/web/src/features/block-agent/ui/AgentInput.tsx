@@ -29,7 +29,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
-import ArrowUp from '@phosphor/arrow-up.svg';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 
@@ -49,8 +48,9 @@ export interface AgentInputProps {
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
   /**
-   * A waiting action can be advanced by ending the current turn. While the
-   * input is empty, Enter and the matching button do exactly that.
+   * A waiting action can be flushed by ending the current turn. While the
+   * input is empty, Enter and the send button do exactly that. The button
+   * stays a send arrow, ringed so it reads as flush rather than a new message.
    */
   hasQueuedMessages?: boolean;
   /**
@@ -430,14 +430,13 @@ export function AgentInput(props: AgentInputProps) {
                     >
                       <SendButton
                         appearance="composer"
-                        aria-label="Send next queued message"
-                        tooltip="Send next queued message"
+                        intent="flush"
+                        aria-label="Flush queued messages"
+                        tooltip="Flush queued messages"
                         shortcut="Enter"
                         onClick={sendNext}
                         disabled={!canSendNext()}
-                      >
-                        <ArrowUp />
-                      </SendButton>
+                      />
                     </Show>
                   </div>
                 </div>

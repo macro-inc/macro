@@ -114,13 +114,22 @@ export function useImportGmailSignatureMutation(
       return result.match(
         (response) => ({ success: true, settings: response.settings }),
         (errors) => {
-          const noSignature = errors.some((e) => e.code === 'NO_SIGNATURE_FOUND');
-          return { success: false, reason: noSignature ? 'no_signature' : 'error' };
+          const noSignature = errors.some(
+            (e) => e.code === 'NO_SIGNATURE_FOUND'
+          );
+          return {
+            success: false,
+            reason: noSignature ? 'no_signature' : 'error',
+          };
         }
       );
     },
 
-    ...withCallbacks<ImportGmailSignatureResult, Error, ImportGmailSignatureVars>(
+    ...withCallbacks<
+      ImportGmailSignatureResult,
+      Error,
+      ImportGmailSignatureVars
+    >(
       {
         onSuccess: async (result, { linkId }) => {
           if (!result.success) return;

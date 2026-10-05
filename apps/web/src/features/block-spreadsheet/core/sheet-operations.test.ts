@@ -115,17 +115,17 @@ describe('spreadsheet range operations', () => {
       '\uFEFF',
       '"unclosed',
       `first,${'x'.repeat(10_001)}`,
-      'x'.repeat(1_000_001),
+      'x'.repeat(20 * 1024 * 1024 + 1),
     ])
       expect(() => csvImportEdits(text, origin)).toThrow();
     const lastCell = {
-      anchor: { row: 999, column: 25 },
-      focus: { row: 999, column: 25 },
+      anchor: { row: 99_999, column: 16_383 },
+      focus: { row: 99_999, column: 16_383 },
     };
     expect(() => csvImportEdits('one,two', lastCell)).toThrow('fit within');
     expect(() => csvImportEdits('one\ntwo', lastCell)).toThrow('fit within');
     expect(csvImportEdits('fits', lastCell).edits).toEqual({
-      Z1000: { value: "'fits" },
+      XFD100000: { value: "'fits" },
     });
   });
 

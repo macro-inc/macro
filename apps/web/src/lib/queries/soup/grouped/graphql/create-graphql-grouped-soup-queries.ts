@@ -62,6 +62,7 @@ type GraphqlGroupQuery = {
   data: Accessor<GroupQueryData | undefined>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
+  error: Accessor<Error | null>;
   fetchNextPage: () => Promise<void>;
   resetToInitialPage: () => void;
   dispose: () => void;
@@ -380,6 +381,7 @@ export function createGraphqlGroupedSoupQueries(
       return {
         key,
         data,
+        error: () => getContinuation()?.query.error ?? null,
         hasNextPage: () => {
           if (cachedMail()) return false;
           const current = getContinuation();

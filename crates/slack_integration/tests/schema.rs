@@ -85,8 +85,8 @@ fn mapping() -> String {
 
 fn message() -> String {
     format!(
-        "INSERT INTO comms_messages (id, channel_id, sender_id, content)
-             VALUES ('{MESSAGE}', '{CHANNEL}', 'macro|schema@example.com', 'Historical message')"
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content)
+             VALUES ('{MESSAGE}', 'channel', '{CHANNEL}', 'macro|schema@example.com', 'Historical message')"
     )
 }
 

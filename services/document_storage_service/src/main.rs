@@ -55,11 +55,7 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
-use collab_surface::{
-    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
-    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
-    outbound::surface_init::LexicalSyncSurfaceInitializer,
-};
+use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use config::{Config, Environment};
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -1414,20 +1410,18 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         ),
     );
+    let collab_surface_service = Arc::new(collab_surface::outbound::pg_collab_surface_service(
+        db.clone(),
+        lexical_client.as_ref().clone(),
+        sync_service_client.as_ref().clone(),
+        config.document_permission_jwt.as_ref().to_string(),
+    ));
+
     let initiative_service = Arc::new(
         InitiativeServiceImpl::new(
             PgInitiativeRepo::new(db.clone()),
-            initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
-                document_creator.clone(),
-                documents_hex::domain::purge::DocumentPurger::new(
-                    documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
-                        db.clone(),
-                    ),
-                    documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(
-                        sqs_client.clone(),
-                    ),
-                    macro_event_broker.clone(),
-                ),
+            initiative_description::InitiativeDescriptionSurfacesAdapter::new(
+                collab_surface_service.clone(),
             ),
             Arc::new(initiative::outbound::resources::ProjectResources::new(
                 properties_service.clone(),
@@ -1451,15 +1445,6 @@ async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
     ));
-
-    let collab_surface_service = CollabSurfaceServiceImpl::new(
-        Arc::new(PgCollabSurfaceRepo::new(db.clone())),
-        Arc::new(LexicalSyncSurfaceInitializer::new(
-            lexical_client.as_ref().clone(),
-            sync_service_client.as_ref().clone(),
-        )),
-        config.document_permission_jwt.as_ref().to_string(),
-    );
 
     // Individual initiative reads preserve read-after-write consistency when a
     // newly created project opens immediately. Lists retain the replica reader.
@@ -1871,7 +1856,7 @@ async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         collab_surface_state: CollabSurfaceRouterState::new(
-            Arc::new(collab_surface_service),
+            collab_surface_service,
             entity_access_service.clone(),
             authorization_state.clone(),
         ),

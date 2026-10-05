@@ -4922,6 +4922,16 @@
               }
             }
           },
+          "409": {
+            "description": "The surface id is already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "410": {
             "description": "The surface id was deleted and cannot be reused",
             "content": {
@@ -5060,6 +5070,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The surface is not initialized yet, or its id is in use",
             "content": {
               "application/json": {
                 "schema": {
@@ -12057,165 +12077,6 @@
         }
       }
     },
-    "/initiatives/{initiative_id}/tasks": {
-      "put": {
-        "tags": ["initiative"],
-        "summary": "Assign tasks the caller can edit.",
-        "operationId": "assign_initiative_tasks",
-        "parameters": [
-          {
-            "name": "initiative_id",
-            "in": "path",
-            "description": "Initiative identifier.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AssignTasksRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AssignTasksResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid credentials",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/initiatives/{initiative_id}/tasks/{task_id}": {
-      "delete": {
-        "tags": ["initiative"],
-        "summary": "Unassign one task the caller can edit.",
-        "operationId": "unassign_initiative_task",
-        "parameters": [
-          {
-            "name": "initiative_id",
-            "in": "path",
-            "description": "Initiative identifier.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "task_id",
-            "in": "path",
-            "description": "Task identifier.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericSuccessResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid credentials",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/instructions": {
       "get": {
         "tags": ["instructions::get_instructions"],
@@ -17775,60 +17636,6 @@
           }
         }
       },
-      "AssignTaskStatus": {
-        "type": "string",
-        "description": "Status written onto one assign result.",
-        "enum": [
-          "assigned",
-          "moved",
-          "notATask",
-          "notFound",
-          "skippedNoPermission"
-        ]
-      },
-      "AssignTasksRequest": {
-        "type": "object",
-        "description": "Assign-tasks HTTP body.",
-        "required": ["taskIds"],
-        "properties": {
-          "taskIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Task ids to assign, in request order."
-          }
-        }
-      },
-      "AssignTasksResponse": {
-        "type": "object",
-        "description": "Assign-tasks HTTP response.",
-        "required": ["results"],
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AssignTasksResult"
-            },
-            "description": "Outcomes in request order after dedupe."
-          }
-        }
-      },
-      "AssignTasksResult": {
-        "type": "object",
-        "description": "Per-task outcome of an assign call.",
-        "required": ["taskId", "status"],
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/AssignTaskStatus",
-            "description": "What happened to the task."
-          },
-          "taskId": {
-            "type": "string",
-            "description": "Task id this outcome describes."
-          }
-        }
-      },
       "AttachmentChange": {
         "oneOf": [
           {
@@ -22093,7 +21900,7 @@
         "properties": {
           "description": {
             "type": ["string", "null"],
-            "description": "Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor."
+            "description": "Initial markdown for the description surface. Not stored on the initiative; later\nedits happen in the collaborative description editor."
           },
           "memberIds": {
             "type": ["array", "null"],
@@ -23313,11 +23120,6 @@
           }
         ]
       },
-      "DescriptionDocumentId": {
-        "type": "string",
-        "format": "uuid",
-        "description": "Id of the markdown document that holds an initiative's description."
-      },
       "DocumentBasic": {
         "type": "object",
         "description": "Returns basic information of a document used for some db queries",
@@ -23603,6 +23405,17 @@
           "project_id": {
             "type": ["string", "null"],
             "description": "Project the document belonged to, when any."
+          },
+          "sub_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "Subtype captured before deletion, so consumers can distinguish tasks."
+              }
+            ]
           }
         }
       },
@@ -25929,6 +25742,7 @@
           "ps",
           "dxf",
           "dwg",
+          "fig",
           "stl",
           "obj",
           "fbx",
@@ -28048,7 +27862,6 @@
         "required": [
           "id",
           "name",
-          "descriptionDocumentId",
           "ownerId",
           "memberIds",
           "taskIds",
@@ -28062,10 +27875,6 @@
             "type": "string",
             "format": "date-time",
             "description": "When the initiative was created."
-          },
-          "descriptionDocumentId": {
-            "$ref": "#/components/schemas/DescriptionDocumentId",
-            "description": "The markdown document holding the description; open it in the editor."
           },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
@@ -28168,12 +27977,8 @@
       "InitiativeSummary": {
         "type": "object",
         "description": "List-row view of an initiative.",
-        "required": ["id", "name", "descriptionDocumentId", "updatedAt"],
+        "required": ["id", "name", "updatedAt"],
         "properties": {
-          "descriptionDocumentId": {
-            "$ref": "#/components/schemas/DescriptionDocumentId",
-            "description": "The markdown document holding the description; open it in the editor."
-          },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
             "description": "Opaque identifier."
@@ -29870,6 +29675,35 @@
               "type": {
                 "type": "string",
                 "enum": ["spreadsheet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.",
+            "required": ["pageId", "x", "y", "type"],
+            "properties": {
+              "nodeId": {
+                "type": ["string", "null"],
+                "description": "Layer the pin follows; absent or null for a pin on the bare canvas."
+              },
+              "pageId": {
+                "type": "string",
+                "description": "Page (canvas) the pin is on."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["fig"]
+              },
+              "x": {
+                "type": "number",
+                "format": "double",
+                "description": "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+              },
+              "y": {
+                "type": "number",
+                "format": "double",
+                "description": "Vertical offset, measured like `x`."
               }
             }
           }
@@ -34427,11 +34261,6 @@
                 "format": "date-time",
                 "description": "Creation timestamp."
               },
-              "descriptionDocumentId": {
-                "type": ["string", "null"],
-                "format": "uuid",
-                "description": "Document holding the initiative description."
-              },
               "id": {
                 "type": "string",
                 "format": "uuid",
@@ -36014,6 +35843,35 @@
                 "enum": ["spreadsheet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.",
+            "required": ["pageId", "x", "y", "type"],
+            "properties": {
+              "nodeId": {
+                "type": ["string", "null"],
+                "description": "Layer the pin follows; absent for a pin on the bare canvas."
+              },
+              "pageId": {
+                "type": "string",
+                "description": "Page (canvas) the pin is on."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["fig"]
+              },
+              "x": {
+                "type": "number",
+                "format": "double",
+                "description": "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+              },
+              "y": {
+                "type": "number",
+                "format": "double",
+                "description": "Vertical offset, measured like `x`."
+              }
+            }
           }
         ],
         "description": "A thread's location within its document. PDF geometry remains annotation-owned."
@@ -36681,7 +36539,7 @@
       },
       "UpdateInitiativeRequest": {
         "type": "object",
-        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.",
+        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its collab surface, not here.",
         "properties": {
           "memberIds": {
             "type": ["array", "null"],

@@ -22,7 +22,9 @@ use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{CollabSurface, CollabSurfaceError, SurfaceState};
+use crate::domain::models::{
+    CollabSurface, CollabSurfaceError, SurfaceOwnership, SurfaceState, surface_ownership,
+};
 use crate::domain::ports::CollabSurfaceService;
 
 /// Router state for collab-surface endpoints.
@@ -99,21 +101,6 @@ where
         .with_state(state)
 }
 
-/// Parent entity types a surface may attach to in v1.
-///
-/// `ChannelMessage` is deliberately absent: it has no access resolution in
-/// `entity_access` — a message-scoped surface attaches to its channel instead
-/// (the `Call → Channel` precedent). The rest are excluded until they have a
-/// surface story.
-const SUPPORTED_PARENT_TYPES: &[EntityType] = &[
-    EntityType::Document,
-    EntityType::Channel,
-    EntityType::Project,
-    EntityType::Chat,
-    EntityType::EmailThread,
-    EntityType::Call,
-];
-
 /// Request body for ensuring a collab surface.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -177,7 +164,7 @@ fn build_parent(
     entity_type: EntityType,
     entity_id: &str,
 ) -> Result<Entity<'static>, CollabSurfaceError> {
-    if !SUPPORTED_PARENT_TYPES.contains(&entity_type) {
+    if surface_ownership(entity_type) != Some(SurfaceOwnership::Callers) {
         return Err(CollabSurfaceError::BadRequest(format!(
             "unsupported parent entity type: {entity_type}"
         )));
@@ -271,6 +258,7 @@ where
         (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
         (status = 403, description = "No access to the parent entity", body = ErrorResponse),
         (status = 404, description = "The parent entity does not exist", body = ErrorResponse),
+        (status = 409, description = "The surface id is already in use", body = ErrorResponse),
         (status = 410, description = "The surface id was deleted and cannot be reused", body = ErrorResponse),
         (status = 422, description = "Malformed request body (plain text)"),
         (status = 500, body = ErrorResponse),
@@ -356,6 +344,7 @@ where
         (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, description = "The surface is not initialized yet, or its id is in use", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -431,6 +420,7 @@ impl IntoResponse for CollabSurfaceError {
                 StatusCode::NOT_FOUND
             }
             CollabSurfaceError::Gone => StatusCode::GONE,
+            CollabSurfaceError::IdReserved | CollabSurfaceError::NotReady => StatusCode::CONFLICT,
             CollabSurfaceError::BadRequest(_) => StatusCode::BAD_REQUEST,
             CollabSurfaceError::AccessDenied => StatusCode::FORBIDDEN,
             CollabSurfaceError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,

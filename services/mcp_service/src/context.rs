@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use ai_tools::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpScheduleContext,
-    NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpSnsEndpointManager,
+    ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -213,6 +213,11 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
+    let document_files = documents::outbound::s3_document_files::S3DocumentFiles::new(
+        db.clone(),
+        s3_client.clone(),
+        config.document_storage_bucket.as_ref(),
+    );
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
         config.document_storage_bucket.as_ref(),
@@ -302,7 +307,9 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             lexical_client.clone(),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_presentation_files(Arc::new(document_files.clone()))
+    .with_design_files(Arc::new(document_files));
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
         properties_service.clone(),
@@ -397,7 +404,6 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        side_effect_clients.sqs,
         side_effect_clients.macro_event_broker,
     );
 
@@ -469,7 +475,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         skill_tool_context,
-        schedule_tool_context: NoOpScheduleContext,
+        schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         admission: ai_billing::composition::pg_admission_service(
             db.clone(),

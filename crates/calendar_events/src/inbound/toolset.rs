@@ -6,6 +6,7 @@
 //! policy live behind those ports, exactly as for the HTTP routers.
 
 mod create_calendar_event;
+mod create_confirmed_calendar_event;
 mod delete_calendar_event;
 mod list_calendar_events;
 mod list_calendars;
@@ -31,6 +32,7 @@ use crate::domain::{
 };
 
 pub use create_calendar_event::CreateCalendarEvent;
+pub use create_confirmed_calendar_event::CreateConfirmedCalendarEvent;
 pub use delete_calendar_event::{
     DeleteCalendarEvent, DeleteCalendarEventResponse, DeletionScopeInput,
 };
@@ -93,16 +95,20 @@ where
         .add_tool::<DeleteCalendarEvent, CalendarToolContext<M, O>>()
 }
 
-/// Create the AI chat calendar toolset.
-///
-/// Event creation is deferred until the user reviews and executes the pending
-/// call. Reads, updates, and deletions continue to execute in the agent loop.
+/// The full calendar toolset, for hosts that finish user tools: the deferring
+/// `CreateCalendarEvent`, which a composer or review card confirms, beside
+/// `CreateConfirmedCalendarEvent`, which creates on a confirmation the user
+/// already gave in conversation. Both are always registered; the prompt
+/// decides which fits the surface the prompt came from. Reads, updates, and
+/// deletions execute in the agent loop.
 pub fn calendar_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
 {
-    shared_calendar_toolset().add_user_tool::<CreateCalendarEvent, CalendarToolContext<M, O>>()
+    shared_calendar_toolset()
+        .add_user_tool::<CreateCalendarEvent, CalendarToolContext<M, O>>()
+        .add_tool::<CreateConfirmedCalendarEvent, CalendarToolContext<M, O>>()
 }
 
 /// Create the calendar toolset for hosts without a composer — the MCP server
@@ -110,7 +116,9 @@ where
 ///
 /// These hosts receive the real create tool and apply their own confirmation
 /// policy from its annotations rather than the chat-specific deferred flow,
-/// which only the chat frontend can finish.
+/// which only the chat frontend can finish. `CreateConfirmedCalendarEvent`
+/// is left out: it is for the in-process agent's conversation turns, and
+/// here the plain tool already creates directly.
 pub fn mcp_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
 where
     M: CalendarMutationService,

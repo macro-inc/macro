@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  "crates/routines",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/agent_fold",
   "crates/agent_harness",
@@ -72,7 +73,7 @@ members = [
   "crates/harnesses",
   "crates/import",
   "crates/initiative",
-  "crates/initiative_documents",
+  "crates/initiative_description",
   "crates/item_filter_index",
   "crates/integration_tests/local_e2e",
   "crates/loops_client",
@@ -91,6 +92,9 @@ members = [
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/docx_engine",
+  "crates/fig_engine",
+  "crates/pptx_engine",
   "crates/predicate_index",
   "crates/prompt",
   "crates/properties_service",
@@ -205,12 +209,14 @@ axum-extra = { version = "0.10" }
 backoff = { version = "0.4.0", features = ["tokio"] }
 base64 = "0.22.1"
 bebop = "3.1.3"
+brotli-decompressor = { version = "5.0.3", default-features = false, features = ["std"] }
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 constant_time_eq = "0.3.1"
+console_error_panic_hook = "0.1.7"
 crossterm = "0.28"
 cookie = "0.18.1"
 cron = "0.16.0"
@@ -225,6 +231,7 @@ eventsource-stream = "0.2.3"
 fractional_index = { version = "2.0.2", default-features = false }
 futures = "0.3.31"
 getrandom = "0.3"
+gif = { version = "0.14", default-features = false, features = ["std"] }
 glob = "0.3.3"
 # Pinned engine for the generated dependency artifacts (used by the xtask
 # graph/deps commands). This version lives in Cargo.lock, so dev machines and
@@ -235,9 +242,11 @@ hex = "0.4.3"
 hmac = "0.12.1"
 encoding_rs = "0.8"
 http = "1"
+http-body = "1.0.1"
 http-body-util = "0.1.2"
 httpdate = "1"
 image = "0.25"
+image-webp = "0.2"
 indexmap = "2"
 infer = "0.19.0"
 indoc = "2"
@@ -260,6 +269,7 @@ log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
 lru = "0.16"
+miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nom = "8"
 opus-pure = "0.2.1"
@@ -281,6 +291,7 @@ pdfium-render = { version = "0.8.37", default-features = false, features = [
   "thread_safe",
 ] }
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
+png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 quote = "1"
@@ -304,6 +315,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ] }
 rmcp = "1.6.0"
+skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
@@ -313,6 +325,7 @@ rustix = { version = "1", default-features = false, features = ["process", "std"
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
+ruzstd = { version = "0.8", default-features = false, features = ["std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
@@ -343,6 +356,7 @@ symphonia = { version = "0.6.1", default-features = false, features = [
 tempfile = "3"
 thiserror = "2.0.0"
 time = "0.3.37"
+tiny-skia = { version = "0.11.4", default-features = false, features = ["simd", "std"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-retry = { version = "0.3.2", default-features = false }
 tokio-stream = { version = "0.1.17" }
@@ -380,6 +394,8 @@ utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 wiremock = "0.6.5"
 zeroize = "1.8.2"
+zune-core = "0.5"
+zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"
@@ -431,3 +447,10 @@ strip = "none"
 inherits = "release"
 lto = true
 opt-level = "s"
+
+# The fig engine's browser build (apps/web `build-fig-engine-wasm`): one
+# codegen unit and full LTO, so its rasterizing loops inline across crates.
+[profile.fig-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

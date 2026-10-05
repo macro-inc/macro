@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE initiative\n        SET\n            name = CASE WHEN $2 THEN $3 ELSE name END,\n            updated_at = now()\n        WHERE id = $1\n        RETURNING share_permission_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "share_permission_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d46ff8e9ada23ca4eb50981458931bae57f6b6f7495069b6fa0d6c4f8c67dcf0"
+}

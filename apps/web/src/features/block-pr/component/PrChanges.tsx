@@ -16,13 +16,21 @@ import { createSignal, type ParentProps } from 'solid-js';
 import { createPrChangesSource } from '../data/pr-changes';
 
 export function PrChangesProvider(
-  props: ParentProps<{ foreignEntityId: string; pullRequestUrl?: string }>
+  props: ParentProps<{
+    foreignEntityId: string;
+    pullRequestUrl?: string;
+    pullRequestTitle?: string;
+    pullRequestChangeCounts?: { additions: number; deletions: number };
+  }>
 ) {
   const scopeKey = () => `pr:${props.foreignEntityId}`;
   const source = createPrChangesSource(() => props.foreignEntityId);
   const host: ChangesHost = {
     scopeKey,
     pullRequestUrl: () => props.pullRequestUrl,
+    pullRequestTitle: () => props.pullRequestTitle,
+    // Missing GitHub totals never fall back to captured estimates.
+    pullRequestChangeCounts: () => props.pullRequestChangeCounts,
     openExternal: openExternalUrl,
     copyText,
     notify: (message, tone) => {

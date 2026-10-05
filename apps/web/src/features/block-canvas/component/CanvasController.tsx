@@ -859,9 +859,9 @@ export function CanvasController(props: ParentProps) {
     if (entityType === 'channel_message' || entityType === 'channel_thread') {
       return;
     }
-    // Automation and foreign entities aren't yet renderable as canvas mentions.
+    // Routine and foreign entities aren't yet renderable as canvas mentions.
     if (
-      entityType === 'automation' ||
+      entityType === 'routine' ||
       entityType === 'foreign' ||
       entityType === 'initiative'
     )

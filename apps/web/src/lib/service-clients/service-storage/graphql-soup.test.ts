@@ -19,7 +19,6 @@ it('preserves initiative identity, properties, and metadata separately from fold
       id: 'initiative',
       entityType: 'INITIATIVE',
       displayName: 'Launch',
-      descriptionDocumentId: 'description',
       metadata: {
         ownerId: 'owner',
         createdAt: '2026-09-01',
@@ -42,7 +41,6 @@ it('preserves initiative identity, properties, and metadata separately from fold
       id: 'initiative',
       name: 'Launch',
       ownerId: 'owner',
-      descriptionDocumentId: 'description',
       properties: [],
       updatedAt: '2026-09-26',
     },

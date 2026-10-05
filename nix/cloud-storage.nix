@@ -53,8 +53,10 @@
       sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
       pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
       # `.sh` is required so `include_str!` of
-      # `crates/agent_harness/container/ensure_ready.sh` survives the prune.
-      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql|sh)$" path != null;
+      # `crates/agent_harness/container/ensure_ready.sh` survives the prune;
+      # `.ttf` and `.xml` for the fonts and preset shape definitions that
+      # `crates/pptx_engine` embeds with `include_bytes!`.
+      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql|sh|ttf|xml)$" path != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;

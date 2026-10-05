@@ -1,6 +1,7 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
@@ -8,7 +9,6 @@ import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/cons
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { setAutomationComposerOpen } from '@block-automation/component';
 import {
   endTrackedDocumentSpan,
   registerDocumentSpan,
@@ -23,6 +23,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   enableChatV3Agents,
   enableDatabases,
+  enableFigViewer,
   enableProjects,
   enableReminders,
   enableSnippets,
@@ -309,6 +310,16 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'fig':
+      if (!isFeatureEnabled(enableFigViewer)) return;
+      createBlock({
+        blockName: 'fig',
+        loading: true,
+        createFn: () =>
+          createFigDocument({ projectId: options.projectId, source }),
+        shouldInsert,
+      });
+      return;
     case 'canvas':
       createBlock({
         blockName: 'canvas',
@@ -447,9 +458,8 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
-    case 'automation':
-      setCreateMenuOpen(false, false);
-      setAutomationComposerOpen(true, false);
+    case 'routine':
+      createComponent({ componentId: 'routine-compose', asPopover: true });
       return;
     case 'skill':
       createComponent({
@@ -541,16 +551,16 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Automation',
-    icon: getIconConfig('automation').icon,
-    description: 'Create automation',
-    launcherHint: 'Scheduled agent runs',
-    keywords: ['new', 'make', 'add', 'schedule', 'agent'],
-    blockName: 'automation',
-    hotkeyToken: TOKENS.create.automation,
+    label: 'Routine',
+    icon: getIconConfig('routine').icon,
+    description: 'Run a model or agent on a schedule or Macro activity',
+    launcherHint: 'Schedules and activity triggers',
+    keywords: ['new', 'make', 'add', 'schedule', 'agent', 'event', 'trigger'],
+    blockName: 'routine',
+    hotkeyToken: TOKENS.create.routine,
     hotkey: 'u',
     keyDownHandler: () => {
-      runCreateAction('automation');
+      runCreateAction('routine');
       return true;
     },
   },
@@ -722,6 +732,22 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    label: 'Design',
+    enabled: () => isFeatureEnabled(enableFigViewer),
+    icon: getIconConfig('fig').icon,
+    description: 'Create design',
+    launcherHint: 'Figma-compatible canvas for UI and graphics',
+    keywords: ['new', 'make', 'add', 'design', 'figma', 'mockup', 'ui'],
+    blockName: 'fig',
+    hotkeyToken: TOKENS.create.design,
+    altHotkeyToken: TOKENS.create.designNewSplit,
+    hotkey: 'i',
+    keyDownHandler: () => {
+      runCreateAction('fig', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
     label: 'Spreadsheet',
     enabled: isSpreadsheetEnabledForCurrentUser,
     icon: getIconConfig('spreadsheet').icon,
@@ -803,10 +829,12 @@ export function useCreateMenuBlocks(
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
   const projectsFlag = useFeatureFlag(enableProjects);
   const databasesFlag = useFeatureFlag(enableDatabases);
+  const figFlag = useFeatureFlag(enableFigViewer);
   return createMemo(() => {
     remindersFlag();
     agentsFlag();
     databasesFlag();
+    figFlag();
     return (source() ?? commands).filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;

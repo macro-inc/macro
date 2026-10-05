@@ -31,6 +31,9 @@ type SheetActionsSource = {
   canEdit: Accessor<boolean>;
   busy: Accessor<boolean>;
   rowCount: Accessor<number>;
+  columnCount?: Accessor<number>;
+  /** Changes whenever any cell changes; cells are updated in place. */
+  revision: Accessor<number>;
   setCells: (edits: SpreadsheetCellEdits) => void;
   appendRows: (count: number) => void;
   copyCells: (copies: CellCopy[]) => Promise<SpreadsheetCellEdits>;
@@ -141,6 +144,7 @@ export function createSheetActions(
     const revision = ++operation;
     const gridRevision = grid.operationRevision();
     const before = source.cells();
+    const beforeRevision = source.revision();
     setPending(true);
     setNotice('Sorting selected range…');
     try {
@@ -152,7 +156,10 @@ export function createSheetActions(
             ? selection
             : {
                 anchor: { row: 0, column: 0 },
-                focus: { row: source.rowCount() - 1, column: 25 },
+                focus: {
+                  row: source.rowCount() - 1,
+                  column: (source.columnCount?.() ?? GRID_COLUMNS) - 1,
+                },
               },
           descending,
           sheetColumn
@@ -163,7 +170,7 @@ export function createSheetActions(
         !source.canEdit() ||
         gridRevision !== grid.operationRevision() ||
         grid.editing() ||
-        before !== source.cells() ||
+        beforeRevision !== source.revision() ||
         selection !== grid.selection()
       ) {
         setNotice(
@@ -228,7 +235,7 @@ export function createSheetActions(
   async function copy(cut = false) {
     grid.commit();
     const gridRevision = grid.operationRevision();
-    const before = source.cells();
+    const before = source.revision();
     const selection = grid.selection();
     const text = cut ? grid.copy() : displayedCopy();
     const metadata = grid.copyMetadata(cut);
@@ -240,7 +247,7 @@ export function createSheetActions(
           !source.canEdit() ||
           gridRevision !== grid.operationRevision() ||
           grid.editing() ||
-          before !== source.cells() ||
+          before !== source.revision() ||
           selection !== grid.selection()
         )
           return;
@@ -268,7 +275,7 @@ export function createSheetActions(
     if (!source.canEdit()) return;
     grid.commit();
     const gridRevision = grid.operationRevision();
-    const before = source.cells();
+    const before = source.revision();
     const rows = source.rowCount();
     const selection = grid.selection();
     try {
@@ -277,7 +284,7 @@ export function createSheetActions(
         !source.canEdit() ||
         gridRevision !== grid.operationRevision() ||
         grid.editing() ||
-        before !== source.cells() ||
+        before !== source.revision() ||
         rows !== source.rowCount() ||
         grid.selection() !== selection
       )
@@ -309,7 +316,10 @@ export function createSheetActions(
   function selectAll() {
     grid.selectRange(
       { row: 0, column: 0 },
-      { row: source.rowCount() - 1, column: GRID_COLUMNS - 1 }
+      {
+        row: source.rowCount() - 1,
+        column: (source.columnCount?.() ?? GRID_COLUMNS) - 1,
+      }
     );
   }
 

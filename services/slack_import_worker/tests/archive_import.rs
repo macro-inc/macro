@@ -724,7 +724,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
                     "unproven domain must stay external"
                 );
                 let replies = sqlx::query_scalar!(
-                    "SELECT thread_id FROM comms_messages WHERE channel_id = $1 AND id <> $2",
+                    "SELECT thread_id FROM comms_messages WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text AND id <> $2",
                     targets[index],
                     root
                 )

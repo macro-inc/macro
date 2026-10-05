@@ -11741,6 +11741,7 @@ export const editDocumentBody = zod
                     'ps',
                     'dxf',
                     'dwg',
+                    'fig',
                     'stl',
                     'obj',
                     'fbx',
@@ -14487,11 +14488,6 @@ export const listInitiativesResponse = zod
       .array(
         zod
           .object({
-            descriptionDocumentId: zod
-              .uuid()
-              .describe(
-                "Id of the markdown document that holds an initiative's description."
-              ),
             id: zod
               .uuid()
               .describe(
@@ -14517,7 +14513,7 @@ export const createInitiativeBody = zod
       .string()
       .nullish()
       .describe(
-        'Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor.'
+        'Initial markdown for the description surface. Not stored on the initiative; later\nedits happen in the collaborative description editor.'
       ),
     memberIds: zod
       .array(zod.string())
@@ -14692,11 +14688,6 @@ export const createInitiativeResponse = zod
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
-    descriptionDocumentId: zod
-      .uuid()
-      .describe(
-        "Id of the markdown document that holds an initiative's description."
-      ),
     id: zod
       .uuid()
       .describe(
@@ -14774,11 +14765,6 @@ export const getInitiativeResponse = zod
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
-    descriptionDocumentId: zod
-      .uuid()
-      .describe(
-        "Id of the markdown document that holds an initiative's description."
-      ),
     id: zod
       .uuid()
       .describe(
@@ -14927,7 +14913,7 @@ export const updateInitiativeBody = zod
       .optional(),
   })
   .describe(
-    'Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.'
+    'Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its collab surface, not here.'
   );
 
 export const updateInitiativeResponse = zod
@@ -14935,11 +14921,6 @@ export const updateInitiativeResponse = zod
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
-    descriptionDocumentId: zod
-      .uuid()
-      .describe(
-        "Id of the markdown document that holds an initiative's description."
-      ),
     id: zod
       .uuid()
       .describe(
@@ -15004,56 +14985,6 @@ export const updateInitiativeResponse = zod
   .describe(
     'Full initiative returned to a caller, including members, tasks, and share state.'
   );
-
-/**
- * @summary Assign tasks the caller can edit.
- */
-export const assignInitiativeTasksParams = zod.object({
-  initiative_id: zod.string().describe('Initiative identifier.'),
-});
-
-export const assignInitiativeTasksBody = zod
-  .object({
-    taskIds: zod
-      .array(zod.string())
-      .describe('Task ids to assign, in request order.'),
-  })
-  .describe('Assign-tasks HTTP body.');
-
-export const assignInitiativeTasksResponse = zod
-  .object({
-    results: zod
-      .array(
-        zod
-          .object({
-            status: zod
-              .enum([
-                'assigned',
-                'moved',
-                'notATask',
-                'notFound',
-                'skippedNoPermission',
-              ])
-              .describe('Status written onto one assign result.'),
-            taskId: zod.string().describe('Task id this outcome describes.'),
-          })
-          .describe('Per-task outcome of an assign call.')
-      )
-      .describe('Outcomes in request order after dedupe.'),
-  })
-  .describe('Assign-tasks HTTP response.');
-
-/**
- * @summary Unassign one task the caller can edit.
- */
-export const unassignInitiativeTaskParams = zod.object({
-  initiative_id: zod.string().describe('Initiative identifier.'),
-  task_id: zod.string().describe('Task identifier.'),
-});
-
-export const unassignInitiativeTaskResponse = zod.object({
-  success: zod.boolean().describe('Indicates if the request was successful'),
-});
 
 /**
  * @summary Gets the instructions document for the current user
@@ -16266,10 +16197,6 @@ export const getItemsSoupResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
-                    descriptionDocumentId: zod
-                      .uuid()
-                      .nullish()
-                      .describe('Document holding the initiative description.'),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -21027,10 +20954,6 @@ export const postItemsSoupResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
-                    descriptionDocumentId: zod
-                      .uuid()
-                      .nullish()
-                      .describe('Document holding the initiative description.'),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -25200,10 +25123,6 @@ export const postItemsSoupAstResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
-                    descriptionDocumentId: zod
-                      .uuid()
-                      .nullish()
-                      .describe('Document holding the initiative description.'),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -29655,12 +29574,6 @@ export const postItemsSoupAstGroupedResponse = zod
                           createdAt: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
-                          descriptionDocumentId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'Document holding the initiative description.'
-                            ),
                           id: zod.uuid().describe('Initiative identifier.'),
                           name: zod
                             .string()
@@ -33828,12 +33741,6 @@ export const postItemsSoupAstGroupedResponse = zod
                           createdAt: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
-                          descriptionDocumentId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'Document holding the initiative description.'
-                            ),
                           id: zod.uuid().describe('Initiative identifier.'),
                           name: zod
                             .string()
@@ -37067,6 +36974,32 @@ export const messageTimelineResponse = zod
                             .describe(
                               'A cell or rectangular range in a native spreadsheet.'
                             ),
+                          zod
+                            .object({
+                              nodeId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Layer the pin follows; absent for a pin on the bare canvas.'
+                                ),
+                              pageId: zod
+                                .string()
+                                .describe('Page (canvas) the pin is on.'),
+                              type: zod.enum(['fig']),
+                              x: zod
+                                .number()
+                                .describe(
+                                  "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                                ),
+                              y: zod
+                                .number()
+                                .describe(
+                                  'Vertical offset, measured like `x`.'
+                                ),
+                            })
+                            .describe(
+                              'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+                            ),
                         ])
                         .describe(
                           "A thread's location within its document. PDF geometry remains annotation-owned."
@@ -37440,6 +37373,26 @@ export const entityMessageCreateBody = zod
                 type: zod.enum(['spreadsheet']),
               })
               .describe('A cell or rectangular range in a native spreadsheet.'),
+            zod
+              .object({
+                nodeId: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Layer the pin follows; absent or null for a pin on the bare canvas.'
+                  ),
+                pageId: zod.string().describe('Page (canvas) the pin is on.'),
+                type: zod.enum(['fig']),
+                x: zod
+                  .number()
+                  .describe(
+                    "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                  ),
+                y: zod.number().describe('Vertical offset, measured like `x`.'),
+              })
+              .describe(
+                'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+              ),
           ])
           .describe('Location supplied when creating a document discussion.'),
       ])
@@ -38938,6 +38891,30 @@ export const entityMessageGetThreadResponse = zod
                   .describe(
                     'A cell or rectangular range in a native spreadsheet.'
                   ),
+                zod
+                  .object({
+                    nodeId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Layer the pin follows; absent for a pin on the bare canvas.'
+                      ),
+                    pageId: zod
+                      .string()
+                      .describe('Page (canvas) the pin is on.'),
+                    type: zod.enum(['fig']),
+                    x: zod
+                      .number()
+                      .describe(
+                        "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                      ),
+                    y: zod
+                      .number()
+                      .describe('Vertical offset, measured like `x`.'),
+                  })
+                  .describe(
+                    'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+                  ),
               ])
               .describe(
                 "A thread's location within its document. PDF geometry remains annotation-owned."
@@ -39044,6 +39021,26 @@ export const entityMessageDeleteThreadResponse = zod
                 type: zod.enum(['spreadsheet']),
               })
               .describe('A cell or rectangular range in a native spreadsheet.'),
+            zod
+              .object({
+                nodeId: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Layer the pin follows; absent for a pin on the bare canvas.'
+                  ),
+                pageId: zod.string().describe('Page (canvas) the pin is on.'),
+                type: zod.enum(['fig']),
+                x: zod
+                  .number()
+                  .describe(
+                    "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                  ),
+                y: zod.number().describe('Vertical offset, measured like `x`.'),
+              })
+              .describe(
+                'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+              ),
           ])
           .describe(
             "A thread's location within its document. PDF geometry remains annotation-owned."
@@ -39163,6 +39160,26 @@ export const entityMessagePatchThreadResponse = zod
                 type: zod.enum(['spreadsheet']),
               })
               .describe('A cell or rectangular range in a native spreadsheet.'),
+            zod
+              .object({
+                nodeId: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Layer the pin follows; absent for a pin on the bare canvas.'
+                  ),
+                pageId: zod.string().describe('Page (canvas) the pin is on.'),
+                type: zod.enum(['fig']),
+                x: zod
+                  .number()
+                  .describe(
+                    "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                  ),
+                y: zod.number().describe('Vertical offset, measured like `x`.'),
+              })
+              .describe(
+                'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+              ),
           ])
           .describe(
             "A thread's location within its document. PDF geometry remains annotation-owned."
@@ -40155,6 +40172,7 @@ export const uploadFolderHandlerBody = zod.object({
                 'ps',
                 'dxf',
                 'dwg',
+                'fig',
                 'stl',
                 'obj',
                 'fbx',
@@ -40650,6 +40668,7 @@ export const uploadFolderHandlerResponse = zod.object({
                     'ps',
                     'dxf',
                     'dwg',
+                    'fig',
                     'stl',
                     'obj',
                     'fbx',

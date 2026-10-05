@@ -12,13 +12,15 @@ export type DemoMention = {
 
 /** The same fictional reference set is available in every writable demo. */
 export const demoMentions: DemoMention[] = [
-  ...(['julia', 'teo', 'jacob', 'valentina', 'gabriel'] as const).map((id) => ({
-    id,
-    label: homepagePeople[id].name,
-    kind: 'person' as const,
-    photo: homepagePeople[id].photo,
-    shortName: homepagePeople[id].shortName,
-  })),
+  ...(['julia', 'teo', 'jacob', 'valentina', 'gabriel', 'macro'] as const).map(
+    (id) => ({
+      id,
+      label: homepagePeople[id].name,
+      kind: 'person' as const,
+      photo: homepagePeople[id].photo,
+      shortName: homepagePeople[id].shortName,
+    })
+  ),
   { id: 'plan', label: 'Q3 launch plan', kind: 'document' },
   {
     id: 'announcement',

@@ -144,6 +144,14 @@ impl AgentSessionNotificationRecipient for Controls {
     ) -> SessionResult<()> {
         panic!("not a routine capability")
     }
+    async fn steer_queued_control(
+        &self,
+        _: AgentSessionId,
+        _: AgentActionId,
+        _: Option<MacroUserIdStr<'static>>,
+    ) -> SessionResult<()> {
+        panic!("not a routine capability")
+    }
     async fn set_sandbox_size(&self, _: AgentSessionId, _: SandboxSize) -> SessionResult<()> {
         panic!("not a routine capability")
     }

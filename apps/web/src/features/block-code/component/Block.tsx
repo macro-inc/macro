@@ -16,6 +16,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
 import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
@@ -77,11 +78,7 @@ export default function BlockCode() {
                   />
                 }
               >
-                <Suspense
-                  fallback={
-                    <div class="p-6 text-ink-muted">Opening spreadsheet…</div>
-                  }
-                >
+                <Suspense fallback={<SpreadsheetSkeleton />}>
                   <UploadedWorkbook />
                 </Suspense>
               </Show>

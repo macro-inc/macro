@@ -71,11 +71,7 @@ use agent_session::{
     domain::search::{AgentSessionSearchMetadataService, AgentSessionSearchMetadataServiceImpl},
     outbound::postgres::PgAgentSessionRepo,
 };
-use collab_surface::{
-    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
-    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
-    outbound::surface_init::LexicalSyncSurfaceInitializer,
-};
+use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use databases::{
     inbound::axum_router::DatabasesRouterState,
     outbound::gateway_event_publisher::GatewayTableEventPublisher, wiring::PgDatabasesService,
@@ -638,30 +634,20 @@ pub(crate) type RemindersServiceType =
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
-pub(crate) type InitiativeDescriptionDocumentsType =
-    initiative_documents::InitiativeDescriptionDocumentsAdapter<
-        Arc<DocumentService>,
-        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
-        documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
-        documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
-        documents_hex::domain::purge::DocumentPurger<
-            documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository,
-            documents_hex::outbound::document_purge::SqsDocumentPurgeQueue,
-            DssEventBroker,
-        >,
-    >;
+/// Initiative description surfaces, backed by the shared collab-surface service.
+pub(crate) type InitiativeDescriptionSurfacesType =
+    initiative_description::InitiativeDescriptionSurfacesAdapter<CollabSurfaceServiceType>;
 
 /// Type alias for the initiative service.
 pub(crate) type InitiativeServiceType =
-    InitiativeServiceImpl<PgInitiativeRepo, InitiativeDescriptionDocumentsType>;
+    InitiativeServiceImpl<PgInitiativeRepo, InitiativeDescriptionSurfacesType>;
 
 /// Type alias for the initiative router state.
 pub(crate) type DssInitiativeState =
     InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the collab-surface service.
-pub(crate) type CollabSurfaceServiceType =
-    CollabSurfaceServiceImpl<PgCollabSurfaceRepo, LexicalSyncSurfaceInitializer>;
+pub(crate) type CollabSurfaceServiceType = collab_surface::outbound::PgCollabSurfaceService;
 
 /// Type alias for the collab-surface router state.
 pub(crate) type DssCollabSurfaceState =

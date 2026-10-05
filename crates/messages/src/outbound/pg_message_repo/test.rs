@@ -4,6 +4,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 const USER: &str = "macro|message-test@example.com";
 
 mod initiative;
+mod schema_drop;
 
 async fn setup(pool: &PgPool) {
     let user_id = macro_uuid::generate_uuid_v7();
@@ -481,10 +482,14 @@ async fn pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable(p
         height_pct: 0.05,
     });
     let root = repo.create(create).await.unwrap();
-    let saved = sqlx::query!(r#"SELECT root_id, "threadId" AS thread_id, "xPct" AS x FROM "PdfPlaceableCommentAnchor" WHERE uuid = $1"#, anchor_id)
-        .fetch_one(&pool).await.unwrap();
-    assert_eq!(saved.root_id, Some(root.id));
-    assert_eq!(saved.thread_id, None);
+    let saved = sqlx::query!(
+        r#"SELECT root_id, "xPct" AS x FROM "PdfPlaceableCommentAnchor" WHERE uuid = $1"#,
+        anchor_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(saved.root_id, root.id);
     assert_eq!(saved.x, 0.2);
     repo.delete(&root.parent, root.id).await.unwrap();
     assert_eq!(
@@ -529,18 +534,22 @@ async fn highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_h
         .is_empty()
     );
     create.parent = MessageParent::parse("document", "message-doc-a").unwrap();
-    let root = repo.create(create).await.unwrap();
+    let root = repo.create(create.clone()).await.unwrap();
+    // The root identity alone prevents a second discussion from stealing a highlight.
+    assert!(repo.create(create.clone()).await.is_err());
     repo.delete_thread(&root.parent, root.id).await.unwrap();
     let remaining = sqlx::query!(
-        r#"SELECT root_id, "threadId" AS thread_id, text FROM "PdfHighlightAnchor" WHERE uuid = $1"#,
+        r#"SELECT root_id, text FROM "PdfHighlightAnchor" WHERE uuid = $1"#,
         anchor_id
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     assert!(remaining.root_id.is_none());
-    assert!(remaining.thread_id.is_none());
     assert_eq!(remaining.text, "selected text");
+    // Deleting a discussion releases its highlight for a new discussion.
+    let replacement = repo.create(create).await.unwrap();
+    assert_ne!(replacement.id, root.id);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -568,7 +577,7 @@ async fn placeable_anchor_creation_is_atomic_with_its_root(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(anchored.root_id, Some(root.id));
+    assert_eq!(anchored.root_id, root.id);
 
     // Reusing the annotation id fails inside the transaction, so neither the
     // second root nor its thread row survive.
@@ -618,9 +627,7 @@ async fn roots_get_thread_rows_without_the_bookkeeping_trigger(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn channel_rows_get_the_legacy_channel_column_from_the_shim_and_attachments_do_not(
-    pool: PgPool,
-) {
+async fn channel_and_document_attachments_use_message_parent_identity(pool: PgPool) {
     setup(&pool).await;
     let channel = macro_uuid::generate_uuid_v7();
     sqlx::query!(
@@ -646,7 +653,7 @@ async fn channel_rows_get_the_legacy_channel_column_from_the_shim_and_attachment
     document_post.input.attachments.push(attachment);
     let document_message = repo.create(document_post).await.unwrap();
     let columns = sqlx::query!(
-        r#"SELECT m.id, m.channel_id, a.channel_id AS attachment_channel_id
+        r#"SELECT m.id, m.parent_entity_type, m.parent_entity_id, a.entity_id
            FROM comms_messages m JOIN comms_attachments a ON a.message_id = m.id
            WHERE m.id = ANY($1) ORDER BY m.created_at"#,
         &[channel_message.id, document_message.id]
@@ -654,10 +661,11 @@ async fn channel_rows_get_the_legacy_channel_column_from_the_shim_and_attachment
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(columns[0].channel_id, Some(channel));
-    assert_eq!(columns[0].attachment_channel_id, None);
-    assert_eq!(columns[1].channel_id, None);
-    assert_eq!(columns[1].attachment_channel_id, None);
+    assert_eq!(columns[0].parent_entity_type, "channel");
+    assert_eq!(columns[0].parent_entity_id, channel.to_string());
+    assert_eq!(columns[1].parent_entity_type, "document");
+    assert_eq!(columns[1].parent_entity_id, "message-doc-a");
+    assert!(columns.iter().all(|row| row.entity_id == "message-doc-b"));
 }
 
 #[cfg(feature = "delivery")]
@@ -1356,6 +1364,90 @@ async fn spreadsheet_threads_round_trip_resolve_and_delete(pool: PgPool) {
             .items
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fig_threads_round_trip_on_layers_and_the_canvas(pool: PgPool) {
+    // The repository stores what the service validated; the service owns the
+    // design-file check, so the document's file type does not matter here.
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let mut threads = Vec::new();
+    for (text, node_id, x, y) in [
+        ("On the button", Some("12:34"), 18.5, -4.25),
+        ("On the canvas", None, 1024.0, 768.0),
+    ] {
+        let mut create = command("message-doc-a", None, text);
+        create.input.anchor = Some(NewThreadAnchor::Fig {
+            page_id: "0:1".into(),
+            node_id: node_id.map(str::to_owned),
+            x,
+            y,
+        });
+        let anchor = create.input.anchor.as_ref().unwrap().reference();
+        let root = repo.create(create).await.unwrap();
+        let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
+        assert_eq!(state.anchor.as_ref(), Some(&anchor));
+        threads.push((root, anchor));
+    }
+    let stored = sqlx::query_scalar!(
+        r#"SELECT anchor AS "anchor!" FROM comms_message_threads WHERE root_id = $1"#,
+        threads[1].0.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored,
+        serde_json::json!({
+            "type": "fig", "pageId": "0:1", "nodeId": null, "x": 1024.0, "y": 768.0
+        })
+    );
+
+    let (root, anchor) = &threads[0];
+    repo.create(command("message-doc-a", Some(root.id), "Fixed"))
+        .await
+        .unwrap();
+    let page = repo
+        .timeline(
+            &root.parent,
+            MessageTimelineQuery {
+                anchored: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 2);
+    let item = page
+        .items
+        .iter()
+        .find(|item| item.message.id == root.id)
+        .unwrap();
+    assert_eq!(item.state.anchor.as_ref(), Some(anchor));
+    assert_eq!(item.thread.reply_count, 1);
+    let state = repo
+        .patch_thread(
+            &root.parent,
+            root.id,
+            ThreadPatch {
+                resolved: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(state.resolved);
+    assert_eq!(state.anchor.as_ref(), Some(anchor));
+    let state = repo.delete_thread(&root.parent, root.id).await.unwrap();
+    assert!(state.deleted_at.is_some());
+    let remaining = repo
+        .timeline(&root.parent, MessageTimelineQuery::default())
+        .await
+        .unwrap()
+        .items;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].state.anchor.as_ref(), Some(&threads[1].1));
 }
 
 async fn setup_call_chat(pool: &PgPool) -> Uuid {

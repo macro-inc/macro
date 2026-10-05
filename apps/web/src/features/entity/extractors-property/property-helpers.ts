@@ -337,6 +337,46 @@ export function buildCompanyDefaultProperties(): Property[] {
 }
 
 /**
+ * Placeholder for a task's Project property, which a task only carries once it
+ * joins a project. Lets the standard property row and editor show and set it;
+ * setting a value upserts the real row.
+ */
+export function buildTaskProjectDefaultProperty(): Property {
+  return soupPropertyToProperty({
+    id: `pending:${SYSTEM_PROPERTY_IDS.PROJECT}`,
+    definition: {
+      id: SYSTEM_PROPERTY_IDS.PROJECT,
+      display_name: 'Project',
+      data_type: 'ENTITY',
+      is_metadata: false,
+      is_multi_select: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: 'INITIATIVE',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
+    },
+  });
+}
+
+/**
+ * A task's key properties followed by its Project, or the Project placeholder
+ * when the task isn't in a project.
+ */
+export function withTaskProject(
+  keyProperties: Property[],
+  properties: Property[]
+): Property[] {
+  return [
+    ...keyProperties,
+    properties.find(
+      (property) =>
+        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+    ) ?? buildTaskProjectDefaultProperty(),
+  ];
+}
+
+/**
  * Sort properties by the defined sort order (status, priority, assignees first)
  */
 function sortProperties(properties: Property[]): Property[] {

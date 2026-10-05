@@ -214,12 +214,20 @@ function MacroToolIcon(props: { name: string }): JSX.Element {
       'ReadThread',
       'ReadChat',
       'ReadProject',
+      'ReadPresentation',
+      'ReadDesign',
+      'ReadWordDocument',
       () => <ReadIcon class="size-4" />
     )
     .with('WebFetch', () => <GlobeIcon class="size-4" />)
-    .with('EditDocument', 'EditSpreadsheet', 'CreateDocument', () => (
-      <PencilIcon class="size-4" />
-    ))
+    .with(
+      'EditDocument',
+      'EditSpreadsheet',
+      'EditPresentation',
+      'EditWordDocument',
+      'CreateDocument',
+      () => <PencilIcon class="size-4" />
+    )
     .with('ListEntities', 'ListSkills', 'ListCalendarEvents', () => (
       <ListIcon class="size-4" />
     ))

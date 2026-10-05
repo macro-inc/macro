@@ -8,10 +8,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import {
-  DocsDemoPointer,
-  DocsGraphicFrame,
-} from '../../../app/components/featureGraphics/DocsMarkdownScene';
+import { DocsGraphicFrame } from '../../../app/components/featureGraphics/DocsMarkdownScene';
 import {
   CRM_DEMO_COMPANIES,
   CRM_DEMO_DURATION,
@@ -22,6 +19,7 @@ import {
   CompanyKanbanCardSurface,
   CompanyKanbanColumn,
 } from './DemoCompanyKanban';
+import { DemoCursor } from './DemoCursor';
 import { CrmStageIcon } from './DemoStageIcon';
 import './homepage-crm.css';
 
@@ -184,16 +182,13 @@ export default function HomepageCrm(
                 <DemoCard company={moving()} />
               </div>
             </Show>
-            <div
+            <DemoCursor
               class="homepage-crm-cursor"
               style={{
                 transform: `translate(${frame().x}px, ${frame().y}px)`,
                 opacity: frame().opacity,
               }}
-            >
-              <DocsDemoPointer />
-              <span>Claude</span>
-            </div>
+            />
           </div>
         </div>
         <div class="homepage-crm-footer">

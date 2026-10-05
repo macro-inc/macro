@@ -831,10 +831,9 @@ export const authServiceClient = {
    * After Google consent, the user is redirected back to `originalUrl` with `?link_id=<uuid>`
    * appended; the frontend then calls `emailClient.init({ linkId })` to provision the inbox.
    *
-   * `scopes` selects which permissions the consent screen asks for. Only
-   * calendar entry points may request calendar access, and an inbox that is
-   * already connected should ask for `calendar` alone so the user isn't
-   * re-consenting to mailbox access they have already granted.
+   * `scopes` selects which permissions the consent screen asks for. A healthy
+   * mailbox adding calendar requests `calendar`; reconnecting an account that
+   * used calendar requests `gmail_and_calendar` to repair both capabilities.
    */
   async initGmailLink(
     originalUrl?: string,

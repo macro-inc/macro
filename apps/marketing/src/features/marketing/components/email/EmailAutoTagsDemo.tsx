@@ -4,7 +4,6 @@ import Tag from '@phosphor/tag.svg';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { DocsDemoPointer } from '../../../../app/components/featureGraphics/DocsMarkdownScene';
 import {
   type DemoEmail,
   demoEmails,
@@ -12,6 +11,7 @@ import {
   emailTags,
 } from '../../core/demo-email';
 import { createEmailWalkthrough } from '../../primitives/createEmailWalkthrough';
+import { DemoCursor } from '../DemoCursor';
 import { EmailRows } from './frozen/EmailRows';
 import { EmailShell } from './frozen/EmailShell';
 import { EmailThread } from './frozen/EmailThread';
@@ -196,8 +196,7 @@ export function EmailAutoTagsDemo() {
               }}
               aria-hidden="true"
             >
-              <DocsDemoPointer />
-              <span>Claude</span>
+              <DemoCursor />
             </div>
           </Show>
         </EmailShell>

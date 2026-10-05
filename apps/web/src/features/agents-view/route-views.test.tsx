@@ -49,7 +49,7 @@ vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => state.touch,
 }));
-vi.mock('@queries/agent-schedule/entities', () => ({}));
+vi.mock('@app/features/routines/queries/entities', () => ({}));
 vi.mock('../next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('./views/AgentsView', () => ({ AgentsView: () => null }));
 vi.mock('../settings/McpConnections', () => ({ McpConnections: () => null }));

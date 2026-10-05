@@ -70,7 +70,9 @@ export function TimezoneSelect(props: {
   onChange: (zone: string) => void;
   options: TimezoneOption[];
   class?: string;
+  portalScope?: 'local';
 }) {
+  let triggerRef: HTMLButtonElement | undefined;
   const [search, setSearch] = createSignal('');
   // Keep the current zone in the collection even when the runtime no longer
   // lists it (a zone dropped between releases), so it resolves as the selection
@@ -118,6 +120,7 @@ export function TimezoneSelect(props: {
     >
       <Combobox.Control class="min-w-0 flex-1">
         <Combobox.Trigger
+          ref={triggerRef}
           type="button"
           aria-label="Timezone"
           class={cn(
@@ -130,7 +133,13 @@ export function TimezoneSelect(props: {
         </Combobox.Trigger>
       </Combobox.Control>
 
-      <Combobox.Portal>
+      <Combobox.Portal
+        mount={
+          props.portalScope === 'local'
+            ? (triggerRef?.closest<HTMLElement>('.portal-scope') ?? undefined)
+            : undefined
+        }
+      >
         <Layer depth={2}>
           <Combobox.Content class="z-action-menu w-[24rem] max-w-[90vw] overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-md">
             <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">

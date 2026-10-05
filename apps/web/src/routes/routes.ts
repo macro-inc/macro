@@ -25,6 +25,11 @@ import {
   REMINDER_DETAIL_ROUTE_ID,
 } from '@app/features/reminders/reminder-navigation';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
+import {
+  ROUTINE_CREATE_ROUTE_ID,
+  ROUTINE_DETAIL_ROUTE_ID,
+  ROUTINES_ROUTE_ID,
+} from '@app/features/routines/routine-navigation';
 import { defineRoute, type Entry, routeParams } from '@app/lib/split-router';
 import { callDetailSearch } from '@block-call/call-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
@@ -464,6 +469,29 @@ export const remindersRoute = defineRoute({
   path: 'reminders',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'reminders' }),
+});
+
+export const routinesRoute = defineRoute({
+  id: ROUTINES_ROUTE_ID,
+  path: 'routines',
+  claim: () => ({ namespace: 'component', id: 'routines' }),
+});
+
+export const routineCreateRoute = defineRoute({
+  id: ROUTINE_CREATE_ROUTE_ID,
+  path: 'routines/new',
+  aliases: ['routine/new', 'automation/new'],
+  claim: () => ({ namespace: 'component', id: 'routine-compose' }),
+});
+
+export const routineDetailRoute = defineRoute({
+  id: ROUTINE_DETAIL_ROUTE_ID,
+  path: 'routines/:routineId',
+  aliases: ['routine/:routineId', 'automation/:routineId'],
+  params: z.object({ routineId: z.string().min(1) }),
+  remountKey: ({ routineId }) => routineId,
+  claim: ({ routineId }) => ({ namespace: 'routine', id: routineId }),
+  toReference: ({ routineId }) => uuidRouteReference(routineId, 'routine'),
 });
 
 export const agentsViewRoute = defineRoute({

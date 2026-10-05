@@ -1,5 +1,7 @@
-import { TaskProjectProperty } from '@app/features/projects/task-project-property';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
+import { enableProjects } from '@core/constant/featureFlags';
+import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -39,6 +41,7 @@ export function InlineTaskProperties() {
   const { properties, refetch, addProperty, removeProperty } =
     useEntityProperties(blockId, entityType, false);
   const pins = createPinnedProperties(() => state.editor.md.editor);
+  const projects = useFeatureFlag(enableProjects);
   const tagSets = useTagsQuery();
   const tagDefinitionIds = () =>
     new Set(
@@ -84,9 +87,18 @@ export function InlineTaskProperties() {
       SYSTEM_PROPERTY_IDS.PRIORITY,
       SYSTEM_PROPERTY_IDS.ASSIGNEES,
     ];
-    return ids
+    const task = ids
       .map((id) => props.find((p) => p.propertyDefinitionId === id))
       .filter((p): p is Property => p !== undefined);
+    if (!projects().enabled) return task;
+    // A task carries Project only once it joins one; the placeholder lets the
+    // same pill and editor set it.
+    return [
+      ...task,
+      props.find(
+        (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+      ) ?? buildTaskProjectDefaultProperty(),
+    ];
   });
   const shouldShowRow = createMemo(
     () =>
@@ -146,9 +158,6 @@ export function InlineTaskProperties() {
           </For>
           <Show when={documentKind === 'document' && canEdit()}>
             <AddPropertyButton class="gap-1.5 bg-surface-2" />
-          </Show>
-          <Show when={documentKind === 'task'}>
-            <TaskProjectProperty taskId={blockId} canEdit={canEdit()} />
           </Show>
           <Show when={documentKind === 'task' && state.editor.md.progressStats}>
             {(progressStats) => (

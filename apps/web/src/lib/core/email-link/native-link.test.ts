@@ -28,9 +28,6 @@ vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: { MULTI_INBOX: 'multi-inbox' },
   usePaywallState: () => ({ showPaywall: vi.fn() }),
 }));
-vi.mock('@core/constant/SettingsState', () => ({
-  currentSettingsReturnTo: () => undefined,
-}));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => true,
 }));

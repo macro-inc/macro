@@ -743,6 +743,28 @@ export const enableNotificationSettings = defineFlag({
   default: onInDev,
 });
 
+/**
+ * The in-browser PowerPoint editor (`block-pptx`). Off shows uploaded
+ * `.pptx` files as before: download only. On in dev; deployed environments
+ * follow PostHog.
+ */
+export const enablePptxEditor = defineFlag({
+  key: 'enable-pptx-editor',
+  env: 'ENABLE_PPTX_EDITOR',
+  default: onInDev,
+});
+
+/**
+ * The in-browser Figma file viewer (`block-fig`). Off shows uploaded `.fig`
+ * files as before: download only. On in dev; deployed environments follow
+ * PostHog.
+ */
+export const enableFigViewer = defineFlag({
+  key: 'enable-fig-viewer',
+  env: 'ENABLE_FIG_VIEWER',
+  default: onInDev,
+});
+
 // PostHog controls the internal pilot and team targeting in every environment.
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
@@ -759,6 +781,20 @@ export const enableSpreadsheets = defineFlag({
 export const enableDictation = defineFlag({
   key: 'enable-dictation',
   env: 'ENABLE_DICTATION',
+  default: onInDev,
+});
+
+/**
+ * AI usage billing UI: the Billing settings usage meter, credit packs and
+ * usage-billing controls, the out-of-credits dialog, the "$N of AI usage"
+ * plan copy, and the model picker's usage multipliers. Presentation only:
+ * backend quota admission and settlement are gated separately by
+ * `ENABLE_AI_USAGE_ENFORCEMENT` and `ENABLE_AI_USAGE_BILLING`. On in dev;
+ * production follows PostHog. Override with VITE_ENABLE_AI_USAGE_BILLING.
+ */
+export const enableAiUsageBilling = defineFlag({
+  key: 'enable-ai-usage-billing',
+  env: 'ENABLE_AI_USAGE_BILLING',
   default: onInDev,
 });
 

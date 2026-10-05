@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   soup: vi.fn(),
   graphql: undefined as Client | undefined,
   get: vi.fn(),
-  taskReferences: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => createMemo(() => ({ enabled: mocks.enabled() })),
@@ -55,8 +54,8 @@ vi.mock('@queries/client', async () => {
     }),
   };
 });
-vi.mock('./queries/create-project-task', () => ({
-  createProjectTaskMutation: () => vi.fn(),
+vi.mock('@block-md/util/taskComposerProperties', () => ({
+  createTaskWithProperties: vi.fn(),
 }));
 // These independent property adapters are not used by this fixture.
 vi.mock('@entity', () => ({ isTaskEntity: () => false }));
@@ -68,7 +67,6 @@ vi.mock('@queries/properties/graphql/entity', () => ({}));
 vi.mock('@queries/soup/transform-utils', () => ({}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => mocks.graphql,
-  getGraphqlSoupCacheHost: () => undefined,
   mapGraphqlProperties: () => [],
 }));
 
@@ -83,7 +81,6 @@ import { createProjectSources } from './queries/project-sources';
 const project = {
   id: 'launch',
   name: 'Launch',
-  descriptionDocumentId: 'description',
   ownerId: 'viewer',
   memberIds: [],
   taskIds: ['task'],
@@ -124,7 +121,6 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
               __typename: 'GraphqlSoupInitiative',
               id: project.id,
               displayName: project.name,
-              descriptionDocumentId: project.descriptionDocumentId,
               metadata: { updatedAt: project.updatedAt },
               viewerPermission: {
                 __typename: 'GraphqlAccessLevelPermission',
@@ -148,11 +144,6 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     exchanges: [exchange],
   });
   mocks.get.mockResolvedValue(ok(project));
-  mocks.taskReferences.mockResolvedValue(
-    ok({
-      references: [{ taskId: 'task', state: 'visible', initiative: project }],
-    })
-  );
 
   // The context belongs to a view, but split-owned queries are constructed
   // under a separate owner that survives view unmount.
@@ -175,28 +166,23 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     return {
       collection: retainedContext.createCollectionSource(),
       detail: retainedContext.createProjectSource(() => 'launch'),
-      references: retainedContext.createReferencesSource(() => ['task']),
     };
   });
   await vi.advanceTimersByTimeAsync(60_000);
-  for (const request of [mocks.get, mocks.taskReferences])
-    expect(request).not.toHaveBeenCalled();
+  expect(mocks.get).not.toHaveBeenCalled();
 
   setEnabled(true);
   await vi.waitFor(() => expect(sources.detail.project()?.name).toBe('Launch'));
   await vi.waitFor(() => expect(sources.collection.rows()).toHaveLength(1));
   expect(mocks.page).not.toHaveBeenCalled();
   expect(mocks.soup).toHaveBeenCalledTimes(1);
-  expect(sources.references.references().size).toBe(1);
   await vi.advanceTimersByTimeAsync(30_000);
-  for (const request of [mocks.get, mocks.taskReferences])
-    expect(request).toHaveBeenCalledTimes(2);
+  expect(mocks.get).toHaveBeenCalledTimes(2);
 
   setEnabled(false);
   const soupRequests = mocks.soup.mock.calls.length;
   expect(sources.collection.rows()).toBeUndefined();
   expect(sources.detail.project()).toBeUndefined();
-  expect(sources.references.references().size).toBe(0);
   await Promise.all([
     sources.collection.loadMore(),
     sources.collection.refresh(),
@@ -204,8 +190,7 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     queryClient.invalidateQueries(),
   ]);
   await vi.advanceTimersByTimeAsync(60_000);
-  for (const request of [mocks.get, mocks.taskReferences])
-    expect(request).toHaveBeenCalledTimes(2);
+  expect(mocks.get).toHaveBeenCalledTimes(2);
 
   expect(mocks.soup).toHaveBeenCalledTimes(soupRequests);
   setEnabled(true);
@@ -225,7 +210,7 @@ it('keeps standalone source adapters enabled when no rollout gate is injected', 
     disposeSource = dispose;
     return createProjectSources(
       initiativeClient,
-      { client: () => mocks.graphql!, cacheHost: () => undefined },
+      { client: () => mocks.graphql! },
       cache,
       () => 'viewer'
     ).createProjectSource(() => 'launch');

@@ -1024,11 +1024,6 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
         }
     }
 
-    /// Document backing the project's description, when one exists.
-    async fn description_document_id(&self) -> Option<ID> {
-        self.0.description_document_id.map(|id| ID(id.to_string()))
-    }
-
     /// Common entity edges, including properties and viewer permissions.
     #[graphql(flatten)]
     async fn edges(&self) -> E {

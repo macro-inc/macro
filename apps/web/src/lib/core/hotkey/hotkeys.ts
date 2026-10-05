@@ -803,9 +803,6 @@ export function useHotKeyRoot() {
       commandFound: !!commandCaptured,
       commandCaptured: commandCaptured,
       eventType: e.type as 'keydown' | 'keyup',
-      isNonModifierKeypress: ![...currentPressedKeys].every((key) =>
-        ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
-      ),
     };
 
     // Notify all subscribers with the context
