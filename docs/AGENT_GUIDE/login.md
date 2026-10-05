@@ -18,6 +18,15 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Temporary open signup in Develop
+
+Once the temporary authentication-service override is deployed, Develop accepts
+new accounts with any email address regardless of signup allowlist membership or
+the configured bypass flag. Verify with an authorized test account outside
+`macro.com` that is absent from the allowlist. Email verification and provider
+sign-in still apply. See the [authentication-service configuration guide](../../services/authentication_service/README.md#temporary-open-signup-override)
+for restoring allowlist enforcement.
+
 ## Hosted-dev proxy SSO
 
 On an allowed OAuth origin such as `https://localhost:<port>`, Google/SSO
