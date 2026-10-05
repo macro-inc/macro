@@ -198,6 +198,12 @@ headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
 only opens or closes its children. Selecting a Drive folder or tab closes an
 inline detail into that destination; it does not navigate back to Drive's root.
+Drive's **New** menu (sidebar, or the header in narrow layouts) is headed
+**Create in &lt;folder&gt;** and creates everything in the open folder; on a tab or
+the Drive root it reads **Create in Drive**. **Folder** opens a **New folder**
+dialog with `Untitled folder` preselected; creating keeps Drive where it is, adds
+the folder to the open folder's list, and shows a toast with **Open**. Other
+items open after creation. **Database** is offered only outside folders.
 Home, Email, Tasks, Channels, and Drive keep their workspace provider mounted
 while typed child routes own the accepted inline detail. Tasks and Email replace
 the list with detail, capturing its focus and scroll state before disposal. Their child

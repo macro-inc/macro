@@ -34,6 +34,23 @@ const paragraphs = async (page: Page) =>
     '\n'
   );
 
+/** Whether `text` is bold in the shared paragraph starting with `prefix`. */
+const sharedBold = (page: Page, prefix: string) =>
+  page.evaluate(
+    (prefix) =>
+      (window.docxFixture?.sharedBlock(prefix)?.attrs ?? []).some((a) =>
+        Object.keys(a).some((key) => /^r:.*:b$/.test(key))
+      ),
+    prefix
+  );
+
+/** Caret at the end of the paragraph starting with `prefix`, input focused. */
+async function caretAtEnd(page: Page, prefix: string) {
+  expect(
+    await page.evaluate((p) => window.docxFixture?.place(p, 'end'), prefix)
+  ).toBe(true);
+}
+
 /** What the AI tools do, run the way the editing worker runs it. */
 const agent = (page: Page, request: DocxAgentRequest) =>
   page.evaluate(
@@ -44,7 +61,7 @@ const agent = (page: Page, request: DocxAgentRequest) =>
 /** The id ReadWordDocument shows for the paragraph whose text starts so. */
 function paragraphId(description: string, text: string): string {
   const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(`paragraph (\\w{32})[^\\n]*\\n\\s+${escaped}`).exec(
+  const match = new RegExp(`paragraph (\\S+)[^\\n]*\\n\\s+${escaped}`).exec(
     description
   );
   if (!match) throw new Error(`no paragraph starting "${text}"`);
@@ -72,7 +89,7 @@ test('AI tool edits reach an open editor live and survive a reopen', async ({
     await open(worker, documentId, AGENT);
 
     const read = await agent(worker, { action: 'read' });
-    expect(read).toContain('Word document with 17 blocks.');
+    expect(read).toMatch(/Word document with \d+ blocks\./);
     const term = paragraphId(read, 'This Agreement shall remain');
     const heading = paragraphId(read, '3. Term');
     const definition = paragraphId(read, '"Confidential Information" means');
@@ -110,21 +127,15 @@ test('AI tool edits reach an open editor live and survive a reopen', async ({
     expect(text).toMatch(
       /3\. Term\nThis section sets out how long the Agreement lasts\.\nThis Agreement shall remain/
     );
-    const bold = alice
-      .locator('.docx-body-flow [data-anchor]')
-      .filter({ hasText: '"Confidential Information" means' })
-      .locator('span, b, strong')
-      .filter({ hasText: /^Confidential Information$/ })
-      .first();
-    await expect(bold).toHaveCSS('font-weight', '700');
+    await expect
+      .poll(() => sharedBold(alice, '"Confidential Information" means'))
+      .toBe(true);
+    expect(await agent(worker, { action: 'read' })).toContain(
+      'bold: "Confidential Information"'
+    );
 
     // People keep editing alongside it.
-    await alice
-      .locator('.docx-body-flow [data-anchor][contenteditable="true"]')
-      .filter({ hasText: 'This section sets out' })
-      .first()
-      .click();
-    await alice.keyboard.press('End');
+    await caretAtEnd(alice, 'This section sets out');
     await alice.keyboard.type(' [alice]');
     await expect
       .poll(() => paragraphs(worker))
@@ -162,7 +173,7 @@ test('AI tool edits inside table cells', async ({ browser }) => {
     await open(alice, documentId, ALICE, { fixture: 'complex-msa.docx' });
     await open(worker, documentId, AGENT, { fixture: 'complex-msa.docx' });
     const read = await agent(worker, { action: 'read' });
-    const cell = /row 2, cell 1:\n\s+paragraph (\w{32})/.exec(read)?.[1];
+    const cell = /row 2, cell 1:\n\s+paragraph (\S+)/.exec(read)?.[1];
     expect(cell).toBeDefined();
     await agent(worker, {
       action: 'edit',

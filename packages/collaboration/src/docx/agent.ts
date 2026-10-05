@@ -6,6 +6,16 @@ import type {
   TimeoutError,
 } from '../collab/source';
 import {
+  DocxAgentError,
+  type DocxAgentOperation,
+  type DocxAgentRequest,
+  type DocxAgentResult,
+  MAX_DOCX_OPERATIONS,
+  occurrences,
+  preview,
+  READ_BUDGET,
+} from './agent-types';
+import {
   createParagraph,
   formatRange,
   isNumbered,
@@ -17,7 +27,6 @@ import {
   paragraphAlignment,
   paragraphStyle,
   paragraphText,
-  type RunFormat,
   replaceRange,
   runFormat,
   segments,
@@ -33,102 +42,34 @@ import {
   writeDocxChanges,
 } from './schema';
 import {
+  findStyle,
+  type ParagraphStyleInfo,
+  paragraphStylesFromXml,
+  prefixFor,
+} from './styles';
+import { describeWord, editWord, isWordFormat } from './word-agent';
+import {
   elementChildren,
   getAttribute,
-  isElement,
-  namespaceDeclarations,
   parseElement,
-  parseXml,
   serializeXml,
   setAttribute,
   type XmlElement,
 } from './xml';
 
-/** One change an agent asks for. Ids are the engine's paragraph and block ids. */
-export type DocxAgentOperation =
-  | {
-      type: 'replaceText';
-      paragraph: string;
-      find: string;
-      replace: string;
-      occurrence?: number;
-    }
-  | { type: 'setText'; paragraph: string; text: string }
-  | ({
-      type: 'formatText';
-      paragraph: string;
-      find?: string;
-      occurrence?: number;
-    } & RunFormat)
-  | {
-      type: 'insertParagraph';
-      after?: string;
-      before?: string;
-      text: string;
-      style?: string;
-    }
-  | { type: 'delete'; id: string }
-  | { type: 'setStyle'; paragraph: string; style: string };
+export {
+  DocxAgentError,
+  type DocxAgentOperation,
+  type DocxAgentRequest,
+  type DocxAgentResult,
+  MAX_DOCX_OPERATIONS,
+} from './agent-types';
 
-export type DocxAgentRequest =
-  | { action: 'read'; start?: number; count?: number }
-  | { action: 'edit'; operations: DocxAgentOperation[] };
-
-export type DocxAgentResult = { content: string };
-
-/** A request the document cannot satisfy; the message is for the agent. */
-export class DocxAgentError extends Error {}
-
-/** Most operations one edit may apply. */
-export const MAX_DOCX_OPERATIONS = 50;
-/** Characters a read returns before it asks to be continued. */
-const READ_BUDGET = 60_000;
 const STYLES_PART = 'word/styles.xml';
-
-type ParagraphStyleInfo = {
-  id: string;
-  name: string;
-  next: string | null;
-  /** The style paragraphs without a style of their own use. */
-  isDefault: boolean;
-};
 
 /** Paragraph styles the document defines, in definition order. */
 export function paragraphStyles(state: DocxPackageState): ParagraphStyleInfo[] {
-  const xml = state.parts.get(STYLES_PART);
-  if (!xml) return [];
-  const root = parseXml(xml).find(isElement);
-  if (!root) return [];
-  const w = prefixFor(root, WORDML_NS) ?? 'w';
-  const val = (node: XmlElement, local: string) => {
-    const child = elementChildren(node).find((c) => c.name === `${w}:${local}`);
-    return child ? getAttribute(child, `${w}:val`) : null;
-  };
-  return elementChildren(root)
-    .filter(
-      (node) =>
-        node.name === `${w}:style` &&
-        getAttribute(node, `${w}:type`) === 'paragraph'
-    )
-    .flatMap((node) => {
-      const id = getAttribute(node, `${w}:styleId`);
-      return id
-        ? [
-            {
-              id,
-              name: val(node, 'name') ?? id,
-              next: val(node, 'next'),
-              isDefault: getAttribute(node, `${w}:default`) === '1',
-            },
-          ]
-        : [];
-    });
-}
-
-function prefixFor(node: XmlElement, uri: string): string | null {
-  for (const [prefix, value] of namespaceDeclarations(node))
-    if (value === uri && prefix) return prefix;
-  return null;
+  return paragraphStylesFromXml(state.parts.get(STYLES_PART));
 }
 
 type Tree = { root: XmlElement; names: Names };
@@ -224,20 +165,6 @@ class Workspace {
   }
 }
 
-function occurrences(text: string, find: string): number[] {
-  const found: number[] = [];
-  if (!find) return found;
-  let index = text.indexOf(find);
-  while (index >= 0) {
-    found.push(index);
-    index = text.indexOf(find, index + find.length);
-  }
-  return found;
-}
-
-const preview = (text: string, limit = 200) =>
-  text.length > limit ? `${text.slice(0, limit)}…` : text;
-
 class Editor {
   readonly workspace: Workspace;
   readonly touched = new Set<string>();
@@ -293,23 +220,14 @@ class Editor {
   }
 
   private resolveStyle(style: string): string {
-    const wanted = style.trim();
-    const lower = wanted.toLowerCase();
-    const found =
-      this.styles.find((s) => s.id === wanted) ??
-      this.styles.find((s) => s.name.toLowerCase() === lower) ??
-      this.styles.find((s) => s.id.toLowerCase() === lower) ??
-      this.styles.find(
-        (s) =>
-          s.name.replace(/\s+/g, '').toLowerCase() === lower.replace(/\s+/g, '')
-      );
+    const found = findStyle(this.styles, style);
     if (!found)
       throw new DocxAgentError(
         `The document has no paragraph style "${style}". Its paragraph styles are: ${this.styles
           .map((s) => s.id)
           .join(', ')}.`
       );
-    return found.id;
+    return found;
   }
 
   private static singleLine(text: string, what: string) {
@@ -800,6 +718,18 @@ export async function runDocxAgentRequest(
     );
   const doc = new LoroDoc();
   if (initial.value.snapshot.length > 0) doc.import(initial.value.snapshot);
+  // The editor's shared format: blocks and rich text the engine writes.
+  if (isWordFormat(doc)) {
+    if (request.action === 'read')
+      return { content: describeWord(doc, request) };
+    const version = doc.version();
+    const content = editWord(doc, request.operations);
+    const update = doc.export({ mode: 'update', from: version });
+    source.registerPeerId(doc.peerId);
+    if (!(await source.pushUpdate([update])))
+      throw new Error('the sync service did not acknowledge the edit');
+    return { content };
+  }
   if (!isDocxSeeded(doc))
     throw new DocxAgentError(
       "This Word document hasn't been opened in Macro's editor yet, so it has no live copy to read or edit. Ask the user to open it once in Macro, then try again."

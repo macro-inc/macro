@@ -4,6 +4,7 @@
 //! request is mapped to a registered face through a substitution table of
 //! metric-compatible replacements, so line breaks match the original layout.
 
+pub mod arabic;
 mod symbols;
 
 use crate::path::{Path, Point};
@@ -130,6 +131,28 @@ pub const SUBSTITUTES: &[(&str, &[&str])] = &[
     ("lucida sans", &["DejaVu Sans"]),
     ("lucida sans unicode", &["DejaVu Sans"]),
     ("dejavu sans", &["DejaVu Sans"]),
+    // Arabic and Hebrew families: their letters come from the Noto faces
+    // (other characters fall back as for any face).
+    ("simplified arabic", &["Noto Naskh Arabic"]),
+    ("simplified arabic fixed", &["Noto Naskh Arabic"]),
+    ("traditional arabic", &["Noto Naskh Arabic"]),
+    ("arabic typesetting", &["Noto Naskh Arabic"]),
+    ("sakkal majalla", &["Noto Naskh Arabic"]),
+    ("aldhabi", &["Noto Naskh Arabic"]),
+    ("urdu typesetting", &["Noto Naskh Arabic"]),
+    ("microsoft uighur", &["Noto Naskh Arabic"]),
+    ("andalus", &["Noto Naskh Arabic"]),
+    ("arabic transparent", &["Noto Sans Arabic"]),
+    ("geeza pro", &["Noto Sans Arabic"]),
+    ("dubai", &["Noto Sans Arabic"]),
+    ("david", &["Noto Serif Hebrew"]),
+    ("frank ruehl", &["Noto Serif Hebrew"]),
+    ("frankruehl", &["Noto Serif Hebrew"]),
+    ("narkisim", &["Noto Sans Hebrew"]),
+    ("miriam", &["Noto Sans Hebrew"]),
+    ("gisha", &["Noto Sans Hebrew"]),
+    ("levenim mt", &["Noto Sans Hebrew"]),
+    ("aharoni", &["Noto Sans Hebrew"]),
 ];
 
 /// Replacement for unknown sans-serif families.
@@ -216,6 +239,44 @@ fn vertical_metrics(font: &FontRef<'_>) -> (i16, i16, i16) {
         }
     }
     (asc, desc, gap)
+}
+
+/// A script's characters, with its faces for serif and for sans-serif
+/// text, each in order.
+type ScriptFaces = (
+    fn(char) -> bool,
+    &'static [&'static str],
+    &'static [&'static str],
+);
+
+/// Faces for Arabic and Hebrew letters, tried before the others.
+const SCRIPT_FALLBACKS: &[ScriptFaces] = &[
+    (
+        is_arabic,
+        &["Noto Naskh Arabic", "Noto Sans Arabic"],
+        &["Noto Sans Arabic", "Noto Naskh Arabic"],
+    ),
+    (
+        is_hebrew,
+        &["Noto Serif Hebrew", "Noto Sans Hebrew"],
+        &["Noto Sans Hebrew", "Noto Serif Hebrew"],
+    ),
+];
+
+fn is_arabic(c: char) -> bool {
+    matches!(c as u32, 0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF)
+}
+
+fn is_hebrew(c: char) -> bool {
+    matches!(c as u32, 0x0590..=0x05FF | 0xFB1D..=0xFB4F)
+}
+
+/// Whether a bundled family draws serif letters.
+fn is_serif_family(family_lower: &str) -> bool {
+    ["serif", "caladea", "tinos", "gelasio", "naskh"]
+        .iter()
+        .any(|k| family_lower.contains(k))
+        && !family_lower.contains("sans")
 }
 
 fn read_metrics(font: &FontRef<'_>) -> FaceMetrics {
@@ -540,7 +601,8 @@ impl FontDb {
         .unwrap_or(0.0)
     }
 
-    /// A face (other than `prefer`) that has a glyph for `ch`.
+    /// A face (other than `prefer`) that has a glyph for `ch`: for Arabic
+    /// and Hebrew a face of the script in `prefer`'s style (serif or sans).
     pub fn fallback_for(
         &self,
         ch: char,
@@ -548,7 +610,17 @@ impl FontDb {
         bold: bool,
         italic: bool,
     ) -> Option<FontChoice> {
-        for fam in GLYPH_FALLBACKS {
+        let preferred = self.faces.get(prefer.0 as usize);
+        let serif = preferred.is_some_and(|f| is_serif_family(&f.family_lower));
+        // The fallback matches the preferred face's own weight and slant too
+        // (a bold face is not synthetic bold).
+        let bold = bold || preferred.is_some_and(|f| f.bold);
+        let italic = italic || preferred.is_some_and(|f| f.italic);
+        let script = SCRIPT_FALLBACKS
+            .iter()
+            .find(|(is, _, _)| is(ch))
+            .map_or(&[][..], |(_, s, sans)| if serif { *s } else { *sans });
+        for fam in script.iter().chain(GLYPH_FALLBACKS) {
             if let Some(c) = self.best_in_family(&fam.to_lowercase(), bold, italic)
                 && c.face != prefer
                 && self.glyph(c.face, ch).is_some()
@@ -771,6 +843,14 @@ pub mod embedded {
         include_bytes!("../fonts/DejaVuSans.ttf"),
         include_bytes!("../fonts/DejaVuSans-Bold.ttf"),
         include_bytes!("../fonts/STIXTwoMath-Regular.ttf"),
+        include_bytes!("../fonts/NotoNaskhArabic-Regular.ttf"),
+        include_bytes!("../fonts/NotoNaskhArabic-Bold.ttf"),
+        include_bytes!("../fonts/NotoSansArabic-Regular.ttf"),
+        include_bytes!("../fonts/NotoSansArabic-Bold.ttf"),
+        include_bytes!("../fonts/NotoSerifHebrew-Regular.ttf"),
+        include_bytes!("../fonts/NotoSerifHebrew-Bold.ttf"),
+        include_bytes!("../fonts/NotoSansHebrew-Regular.ttf"),
+        include_bytes!("../fonts/NotoSansHebrew-Bold.ttf"),
     ];
 }
 
@@ -799,6 +879,14 @@ pub const BUNDLED_FONT_FILES: &[(&str, &str)] = &[
     ("DejaVu Sans", "DejaVuSans.ttf"),
     ("DejaVu Sans", "DejaVuSans-Bold.ttf"),
     ("STIX Two Math", "STIXTwoMath-Regular.ttf"),
+    ("Noto Naskh Arabic", "NotoNaskhArabic-Regular.ttf"),
+    ("Noto Naskh Arabic", "NotoNaskhArabic-Bold.ttf"),
+    ("Noto Sans Arabic", "NotoSansArabic-Regular.ttf"),
+    ("Noto Sans Arabic", "NotoSansArabic-Bold.ttf"),
+    ("Noto Serif Hebrew", "NotoSerifHebrew-Regular.ttf"),
+    ("Noto Serif Hebrew", "NotoSerifHebrew-Bold.ttf"),
+    ("Noto Sans Hebrew", "NotoSansHebrew-Regular.ttf"),
+    ("Noto Sans Hebrew", "NotoSansHebrew-Bold.ttf"),
 ];
 
 /// The bundled family that will serve a requested family (for lazy loading hosts).

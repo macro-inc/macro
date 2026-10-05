@@ -4,7 +4,7 @@ use crate::test_support::fonts;
 #[test]
 fn registers_bundled_families() {
     let db = fonts();
-    assert_eq!(db.len(), 23);
+    assert_eq!(db.len(), 31);
     for fam in [
         "Carlito",
         "Caladea",
@@ -13,6 +13,10 @@ fn registers_bundled_families() {
         "Liberation Mono",
         "DejaVu Sans",
         "STIX Two Math",
+        "Noto Naskh Arabic",
+        "Noto Sans Arabic",
+        "Noto Serif Hebrew",
+        "Noto Sans Hebrew",
     ] {
         assert!(db.has_family(fam), "{fam}");
     }
@@ -89,4 +93,33 @@ fn symbol_fonts_remap() {
     assert_eq!(bundled_family_for("Calibri"), "Carlito");
     assert_eq!(bundled_family_for("Wingdings"), "DejaVu Sans");
     assert_eq!(bundled_family_for("Unknown Font"), "Liberation Sans");
+}
+
+#[test]
+fn arabic_and_hebrew_fall_back_to_a_face_in_the_same_style() {
+    let mut db = FontDb::new();
+    for file in [
+        "LiberationSerif-Regular.ttf",
+        "LiberationSans-Regular.ttf",
+        "NotoNaskhArabic-Regular.ttf",
+        "NotoSansArabic-Regular.ttf",
+        "NotoSerifHebrew-Regular.ttf",
+        "NotoSansHebrew-Regular.ttf",
+    ] {
+        let path = format!("{}/fonts/{file}", env!("CARGO_MANIFEST_DIR"));
+        db.register(std::fs::read(path).expect("font file"));
+    }
+    let serif = db.select("Times New Roman", false, false).unwrap().face;
+    let sans = db.select("Arial", false, false).unwrap().face;
+    let family = |prefer: FaceId, ch: char| {
+        let c = db.fallback_for(ch, prefer, false, false).unwrap();
+        db.family(c.face).to_owned()
+    };
+    assert_eq!(family(serif, '\u{0628}'), "Noto Naskh Arabic");
+    assert_eq!(family(sans, '\u{0628}'), "Noto Sans Arabic");
+    assert_eq!(family(serif, '\u{05D0}'), "Noto Serif Hebrew");
+    assert_eq!(family(sans, '\u{05D0}'), "Noto Sans Hebrew");
+    // Arabic families map to the matching Noto face.
+    let simplified = db.select("Simplified Arabic", false, false).unwrap().face;
+    assert_eq!(db.family(simplified), "Noto Naskh Arabic");
 }
