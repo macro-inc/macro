@@ -59,8 +59,8 @@ export function paintSwatch(p: PaintInfo): string {
 export function paintLabel(p: PaintInfo): string {
   if (p.type === 'SOLID' && p.color) return p.color;
   if (p.type === 'IMAGE') return `Image · ${title(p.scaleMode ?? 'FILL')}`;
-  if (isGradient(p.type))
-    return `${title(p.type.replace('GRADIENT_', ''))} gradient`;
+  // Figma names gradients by kind alone: "Linear", "Radial"…
+  if (isGradient(p.type)) return title(p.type.replace('GRADIENT_', ''));
   return title(p.type);
 }
 
