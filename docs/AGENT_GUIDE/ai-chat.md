@@ -159,7 +159,8 @@ the shimmer.
   channels** (or **Refresh** on subsequent visits), then wait for discovery and
   member checks to update live. Search by name, purpose, or Slack channel id;
   archived channels stay hidden until **Show archived** is checked. Select
-  individual channels or **Select all visible**, then click **Import N channels**.
+  individual channels or **Select all visible**, then click **Import 1 channel**
+  or **Import N channels**.
   Filtering does not clear selections. Rows progress from **Importing…** to an
   **Imported** link; channels already imported by another team member show
   **by a teammate** and cannot be selected again. Imported channels appear under
@@ -168,7 +169,12 @@ the shimmer.
   separately. Unmatched members are not invited. Messages, files, private
   channels, and direct messages are not imported, and there is no ongoing sync.
   A failed discovery shows its error and **Retry**; an empty completed discovery
-  shows **No public channels found**.
+  shows **No public channels found**. If member checks reach their time budget,
+  discovered channels remain available with unchecked membership rather than a
+  discovery failure. Conversations with unknown visibility are not listed.
+  If both Slack connector aliases are connected, the Slack page manages `slack`
+  first; `slack_v2` remains a separate row in Connections where it can be disabled
+  or disconnected.
 
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.

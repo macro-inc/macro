@@ -217,7 +217,11 @@ describe('Slack channel import card', () => {
     setState({ runs: [], entities: [channel('general')] });
     render(() => <SlackChannelImportCard />);
     fireEvent.click(checkbox('Select general'));
-    fireEvent.click(screen.getByRole('button', { name: 'Import 1 channels' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 channel' }));
+    expect(mocks.importChannels).toHaveBeenCalledWith(
+      { importIds: ['general'], discardIds: [] },
+      expect.any(Object)
+    );
     mocks.importChannels.mock.calls[0][1].onError();
     expect(mocks.failure).toHaveBeenCalledWith(
       'Failed to import Slack channels'

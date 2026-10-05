@@ -79,8 +79,12 @@ export function matchLabel(row: SlackChannelRow): string {
       ? 'Checking members…'
       : 'Members not checked yet';
   }
-  if (row.memberCount === null) return `${row.matched} members on your team`;
-  return `${row.matched} of ${row.memberCount} members are on your team`;
+  if (row.memberCount === null) {
+    return `${row.matched} ${row.matched === 1 ? 'member' : 'members'} on your team`;
+  }
+  const members = row.memberCount === 1 ? 'member' : 'members';
+  const verb = row.matched === 1 ? 'is' : 'are';
+  return `${row.matched} of ${row.memberCount} ${members} ${verb} on your team`;
 }
 
 export function runLabel(run: ImportRun | undefined): string {

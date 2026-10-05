@@ -1,6 +1,6 @@
 //! Bounded Slack discovery and roster policy over typed workspace reads.
 
-use super::{GatherMode, ImportServiceImpl, StageOutcome};
+use super::{GatherMode, ImportServiceImpl, StageOutcome, gather_timeout};
 use crate::domain::models::{
     ImportSource, Initiator, SlackChannelMeta, SlackConversation, SlackConversationId,
     SlackConversationKind, SlackConversationPage, SlackMemberPage, SlackParticipant, SlackUser,
@@ -14,6 +14,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use mcp_select::ConnectorSelect;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
+use tokio::time::{Instant, timeout_at};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -25,6 +26,8 @@ const MAX_MEMBER_PAGES: usize = 5;
 const MANUAL_MEMBER_BUDGET: usize = 100;
 const NOTIFY_EVERY: usize = 10;
 const RATE_LIMIT_MAX_SLEEP: Duration = Duration::from_secs(30);
+// Finish best-effort work before spawn_gather's hard timeout can fail usable rows.
+const ENRICHMENT_TIMEOUT_RESERVE: Duration = Duration::from_secs(10);
 
 /// Default for hosts that have not attached a live Slack workspace reader.
 pub struct NoSlackSource;
@@ -242,6 +245,10 @@ where
     C: EntityCreator,
     W: SlackWorkspaceSource,
 {
+    // Anchor before opening/listing: discovery time consumes the enrichment budget.
+    // Slack admission before this call does not perform asynchronous work.
+    let enrichment_deadline =
+        Instant::now() + gather_timeout(ImportSource::Slack, mode) - ENRICHMENT_TIMEOUT_RESERVE;
     let session = service.slack_source.open(user).await?;
     let mut channels = Vec::new();
     let mut seen = HashSet::new();
@@ -304,7 +311,7 @@ where
             Ok(StageOutcome::Staged(_)) => {
                 staged.push((channel.id, metadata));
                 if staged.len() % NOTIFY_EVERY == 0 {
-                    service.notify(user).await;
+                    let _ = timeout_at(enrichment_deadline, service.notify(user)).await;
                 }
             }
             Ok(_) => {}
@@ -313,26 +320,61 @@ where
             }
         }
     }
-    service.notify(user).await;
+    let _ = timeout_at(enrichment_deadline, service.notify(user)).await;
     let count = staged.len();
-    if count == 0 {
-        return Ok(0);
+    if count == 0 || Instant::now() >= enrichment_deadline {
+        return Ok(count);
     }
-    let directory = match SlackDirectory::load(&session).await {
-        Ok(directory) => directory,
-        Err(error) => {
-            tracing::warn!(error = ?error, "Slack directory unavailable; leaving membership unresolved");
-            return Ok(count);
-        }
-    };
-    staged.sort_by_key(|(_, metadata)| std::cmp::Reverse(metadata.member_count.unwrap_or(0)));
     let budget = match mode {
         GatherMode::Onboarding => count,
         GatherMode::Manual => MANUAL_MEMBER_BUDGET,
     };
+    // Dropping this future stops reads/retries and notifications. Each metadata
+    // upsert is atomic and only updates staged rows: cancellation leaves either
+    // the original or enriched metadata, never an import claim to clean up.
+    match timeout_at(
+        enrichment_deadline,
+        enrich_slack(service, user, &session, &roster, staged, initiator, budget),
+    )
+    .await
+    {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            tracing::warn!(error = ?error, "Slack enrichment failed; retaining staged channels");
+        }
+        Err(_) => {
+            tracing::warn!("Slack enrichment deadline reached; retaining staged channels");
+        }
+    }
+    Ok(count)
+}
+
+async fn enrich_slack<R, S, C, W>(
+    service: &ImportServiceImpl<R, S, C, W>,
+    user: &MacroUserIdStr<'static>,
+    session: &W::Session,
+    roster: &[MacroUserIdStr<'static>],
+    mut staged: Vec<(SlackConversationId, SlackChannelMeta)>,
+    initiator: Initiator,
+    budget: usize,
+) -> Result<(), SlackSourceError>
+where
+    R: ImportRepo + CanonicalImportRepo + Clone,
+    S: ConnectorSelect,
+    C: EntityCreator,
+    W: SlackWorkspaceSource,
+{
+    let directory = match SlackDirectory::load(session).await {
+        Ok(directory) => directory,
+        Err(error) => {
+            tracing::warn!(error = ?error, "Slack directory unavailable; leaving membership unresolved");
+            return Ok(());
+        }
+    };
+    staged.sort_by_key(|(_, metadata)| std::cmp::Reverse(metadata.member_count.unwrap_or(0)));
     let mut enriched = 0;
     for (channel, mut metadata) in staged.into_iter().take(budget) {
-        let members = match resolve_members(&session, &directory, &channel, &roster).await {
+        let members = match resolve_members(session, &directory, &channel, roster).await {
             Ok(members) => members,
             Err(error) => {
                 tracing::warn!(channel = %channel.as_str(), error = ?error, "Slack membership unavailable");
@@ -367,5 +409,5 @@ where
         }
     }
     service.notify(user).await;
-    Ok(count)
+    Ok(())
 }

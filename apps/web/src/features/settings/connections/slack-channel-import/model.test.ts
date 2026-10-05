@@ -179,9 +179,9 @@ describe('channel filtering', () => {
 describe('progress labels', () => {
   it('distinguishes active checks, unresolved members and resolved match counts', () => {
     const [row] = buildRows(state([entity()]), 'me');
-    expect(matchLabel(row)).toBe('1 of 10 members are on your team');
+    expect(matchLabel(row)).toBe('1 of 10 members is on your team');
     expect(matchLabel({ ...row, memberCount: null })).toBe(
-      '1 members on your team'
+      '1 member on your team'
     );
     expect(matchLabel({ ...row, matched: 0, memberCount: 0 })).toBe(
       '0 of 0 members are on your team'
@@ -199,6 +199,19 @@ describe('progress labels', () => {
         'Members not checked yet'
       );
     }
+  });
+
+  it.each([
+    [0, null, '0 members on your team'],
+    [1, null, '1 member on your team'],
+    [2, null, '2 members on your team'],
+    [0, 1, '0 of 1 member are on your team'],
+    [1, 1, '1 of 1 member is on your team'],
+    [1, 10, '1 of 10 members is on your team'],
+    [2, 10, '2 of 10 members are on your team'],
+  ])('labels %s matched members out of %s', (matched, memberCount, label) => {
+    const [row] = buildRows(state([entity()]), 'me');
+    expect(matchLabel({ ...row, matched, memberCount })).toBe(label);
   });
 
   it.each([

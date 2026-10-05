@@ -127,8 +127,11 @@ fn parse_slack_channel(value: &Value) -> Option<SlackConversation> {
         .any(|key| map.get(*key) == Some(&Value::Bool(true)))
     {
         SlackConversationKind::PrivateChannel
-    } else {
+    } else if map.get("is_private") == Some(&Value::Bool(false)) {
         SlackConversationKind::PublicChannel
+    } else {
+        // Unknown visibility must never be promoted to a public channel.
+        return None;
     };
     let name = map
         .get("name")

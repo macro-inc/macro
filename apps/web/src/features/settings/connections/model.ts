@@ -1,4 +1,4 @@
-import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
+import { SLACK_PIPEDREAM_SLUGS } from '@core/pipedream/slugs';
 import type { PipedreamConnectionResponse } from '@service-cognition/client';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
 
@@ -124,9 +124,7 @@ function nativeCuratedProvider(
 function pipedreamBySlug(
   connections: PipedreamConnectionResponse[]
 ): Map<string, PipedreamConnectionResponse> {
-  return new Map(
-    connections.map((row) => [canonicalPipedreamSlug(row.app_slug), row])
-  );
+  return new Map(connections.map((row) => [row.app_slug, row]));
 }
 
 function aiStatus(enabled: boolean): CapabilityStatus {
@@ -160,18 +158,22 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
   leftovers: Leftover[];
 } {
   const pipedream = pipedreamBySlug(input.pipedream);
+  const usedPipedream = new Set<string>();
   const usedNative = new Set<string>();
   const capabilities: Capability[] = [];
   const leftovers: Leftover[] = [];
 
   for (const provider of Object.keys(CURATED_AI) as CuratedAiProvider[]) {
     const copy = CURATED_AI[provider];
-    const pd = pipedream.get(provider);
+    // Match backend alias priority before considering enabled state.
+    const slugs = provider === 'slack' ? SLACK_PIPEDREAM_SLUGS : [provider];
+    const pd = slugs.map((slug) => pipedream.get(slug)).find((row) => row);
     const native = input.nativeMcp.find(
       (server) => nativeCuratedProvider(server) === provider
     );
 
     if (pd) {
+      usedPipedream.add(pd.app_slug);
       capabilities.push({
         id: `${provider}-ai`,
         kind: 'ai',
@@ -216,7 +218,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
   }
 
   for (const row of input.pipedream) {
-    if (canonicalPipedreamSlug(row.app_slug) in CURATED_AI) continue;
+    if (usedPipedream.has(row.app_slug)) continue;
     leftovers.push({
       kind: 'pipedream',
       id: `pipedream:${row.app_slug}`,

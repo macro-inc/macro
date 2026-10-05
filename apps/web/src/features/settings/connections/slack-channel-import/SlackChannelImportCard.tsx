@@ -282,7 +282,8 @@ export function SlackChannelImportCard(): JSX.Element {
               <Show when={importChannels.isPending}>
                 <SpinnerIcon class="size-4 animate-spin" aria-hidden="true" />
               </Show>
-              Import {importIds().length} channels
+              Import {importIds().length}{' '}
+              {importIds().length === 1 ? 'channel' : 'channels'}
             </Button>
             <p class="text-xs text-ink-muted">
               Private channels and direct messages are not imported yet.

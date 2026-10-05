@@ -211,9 +211,9 @@ fn listing_arguments(
         if let Some(types) = properties.get("types") {
             // The provisional fixture declares a string; other tools accept arrays.
             arguments["types"] = if types["type"] == "string" {
-                json!("public_channel,private_channel")
+                json!("public_channel")
             } else {
-                json!(["public_channel", "private_channel"])
+                json!(["public_channel"])
             };
         }
         if properties.get("exclude_archived").is_some() {
@@ -267,9 +267,11 @@ async fn call_tool(
 
 fn source_error(text: String) -> SlackSourceError {
     let lower = text.to_ascii_lowercase();
-    if ["ratelimited", "rate_limited", "429"]
-        .iter()
-        .any(|marker| lower.contains(marker))
+    static RATE_LIMIT_STATUS: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\b429\b").unwrap());
+    if lower.contains("ratelimited")
+        || lower.contains("rate_limited")
+        || RATE_LIMIT_STATUS.is_match(&lower)
     {
         static RETRY_AFTER: LazyLock<regex::Regex> =
             LazyLock::new(|| regex::Regex::new(r"retry[\s_-]+after\s*:?\s*(\d+)").unwrap());

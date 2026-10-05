@@ -105,7 +105,7 @@ async fn fixture_tools_return_channels_members_and_users() {
     assert_eq!(
         arguments,
         json!({
-            "limit": 200, "types": "public_channel,private_channel", "exclude_archived": false
+            "limit": 200, "types": "public_channel", "exclude_archived": false
         })
     );
     let channels = parse::parse_slack_channel_page(
@@ -253,7 +253,7 @@ fn arguments_use_only_declared_properties_and_channel_alias() {
     assert_eq!(
         listing_arguments(&schema, Some("next"), None, true),
         json!({
-            "cursor": "next", "types": ["public_channel", "private_channel"], "query": "", "exclude_archived": false
+            "cursor": "next", "types": ["public_channel"], "query": "", "exclude_archived": false
         })
     );
     assert!(
@@ -266,7 +266,7 @@ fn arguments_use_only_declared_properties_and_channel_alias() {
 #[test]
 fn channels_preserve_kinds_archive_and_counts_and_drop_invalid_ids() {
     let page = parse::parse_slack_channel_page(json!({"ret": {"data": [
-        {"id": "C123", "name": " #general ", "is_archived": true, "member_count": 42, "topic": {"value": " topic "}},
+        {"id": "C123", "name": " #general ", "is_private": false, "is_archived": true, "member_count": 42, "topic": {"value": " topic "}},
         {"id": "C124", "name": "private", "is_private": true},
         {"channel_id": "G123", "channel_name": "group", "is_group": true, "description": "description"},
         {"id": "D123", "is_im": true},
@@ -297,6 +297,62 @@ fn channels_preserve_kinds_archive_and_counts_and_drop_invalid_ids() {
 }
 
 #[test]
+fn channels_require_explicit_visibility_without_relying_on_is_channel() {
+    for is_channel in [None, Some(json!(true)), Some(json!(false))] {
+        for visibility in [
+            None,
+            Some(Value::Null),
+            Some(json!("false")),
+            Some(json!("true")),
+            Some(json!(0)),
+            Some(json!(1)),
+            Some(json!([])),
+            Some(json!({})),
+            Some(json!(false)),
+            Some(json!(true)),
+        ] {
+            let mut channel = json!({"id": "C123", "name": "channel"});
+            if let Some(is_channel) = &is_channel {
+                channel["is_channel"] = is_channel.clone();
+            }
+            if let Some(visibility) = &visibility {
+                channel["is_private"] = visibility.clone();
+            }
+            let page = parse::parse_slack_channel_page(json!([channel])).unwrap();
+            let expected = match visibility.and_then(|value| value.as_bool()) {
+                Some(false) => vec![SlackConversationKind::PublicChannel],
+                Some(true) => vec![SlackConversationKind::PrivateChannel],
+                None => vec![],
+            };
+            assert_eq!(
+                page.conversations
+                    .into_iter()
+                    .map(|channel| channel.kind)
+                    .collect::<Vec<_>>(),
+                expected,
+                "channel: {channel}"
+            );
+        }
+    }
+}
+
+#[test]
+fn explicit_private_and_dm_kinds_take_precedence_over_public_visibility() {
+    for (flag, expected) in [
+        ("is_group", SlackConversationKind::PrivateChannel),
+        ("is_im", SlackConversationKind::DirectMessage),
+        ("is_mpim", SlackConversationKind::GroupDirectMessage),
+    ] {
+        let page = parse::parse_slack_channel_page(json!([
+            {"id": "C123", "is_private": false, "is_channel": true, flag: true}
+        ]))
+        .unwrap();
+        assert_eq!(page.conversations.len(), 1);
+        assert_eq!(page.conversations[0].kind, expected);
+    }
+}
+
+#[test]
 fn channel_wrappers_and_cursor_aliases_include_empty_pages() {
     for wrapper in ["channels", "results", "items", "matches", "data", "ret"] {
         for cursor_key in ["next_cursor", "nextCursor", "cursor"] {
@@ -312,7 +368,7 @@ fn channel_wrappers_and_cursor_aliases_include_empty_pages() {
     .unwrap();
     assert_eq!(page.next_cursor.as_deref(), Some("inner"));
     let page = parse::parse_slack_channel_page(
-        json!({"id": "C123", "name": "single", "next_cursor": " "}),
+        json!({"id": "C123", "name": "single", "is_private": false, "next_cursor": " "}),
     )
     .unwrap();
     assert_eq!(page.conversations.len(), 1);
@@ -473,6 +529,40 @@ async fn tool_errors_map_rate_limits_and_scopes_without_retrying() {
         source_error("other failure".into()),
         SlackSourceError::Other(_)
     ));
+}
+
+#[test]
+fn rate_limit_status_requires_a_standalone_token() {
+    for message in [
+        "429",
+        "HTTP 429 Too Many Requests",
+        "status=429; retry later",
+        "HTTP error (429)",
+        r#"{"status":429}"#,
+        "429: rate limit",
+    ] {
+        assert!(
+            matches!(
+                source_error(message.into()),
+                SlackSourceError::RateLimited { retry_after: None }
+            ),
+            "message: {message}"
+        );
+    }
+    for token in [
+        "C429ABC", "C429", "429ABC", "1429", "4290", "14290", "id_429",
+    ] {
+        let message = format!("request failed for {token}");
+        assert!(
+            matches!(source_error(message), SlackSourceError::Other(_)),
+            "token: {token}"
+        );
+        let message = format!("missing_scope for {token}");
+        assert!(
+            matches!(source_error(message), SlackSourceError::MissingScope(_)),
+            "token: {token}"
+        );
+    }
 }
 
 struct NoConnector;

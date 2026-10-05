@@ -48,13 +48,46 @@ describe('Pipedream connections model', () => {
     expect(model.providers[0].ready).toBe(0);
   });
 
-  it('does not expose either Slack alias as a leftover when both exist', () => {
-    const model = toConnectionsModel({
-      pipedream: [connection('slack'), connection('slack_v2')],
-      nativeMcp: [],
-    });
-    expect(capabilitiesFor(model, 'slack')).toHaveLength(1);
-    expect(model.leftovers).toEqual([]);
+  describe.each([
+    ['slack', 'slack_v2'],
+    ['slack_v2', 'slack'],
+  ])('alias input order: %s, %s', (first, second) => {
+    it.each([
+      [true, true],
+      [false, true],
+      [true, false],
+      [false, false],
+    ])(
+      'prefers slack (enabled=%s) and keeps slack_v2 (enabled=%s) manageable',
+      (slackEnabled, slackV2Enabled) => {
+        const connections = [first, second].map((slug) => ({
+          ...connection(slug, slug === 'slack' ? slackEnabled : slackV2Enabled),
+          server_name: `${slug} account`,
+        }));
+        const model = toConnectionsModel({
+          pipedream: connections,
+          nativeMcp: [],
+        });
+        expect(capabilitiesFor(model, 'slack')).toEqual([
+          expect.objectContaining({
+            appSlug: 'slack',
+            account: 'slack account',
+            status: slackEnabled ? 'connected' : 'off',
+          }),
+        ]);
+        expect(model.providers[0].ready).toBe(slackEnabled ? 1 : 0);
+        expect(model.leftovers).toEqual([
+          {
+            kind: 'pipedream',
+            id: 'pipedream:slack_v2',
+            title: 'slack_v2 account',
+            subtitle: 'slack_v2',
+            appSlug: 'slack_v2',
+            enabled: slackV2Enabled,
+          },
+        ]);
+      }
+    );
   });
 
   it('preserves other curated and non-curated Pipedream apps', () => {

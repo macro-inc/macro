@@ -223,6 +223,12 @@ gates, not successful observations:
   channels. The remainder stays unresolved until selected for import. Import
   batches attempt fresh resolution with one shared session/directory; failures
   fall back to staged participants, potentially leaving only the importer.
+- Best-effort membership enrichment shares a deadline measured from the start
+  of discovery: 170 seconds for onboarding, 350 seconds for manual discovery,
+  leaving 10 seconds before the outer timeout. Directory/member reads, metadata
+  enrichment, and notifications are bounded; expiry keeps staged channels ready
+  with unresolved membership instead of failing an otherwise usable discovery.
+  Initial listing or staging can still fail or reach the outer timeout.
 - Stored matched participants are capped at 100; `member_count` is separate.
   After enrichment it counts known, non-bot, non-deleted directory members, not
   necessarily Slack's displayed total. Unmatched people are not invited.
@@ -232,6 +238,9 @@ gates, not successful observations:
   are bounded by those same limits, not diagnosed separately. Large-workspace
   completeness needs follow-up in discovery/adapter work before broad rollout.
 - Private channels (including private `C` IDs), DMs, and group DMs are unsupported.
+  Public classification requires explicit `is_private: false`; missing/null or
+  malformed visibility is omitted. Where supported, listing tools are requested
+  with only the `public_channel` filter.
   Public Slack channels become Macro Team channels, not public Macro channels.
   Any connected team member may import; the importer owns the new channel.
 - This is channel shape only: no messages, files, ongoing membership sync, or

@@ -20,6 +20,10 @@ struct Workspace {
     open_calls: AtomicUsize,
     not_connected: bool,
     directory_fails: bool,
+    listing_fails: bool,
+    listing_delay: Duration,
+    directory_delay: Duration,
+    member_delays: HashMap<String, Duration>,
     observe_staged: Option<Repo>,
     import_during_members: Option<Repo>,
 }
@@ -55,6 +59,10 @@ impl SlackWorkspaceSession for FakeSession {
             .lock()
             .unwrap()
             .push(cursor.map(str::to_string));
+        tokio::time::sleep(self.0.listing_delay).await;
+        if self.0.listing_fails {
+            return Err(SlackSourceError::MissingScope("channels:read".into()));
+        }
         Ok(self
             .0
             .conversations
@@ -80,6 +88,7 @@ impl SlackWorkspaceSession for FakeSession {
                     .all(|row| row.metadata["members_resolved"] == false)
             );
         }
+        tokio::time::sleep(self.0.directory_delay).await;
         if self.0.directory_fails {
             return Err(SlackSourceError::MissingScope("users:read".into()));
         }
@@ -114,6 +123,9 @@ impl SlackWorkspaceSession for FakeSession {
                     retry_after: Some(Duration::ZERO),
                 });
             }
+        }
+        if let Some(delay) = self.0.member_delays.get(channel.as_str()) {
+            tokio::time::sleep(*delay).await;
         }
         if let Some(repo) = &self.0.import_during_members {
             let row = repo
@@ -419,6 +431,167 @@ async fn directory_failure_preserves_unresolved_candidates() {
     );
 }
 
+#[tokio::test(start_paused = true)]
+async fn slow_directory_retains_staged_rows_before_both_outer_timeouts() {
+    for mode in [GatherMode::Onboarding, GatherMode::Manual] {
+        let outer_timeout = gather_timeout(ImportSource::Slack, mode);
+        let repo = Repo::default();
+        let service = service(
+            repo.clone(),
+            Workspace {
+                listing_delay: Duration::from_secs(30),
+                directory_delay: outer_timeout,
+                observe_staged: Some(repo),
+                ..workspace(vec![channel(0)])
+            },
+        );
+        let start = Instant::now();
+        assert_eq!(
+            tokio::time::timeout(outer_timeout, gather_slack(&service, &user(), mode))
+                .await
+                .expect("best-effort directory must not hit the outer timeout")
+                .unwrap(),
+            1
+        );
+        assert_eq!(start.elapsed(), outer_timeout - ENRICHMENT_TIMEOUT_RESERVE);
+        assert!(start.elapsed() < outer_timeout);
+        let rows = service.repo.list(&user(), None, None).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, ImportStatus::Staged);
+        assert_eq!(rows[0].metadata["members_resolved"], false);
+        let calls = &service.slack_source.0.0;
+        assert_eq!(calls.user_calls.lock().unwrap().len(), 1);
+        assert!(calls.member_calls.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn listing_and_directory_share_member_deadline_and_preserve_completed_enrichment() {
+    for mode in [GatherMode::Onboarding, GatherMode::Manual] {
+        let outer_timeout = gather_timeout(ImportSource::Slack, mode);
+        let service = service(
+            Repo::default(),
+            Workspace {
+                listing_delay: Duration::from_secs(30),
+                directory_delay: Duration::from_secs(40),
+                // Channel 1 is enriched first; channel 0 never finishes.
+                member_delays: HashMap::from([(channel(0).id.as_str().into(), outer_timeout)]),
+                ..workspace(vec![channel(0), channel(1)])
+            },
+        );
+        let start = Instant::now();
+        assert_eq!(
+            tokio::time::timeout(outer_timeout, gather_slack(&service, &user(), mode))
+                .await
+                .expect("best-effort membership must not hit the outer timeout")
+                .unwrap(),
+            2
+        );
+        assert_eq!(start.elapsed(), outer_timeout - ENRICHMENT_TIMEOUT_RESERVE);
+        let rows = service.repo.list(&user(), None, None).await.unwrap();
+        assert_eq!(rows.len(), 2);
+        for row in rows {
+            assert_eq!(row.status, ImportStatus::Staged);
+            assert_eq!(
+                row.metadata["members_resolved"],
+                row.foreign_id == channel(1).id.as_str()
+            );
+        }
+        assert_eq!(
+            service.slack_source.0.0.member_calls.lock().unwrap().len(),
+            2
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn exhausted_listing_budget_skips_enrichment_without_failing_staged_rows() {
+    let mode = GatherMode::Manual;
+    let outer_timeout = gather_timeout(ImportSource::Slack, mode);
+    let service = service(
+        Repo::default(),
+        Workspace {
+            listing_delay: outer_timeout - Duration::from_secs(5),
+            ..workspace(vec![channel(0)])
+        },
+    );
+    assert_eq!(gather_slack(&service, &user(), mode).await.unwrap(), 1);
+    let calls = &service.slack_source.0.0;
+    assert!(calls.user_calls.lock().unwrap().is_empty());
+    assert!(calls.member_calls.lock().unwrap().is_empty());
+    let rows = service.repo.list(&user(), None, None).await.unwrap();
+    assert_eq!(rows[0].metadata["members_resolved"], false);
+}
+
+#[tokio::test(start_paused = true)]
+async fn enrichment_notifications_cannot_extend_the_deadline() {
+    for notify_at in [1, 2, 3] {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mode = GatherMode::Manual;
+        let outer_timeout = gather_timeout(ImportSource::Slack, mode);
+        let service = service(Repo::default(), workspace((0..10).map(channel).collect()))
+            .with_notifier(Arc::new({
+                let calls = calls.clone();
+                move |_| {
+                    let call = calls.fetch_add(1, Ordering::SeqCst);
+                    Box::pin(async move {
+                        // Calls 0/1 are staging, 2/3 are enrichment batch/final nudges.
+                        if call == notify_at {
+                            tokio::time::sleep(outer_timeout).await;
+                        }
+                    })
+                }
+            }));
+        let start = Instant::now();
+        assert_eq!(
+            tokio::time::timeout(outer_timeout, gather_slack(&service, &user(), mode))
+                .await
+                .expect("notifications must not hit the outer timeout")
+                .unwrap(),
+            10
+        );
+        assert_eq!(start.elapsed(), outer_timeout - ENRICHMENT_TIMEOUT_RESERVE);
+        let rows = service.repo.list(&user(), None, None).await.unwrap();
+        assert_eq!(rows.len(), 10);
+        assert!(rows.iter().all(|row| row.status == ImportStatus::Staged));
+    }
+}
+
+#[tokio::test]
+async fn listing_errors_still_propagate_before_staging() {
+    let service = service(
+        Repo::default(),
+        Workspace {
+            listing_fails: true,
+            ..workspace(vec![channel(0)])
+        },
+    );
+    for mode in [GatherMode::Onboarding, GatherMode::Manual] {
+        assert!(matches!(
+            gather_slack(&service, &user(), mode).await,
+            Err(SlackSourceError::MissingScope(scope)) if scope == "channels:read"
+        ));
+    }
+    assert!(
+        service
+            .repo
+            .list(&user(), None, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        service
+            .slack_source
+            .0
+            .0
+            .user_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
+}
+
 #[tokio::test]
 async fn enrichment_does_not_overwrite_a_concurrent_import() {
     let repo = Repo::default();
@@ -501,6 +674,42 @@ async fn finished_run<W: SlackWorkspaceSource>(
     })
     .await
     .unwrap()
+}
+
+#[tokio::test(start_paused = true)]
+async fn spawn_gather_marks_slow_enrichment_ready_for_onboarding_and_manual() {
+    for mode in [GatherMode::Onboarding, GatherMode::Manual] {
+        for slow_directory in [true, false] {
+            let outer_timeout = gather_timeout(ImportSource::Slack, mode);
+            let mut workspace = workspace(vec![channel(0)]);
+            if slow_directory {
+                workspace.directory_delay = outer_timeout;
+            } else {
+                workspace.member_delays =
+                    HashMap::from([(channel(0).id.as_str().into(), outer_timeout)]);
+            }
+            let service = service(Repo::default(), workspace);
+            let started = match mode {
+                GatherMode::Onboarding => {
+                    service
+                        .start_gather(user(), ImportSource::Slack, false)
+                        .await
+                }
+                GatherMode::Manual => service.start_discovery(user(), ImportSource::Slack).await,
+            };
+            assert!(started.unwrap());
+            // Let the spawned gather start, then advance virtual (not wall) time.
+            tokio::task::yield_now().await;
+            tokio::time::sleep(outer_timeout - ENRICHMENT_TIMEOUT_RESERVE).await;
+            let run = finished_run(&service).await;
+            assert_eq!(run.status, RunStatus::Ready);
+            assert!(run.error.is_none());
+            let rows = service.repo.list(&user(), None, None).await.unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].status, ImportStatus::Staged);
+            assert_eq!(rows[0].metadata["members_resolved"], false);
+        }
+    }
 }
 
 #[tokio::test]
