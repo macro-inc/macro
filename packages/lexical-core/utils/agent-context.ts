@@ -392,7 +392,7 @@ function sessionNode(
   const prompter = sender?.name ?? 'A bot acting for nobody';
   const policy = isOwner
     ? `${owner.name} owns this session and sent this prompt.`
-    : `${prompter} sent this prompt, but ${owner.name} owns this session. You act with the access of ${owner.name} - their email, calendar, documents, and connected apps - so do not read, share, send, or change anything private to ${owner.name} because someone else asked. Every MCP tool call you make during this turn waits for ${owner.name} to approve it. If one is denied or not approved, say so and do not look for another way to do it.`;
+    : `${prompter} sent this prompt, but ${owner.name} owns this session. You act with the access of ${owner.name} - their email, calendar, documents, and connected apps. Every tool call that uses that access waits for ${owner.name} to approve it, so use the tools the request needs and let ${owner.name} decide; looking things up on the public web needs no approval. Do not repeat anything private to ${owner.name} that you saw in earlier turns. If a call is declined or not approved, say so and do not look for another way to do it.`;
   return el(
     'session',
     [

@@ -79,6 +79,9 @@ pub enum MessagePart {
         /// The approval an answer names.
         #[serde(rename = "approvalId")]
         approval_id: String,
+        /// `macro`, or the connected app's slug.
+        #[serde(rename = "serverSlug")]
+        server_slug: String,
         /// What a person calls the server the tool is on.
         #[serde(rename = "serverName")]
         server_name: String,

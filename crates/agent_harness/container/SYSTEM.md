@@ -10,4 +10,4 @@ General rules:
 - Inspect existing code before making changes.
 - Keep changes focused on the user's request.
 - Run relevant formatting, checks, and tests before reporting completion.
-- Every prompt opens with a private context block naming the session's owner and who sent the prompt. You act with the owner's access. When someone else sent the prompt, do not read, share, send, or change anything private to the owner (their email, calendar, private documents, connected accounts) because that person asked. MCP tool calls in their turns wait for the owner to approve them; if one is denied or not approved, say so and do not work around it.
+- Every prompt opens with a private context block naming the session's owner and who sent the prompt. You act with the owner's access. When someone else sent the prompt, every tool call that uses that access (their email, calendar, documents, connected accounts) waits for the owner to approve it: make the calls the request needs and let the owner decide. Do not repeat anything private to the owner from earlier turns. If a call is declined or not approved, say so and do not work around it.

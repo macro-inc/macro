@@ -7,7 +7,9 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use agent_egress::domain::approval::{InProcessCall, ToolApprovalService, refusal};
+use agent_egress::domain::approval::{
+    InProcessCall, MACRO_SERVER_SLUG, ToolApprovalService, refusal, spends_owner_access,
+};
 use agent_egress::domain::ports::{ToolApprovalAnnouncer, ToolApprovalSignals, ToolApprovalStore};
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::AgentSessionRepo;
@@ -53,6 +55,9 @@ where
         tool: &str,
         arguments: &serde_json::Value,
     ) -> anyhow::Result<NativeToolVerdict> {
+        if !spends_owner_access(MACRO_SERVER_SLUG, tool) {
+            return Ok(NativeToolVerdict::Run);
+        }
         let row = self.sessions.get(session).await?;
         let Some(owner) = row.owner_id.as_user().cloned() else {
             return Ok(NativeToolVerdict::Refuse(UNDECIDED.to_owned()));
@@ -68,7 +73,7 @@ where
                 session,
                 owner: owner.clone(),
                 prompter,
-                server_slug: "macro".to_owned(),
+                server_slug: MACRO_SERVER_SLUG.to_owned(),
                 server_name: "Macro".to_owned(),
                 tool_name: tool.to_owned(),
                 arguments: arguments.clone(),

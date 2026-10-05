@@ -1342,3 +1342,22 @@ async fn without_approvals_a_gated_tool_call_is_refused() {
     assert_eq!(body["result"]["isError"], true);
     assert!(!service.forward.was_called());
 }
+
+/// Looking something up on the public web spends nobody's access, so even a
+/// turn somebody else prompted searches without asking.
+#[tokio::test]
+async fn a_public_web_search_in_a_gated_turn_goes_straight_through() {
+    let service = gated(prompted_by(Some(asker())), SpyCredentials::knowing());
+    service
+        .proxy(
+            &SessionToken::new("token"),
+            EgressTarget::McpServer(McpDestination::Macro),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"WebSearch","arguments":{"input":"rust"}}}"#,
+            ),
+        )
+        .await
+        .expect("proxied");
+    assert!(service.forward.was_called());
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+}

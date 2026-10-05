@@ -141,3 +141,15 @@ async fn a_declined_call_is_refused_in_words_the_model_can_relay() {
     };
     assert!(reason.starts_with("owner@example.com declined this call, so SendEmail did not run."));
 }
+
+#[tokio::test]
+async fn a_public_web_search_runs_without_asking_even_for_somebody_else() {
+    let rig = rig();
+    prompted_by(&rig, None).await;
+    let verdict = rig
+        .gate
+        .check(rig.session, "WebSearch", &serde_json::json!({}))
+        .await;
+    assert_eq!(verdict, NativeToolVerdict::Run);
+    assert!(rig.store.all().is_empty());
+}

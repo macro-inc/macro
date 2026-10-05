@@ -628,6 +628,8 @@ export type MessagePart =
       kind: 'tool_approval';
       /**  The approval an answer names. */
       approvalId: string;
+      /**  `macro`, or the connected app's slug. */
+      serverSlug: string;
       /**  What a person calls the server the tool is on. */
       serverName: string;
       /**  The tool called. */
@@ -770,6 +772,8 @@ export type PendingToolApproval = {
   approvalId: string;
   /**  The turn the call was made in. */
   turn: number;
+  /**  `macro`, or the connected app's slug. */
+  serverSlug: string;
   /**  What a person calls the server the tool is on. */
   serverName: string;
   /**  The tool called. */

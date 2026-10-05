@@ -12,6 +12,7 @@ const held = {
   kind: 'tool_approval',
   approvalId: 'approval-1',
   turn: 0,
+  serverSlug: 'macro',
   serverName: 'Macro',
   toolName: 'ListEmails',
   requestedBy: 'macro|julia@macro.com',

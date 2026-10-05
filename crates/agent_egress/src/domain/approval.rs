@@ -57,6 +57,22 @@ pub const HOLD_LIMIT_WITH_PROGRESS: Duration = Duration::from_secs(30 * 60);
 /// as silence.
 pub const HOLD_LIMIT: Duration = Duration::from_secs(4 * 60);
 
+/// The server slug Macro's own tools are held under.
+pub const MACRO_SERVER_SLUG: &str = "macro";
+
+/// Macro's tools that use nobody's access: looking things up on the public
+/// web, and Macro's help about itself. Everything else on Macro's server
+/// reads or changes the owner's own data, and every connected app is the
+/// owner's own account.
+const MACRO_TOOLS_WITHOUT_OWNER_ACCESS: [&str; 3] = ["WebSearch", "WebFetch", "SelfKnowledge"];
+
+/// Whether calling `tool` on `server_slug` spends the owner's access, and so
+/// waits for them in a turn somebody else prompted.
+#[must_use]
+pub fn spends_owner_access(server_slug: &str, tool: &str) -> bool {
+    server_slug != MACRO_SERVER_SLUG || !MACRO_TOOLS_WITHOUT_OWNER_ACCESS.contains(&tool)
+}
+
 /// Identifies one held call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ToolApprovalId(Uuid);

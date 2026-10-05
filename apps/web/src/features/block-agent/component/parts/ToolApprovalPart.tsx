@@ -7,6 +7,10 @@ import type { MessagePart } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useOptionalAgentSession } from '../../context/AgentSessionContext';
+import {
+  describeToolCall,
+  possessive,
+} from '../../state/tool-approval-wording';
 import { ToolCard } from '../../ui';
 
 export function ToolApprovalPart(props: {
@@ -18,6 +22,22 @@ export function ToolApprovalPart(props: {
     return resolvedBy
       ? (session?.displayName(resolvedBy) ?? resolvedBy)
       : undefined;
+  };
+  const owner = () => {
+    const ownerId = session?.session()?.ownerId;
+    if (!ownerId) return "the owner's";
+    return ownerId === session?.userId()
+      ? 'your'
+      : possessive(session?.displayName(ownerId) ?? ownerId);
+  };
+  // "Read your email", from "read your email".
+  const title = () => {
+    const action = describeToolCall(
+      { slug: props.part.serverSlug, name: props.part.serverName },
+      props.part.toolName,
+      owner()
+    );
+    return action.charAt(0).toUpperCase() + action.slice(1);
   };
   const outcome = () =>
     match(props.part.status)
@@ -31,7 +51,7 @@ export function ToolApprovalPart(props: {
   return (
     <Show when={props.part.status !== 'pending'}>
       <ToolCard
-        title={`${props.part.serverName} · ${props.part.toolName}`}
+        title={title()}
         trailing={<span class="text-ink">{outcome()}</span>}
         status="completed"
       />

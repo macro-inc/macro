@@ -480,3 +480,15 @@ fn only_approval_lets_a_call_run() {
         );
     }
 }
+
+#[test]
+fn only_public_lookups_on_macro_skip_the_owner() {
+    assert!(!spends_owner_access(MACRO_SERVER_SLUG, "WebSearch"));
+    assert!(!spends_owner_access(MACRO_SERVER_SLUG, "WebFetch"));
+    assert!(spends_owner_access(MACRO_SERVER_SLUG, "ListEmails"));
+    assert!(spends_owner_access(MACRO_SERVER_SLUG, "ReadContent"));
+    assert!(
+        spends_owner_access("linear", "WebSearch"),
+        "a connected app is always the owner's own account"
+    );
+}

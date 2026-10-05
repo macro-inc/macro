@@ -145,6 +145,7 @@ fn message(uri: &str) -> ChatMessage {
 
 fn request(messages: Vec<ChatMessage>) -> TurnRequest {
     TurnRequest {
+        session_id: agent_session::domain::model::AgentSessionId::new(),
         owner: Owner::from_principal_str("macro|test@macro.com").expect("user"),
         model: "test-model".to_owned(),
         reasoning_effort: agent::ReasoningEffort::default(),

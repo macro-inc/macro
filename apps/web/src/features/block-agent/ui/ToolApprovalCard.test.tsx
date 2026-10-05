@@ -17,9 +17,7 @@ function card(overrides: Partial<ToolApprovalCardProps>) {
   };
   const view = render(() => (
     <ToolApprovalCard
-      server="Macro"
-      tool="ListEmails"
-      detail={'{\n  "limit": 5\n}'}
+      action="read your email"
       requester="julia@macro.com"
       owner="wolf@macro.com"
       canApprove={false}
@@ -32,15 +30,12 @@ function card(overrides: Partial<ToolApprovalCardProps>) {
 }
 
 describe('ToolApprovalCard', () => {
-  it('asks the owner to approve or decline, naming the tool and who asked', () => {
+  it('asks the owner to approve or decline, saying what the agent wants and who asked', () => {
     const { getByText, onApprove, onDeny } = card({ canApprove: true });
     expect(getByText('Approval needed')).toBeTruthy();
     expect(
-      getByText(
-        'julia@macro.com asked the agent to use a tool with your access.'
-      )
+      getByText('julia@macro.com asked the agent to read your email.')
     ).toBeTruthy();
-    expect(getByText('Macro · ListEmails')).toBeTruthy();
     fireEvent.click(getByText('Approve'));
     fireEvent.click(getByText('Decline'));
     expect(onApprove).toHaveBeenCalledOnce();

@@ -50,8 +50,7 @@ use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor, ContextMessage,
     ContextThread, ConversationContext, DeclinedMention, DeliverAction, HarnessCommand,
     HarnessDefaults, MentionOrigin, OpenSession, PromptPeople, SessionBlocker, SessionDefaults,
-    SessionOrigin,
-    SessionRepository, SpawnContainer,
+    SessionOrigin, SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,

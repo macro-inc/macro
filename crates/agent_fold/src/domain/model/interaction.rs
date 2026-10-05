@@ -52,6 +52,8 @@ pub struct PendingToolApproval {
     pub approval_id: String,
     /// The turn the call was made in.
     pub turn: u32,
+    /// `macro`, or the connected app's slug.
+    pub server_slug: String,
     /// What a person calls the server the tool is on.
     pub server_name: String,
     /// The tool called.

@@ -6,7 +6,9 @@ use http::header::AUTHORIZATION;
 use http::{Method, Uri};
 use http_body_util::{BodyExt, Full};
 
-use crate::domain::approval::{HeldCall, OwnerApprovals, RefuseHeldCalls, ToolsCall};
+use crate::domain::approval::{
+    HeldCall, MACRO_SERVER_SLUG, OwnerApprovals, RefuseHeldCalls, ToolsCall, spends_owner_access,
+};
 use crate::domain::error::EgressError;
 use crate::domain::model::{
     EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, McpServerSlug,
@@ -257,16 +259,18 @@ where
             && *request.method() == Method::POST
         {
             let (parts, bytes) = read_mcp_body(request).await?;
-            if let Some(call) = ToolsCall::parse(&bytes) {
-                let (server_slug, server_name) = match destination {
-                    // Session-scoped previews spend nobody's access; exempt above.
-                    McpDestination::Macro | McpDestination::Preview => {
-                        ("macro".to_owned(), "Macro".to_owned())
-                    }
-                    McpDestination::Connected(slug) => {
-                        (slug.as_str().to_owned(), grant.display_name(slug))
-                    }
-                };
+            let (server_slug, server_name) = match destination {
+                // Session-scoped previews spend nobody's access; exempt above.
+                McpDestination::Macro | McpDestination::Preview => {
+                    (MACRO_SERVER_SLUG.to_owned(), "Macro".to_owned())
+                }
+                McpDestination::Connected(slug) => {
+                    (slug.as_str().to_owned(), grant.display_name(slug))
+                }
+            };
+            if let Some(call) = ToolsCall::parse(&bytes)
+                .filter(|call| spends_owner_access(&server_slug, &call.name))
+            {
                 let forward = Arc::clone(&self.forward);
                 return self
                     .approvals

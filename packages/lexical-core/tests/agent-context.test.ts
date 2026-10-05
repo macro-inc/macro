@@ -388,7 +388,7 @@ describe('composeAgentContextPrompt', () => {
       'julia@macro.com sent this prompt, but wolf@macro.com owns this session.'
     );
     expect(text).toContain(
-      'Every MCP tool call you make during this turn waits for wolf@macro.com to approve it.'
+      'Every tool call that uses that access waits for wolf@macro.com to approve it, so use the tools the request needs and let wolf@macro.com decide'
     );
     expect(text).toContain('<conversation type="channel" id="channel-1">');
   });

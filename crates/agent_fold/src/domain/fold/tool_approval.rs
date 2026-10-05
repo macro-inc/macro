@@ -33,6 +33,7 @@ impl FoldState {
         self.turn.as_ref()?;
         let (changed, position) = self.push_agent_part(MessagePart::ToolApproval {
             approval_id: notice.approval_id.clone(),
+            server_slug: notice.server_slug.clone(),
             server_name: notice.server_name.clone(),
             tool_name: notice.tool_name.clone(),
             arguments: notice.arguments,
@@ -52,6 +53,7 @@ impl FoldState {
             .push(PendingInteraction::ToolApproval(PendingToolApproval {
                 approval_id: notice.approval_id,
                 turn: self.messages[changed.message].id.0,
+                server_slug: notice.server_slug,
                 server_name: notice.server_name,
                 tool_name: notice.tool_name,
                 requested_by: notice.requested_by,

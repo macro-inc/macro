@@ -10,6 +10,7 @@ import {
 } from '@app/features/block-agent/component/parts/shared';
 import type { InteractionController } from '@app/features/block-agent/context/interaction';
 import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
+import { describeToolCall } from '@app/features/block-agent/state/tool-approval-wording';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -190,7 +191,11 @@ export function createMagicChipModel(props: MagicChipData): {
         request,
         canAnswer: false,
         answering: false,
-        action: `${request.serverName} · ${request.toolName} needs the owner's approval`,
+        action: `Wants to ${describeToolCall(
+          { slug: request.serverSlug, name: request.serverName },
+          request.toolName,
+          "the owner's"
+        )}`,
       };
     }
     const tool = messages()

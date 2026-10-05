@@ -671,17 +671,19 @@ marked done.
 ## Tool calls waiting for the session owner
 
 An agent session always runs with its owner's access. When someone else prompts it (a
-second person replying in the session's channel thread, or a bot), every tool call it
-makes on Macro's own tools or a connected app is held until the owner approves it; the
-owner's own turns are not held. The session view shows a card over the composer: the owner
-sees `Approval needed` with the server and tool (`Macro · ListEmails`), the arguments, and
-`Decline` / `Approve`; everyone else sees `Waiting for <owner> to approve` and, with edit
-access, a `Cancel` button for when the owner is away. The owner also gets an
-`agent_session_waiting_for_input` notification. Once answered the transcript shows
-`<Server> · <tool>` with `Approved by …`, `Declined by …`, `Cancelled`, or `Not approved in
-time` (about four minutes for the in-process agent, longer for sandboxed ones). A declined or
-cancelled call does not run and the agent says so. The Magic Chip reads
-`Waiting for approval`. The agent's hidden context names the owner and the prompter.
+second person replying in the session's channel thread, or a bot), every tool call that
+uses that access - Macro's own tools on the owner's email, calendar, documents and so on,
+and any connected app - waits for the owner to approve it. Public lookups (`WebSearch`,
+`WebFetch`, `SelfKnowledge`) and the owner's own turns are never held. The session view
+shows a card over the composer that says what the agent wants to do, e.g. `Dave Seed asked
+the agent to read your email.` The owner sees `Approval needed` with `Decline` / `Approve`;
+everyone else sees `Waiting for <owner> to approve` (`…to read Alice Seed's email`) and,
+with edit access, a `Cancel` button for when the owner is away. The owner also gets an
+`agent_session_waiting_for_input` notification. Once answered the transcript shows the
+same action (`Read your email`) with `Approved by …`, `Declined by …`, `Cancelled`, or
+`Not approved in time` (about four minutes for the in-process agent, longer for sandboxed
+ones). A declined or cancelled call does not run and the agent says so. The Magic Chip
+reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
 
 ## In channels
 

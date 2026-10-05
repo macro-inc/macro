@@ -3,11 +3,8 @@ import { Button } from '@ui';
 import { Show } from 'solid-js';
 
 export type ToolApprovalCardProps = {
-  /** What a person calls the server, e.g. `Macro` or `Linear`. */
-  server: string;
-  tool: string;
-  /** The arguments, formatted for reading. */
-  detail?: string;
+  /** What the agent wants to do, e.g. `read your email`. */
+  action: string;
   /** Who prompted the turn; absent for a bot on nobody's behalf. */
   requester?: string;
   /** The session's owner, whose access the call spends. */
@@ -44,22 +41,10 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
               ? 'Approval needed'
               : `Waiting for ${props.owner} to approve`}
           </div>
-          <p class="mt-0.5 text-xs leading-5 text-ink-muted">
-            {props.canApprove
-              ? `${asker()} asked the agent to use a tool with your access.`
-              : `${asker()} asked the agent to use a tool with ${props.owner}'s access, so it waits for them.`}
+          <p class="mt-0.5 text-sm leading-5 text-ink-muted [overflow-wrap:anywhere]">
+            {asker()} asked the agent to {props.action}.
           </p>
         </div>
-      </div>
-      <div class="mx-4 mt-3 rounded-lg bg-surface px-3 py-2.5">
-        <div class="text-xs font-medium text-ink-muted [overflow-wrap:anywhere]">
-          {props.server} · {props.tool}
-        </div>
-        <Show when={props.detail}>
-          <pre class="mt-1 max-h-32 overflow-y-auto font-mono text-xs leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]">
-            {props.detail}
-          </pre>
-        </Show>
       </div>
       <div class="flex min-w-0 flex-wrap items-center justify-end gap-2 p-3">
         <Show
