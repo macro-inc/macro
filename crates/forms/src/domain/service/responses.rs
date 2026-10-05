@@ -7,7 +7,7 @@ use databases::domain::models::DatabaseError;
 use databases::domain::ports::{DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_event_broker::MacroEventBroker;
-use models_databases::{CellValue, ColumnKind, OptionRef};
+use models_databases::{CellValue, ColumnKind, OptionRef, RowId};
 
 use super::layout::question_columns;
 use super::{
@@ -15,19 +15,21 @@ use super::{
     repository_error,
 };
 use crate::domain::models::{
-    FormAccess, FormError, FormSection, FormSectionId, FormTally, QuestionTally, ResponseSummary,
-    SectionCount, TallyBucket, TallyValue,
+    FormAccess, FormError, FormSection, FormSectionId, FormTally, QuestionOption, QuestionTally,
+    ResponseSummary, SectionCount, TallyBucket, TallyValue,
 };
 use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
 
 /// One column's tally from its cells.
 fn tally_of(
     kind: ColumnKind,
-    options: &[crate::domain::models::QuestionOption],
-    cells: &HashMap<models_databases::RowId, CellValue>,
+    options: &[QuestionOption],
+    cells: &HashMap<RowId, CellValue>,
 ) -> (u64, Vec<TallyBucket>) {
+    // A count of in-memory cells is a usize, at most 64 bits on every
+    // target the service builds for, so it always fits a u64.
     let count = |holds: &dyn Fn(&CellValue) -> bool| -> u64 {
-        u64::try_from(cells.values().filter(|value| holds(value)).count()).unwrap_or(u64::MAX)
+        cells.values().filter(|value| holds(value)).count() as u64
     };
     let responses = count(&|value| match value {
         CellValue::Options(options) => !options.is_empty(),
@@ -55,14 +57,20 @@ fn tally_of(
     (responses, buckets)
 }
 
+/// Whether a column of `kind` has a fixed set of values a tally counts.
 fn tallied(kind: ColumnKind) -> bool {
-    matches!(
-        kind,
+    match kind {
         ColumnKind::Select { .. }
-            | ColumnKind::SelectNumber { .. }
-            | ColumnKind::Tag
-            | ColumnKind::Boolean
-    )
+        | ColumnKind::SelectNumber { .. }
+        | ColumnKind::Tag
+        | ColumnKind::Boolean => true,
+        ColumnKind::Text
+        | ColumnKind::Number
+        | ColumnKind::Date
+        | ColumnKind::Link
+        | ColumnKind::Entity { .. }
+        | ColumnKind::Relation { .. } => false,
+    }
 }
 
 impl<Repository, Databases, Access, Events, Now, Broker>
@@ -155,7 +163,9 @@ where
             if !tallied(column.kind) {
                 continue;
             }
-            let cells = self
+            // A column deleted in the grid since the table was read is not
+            // asked any more, as one already missing above is not.
+            let cells = match self
                 .databases
                 .column_cells(
                     internal_receipt::<ViewAccessLevel>(form.database_id),
@@ -163,7 +173,11 @@ where
                     question.column,
                 )
                 .await
-                .map_err(database_error)?;
+            {
+                Ok(cells) => cells,
+                Err(DatabaseError::NotFound) => continue,
+                Err(other) => return Err(database_error(other)),
+            };
             let (responses, buckets) = tally_of(column.kind, &column.options, &cells);
             questions.push(QuestionTally {
                 question: question.id,

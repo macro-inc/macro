@@ -23,7 +23,7 @@ use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, Forms
 use crate::domain::sharing::FormSharingRepo;
 
 pub(crate) use self::databases::{
-    FakeColumn, FakeDatabase, FakeDatabases, FakeTable, RecordedBatch,
+    FakeColumn, FakeDatabase, FakeDatabases, FakeTable, GridChange, RecordedBatch,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -72,6 +72,8 @@ pub(crate) struct World {
     /// A concurrent submission by this person to this form that commits
     /// its ledger entry while the next batch is being written.
     pub(crate) competing_submission: Option<(FormId, String)>,
+    /// A grid change that commits just before the next cell read.
+    pub(crate) grid_change_before_next_cell_read: Option<GridChange>,
     /// Refuse the next batch with this error.
     pub(crate) refuse_next_batch: Option<::databases::domain::models::DatabaseError>,
     /// Every `macro.forms` envelope the service handed the broker.
@@ -99,6 +101,7 @@ impl World {
             audience_before_next_layout_write: None,
             layout_before_next_update: None,
             competing_submission: None,
+            grid_change_before_next_cell_read: None,
             refuse_next_batch: None,
             events: vec![],
         }

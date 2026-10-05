@@ -37,7 +37,8 @@ impl From<FormError> for EntityMutationErrorCode {
             | FormError::TallyHidden) => Self::invalid(rootcause::report!(error)),
             error @ (FormError::Database(_)
             | FormError::Repository(_)
-            | FormError::AccessDirectory(_)) => Self::internal(rootcause::report!(error)),
+            | FormError::AccessDirectory(_)
+            | FormError::DatabaseContract(_)) => Self::internal(rootcause::report!(error)),
         }
     }
 }

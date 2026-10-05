@@ -117,14 +117,20 @@ async fn a_facts_change_forbidding_a_widget_is_refused_while_a_question_uses_it(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_layout_write_behind_a_concurrent_switch_to_public_sees_the_switch(pool: PgPool) {
+async fn a_layout_write_started_while_a_switch_to_public_holds_the_form_is_refused(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
     let layout = layout_over(&table);
     repo.create_form(&form, &layout).await.unwrap();
 
-    // The switch to public holds the form's row while it commits.
+    // The switch to public holds the form's row while it commits. The
+    // signal only says the write has started: it either waits on the row
+    // lock or runs after the commit, and either way must see the switch and
+    // refuse. This does not force the waiting order (that would mean polling
+    // pg_locks); the lock taken before the check is what makes both orders
+    // safe, and a_layout_needing_members_is_refused_once_the_stored_form_is_public
+    // covers the check itself.
     let mut switch = pool.begin().await.unwrap();
     sqlx::query!(
         "SELECT id FROM forms WHERE id = $1 FOR UPDATE",
@@ -161,13 +167,16 @@ async fn a_layout_write_behind_a_concurrent_switch_to_public_sees_the_switch(poo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_switch_to_public_behind_a_concurrent_file_question_sees_the_question(pool: PgPool) {
+async fn a_switch_to_public_started_while_a_file_question_is_put_is_refused(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
     repo.create_form(&form, &layout_over(&table)).await.unwrap();
 
     // The layout put holds the form's row while it writes a file question.
+    // As above, the signal only says the switch has started; it either waits
+    // on the row lock or runs after the put commits, and must refuse in
+    // either order.
     let mut put = pool.begin().await.unwrap();
     sqlx::query!(
         "SELECT id FROM forms WHERE id = $1 FOR UPDATE",

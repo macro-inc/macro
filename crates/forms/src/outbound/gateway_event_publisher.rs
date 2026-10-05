@@ -28,8 +28,8 @@ pub struct FormChanged {
 #[derive(Debug, thiserror::Error)]
 pub enum FormPublishError {
     /// The gateway rejected or failed the publish.
-    #[error("gateway publish failed: {0}")]
-    Gateway(String),
+    #[error("gateway publish failed")]
+    Gateway(#[source] anyhow::Error),
     /// The payload did not serialize.
     #[error("payload serialization failed")]
     Serialize(#[source] serde_json::Error),
@@ -61,7 +61,7 @@ impl FormEventPublisher for GatewayFormEventPublisher {
                     .map_err(FormPublishError::Serialize)?,
             )
             .await
-            .map_err(|error| FormPublishError::Gateway(format!("{error:#}")))?;
+            .map_err(FormPublishError::Gateway)?;
         Ok(())
     }
 }

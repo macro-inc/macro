@@ -180,8 +180,14 @@ pub(super) async fn insert(
     Ok(())
 }
 
-/// A form's layout, sections and questions in order.
+/// The isolation a layout read runs at: both of its statements see one
+/// snapshot, so a layout put committing between them cannot pair old
+/// sections with new questions. Read only, so it never blocks a writer.
+const SNAPSHOT: &str = "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY";
+
+/// A form's layout, sections and questions in order, as one snapshot.
 pub(super) async fn read(pool: &PgPool, form: FormId) -> Result<FormLayout, PgFormsRepoError> {
+    let mut snapshot = pool.begin_with(SNAPSHOT).await?;
     let sections = sqlx::query!(
         r#"
         SELECT id, title, description, kind, gate_rules, gate_message
@@ -190,7 +196,7 @@ pub(super) async fn read(pool: &PgPool, form: FormId) -> Result<FormLayout, PgFo
         "#,
         form.into_uuid(),
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *snapshot)
     .await?;
     let questions = sqlx::query!(
         r#"
@@ -200,8 +206,9 @@ pub(super) async fn read(pool: &PgPool, form: FormId) -> Result<FormLayout, PgFo
         "#,
         form.into_uuid(),
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *snapshot)
     .await?;
+    snapshot.commit().await?;
     let mut by_section: HashMap<Uuid, Vec<QuestionLayout>> = HashMap::new();
     for question in questions {
         by_section

@@ -16,7 +16,7 @@ use models_databases::{
 };
 
 use super::answers::{AnsweredQuestion, Evaluation, evaluate};
-use super::layout::{gates_fit_table, question_columns};
+use super::layout::{QuestionColumn, gates_fit_table, question_columns};
 use super::managed::{respondent_kind, submitted_kind, writable};
 use super::{
     FormsServiceImpl, database_error, internal_receipt, owner_of, receipt_form_id,
@@ -24,7 +24,7 @@ use super::{
 };
 use crate::domain::events::{FormResponseSubmittedMetadata, FormTopicEvent};
 use crate::domain::models::{
-    Answer, Audience, ColumnId, Form, FormError, FormLayout, FormResponse, MyResponse,
+    Answer, Audience, ColumnId, Form, FormError, FormLayout, FormResponse, FormSection, MyResponse,
     RecordedResponse, Respondent, ResponseStatus, RowId, Submission, SubmissionOutcome,
 };
 use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
@@ -33,7 +33,7 @@ use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, Forms
 /// still has.
 fn insert_cells(
     form: &Form,
-    table: &TableDetail,
+    columns: &HashMap<ColumnId, QuestionColumn>,
     answered: &[AnsweredQuestion],
     respondent: &Respondent,
     submitted_at: DateTime<Utc>,
@@ -47,14 +47,14 @@ fn insert_cells(
             })
         })
         .collect();
-    if let Some(column) = writable(table, form.submitted_column_id, submitted_kind()) {
+    if let Some(column) = writable(columns, form.submitted_column_id, submitted_kind()) {
         cells.push(CellWrite {
             column,
             value: CellValue::Date(submitted_at),
         });
     }
     if let (Some(column), Respondent::Member(user)) = (
-        writable(table, form.respondent_column_id, respondent_kind()),
+        writable(columns, form.respondent_column_id, respondent_kind()),
         respondent,
     ) {
         cells.push(CellWrite {
@@ -79,9 +79,7 @@ fn inserted_row(results: &[OpResult]) -> Result<RowId, FormError> {
             } => rows.first().copied(),
             _ => None,
         })
-        .ok_or_else(|| {
-            FormError::Repository(rootcause::report!("the databases insert answered no row"))
-        })
+        .ok_or_else(|| FormError::DatabaseContract("an insert of one row answered no row"))
 }
 
 /// A refused write in the form's terms: an answer the databases service
@@ -117,8 +115,8 @@ fn answers_of(layout: &FormLayout, cells: &[CellWrite]) -> Vec<Answer> {
         .sections
         .iter()
         .flat_map(|section| match section {
-            crate::domain::models::FormSection::Questions { questions, .. } => questions.as_slice(),
-            crate::domain::models::FormSection::Gate { .. } => &[],
+            FormSection::Questions { questions, .. } => questions.as_slice(),
+            FormSection::Gate { .. } => &[],
         })
         .filter_map(|question| {
             by_column.get(&question.column).map(|value| Answer {
@@ -222,7 +220,7 @@ where
         let insert = vec![DatabaseOp::Rows {
             table: form.table_id,
             change: RowsChange::Insert {
-                rows: vec![insert_cells(&form, &table, &answered, &respondent, now)],
+                rows: vec![insert_cells(&form, &columns, &answered, &respondent, now)],
             },
         }];
         // The row first, under the form's receipt, as the respondent or, for
@@ -307,7 +305,7 @@ where
                 row
             }
             None => {
-                self.rewrite_lost_row(&form, &table, &user, &entry, &answered, now)
+                self.rewrite_lost_row(&form, &columns, &user, &entry, &answered, now)
                     .await?
             }
         };
@@ -375,7 +373,7 @@ where
     async fn rewrite_lost_row(
         &self,
         form: &Form,
-        table: &TableDetail,
+        columns: &HashMap<ColumnId, QuestionColumn>,
         user: &MacroUserIdStr<'static>,
         entry: &FormResponse,
         answered: &[AnsweredQuestion],
@@ -386,7 +384,7 @@ where
             change: RowsChange::Insert {
                 rows: vec![insert_cells(
                     form,
-                    table,
+                    columns,
                     answered,
                     &Respondent::Member(user.clone()),
                     entry.submitted_at,
@@ -425,13 +423,9 @@ where
                 answers: vec![],
             });
         };
-        if self.table_of(&form).await?.is_none() {
-            return Ok(MyResponse {
-                response,
-                answers: vec![],
-            });
-        }
-        let mut cells = self
+        // A table gone, or its database in the trash, leaves the receipt
+        // with no answers to show.
+        let mut cells = match self
             .databases
             .cells_of_rows(
                 internal_receipt::<ViewAccessLevel>(form.database_id),
@@ -439,7 +433,16 @@ where
                 &[row],
             )
             .await
-            .map_err(database_error)?;
+        {
+            Ok(cells) => cells,
+            Err(DatabaseError::NotFound) => {
+                return Ok(MyResponse {
+                    response,
+                    answers: vec![],
+                });
+            }
+            Err(other) => return Err(database_error(other)),
+        };
         let layout = self
             .repository
             .layout(form.id)

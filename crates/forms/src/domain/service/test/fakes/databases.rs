@@ -447,7 +447,10 @@ impl FakeDatabases {
         read: impl FnOnce(&FakeTable) -> Answer,
     ) -> Result<Answer, DatabaseError> {
         let database_id = receipt_database(receipt)?;
-        let world = self.0.lock().unwrap();
+        let mut world = self.0.lock().unwrap();
+        if let Some(change) = world.grid_change_before_next_cell_read.take() {
+            apply_grid_change(&mut world, change);
+        }
         let database = world
             .databases
             .iter()
@@ -455,6 +458,42 @@ impl FakeDatabases {
             .ok_or(DatabaseError::NotFound)?;
         let table = database.table(table_id).ok_or(DatabaseError::NotFound)?;
         Ok(read(table))
+    }
+}
+
+/// A change an editor makes in the grid while a forms request is between
+/// its table read and its cell read.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum GridChange {
+    /// The form's database goes to the trash.
+    TrashDatabase(DatabaseId),
+    /// A column is deleted.
+    DeleteColumn(ColumnId),
+}
+
+fn apply_grid_change(world: &mut super::World, change: GridChange) {
+    match change {
+        GridChange::TrashDatabase(id) => {
+            if let Some(database) = world
+                .databases
+                .iter_mut()
+                .find(|database| database.id == id)
+            {
+                database.trashed = true;
+            }
+        }
+        GridChange::DeleteColumn(column) => {
+            for table in world
+                .databases
+                .iter_mut()
+                .flat_map(|database| database.tables.iter_mut())
+            {
+                table.columns.retain(|held| held.id != column);
+                for (_, cells) in &mut table.rows {
+                    cells.remove(&column);
+                }
+            }
+        }
     }
 }
 

@@ -2,10 +2,11 @@
 //! that make them the form's: a date stamping the submission, and one person
 //! naming a signed-in respondent.
 
-use databases::domain::models::TableDetail;
+use std::collections::HashMap;
+
 use models_databases::{ColumnId, ColumnKind, EntityKind};
 
-use super::layout::question_columns;
+use super::layout::QuestionColumn;
 
 /// The type of the column each submission stamps.
 pub(super) fn submitted_kind() -> ColumnKind {
@@ -20,16 +21,17 @@ pub(super) fn respondent_kind() -> ColumnKind {
     }
 }
 
-/// The form's managed `column`, if the table still holds it with `kind`. A
+/// The form's managed `column`, if the table's `columns` (as
+/// `question_columns` reads them) still hold it with `kind`. A
 /// managed column deleted or retyped in the grid is no longer the form's to
 /// write: its value would not fit, and the respondent's answers still save.
 pub(super) fn writable(
-    table: &TableDetail,
+    columns: &HashMap<ColumnId, QuestionColumn>,
     column: Option<ColumnId>,
     kind: ColumnKind,
 ) -> Option<ColumnId> {
     let column = column?;
-    question_columns(table)
+    columns
         .get(&column)
         .is_some_and(|held| held.kind == kind)
         .then_some(column)

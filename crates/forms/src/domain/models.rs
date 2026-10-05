@@ -203,6 +203,9 @@ pub enum FormError {
     /// Persistence failure.
     #[error("repository error: {0}")]
     Repository(rootcause::Report),
+    /// The databases service answered something its contract rules out.
+    #[error("databases contract violated: {0}")]
+    DatabaseContract(&'static str),
     /// The grants behind the forms catalog could not be read.
     #[error("access directory error: {0}")]
     AccessDirectory(rootcause::Report),

@@ -10,7 +10,7 @@ default = []
 # restore, permanent delete).
 entity_mutation = ["dep:entity_mutation", "ports"]
 # Liveness pings through the connection gateway.
-gateway = ["dep:connection_gateway_client", "dep:serde_json", "outbound"]
+gateway = ["dep:anyhow", "dep:connection_gateway_client", "dep:serde_json", "outbound"]
 # Driven adapters share the port contracts.
 outbound = ["ports"]
 ports = ["databases/ports", "dep:entity_access", "dep:tracing"]
@@ -19,6 +19,7 @@ postgres = ["dep:entity_access_db_utils", "dep:serde_json", "dep:sqlx", "outboun
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+anyhow = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true, features = ["serde"] }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }

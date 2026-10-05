@@ -1,7 +1,7 @@
 //! Creating a form: over a new database whose one table holds only the
 //! form's own columns, or over an existing table with a question per column.
 
-use databases::domain::models::{CreateDatabase, OpBatch, TableDetail, Viewer};
+use databases::domain::models::{CreateDatabase, DatabaseError, OpBatch, TableDetail, Viewer};
 use databases::domain::ports::{DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
@@ -18,7 +18,7 @@ use super::{
 use crate::domain::events::{Attribution, FormCreatedMetadata, FormTopicEvent};
 use crate::domain::models::{
     Audience, ColumnId, DatabaseId, Form, FormAccess, FormDetail, FormError, FormId, FormLayout,
-    FormSection, FormSectionId, FormStatus, QuestionLayout,
+    FormQuestionId, FormSection, FormSectionId, FormStatus, QuestionLayout, TableId,
 };
 use crate::domain::ports::{
     Clock, CreateFormCommand, CreateSource, FormAccessDirectory, FormEventPublisher, FormsRepo,
@@ -169,9 +169,11 @@ where
             .get_database(internal_receipt::<ViewAccessLevel>(database_id))
             .await
             .map_err(database_error)?;
-        let table = detail.tables.into_iter().next().ok_or_else(|| {
-            FormError::Repository(rootcause::report!("a new database has no table"))
-        })?;
+        let table = detail
+            .tables
+            .into_iter()
+            .next()
+            .ok_or_else(|| FormError::DatabaseContract("a new database has no table"))?;
         let submitted = ManagedColumn::New {
             id: ColumnId::new(),
             name: SUBMITTED_COLUMN.to_string(),
@@ -247,7 +249,7 @@ where
         creator: Viewer,
         name: String,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        table_id: models_databases::TableId,
+        table_id: TableId,
     ) -> Result<FormDetail, FormError> {
         // The receipt must be for a database; the table is looked up in it.
         receipt_database_id(&receipt)?;
@@ -260,7 +262,7 @@ where
             .get_database(view)
             .await
             .map_err(|error| match error {
-                databases::domain::models::DatabaseError::NotFound => FormError::NotFound,
+                DatabaseError::NotFound => FormError::NotFound,
                 other => database_error(other),
             })?;
         let table = detail
@@ -296,7 +298,7 @@ where
             .filter(|column| !managed.contains(&column.column.id))
             .filter(|column| askable.contains_key(&column.column.id))
             .map(|column| QuestionLayout {
-                id: crate::domain::models::FormQuestionId::new(),
+                id: FormQuestionId::new(),
                 column: column.column.id,
                 help_text: String::new(),
                 required: false,

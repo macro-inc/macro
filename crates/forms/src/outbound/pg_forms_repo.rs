@@ -10,14 +10,16 @@ mod test;
 
 use chrono::{DateTime, Utc};
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_databases::position::PositionError;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Audience, ColumnId, DatabaseId, ForbiddenWidget, Form, FormId, FormLayout, FormStatus,
-    FormUpdate, LayoutReplacement, StoredForm, TableId, UpdateForm,
+    Audience, ColumnId, DatabaseId, ForbiddenWidget, Form, FormId, FormLayout, FormResponse,
+    FormResponseId, FormSectionId, FormStatus, FormUpdate, LayoutReplacement, RecordedResponse,
+    ResponseCounts, RowId, StoredForm, TableId, UpdateForm,
 };
 
 /// Errors from the Postgres repository.
@@ -439,16 +441,17 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
     async fn response_of(
         &self,
         form: FormId,
-        respondent: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<crate::domain::models::FormResponse>, Self::Error> {
+        respondent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<FormResponse>, Self::Error> {
+        // The ledger's functions carry their own spans.
         ledger::response_of(&self.pool, form, respondent).await
     }
 
     async fn record_stop(
         &self,
         form: FormId,
-        respondent: &macro_user_id::user_id::MacroUserIdStr<'_>,
-        section: crate::domain::models::FormSectionId,
+        respondent: &MacroUserIdStr<'_>,
+        section: FormSectionId,
         at: DateTime<Utc>,
     ) -> Result<(), Self::Error> {
         ledger::record_stop(&self.pool, form, respondent, section, at).await
@@ -457,17 +460,17 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
     async fn record_submission(
         &self,
         form: FormId,
-        respondent: Option<&macro_user_id::user_id::MacroUserIdStr<'_>>,
-        row: crate::domain::models::RowId,
+        respondent: Option<&MacroUserIdStr<'_>>,
+        row: RowId,
         at: DateTime<Utc>,
-    ) -> Result<crate::domain::models::RecordedResponse, Self::Error> {
+    ) -> Result<RecordedResponse, Self::Error> {
         ledger::record_submission(&self.pool, form, respondent, row, at).await
     }
 
     async fn repoint_response(
         &self,
-        response: crate::domain::models::FormResponseId,
-        row: crate::domain::models::RowId,
+        response: FormResponseId,
+        row: RowId,
         at: DateTime<Utc>,
     ) -> Result<(), Self::Error> {
         ledger::repoint_response(&self.pool, response, row, at).await
@@ -475,16 +478,13 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
 
     async fn touch_response(
         &self,
-        response: crate::domain::models::FormResponseId,
+        response: FormResponseId,
         at: DateTime<Utc>,
     ) -> Result<(), Self::Error> {
         ledger::touch_response(&self.pool, response, at).await
     }
 
-    async fn response_counts(
-        &self,
-        form: FormId,
-    ) -> Result<crate::domain::models::ResponseCounts, Self::Error> {
+    async fn response_counts(&self, form: FormId) -> Result<ResponseCounts, Self::Error> {
         ledger::response_counts(&self.pool, form).await
     }
 }

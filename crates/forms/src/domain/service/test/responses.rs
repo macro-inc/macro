@@ -568,3 +568,54 @@ async fn rewriting_a_lost_row_skips_managed_columns_retyped_in_the_grid() {
     assert!(!cells.contains_key(&RESPONDENT));
     assert_eq!(world.ledger[0].response.row, Some(row));
 }
+
+#[tokio::test]
+async fn a_database_trashed_while_reading_ones_response_reads_as_the_receipt_without_answers() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    let (response, row) = submitted(respond(&forms, VIEWER, answers(EMPLOYEE, None)).await);
+    world.lock().unwrap().grid_change_before_next_cell_read =
+        Some(GridChange::TrashDatabase(RSVP_DATABASE));
+
+    let mine = forms
+        .my_response(form_receipt::<ViewAccessLevel>(
+            RSVP_FORM,
+            VIEWER,
+            AccessLevel::View,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(mine.response.id, response);
+    assert_eq!(mine.response.row, Some(row));
+    assert_eq!(mine.answers, vec![]);
+}
+
+#[tokio::test]
+async fn a_question_whose_column_is_deleted_while_tallying_drops_out_of_the_tally() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    respond(&forms, VIEWER, answers(EMPLOYEE, None)).await;
+    // Team is tallied first; it goes between the table read and its cells.
+    world.lock().unwrap().grid_change_before_next_cell_read = Some(GridChange::DeleteColumn(TEAM));
+
+    let tally = forms
+        .tally(form_receipt::<ViewAccessLevel>(
+            RSVP_FORM,
+            OWNER,
+            AccessLevel::Owner,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        tally
+            .questions
+            .iter()
+            .map(|question| question.question)
+            .collect::<Vec<_>>(),
+        vec![PLUS_ONE_QUESTION]
+    );
+}
