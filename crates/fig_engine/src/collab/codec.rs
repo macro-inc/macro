@@ -230,6 +230,9 @@ pub fn image_hashes(p: &Props, out: &mut Vec<Arc<str>>) {
             paints(&run.fills);
         }
     }
+    for run in p.vector_styles.iter().flat_map(|s| s.iter()) {
+        paints(&run.fills);
+    }
     let nested: Vec<&Props> = p
         .symbol
         .iter()

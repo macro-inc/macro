@@ -510,7 +510,7 @@ impl<'a> Painter<'a> {
         } else {
             0
         };
-        if props.node_type() == NodeType::Text {
+        if props.node_type().is_text() {
             // Glyphs do not overlap, so one paint per glyph folds safely.
             return fills <= 1 && strokes == 0;
         }
@@ -541,8 +541,10 @@ impl<'a> Painter<'a> {
         let ts = self.node_transform(i, surface);
         let size = props.size();
 
-        if node_type == NodeType::Text {
+        if node_type.is_text() {
             self.draw_text(i, props, &ts, surface, clip, opacity);
+        } else if props.vector_styles.is_some() {
+            self.fill_regions(props, &ts, surface, clip, opacity);
         } else if props.has_visible_fills() {
             let shapes = self.fill_shapes(i);
             for paint in props.fills().iter().filter(|p| p.is_visible()) {
@@ -590,7 +592,7 @@ impl<'a> Painter<'a> {
         }
 
         // Text draws its own strokes, clipped to its glyphs.
-        if props.has_visible_strokes() && node_type != NodeType::Text {
+        if props.has_visible_strokes() && !node_type.is_text() {
             self.draw_strokes(i, props, &ts, surface, clip, opacity);
         }
     }
@@ -630,6 +632,34 @@ impl<'a> Painter<'a> {
             }
         }
         shapes
+    }
+
+    /// A vector network's fill geometry, each region with its own fills
+    /// where its style has them and the node's elsewhere.
+    fn fill_regions(
+        &mut self,
+        props: &Props,
+        ts: &Affine,
+        surface: &mut Surface,
+        clip: Option<&Mask>,
+        opacity: f32,
+    ) {
+        let styles = props.vector_styles.as_deref().unwrap_or_default();
+        let size = props.size();
+        for g in props.fill_geometry() {
+            let Some(path) = self.doc.blobs.path(g.blob) else {
+                continue;
+            };
+            let shape = Shape::Blob(path, fill_rule(g.winding));
+            let fills = styles
+                .iter()
+                .find(|s| g.style != 0 && s.id == g.style)
+                .and_then(|s| s.fills.as_deref())
+                .unwrap_or(props.fills());
+            for paint in fills.iter().filter(|p| p.is_visible()) {
+                self.fill_shape(surface, &shape, ts, paint, size, opacity, clip);
+            }
+        }
     }
 
     /// Every shape the node draws (fills, else strokes), for masks.
@@ -778,15 +808,13 @@ impl<'a> Painter<'a> {
             ..Default::default()
         };
         let node_type = props.node_type();
-        if node_type == NodeType::Text {
+        if node_type.is_text() {
             if let Some(layout) = &props.text_layout {
                 for g in layout.glyphs.iter() {
                     let Some(path) = g.blob.and_then(|b| self.doc.blobs.path(b)) else {
                         continue;
                     };
-                    let gts = ts
-                        .pre_translate(g.x, g.y)
-                        .pre_scale(g.font_size, -g.font_size);
+                    let gts = ts.pre_concat(g.to_node().to_skia());
                     surface
                         .pixmap
                         .fill_path(&path.path, &paint, FillRule::Winding, gts, clip);

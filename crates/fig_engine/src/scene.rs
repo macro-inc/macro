@@ -477,7 +477,7 @@ impl Scene {
         }
         let size = props.size();
         let node_type = props.node_type();
-        if node_type == NodeType::Text {
+        if node_type.is_text() {
             local = local.union(&text_bounds(props, size));
         } else if (has_fills || has_strokes || !props.effects().is_empty())
             && local.is_empty()

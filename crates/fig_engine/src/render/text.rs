@@ -71,8 +71,7 @@ impl Painter<'_> {
                 run_style = Some(g.style_id);
             }
             let fs = f64::from(g.font_size);
-            let glyph =
-                Affine::translate(f64::from(g.x), f64::from(g.y)).mul(&Affine::scale(fs, -fs));
+            let glyph = g.to_node();
             if fs * device_scale < GREEK_BELOW {
                 // Too small to read: a bar where the glyph's ink sits.
                 let b = path.path.bounds();
@@ -153,9 +152,7 @@ impl Painter<'_> {
             {
                 for g in layout.glyphs.iter() {
                     if let Some(path) = g.blob.and_then(|b| self.doc.blobs.path(b)) {
-                        let gts = sts
-                            .pre_translate(g.x, g.y)
-                            .pre_scale(g.font_size, -g.font_size);
+                        let gts = sts.pre_concat(g.to_node().to_skia());
                         mask.fill_path(&path.path, FillRule::Winding, gts);
                     }
                 }

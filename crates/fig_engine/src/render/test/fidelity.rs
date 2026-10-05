@@ -12,7 +12,7 @@ use tiny_skia::Pixmap;
 
 /// The common test schema plus FigJam's generated layers and derived text.
 const SCHEMA: &str = "
-enum NodeType DOCUMENT CANVAS GROUP FRAME RECTANGLE ROUNDED_RECTANGLE ELLIPSE VECTOR TEXT SYMBOL INSTANCE SECTION STICKY SHAPE_WITH_TEXT CONNECTOR
+enum NodeType DOCUMENT CANVAS GROUP FRAME RECTANGLE ROUNDED_RECTANGLE ELLIPSE VECTOR TEXT SYMBOL INSTANCE SECTION STICKY SHAPE_WITH_TEXT CONNECTOR TEXT_PATH
 enum NodePhase CREATED REMOVED
 enum PaintType SOLID GRADIENT_LINEAR GRADIENT_RADIAL GRADIENT_ANGULAR GRADIENT_DIAMOND IMAGE
 enum BlendMode PASS_THROUGH NORMAL MULTIPLY SCREEN
@@ -29,15 +29,16 @@ message ColorStop color:Color position:float
 message Image hash:byte[] name:string dataBlob:uint
 message PaintFilterMessage exposure:float contrast:float vibrance:float temperature:float tint:float highlights:float shadows:float
 message Paint type:PaintType color:Color opacity:float visible:bool blendMode:BlendMode stops:ColorStop[] transform:Matrix image:Image imageScaleMode:ImageScaleMode paintFilter:PaintFilterMessage
-message Path windingRule:WindingRule commandsBlob:uint
+message Path windingRule:WindingRule commandsBlob:uint styleID:uint
 message Effect type:EffectType color:Color offset:Vector radius:float spread:float visible:bool
 message GUIDPath guids:GUID[]
 message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
-message Glyph commandsBlob:uint position:Vector fontSize:float firstCharacter:uint advance:float
+message Glyph commandsBlob:uint position:Vector fontSize:float firstCharacter:uint advance:float rotation:float
+message VectorData styleOverrideTable:NodeChange[]
 message DerivedTextData layoutSize:Vector glyphs:Glyph[] truncationStartIndex:int
 message NodeGenerationData overrides:NodeChange[]
 message DerivedImmutableFrameData overrides:NodeChange[]
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float size:Vector transform:Matrix fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float backgroundColor:Color symbolData:SymbolData guidPath:GUIDPath overrideKey:GUID internalOnly:bool derivedTextData:DerivedTextData nodeGenerationData:NodeGenerationData derivedImmutableFrameData:DerivedImmutableFrameData
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float size:Vector transform:Matrix fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float backgroundColor:Color symbolData:SymbolData guidPath:GUIDPath overrideKey:GUID internalOnly:bool derivedTextData:DerivedTextData nodeGenerationData:NodeGenerationData derivedImmutableFrameData:DerivedImmutableFrameData vectorData:VectorData styleID:uint
 message Blob bytes:byte[]
 message Message nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -278,4 +279,101 @@ fn draws_images_stored_in_blobs() {
     assert!(doc.images.contains_key(&"ab".repeat(20)));
     let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 60, 60));
     assert_eq!(rgba(&p, 30, 30), [255, 0, 0, 255]);
+}
+
+/// A vector network's regions with their own fills (style overrides keyed
+/// by the style id on their geometry) draw in those, the rest in the
+/// node's fills.
+#[test]
+fn fills_vector_regions_with_their_styles() {
+    let region = |blob: u32, style: u32| {
+        V::Msg(vec![
+            ("windingRule", V::Enum("NONZERO")),
+            ("commandsBlob", V::Uint(blob)),
+            ("styleID", V::Uint(style)),
+        ])
+    };
+    let bytes = file(
+        vec![node(
+            2,
+            Some((1, "!")),
+            "VECTOR",
+            "Logo",
+            vec![
+                ("size", size(100.0, 50.0)),
+                ("transform", translate(0.0, 0.0)),
+                ("fillPaints", V::List(vec![solid(0.5, 0.5, 0.5)])),
+                ("fillGeometry", V::List(vec![region(0, 0), region(1, 3)])),
+                (
+                    "vectorData",
+                    V::Msg(vec![(
+                        "styleOverrideTable",
+                        V::List(vec![V::Msg(vec![
+                            ("styleID", V::Uint(3)),
+                            ("fillPaints", V::List(vec![solid(0.0, 0.0, 1.0)])),
+                        ])]),
+                    )]),
+                ),
+            ],
+        )],
+        vec![square(0.0, 0.0, 50.0, 50.0), square(50.0, 0.0, 50.0, 50.0)],
+    );
+    let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 100, 50));
+    assert_eq!(rgba(&p, 25, 25), [128, 128, 128, 255], "the node's fill");
+    assert_eq!(rgba(&p, 75, 25), [0, 0, 255, 255], "the region's own fill");
+}
+
+/// Text set along a path turns each glyph by its rotation.
+#[test]
+fn turns_glyphs_on_a_path() {
+    // A 10×2 bar glyph (em units 1 × 0.2), turned a quarter (down the page).
+    let bar = path_blob(&[
+        (1, &[0.0, 0.0]),
+        (2, &[1.0, 0.0]),
+        (2, &[1.0, 0.2]),
+        (2, &[0.0, 0.2]),
+        (0, &[]),
+    ]);
+    let bytes = file(
+        vec![node(
+            2,
+            Some((1, "!")),
+            "TEXT_PATH",
+            "Around",
+            vec![
+                ("size", size(40.0, 40.0)),
+                ("transform", translate(0.0, 0.0)),
+                ("fillPaints", V::List(vec![solid(0.0, 0.0, 0.0)])),
+                (
+                    "derivedTextData",
+                    V::Msg(vec![
+                        ("layoutSize", size(40.0, 40.0)),
+                        (
+                            "glyphs",
+                            V::List(vec![V::Msg(vec![
+                                ("commandsBlob", V::Uint(0)),
+                                (
+                                    "position",
+                                    V::Msg(vec![("x", V::Float(20.0)), ("y", V::Float(10.0))]),
+                                ),
+                                ("fontSize", V::Float(10.0)),
+                                ("advance", V::Float(1.0)),
+                                ("rotation", V::Float(-std::f32::consts::FRAC_PI_2)),
+                            ])]),
+                        ),
+                    ]),
+                ),
+            ],
+        )],
+        vec![bar],
+    );
+    let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 40, 40));
+    // The bar runs from (20, 10) down to (20, 20), one em-fifth wide to
+    // its right (the glyph's up turned toward +x).
+    assert_eq!(rgba(&p, 21, 15), [0, 0, 0, 255], "along the path");
+    assert_eq!(
+        rgba(&p, 25, 11),
+        [255, 255, 255, 255],
+        "not along the baseline"
+    );
 }

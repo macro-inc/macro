@@ -167,6 +167,7 @@ impl<'a> Reader<'a> {
             Ok(PathRef {
                 winding: dec_winding(r.u8()?),
                 blob: r.blob()?,
+                style: r.u32()?,
             })
         })
     }
@@ -253,16 +254,18 @@ impl<'a> Reader<'a> {
         Ok(TextContent {
             characters: self.arc_str()?,
             style_ids: self.arc_list(Self::u32)?,
-            styles: self.arc_list(|r| {
-                Ok(StyleRun {
-                    id: r.u32()?,
-                    fills: r.opt(Self::paints)?,
-                    font_family: r.opt_arc_str()?,
-                    font_style: r.opt_arc_str()?,
-                    font_size: r.opt(Self::f32)?,
-                    decoration: r.opt_arc_str()?,
-                })
-            })?,
+            styles: self.arc_list(Self::style_run)?,
+        })
+    }
+
+    fn style_run(&mut self) -> Decoded<StyleRun> {
+        Ok(StyleRun {
+            id: self.u32()?,
+            fills: self.opt(Self::paints)?,
+            font_family: self.opt_arc_str()?,
+            font_style: self.opt_arc_str()?,
+            font_size: self.opt(Self::f32)?,
+            decoration: self.opt_arc_str()?,
         })
     }
 
@@ -443,6 +446,7 @@ impl<'a> Reader<'a> {
             stroke_style: self.opt(Self::guid)?,
             effect_style: self.opt(Self::guid)?,
             generated: self.opt(|r| r.arc_list(Self::props))?,
+            vector_styles: self.opt(|r| r.arc_list(Self::style_run))?,
             recomputed: self.bool()?,
         })
     }

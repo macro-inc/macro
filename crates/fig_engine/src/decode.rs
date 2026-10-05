@@ -103,6 +103,7 @@ const NODE_FIELDS: &[&str] = &[
     "backgroundEnabled",
     "derivedImmutableFrameData",
     "nodeGenerationData",
+    "vectorData",
 ];
 
 const PAINT_FIELDS: &[&str] = &[
@@ -191,6 +192,7 @@ pub fn restrict_schema(schema: &mut Schema) {
     schema.keep_only("ComponentPropDef", &["id", "name", "type", "isDeleted"]);
     schema.keep_only("ExportSettings", &["suffix", "imageType", "constraint"]);
     schema.keep_only("NodeGenerationData", &["overrides"]);
+    schema.keep_only("VectorData", &["styleOverrideTable"]);
     schema.keep_only("DerivedImmutableFrameData", &["overrides"]);
 }
 
@@ -345,6 +347,7 @@ fn path_refs<'a>(items: impl Iterator<Item = MsgRef<'a>>) -> Arc<[PathRef]> {
                     _ => WindingRule::NonZero,
                 },
                 blob: p.u32("commandsBlob")?,
+                style: p.u32("styleID").unwrap_or(0),
             })
         })
         .collect()
@@ -711,6 +714,20 @@ pub fn props(m: MsgRef) -> Props {
     p.stroke_style = style("styleIdForStrokeFill", "inheritFillStyleIDForStroke");
     p.effect_style = style("styleIdForEffect", "inheritEffectStyleID");
     p.generated = generated_layers(&m);
+    p.vector_styles = m.msg("vectorData").and_then(|v| {
+        let styles: Arc<[StyleRun]> = v
+            .msgs("styleOverrideTable")
+            .filter(|s| s.has("fillPaints"))
+            .filter_map(|s| {
+                Some(StyleRun {
+                    id: s.u32("styleID")?,
+                    fills: Some(s.collect_msgs("fillPaints", paint)),
+                    ..StyleRun::default()
+                })
+            })
+            .collect();
+        (!styles.is_empty()).then_some(styles)
+    });
     p
 }
 

@@ -297,7 +297,7 @@ impl<'s> Build<'s> {
                     },
                 );
                 pm.set(self.schema, "commandsBlob", Value::Uint(p.blob));
-                pm.set(self.schema, "styleID", Value::Uint(0));
+                pm.set(self.schema, "styleID", Value::Uint(p.style));
                 Value::Msg(Box::new(pm))
             })
             .collect();
