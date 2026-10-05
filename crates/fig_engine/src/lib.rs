@@ -2,6 +2,7 @@
 //! hit testing, and inspection. The same code runs natively (tests, the
 //! `fig_render` CLI) and as WebAssembly in the web app's `.fig` viewer worker.
 
+pub mod boolean;
 pub mod container;
 pub mod decode;
 pub mod document;
@@ -18,6 +19,7 @@ pub mod scene;
 #[cfg(test)]
 pub(crate) mod testing;
 pub mod text;
+pub mod vector;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 mod zip;

@@ -87,6 +87,7 @@ const NODE_FIELDS: &[&str] = &[
     "maxSize",
     "exportSettings",
     "booleanOperation",
+    "vectorData",
     "horizontalConstraint",
     "verticalConstraint",
     "description",
@@ -676,6 +677,12 @@ pub fn props(m: MsgRef) -> Props {
         );
     }
     p.boolean_operation = m.enum_name("booleanOperation").map(Into::into);
+    p.vector_data = m.msg("vectorData").map(|v| {
+        Arc::new(VectorData {
+            network_blob: v.u32("vectorNetworkBlob"),
+            normalized_size: v.msg("normalizedSize").map(vec2),
+        })
+    });
     let (h, v) = (
         m.enum_name("horizontalConstraint"),
         m.enum_name("verticalConstraint"),
