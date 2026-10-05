@@ -237,7 +237,7 @@ function Fixture() {
   });
   const property = (entityId: string): Property => {
     const raw =
-      query.data?.user.soup.items.find((item) => item.id === entityId)
+      query.data?.user.soup?.items.find((item) => item.id === entityId)
         ?.properties ?? [];
     return (
       mapGraphqlProperties(raw)

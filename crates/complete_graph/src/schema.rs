@@ -48,9 +48,9 @@ use graphql_properties::{
 };
 use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
-    GraphqlSoupEmailThread, GraphqlSoupInitiative, GroupedSoup, GroupedSoupInput,
-    SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage, SoupPatch,
-    resolve_grouped_soup, resolve_soup, resolve_soup_email_thread, resolve_soup_updates,
+    GraphqlSoupDocument, GraphqlSoupEmailThread, GraphqlSoupInitiative, GroupedSoup,
+    GroupedSoupInput, SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage,
+    SoupPatch, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread, resolve_soup_updates,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -69,7 +69,10 @@ use soup_realtime::domain::ports::{
     NoOpSoupRealtimeSubscriptionService, SoupRealtimeSubscriptionService,
 };
 
-use crate::SoupEdges;
+use crate::{
+    SoupEdges,
+    document::{resolve_document, resolve_documents},
+};
 
 /// Mutation root combining independent domain GraphQL adapters.
 #[derive(MergedObject)]
@@ -630,6 +633,27 @@ where
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
+    }
+
+    /// One explicitly addressed document the authenticated viewer can currently view.
+    /// Link access does not add the document to Soup discovery.
+    async fn document(
+        &self,
+        ctx: &Context<'_>,
+        document_id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSoupDocument<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        resolve_document(ctx, self.user_id.clone(), document_id).await
+    }
+
+    /// Live, authorized documents from at most 100 explicitly supplied IDs.
+    /// Missing or denied documents are omitted; history membership never grants access.
+    async fn documents(
+        &self,
+        ctx: &Context<'_>,
+        document_ids: Vec<ID>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupDocument<SoupEdges<NR, PR, ER, FR, AR, AcR>>>> {
+        resolve_documents(ctx, self.user_id.clone(), document_ids).await
     }
 
     /// One initiative accessible to the authenticated viewer.

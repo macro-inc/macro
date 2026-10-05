@@ -23,6 +23,7 @@ import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { Button } from '@ui';
 import {
   createComputed,
@@ -34,6 +35,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { createMarkdownOpenTracking } from '../primitives/create-markdown-open-tracking';
 import type { FileDetailContext } from '../util/file-detail-context';
 
 export type MarkdownDetailContext = FileDetailContext<MarkdownDocumentData>;
@@ -149,6 +151,13 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
     () => props.documentId,
     loadMarkdownDocument
   );
+  const history = useUpsertToHistoryMutation();
+  createMarkdownOpenTracking({
+    documentId: () => props.documentId,
+    loadedDocumentId: () =>
+      document.state === 'ready' ? document()?.metadata.documentId : undefined,
+    recordOpen: (itemId) => history.mutate({ itemId, itemType: 'document' }),
+  });
   const entityLabel = () => (props.kind === 'task' ? 'task' : 'document');
 
   return (

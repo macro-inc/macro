@@ -56,6 +56,7 @@ import {
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
+import { authorizedDocumentDeletionKeys } from './document-cache-deletions';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
@@ -527,7 +528,10 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
-            deletedRecordKeys: emailCacheDeletionKeys,
+            deletedRecordKeys: (result) => [
+              ...emailCacheDeletionKeys(result),
+              ...authorizedDocumentDeletionKeys(result),
+            ],
             onCacheError: (error, operation) => {
               // Initialization failure already reports before retiring the host;
               // rejected in-flight operations must not report it again.

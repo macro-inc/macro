@@ -212,6 +212,34 @@ describe('mapGraphqlEntityProperties', () => {
     expect(mapGraphqlPropertiesMock).toHaveBeenCalledWith([property]);
   });
 
+  it('reads existing tags from an authorized document with no Soup membership', () => {
+    const tags = [{ id: 'crm-assignment' }];
+    const mapped = [{ id: 'crm-assignment' }] as SoupProperty[];
+    mapGraphqlPropertiesMock.mockReturnValue(mapped);
+    const data = {
+      user: {
+        id: 'viewer',
+        document: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'link-only',
+          properties: tags,
+        },
+      },
+    } as never;
+    expect(mapGraphqlEntityProperties(data, 'link-only')).toBe(mapped);
+    expect(mapGraphqlPropertiesMock).toHaveBeenCalledWith(tags);
+  });
+
+  it('keeps denied document reads unavailable, not an empty property list', () => {
+    expect(
+      mapGraphqlEntityProperties(
+        { user: { id: 'viewer', document: null } } as never,
+        'link-only'
+      )
+    ).toBeUndefined();
+    expect(mapGraphqlPropertiesMock).not.toHaveBeenCalled();
+  });
+
   it('retains the not-yet-loaded distinction', () => {
     expect(mapGraphqlEntityProperties(undefined, 'entity-1')).toBeUndefined();
     expect(
@@ -876,6 +904,10 @@ describe('createGraphqlEntityPropertiesQuery', () => {
     });
 
     await vi.waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]?.operation.variables).toMatchObject({
+      documentId: 'entity-1',
+      isDocument: true,
+    });
     expect(requests[0]?.operation.context.requestPolicy).toBe(
       'cache-and-network'
     );

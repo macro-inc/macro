@@ -33,6 +33,7 @@ import {
   getGraphqlItemPreview,
   graphqlRecordToPreview,
   isGraphqlPreviewItem,
+  itemPreviewVariables,
   readCachedGraphqlItemPreviewFromHost,
   setGraphqlPreviewFileType,
   setGraphqlPreviewName,
@@ -111,6 +112,92 @@ describe('GraphQL item previews', () => {
       fileType: 'md',
       subType: { type: 'task', is_completed: true },
     });
+  });
+
+  it('routes known document IDs outside Soup, including mixed preview batches', () => {
+    expect(
+      itemPreviewVariables([{ id: 'link-only', type: 'document' }])
+    ).toMatchObject({
+      documentIds: ['link-only'],
+      includeDocuments: true,
+      includeSoup: false,
+    });
+    const mixed = itemPreviewVariables([
+      { id: 'link-only', type: 'document' },
+      { id: 'chat-1', type: 'chat' },
+    ]);
+    expect(mixed).toMatchObject({
+      documentIds: ['link-only'],
+      includeDocuments: true,
+      includeSoup: true,
+    });
+    expect(JSON.stringify(mixed.input)).not.toContain('link-only');
+  });
+
+  it('renders a link-authorized document without a Soup result and drops stale preview data after denial', async () => {
+    const read = vi.fn(async () => [
+      {
+        recordKey: 'GraphqlSoupDocument:link-only',
+        record: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'link-only',
+          displayName: 'Cached title',
+          documentName: 'Cached title',
+          fileType: 'md',
+          subType: null,
+        },
+      },
+    ]);
+    getGraphqlSoupCacheHostMock.mockReturnValue(cacheHost(read));
+    const [result, setResult] = createStore({
+      data: undefined as ItemPreviewsQuery | undefined,
+      error: null,
+      isError: false,
+      isFetched: false,
+      isFetching: true,
+      isLoading: true,
+      isEnabled: true,
+      stale: false,
+      refetch: vi.fn(async () => undefined),
+    });
+    createUrqlQueryMock.mockReturnValue(result);
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createGraphqlItemPreviewQuery(
+        () => ({ id: 'link-only', type: 'document' }),
+        () => true
+      ),
+      dispose,
+    }));
+    try {
+      await vi.advanceTimersByTimeAsync(30);
+      setResult({
+        data: {
+          user: {
+            id: 'viewer',
+            documents: [
+              {
+                __typename: 'GraphqlSoupDocument',
+                id: 'link-only',
+                displayName: 'CRM plan',
+                documentName: 'CRM plan',
+                fileType: 'md',
+                subType: null,
+                properties: [],
+                viewerPermission: null,
+              },
+            ],
+          },
+        },
+        isFetched: true,
+        isFetching: false,
+        isLoading: false,
+      });
+      expect(query.data()).toMatchObject({ name: 'CRM plan' });
+      setResult('data', { user: { id: 'viewer', documents: [] } });
+      expect(query.data()).toBeUndefined();
+    } finally {
+      dispose();
+    }
   });
 
   it('carries loaded-empty properties and permission on the preview', () => {
@@ -636,14 +723,16 @@ describe('GraphQL item previews', () => {
     }
   });
 
-  it('bypasses cached access state for security-sensitive lookups', async () => {
-    getGraphqlSoupCacheHostMock.mockClear();
-    const query = vi.fn(() => ({
-      toPromise: async () => ({
-        data: {
-          user: {
-            soup: {
-              items: [
+  it.each([true, undefined])(
+    'reauthorizes document previews (requireFresh: %s)',
+    async (requireFresh) => {
+      getGraphqlSoupCacheHostMock.mockClear();
+      const query = vi.fn(() => ({
+        toPromise: async () => ({
+          data: {
+            user: {
+              id: 'viewer',
+              documents: [
                 {
                   __typename: 'GraphqlSoupDocument',
                   id: 'doc-1',
@@ -655,23 +744,23 @@ describe('GraphQL item previews', () => {
               ],
             },
           },
-        },
-      }),
-    }));
-    getGraphqlSoupClientMock.mockReturnValue({ query });
+        }),
+      }));
+      getGraphqlSoupClientMock.mockReturnValue({ query });
 
-    await expect(
-      getGraphqlItemPreview(
-        { id: 'doc-1', type: 'document' },
-        { requireFresh: true }
-      )
-    ).resolves.toMatchObject({ access: 'access', name: 'Roadmap' });
+      await expect(
+        getGraphqlItemPreview(
+          { id: 'doc-1', type: 'document' },
+          { requireFresh }
+        )
+      ).resolves.toMatchObject({ access: 'access', name: 'Roadmap' });
 
-    expect(getGraphqlSoupCacheHostMock).not.toHaveBeenCalled();
-    expect(query).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
-      requestPolicy: 'network-only',
-    });
-  });
+      expect(getGraphqlSoupCacheHostMock).not.toHaveBeenCalled();
+      expect(query).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+        requestPolicy: 'network-only',
+      });
+    }
+  );
 
   it.each([
     { type: 'document', nameKey: 'documentName' },

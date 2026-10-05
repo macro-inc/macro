@@ -7102,6 +7102,16 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	One explicitly addressed document the authenticated viewer can currently view.
+	Link access does not add the document to Soup discovery.
+	"""
+	document(documentId: ID!): GraphqlSoupDocument
+	"""
+	Live, authorized documents from at most 100 explicitly supplied IDs.
+	Missing or denied documents are omitted; history membership never grants access.
+	"""
+	documents(documentIds: [ID!]!): [GraphqlSoupDocument!]!
+	"""
 	One initiative accessible to the authenticated viewer.
 	"""
 	initiative(initiativeId: ID!): GraphqlSoupInitiative!

@@ -138,6 +138,34 @@ function itemPreviewInput(item: ItemEntity) {
   return buildGraphqlEntitySoupInput(graphqlEntityType(type), item.id);
 }
 
+/** Split known documents from discovery-filtered entity lookups. */
+export function itemPreviewVariables(
+  items: ItemEntity[]
+): ItemPreviewQueryVariables {
+  const documents = items.filter(
+    (item) => normalizedItemType(item) === 'document'
+  );
+  const soupItems = items.filter(
+    (item) => normalizedItemType(item) !== 'document'
+  );
+  const input = buildGraphqlEntitiesSoupInput(
+    (soupItems.length ? soupItems : items).map((item) => ({
+      entityId: item.id,
+      entityType: graphqlEntityType(
+        normalizedItemType(item) as GraphqlPreviewType
+      ),
+    }))
+  )!;
+  return documents.length
+    ? {
+        input,
+        documentIds: documents.map((item) => item.id),
+        includeDocuments: true,
+        includeSoup: soupItems.length > 0,
+      }
+    : { input };
+}
+
 function documentSubType(
   subType: Extract<
     ItemPreviewFieldsFragment,
@@ -294,8 +322,10 @@ function previewFromQuery(
 ): PreviewItem | undefined {
   // Cache-and-network can emit a user envelope before this soup selection
   // is present. Treat that as unloaded so REST fallback can take over.
-  const items = data.user?.soup?.items;
-  if (!items) return undefined;
+  const items = [
+    ...(data.user?.documents ?? []),
+    ...(data.user?.soup?.items ?? []),
+  ];
   const recordKey = normalizedRecordKey(item);
   const record = items.find(
     (record) => `${record.__typename}:${record.id}` === recordKey
@@ -515,7 +545,9 @@ export async function getGraphqlItemPreview(
   item: ItemEntity,
   options?: { requireFresh?: boolean }
 ): Promise<PreviewItem | undefined> {
-  if (!options?.requireFresh) {
+  const requireFresh =
+    options?.requireFresh || normalizedItemType(item) === 'document';
+  if (!requireFresh) {
     const cached = await readCachedGraphqlItemPreview(item);
     if (cached) return cached;
   }
@@ -524,9 +556,9 @@ export async function getGraphqlItemPreview(
   const result = await getGraphqlSoupClient()
     .query<ItemPreviewQuery, ItemPreviewQueryVariables>(
       ItemPreviewDocument,
-      { input },
+      itemPreviewVariables([item]),
       {
-        requestPolicy: options?.requireFresh ? 'network-only' : 'cache-first',
+        requestPolicy: requireFresh ? 'network-only' : 'cache-first',
       }
     )
     .toPromise();
@@ -550,21 +582,14 @@ function startPreviewBatch(
   includeProperties: boolean
 ) {
   return createRoot((dispose) => {
-    const input = buildGraphqlEntitiesSoupInput(
-      items.map((item) => ({
-        entityId: item.id,
-        entityType: graphqlEntityType(
-          normalizedItemType(item) as GraphqlPreviewType
-        ),
-      }))
-    )!;
+    const variables = itemPreviewVariables(items);
     const result = createUrqlQuery<
       ItemPreviewQuery | ItemPreviewsQuery,
       ItemPreviewQueryVariables
     >(() => ({
       client,
       query: includeProperties ? ItemPreviewsDocument : ItemPreviewDocument,
-      variables: { input },
+      variables,
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
     }));
@@ -682,8 +707,22 @@ export function createGraphqlItemPreviewQuery(
     const data = result()?.data;
     return data ? previewFromQuery(data, item()) : undefined;
   });
+  const documentUnavailable = () => {
+    const query = result();
+    return (
+      normalizedItemType(item()) === 'document' &&
+      query?.isFetched &&
+      !query.isFetching &&
+      !query.stale &&
+      !query.error &&
+      query.data?.user?.documents !== undefined &&
+      livePreview() === undefined
+    );
+  };
   const cachedPreview = () =>
-    group()?.cached().get(normalizedRecordKey(item())!);
+    documentUnavailable()
+      ? undefined
+      : group()?.cached().get(normalizedRecordKey(item())!);
   const data = () => livePreview() ?? cachedPreview();
   const refetch = async () => {
     await (await ready)?.refresh();

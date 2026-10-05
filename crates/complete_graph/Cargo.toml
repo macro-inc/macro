@@ -9,6 +9,8 @@ anyhow = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 axum = { workspace = true }
 bots = { path = "../bots", default-features = false, features = ["ports"] }
+documents = { path = "../documents", default-features = false, features = ["ports"] }
+models_soup = { path = "../models_soup" }
 email = { path = "../email", default-features = false, features = [
   "axum",
   "inbound",
@@ -53,11 +55,11 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
 apollo-compiler = { workspace = true }
 chrono = { workspace = true }
+model = { path = "../model" }
 model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
-models_soup = { path = "../models_soup" }
 rootcause = { workspace = true }
 scheduled_action = { path = "../../services/scheduled_action" }
 serde = { workspace = true }

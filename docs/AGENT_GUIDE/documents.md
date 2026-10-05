@@ -27,6 +27,26 @@ deleting the shared property definition). Pins are saved with the document.
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;
 they do not show a success toast.
+
+## Documents opened through sharing links
+
+An authenticated viewer with link access can read existing document tags, preview
+metadata, and Activity without the document belonging to their Files/Soup lists.
+Do not reapply an existing tag or change sharing grants to make it render.
+A successful Markdown detail open records history once; previews, failed opens,
+and loading retries do not record additional views. After opening through a
+mention or Cmd+K, the document becomes eligible for that viewer's Quick Access.
+A fresh cache recovers previously opened document IDs from history and checks
+current view access before hydrating them. Denied or deleted targets are removed
+from the local projection; temporary network failures are not revocations.
+Removing a document from history also removes its cached Quick Access entry.
+
+For verification, use disposable owner/viewer accounts and a document with an
+existing tag and link-only access. Check the tag on first open, save a permitted
+change, navigate away, return through Cmd+K, and reload with an empty cache.
+Confirm another viewer cannot discover unopened link-shared documents through
+Files/Soup or remote search. Successful opens never create new sharing grants.
+
 ## Markdown outline
 
 On desktop, Markdown documents with at least three headings show a tick rail in

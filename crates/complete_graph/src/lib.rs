@@ -5,6 +5,9 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+/// Explicit, receipt-gated document lookup capability.
+mod document;
+pub use document::DocumentGraphqlContext;
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
 /// Complete schema types and construction helpers.

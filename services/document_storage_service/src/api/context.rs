@@ -334,6 +334,32 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     }
 }
 
+impl documents_hex::domain::ports::metadata::TaskStatusPort for TaskPropertiesAdapter {
+    async fn task_status(
+        &self,
+        receipt: &entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewAccessLevel,
+        >,
+    ) -> Result<Option<Vec<uuid::Uuid>>, documents_hex::domain::models::DocumentError> {
+        use documents_hex::domain::models::DocumentError;
+        use models_properties::service::property_value::PropertyValue;
+        use properties::PropertiesService as _;
+
+        let value = self
+            .properties
+            .get_system_property_value(receipt, system_properties::SystemPropertyKey::Status)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?;
+        match value {
+            Some(PropertyValue::SelectOption(options)) => Ok(Some(options)),
+            None => Ok(None),
+            _ => Err(DocumentError::Internal(anyhow::anyhow!(
+                "Expected select options for task status"
+            ))),
+        }
+    }
+}
+
 pub(crate) type EntityAccessManagementService =
     entity_access_management::domain::service::EntityAccessManagementServiceImpl<
         entity_access_management::outbound::PgRepository,

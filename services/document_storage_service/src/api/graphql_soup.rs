@@ -180,6 +180,10 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_notification_reader.clone());
     data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());
+    data.insert(complete_graph::DocumentGraphqlContext::new(
+        state.documents_state.service.clone(),
+        state.entity_access_service.clone(),
+    ));
     data.insert(soup_item_loader);
     // Mutation replies must read their committed state from the primary email
     // service. Ordinary Soup lists and subscriptions retain their own reader.

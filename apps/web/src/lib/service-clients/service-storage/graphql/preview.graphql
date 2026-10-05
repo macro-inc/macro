@@ -33,10 +33,11 @@ query ItemPreviewFileTypeCacheWrite($input: SoupInput!) {
 	}
 }
 
-query ItemPreview($input: SoupInput!) {
+query ItemPreview($input: SoupInput!, $documentIds: [ID!]! = [], $includeDocuments: Boolean! = false, $includeSoup: Boolean! = true) {
 	user {
 		id
-		soup(input: $input) {
+		documents(documentIds: $documentIds) @include(if: $includeDocuments) { ...ItemPreviewFields }
+		soup(input: $input) @include(if: $includeSoup) {
 			items {
 				...ItemPreviewFields
 			}
@@ -46,10 +47,11 @@ query ItemPreview($input: SoupInput!) {
 
 # Rich display previews load task metadata before their children mount.
 # Keep ItemPreviewFields minimal for cached creation seeds and name-only reads.
-query ItemPreviews($input: SoupInput!) {
+query ItemPreviews($input: SoupInput!, $documentIds: [ID!]! = [], $includeDocuments: Boolean! = false, $includeSoup: Boolean! = true) {
 	user {
 		id
-		soup(input: $input) {
+		documents(documentIds: $documentIds) @include(if: $includeDocuments) { ...ItemPreviewDetailsFields }
+		soup(input: $input) @include(if: $includeSoup) {
 			items {
 				...ItemPreviewDetailsFields
 			}

@@ -31,10 +31,11 @@ query MyActivityOverview($input: ActivityOverviewInput!) {
 	}
 }
 
-query EntityActivity($input: SoupInput!, $limit: Int) {
+query EntityActivity($input: SoupInput!, $limit: Int, $documentId: ID! = "", $isDocument: Boolean! = false) {
 	user {
 		id
-		soup(input: $input) {
+		document(documentId: $documentId) @include(if: $isDocument) { ...EntityActivityFields }
+		soup(input: $input) @skip(if: $isDocument) {
 			items {
 				...EntityActivityFields
 			}

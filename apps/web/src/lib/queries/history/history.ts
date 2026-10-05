@@ -1,5 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
@@ -7,7 +10,10 @@ import {
   type ItemType,
   storageServiceClient,
 } from '@service-storage/client';
-import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import {
   type QueryClient,
   queryOptions,
@@ -24,6 +30,7 @@ import {
   readCachedGraphqlHistoryItems,
 } from './graphql';
 import { historyKeys } from './keys';
+import { hydrateKnownGraphqlDocuments } from './known-documents';
 import { transformHistoryItem, transformHistoryResponse } from './transforms';
 import type { HistoryItem } from './types';
 
@@ -133,7 +140,34 @@ export function useHistoryQuery() {
     if (cacheHost) {
       return {
         queryKey: historyKeys.graphqlList.queryKey,
-        queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
+        queryFn: async () => {
+          // Cache candidate IDs, never the authorization result. Each refresh
+          // rechecks current access before materializing the local projection.
+          try {
+            const history = await activeQueryClient.fetchQuery({
+              queryKey: [
+                ...historyKeys.graphqlDocumentCandidates.queryKey,
+                await cacheHost.currentStorageGeneration(),
+              ],
+              staleTime: HISTORY_STALE_TIME,
+              queryFn: fetchHistory,
+            });
+            await hydrateKnownGraphqlDocuments(
+              getGraphqlSoupClient(),
+              cacheHost,
+              history
+                .filter((item) => item.type === 'document')
+                .map((item) => item.id)
+            );
+          } catch (error) {
+            // Offline opens retain previously authorized local history.
+            console.warn(
+              'Unable to recover document history for Quick Access',
+              error
+            );
+          }
+          return readCachedGraphqlHistoryItems(cacheHost);
+        },
         placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
         staleTime: Infinity,
         refetchOnMount: 'always' as const,
@@ -152,6 +186,40 @@ export function useHistoryQuery() {
   });
 }
 
+/** Successful view tracking remains durable if GraphQL hydration is temporarily offline. */
+async function hydrateOpenedHistoryDocument(
+  itemType: HistoryItemType,
+  itemId: string
+): Promise<void> {
+  if (itemType !== 'document' || !isFeatureEnabled(enableGraphqlSoup)) return;
+  const host = getGraphqlSoupCacheHost();
+  if (!host || host.disabled) return;
+  try {
+    await hydrateKnownGraphqlDocuments(getGraphqlSoupClient(), host, [itemId]);
+  } catch (error) {
+    console.warn('Unable to hydrate opened document for Quick Access', error);
+  }
+}
+
+/** Removing history must also remove its independently persisted document projection. */
+async function evictRemovedHistoryDocument(
+  itemType: ItemType,
+  itemId: string
+): Promise<void> {
+  if (itemType !== 'document' || !isFeatureEnabled(enableGraphqlSoup)) return;
+  const host = getGraphqlSoupCacheHost();
+  if (!host || host.disabled) return;
+  try {
+    await host.deleteRecords([`GraphqlSoupDocument:${itemId}`]);
+  } catch (error) {
+    // The server-side removal succeeded even if the local cache is unavailable.
+    console.warn(
+      'Unable to evict removed document history from Quick Access',
+      error
+    );
+  }
+}
+
 export async function prefetchHistory() {
   void (await catchToResult(
     async () => await queryClient.prefetchQuery(historyQueryOptions)
@@ -159,14 +227,8 @@ export async function prefetchHistory() {
 }
 
 export async function refetchHistory(): Promise<void> {
-  await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: historyQueryOptions.queryKey,
-    }),
-    queryClient.invalidateQueries({
-      queryKey: historyKeys.graphqlList.queryKey,
-    }),
-  ]);
+  // Candidate IDs must become stale before the GraphQL list refresh begins.
+  await queryClient.invalidateQueries({ queryKey: historyKeys._def });
 }
 
 type UpsertToHistoryParams = {
@@ -197,6 +259,7 @@ export function useUpsertToHistoryMutation(
               itemType: params.itemType,
             })
         );
+        await hydrateOpenedHistoryDocument(params.itemType, params.itemId);
       },
       ...withCallbacks<
         void,
@@ -219,11 +282,7 @@ export function useUpsertToHistoryMutation(
               setHistoryData(context.previousData);
             }
           },
-          onSettled: () => {
-            queryClient.invalidateQueries({
-              queryKey: historyQueryOptions.queryKey,
-            });
-          },
+          onSettled: () => refetchHistory(),
         },
         callbacks
       ),
@@ -245,6 +304,9 @@ export async function postNewHistoryItem(
     itemType,
   });
 
+  if (maybeAdded.isOk() && maybeAdded.value.success) {
+    await hydrateOpenedHistoryDocument(itemType, itemId);
+  }
   await refetchHistory();
 
   return maybeAdded.isOk() && !!maybeAdded.value.success;
@@ -263,6 +325,10 @@ export async function removeHistoryItem(
     itemId,
     itemType,
   });
+
+  if (maybeRemoved.isOk() && maybeRemoved.value.success) {
+    await evictRemovedHistoryDocument(itemType, itemId);
+  }
 
   await refetchHistory();
 

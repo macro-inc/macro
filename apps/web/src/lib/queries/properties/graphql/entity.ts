@@ -56,6 +56,18 @@ import { observePropertyMutationSettlements } from './mutation-settlements';
 /** Builds the exact Soup input used to load one entity's properties. */
 export const buildEntityPropertiesInput = buildGraphqlEntitySoupInput;
 
+/** Known documents use canonical view authorization, never Soup discovery. */
+export function buildEntityPropertiesVariables(
+  entityType: EntityType | PropertyTargetEntityType,
+  entityId: string
+): EntityPropertiesQueryVariables | undefined {
+  const input = buildEntityPropertiesInput(entityType, entityId);
+  if (!input) return undefined;
+  return entityType === 'DOCUMENT' || entityType === 'TASK'
+    ? { input, documentId: entityId, isDocument: true }
+    : { input };
+}
+
 type GraphqlEntityPropertiesQueryOptions = {
   entityType: Accessor<EntityType>;
   entityId: Accessor<string>;
@@ -83,7 +95,10 @@ export function createGraphqlEntityPropertiesQuery(
     return {
       query: EntityPropertiesDocument,
       client: getGraphqlSoupClient(),
-      variables: { input: currentInput! },
+      variables: buildEntityPropertiesVariables(
+        options.entityType(),
+        entityId
+      )!,
       enabled: currentInput !== undefined,
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
@@ -616,7 +631,13 @@ export function mapGraphqlEntityProperties(
   entityId: string
 ): SoupProperty[] | undefined {
   if (!data) return undefined;
-  const items = data.user?.soup?.items;
+  const user = data.user;
+  if (user && 'document' in user) {
+    return user.document?.id === entityId
+      ? mapGraphqlProperties(user.document.properties)
+      : undefined;
+  }
+  const items = user?.soup?.items;
   if (!items) return undefined;
   const item = items.find((candidate) => candidate.id === entityId);
   return mapGraphqlProperties(item?.properties ?? []);

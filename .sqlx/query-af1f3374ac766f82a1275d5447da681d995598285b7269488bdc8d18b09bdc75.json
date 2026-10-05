@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                (SELECT h.\"updatedAt\"::timestamptz FROM \"UserHistory\" h\n                 WHERE h.\"itemId\" = $1 AND h.\"userId\" = $2\n                   AND h.\"itemType\" = 'document') AS \"viewed_at?\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "af1f3374ac766f82a1275d5447da681d995598285b7269488bdc8d18b09bdc75"
+}

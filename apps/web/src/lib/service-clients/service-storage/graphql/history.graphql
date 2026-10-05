@@ -86,3 +86,25 @@ fragment GraphqlChannelQuickAccessFields on GraphqlSoupChannel {
 		userId
 	}
 }
+
+# History supplies candidate IDs only; each document is freshly authorized.
+query KnownDocuments($documentIds: [ID!]!) {
+  user {
+    id
+    documents(documentIds: $documentIds) {
+      __typename
+      id
+      name
+      ownerId
+      fileType
+      createdAt
+      updatedAt
+      viewedAt
+      deletedAt
+      subType {
+        __typename
+        ... on GraphqlTaskSubType { isCompleted }
+      }
+    }
+  }
+}

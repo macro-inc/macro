@@ -26,13 +26,15 @@ import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
-import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import { buildOptimisticEntityPropertyOptions } from '../graphql-optimistic';
 import {
   type EntityPropertyOptionSelection,
   getEntityPropertyOptionDeltas,
 } from '../option-deltas';
-import { toGraphqlPropertyTargetEntityType } from './entity';
+import {
+  buildEntityPropertiesVariables,
+  toGraphqlPropertyTargetEntityType,
+} from './entity';
 
 export type GraphqlEntityPropertyOptionsInput = {
   entityType: EntityType | PropertyTargetEntityType;
@@ -66,10 +68,8 @@ function newPropertyLinkRevalidations(
   entityId: string
 ): QueryRevalidation[] {
   if (!getGraphqlCacheHost()) return [];
-  const input = buildGraphqlEntitySoupInput(entityType, entityId);
-  return input
-    ? [{ document: EntityPropertiesDocument, variables: { input } }]
-    : [];
+  const variables = buildEntityPropertiesVariables(entityType, entityId);
+  return variables ? [{ document: EntityPropertiesDocument, variables }] : [];
 }
 
 /**

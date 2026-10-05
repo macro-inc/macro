@@ -26,9 +26,13 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: () => cacheHostState.current,
 }));
 
-vi.mock('./entity', () => ({
-  toGraphqlPropertyTargetEntityType: (entityType: string) => entityType,
-}));
+vi.mock('./entity', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./entity')>();
+  return {
+    ...actual,
+    toGraphqlPropertyTargetEntityType: (entityType: string) => entityType,
+  };
+});
 
 import { updateGraphqlEntityPropertyOptions } from './entity-options';
 
@@ -185,7 +189,11 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(options.revalidations).toEqual([
       {
         document: EntityPropertiesDocument,
-        variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1') },
+        variables: {
+          input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1'),
+          documentId: 'doc-1',
+          isDocument: true,
+        },
       },
     ]);
     expect(inspectMock).not.toHaveBeenCalled();
@@ -263,6 +271,9 @@ describe('updateGraphqlEntityPropertyOptions', () => {
           document: EntityPropertiesDocument,
           variables: {
             input: buildGraphqlEntitySoupInput(entityType, 'target-1'),
+            ...(entityType === 'TASK'
+              ? { documentId: 'target-1', isDocument: true }
+              : {}),
           },
         },
       ]);

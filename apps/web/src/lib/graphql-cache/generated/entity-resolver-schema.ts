@@ -39,6 +39,10 @@ export const entityResolverSchema = {
     },
   },
   GraphqlUser: {
+    document: {
+      targets: ['GraphqlSoupDocument'],
+      argumentPaths: [['documentId']],
+    },
     emailThread: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
@@ -54,9 +58,11 @@ export type GeneratedEntityResolverSchema = typeof entityResolverSchema;
 export type GeneratedEntityResolverTarget =
   | 'GraphqlChannelActivity'
   | 'GraphqlProperty'
+  | 'GraphqlSoupDocument'
   | 'GraphqlSoupEmailThread'
   | 'GraphqlSoupInitiative';
 export type GeneratedEntityResolverArgumentPath =
+  | readonly ['documentId']
   | readonly ['initiativeId']
   | readonly ['input', 'channelId']
   | readonly ['input', 'labelId']

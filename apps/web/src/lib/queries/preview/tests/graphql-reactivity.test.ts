@@ -60,7 +60,7 @@ describe('GraphQL preview hover reactivity', () => {
   it('shares a rich batch with the popup and stays settled across live updates', async () => {
     const id = '01a081e3-3982-70e8-8d67-4c28ed21129e';
     const document: Extract<
-      ItemPreviewsQuery['user']['soup']['items'][number],
+      NonNullable<ItemPreviewsQuery['user']['soup']>['items'][number],
       { __typename: 'GraphqlSoupDocument' }
     > = {
       __typename: 'GraphqlSoupDocument',

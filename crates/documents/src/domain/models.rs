@@ -24,6 +24,28 @@ pub const STATUS_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000002";
 pub const NOT_STARTED_STATUS_OPTION_ID: uuid::Uuid =
     uuid::uuid!("00000001-0000-0000-0002-000000000001");
 
+/// Completed task status option.
+pub const COMPLETED_STATUS_OPTION_ID: uuid::Uuid =
+    uuid::uuid!("00000001-0000-0000-0002-000000000004");
+
+/// Viewer-specific facts used when displaying an explicitly addressed document.
+#[derive(Debug, Clone)]
+pub struct DocumentViewMetadata {
+    /// The authenticated viewer's last successful access.
+    pub viewed_at: Option<DateTime<Utc>>,
+}
+
+/// Document metadata read through a fresh view capability, without loading content.
+#[derive(Debug, Clone)]
+pub struct ViewedDocumentMetadata {
+    /// Canonical document metadata.
+    pub document: DocumentMetadata,
+    /// Whether the task status indicates completion.
+    pub is_completed: bool,
+    /// Viewer-specific last access time.
+    pub view: DocumentViewMetadata,
+}
+
 /// Errors that can occur during document operations.
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {

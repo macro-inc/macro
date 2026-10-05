@@ -1,3 +1,4 @@
+use macro_user_id::cowlike::CowLike;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -46,6 +47,7 @@ use super::*;
 
 mod database_activity;
 mod database_row;
+mod document;
 mod email_archive;
 mod initiative;
 mod scheduled_actions;
@@ -898,6 +900,21 @@ impl EntityAccessService for CountingEntityAccessService {
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        if entity_type == EntityType::Document {
+            if entity_id != document::LINK_DOCUMENT_ID || _user_id.as_ref() != VALID_USER_ID {
+                return Err(AccessError::Unauthorized);
+            }
+            return EntityAccessReceipt::try_new_authenticated_user(
+                MacroUserIdStr(_user_id.clone().into_owned()),
+                entity_access::domain::models::Entity {
+                    entity_id: entity_id.to_owned(),
+                    entity_type,
+                },
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                },
+            );
+        }
         // The viewer can see exactly one database and no other.
         if entity_type == EntityType::Database {
             if entity_id != database_activity::VIEWABLE_DATABASE_ID {

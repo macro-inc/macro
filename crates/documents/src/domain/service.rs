@@ -1,6 +1,7 @@
 //! Document service implementation.
 
 mod content_events;
+mod metadata;
 
 #[cfg(test)]
 mod tests;

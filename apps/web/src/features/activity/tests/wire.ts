@@ -33,7 +33,7 @@ export function overviewPage(
 }
 
 export function soupPage(
-  items: EntityActivityQuery['user']['soup']['items']
+  items: NonNullable<EntityActivityQuery['user']['soup']>['items']
 ): EntityActivityQuery {
   return { user: { id: 'user-1', soup: { items } } };
 }

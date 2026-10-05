@@ -55,6 +55,10 @@ export function createEntityActivityQuery(
       variables: {
         input: currentInput!,
         limit: options.limit ?? ENTITY_ACTIVITY_PREVIEW_LIMIT,
+        ...(options.entityType() === 'DOCUMENT' ||
+        options.entityType() === 'TASK'
+          ? { documentId: entityId, isDocument: true }
+          : {}),
       },
       enabled: currentInput !== undefined,
       requestPolicy: 'cache-and-network',

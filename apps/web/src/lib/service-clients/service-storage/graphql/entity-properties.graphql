@@ -1,8 +1,15 @@
 # Also used as a typed entrypoint for optimistic property-list links.
-query EntityProperties($input: SoupInput!) {
+query EntityProperties($input: SoupInput!, $documentId: ID! = "", $isDocument: Boolean! = false) {
   user {
     id
-    soup(input: $input) {
+    document(documentId: $documentId) @include(if: $isDocument) {
+      __typename
+      id
+      properties {
+        ...SoupPropertyFields
+      }
+    }
+    soup(input: $input) @skip(if: $isDocument) {
       items {
         __typename
         id

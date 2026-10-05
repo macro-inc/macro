@@ -24,6 +24,8 @@ use models_permissions::share_permission::team_share::{
     TeamShareGrant, TeamShareLevel, TeamShareRequest, authorize_team_share,
 };
 
+mod metadata;
+
 #[derive(Clone)]
 struct SponsoredByOwner;
 

@@ -128,6 +128,29 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_document_view_metadata(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> Result<crate::domain::models::DocumentViewMetadata, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                (SELECT h."updatedAt"::timestamptz FROM "UserHistory" h
+                 WHERE h."itemId" = $1 AND h."userId" = $2
+                   AND h."itemType" = 'document') AS "viewed_at?"
+            "#,
+            document_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(crate::domain::models::DocumentViewMetadata {
+            viewed_at: row.viewed_at,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_document_metadata(
         &self,
         document_id: &str,

@@ -7,6 +7,7 @@ pub mod create;
 pub mod editing;
 pub mod markdown;
 pub mod mentions;
+pub mod metadata;
 pub mod sync;
 
 use std::future::Future;
@@ -56,6 +57,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Read viewer-specific access time and task completion for one document.
+    fn get_document_view_metadata(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<super::models::DocumentViewMetadata, Self::Err>> + Send;
 
     /// Get a user's last view location within a document.
     fn get_user_view_location(
