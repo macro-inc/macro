@@ -88,10 +88,11 @@ export function LayersPanel(props: {
       void load(ROOT);
     })
   );
-  // After an edit, every loaded level reloads in place (expansion kept).
+  // After edits, every loaded level reloads in place (expansion kept); a
+  // drag's steps only move layers, so once it pauses is enough.
   createEffect(
     on(
-      viewer.editVersion,
+      viewer.editsSettled,
       async () => {
         const page = viewer.page();
         const parents = [...children().keys()];

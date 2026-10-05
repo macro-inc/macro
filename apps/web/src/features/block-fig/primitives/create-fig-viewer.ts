@@ -11,7 +11,7 @@ import type {
   PageLayout,
   Rect,
 } from '@core/fig-engine/types';
-import { batch, createSignal } from 'solid-js';
+import { batch, createSignal, onCleanup } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import {
   type Camera,
@@ -51,6 +51,8 @@ export interface FigViewerOptions {
 
 /** Pick tolerance around thin shapes, in CSS pixels. */
 const HIT_SLOP = 3;
+/** A pause between edits that ends a stream of them (see `editsSettled`). */
+const EDITS_QUIET_MS = 250;
 
 export function createFigViewer(options: FigViewerOptions) {
   const { engine } = options;
@@ -81,6 +83,29 @@ export function createFigViewer(options: FigViewerOptions) {
   const [revealSignal, setRevealSignal] = createSignal(0);
   /** Bumped after every edit (layers, properties, and geometry reload). */
   const [editVersion, setEditVersion] = createSignal(0);
+  /**
+   * Bumped after an edit too, but once per pause in a stream of edits (a
+   * drag's steps): at the first and after the last. For what need not
+   * follow every step (the layers list, file-wide lists).
+   */
+  const [editsSettled, setEditsSettled] = createSignal(0);
+  let lastEditAt = Number.NEGATIVE_INFINITY;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  const noteEdit = () => {
+    const now = performance.now();
+    const quiet = now - lastEditAt > EDITS_QUIET_MS;
+    lastEditAt = now;
+    clearTimeout(settleTimer);
+    settleTimer = undefined;
+    if (quiet) setEditsSettled((n) => n + 1);
+    else {
+      settleTimer = setTimeout(() => {
+        settleTimer = undefined;
+        setEditsSettled((n) => n + 1);
+      }, EDITS_QUIET_MS);
+    }
+  };
+  onCleanup(() => clearTimeout(settleTimer));
   /** Bumped to start renaming the selected layer in the layers panel. */
   const [renameSignal, setRenameSignal] = createSignal(0);
 
@@ -437,6 +462,7 @@ export function createFigViewer(options: FigViewerOptions) {
       batch(() => {
         setLayout(next);
         setEditVersion((n) => n + 1);
+        noteEdit();
       });
     } catch (e) {
       options.notifyError(e instanceof Error ? e.message : String(e));
@@ -540,6 +566,7 @@ export function createFigViewer(options: FigViewerOptions) {
     collapseLayers: () => setCollapseSignal((n) => n + 1),
     revealSignal,
     editVersion,
+    editsSettled,
     renameSignal,
     requestRename: () => setRenameSignal((n) => n + 1),
     afterEdit,

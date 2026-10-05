@@ -48,7 +48,7 @@ export function createDesignSystem(options: {
     }
   };
   createEffect(
-    on([viewer.selected, viewer.editVersion], ([selected]) => {
+    on([viewer.selected, viewer.editsSettled], ([selected]) => {
       void loadInfo(selected.length === 1 ? selected[0].id : undefined);
     })
   );
@@ -71,7 +71,7 @@ export function createDesignSystem(options: {
       // A file that fails to answer keeps the last lists.
     }
   };
-  createEffect(on(viewer.editVersion, () => void loadLists()));
+  createEffect(on(viewer.editsSettled, () => void loadLists()));
 
   const run = (...ops: DesignOp[]) => editor.apply(ops);
   const selectedId = () => viewer.selected()[0]?.id;

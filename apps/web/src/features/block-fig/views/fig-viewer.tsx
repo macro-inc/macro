@@ -159,7 +159,7 @@ export function FigViewer() {
   // it is edited.
   const fonts = createFontRegistry({ engine, source: context.fonts });
   createEffect(
-    on(viewer.editVersion, () => void fonts.refresh(), { defer: true })
+    on(viewer.editsSettled, () => void fonts.refresh(), { defer: true })
   );
   let mixedRequest = 0;
   const loadMixed = async (ids: string[], request: number) => {
@@ -173,7 +173,7 @@ export function FigViewer() {
     }
   };
   createEffect(
-    on([viewer.selected, viewer.editVersion], ([selected]) => {
+    on([viewer.selected, viewer.editsSettled], ([selected]) => {
       const request = ++mixedRequest;
       if (selected.length < 2) setMixed(undefined);
       else
