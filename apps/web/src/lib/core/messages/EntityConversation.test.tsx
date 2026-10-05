@@ -128,7 +128,18 @@ describe('EntityDiscussion target ownership', () => {
     mocks.linkResolved = false;
     mocks.timeline.mockReturnValue({
       isSuccess: true,
-      data: { pages: [{ items: [thread('Latest workbook topic', null)] }] },
+      data: {
+        pages: [
+          {
+            entries: [
+              {
+                type: 'message',
+                message: thread('Latest workbook topic', null),
+              },
+            ],
+          },
+        ],
+      },
     });
     const view = render(() => (
       <EntityDiscussion
@@ -154,7 +165,18 @@ describe('EntityDiscussion target ownership', () => {
       mocks.urlTarget = 'workbook-reply';
       mocks.timeline.mockReturnValue({
         isSuccess: true,
-        data: { pages: [{ items: [thread('root-of-workbook-reply', null)] }] },
+        data: {
+          pages: [
+            {
+              entries: [
+                {
+                  type: 'message',
+                  message: thread('root-of-workbook-reply', null),
+                },
+              ],
+            },
+          ],
+        },
       });
       const view = render(() => (
         <EntityDiscussion

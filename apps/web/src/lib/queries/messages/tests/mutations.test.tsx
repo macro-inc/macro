@@ -428,13 +428,16 @@ describe('root deletion', () => {
             pageParams: [null],
             pages: [
               {
-                items: [
+                entries: [
                   {
-                    ...root,
-                    thread: {
-                      reply_count: 0,
-                      preview: [],
-                      latest_reply_at: null,
+                    type: 'message',
+                    message: {
+                      ...root,
+                      thread: {
+                        reply_count: 0,
+                        preview: [],
+                        latest_reply_at: null,
+                      },
                     },
                   },
                 ],
@@ -577,7 +580,7 @@ describe('sending', () => {
       const threadKey = getThreadRepliesQueryKey(parent, parent.id);
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
         pageParams: [null],
-        pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+        pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
       });
       testQueryClient.setQueryData(threadKey, null);
       mocks.post.mockResolvedValue(message(parent, parent.id));
@@ -589,9 +592,9 @@ describe('sending', () => {
         optimisticId: newMessageId(),
       });
 
-      const roots =
+      const roots = timelineMessages(
         testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-          .items;
+      );
       expect(roots.map((root) => [root.id, root.thread_id])).toEqual([
         ['call-id', undefined],
       ]);
@@ -617,11 +620,14 @@ describe('sending', () => {
       pageParams: [null],
       pages: [
         {
-          items: [
+          entries: [
             {
-              ...root,
-              state,
-              thread: { reply_count: 0, preview: [], latest_reply_at: null },
+              type: 'message',
+              message: {
+                ...root,
+                state,
+                thread: { reply_count: 0, preview: [], latest_reply_at: null },
+              },
             },
           ],
           next_cursor: null,
@@ -644,9 +650,9 @@ describe('sending', () => {
       optimisticId: replyId,
     });
 
-    const roots =
+    const roots = timelineMessages(
       testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items;
+    );
     expect(roots.map((item) => item.id)).toEqual([root.id]);
     expect(roots[0].thread.reply_count).toBe(1);
     const thread = testQueryClient.getQueryData<MessageThread>(threadKey)!;
@@ -711,8 +717,9 @@ describe('sending', () => {
     await pending;
     expect(rootIds()).toEqual([[id, id]]);
     expect(
-      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items[0].state.anchor
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+      )[0].state.anchor
     ).toEqual(anchor ?? null);
   });
 
