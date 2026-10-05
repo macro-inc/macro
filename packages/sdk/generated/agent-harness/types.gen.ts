@@ -1393,7 +1393,7 @@ export type StatusResponse = {
 /**
  * How a person answers a held tool call.
  */
-export type ToolApprovalAnswerDto = 'approve' | 'deny' | 'cancel';
+export type ToolApprovalAnswerDto = 'approve' | 'approve_and_remember' | 'deny' | 'cancel';
 
 /**
  * Where a held tool call stands once answered.
@@ -2278,6 +2278,10 @@ export type AnswerAgentSessionToolApprovalErrors = {
      * Already resolved
      */
     409: string;
+    /**
+     * Approve for good, for a call no person asked for
+     */
+    422: string;
     500: string;
 };
 

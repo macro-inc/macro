@@ -9,7 +9,7 @@
 //! [`RuntimeAttachment::solo`]: agent_session::domain::connection::RuntimeAttachment::solo
 
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

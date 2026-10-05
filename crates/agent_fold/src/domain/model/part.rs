@@ -99,6 +99,9 @@ pub enum MessagePart {
         /// Who resolved it, when a person did.
         #[serde(rename = "resolvedBy")]
         resolved_by: Option<String>,
+        /// Approved for good: the person who asked may make the calls it
+        /// covers without the owner being asked again.
+        remembered: bool,
     },
     /// A user-issued control operation on the session.
     Control {

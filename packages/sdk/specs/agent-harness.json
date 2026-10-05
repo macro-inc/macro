@@ -1913,6 +1913,16 @@
               }
             }
           },
+          "422": {
+            "description": "Approve for good, for a call no person asked for",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -3925,7 +3935,7 @@
       "ToolApprovalAnswerDto": {
         "type": "string",
         "description": "How a person answers a held tool call.",
-        "enum": ["approve", "deny", "cancel"]
+        "enum": ["approve", "approve_and_remember", "deny", "cancel"]
       },
       "ToolApprovalStatusDto": {
         "type": "string",

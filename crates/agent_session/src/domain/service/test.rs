@@ -1410,6 +1410,7 @@ async fn a_recorded_frame_is_stored_and_published_at_once() {
         requested_by: None,
         status: agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Pending,
         resolved_by: None,
+        remembered: false,
     };
 
     service

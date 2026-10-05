@@ -35,6 +35,10 @@ mod test;
 pub enum ToolApprovalAnswerDto {
     /// Let it run. Owner only.
     Approve,
+    /// Let it run, and let the same person make the calls it covers in this
+    /// session without asking again: the same tool on Macro, every tool of a
+    /// connected app. Owner only.
+    ApproveAndRemember,
     /// Refuse it. Owner only.
     Deny,
     /// Stop waiting on the owner. Anyone with edit access.
@@ -45,6 +49,7 @@ impl From<ToolApprovalAnswerDto> for ApprovalAnswer {
     fn from(answer: ToolApprovalAnswerDto) -> Self {
         match answer {
             ToolApprovalAnswerDto::Approve => Self::Approve,
+            ToolApprovalAnswerDto::ApproveAndRemember => Self::ApproveAndRemember,
             ToolApprovalAnswerDto::Deny => Self::Deny,
             ToolApprovalAnswerDto::Cancel => Self::Cancel,
         }
@@ -182,6 +187,11 @@ impl IntoResponse for ToolApprovalApiError {
                 "only the session owner may approve or decline",
             )
                 .into_response(),
+            ToolApprovalError::NobodyToRemember => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "a call a bot made on nobody's behalf cannot be approved for good",
+            )
+                .into_response(),
             ToolApprovalError::Egress(error) => {
                 tracing::error!(error = ?error, "answering a tool approval failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
@@ -206,6 +216,7 @@ impl IntoResponse for ToolApprovalApiError {
         (status = 403, body = String, description = "Not the owner, for approve or deny; or no edit access"),
         (status = 404, body = String),
         (status = 409, body = String, description = "Already resolved"),
+        (status = 422, body = String, description = "Approve for good, for a call no person asked for"),
         (status = 500, body = String),
     )
 )]

@@ -5,6 +5,11 @@ import { Show } from 'solid-js';
 export type ToolApprovalCardProps = {
   /** What the agent wants to do, e.g. `read your email`. */
   action: string;
+  /**
+   * What approving for good would let the requester do without asking, e.g.
+   * `use your Linear account`. Absent when it cannot be offered.
+   */
+  standing?: string;
   /** Who prompted the turn; absent for a bot on nobody's behalf. */
   requester?: string;
   /** The session's owner, whose access the call spends. */
@@ -16,6 +21,7 @@ export type ToolApprovalCardProps = {
   /** An answer is on the wire. */
   disabled?: boolean;
   onApprove: () => void;
+  onApproveAlways: () => void;
   onDeny: () => void;
   onCancel: () => void;
 };
@@ -44,6 +50,14 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
           <p class="mt-0.5 text-sm leading-5 text-ink-muted [overflow-wrap:anywhere]">
             {asker()} asked the agent to {props.action}.
           </p>
+          <Show when={props.canApprove && props.standing}>
+            {(standing) => (
+              <p class="mt-1 text-xs leading-4 text-ink-muted [overflow-wrap:anywhere]">
+                Always allow lets {asker()} {standing()} in this session without
+                asking you.
+              </p>
+            )}
+          </Show>
         </div>
       </div>
       <div class="flex min-w-0 flex-wrap items-center justify-end gap-2 p-3">
@@ -73,6 +87,17 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
           >
             Decline
           </Button>
+          <Show when={props.standing}>
+            <Button
+              type="button"
+              size="md"
+              variant="outline"
+              disabled={props.disabled}
+              onClick={() => props.onApproveAlways()}
+            >
+              Always allow
+            </Button>
+          </Show>
           <Button
             type="button"
             size="md"

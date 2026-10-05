@@ -95,6 +95,10 @@ pub struct ToolApprovalNotice {
     /// Who resolved it, when a person did.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_by: Option<String>,
+    /// Approved for good: the person who asked may make the calls it covers
+    /// in this session without the owner being asked again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub remembered: bool,
 }
 
 impl ToolApprovalNotice {

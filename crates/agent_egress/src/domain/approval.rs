@@ -131,6 +131,9 @@ pub struct ToolApproval {
     pub status: ToolApprovalStatus,
     /// Who resolved it, when a person did.
     pub resolved_by: Option<MacroUserIdStr<'static>>,
+    /// Approved for good: the person who asked may make the calls it covers
+    /// without the owner being asked again.
+    pub remembered: bool,
 }
 
 impl ToolApproval {
@@ -152,7 +155,60 @@ impl ToolApproval {
                 .resolved_by
                 .as_ref()
                 .map(|user| user.as_ref().to_owned()),
+            remembered: self.remembered,
         }
+    }
+}
+
+/// The owner's "approve, and don't ask me again": one person may make the
+/// calls it covers in one session without the owner being asked each time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StandingApproval {
+    /// The session it holds in, for as long as the session lasts.
+    pub session: AgentSessionId,
+    /// Who may make the calls.
+    pub user: MacroUserIdStr<'static>,
+    /// `macro`, or the connected app's slug.
+    pub server_slug: String,
+    /// The one tool covered on Macro's server, which reaches all of the
+    /// owner's data; `None` covers a whole connected app.
+    pub tool_name: Option<String>,
+    /// The owner who said so.
+    pub granted_by: MacroUserIdStr<'static>,
+}
+
+impl StandingApproval {
+    /// What approving `approval` for good covers: the same tool on Macro,
+    /// the whole app otherwise. `None` when no person asked, since there is
+    /// nobody to remember.
+    #[must_use]
+    pub fn covering(approval: &ToolApproval, granted_by: &MacroUserIdStr<'static>) -> Option<Self> {
+        Some(Self {
+            session: approval.session,
+            user: approval.requested_by.clone()?,
+            server_slug: approval.server_slug.clone(),
+            tool_name: (approval.server_slug == MACRO_SERVER_SLUG)
+                .then(|| approval.tool_name.clone()),
+            granted_by: granted_by.clone(),
+        })
+    }
+
+    /// Whether it covers `user` calling `tool` on `server_slug` in `session`.
+    #[must_use]
+    pub fn covers(
+        &self,
+        session: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+        server_slug: &str,
+        tool: &str,
+    ) -> bool {
+        self.session == session
+            && self.user == *user
+            && self.server_slug == server_slug
+            && self
+                .tool_name
+                .as_deref()
+                .is_none_or(|covered| covered == tool)
     }
 }
 
@@ -162,6 +218,9 @@ impl ToolApproval {
 pub enum ApprovalAnswer {
     /// Let it run.
     Approve,
+    /// Let it run, and let the same person make the calls it covers in this
+    /// session without asking again.
+    ApproveAndRemember,
     /// Refuse it.
     Deny,
     /// Give up waiting on the owner.
@@ -171,7 +230,7 @@ pub enum ApprovalAnswer {
 impl ApprovalAnswer {
     fn status(self) -> ToolApprovalStatus {
         match self {
-            Self::Approve => ToolApprovalStatus::Approved,
+            Self::Approve | Self::ApproveAndRemember => ToolApprovalStatus::Approved,
             Self::Deny => ToolApprovalStatus::Denied,
             Self::Cancel => ToolApprovalStatus::Cancelled,
         }
@@ -190,6 +249,9 @@ pub enum ToolApprovalError {
     /// Only the owner may approve or decline.
     #[error("only the session owner may approve or decline a tool call")]
     NotOwner,
+    /// A call no person asked for cannot be approved for good.
+    #[error("a call a bot made on nobody's behalf cannot be approved for good")]
+    NobodyToRemember,
     /// The store failed.
     #[error(transparent)]
     Egress(#[from] EgressError),
@@ -427,7 +489,23 @@ where
 {
     /// Hold `call` until it is resolved, and say how. Dropping the future
     /// cancels the hold, which is how a stopped turn gives up on it.
-    pub async fn hold_in_process(&self, call: InProcessCall) -> Result<ToolApproval, EgressError> {
+    pub async fn hold_in_process(
+        &self,
+        call: InProcessCall,
+    ) -> Result<ToolApprovalStatus, EgressError> {
+        if self
+            .inner
+            .is_standing(
+                call.session,
+                &call.prompter,
+                &call.server_slug,
+                &call.tool_name,
+            )
+            .await?
+        {
+            return Ok(ToolApprovalStatus::Approved);
+        }
+        let prompter = call.prompter.clone();
         let approval = ToolApproval {
             id: ToolApprovalId::mint(),
             session: call.session,
@@ -442,8 +520,12 @@ where
             arguments: call.arguments,
             status: ToolApprovalStatus::Pending,
             resolved_by: None,
+            remembered: false,
         };
         self.inner.store.insert(&approval).await?;
+        if self.inner.settled_by_standing(&approval, &prompter).await? {
+            return Ok(ToolApprovalStatus::Approved);
+        }
         tracing::info!(
             approval = %approval.id,
             session = %approval.session,
@@ -461,7 +543,7 @@ where
             .await_resolution(&approval, None, call.owner.email_str(), None)
             .await;
         guard.disarm();
-        resolved
+        Ok(resolved?.status)
     }
 }
 
@@ -575,6 +657,9 @@ where
         if !approval.status.is_pending() {
             return Err(ToolApprovalError::NotPending);
         }
+        if answer == ApprovalAnswer::ApproveAndRemember {
+            return self.inner.approve_for_good(&approval, by).await;
+        }
         self.inner
             .resolve(id, answer.status(), Some(by))
             .await?
@@ -605,7 +690,18 @@ where
         status: ToolApprovalStatus,
         by: Option<&MacroUserIdStr<'static>>,
     ) -> Result<Option<ToolApproval>, EgressError> {
-        let resolved = self.store.resolve(id, status, by).await?;
+        self.settle(id, status, by, false).await
+    }
+
+    /// [`Self::resolve`], recording whether it was approved for good.
+    async fn settle(
+        &self,
+        id: ToolApprovalId,
+        status: ToolApprovalStatus,
+        by: Option<&MacroUserIdStr<'static>>,
+        remembered: bool,
+    ) -> Result<Option<ToolApproval>, EgressError> {
+        let resolved = self.store.resolve(id, status, by, remembered).await?;
         if let Some(approval) = &resolved {
             tracing::info!(
                 approval = %approval.id,
@@ -616,6 +712,73 @@ where
             self.announcer.resolved(approval).await;
         }
         Ok(resolved)
+    }
+
+    /// Whether a standing approval lets whoever prompted the turn make this
+    /// call without asking. Never for a bot on nobody's behalf.
+    async fn is_standing(
+        &self,
+        session: AgentSessionId,
+        prompter: &TurnPrompter,
+        server_slug: &str,
+        tool: &str,
+    ) -> Result<bool, EgressError> {
+        match &prompter.user {
+            Some(user) => {
+                self.store
+                    .is_standing(session, user, server_slug, tool)
+                    .await
+            }
+            None => Ok(false),
+        }
+    }
+
+    /// Checks again once `approval` is recorded and before anyone is told:
+    /// a standing approval given between the first check and the insert
+    /// either finds the row among those it covers, or is seen here, which
+    /// approves it quietly. Whether it was.
+    async fn settled_by_standing(
+        &self,
+        approval: &ToolApproval,
+        prompter: &TurnPrompter,
+    ) -> Result<bool, EgressError> {
+        if !self
+            .is_standing(
+                approval.session,
+                prompter,
+                &approval.server_slug,
+                &approval.tool_name,
+            )
+            .await?
+        {
+            return Ok(false);
+        }
+        self.store
+            .resolve(approval.id, ToolApprovalStatus::Approved, None, true)
+            .await?;
+        Ok(true)
+    }
+
+    /// Approve `approval` for good: remember what it covers, approve it, and
+    /// approve whatever else the same person is already waiting on that it
+    /// covers, so one answer settles them all.
+    async fn approve_for_good(
+        &self,
+        approval: &ToolApproval,
+        by: &MacroUserIdStr<'static>,
+    ) -> Result<ToolApproval, ToolApprovalError> {
+        let standing =
+            StandingApproval::covering(approval, by).ok_or(ToolApprovalError::NobodyToRemember)?;
+        self.store.remember(&standing).await?;
+        let approved = self
+            .settle(approval.id, ToolApprovalStatus::Approved, Some(by), true)
+            .await?
+            .ok_or(ToolApprovalError::NotPending)?;
+        for covered in self.store.pending_covered_by(&standing).await? {
+            self.settle(covered, ToolApprovalStatus::Approved, Some(by), true)
+                .await?;
+        }
+        Ok(approved)
     }
 
     /// Wait until `id` is no longer pending, keeping the client alive on
@@ -759,6 +922,18 @@ where
     Announcer: ToolApprovalAnnouncer,
 {
     async fn hold(&self, call: HeldCall) -> Result<ProxyResponse, EgressError> {
+        if self
+            .inner
+            .is_standing(
+                call.session,
+                &call.prompter,
+                &call.server_slug,
+                &call.call.name,
+            )
+            .await?
+        {
+            return (call.forward)(call.request).await;
+        }
         let approval = ToolApproval {
             id: ToolApprovalId::mint(),
             session: call.session,
@@ -772,8 +947,16 @@ where
             arguments: call.call.arguments.clone(),
             status: ToolApprovalStatus::Pending,
             resolved_by: None,
+            remembered: false,
         };
         self.inner.store.insert(&approval).await?;
+        if self
+            .inner
+            .settled_by_standing(&approval, &call.prompter)
+            .await?
+        {
+            return (call.forward)(call.request).await;
+        }
         tracing::info!(
             approval = %approval.id,
             session = %approval.session,

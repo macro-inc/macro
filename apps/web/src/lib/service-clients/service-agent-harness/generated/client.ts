@@ -2070,6 +2070,11 @@ export type answerAgentSessionToolApprovalResponse409 = {
   status: 409;
 };
 
+export type answerAgentSessionToolApprovalResponse422 = {
+  data: string;
+  status: 422;
+};
+
 export type answerAgentSessionToolApprovalResponse500 = {
   data: string;
   status: 500;
@@ -2084,6 +2089,7 @@ export type answerAgentSessionToolApprovalResponseError = (
   | answerAgentSessionToolApprovalResponse403
   | answerAgentSessionToolApprovalResponse404
   | answerAgentSessionToolApprovalResponse409
+  | answerAgentSessionToolApprovalResponse422
   | answerAgentSessionToolApprovalResponse500
 ) & {
   headers: Headers;

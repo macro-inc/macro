@@ -115,6 +115,7 @@ fn approval(session: AgentSessionId, status: ToolApprovalStatus) -> ToolApproval
         arguments: serde_json::json!({}),
         status,
         resolved_by: None,
+        remembered: false,
     }
 }
 

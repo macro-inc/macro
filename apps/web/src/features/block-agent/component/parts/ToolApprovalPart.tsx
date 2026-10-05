@@ -42,7 +42,10 @@ export function ToolApprovalPart(props: {
   const outcome = () =>
     match(props.part.status)
       .with('pending', () => 'Waiting for approval')
-      .with('approved', () => (by() ? `Approved by ${by()}` : 'Approved'))
+      .with('approved', () => {
+        const approved = props.part.remembered ? 'Always allowed' : 'Approved';
+        return by() ? `${approved} by ${by()}` : approved;
+      })
       .with('denied', () => (by() ? `Declined by ${by()}` : 'Declined'))
       .with('cancelled', () => (by() ? `Cancelled by ${by()}` : 'Cancelled'))
       .with('expired', () => 'Not approved in time')

@@ -9,7 +9,7 @@
 
 use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
 
-use crate::domain::approval::{ToolApproval, ToolApprovalId};
+use crate::domain::approval::{StandingApproval, ToolApproval, ToolApprovalId};
 use crate::domain::error::EgressError;
 use crate::domain::model::{
     AgentSessionId, McpDestination, McpResolution, ProxyRequest, ProxyResponse, RepoSlug,
@@ -104,12 +104,14 @@ pub trait ToolApprovalStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), EgressError>> + Send;
 
     /// Resolve `id` if it is still pending, and wake whoever waits on it.
-    /// `None` when it was not pending or does not exist.
+    /// `remembered` records an approval given for good. `None` when it was
+    /// not pending or does not exist.
     fn resolve(
         &self,
         id: ToolApprovalId,
         status: ToolApprovalStatus,
         resolved_by: Option<&MacroUserIdStr<'static>>,
+        remembered: bool,
     ) -> impl Future<Output = Result<Option<ToolApproval>, EgressError>> + Send;
 
     /// The approval `id`, whatever its state.
@@ -129,6 +131,29 @@ pub trait ToolApprovalStore: Send + Sync + 'static {
     fn pending_for_session(
         &self,
         session: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<ToolApprovalId>, EgressError>> + Send;
+
+    /// Record an approval given for good. Recording the same one twice is
+    /// not an error.
+    fn remember(
+        &self,
+        standing: &StandingApproval,
+    ) -> impl Future<Output = Result<(), EgressError>> + Send;
+
+    /// Whether a standing approval lets `user` call `tool` on `server_slug`
+    /// in `session` without asking.
+    fn is_standing(
+        &self,
+        session: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+        server_slug: &str,
+        tool: &str,
+    ) -> impl Future<Output = Result<bool, EgressError>> + Send;
+
+    /// Every pending approval `standing` covers.
+    fn pending_covered_by(
+        &self,
+        standing: &StandingApproval,
     ) -> impl Future<Output = Result<Vec<ToolApprovalId>, EgressError>> + Send;
 }
 

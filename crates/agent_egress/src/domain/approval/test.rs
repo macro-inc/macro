@@ -442,8 +442,7 @@ async fn an_in_process_call_waits_for_the_owner_and_says_how_it_ended() {
         .answer(session, id, ApprovalAnswer::Deny, &owner())
         .await
         .unwrap();
-    let resolved = waiting.await.unwrap().unwrap();
-    assert_eq!(resolved.status, ToolApprovalStatus::Denied);
+    assert_eq!(waiting.await.unwrap().unwrap(), ToolApprovalStatus::Denied);
     assert_eq!(announcer.heard()[0].0, ToolApprovalStatus::Pending);
 }
 
@@ -491,4 +490,229 @@ fn only_public_lookups_on_macro_skip_the_owner() {
         spends_owner_access("linear", "WebSearch"),
         "a connected app is always the owner's own account"
     );
+}
+
+/// Hold `call` in-process on a task, and the approval it is waiting on once
+/// the owner has been told.
+async fn waiting_in_process(
+    service: &Service,
+    store: &MemoryStore,
+    announcer: &RecordingAnnouncer,
+    call: InProcessCall,
+) -> (
+    tokio::task::JoinHandle<Result<ToolApprovalStatus, EgressError>>,
+    ToolApprovalId,
+) {
+    let before: Vec<ToolApprovalId> = store.all().iter().map(|approval| approval.id).collect();
+    let waiting = tokio::spawn({
+        let service = service.clone();
+        async move { service.hold_in_process(call).await }
+    });
+    announcer.requested.notified().await;
+    let id = store
+        .all()
+        .into_iter()
+        .find(|approval| !before.contains(&approval.id))
+        .expect("the call was held")
+        .id;
+    (waiting, id)
+}
+
+#[tokio::test]
+async fn approving_for_good_lets_that_person_use_that_macro_tool_without_asking_again() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (waiting, id) = waiting_in_process(&service, &store, &announcer, in_process(session)).await;
+
+    let approved = service
+        .answer(session, id, ApprovalAnswer::ApproveAndRemember, &owner())
+        .await
+        .unwrap();
+    assert_eq!(approved.status, ToolApprovalStatus::Approved);
+    assert!(approved.remembered, "the log says it was approved for good");
+    assert_eq!(
+        waiting.await.unwrap().unwrap(),
+        ToolApprovalStatus::Approved
+    );
+
+    assert_eq!(
+        service.hold_in_process(in_process(session)).await.unwrap(),
+        ToolApprovalStatus::Approved,
+        "the same person calling the same tool runs at once"
+    );
+    assert_eq!(store.all().len(), 1, "and nothing was held for it");
+    assert_eq!(
+        announcer.heard(),
+        [
+            (
+                ToolApprovalStatus::Pending,
+                Some(owner().as_ref().to_owned())
+            ),
+            (ToolApprovalStatus::Approved, None),
+        ],
+        "nobody was asked about the second call"
+    );
+}
+
+#[tokio::test]
+async fn approving_one_macro_tool_for_good_still_asks_about_anything_else() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (waiting, id) = waiting_in_process(&service, &store, &announcer, in_process(session)).await;
+    service
+        .answer(session, id, ApprovalAnswer::ApproveAndRemember, &owner())
+        .await
+        .unwrap();
+    waiting.await.unwrap().unwrap();
+
+    let other_tool = InProcessCall {
+        tool_name: "SendEmail".to_owned(),
+        ..in_process(session)
+    };
+    let (other_tool, _) = waiting_in_process(&service, &store, &announcer, other_tool).await;
+    other_tool.abort();
+
+    let someone_else = InProcessCall {
+        prompter: TurnPrompter {
+            action_id: AgentActionId::mint(),
+            user: Some(MacroUserIdStr::try_from_email("someone@macro.com").unwrap()),
+        },
+        ..in_process(session)
+    };
+    let (someone_else, _) = waiting_in_process(&service, &store, &announcer, someone_else).await;
+    someone_else.abort();
+
+    let (another_session, _) = waiting_in_process(
+        &service,
+        &store,
+        &announcer,
+        in_process(AgentSessionId::new()),
+    )
+    .await;
+    another_session.abort();
+
+    assert_eq!(store.all().len(), 4, "each of those was held");
+}
+
+#[tokio::test]
+async fn approving_a_connected_app_for_good_covers_all_of_its_tools() {
+    let (service, store, _announcer) = service();
+    let session = AgentSessionId::new();
+    let linear = |call: ToolsCall| {
+        let (held, forwarded) = held(session, call, serde_json::json!({ "jsonrpc": "2.0" }));
+        (
+            HeldCall {
+                server_slug: "linear".to_owned(),
+                server_name: "Linear".to_owned(),
+                ..held
+            },
+            forwarded,
+        )
+    };
+    let (first, _) = linear(tools_call(None));
+    let mut body = service.hold(first).await.unwrap().into_body();
+    next_event(&mut body).await;
+    service
+        .answer(
+            session,
+            store.only().id,
+            ApprovalAnswer::ApproveAndRemember,
+            &owner(),
+        )
+        .await
+        .unwrap();
+
+    let (second, forwarded) = linear(ToolsCall {
+        name: "create_issue".to_owned(),
+        ..tools_call(None)
+    });
+    let response = service.hold(second).await.unwrap();
+    assert_ne!(
+        response
+            .headers()
+            .get(CONTENT_TYPE)
+            .map(|value| value.as_bytes()),
+        Some(b"text/event-stream".as_slice()),
+        "the call is not held"
+    );
+    forwarded.await.expect("it went straight upstream");
+    assert_eq!(store.all().len(), 1, "and nothing was recorded for it");
+}
+
+#[tokio::test]
+async fn approving_for_good_also_approves_what_that_person_is_already_waiting_on() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (first, first_id) =
+        waiting_in_process(&service, &store, &announcer, in_process(session)).await;
+    let (second, _) = waiting_in_process(&service, &store, &announcer, in_process(session)).await;
+    let other_tool = InProcessCall {
+        tool_name: "SendEmail".to_owned(),
+        ..in_process(session)
+    };
+    let (other_tool, other_id) = waiting_in_process(&service, &store, &announcer, other_tool).await;
+
+    service
+        .answer(
+            session,
+            first_id,
+            ApprovalAnswer::ApproveAndRemember,
+            &owner(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(first.await.unwrap().unwrap(), ToolApprovalStatus::Approved);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), second)
+            .await
+            .expect("the second call to the same tool did not need its own click")
+            .unwrap()
+            .unwrap(),
+        ToolApprovalStatus::Approved
+    );
+    assert_eq!(
+        store.get(other_id).await.unwrap().unwrap().status,
+        ToolApprovalStatus::Pending,
+        "a call it does not cover still waits"
+    );
+    other_tool.abort();
+}
+
+#[tokio::test]
+async fn only_the_owner_approves_for_good_and_never_for_a_bot() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (waiting, id) = waiting_in_process(&service, &store, &announcer, in_process(session)).await;
+    assert!(matches!(
+        service
+            .answer(session, id, ApprovalAnswer::ApproveAndRemember, &asker())
+            .await,
+        Err(ToolApprovalError::NotOwner)
+    ));
+    waiting.abort();
+
+    let from_a_bot = InProcessCall {
+        prompter: TurnPrompter {
+            action_id: AgentActionId::mint(),
+            user: None,
+        },
+        ..in_process(session)
+    };
+    let (waiting, id) = waiting_in_process(&service, &store, &announcer, from_a_bot).await;
+    assert!(
+        matches!(
+            service
+                .answer(session, id, ApprovalAnswer::ApproveAndRemember, &owner())
+                .await,
+            Err(ToolApprovalError::NobodyToRemember)
+        ),
+        "there is no person to remember"
+    );
+    assert_eq!(
+        store.get(id).await.unwrap().unwrap().status,
+        ToolApprovalStatus::Pending,
+        "and the call still waits for a plain answer"
+    );
+    waiting.abort();
 }

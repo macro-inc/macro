@@ -40,6 +40,7 @@ impl FoldState {
             requested_by: notice.requested_by.clone(),
             status: notice.status,
             resolved_by: None,
+            remembered: false,
         })?;
         self.pending_tool_approvals.insert(
             notice.approval_id.clone(),
@@ -66,11 +67,13 @@ impl FoldState {
         if let Some(MessagePart::ToolApproval {
             status,
             resolved_by,
+            remembered,
             ..
         }) = self.part_at_mut(&at)
         {
             *status = notice.status;
             resolved_by.clone_from(&notice.resolved_by);
+            *remembered = notice.remembered;
         }
         let before = self.metadata.pending_interactions.len();
         self.metadata.pending_interactions.retain(|pending| {

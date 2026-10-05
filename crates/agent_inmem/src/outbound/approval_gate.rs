@@ -67,7 +67,7 @@ where
         else {
             return Ok(NativeToolVerdict::Run);
         };
-        let resolved = self
+        let status = self
             .approvals
             .hold_in_process(InProcessCall {
                 session,
@@ -79,7 +79,7 @@ where
                 arguments: arguments.clone(),
             })
             .await?;
-        Ok(match refusal(resolved.status, owner.email_str(), tool) {
+        Ok(match refusal(status, owner.email_str(), tool) {
             None => NativeToolVerdict::Run,
             Some(text) => NativeToolVerdict::Refuse(text),
         })

@@ -1,5 +1,6 @@
 //! Shared live-request lifecycle, preserving each protocol's answer shape.
 
+use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
 use serde_json::{Value, json};
 
 use super::util::parse_log;
@@ -196,8 +197,6 @@ fn approval_part(machine: &FoldMachineImpl) -> MessagePart {
 
 #[test]
 fn a_held_tool_call_blocks_the_turn_until_it_is_resolved() {
-    use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
-
     let mut machine = FoldMachineImpl::new();
     prompt(&mut machine, "p");
     assert!(push(
@@ -233,6 +232,32 @@ fn a_held_tool_call_blocks_the_turn_until_it_is_resolved() {
 }
 
 #[test]
+fn a_held_tool_call_approved_for_good_says_so() {
+    let mut machine = FoldMachineImpl::new();
+    prompt(&mut machine, "p");
+    push(&mut machine, "to_server", tool_approval("pending", None));
+    assert!(matches!(
+        approval_part(&machine),
+        MessagePart::ToolApproval {
+            remembered: false,
+            ..
+        }
+    ));
+
+    let mut approved = tool_approval("approved", Some("macro|wolf@macro.com"));
+    approved["params"]["remembered"] = json!(true);
+    assert!(push(&mut machine, "to_server", approved));
+    assert!(matches!(
+        approval_part(&machine),
+        MessagePart::ToolApproval {
+            status: ToolApprovalStatus::Approved,
+            remembered: true,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn a_held_tool_call_outside_a_turn_or_resolved_twice_changes_nothing() {
     let mut machine = FoldMachineImpl::new();
     assert!(!push(
@@ -253,7 +278,7 @@ fn a_held_tool_call_outside_a_turn_or_resolved_twice_changes_nothing() {
     assert!(matches!(
         approval_part(&machine),
         MessagePart::ToolApproval {
-            status: agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Denied,
+            status: ToolApprovalStatus::Denied,
             ..
         }
     ));

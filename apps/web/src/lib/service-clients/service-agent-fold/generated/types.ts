@@ -642,6 +642,11 @@ export type MessagePart =
       status: ToolApprovalStatus;
       /**  Who resolved it, when a person did. */
       resolvedBy: string | null;
+      /**
+       *  Approved for good: the person who asked may make the calls it
+       *  covers without the owner being asked again.
+       */
+      remembered: boolean;
     }
   /**  A user-issued control operation on the session. */
   | {

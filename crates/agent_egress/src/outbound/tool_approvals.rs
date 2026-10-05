@@ -15,7 +15,7 @@ use sqlx::PgPool;
 use sqlx::postgres::PgListener;
 use tokio::sync::broadcast;
 
-use crate::domain::approval::{ToolApproval, ToolApprovalId};
+use crate::domain::approval::{StandingApproval, ToolApproval, ToolApprovalId};
 use crate::domain::error::EgressError;
 use crate::domain::model::AgentSessionId;
 use crate::domain::ports::{ToolApprovalSignals, ToolApprovalStore, ToolApprovalSubscription};
@@ -40,6 +40,7 @@ struct Row {
     arguments: serde_json::Value,
     status: String,
     resolved_by: Option<MacroUserIdStr<'static>>,
+    remembered: bool,
 }
 
 impl Row {
@@ -58,6 +59,7 @@ impl Row {
             status: ToolApprovalStatus::parse(&self.status)
                 .ok_or_else(|| storage(format!("unknown status {:?}", self.status)))?,
             resolved_by: self.resolved_by,
+            remembered: self.remembered,
         })
     }
 }
@@ -108,13 +110,14 @@ impl ToolApprovalStore for PgToolApprovalStore {
         id: ToolApprovalId,
         status: ToolApprovalStatus,
         resolved_by: Option<&MacroUserIdStr<'static>>,
+        remembered: bool,
     ) -> Result<Option<ToolApproval>, EgressError> {
         let row = sqlx::query_as!(
             Row,
             r#"
             WITH resolved AS (
                 UPDATE agent_session_tool_approval
-                SET status = $2, resolved_by = $3, resolved_at = now()
+                SET status = $2, resolved_by = $3, resolved_at = now(), remembered = $5
                 WHERE id = $1 AND status = 'pending'
                 RETURNING *
             )
@@ -130,13 +133,15 @@ impl ToolApprovalStore for PgToolApprovalStore {
                 resolved.tool_name AS "tool_name!",
                 resolved.arguments AS "arguments!",
                 resolved.status AS "status!",
-                resolved.resolved_by AS "resolved_by: MacroUserIdStr<'static>"
+                resolved.resolved_by AS "resolved_by: MacroUserIdStr<'static>",
+                resolved.remembered AS "remembered!"
             FROM resolved, pg_notify($4, resolved.id::text)
             "#,
             id.as_uuid(),
             status.as_str(),
             resolved_by.map(|user| user.as_ref()),
             TOOL_APPROVAL_CHANNEL,
+            remembered,
         )
         .fetch_optional(&self.pool)
         .await
@@ -153,7 +158,8 @@ impl ToolApprovalStore for PgToolApprovalStore {
                 owner_id AS "owner_id: MacroUserIdStr<'static>",
                 requested_by AS "requested_by: MacroUserIdStr<'static>",
                 server_slug, server_name, tool_name, arguments, status,
-                resolved_by AS "resolved_by: MacroUserIdStr<'static>"
+                resolved_by AS "resolved_by: MacroUserIdStr<'static>",
+                remembered
             FROM agent_session_tool_approval
             WHERE id = $1
             "#,
@@ -196,6 +202,75 @@ impl ToolApprovalStore for PgToolApprovalStore {
             WHERE agent_session_id = $1 AND status = 'pending'
             "#,
             session.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(ids.into_iter().map(ToolApprovalId::from_uuid).collect())
+    }
+
+    async fn remember(&self, standing: &StandingApproval) -> Result<(), EgressError> {
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_session_tool_standing_approval (
+                agent_session_id, user_id, server_slug, tool_name, granted_by
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (agent_session_id, user_id, server_slug, (COALESCE(tool_name, '')))
+            DO NOTHING
+            "#,
+            standing.session.as_uuid(),
+            standing.user.as_ref(),
+            standing.server_slug,
+            standing.tool_name,
+            standing.granted_by.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(())
+    }
+
+    async fn is_standing(
+        &self,
+        session: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+        server_slug: &str,
+        tool: &str,
+    ) -> Result<bool, EgressError> {
+        let standing = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM agent_session_tool_standing_approval
+                WHERE agent_session_id = $1 AND user_id = $2 AND server_slug = $3
+                    AND (tool_name IS NULL OR tool_name = $4)
+            ) AS "standing!"
+            "#,
+            session.as_uuid(),
+            user.as_ref(),
+            server_slug,
+            tool,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(standing)
+    }
+
+    async fn pending_covered_by(
+        &self,
+        standing: &StandingApproval,
+    ) -> Result<Vec<ToolApprovalId>, EgressError> {
+        let ids = sqlx::query_scalar!(
+            r#"
+            SELECT id FROM agent_session_tool_approval
+            WHERE agent_session_id = $1 AND requested_by = $2 AND server_slug = $3
+                AND ($4::text IS NULL OR tool_name = $4) AND status = 'pending'
+            "#,
+            standing.session.as_uuid(),
+            standing.user.as_ref(),
+            standing.server_slug,
+            standing.tool_name,
         )
         .fetch_all(&self.pool)
         .await
@@ -310,6 +385,7 @@ impl ToolApprovalSignals for InProcessToolApprovalSignals {
 #[derive(Clone, Default)]
 pub struct InMemoryToolApprovalStore {
     rows: Arc<std::sync::Mutex<std::collections::HashMap<ToolApprovalId, ToolApproval>>>,
+    standing: Arc<std::sync::Mutex<Vec<StandingApproval>>>,
     signals: InProcessToolApprovalSignals,
 }
 
@@ -352,6 +428,7 @@ impl ToolApprovalStore for InMemoryToolApprovalStore {
         id: ToolApprovalId,
         status: ToolApprovalStatus,
         resolved_by: Option<&MacroUserIdStr<'static>>,
+        remembered: bool,
     ) -> Result<Option<ToolApproval>, EgressError> {
         let resolved = {
             let mut rows = self.rows.lock().expect("tool approvals poisoned");
@@ -360,6 +437,7 @@ impl ToolApprovalStore for InMemoryToolApprovalStore {
             };
             row.status = status;
             row.resolved_by = resolved_by.cloned();
+            row.remembered = remembered;
             row.clone()
         };
         self.signals.notify(id);
@@ -401,6 +479,54 @@ impl ToolApprovalStore for InMemoryToolApprovalStore {
             .expect("tool approvals poisoned")
             .values()
             .filter(|row| row.session == session && row.status.is_pending())
+            .map(|row| row.id)
+            .collect())
+    }
+
+    async fn remember(&self, standing: &StandingApproval) -> Result<(), EgressError> {
+        let mut all = self.standing.lock().expect("standing approvals poisoned");
+        let same = |held: &StandingApproval| {
+            held.session == standing.session
+                && held.user == standing.user
+                && held.server_slug == standing.server_slug
+                && held.tool_name == standing.tool_name
+        };
+        if !all.iter().any(same) {
+            all.push(standing.clone());
+        }
+        Ok(())
+    }
+
+    async fn is_standing(
+        &self,
+        session: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+        server_slug: &str,
+        tool: &str,
+    ) -> Result<bool, EgressError> {
+        Ok(self
+            .standing
+            .lock()
+            .expect("standing approvals poisoned")
+            .iter()
+            .any(|standing| standing.covers(session, user, server_slug, tool)))
+    }
+
+    async fn pending_covered_by(
+        &self,
+        standing: &StandingApproval,
+    ) -> Result<Vec<ToolApprovalId>, EgressError> {
+        Ok(self
+            .rows
+            .lock()
+            .expect("tool approvals poisoned")
+            .values()
+            .filter(|row| {
+                row.status.is_pending()
+                    && row.requested_by.as_ref().is_some_and(|user| {
+                        standing.covers(row.session, user, &row.server_slug, &row.tool_name)
+                    })
+            })
             .map(|row| row.id)
             .collect())
     }

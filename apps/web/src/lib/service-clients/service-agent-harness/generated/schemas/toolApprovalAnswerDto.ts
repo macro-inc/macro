@@ -14,6 +14,7 @@ export type ToolApprovalAnswerDto =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ToolApprovalAnswerDto = {
   approve: 'approve',
+  approve_and_remember: 'approve_and_remember',
   deny: 'deny',
   cancel: 'cancel',
 } as const;

@@ -12,6 +12,7 @@ fn notice(status: ToolApprovalStatus) -> ToolApprovalNotice {
         requested_by: Some("macro|julia@macro.com".to_owned()),
         status,
         resolved_by: None,
+        remembered: false,
     }
 }
 

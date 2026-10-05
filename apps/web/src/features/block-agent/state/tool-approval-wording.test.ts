@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { describeToolCall, possessive } from './tool-approval-wording';
+import {
+  describeStandingApproval,
+  describeToolCall,
+  possessive,
+} from './tool-approval-wording';
 
 const macro = { slug: 'macro', name: 'Macro' };
 
@@ -14,8 +18,8 @@ describe('describeToolCall', () => {
   });
 
   it('falls back to the tool name in words', () => {
-    expect(describeToolCall(macro, 'QueryDatabase', 'your')).toBe(
-      'use your Macro workspace (query database)'
+    expect(describeToolCall(macro, 'NewerThanThisBuild', 'your')).toBe(
+      'use your Macro workspace (newer than this build)'
     );
     expect(
       describeToolCall(
@@ -24,6 +28,21 @@ describe('describeToolCall', () => {
         'your'
       )
     ).toBe('use your Linear account (linear create issue)');
+  });
+});
+
+describe('describeStandingApproval', () => {
+  it("covers one of Macro's tools, or a whole connected app", () => {
+    expect(describeStandingApproval(macro, 'GetThread', 'your')).toBe(
+      'read your email'
+    );
+    expect(
+      describeStandingApproval(
+        { slug: 'linear', name: 'Linear' },
+        'linear-create-issue',
+        'your'
+      )
+    ).toBe('use your Linear account');
   });
 });
 
