@@ -4,6 +4,7 @@
 //! from and named again without clashes.
 
 use super::objects::Objects;
+use crate::geom::Affine;
 use crate::pdf::content::Op;
 use crate::pdf::{Dict, Name, Object, Pdf};
 use std::collections::{BTreeMap, HashMap};
@@ -97,11 +98,66 @@ fn lookup(pdf: &Pdf, source: &Dict, cat: &str, name: &Name) -> Option<Object> {
         .map(|(_, v)| v.clone())
 }
 
+/// A pattern copied with its matrix followed by `m` (patterns are placed
+/// in the space of the content that uses them, so content moved out of a
+/// form, or moved on the canvas, takes `m` with it).
+fn moved_pattern(pdf: &Pdf, value: &Object, m: &Affine, objects: &mut Objects) -> Object {
+    let resolved = pdf.resolve(value);
+    let matrix = |d: &Dict| {
+        d.get("Matrix")
+            .map(|v| pdf.resolve(v))
+            .and_then(|v| v.as_numbers())
+            .and_then(|n| Affine::from_slice(&n))
+            .unwrap_or(Affine::IDENTITY)
+            .followed_by(m)
+    };
+    let set = |d: &mut Dict, a: Affine| {
+        d.set(
+            "Matrix",
+            Object::Array(a.0.iter().map(|&v| Object::number(v)).collect()),
+        );
+    };
+    let copied = objects.copy(pdf, &resolved);
+    let moved = match copied {
+        Object::Dict(mut d) => {
+            let a = resolved.as_dict().map_or(*m, matrix);
+            set(&mut d, a);
+            Object::Dict(d)
+        }
+        Object::Stream(mut s) => {
+            let a = resolved.as_stream().map_or(*m, |st| matrix(&st.dict));
+            set(&mut s.dict, a);
+            Object::Stream(s)
+        }
+        other => other,
+    };
+    Object::Ref(objects.add(moved))
+}
+
 /// An operator from the opened file with the resources it names copied
-/// and renamed.
-pub fn rename(op: &Op, pdf: &Pdf, source: &Dict, res: &mut Resources, objects: &mut Objects) -> Op {
+/// and renamed. `pattern_space` maps the space patterns were placed in to
+/// the space of the content written.
+pub fn rename(
+    op: &Op,
+    pdf: &Pdf,
+    source: &Dict,
+    res: &mut Resources,
+    objects: &mut Objects,
+    pattern_space: &Affine,
+) -> Op {
     let mut op = op.clone();
     op.span = 0..0;
+    if matches!(op.operator.as_slice(), b"scn" | b"SCN")
+        && *pattern_space != Affine::IDENTITY
+        && let Some(Object::Name(n)) = op.operands.last()
+        && let Some(value) = lookup(pdf, source, "Pattern", n)
+    {
+        let moved = moved_pattern(pdf, &value, pattern_space, objects);
+        let new = res.name("Pattern", moved);
+        let last = op.operands.len() - 1;
+        op.operands[last] = Object::Name(new);
+        return op;
+    }
     let mut swap = |op: &mut Op, i: usize, cat: &str| {
         let Some(Object::Name(n)) = op.operands.get(i) else {
             return;

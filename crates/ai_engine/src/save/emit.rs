@@ -320,6 +320,9 @@ impl<'a, 'b> PageWriter<'a, 'b> {
         let Some(file) = self.file() else { return };
         let delta = self.delta(n, source);
         let src_res = file.resources(source.resources).clone();
+        // Patterns were placed in the space the content started in; it now
+        // starts in this page's, moved along.
+        let patterns = source.base.followed_by(&delta);
         let mut ops = vec![op("q", Vec::new()), cm(&source.ctm.followed_by(&delta))];
         {
             let Target { res, .. } = self.targets.last_mut().expect("target");
@@ -330,10 +333,18 @@ impl<'a, 'b> PageWriter<'a, 'b> {
                     file.resources(*r),
                     res,
                     self.shared.objects,
+                    &patterns,
                 ));
             }
             for o in &source.ops {
-                ops.push(rename(o, &file.pdf, &src_res, res, self.shared.objects));
+                ops.push(rename(
+                    o,
+                    &file.pdf,
+                    &src_res,
+                    res,
+                    self.shared.objects,
+                    &patterns,
+                ));
             }
         }
         ops.push(op("Q", Vec::new()));
@@ -386,7 +397,14 @@ impl<'a, 'b> PageWriter<'a, 'b> {
                     return;
                 };
                 let Target { res, .. } = self.targets.last_mut().expect("target");
-                ops.push(rename(draw, &file.pdf, &src_res, res, self.shared.objects));
+                ops.push(rename(
+                    draw,
+                    &file.pdf,
+                    &src_res,
+                    res,
+                    self.shared.objects,
+                    &Affine::IDENTITY,
+                ));
             }
             ImageSource::Added { hash } => {
                 let Some(xobject) = self.added_image(hash) else {

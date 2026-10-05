@@ -174,3 +174,52 @@ fn outline_mode_and_views() {
     assert_eq!(at(100, 100), 0);
     assert!(at(40, 100) > 0);
 }
+
+#[test]
+fn gradients_stop_at_their_ends_unless_extended() {
+    let d = with(NewNode::Rect {
+        rect: Rect::from_xywh(0.0, 0.0, 100.0, 100.0),
+        radius: 0.0,
+        fill: Some(Paint::Gradient {
+            gradient: Gradient {
+                transform: crate::geom::Affine::translate(20.0, 0.0),
+                radial: false,
+                start: Point::new(0.0, 0.0),
+                end: Point::new(60.0, 0.0),
+                start_radius: 0.0,
+                end_radius: 0.0,
+                stops: vec![
+                    GradientStop {
+                        offset: 0.0,
+                        color: Color::Rgb {
+                            r: 1.0,
+                            g: 0.0,
+                            b: 0.0,
+                        },
+                        opacity: 1.0,
+                    },
+                    GradientStop {
+                        offset: 1.0,
+                        color: Color::Rgb {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 1.0,
+                        },
+                        opacity: 1.0,
+                    },
+                ],
+                extend: [false, false],
+            },
+        }),
+        stroke: None,
+    });
+    let img = draw(&d);
+    assert_eq!(
+        pixel(&img, 10, 50),
+        [255, 255, 255, 255],
+        "before the start"
+    );
+    assert_eq!(pixel(&img, 90, 50), [255, 255, 255, 255], "past the end");
+    let mid = pixel(&img, 50, 50);
+    assert!(mid[0] > 100 && mid[2] > 100, "{mid:?}");
+}

@@ -3,7 +3,7 @@ use crate::build::open;
 use crate::edit::{History, NewNode, Op, Position, TextPatch};
 use crate::geom::Point;
 use crate::model::{Color, Paint, TextAlign};
-use crate::testing::{PdfBuilder, dict, draw, helvetica, pixel};
+use crate::testing::{PdfBuilder, dict, draw, helvetica, name, pixel};
 
 fn sample() -> Vec<u8> {
     let mut b = PdfBuilder::new();
@@ -323,4 +323,125 @@ fn placed_images_save() {
     let img = draw(&again);
     assert_eq!(pixel(&img, 30, 30), [255, 0, 0, 255]);
     assert_eq!(pixel(&img, 70, 70), [255, 255, 255, 255]);
+}
+
+#[test]
+fn text_keeps_leading_set_by_earlier_blocks() {
+    let mut b = PdfBuilder::new();
+    let resources = dict(vec![(
+        "Font",
+        Object::Dict(dict(vec![("F1", helvetica())])),
+    )]);
+    b.page(
+        200.0,
+        100.0,
+        "BT /F1 10 Tf 10 80 Td (A) Tj 0 -20 TD (B) Tj ET BT 10 50 Td T* (C) Tj ET",
+        resources,
+    );
+    let mut doc = open(&b.finish()).expect("opens").document;
+    let before: Vec<Option<Rect>> = doc
+        .paint_order()
+        .into_iter()
+        .map(|i| node_bounds(&doc, i))
+        .collect();
+    let id = doc.node(doc.layers[0]).id;
+    apply(
+        &mut doc,
+        vec![Op::SetNode {
+            ids: vec![id],
+            patch: crate::edit::NodePatch {
+                name: Some("Text".into()),
+                ..Default::default()
+            },
+        }],
+    );
+    let again = reopen(&doc);
+    let after: Vec<Option<Rect>> = again
+        .paint_order()
+        .into_iter()
+        .map(|i| node_bounds(&again, i))
+        .collect();
+    assert_eq!(before, after);
+    assert_eq!(draw(&again).2, draw(&doc).2);
+}
+
+#[test]
+fn patterns_move_with_their_objects() {
+    let mut b = PdfBuilder::new();
+    let shading = dict(vec![
+        ("ShadingType", Object::Int(2)),
+        ("ColorSpace", name("DeviceRGB")),
+        ("Coords", crate::testing::nums(&[0.0, 0.0, 40.0, 0.0])),
+        (
+            "Function",
+            Object::Dict(dict(vec![
+                ("FunctionType", Object::Int(2)),
+                ("Domain", crate::testing::nums(&[0.0, 1.0])),
+                ("C0", crate::testing::nums(&[1.0, 0.0, 0.0])),
+                ("C1", crate::testing::nums(&[0.0, 0.0, 1.0])),
+                ("N", Object::Int(1)),
+            ])),
+        ),
+    ]);
+    let pattern = dict(vec![
+        ("PatternType", Object::Int(2)),
+        ("Shading", Object::Dict(shading)),
+        (
+            "Matrix",
+            crate::testing::nums(&[1.0, 0.0, 0.0, 1.0, 10.0, 10.0]),
+        ),
+    ]);
+    let form = b.stream(
+        dict(vec![
+            ("Type", name("XObject")),
+            ("Subtype", name("Form")),
+            ("BBox", crate::testing::nums(&[0.0, 0.0, 200.0, 100.0])),
+            (
+                "Matrix",
+                crate::testing::nums(&[1.0, 0.0, 0.0, 1.0, 20.0, 0.0]),
+            ),
+            (
+                "Resources",
+                Object::Dict(dict(vec![(
+                    "Pattern",
+                    Object::Dict(dict(vec![("P0", Object::Dict(pattern))])),
+                )])),
+            ),
+        ]),
+        "/Pattern cs /P0 scn 10 10 40 40 re f",
+    );
+    let resources = dict(vec![(
+        "XObject",
+        Object::Dict(dict(vec![("Fm0", Object::Ref(form))])),
+    )]);
+    b.page(200.0, 100.0, "/Fm0 Do", resources);
+    let mut doc = open(&b.finish()).expect("opens").document;
+    let leaf = *doc
+        .paint_order()
+        .iter()
+        .find(|&&i| !doc.node(i).is_container())
+        .expect("the rectangle");
+    let id = doc.node(leaf).id;
+    apply(
+        &mut doc,
+        vec![Op::Transform {
+            ids: vec![id],
+            matrix: Affine::translate(50.0, 20.0),
+        }],
+    );
+    let moved = draw(&doc);
+    let again = reopen(&doc);
+    let img = draw(&again);
+    let diff: u64 = moved
+        .2
+        .iter()
+        .zip(&img.2)
+        .map(|(a, b)| u64::from(a.abs_diff(*b)))
+        .sum();
+    assert!(diff < 2000, "{diff}");
+    // Red at the moved rectangle's left, blue at its right.
+    let left = pixel(&img, 82, 80);
+    let right = pixel(&img, 118, 80);
+    assert!(left[0] > 200 && left[2] < 60, "{left:?}");
+    assert!(right[2] > 200 && right[0] < 60, "{right:?}");
 }

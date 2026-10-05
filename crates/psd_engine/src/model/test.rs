@@ -28,8 +28,10 @@ fn hex_colors() {
 
 #[test]
 fn gradient_samples_follow_stops_and_midpoints() {
-    let mut g = Gradient::default();
-    g.smoothness = 0.0;
+    let mut g = Gradient {
+        smoothness: 0.0,
+        ..Default::default()
+    };
     assert_eq!(g.sample(0.0), [0.0, 0.0, 0.0, 1.0]);
     assert_eq!(g.sample(1.0), [1.0, 1.0, 1.0, 1.0]);
     let mid = g.sample(0.5);

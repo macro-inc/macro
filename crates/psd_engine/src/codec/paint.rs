@@ -45,14 +45,49 @@ const BLEND_IDS: [(BlendMode, &str); 28] = [
     (BlendMode::Luminosity, "Lmns"),
 ];
 
+/// Blend modes by the long ids newer Photoshop versions write (`darken`
+/// for `Drkn`, `colorBurn` for `CBrn`, …).
+const LONG_BLEND_IDS: &[(BlendMode, &str)] = &[
+    (BlendMode::Normal, "normal"),
+    (BlendMode::Dissolve, "dissolve"),
+    (BlendMode::Darken, "darken"),
+    (BlendMode::Multiply, "multiply"),
+    (BlendMode::ColorBurn, "colorBurn"),
+    (BlendMode::LinearBurn, "linearBurn"),
+    (BlendMode::DarkerColor, "darkerColor"),
+    (BlendMode::Lighten, "lighten"),
+    (BlendMode::Screen, "screen"),
+    (BlendMode::ColorDodge, "colorDodge"),
+    (BlendMode::LinearDodge, "linearDodge"),
+    (BlendMode::LighterColor, "lighterColor"),
+    (BlendMode::Overlay, "overlay"),
+    (BlendMode::SoftLight, "softLight"),
+    (BlendMode::HardLight, "hardLight"),
+    (BlendMode::VividLight, "vividLight"),
+    (BlendMode::LinearLight, "linearLight"),
+    (BlendMode::PinLight, "pinLight"),
+    (BlendMode::HardMix, "hardMix"),
+    (BlendMode::Difference, "difference"),
+    (BlendMode::Exclusion, "exclusion"),
+    (BlendMode::Subtract, "subtract"),
+    (BlendMode::Divide, "divide"),
+    (BlendMode::Hue, "hue"),
+    (BlendMode::Saturation, "saturation"),
+    (BlendMode::Color, "color"),
+    (BlendMode::Luminosity, "luminosity"),
+    (BlendMode::PassThrough, "passThrough"),
+];
+
 /// The model blend mode of a descriptor blend mode id (`Nrml`,
-/// `linearBurn`, …); unknown ids are Normal.
+/// `linearBurn`, or the long ids of newer versions such as `darken`);
+/// unknown ids are Normal.
 pub(crate) fn blend_mode(id: &str) -> BlendMode {
     match id {
         "Sbtr" => BlendMode::Subtract,
         "pass" | "PasT" => BlendMode::PassThrough,
         _ => BLEND_IDS
             .iter()
+            .chain(LONG_BLEND_IDS)
             .find(|(_, s)| *s == id)
             .map_or(BlendMode::Normal, |(m, _)| *m),
     }

@@ -270,7 +270,7 @@ impl Renderer {
                             n.opacity,
                             n.blend,
                             &m,
-                            &run.matrix,
+                            &to_device,
                         );
                     }
                     if let Some(stroke) = &run.stroke {
@@ -297,7 +297,7 @@ impl Renderer {
                 n.opacity,
                 n.blend,
                 &to_device,
-                &Affine::IDENTITY,
+                &to_device,
             );
         }
         if let Some(stroke) = &t.stroke {
@@ -364,16 +364,7 @@ fn draw_path(ctx: &Ctx<'_>, canvas: &mut Canvas, n: &Node, p: &PathNode) {
         FillRule::Winding
     };
     if let Some(fill) = &p.fill {
-        paint::fill(
-            canvas,
-            &path,
-            fill,
-            rule,
-            n.opacity,
-            n.blend,
-            &m,
-            &Affine::IDENTITY,
-        );
+        paint::fill(canvas, &path, fill, rule, n.opacity, n.blend, &m, &m);
     }
     if let Some(stroke) = &p.stroke {
         paint::stroke(canvas, &path, stroke, n.opacity, n.blend, &m);

@@ -100,8 +100,9 @@ fn gradient_shader(g: &Gradient, opacity: f32, paint_to_path: &Affine) -> Option
 }
 
 /// The area a gradient paints when it does not extend past its ends, in
-/// the gradient's space (`None` when it extends both ways).
-fn gradient_extent(g: &Gradient) -> Option<PathData> {
+/// the gradient's space (`None` when it extends both ways); `far` is how
+/// far past the ends and across the axis the area must reach.
+fn gradient_extent(g: &Gradient, far: f64) -> Option<PathData> {
     if g.extend[0] && g.extend[1] {
         return None;
     }
@@ -149,8 +150,7 @@ fn gradient_extent(g: &Gradient) -> Option<PathData> {
         return None;
     }
     let (dx, dy) = ((e.x - s.x) / len, (e.y - s.y) / len);
-    let (nx, ny) = (-dy * 1e6, dx * 1e6);
-    let far = 1e6;
+    let (nx, ny) = (-dy * far, dx * far);
     let a = if g.extend[0] {
         Point::new(s.x - dx * far, s.y - dy * far)
     } else {
@@ -203,10 +203,20 @@ pub fn fill(
         return;
     };
     let extent = match paint {
-        Paint::Gradient { gradient } => gradient_extent(gradient).and_then(|e| {
-            e.transform(&gradient.transform.followed_by(object_to_device))
-                .to_skia()
-        }),
+        Paint::Gradient { gradient } => {
+            let to_device = gradient.transform.followed_by(object_to_device);
+            // Far enough to cover the canvas, and no farther (tiny-skia
+            // refuses huge coordinates).
+            let far = to_device.invert().map_or(1e4, |inv| {
+                let (w, h) = (f64::from(canvas.width()), f64::from(canvas.height()));
+                [(0.0, 0.0), (w, 0.0), (0.0, h), (w, h)]
+                    .iter()
+                    .map(|&(x, y)| inv.apply(Point::new(x, y)).distance(gradient.start))
+                    .fold(0.0, f64::max)
+                    + gradient.start.distance(gradient.end)
+            });
+            gradient_extent(gradient, far.max(1.0)).and_then(|e| e.transform(&to_device).to_skia())
+        }
         Paint::Solid { .. } => None,
     };
     if let Some(e) = &extent {

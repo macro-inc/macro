@@ -214,6 +214,7 @@ fn mask_data(w: &mut Writer, mask: Option<&MaskData>) {
     if let Some(params) = &m.params {
         mask_params(w, params);
     }
+    w.bytes(&m.tail);
     let len = w.len() - at - 4;
     w.zeros(MIN_MASK.saturating_sub(len));
     w.fill_length(at, false, 0);

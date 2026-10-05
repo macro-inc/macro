@@ -140,6 +140,7 @@ fn encode_mask(header: &Header, layer: &Layer) -> Option<(MaskData, Channel)> {
             flags: f,
             params,
             real: None,
+            tail: Vec::new(),
         },
         channel,
     ))
