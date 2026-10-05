@@ -127,7 +127,10 @@ pub(super) fn table_box(
     let epoch = cache.epoch();
     let id = (story_ref.clone(), table.id.clone());
     let key = TableKey::of(env, story, table, avail, story_ref);
-    if let Some(tb) = cache.tables.get(epoch, &id, &key, fields, &env.note_numbers) {
+    if let Some(tb) = cache
+        .tables
+        .get(epoch, &id, &key, fields, &env.note_numbers)
+    {
         return tb;
     }
     let tb = Arc::new(lay_out_table(env, story, table, avail, story_ref, fields));

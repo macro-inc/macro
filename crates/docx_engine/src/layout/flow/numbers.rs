@@ -79,17 +79,18 @@ impl Sequence {
     /// and formats, so they get the same labels.
     fn same_items(&self, other: &Self) -> bool {
         self.items.len() == other.items.len()
-            && self.items.iter().zip(&other.items).all(|(a, b)| {
-                a.0 == b.0 && a.1 == b.1 && a.2 == b.2 && Arc::ptr_eq(&a.3, &b.3)
-            })
+            && self
+                .items
+                .iter()
+                .zip(&other.items)
+                .all(|(a, b)| a.0 == b.0 && a.1 == b.1 && a.2 == b.2 && Arc::ptr_eq(&a.3, &b.3))
     }
 
     fn labels(&self, formats: &Formats<'_>) -> Labels {
         let mut counters = Counters::default();
         let mut labels = Labels::default();
         for (id, num_id, ilvl, fmt) in &self.items {
-            if let Some(label) = counters.next(formats.numbering, formats.styles, *num_id, *ilvl)
-            {
+            if let Some(label) = counters.next(formats.numbering, formats.styles, *num_id, *ilvl) {
                 let props = formats.label_props(fmt, &label);
                 labels.insert(id.clone(), (label, props));
             }

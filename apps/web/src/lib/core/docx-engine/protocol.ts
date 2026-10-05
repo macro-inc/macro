@@ -9,9 +9,9 @@
 import type {
   CaretRect,
   Clip,
+  DocComment,
   EditResult,
   FindOptions,
-  DocComment,
   FindResult,
   PageInfo,
   PageRect,

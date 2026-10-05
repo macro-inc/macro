@@ -15,8 +15,8 @@ import type { DocxRequest, DocxResponse } from './protocol';
 import type {
   CaretRect,
   Clip,
-  EditResult,
   DocComment,
+  EditResult,
   FindResult,
   PageInfo,
   PageRect,
