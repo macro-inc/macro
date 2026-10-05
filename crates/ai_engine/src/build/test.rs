@@ -25,14 +25,23 @@ fn layered() -> Vec<u8> {
         ("Font", Object::Dict(dict(vec![("F1", helvetica())]))),
         (
             "Properties",
-            Object::Dict(dict(vec![("MC0", Object::Ref(bg)), ("MC1", Object::Ref(art))])),
+            Object::Dict(dict(vec![
+                ("MC0", Object::Ref(bg)),
+                ("MC1", Object::Ref(art)),
+            ])),
         ),
-        ("XObject", Object::Dict(dict(vec![("Fm0", Object::Ref(form))]))),
+        (
+            "XObject",
+            Object::Dict(dict(vec![("Fm0", Object::Ref(form))])),
+        ),
         (
             "ExtGState",
             Object::Dict(dict(vec![(
                 "GS0",
-                Object::Dict(dict(vec![("ca", Object::number(0.5)), ("CA", Object::number(0.5))])),
+                Object::Dict(dict(vec![
+                    ("ca", Object::number(0.5)),
+                    ("CA", Object::number(0.5)),
+                ])),
             )])),
         ),
     ]);
@@ -60,7 +69,11 @@ fn reads_layers_clips_text_and_groups() {
     let doc = open(&layered()).expect("opens").document;
     assert_eq!(doc.artboards.len(), 1);
     assert_eq!(doc.artboards[0].rect, Rect::new(0.0, 0.0, 200.0, 100.0));
-    let names: Vec<&str> = doc.layers.iter().map(|&l| doc.node(l).name.as_str()).collect();
+    let names: Vec<&str> = doc
+        .layers
+        .iter()
+        .map(|&l| doc.node(l).name.as_str())
+        .collect();
     assert_eq!(names, ["Background", "Art"], "bottom to top");
 
     let bg = doc.layers[0];
@@ -87,7 +100,10 @@ fn reads_layers_clips_text_and_groups() {
     assert_eq!(kinds(&doc, art), ["clipGroup", "text", "group"]);
     let clip_group = doc.node(art).children[0];
     assert_eq!(kinds(&doc, clip_group), ["path", "path"]);
-    let NodeKind::Group { clip: Some(clip), .. } = &doc.node(clip_group).kind else {
+    let NodeKind::Group {
+        clip: Some(clip), ..
+    } = &doc.node(clip_group).kind
+    else {
         panic!("a clip group")
     };
     assert_eq!(clip.path.bounds(), Some(Rect::new(10.0, 40.0, 60.0, 90.0)));
@@ -142,7 +158,10 @@ fn shared_clips_make_one_group_and_new_clips_another() {
     let doc = open(&b.finish()).expect("opens").document;
     // Same path, set again: a second clip.
     assert_eq!(kinds(&doc, doc.layers[0]), ["clipGroup", "clipGroup"]);
-    assert_eq!(kinds(&doc, doc.node(doc.layers[0]).children[0]), ["path", "path"]);
+    assert_eq!(
+        kinds(&doc, doc.node(doc.layers[0]).children[0]),
+        ["path", "path"]
+    );
 }
 
 #[test]
@@ -155,7 +174,10 @@ fn soft_masked_content_is_raw() {
             ("BBox", nums(&[0.0, 0.0, 100.0, 100.0])),
             (
                 "Group",
-                Object::Dict(dict(vec![("S", name("Transparency")), ("CS", name("DeviceGray"))])),
+                Object::Dict(dict(vec![
+                    ("S", name("Transparency")),
+                    ("CS", name("DeviceGray")),
+                ])),
             ),
         ]),
         "0.5 g 0 0 100 100 re f",
@@ -173,7 +195,12 @@ fn soft_masked_content_is_raw() {
             )])),
         )])),
     )]);
-    b.page(100.0, 100.0, "q /GS0 gs 1 0 0 rg 0 0 100 100 re f Q", resources);
+    b.page(
+        100.0,
+        100.0,
+        "q /GS0 gs 1 0 0 rg 0 0 100 100 re f Q",
+        resources,
+    );
     let doc = open(&b.finish()).expect("opens").document;
     assert_eq!(kinds(&doc, doc.layers[0]), ["artwork"]);
     // Drawn: half of red over white.
@@ -191,7 +218,10 @@ fn pages_are_artboards_side_by_side() {
     let doc = open(&b.finish()).expect("opens").document;
     let rects: Vec<Rect> = doc.artboards.iter().map(|a| a.rect).collect();
     assert_eq!(rects[0], Rect::new(0.0, 0.0, 100.0, 50.0));
-    assert_eq!(rects[1], Rect::new(100.0 + ARTBOARD_GAP, 0.0, 180.0 + ARTBOARD_GAP, 60.0));
+    assert_eq!(
+        rects[1],
+        Rect::new(100.0 + ARTBOARD_GAP, 0.0, 180.0 + ARTBOARD_GAP, 60.0)
+    );
     let second = doc.node(doc.layers[0]).children[1];
     let b = node_bounds(&doc, second).expect("bounds");
     assert_eq!(b, Rect::new(140.0, 50.0, 150.0, 60.0));
@@ -213,7 +243,10 @@ fn rotated_pages_show_turned() {
     assert_eq!(doc.artboards[0].rect, Rect::new(0.0, 0.0, 50.0, 100.0));
     let square = doc.node(doc.layers[0]).children[0];
     // The bottom-left corner of the page shows at the top-left.
-    assert_eq!(node_bounds(&doc, square), Some(Rect::new(0.0, 0.0, 10.0, 10.0)));
+    assert_eq!(
+        node_bounds(&doc, square),
+        Some(Rect::new(0.0, 0.0, 10.0, 10.0))
+    );
 }
 
 #[test]
@@ -228,7 +261,10 @@ fn old_and_foreign_files() {
 #[test]
 fn text_with_word_gaps_and_lines() {
     let mut b = PdfBuilder::new();
-    let resources = dict(vec![("Font", Object::Dict(dict(vec![("F1", helvetica())])))]);
+    let resources = dict(vec![(
+        "Font",
+        Object::Dict(dict(vec![("F1", helvetica())])),
+    )]);
     b.page(
         300.0,
         200.0,

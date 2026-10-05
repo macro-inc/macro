@@ -49,7 +49,7 @@ pub enum Finished {
     /// Text.
     Text {
         /// The text.
-        node: TextNode,
+        node: Box<TextNode>,
         /// Text space to canvas.
         transform: Affine,
         /// Opacity.
@@ -228,7 +228,7 @@ impl TextBlock {
         };
         let (family, style) = fig_engine::text::family_and_style(first.font.font.name());
         Finished::Text {
-            node: TextNode {
+            node: Box::new(TextNode {
                 text,
                 family,
                 style,
@@ -240,7 +240,7 @@ impl TextBlock {
                 tracking: first.char_spacing / size * 1000.0,
                 width: None,
                 runs: Some(runs),
-            },
+            }),
             transform,
             opacity: first.opacity,
             blend: first.blend,
