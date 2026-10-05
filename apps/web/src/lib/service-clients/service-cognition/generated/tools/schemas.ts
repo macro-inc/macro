@@ -7238,6 +7238,7 @@ export const ReadActivityResponse = z.object({
           z.object({ type: z.literal('deleted') }),
           z.object({ type: z.literal('messaged') }),
           z.object({ type: z.literal('sent') }),
+          z.object({ type: z.literal('responded') }),
           z.object({
             property: z.string(),
             propertyName: z.union([z.string(), z.null()]).optional(),

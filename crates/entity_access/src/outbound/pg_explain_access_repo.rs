@@ -129,13 +129,22 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
                     .await
                     .map_err(anyhow_access_error)?;
-                Ok(queries::list_entity_access_grants(
+                Ok(queries::database_access::explain_database_access(
                     &self.pool,
                     &database_id,
-                    EntityType::Database,
                     &source_ids,
                 )
                 .await?)
+            }
+            EntityType::Form => {
+                let form_id = parse_uuid(entity_id, "Invalid form ID format")?;
+                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+                    .await
+                    .map_err(anyhow_access_error)?;
+                Ok(
+                    queries::form_access::explain_form_access(&self.pool, &form_id, &source_ids)
+                        .await?,
+                )
             }
             EntityType::DatabaseRow => {
                 let row_id = parse_uuid(entity_id, "Invalid database row ID format")?;

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH u AS (INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1,$2,$2,$2) RETURNING id) INSERT INTO \"User\" (\"id\", \"email\", \"macro_user_id\") SELECT $3,$2,u.id FROM u",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "09d165c95c65c1c557077270a3ae8337815d014b73097e578c5b5bd43e8b6ce4"
+}

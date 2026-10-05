@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT f.id\n        FROM forms f\n        JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'\n        WHERE f.database_id = $1\n        AND f.trashed_at IS NULL\n        AND ea.source_id = ANY($2)\n        AND ea.access_level IN ('edit', 'owner')\n        ORDER BY f.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8bd30bbf2f0b9530def693d1a467f04f411ea6082e5e15ffc4933ae5e7ac8dd1"
+}

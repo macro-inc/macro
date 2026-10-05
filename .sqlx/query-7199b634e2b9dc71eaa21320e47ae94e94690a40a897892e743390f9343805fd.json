@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO database_rows (id, table_id, position)\n        SELECT $1, table_id, 'a' FROM forms WHERE id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7199b634e2b9dc71eaa21320e47ae94e94690a40a897892e743390f9343805fd"
+}

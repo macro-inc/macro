@@ -184,3 +184,43 @@ async fn calendar_event_references_grant_the_channel_view_without_a_share_permis
     .unwrap();
     assert_eq!(levels, vec![AccessLevel::View]);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn form_references_grant_the_channel_view_and_keep_an_existing_grant(pool: PgPool) {
+    let channel_id = Uuid::now_v7();
+    for existing in [None, Some(AccessLevel::View), Some(AccessLevel::Edit)] {
+        let form_id = Uuid::now_v7();
+        let item = ReferencedShareItem::from_raw(form_id.to_string(), "form").unwrap();
+        if let Some(level) = existing {
+            let mut transaction = pool.begin().await.unwrap();
+            insert_entity_access_row(
+                &mut transaction,
+                &form_id,
+                EntityType::Form,
+                &channel_id.to_string(),
+                EntityAccessSourceType::Channel,
+                level,
+            )
+            .await
+            .unwrap();
+            transaction.commit().await.unwrap();
+        }
+        let level = grant_level(item.entity_type(), Some(AccessLevel::Owner)).unwrap();
+        for _ in 0..2 {
+            ensure_referenced_item_visible_to_channel(&pool, channel_id, &item, level)
+                .await
+                .unwrap();
+        }
+        let levels = sqlx::query_scalar!(
+            r#"SELECT access_level AS "access_level: AccessLevel" FROM entity_access
+            WHERE entity_id = $1 AND entity_type = 'form' AND source_id = $2
+                AND source_type = 'channel' AND granted_from_project_id IS NULL"#,
+            form_id,
+            channel_id.to_string(),
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(levels, vec![existing.unwrap_or(AccessLevel::View)]);
+    }
+}

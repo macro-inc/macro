@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n        VALUES (gen_random_uuid(), $1, 'TASK', $2, $3)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aacc4db2ea4c8e7c5bb88a054287127eedce832f83fe7098d14c2e75bd1d03dc"
+}

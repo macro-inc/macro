@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n        VALUES ($1, 'form', $2, ($3::text)::entity_access_source_type, ($4::text)::\"AccessLevel\")\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e43a03cf5888b86fced64c5e9ccfcf69ef8fa848675311780c0641b04acb5929"
+}

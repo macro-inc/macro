@@ -96,3 +96,25 @@ fn database_references_round_trip_without_becoming_documents() {
     );
     assert_eq!(ReferencedShareItemType::Database.as_str(), "database");
 }
+
+#[test]
+fn posting_a_form_grants_the_channel_view_and_never_more() {
+    for (access, expected) in [
+        (None, None),
+        (Some(AccessLevel::View), Some(AccessLevel::View)),
+        (Some(AccessLevel::Comment), Some(AccessLevel::View)),
+        (Some(AccessLevel::Edit), Some(AccessLevel::View)),
+        (Some(AccessLevel::Owner), Some(AccessLevel::View)),
+    ] {
+        assert_eq!(grant_level(ReferencedShareItemType::Form, access), expected);
+    }
+}
+
+#[test]
+fn form_references_round_trip_without_becoming_documents() {
+    assert_eq!(
+        ReferencedShareItemType::from_raw("form"),
+        Some(ReferencedShareItemType::Form)
+    );
+    assert_eq!(ReferencedShareItemType::Form.as_str(), "form");
+}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO forms (id, name, owner_id, database_id, table_id, trashed_at)\n        VALUES ($1, 'Deal intake', 'macro|owner@databases.test', $2, $3, CASE WHEN $4 THEN now() END)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "63a111d720ae64e86e68a28be7f08754bb69b6c52f64f6298f377be1628b44ac"
+}

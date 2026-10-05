@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO github_pull_request_changeset (\n            id, github_key, repository, number, base_sha, head_sha, captured_at\n        )\n        VALUES ($1, 'github:1:7', 'https://github.com/example/example', 7, 'aaa', 'bbb', now())\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e018a8ab9bce9bd3b313c63d3e9cdadddcb99915d9b1a1f726af4238e267e4eb"
+}

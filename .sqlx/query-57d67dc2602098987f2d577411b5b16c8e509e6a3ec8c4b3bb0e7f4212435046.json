@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO forms (id, name, owner_id, database_id, table_id)\n        VALUES ($1, 'RSVP', $2, $3, $4)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "57d67dc2602098987f2d577411b5b16c8e509e6a3ec8c4b3bb0e7f4212435046"
+}

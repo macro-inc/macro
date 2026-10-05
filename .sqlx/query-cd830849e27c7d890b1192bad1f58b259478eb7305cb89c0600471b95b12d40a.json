@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE form_sections SET gate_rules = '[]'::jsonb WHERE form_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cd830849e27c7d890b1192bad1f58b259478eb7305cb89c0600471b95b12d40a"
+}

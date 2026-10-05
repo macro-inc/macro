@@ -423,6 +423,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Form
             | EntityType::DatabaseRow
             | EntityType::Initiative => {
                 return unsupported(requested, "rename");
@@ -476,6 +477,7 @@ where
             // A database is not filed into a project, so there is nowhere to
             // move it to (`EntityType::is_valid_entity_access_entity`).
             | EntityType::Database
+            | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "move");
             }
@@ -530,6 +532,7 @@ where
             // Databases are shared by granting access directly; they carry no
             // public/channel share policy.
             | EntityType::Database
+            | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "share policy updates");
             }
@@ -584,6 +587,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Form
             | EntityType::DatabaseRow
             | EntityType::Initiative => {
                 return unsupported(requested, "trash");
@@ -618,6 +622,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Form
             | EntityType::DatabaseRow
             | EntityType::Initiative => {
                 return unsupported(requested, "restore");
@@ -672,6 +677,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Form
             | EntityType::DatabaseRow
             | EntityType::Initiative => {
                 return unsupported(requested, "permanent deletion");
@@ -738,6 +744,7 @@ where
             | EntityType::Initiative
             // Duplicating a database is unsupported.
             | EntityType::Database
+            | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "duplication");
             }

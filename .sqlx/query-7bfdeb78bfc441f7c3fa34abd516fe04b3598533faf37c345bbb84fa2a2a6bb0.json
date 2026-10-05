@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_channel_participants (channel_id, role, user_id, left_at)\n        VALUES (\n            $1,\n            'member',\n            $2,\n            CASE WHEN $3 THEN now() ELSE NULL END\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7bfdeb78bfc441f7c3fa34abd516fe04b3598533faf37c345bbb84fa2a2a6bb0"
+}

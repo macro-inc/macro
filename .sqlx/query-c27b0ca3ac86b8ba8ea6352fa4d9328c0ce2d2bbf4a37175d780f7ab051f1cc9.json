@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO notification (\n            id,\n            notification_event_type,\n            event_item_id,\n            event_item_type,\n            service_sender,\n            metadata,\n            secondary_event_item_id,\n            secondary_event_item_type\n        )\n        VALUES (\n            $1,\n            'channel_reply',\n            $2,\n            'channel',\n            'channels-test',\n            '{}'::jsonb,\n            $3,\n            'channel_message'\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c27b0ca3ac86b8ba8ea6352fa4d9328c0ce2d2bbf4a37175d780f7ab051f1cc9"
+}

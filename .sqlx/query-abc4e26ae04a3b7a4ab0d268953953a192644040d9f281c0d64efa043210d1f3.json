@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            event_item_id,\n            event_item_type,\n            secondary_event_item_id,\n            secondary_event_item_type\n        FROM notification\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "secondary_event_item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "secondary_event_item_type",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "abc4e26ae04a3b7a4ab0d268953953a192644040d9f281c0d64efa043210d1f3"
+}

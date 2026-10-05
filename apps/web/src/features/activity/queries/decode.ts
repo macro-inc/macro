@@ -87,6 +87,9 @@ function decodeAction(
     .with({ __typename: 'GraphqlActivityCallStarted' }, () => ({
       kind: 'call-started' as const,
     }))
+    .with({ __typename: 'GraphqlActivityResponded' }, () => ({
+      kind: 'responded' as const,
+    }))
     .with(
       { __typename: 'GraphqlActivityPropertyChanged' },
       ({ property, from, to }) => ({

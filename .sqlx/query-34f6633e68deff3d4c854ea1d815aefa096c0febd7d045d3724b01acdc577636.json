@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            (SELECT count(*) FROM forms WHERE id = $1) AS \"forms!\",\n            (SELECT count(*) FROM form_sections WHERE form_id = $1) AS \"sections!\",\n            (SELECT count(*) FROM form_questions WHERE form_id = $1) AS \"questions!\",\n            (SELECT count(*) FROM form_responses WHERE form_id = $1) AS \"responses!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "forms!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "sections!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "questions!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "responses!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "34f6633e68deff3d4c854ea1d815aefa096c0febd7d045d3724b01acdc577636"
+}

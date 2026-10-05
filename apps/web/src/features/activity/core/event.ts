@@ -8,6 +8,8 @@ export type ActivityAction =
   | { kind: 'messaged' }
   | { kind: 'email-sent' }
   | { kind: 'call-started' }
+  /** Someone answered a form; attributed to the respondent when signed in. */
+  | { kind: 'responded' }
   | { kind: 'property-changed'; property: string; from: unknown; to: unknown }
   | { kind: 'participant-added'; participant: string }
   | { kind: 'participant-removed'; participant: string }

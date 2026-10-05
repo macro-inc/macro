@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO form_sections (id, form_id, position, kind) VALUES ($1, $2, 'a0', 'questions')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "686e20113c2943db6f146fa1594c24e8c8db845c904734ae84701748033efdd2"
+}

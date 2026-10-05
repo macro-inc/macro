@@ -47,6 +47,7 @@ use super::*;
 mod database_activity;
 mod database_row;
 mod email_archive;
+mod form_activity;
 mod initiative;
 mod scheduled_actions;
 mod soup_patches;
@@ -922,9 +923,14 @@ impl EntityAccessService for CountingEntityAccessService {
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        // The viewer can see exactly one database and no other.
-        if entity_type == EntityType::Database {
-            if entity_id != database_activity::VIEWABLE_DATABASE_ID {
+        // The viewer can see exactly one database, one form, and no other.
+        let viewable = match entity_type {
+            EntityType::Database => Some(database_activity::VIEWABLE_DATABASE_ID),
+            EntityType::Form => Some(form_activity::VIEWABLE_FORM_ID),
+            _ => None,
+        };
+        if let Some(viewable) = viewable {
+            if entity_id != viewable {
                 return Err(AccessError::Unauthorized);
             }
             return EntityAccessReceipt::try_new_authenticated_user(

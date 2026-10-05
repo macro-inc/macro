@@ -46,6 +46,7 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   initiative: 'INITIATIVE',
   database: 'DATABASE',
   database_row: 'DATABASE_ROW',
+  form: 'FORM',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -62,6 +63,7 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   DOCUMENT: 'document',
   EMAIL_THREAD: 'email_thread',
   FOREIGN_ENTITY: 'foreign_entity',
+  FORM: 'form',
   INITIATIVE: 'initiative',
   PROJECT: 'project',
   REMINDER: 'reminder',
@@ -146,6 +148,7 @@ function favoriteSoupEffects(
     initiative: 'GraphqlSoupInitiative',
     database: undefined,
     database_row: undefined,
+    form: undefined,
   } as const satisfies Record<FavoriteEntityType, string | undefined>;
   const typename = typenames[args.entityType];
   return typename
