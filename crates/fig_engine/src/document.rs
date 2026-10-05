@@ -20,7 +20,7 @@ pub struct Node {
     pub children: Vec<NodeIdx>,
     /// Which properties were edited since the file was opened
     /// ([`crate::edit::flags`]); saving rewrites only those.
-    pub edits: u32,
+    pub edits: u64,
     /// Deleted by an edit (kept so undo can bring it back).
     pub removed: bool,
     /// For a copy made by an edit: the file node it was copied from, whose

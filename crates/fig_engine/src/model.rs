@@ -14,6 +14,7 @@ pub mod geom;
 pub mod paint;
 pub mod prototype;
 pub mod text;
+pub mod variables;
 
 pub use geom::{Affine, Rect, Vec2};
 pub use paint::{
@@ -22,6 +23,7 @@ pub use paint::{
 };
 pub use prototype::{Action, FlowStart, Interaction, OverlaySettings};
 pub use text::{Baseline, Decoration, Glyph, StyleRun, TextContent, TextLayout, TextStyle};
+pub use variables::{Variable, VariableMode, VariableType, VariableValue};
 
 /// A node id, written `session:local` (Figma's node ids).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -390,7 +392,62 @@ pub struct PropDef {
     #[serde(skip)]
     pub id: Guid,
     pub name: String,
+    /// `BOOL`, `TEXT`, `INSTANCE_SWAP`, `VARIANT`, …
     pub kind: String,
+    /// The value instances show unless they assign another.
+    #[serde(skip)]
+    pub initial: Option<PropValue>,
+    /// For instance swap properties: keys of the components (or component
+    /// sets) offered first.
+    #[serde(skip)]
+    pub preferred: Arc<[Arc<str>]>,
+}
+
+/// A variant's value for one of its component set's variant properties.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VariantSpec {
+    pub def_id: Guid,
+    pub value: Arc<str>,
+}
+
+/// The order a component set lists a variant property's values in.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VariantOrder {
+    pub property: Arc<str>,
+    pub values: Arc<[Arc<str>]>,
+}
+
+/// What a shared style node styles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum StyleType {
+    Fill,
+    Text,
+    Effect,
+    Grid,
+    Other,
+}
+
+impl StyleType {
+    pub fn parse(s: &str) -> StyleType {
+        match s {
+            "FILL" => StyleType::Fill,
+            "TEXT" => StyleType::Text,
+            "EFFECT" => StyleType::Effect,
+            "GRID" => StyleType::Grid,
+            _ => StyleType::Other,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            StyleType::Fill => "FILL",
+            StyleType::Text => "TEXT",
+            StyleType::Effect => "EFFECT",
+            StyleType::Grid => "GRID",
+            StyleType::Other => "NONE",
+        }
+    }
 }
 
 /// What makes a node an instance.
@@ -468,6 +525,30 @@ pub struct Props {
     pub fill_style: Option<Guid>,
     pub stroke_style: Option<Guid>,
     pub effect_style: Option<Guid>,
+    /// The shared text style a text layer's type comes from.
+    pub text_style_id: Option<Guid>,
+    /// A component's (or style's) library key; set on those imported from
+    /// libraries.
+    pub key: Option<Arc<str>>,
+    /// On shared style nodes: what they style, their place in the styles
+    /// list, and whether they were deleted (kept for layers using them).
+    pub style_type: Option<StyleType>,
+    pub sort_position: Option<Arc<str>>,
+    pub soft_deleted: Option<bool>,
+    /// On a variant: its value for each of its set's variant properties.
+    pub variant_specs: Option<Arc<[VariantSpec]>>,
+    /// On a component set: the order of each variant property's values.
+    pub variant_orders: Option<Arc<[VariantOrder]>>,
+    /// On an instance in a component: its properties show on the
+    /// component's instances ("exposed" nested instances).
+    pub props_bubbled: Option<bool>,
+    /// On variable nodes: the variable's collection, kind, and values.
+    pub variable: Option<Arc<Variable>>,
+    /// On variable collections: their modes, in order (the first is the
+    /// default).
+    pub variable_modes: Option<Arc<[VariableMode]>>,
+    /// The mode a frame (or page) picks per collection: `(collection, mode)`.
+    pub mode_by_set: Option<Arc<[(Guid, Guid)]>>,
     /// The layers Figma generates for FigJam objects (a sticky's or shape's
     /// background and text, a connector's line and label): paints and text
     /// from `nodeGenerationData` merged with the layout Figma derived for
@@ -516,6 +597,8 @@ impl Props {
             override_key, auto_layout, layout_child, export_settings, boolean_operation, vector_data, constraints,
             description, is_state_group, fill_style, stroke_style, effect_style, generated,
             vector_styles,
+            text_style_id, key, style_type, sort_position, soft_deleted, variant_specs,
+            variant_orders, props_bubbled, variable, variable_modes, mode_by_set,
             interactions, flow_start, overlay, prototype_start,
         );
     }

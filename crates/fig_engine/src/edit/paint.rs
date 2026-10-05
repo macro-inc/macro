@@ -61,6 +61,12 @@ pub(super) fn paints(existing: &[Paint], specs: &[PaintSpec]) -> Arc<[Paint]> {
             if let Some(b) = &s.blend_mode {
                 paint.blend_mode = BlendMode::parse(b);
             }
+            // A color chosen by hand detaches the paint's color variable.
+            if paint.color_var.is_some()
+                && s.keep.and_then(|k| existing.get(k)).map(|p| &p.kind) != Some(&paint.kind)
+            {
+                paint.color_var = None;
+            }
             Some(paint)
         })
         .collect()

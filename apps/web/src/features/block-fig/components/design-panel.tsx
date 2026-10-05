@@ -24,6 +24,7 @@ import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
 import type { BooleanOperation } from '../core/boolean';
 import { cssFor } from '../core/css';
+import type { StyleKind } from '../core/design-system';
 import { formatMeasure } from '../core/measure';
 import type { MixedInfo } from '../core/mixed';
 import { formatDashes, parseDashes } from '../core/paint';
@@ -260,6 +261,12 @@ export function DesignPanel(props: {
   /** The Prototype tab's content; the tab shows when it is given. */
   prototype?: JSX.Element;
   onTabChange?: (tab: PanelTab) => void;
+  /** Component, variant, and property sections for the selected layer. */
+  designSections?: JSX.Element;
+  /** Shown with the page when nothing is selected (local styles). */
+  pageExtra?: JSX.Element;
+  /** The shared style control of a fill, stroke, text, or effect section. */
+  styleControl?: (kind: StyleKind) => JSX.Element;
 }) {
   const [tab, setTabSignal] = createSignal<PanelTab>('design');
   const setTab = (t: PanelTab) => {
@@ -424,6 +431,7 @@ export function DesignPanel(props: {
                   {(d) => <p class="mt-1 text-ink-muted">{d()}</p>}
                 </Show>
               </div>
+              {props.designSections}
               <Section title="Layout">
                 <Show
                   when={props.onPatch && !info().id.startsWith('I')}
@@ -643,7 +651,7 @@ export function DesignPanel(props: {
               </Section>
               <Show when={info().text}>
                 {(t) => (
-                  <Section title="Text">
+                  <Section title="Text" actions={props.styleControl?.('TEXT')}>
                     <Show
                       when={props.onPatch}
                       fallback={<TextFields text={t()} />}
@@ -699,6 +707,7 @@ export function DesignPanel(props: {
                 <Section
                   title="Fill"
                   testId="fig-fills"
+                  actions={props.styleControl?.('FILL')}
                   onAdd={() =>
                     props.onPatch?.(
                       {
@@ -728,6 +737,7 @@ export function DesignPanel(props: {
                 <Section
                   title="Stroke"
                   testId="fig-strokes"
+                  actions={props.styleControl?.('STROKE')}
                   onAdd={() =>
                     props.onPatch?.(
                       {
@@ -838,6 +848,7 @@ export function DesignPanel(props: {
                 <Section
                   title="Effects"
                   testId="fig-effects"
+                  actions={props.styleControl?.('EFFECT')}
                   onAdd={() =>
                     props.onPatch?.(
                       {
@@ -908,6 +919,11 @@ export function DesignPanel(props: {
               </Section>
             </Show>
           )}
+        </Show>
+        <Show
+          when={!props.info && props.selectionCount === 0 && tab() === 'design'}
+        >
+          {props.pageExtra}
         </Show>
       </div>
     </div>

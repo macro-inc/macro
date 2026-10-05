@@ -156,6 +156,38 @@ the instance's layers out again with the same constraints and auto layout
 code (on a temporary copy), keeping the result as the instance's derived
 layout, which saving writes to `derivedSymbolData`.
 
+## Design systems
+
+`edit::design` holds Figma's design system workflows. Instances take
+component property values (boolean, text, and instance swap, by
+definition id; nested instances through overrides on the outermost one)
+and switch variants by property name, which swaps to the variant whose
+values match best. A swap keeps the overrides that still apply: an
+override's layer is found in the new component by its place among
+same-named layers, and text carried over is laid out again in the new
+layer's style. "Reset all changes" drops overrides and values. Main
+components get "Combine as variants" (a component set: a frame with
+`isStateGroup`, values from `Prop=Value` names or from slash-separated
+names), added variants and variant properties, and component properties
+with defaults (which the bound layers show) and bindings
+(`componentPropRefs`). A set's variant properties live three ways in a
+file (variant names, `variantPropSpecs`, and the set's `VARIANT`
+definitions and `stateGroupPropertyValueOrders`); edits change names and
+bring the other two in line. Shared styles live on the internal canvas
+(made when a file has none); a layer using one keeps the reference and
+the values, editing a style updates every layer using it, and typing a
+font or size into styled text detaches it, as in Figma. Saving patches the
+property, variant, and style records in place, keeping fields the engine
+does not model (sort positions, deleted entries) and writing Figma's
+variable form of values (`varValue`) beside them. Variables (collections
+with their modes, and values per mode) are read; a fill or stroke color
+binds to a color variable (`colorVar`), and a frame picks a collection's
+mode (`variableModeBySetMap`). As in Figma's files, bound paints keep the
+resolved color, so binding and switching modes resolve it again (aliases
+followed) for the layers they affect, instances' layers as overrides.
+`inspect::design_info`, `inspect::local_styles`, and `inspect::variables`
+describe all of this to the design panel.
+
 ## Editing together
 
 `collab` shares edits between people as flat maps (Loro maps in the web app,

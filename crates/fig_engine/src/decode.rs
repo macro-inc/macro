@@ -108,6 +108,20 @@ const NODE_FIELDS: &[&str] = &[
     "inheritFillStyleID",
     "inheritFillStyleIDForStroke",
     "inheritEffectStyleID",
+    "styleIdForText",
+    "inheritTextStyleID",
+    "key",
+    "styleType",
+    "sortPosition",
+    "isSoftDeleted",
+    "variantPropSpecs",
+    "stateGroupPropertyValueOrders",
+    "propsAreBubbled",
+    "variableSetID",
+    "variableResolvedType",
+    "variableDataValues",
+    "variableSetModes",
+    "variableModeBySetMap",
     "backgroundPaints",
     "backgroundEnabled",
     "derivedImmutableFrameData",
@@ -130,6 +144,7 @@ const PAINT_FIELDS: &[&str] = &[
     "paintFilter",
     "originalImageWidth",
     "originalImageHeight",
+    "colorVar",
 ];
 
 const EFFECT_FIELDS: &[&str] = &[
@@ -232,7 +247,21 @@ pub fn restrict_schema(schema: &mut Schema) {
         "ComponentPropRef",
         &["defID", "componentPropNodeField", "isDeleted"],
     );
-    schema.keep_only("ComponentPropDef", &["id", "name", "type", "isDeleted"]);
+    schema.keep_only(
+        "ComponentPropDef",
+        &[
+            "id",
+            "name",
+            "type",
+            "isDeleted",
+            "initialValue",
+            "preferredValues",
+        ],
+    );
+    schema.keep_only("ComponentPropPreferredValues", &["instanceSwapValues"]);
+    schema.keep_only("InstanceSwapPreferredValue", &["key"]);
+    schema.keep_only("VariantPropSpec", &["propDefId", "value"]);
+    schema.keep_only("StateGroupPropertyValueOrder", &["property", "values"]);
     schema.keep_only("ExportSettings", &["suffix", "imageType", "constraint"]);
     schema.keep_only("NodeGenerationData", &["overrides"]);
     schema.keep_only(
@@ -356,7 +385,56 @@ pub fn paint(m: MsgRef) -> Paint {
             .enum_name("blendMode")
             .map(BlendMode::parse)
             .unwrap_or(BlendMode::Normal),
+        color_var: m.msg("colorVar").and_then(variable_alias),
     }
+}
+
+/// The variable a `VariableData` aliases.
+fn variable_alias(v: MsgRef) -> Option<Guid> {
+    v.msg("value")?.msg("alias")?.msg("guid").and_then(guid)
+}
+
+fn variable(m: &MsgRef) -> Option<Variable> {
+    let values = m.msg("variableDataValues")?;
+    Some(Variable {
+        set: m
+            .msg("variableSetID")
+            .and_then(|s| s.msg("guid"))
+            .and_then(guid),
+        resolved_type: m
+            .enum_name("variableResolvedType")
+            .map(VariableType::parse)
+            .unwrap_or(VariableType::Other),
+        values: values
+            .msgs("entries")
+            .filter_map(|e| {
+                let mode = e.msg("modeID").and_then(guid)?;
+                let data = e.msg("variableData")?;
+                let value = match data.msg("value") {
+                    Some(v) if data.enum_name("dataType") == Some("ALIAS") => v
+                        .msg("alias")
+                        .and_then(|a| a.msg("guid"))
+                        .and_then(guid)
+                        .map_or(VariableValue::Other, VariableValue::Alias),
+                    Some(v) => {
+                        if let Some(c) = v.msg("colorValue") {
+                            VariableValue::Color(color(c))
+                        } else if let Some(f) = v.f32("floatValue") {
+                            VariableValue::Float(f)
+                        } else if let Some(b) = v.bool("boolValue") {
+                            VariableValue::Bool(b)
+                        } else if let Some(t) = v.str("textValue") {
+                            VariableValue::Text(t.into())
+                        } else {
+                            VariableValue::Other
+                        }
+                    }
+                    None => VariableValue::Other,
+                };
+                Some((mode, value))
+            })
+            .collect(),
+    })
 }
 
 pub fn effect(m: MsgRef) -> Effect {
@@ -740,6 +818,15 @@ pub fn props(m: MsgRef) -> Props {
                         id: d.msg("id").and_then(guid)?,
                         name: d.str("name").unwrap_or("").to_owned(),
                         kind: d.enum_name("type").unwrap_or("").to_owned(),
+                        initial: d.msg("initialValue").map(|v| prop_value(Some(v))),
+                        preferred: d
+                            .msg("preferredValues")
+                            .map(|p| {
+                                p.msgs("instanceSwapValues")
+                                    .filter_map(|v| v.str("key").map(Into::into))
+                                    .collect()
+                            })
+                            .unwrap_or_else(|| Arc::from([])),
                     })
                 })
                 .collect(),
@@ -799,6 +886,67 @@ pub fn props(m: MsgRef) -> Props {
     p.fill_style = style("styleIdForFill", "inheritFillStyleID");
     p.stroke_style = style("styleIdForStrokeFill", "inheritFillStyleIDForStroke");
     p.effect_style = style("styleIdForEffect", "inheritEffectStyleID");
+    p.text_style_id = style("styleIdForText", "inheritTextStyleID");
+    p.key = m.str("key").filter(|k| !k.is_empty()).map(Into::into);
+    p.style_type = m
+        .enum_name("styleType")
+        .filter(|t| *t != "NONE")
+        .map(StyleType::parse);
+    p.sort_position = m.str("sortPosition").map(Into::into);
+    p.soft_deleted = m.bool("isSoftDeleted");
+    if m.has("variantPropSpecs") {
+        p.variant_specs = Some(
+            m.msgs("variantPropSpecs")
+                .filter_map(|v| {
+                    Some(VariantSpec {
+                        def_id: v.msg("propDefId").and_then(guid)?,
+                        value: v.str("value").unwrap_or("").into(),
+                    })
+                })
+                .collect(),
+        );
+    }
+    if m.has("stateGroupPropertyValueOrders") {
+        p.variant_orders = Some(
+            m.msgs("stateGroupPropertyValueOrders")
+                .map(|o| VariantOrder {
+                    property: o.str("property").unwrap_or("").into(),
+                    values: o
+                        .list("values")
+                        .filter_map(|v| v.as_str().map(Into::into))
+                        .collect(),
+                })
+                .collect(),
+        );
+    }
+    p.props_bubbled = m.bool("propsAreBubbled");
+    p.variable = variable(&m).map(Arc::new);
+    if m.has("variableSetModes") {
+        p.variable_modes = Some(
+            m.msgs("variableSetModes")
+                .filter_map(|v| {
+                    Some(VariableMode {
+                        id: v.msg("id").and_then(guid)?,
+                        name: v.str("name").unwrap_or("").into(),
+                    })
+                })
+                .collect(),
+        );
+    }
+    if let Some(map) = m.msg("variableModeBySetMap") {
+        let entries: Arc<[(Guid, Guid)]> = map
+            .msgs("entries")
+            .filter_map(|e| {
+                Some((
+                    e.msg("variableSetID")?.msg("guid").and_then(guid)?,
+                    e.msg("variableModeID").and_then(guid)?,
+                ))
+            })
+            .collect();
+        if !entries.is_empty() {
+            p.mode_by_set = Some(entries);
+        }
+    }
     p.generated = generated_layers(&m);
     p.vector_styles = m.msg("vectorData").and_then(|v| {
         let styles: Arc<[StyleRun]> = v

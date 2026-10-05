@@ -85,6 +85,16 @@ impl Txn<'_> {
         props.is_state_group = None;
         props.derived = None;
         props.export_settings = None;
+        props.prop_refs = None;
+        props.variant_specs = None;
+        props.variant_orders = None;
+        props.key = None;
+        // An instance of a variant is named after its component set.
+        if let Some(set) = self.doc.node(component).parent
+            && self.doc.props(set).is_state_group == Some(true)
+        {
+            props.name = self.doc.props(set).name.clone();
+        }
         let i = self.new_node(props);
         self.attach(i, parent, index, false);
         let guid = self.doc.props(i).guid.unwrap_or_default();

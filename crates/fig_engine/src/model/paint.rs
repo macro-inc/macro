@@ -206,6 +206,9 @@ pub struct Paint {
     pub opacity: f32,
     pub visible: bool,
     pub blend_mode: BlendMode,
+    /// The color variable a solid paint's color comes from (the color is
+    /// kept, resolved, as Figma stores it).
+    pub color_var: Option<super::Guid>,
 }
 
 impl Paint {
@@ -219,6 +222,7 @@ impl Paint {
             opacity: 1.0,
             visible: true,
             blend_mode: BlendMode::Normal,
+            color_var: None,
         }
     }
 }

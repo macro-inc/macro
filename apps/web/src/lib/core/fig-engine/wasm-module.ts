@@ -13,6 +13,12 @@ export interface WasmFigFile {
   /** `FileSummary` JSON. */
   summary: () => string;
   components: () => string;
+  /** `StyleInfo[]` JSON. */
+  styles: () => string;
+  /** `CollectionInfo[]` JSON. */
+  variables: () => string;
+  /** `DesignInfo` JSON. */
+  designInfo: (page: number, id: string) => string;
   /** `PageLayout` JSON. */
   openPage: (page: number) => string;
   /** Premultiplied RGBA, `width × height × 4` bytes. */

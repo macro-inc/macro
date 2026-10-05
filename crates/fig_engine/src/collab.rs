@@ -115,7 +115,7 @@ pub struct Collab {
     /// Edit flags of every field changed during the collaboration, by any
     /// peer: saving rewrites them whichever version of the file a peer
     /// opened.
-    flags: HashMap<Guid, u32>,
+    flags: HashMap<Guid, u64>,
     /// Entries waiting for blobs that have not arrived.
     pending: HashMap<Guid, String>,
     /// Nodes whose parent has not arrived.

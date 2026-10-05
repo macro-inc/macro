@@ -2,13 +2,14 @@
 
 use super::{
     BlobRef, ENTRY_VERSION, NodeState, enc_align, enc_blend, enc_effect, enc_gradient, enc_mask,
-    enc_node_type, enc_prop_field, enc_scale_mode, enc_winding,
+    enc_node_type, enc_prop_field, enc_scale_mode, enc_style_type, enc_variable_type, enc_winding,
 };
 use crate::model::{
     Action, Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
     ExportSetting, FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild,
     OverlaySettings, Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props,
-    StyleRun, SymbolData, TextContent, TextLayout, TextStyle, Vec2, VectorData,
+    StyleRun, SymbolData, TextContent, TextLayout, TextStyle, Variable, VariableMode,
+    VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -142,6 +143,7 @@ impl<'a> Writer<'a> {
             opacity,
             visible,
             blend_mode,
+            color_var,
         } = p;
         match kind {
             PaintKind::Solid(c) => {
@@ -208,6 +210,7 @@ impl<'a> Writer<'a> {
         self.f32(*opacity);
         self.bool(*visible);
         self.u8(enc_blend(*blend_mode));
+        self.opt(color_var, |w, g| w.guid(g));
     }
 
     fn paints(&mut self, paints: &[Paint]) {
@@ -466,6 +469,60 @@ impl<'a> Writer<'a> {
         self.list(list, |w, p| w.props(p));
     }
 
+    fn variable(&mut self, v: &Variable) {
+        let Variable {
+            set,
+            resolved_type,
+            values,
+        } = v;
+        self.opt(set, |w, g| w.guid(g));
+        self.u8(enc_variable_type(*resolved_type));
+        self.list(values, |w, (mode, value)| {
+            w.guid(mode);
+            match value {
+                VariableValue::Color(c) => {
+                    w.u8(0);
+                    w.color(c);
+                }
+                VariableValue::Float(f) => {
+                    w.u8(1);
+                    w.f32(*f);
+                }
+                VariableValue::Text(t) => {
+                    w.u8(2);
+                    w.str(t);
+                }
+                VariableValue::Bool(b) => {
+                    w.u8(3);
+                    w.bool(*b);
+                }
+                VariableValue::Alias(g) => {
+                    w.u8(4);
+                    w.guid(g);
+                }
+                VariableValue::Other => w.u8(5),
+            }
+        });
+    }
+
+    fn prop_value(&mut self, value: &PropValue) {
+        match value {
+            PropValue::Bool(b) => {
+                self.u8(0);
+                self.bool(*b);
+            }
+            PropValue::Text(t) => {
+                self.u8(1);
+                self.str(t);
+            }
+            PropValue::Symbol(g) => {
+                self.u8(2);
+                self.guid(g);
+            }
+            PropValue::Other => self.u8(3),
+        }
+    }
+
     /// Every field of `p`.
     pub fn props(&mut self, p: &Props) {
         let Props {
@@ -521,6 +578,17 @@ impl<'a> Writer<'a> {
             fill_style,
             stroke_style,
             effect_style,
+            text_style_id,
+            key,
+            style_type,
+            sort_position,
+            soft_deleted,
+            variant_specs,
+            variant_orders,
+            props_bubbled,
+            variable,
+            variable_modes,
+            mode_by_set,
             generated,
             vector_styles,
             interactions,
@@ -593,21 +661,7 @@ impl<'a> Writer<'a> {
             w.list(list, |w, a| {
                 let PropAssignment { def_id, value } = a;
                 w.guid(def_id);
-                match value {
-                    PropValue::Bool(b) => {
-                        w.u8(0);
-                        w.bool(*b);
-                    }
-                    PropValue::Text(t) => {
-                        w.u8(1);
-                        w.str(t);
-                    }
-                    PropValue::Symbol(g) => {
-                        w.u8(2);
-                        w.guid(g);
-                    }
-                    PropValue::Other => w.u8(3),
-                }
+                w.prop_value(value);
             });
         });
         self.opt(prop_refs, |w, list| {
@@ -619,10 +673,18 @@ impl<'a> Writer<'a> {
         });
         self.opt(prop_defs, |w, list| {
             w.list(list, |w, d| {
-                let PropDef { id, name, kind } = d;
+                let PropDef {
+                    id,
+                    name,
+                    kind,
+                    initial,
+                    preferred,
+                } = d;
                 w.guid(id);
                 w.str(name);
                 w.str(kind);
+                w.opt(initial, |w, v| w.prop_value(v));
+                w.list(preferred, |w, k| w.str(k));
             });
         });
         self.opt(guid_path, |w, path| w.list(path, |w, g| w.guid(g)));
@@ -658,9 +720,42 @@ impl<'a> Writer<'a> {
         });
         self.opt_str(description);
         self.opt(is_state_group, |w, v| w.bool(*v));
-        for g in [fill_style, stroke_style, effect_style] {
+        for g in [fill_style, stroke_style, effect_style, text_style_id] {
             self.opt(g, |w, g| w.guid(g));
         }
+        self.opt_str(key);
+        self.opt(style_type, |w, t| w.u8(enc_style_type(*t)));
+        self.opt_str(sort_position);
+        self.opt(soft_deleted, |w, v| w.bool(*v));
+        self.opt(variant_specs, |w, list| {
+            w.list(list, |w, s| {
+                let VariantSpec { def_id, value } = s;
+                w.guid(def_id);
+                w.str(value);
+            });
+        });
+        self.opt(variant_orders, |w, list| {
+            w.list(list, |w, o| {
+                let VariantOrder { property, values } = o;
+                w.str(property);
+                w.list(values, |w, v| w.str(v));
+            });
+        });
+        self.opt(props_bubbled, |w, v| w.bool(*v));
+        self.opt(variable, |w, v| w.variable(v));
+        self.opt(variable_modes, |w, list| {
+            w.list(list, |w, m| {
+                let VariableMode { id, name } = m;
+                w.guid(id);
+                w.str(name);
+            });
+        });
+        self.opt(mode_by_set, |w, list| {
+            w.list(list, |w, (set, mode)| {
+                w.guid(set);
+                w.guid(mode);
+            });
+        });
         self.opt(generated, |w, d| w.props_list(d));
         self.opt(vector_styles, |w, list| {
             w.list(list, |w, run| w.style_run(run))
@@ -698,7 +793,7 @@ impl<'a> Writer<'a> {
         self.props(&state.props);
         self.bool(state.removed);
         self.bool(state.listed);
-        self.u32(state.edits);
+        self.var(state.edits);
         self.opt(&state.source, |w, g| w.guid(g));
         let body = std::mem::take(&mut self.out);
         let keys = std::mem::take(&mut self.keys);

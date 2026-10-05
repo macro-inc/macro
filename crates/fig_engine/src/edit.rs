@@ -23,55 +23,61 @@ use std::sync::Arc;
 
 /// Bits of [`Node::edits`].
 pub mod flags {
-    pub const TRANSFORM: u32 = 1 << 0;
-    pub const SIZE: u32 = 1 << 1;
-    pub const NAME: u32 = 1 << 2;
-    pub const VISIBLE: u32 = 1 << 3;
-    pub const LOCKED: u32 = 1 << 4;
-    pub const OPACITY: u32 = 1 << 5;
-    pub const FILLS: u32 = 1 << 6;
-    pub const STROKES: u32 = 1 << 7;
+    pub const TRANSFORM: u64 = 1 << 0;
+    pub const SIZE: u64 = 1 << 1;
+    pub const NAME: u64 = 1 << 2;
+    pub const VISIBLE: u64 = 1 << 3;
+    pub const LOCKED: u64 = 1 << 4;
+    pub const OPACITY: u64 = 1 << 5;
+    pub const FILLS: u64 = 1 << 6;
+    pub const STROKES: u64 = 1 << 7;
     /// Stroke weight and dashes.
-    pub const STROKE_WEIGHT: u32 = 1 << 8;
-    pub const STROKE_ALIGN: u32 = 1 << 9;
-    pub const RADIUS: u32 = 1 << 10;
-    pub const TEXT: u32 = 1 << 11;
+    pub const STROKE_WEIGHT: u64 = 1 << 8;
+    pub const STROKE_ALIGN: u64 = 1 << 9;
+    pub const RADIUS: u64 = 1 << 10;
+    pub const TEXT: u64 = 1 << 11;
     /// Parent or position among siblings.
-    pub const PARENT: u32 = 1 << 12;
-    pub const BLEND: u32 = 1 << 13;
-    pub const CLIP: u32 = 1 << 14;
+    pub const PARENT: u64 = 1 << 12;
+    pub const BLEND: u64 = 1 << 13;
+    pub const CLIP: u64 = 1 << 14;
     /// Fill and stroke geometry replaced (or dropped to be recomputed).
-    pub const GEOMETRY: u32 = 1 << 15;
-    pub const EFFECTS: u32 = 1 << 16;
+    pub const GEOMETRY: u64 = 1 << 15;
+    pub const EFFECTS: u64 = 1 << 16;
     /// The node did not exist in the file.
-    pub const CREATED: u32 = 1 << 17;
+    pub const CREATED: u64 = 1 << 17;
     /// A page's canvas color.
-    pub const BACKGROUND: u32 = 1 << 18;
+    pub const BACKGROUND: u64 = 1 << 18;
     /// Auto layout settings of a frame.
-    pub const AUTO_LAYOUT: u32 = 1 << 19;
+    pub const AUTO_LAYOUT: u64 = 1 << 19;
     /// How a layer sits in its auto layout parent.
-    pub const LAYOUT_CHILD: u32 = 1 << 20;
+    pub const LAYOUT_CHILD: u64 = 1 << 20;
     /// How a layer follows its frame when the frame is resized.
-    pub const CONSTRAINTS: u32 = 1 << 21;
+    pub const CONSTRAINTS: u64 = 1 << 21;
     /// The node's type changed (a frame made a component, an instance
     /// detached).
-    pub const TYPE: u32 = 1 << 22;
+    pub const TYPE: u64 = 1 << 22;
     /// Which component an instance shows.
-    pub const INSTANCE_OF: u32 = 1 << 23;
+    pub const INSTANCE_OF: u64 = 1 << 23;
     /// An instance's overrides (edits to the layers inside it).
-    pub const OVERRIDES: u32 = 1 << 24;
+    pub const OVERRIDES: u64 = 1 << 24;
     /// An instance's component property values.
-    pub const PROP_ASSIGNMENTS: u32 = 1 << 25;
+    pub const PROP_ASSIGNMENTS: u64 = 1 << 25;
     /// How open paths end (lines, arrows).
-    pub const STROKE_CAP: u32 = 1 << 26;
+    pub const STROKE_CAP: u64 = 1 << 26;
     /// An instance's derived layout (where its layers are at its size).
-    pub const DERIVED: u32 = 1 << 27;
+    pub const DERIVED: u64 = 1 << 27;
     /// A boolean layer's operation.
-    pub const BOOLEAN: u32 = 1 << 28;
+    pub const BOOLEAN: u64 = 1 << 28;
     /// A vector layer's network.
-    pub const VECTOR: u32 = 1 << 29;
+    pub const VECTOR: u64 = 1 << 29;
+    /// Component properties and variants: a component's (or set's)
+    /// property definitions and variant value orders, a variant's values,
+    /// a layer's bindings to properties, and nested instances' exposure.
+    pub const COMPONENT: u64 = 1 << 30;
+    /// Shared styles: the styles a layer uses, and a style node's kind.
+    pub const STYLES: u64 = 1 << 31;
     /// Prototype interactions and a frame's flow starting point.
-    pub const PROTOTYPE: u32 = 1 << 30;
+    pub const PROTOTYPE: u64 = 1 << 32;
 }
 
 /// A paint as the editor describes it.
@@ -450,6 +456,117 @@ pub enum Op {
         #[serde(default)]
         props: Patch,
     },
+    // ---- design systems (see `edit::design`) ------------------------------
+    /// Sets a component property of instances (`I…` ids for nested ones):
+    /// a boolean, text, or instance swap property by its definition id, or
+    /// a variant property by name, which switches to the matching variant.
+    SetProperty {
+        ids: Vec<String>,
+        property: String,
+        value: PropertyInput,
+    },
+    /// "Swap instance": instances show another component, keeping the
+    /// overrides that still apply.
+    SwapInstance {
+        ids: Vec<String>,
+        component: String,
+    },
+    /// "Reset all changes" of instances, or one property's value.
+    ResetInstance {
+        ids: Vec<String>,
+        property: Option<String>,
+    },
+    /// "Combine as variants": components become the variants of a new
+    /// component set.
+    CombineAsVariants {
+        ids: Vec<String>,
+    },
+    /// Adds a variant to a component set, copying `from` (or its last).
+    AddVariant {
+        set: String,
+        from: Option<String>,
+    },
+    /// Adds a variant property to a component set; every variant takes
+    /// `value`.
+    AddVariantProperty {
+        set: String,
+        name: String,
+        value: String,
+    },
+    /// Renames a component set's variant property.
+    RenameVariantProperty {
+        set: String,
+        from: String,
+        to: String,
+    },
+    /// Removes a variant property from a component set.
+    RemoveVariantProperty {
+        set: String,
+        name: String,
+    },
+    /// Sets variants' value of a variant property.
+    SetVariantValue {
+        ids: Vec<String>,
+        property: String,
+        value: String,
+    },
+    /// "Create component property" on a component (or its set): `BOOL`,
+    /// `TEXT`, or `INSTANCE_SWAP`, bound to `layer` when given (its value
+    /// becomes the default).
+    AddComponentProperty {
+        component: String,
+        name: String,
+        kind: String,
+        value: Option<PropertyInput>,
+        layer: Option<String>,
+    },
+    /// Renames a component property or changes its default (which the
+    /// component's bound layers show).
+    EditComponentProperty {
+        component: String,
+        property: String,
+        name: Option<String>,
+        value: Option<PropertyInput>,
+    },
+    DeleteComponentProperty {
+        component: String,
+        property: String,
+    },
+    /// Binds a field (`VISIBLE`, `TEXT`, or `INSTANCE_SWAP`) of layers in a
+    /// main component to a property, or unbinds it (`property` absent).
+    BindProperty {
+        ids: Vec<String>,
+        field: String,
+        property: Option<String>,
+    },
+    /// Shows (or stops showing) nested instances' properties on the
+    /// instances of the component holding them.
+    ExposeInstance {
+        ids: Vec<String>,
+        exposed: bool,
+    },
+    /// Applies a shared style (`FILL`, `STROKE`, `TEXT`, or `EFFECT`) to
+    /// layers, or detaches it (`style` absent), keeping the values.
+    ApplyStyle {
+        ids: Vec<String>,
+        kind: String,
+        style: Option<String>,
+    },
+    /// Creates a local style from a layer's fills (`FILL`), strokes
+    /// (`STROKE`, a color style too), type (`TEXT`), or effects (`EFFECT`),
+    /// and applies it to the layer.
+    CreateStyle {
+        kind: String,
+        name: String,
+        from: String,
+    },
+    /// Changes a style; every layer using it follows.
+    EditStyle {
+        style: String,
+        name: Option<String>,
+        #[serde(default)]
+        props: Patch,
+    },
     /// Replaces a layer's network (page coordinates); other shapes become
     /// vector layers, as editing their points does in Figma.
     SetVector {
@@ -467,6 +584,36 @@ pub enum Op {
         id: String,
         name: Option<String>,
     },
+    /// Deletes local styles; layers using them keep their values.
+    DeleteStyle {
+        ids: Vec<String>,
+    },
+    /// Binds paint `index` of layers' fills (`FILL`) or strokes (`STROKE`)
+    /// to a color variable, or unbinds it (`variable` absent).
+    BindVariable {
+        ids: Vec<String>,
+        field: String,
+        index: usize,
+        variable: Option<String>,
+    },
+    /// Makes frames use a mode of a variable collection (or inherit one,
+    /// `mode` absent).
+    SetVariableMode {
+        ids: Vec<String>,
+        collection: String,
+        mode: Option<String>,
+    },
+}
+
+/// A component property value as the editor sends it: `{"bool": true}`,
+/// `{"text": "Label"}`, `{"component": "12:34"}`, or `{"variant": "Large"}`.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PropertyInput {
+    Bool(bool),
+    Text(String),
+    Component(String),
+    Variant(String),
 }
 
 /// What an applied step changed.
@@ -506,6 +653,7 @@ struct Txn<'a> {
 }
 
 mod components;
+mod design;
 mod flip;
 mod instance_layout;
 mod overrides;
@@ -513,6 +661,7 @@ mod paint;
 mod paste;
 mod prototype;
 pub mod shapes;
+pub(crate) use design::parse_variant_name;
 pub(crate) use overrides::guid_of;
 pub use paste::{At, PasteSpec, View};
 pub use prototype::{ActionSpec, InteractionSpec};
@@ -526,7 +675,7 @@ impl<'a> Txn<'a> {
         &mut self.doc.nodes[i as usize]
     }
 
-    fn edit(&mut self, i: NodeIdx, flag: u32) -> &mut Props {
+    fn edit(&mut self, i: NodeIdx, flag: u64) -> &mut Props {
         let node = self.touch(i);
         node.edits |= flag;
         &mut node.props
@@ -885,6 +1034,7 @@ impl<'a> Txn<'a> {
             self.set_position(i, patch.x, patch.y);
         }
         if text {
+            self.detach_text_style(i, patch);
             let props = self.doc.props(i).clone();
             let mut change = patch.text_change(&props);
             if let Some(auto) = text_sizing {
@@ -945,7 +1095,7 @@ impl<'a> Txn<'a> {
         let node = self.touch(i);
         node.props = props;
         node.removed = false;
-        node.edits = u32::MAX;
+        node.edits = u64::MAX;
         i
     }
 
@@ -1074,7 +1224,7 @@ impl<'a> Txn<'a> {
         let edits = if source.is_some() {
             original.edits | flags::CREATED | flags::PARENT | flags::TRANSFORM
         } else {
-            u32::MAX
+            u64::MAX
         };
         props.guid = Some(guid);
         props.override_key = None;
@@ -1451,6 +1601,26 @@ impl<'a> Txn<'a> {
                 let i = self.resolve(id)?;
                 self.set_vector(i, network)?;
             }
+            Op::SetProperty { .. }
+            | Op::SwapInstance { .. }
+            | Op::ResetInstance { .. }
+            | Op::CombineAsVariants { .. }
+            | Op::AddVariant { .. }
+            | Op::AddVariantProperty { .. }
+            | Op::RenameVariantProperty { .. }
+            | Op::RemoveVariantProperty { .. }
+            | Op::SetVariantValue { .. }
+            | Op::AddComponentProperty { .. }
+            | Op::EditComponentProperty { .. }
+            | Op::DeleteComponentProperty { .. }
+            | Op::BindProperty { .. }
+            | Op::ExposeInstance { .. }
+            | Op::ApplyStyle { .. }
+            | Op::CreateStyle { .. }
+            | Op::EditStyle { .. }
+            | Op::DeleteStyle { .. }
+            | Op::BindVariable { .. }
+            | Op::SetVariableMode { .. } => self.apply_design(op)?,
         }
         Ok(())
     }

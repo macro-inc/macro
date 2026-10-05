@@ -412,6 +412,25 @@ impl FigFile {
         to_json(&inspect::node_info(&self.doc, scene, i))
     }
 
+    /// One layer's component, variant, property, and style details
+    /// (`DesignInfo` JSON).
+    #[wasm_bindgen(js_name = designInfo)]
+    pub fn design_info(&mut self, page: usize, id: &str) -> Result<String, JsError> {
+        let i = self.find(page, id)?;
+        let (_, scene) = self.scene.as_ref().expect("scene built above");
+        to_json(&inspect::design_info(&self.doc, scene, i))
+    }
+
+    /// The file's variable collections (`CollectionInfo[]` JSON).
+    pub fn variables(&self) -> Result<String, JsError> {
+        to_json(&inspect::variables(&self.doc))
+    }
+
+    /// The file's shared styles (`StyleInfo[]` JSON).
+    pub fn styles(&self) -> Result<String, JsError> {
+        to_json(&inspect::local_styles(&self.doc))
+    }
+
     /// A text layer's lines and caret stops (`TextGeometry` JSON, `null`
     /// for other layers).
     #[wasm_bindgen(js_name = textGeometry)]

@@ -30,7 +30,7 @@ pub(crate) fn guid_of(doc: &Document, g: Guid) -> Guid {
 }
 
 /// The index of the override for `path`, added when there is none.
-fn entry_for(doc: &Document, overrides: &mut Vec<Props>, path: &[Guid]) -> usize {
+pub(super) fn entry_for(doc: &Document, overrides: &mut Vec<Props>, path: &[Guid]) -> usize {
     if let Some(k) = overrides.iter().position(|o| {
         o.guid_path
             .as_deref()

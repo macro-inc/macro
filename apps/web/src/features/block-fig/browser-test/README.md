@@ -51,7 +51,15 @@ reordering paints), mixed values for several layers, and the layers
 panel's range selection and arrow keys. `text-editing` covers the caret
 and selection drawn from the engine's layout, word and paragraph
 selection, line moves, styling a range (⌘B/⌘U, the panel), undo in typing
-bursts, switching fonts, and the missing fonts notice.
+bursts, switching fonts, and the missing fonts notice. `fig-design-system` opens
+`design-system.fig` (components with boolean, text, and instance swap
+properties, a component set, and color, text, and effect styles in use,
+made by `fig_engine::testing::design_system`) and covers instance
+properties, variant switching, swapping and resetting instances, editing
+a component set's variants and properties, binding layers to properties,
+and applying, creating, renaming, and detaching styles; on `variables.fig`
+(a collection with Light and Dark modes) it lists variables, binds fill
+colors to them, and switches a frame's mode.
 
 `?collab` opens several people on one design side by side
 (`&people=alice,bob` by default), each with the real shared-design session

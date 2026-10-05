@@ -25,6 +25,8 @@ use crate::render::{self, RenderOptions, Viewport};
 use crate::scene::Scene;
 use std::collections::HashMap;
 
+mod design;
+
 /// The schema of designs created in Macro: a subset of Figma's, with the
 /// same type and field names, so the files are ordinary `.fig` files.
 pub const MACRO_SCHEMA: &str = "
@@ -74,8 +76,22 @@ message DerivedTextData layoutSize:Vector baselines:Baseline[] glyphs:Glyph[] de
 message TextData characters:string characterStyleIDs:uint[] styleOverrideTable:NodeChange[]
 message GUIDPath guids:GUID[]
 message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
+enum ComponentPropType BOOL TEXT COLOR INSTANCE_SWAP VARIANT NUMBER IMAGE SLOT
+enum ComponentPropNodeField VISIBLE TEXT_DATA OVERRIDDEN_SYMBOL_ID INHERIT_FILL_STYLE_ID SLOT_CONTENT_ID
+enum InstanceSwapPreferredValueType COMPONENT STATE_GROUP
+enum StyleType NONE FILL STROKE TEXT EFFECT EXPORT GRID
+message AssetRef key:string version:string
+message StyleId guid:GUID assetRef:AssetRef
+message ComponentPropValue boolValue:bool textValue:TextData guidValue:GUID floatValue:float
+message InstanceSwapPreferredValue type:InstanceSwapPreferredValueType key:string
+message ComponentPropPreferredValues stringValues:string[] instanceSwapValues:InstanceSwapPreferredValue[]
+message ComponentPropDef id:GUID name:string initialValue:ComponentPropValue sortPosition:string parentPropDefId:GUID type:ComponentPropType isDeleted:bool preferredValues:ComponentPropPreferredValues
+message ComponentPropRef defID:GUID zombieFallbackName:string componentPropNodeField:ComponentPropNodeField isDeleted:bool
+message ComponentPropAssignment defID:GUID value:ComponentPropValue
+message VariantPropSpec propDefId:GUID value:string
+message StateGroupPropertyValueOrder property:string values:string[]
 message VectorData vectorNetworkBlob:uint normalizedSize:Vector
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID styleID:uint booleanOperation:BooleanOperation vectorData:VectorData
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID booleanOperation:BooleanOperation vectorData:VectorData componentPropDefs:ComponentPropDef[] componentPropRefs:ComponentPropRef[] componentPropAssignments:ComponentPropAssignment[] variantPropSpecs:VariantPropSpec[] stateGroupPropertyValueOrders:StateGroupPropertyValueOrder[] isStateGroup:bool propsAreBubbled:bool description:string key:string styleType:StyleType sortPosition:string isSoftDeleted:bool styleIdForFill:StyleId styleIdForStrokeFill:StyleId styleIdForEffect:StyleId styleIdForText:StyleId styleID:uint
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -239,6 +255,9 @@ impl<'s> Build<'s> {
         m.set(self.schema, "opacity", Value::Float(p.opacity));
         m.set(self.schema, "visible", Value::Bool(p.visible));
         self.set_enum(&mut m, "blendMode", blend_name(p.blend_mode));
+        if let Some(var) = p.color_var {
+            self.color_var(&mut m, var);
+        }
         Some(Value::Msg(Box::new(m)))
     }
 
@@ -587,7 +606,7 @@ impl<'s> Build<'s> {
     }
 
     /// Rewrites the fields of `m` that `edits` names, from `node`.
-    fn patch(&self, m: &mut Msg, node: &Node, doc: &Document, edits: u32) {
+    fn patch(&self, m: &mut Msg, node: &Node, doc: &Document, edits: u64) {
         let p = &node.props;
         let s = self.schema;
         if edits & flags::TRANSFORM != 0 {
@@ -747,6 +766,12 @@ impl<'s> Build<'s> {
         if edits & flags::VECTOR != 0 {
             self.vector_data(m, p.vector_data.as_deref());
         }
+        if edits & flags::COMPONENT != 0 {
+            self.component_fields(m, p, edits);
+        }
+        if edits & flags::STYLES != 0 {
+            self.style_fields(m, p);
+        }
         if edits & flags::CONSTRAINTS != 0
             && let Some((h, v)) = &p.constraints
         {
@@ -788,73 +813,6 @@ impl<'s> Build<'s> {
                 m.set(s, "parentIndex", Value::Msg(Box::new(pm)));
             }
         }
-    }
-
-    /// Sets text property values in `componentPropAssignments`, keeping the
-    /// file's other values and fields.
-    fn prop_assignments(&self, m: &mut Msg, list: &[crate::model::PropAssignment]) {
-        let s = self.schema;
-        let Some(def) = self.sub(m.def, "componentPropAssignments") else {
-            return;
-        };
-        let mut entries: Vec<Msg> = match m.get(s, "componentPropAssignments") {
-            Some(Value::List(l)) => l
-                .iter()
-                .filter_map(|v| match v {
-                    Value::Msg(m) => Some((**m).clone()),
-                    _ => None,
-                })
-                .collect(),
-            _ => Vec::new(),
-        };
-        for a in list {
-            let crate::model::PropValue::Text(text) = &a.value else {
-                continue;
-            };
-            let k = match entries.iter().position(|e| {
-                matches!(e.get(s, "defID"), Some(Value::Msg(g))
-                    if matches!(g.get(s, "sessionID"), Some(Value::Uint(v)) if *v == a.def_id.session)
-                        && matches!(g.get(s, "localID"), Some(Value::Uint(v)) if *v == a.def_id.local))
-            }) {
-                Some(k) => k,
-                None => {
-                    let mut e = Msg::new(def);
-                    self.guid_field(&mut e, "defID", a.def_id);
-                    entries.push(e);
-                    entries.len() - 1
-                }
-            };
-            let e = &mut entries[k];
-            let Some(vdef) = self.sub(e.def, "value") else {
-                continue;
-            };
-            let mut value = match e.get(s, "value") {
-                Some(Value::Msg(v)) => (**v).clone(),
-                _ => Msg::new(vdef),
-            };
-            if let Some(tdef) = self.sub(vdef, "textValue") {
-                let mut t = match value.get(s, "textValue") {
-                    Some(Value::Msg(t)) => (**t).clone(),
-                    _ => Msg::new(tdef),
-                };
-                t.set(s, "characters", Value::Str(text.as_ref().into()));
-                for f in ["characterStyleIDs", "styleOverrideTable", "lines"] {
-                    t.remove(s, f);
-                }
-                value.set(s, "textValue", Value::Msg(Box::new(t)));
-            }
-            e.set(s, "value", Value::Msg(Box::new(value)));
-        }
-        m.set(
-            s,
-            "componentPropAssignments",
-            Value::List(
-                entries
-                    .into_iter()
-                    .map(|e| Value::Msg(Box::new(e)))
-                    .collect(),
-            ),
-        );
     }
 
     fn read_path(&self, m: &Msg) -> Vec<Guid> {
@@ -954,6 +912,14 @@ impl<'s> Build<'s> {
                     (o.text_content.is_some(), flags::TEXT),
                     (o.size.is_some(), flags::SIZE),
                     (o.prop_assignments.is_some(), flags::PROP_ASSIGNMENTS),
+                    (o.swapped_symbol.is_some(), flags::COMPONENT),
+                    (
+                        o.fill_style.is_some()
+                            || o.stroke_style.is_some()
+                            || o.effect_style.is_some()
+                            || o.text_style_id.is_some(),
+                        flags::STYLES,
+                    ),
                 ] {
                     if set {
                         edits |= flag;

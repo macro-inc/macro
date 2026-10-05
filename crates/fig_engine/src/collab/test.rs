@@ -224,6 +224,7 @@ fn entries_round_trip_every_property() {
         // Fields the showcase leaves unset are set here, so they round-trip too.
         let mut props = node.props.clone();
         props.stroke_sides = Some([1.0, 2.0, 3.0, 4.0]);
+        set_design_system_fields(&mut props);
         if let Some(a) = &mut props.auto_layout {
             Arc::make_mut(a).strokes_in_layout = true;
         }
@@ -321,6 +322,86 @@ fn entries_round_trip_every_property() {
         };
         let back = Reader::new(&bytes, &resolve).node().unwrap();
         assert_eq!(back, state, "{:?}", node.props.guid);
+    }
+}
+
+/// Components, variants, and styles: fields the showcase leaves unset.
+fn set_design_system_fields(props: &mut crate::model::Props) {
+    use crate::model::{
+        Guid, PropAssignment, PropDef, PropValue, StyleType, VariantOrder, VariantSpec,
+    };
+    let g = |local| Guid { session: 7, local };
+    props.prop_defs = Some(Arc::from([
+        PropDef {
+            id: g(1),
+            name: "Label".into(),
+            kind: "TEXT".into(),
+            initial: Some(PropValue::Text("Go".into())),
+            preferred: Arc::from([]),
+        },
+        PropDef {
+            id: g(2),
+            name: "Icon".into(),
+            kind: "INSTANCE_SWAP".into(),
+            initial: Some(PropValue::Symbol(g(9))),
+            preferred: Arc::from([Arc::from("abc"), Arc::from("def")]),
+        },
+        PropDef {
+            id: g(3),
+            name: "Size".into(),
+            kind: "VARIANT".into(),
+            initial: None,
+            preferred: Arc::from([]),
+        },
+    ]));
+    props.prop_assignments = Some(Arc::from([
+        PropAssignment {
+            def_id: g(4),
+            value: PropValue::Bool(true),
+        },
+        PropAssignment {
+            def_id: g(5),
+            value: PropValue::Other,
+        },
+    ]));
+    props.text_style_id = Some(g(10));
+    props.key = Some("0123abcd".into());
+    props.style_type = Some(StyleType::Effect);
+    props.sort_position = Some("a!".into());
+    props.soft_deleted = Some(false);
+    props.variant_specs = Some(Arc::from([VariantSpec {
+        def_id: g(3),
+        value: "Large".into(),
+    }]));
+    props.variant_orders = Some(Arc::from([VariantOrder {
+        property: "Size".into(),
+        values: Arc::from([Arc::from("Small"), Arc::from("Large")]),
+    }]));
+    props.props_bubbled = Some(true);
+    use crate::model::{Color, Variable, VariableMode, VariableType, VariableValue};
+    props.variable = Some(Arc::new(Variable {
+        set: Some(g(20)),
+        resolved_type: VariableType::Color,
+        values: Arc::from([
+            (g(21), VariableValue::Color(Color::WHITE)),
+            (g(22), VariableValue::Alias(g(23))),
+            (g(24), VariableValue::Float(2.5)),
+            (g(25), VariableValue::Text("x".into())),
+            (g(26), VariableValue::Bool(true)),
+            (g(27), VariableValue::Other),
+        ]),
+    }));
+    props.variable_modes = Some(Arc::from([VariableMode {
+        id: g(21),
+        name: "Light".into(),
+    }]));
+    props.mode_by_set = Some(Arc::from([(g(20), g(21))]));
+    if let Some(fills) = &props.fills {
+        let mut list = fills.to_vec();
+        for p in &mut list {
+            p.color_var = Some(g(23));
+        }
+        props.fills = Some(list.into());
     }
 }
 
@@ -565,6 +646,79 @@ fn saved_files_reopen_to_the_same_design() {
     let saved_d = crate::save::save(&d.doc, &saved_a).unwrap();
     let e = Peer::open(5, &saved_d, &mut hub);
     assert_same(&a.doc, &e.doc);
+}
+
+#[test]
+fn design_system_edits_reach_others_and_survive_saving() {
+    let bytes = crate::testing::design_system::design_system_file();
+    let mut hub = Hub::default();
+    let mut a = Peer::open(1, &bytes, &mut hub);
+    let mut b = Peer::open(2, &bytes, &mut hub);
+    let named = |doc: &Document, name: &str, t: crate::model::NodeType| {
+        doc.nodes
+            .iter()
+            .find(|n| !n.removed && n.props.name() == name && n.props.node_type() == t)
+            .and_then(|n| n.props.guid)
+            .unwrap()
+            .to_string()
+    };
+    use crate::model::NodeType;
+    let screen = a.find(&named(&a.doc, "Screen", NodeType::Frame));
+    let instances: Vec<String> = a.doc.node(screen).children[..2]
+        .iter()
+        .map(|&c| a.doc.props(c).guid.unwrap().to_string())
+        .collect();
+    let (card, button) = (&instances[0], &instances[1]);
+    let card_component = a.find(&named(&a.doc, "Card", NodeType::Symbol));
+    let defs = a.doc.props(card_component).prop_defs.clone().unwrap();
+    let set = named(&a.doc, "Button", NodeType::Frame);
+    let swatch = named(&a.doc, "Swatch", NodeType::Rectangle);
+    let brand = a
+        .doc
+        .nodes
+        .iter()
+        .find(|n| n.props.name() == "Brand/Primary")
+        .and_then(|n| n.props.guid)
+        .unwrap()
+        .to_string();
+    a.edit(
+        &mut hub,
+        &format!(
+            r#"[{{"op":"setProperty","ids":["{card}"],"property":"{}","value":{{"bool":false}}}},
+                {{"op":"setProperty","ids":["{card}"],"property":"{}","value":{{"text":"Shared title"}}}},
+                {{"op":"setProperty","ids":["{button}"],"property":"Type","value":{{"variant":"Secondary"}}}}]"#,
+            defs[0].id, defs[2].id
+        ),
+    );
+    a.edit(
+        &mut hub,
+        &format!(
+            r#"[{{"op":"addVariant","set":"{set}"}},
+                {{"op":"addComponentProperty","component":"{set}","name":"Disabled","kind":"BOOL"}},
+                {{"op":"editStyle","style":"{brand}","props":{{"fills":[{{"color":"00AA88"}}]}}}},
+                {{"op":"createStyle","kind":"FILL","name":"Copied","from":"{swatch}"}}]"#
+        ),
+    );
+    b.receive(&mut hub);
+    assert_same(&a.doc, &b.doc);
+    a.undo(&mut hub);
+    b.receive(&mut hub);
+    assert_same(&a.doc, &b.doc);
+    a.redo(&mut hub);
+    b.receive(&mut hub);
+    assert_same(&a.doc, &b.doc);
+    // Either save reopens to the same design, as does a joiner.
+    let saved_a = crate::save::save(&a.doc, &bytes).unwrap();
+    let saved_b = crate::save::save(&b.doc, &bytes).unwrap();
+    assert!(
+        pixels(&Document::open(&saved_a).unwrap()) == pixels(&Document::open(&saved_b).unwrap())
+    );
+    let c = Peer::open(3, &saved_a, &mut hub);
+    assert_same(&a.doc, &c.doc);
+    assert_eq!(
+        crate::inspect::local_styles(&Document::open(&saved_b).unwrap()).len(),
+        4
+    );
 }
 
 #[test]

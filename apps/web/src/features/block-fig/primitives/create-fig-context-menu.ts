@@ -132,6 +132,15 @@ export function createFigContextMenu(options: {
     void openOnRow(e, id);
   };
 
+  /** "Combine as variants": the selected components become a set. */
+  const combineAsVariants = async () => {
+    const result = await editor.apply([
+      { op: 'combineAsVariants', ids: editor.editableIds() },
+    ]);
+    if (result && result.created.length > 0)
+      await viewer.selectIds(result.created);
+  };
+
   const choose = (action: MenuAction) => {
     const open = menu();
     setMenu(undefined);
@@ -140,6 +149,8 @@ export function createFigContextMenu(options: {
       if (open) void editor.pasteHere(open.page);
     } else if (action === 'paste-replace') {
       void editor.pasteToReplace();
+    } else if (action === 'combine-as-variants') {
+      void combineAsVariants();
     } else if (action === 'toggle-visible' && open?.facts) {
       // Several layers: hide them all unless all are hidden already.
       void editor.setProps({ visible: !open.facts.anyVisible });

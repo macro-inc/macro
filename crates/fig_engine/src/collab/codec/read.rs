@@ -3,13 +3,14 @@
 use super::{
     BlobRef, DecodeError, Decoded, ENTRY_VERSION, NodeState, UNSUPPORTED_PAINTS, dec_align,
     dec_blend, dec_effect, dec_gradient, dec_mask, dec_node_type, dec_prop_field, dec_scale_mode,
-    dec_winding,
+    dec_style_type, dec_variable_type, dec_winding,
 };
 use crate::model::{
     Action, Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
     ExportSetting, FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild,
     OverlaySettings, Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props,
-    StyleRun, SymbolData, TextContent, TextLayout, TextStyle, Vec2, VectorData,
+    StyleRun, SymbolData, TextContent, TextLayout, TextStyle, Variable, VariableMode,
+    VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -222,6 +223,7 @@ impl<'a> Reader<'a> {
             opacity: self.f32()?,
             visible: self.bool()?,
             blend_mode: dec_blend(self.u8()?),
+            color_var: self.opt(Self::guid)?,
         })
     }
 
@@ -382,6 +384,36 @@ impl<'a> Reader<'a> {
         })
     }
 
+    fn variable(&mut self) -> Decoded<Variable> {
+        Ok(Variable {
+            set: self.opt(Self::guid)?,
+            resolved_type: dec_variable_type(self.u8()?),
+            values: self.arc_list(|r| {
+                let mode = r.guid()?;
+                let value = match r.u8()? {
+                    0 => VariableValue::Color(r.color()?),
+                    1 => VariableValue::Float(r.f32()?),
+                    2 => VariableValue::Text(r.arc_str()?),
+                    3 => VariableValue::Bool(r.bool()?),
+                    4 => VariableValue::Alias(r.guid()?),
+                    5 => VariableValue::Other,
+                    _ => return Err(DecodeError::Invalid),
+                };
+                Ok((mode, value))
+            })?,
+        })
+    }
+
+    fn prop_value(&mut self) -> Decoded<PropValue> {
+        Ok(match self.u8()? {
+            0 => PropValue::Bool(self.bool()?),
+            1 => PropValue::Text(self.arc_str()?),
+            2 => PropValue::Symbol(self.guid()?),
+            3 => PropValue::Other,
+            _ => return Err(DecodeError::Invalid),
+        })
+    }
+
     pub fn props(&mut self) -> Decoded<Props> {
         Ok(Props {
             guid: self.opt(Self::guid)?,
@@ -435,15 +467,10 @@ impl<'a> Reader<'a> {
             swapped_symbol: self.opt(Self::guid)?,
             prop_assignments: self.opt(|r| {
                 r.arc_list(|r| {
-                    let def_id = r.guid()?;
-                    let value = match r.u8()? {
-                        0 => PropValue::Bool(r.bool()?),
-                        1 => PropValue::Text(r.arc_str()?),
-                        2 => PropValue::Symbol(r.guid()?),
-                        3 => PropValue::Other,
-                        _ => return Err(DecodeError::Invalid),
-                    };
-                    Ok(PropAssignment { def_id, value })
+                    Ok(PropAssignment {
+                        def_id: r.guid()?,
+                        value: r.prop_value()?,
+                    })
                 })
             })?,
             prop_refs: self.opt(|r| {
@@ -460,6 +487,8 @@ impl<'a> Reader<'a> {
                         id: r.guid()?,
                         name: r.string()?,
                         kind: r.string()?,
+                        initial: r.opt(Self::prop_value)?,
+                        preferred: r.arc_list(Self::arc_str)?,
                     })
                 })
             })?,
@@ -490,6 +519,38 @@ impl<'a> Reader<'a> {
             fill_style: self.opt(Self::guid)?,
             stroke_style: self.opt(Self::guid)?,
             effect_style: self.opt(Self::guid)?,
+            text_style_id: self.opt(Self::guid)?,
+            key: self.opt_arc_str()?,
+            style_type: self.opt(|r| Ok(dec_style_type(r.u8()?)))?,
+            sort_position: self.opt_arc_str()?,
+            soft_deleted: self.opt(Self::bool)?,
+            variant_specs: self.opt(|r| {
+                r.arc_list(|r| {
+                    Ok(VariantSpec {
+                        def_id: r.guid()?,
+                        value: r.arc_str()?,
+                    })
+                })
+            })?,
+            variant_orders: self.opt(|r| {
+                r.arc_list(|r| {
+                    Ok(VariantOrder {
+                        property: r.arc_str()?,
+                        values: r.arc_list(Self::arc_str)?,
+                    })
+                })
+            })?,
+            props_bubbled: self.opt(Self::bool)?,
+            variable: self.opt(|r| r.variable().map(Arc::new))?,
+            variable_modes: self.opt(|r| {
+                r.arc_list(|r| {
+                    Ok(VariableMode {
+                        id: r.guid()?,
+                        name: r.arc_str()?,
+                    })
+                })
+            })?,
+            mode_by_set: self.opt(|r| r.arc_list(|r| Ok((r.guid()?, r.guid()?))))?,
             generated: self.opt(|r| r.arc_list(Self::props))?,
             vector_styles: self.opt(|r| r.arc_list(Self::style_run))?,
             interactions: self.opt(|r| r.arc_list(Self::interaction))?,
@@ -522,7 +583,7 @@ impl<'a> Reader<'a> {
             props: self.props()?,
             removed: self.bool()?,
             listed: self.bool()?,
-            edits: self.u32()?,
+            edits: self.var()?,
             source: self.opt(Self::guid)?,
         };
         if self.at != self.data.len() {

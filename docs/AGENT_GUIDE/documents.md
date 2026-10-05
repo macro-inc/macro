@@ -948,7 +948,8 @@ Layout and test hooks:
   main component. ⌥⌘K makes the selection a component (a frame becomes one;
   other layers are wrapped), duplicating or pasting a main component places
   an instance, and ⌥⌘B detaches an instance into ordinary layers (nested
-  instances too).
+  instances too). Components of one set are listed under the set's name;
+  right-clicking selected components offers `fig-menu-combine-as-variants`.
 - **Layers panel** (`fig-layers-panel`, toggled with ⌥1): layer search
   (`fig-layer-search`, ⌘/Ctrl+F; results are `fig-search-hit`), the pages list
   (`fig-page` buttons; pages named only with dashes are dividers; editors
@@ -1052,9 +1053,53 @@ Layout and test hooks:
   SVG, and `fig-copy-svg` for Copy as SVG). Read-only viewers see the same
   values as text. The Code tab shows CSS (`fig-css`). With nothing selected
   it shows the page name and canvas color (`fig-page-color` opens the
-  picker). With several layers selected (`fig-mixed`) it shows what they
+  picker), then the file's local styles (`fig-local-styles`: color, text,
+  effect, and grid styles by folder; a `fig-local-style` row, with
+  `data-style-name`, opens to rename it in `fig-local-style-name`, change
+  a color style's color (`fig-local-style-color`) or a text style's size
+  (`fig-local-style-size`), which every layer using it follows, or
+  `fig-local-style-delete`). With several layers selected (`fig-mixed`) it shows what they
   share; differing values read "Mixed", typing sets all of them, and "+"
   replaces mixed fills or strokes with one.
+- **Components and styles in the design panel**: for an instance,
+  `fig-instance-section` names its main component (`fig-main-component`;
+  `fig-go-to-main` goes to it, `fig-swap-instance` picks another component
+  in `fig-component-picker` with `fig-component-search` and
+  `fig-component-choice` items, preferred ones first, and
+  `fig-reset-instance` is "Reset all changes") and shows its variant
+  properties as menus (`fig-variant-<Name>`; switching keeps the overrides
+  that still apply), boolean properties as checkboxes, text properties as
+  fields, and instance swap properties as component pickers
+  (`fig-prop-<Name>`, spaces as dashes; a changed one gets
+  `fig-prop-reset-<Name>`), then the same for nested instances whose
+  properties are exposed. A main component, component set, or variant gets
+  `fig-component-section`: "+" opens "Create component property"
+  (`fig-new-property-kind`: Variant, Boolean, Text, or Instance swap;
+  `fig-new-property-name`; `fig-new-property-create`; a variant property on
+  a lone component makes it a component set), a set's variant properties
+  are renamed in `fig-variant-property-<Name>` and removed with
+  `fig-variant-property-remove-<Name>`, a variant's values are typed in
+  `fig-variant-value-<Name>`, `fig-add-variant` adds a variant (a lone
+  component becomes a set of two), and each property
+  (`fig-component-property`) has its name (`fig-property-name-<Name>`),
+  default (`fig-property-default-<Name>`, which the bound layers show),
+  and `fig-property-delete-<Name>`. A layer inside a main component gets
+  `fig-bindings-section`: which property drives its visibility, text, or
+  instance (`fig-bind-VISIBLE|TEXT|INSTANCE_SWAP`; the last item creates a
+  property from the layer), and for nested instances `fig-expose-instance`.
+  The Fill, Stroke, Text, and Effects sections show the shared style in use
+  (`fig-style-FILL|STROKE|TEXT|EFFECT`, `fig-style-detach-<kind>` detaches
+  it, keeping its values) and a style picker (`fig-style-picker-<kind>`:
+  `fig-style-option` items by folder, and `fig-style-create-name` with
+  `fig-style-create` to make a style from the layer and apply it). Fill
+  and Stroke also show the color variable the first paint uses
+  (`fig-variable-FILL|STROKE`, `fig-variable-detach-<kind>`) and a picker
+  of the file's color variables (`fig-variable-picker-<kind>`,
+  `fig-variable-option`). Frames get `fig-variable-modes`: per collection
+  with several modes, `fig-variable-mode-<Collection>` picks one (or
+  Auto, inherited), and bound colors inside follow. With nothing selected,
+  `fig-variables` lists the collections and their variables
+  (`fig-variable`, `data-variable-name`) with a value per mode.
 - **Color and paint pickers**: a paint's swatch (`fig-fill-<n>-swatch`,
   `fig-stroke-<n>-swatch`, `fig-effect-<n>-swatch`) opens the picker
   beside the panel (`fig-paint-popover`): the kind (`fig-paint-type`:
@@ -1120,7 +1165,8 @@ bunx vite --config src/features/block-fig/browser-test/vite.config.ts
 ```
 
 It opens files from `crates/fig_engine/tests/fixtures` (the synthetic
-`showcase.fig`), or from any directory named by `FIG_CORPUS_DIR`; the header
+`showcase.fig`, and `design-system.fig` with components, a component set,
+properties, and styles), or from any directory named by `FIG_CORPUS_DIR`; the header
 also opens a local `.fig`. `?edit` makes the file editable and `?new` opens a
 blank design (editable); saves stay in memory, and `?reload` reopens each one
 to check it round-trips. `window.figFixture` exposes `engine()`, `saves()`,

@@ -8,7 +8,11 @@
 import type { ViewerAction } from './shortcuts';
 
 /** Menu-only actions, besides the shortcut actions. */
-export type MenuAction = ViewerAction | 'paste-here' | 'paste-replace';
+export type MenuAction =
+  | ViewerAction
+  | 'paste-here'
+  | 'paste-replace'
+  | 'combine-as-variants';
 
 export interface MenuItem {
   action: MenuAction;
@@ -139,6 +143,11 @@ function structureItems(f: SelectionFacts): MenuEntry[] {
       label: 'Create component',
       shortcut: '⌥⌘K',
     },
+    f.types.length > 0 &&
+      f.types.every((t) => t === 'SYMBOL') && {
+        action: 'combine-as-variants',
+        label: 'Combine as variants',
+      },
     f.types.includes('INSTANCE') && {
       action: 'detach-instance',
       label: 'Detach instance',

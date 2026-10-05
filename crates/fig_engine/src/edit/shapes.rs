@@ -504,7 +504,7 @@ impl Txn<'_> {
             Some(name),
             &Patch::default(),
         )?;
-        let p = self.edit(v, u32::MAX);
+        let p = self.edit(v, u64::MAX);
         p.fills = look.fills.clone();
         p.strokes = look.strokes.clone();
         p.stroke_weight = look.stroke_weight;
@@ -581,7 +581,7 @@ impl Txn<'_> {
             props: Patch::default(),
         };
         let v = self.create(parent, index, &spec)?;
-        let p = self.edit(v, u32::MAX);
+        let p = self.edit(v, u64::MAX);
         p.transform = Some(Affine::translate(r.x, r.y));
         p.size = Some(Vec2::new(r.w.max(0.01), r.h.max(0.01)));
         p.fills = Some(Arc::from([]));
