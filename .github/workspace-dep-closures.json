@@ -8954,6 +8954,14 @@
       "crates/models_entity_access_management",
       "crates/workspace-hack"
     ],
+    "models_forms": [
+      "crates/cowlike",
+      "crates/macro_user_id",
+      "crates/macro_uuid",
+      "crates/models_databases",
+      "crates/models_forms",
+      "crates/workspace-hack"
+    ],
     "models_grouping": [
       "crates/models_grouping",
       "crates/workspace-hack"

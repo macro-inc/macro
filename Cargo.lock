@@ -12458,6 +12458,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "models_forms"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_uuid",
+ "models_databases",
+ "serde",
+ "serde_json",
+ "specta",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "models_grouping"
 version = "0.1.0"
 dependencies = [

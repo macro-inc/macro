@@ -39,6 +39,7 @@ members = [
   "crates/databases",
   "crates/databases_sql",
   "crates/models_databases",
+  "crates/models_forms",
   "crates/embedding",
   "crates/image_generation",
   "crates/dictation",
