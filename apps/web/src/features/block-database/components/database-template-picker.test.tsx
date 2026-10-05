@@ -59,10 +59,10 @@ describe('database template picker', () => {
           status: 'ready',
           templates: [
             {
-              id: 'crm',
-              name: 'CRM',
-              description: 'Companies, contacts, and deals.',
-              icon: 'handshake',
+              id: 'reading_list',
+              name: 'Reading list',
+              description: 'Books to read, reading, and finished.',
+              icon: 'books',
             },
           ],
         }}
@@ -70,11 +70,11 @@ describe('database template picker', () => {
       />
     ));
 
-    await userEvent.click(screen.getByRole('option', { name: 'CRM' }));
+    await userEvent.click(screen.getByRole('option', { name: 'Reading list' }));
 
     expect(onChoose).toHaveBeenCalledExactlyOnceWith({
-      name: 'CRM',
-      template: 'crm',
+      name: 'Reading list',
+      template: 'reading_list',
     });
   });
 
@@ -88,10 +88,10 @@ describe('database template picker', () => {
           status: 'ready',
           templates: [
             {
-              id: 'crm',
-              name: 'CRM',
-              description: 'Companies, contacts, and deals.',
-              icon: 'handshake',
+              id: 'reading_list',
+              name: 'Reading list',
+              description: 'Books to read, reading, and finished.',
+              icon: 'books',
             },
           ],
         }}

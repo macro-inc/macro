@@ -204,7 +204,7 @@ it('creates and opens the database from the chosen template', async () => {
 
   runCreateAction('database', { shouldInsert: true });
   const [onChoose] = host.openDatabaseTemplatePicker.mock.calls[0];
-  onChoose({ name: 'CRM', template: 'crm' });
+  onChoose({ name: 'Reading list', template: 'reading_list' });
 
   await vi.waitFor(() => {
     expect(replace).toHaveBeenCalledExactlyOnceWith({
@@ -218,8 +218,8 @@ it('creates and opens the database from the chosen template', async () => {
     { referredFrom: 'launcher', preferNewSplit: true }
   );
   expect(host.createDatabase).toHaveBeenCalledExactlyOnceWith({
-    name: 'CRM',
-    template: 'crm',
+    name: 'Reading list',
+    template: 'reading_list',
     source: 'create_menu',
   });
 });

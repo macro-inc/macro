@@ -5,7 +5,6 @@
 //! from its first commit on.
 
 mod content_calendar;
-mod crm;
 mod event_planner;
 mod getting_started;
 mod project_tracker;
@@ -31,6 +30,7 @@ use serde::{Deserialize, Serialize};
     Deserialize,
     utoipa::ToSchema,
     strum::Display,
+    strum::EnumString,
 )]
 #[cfg_attr(
     feature = "ai_tools",
@@ -45,8 +45,6 @@ pub enum TemplateId {
     GettingStarted,
     /// Tasks with a status, owner, due date and priority.
     ProjectTracker,
-    /// Companies, their contacts, and a pipeline of deals.
-    Crm,
     /// Parties and their invites, with an RSVP board.
     EventPlanner,
     /// Posts by status, channel and publish date.
@@ -64,8 +62,6 @@ pub enum TemplateIcon {
     Sparkle,
     /// Columns of cards.
     Kanban,
-    /// A handshake.
-    Handshake,
     /// A party popper.
     Confetti,
     /// A calendar.
@@ -109,9 +105,8 @@ impl TemplateContext {
 }
 
 /// Every template, in the order a picker lists them.
-pub const TEMPLATES: [DatabaseTemplate; 6] = [
+pub const TEMPLATES: [DatabaseTemplate; 5] = [
     project_tracker::TEMPLATE,
-    crm::TEMPLATE,
     event_planner::TEMPLATE,
     content_calendar::TEMPLATE,
     reading_list::TEMPLATE,
@@ -124,7 +119,6 @@ impl TemplateId {
         match self {
             TemplateId::GettingStarted => &getting_started::TEMPLATE,
             TemplateId::ProjectTracker => &project_tracker::TEMPLATE,
-            TemplateId::Crm => &crm::TEMPLATE,
             TemplateId::EventPlanner => &event_planner::TEMPLATE,
             TemplateId::ContentCalendar => &content_calendar::TEMPLATE,
             TemplateId::ReadingList => &reading_list::TEMPLATE,
@@ -137,7 +131,6 @@ impl TemplateId {
         match self {
             TemplateId::GettingStarted => getting_started::ops(context),
             TemplateId::ProjectTracker => project_tracker::ops(context),
-            TemplateId::Crm => crm::ops(context),
             TemplateId::EventPlanner => event_planner::ops(context),
             TemplateId::ContentCalendar => content_calendar::ops(context),
             TemplateId::ReadingList => reading_list::ops(context),

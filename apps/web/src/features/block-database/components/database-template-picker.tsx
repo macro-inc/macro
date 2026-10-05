@@ -2,7 +2,6 @@ import { Listbox } from '@kobalte/core/listbox';
 import BooksIcon from '@phosphor/books.svg';
 import CalendarIcon from '@phosphor/calendar.svg';
 import ConfettiIcon from '@phosphor/confetti.svg';
-import HandshakeIcon from '@phosphor/handshake.svg';
 import KanbanIcon from '@phosphor/kanban.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import TableIcon from '@phosphor/table.svg';
@@ -34,7 +33,6 @@ function templateIcon(
   return match(icon)
     .with('sparkle', () => SparkleIcon)
     .with('kanban', () => KanbanIcon)
-    .with('handshake', () => HandshakeIcon)
     .with('confetti', () => ConfettiIcon)
     .with('calendar', () => CalendarIcon)
     .with('books', () => BooksIcon)
@@ -56,6 +54,7 @@ export function DatabaseTemplatePicker(props: {
   templates: DatabaseTemplates;
   onChoose: (creation: DatabaseCreation) => void;
 }) {
+  let choosing = false;
   const options = (): PickerOption[] => [
     BLANK_OPTION,
     ...(props.templates.status === 'ready'
@@ -70,13 +69,18 @@ export function DatabaseTemplatePicker(props: {
   ];
   const choose = (keys: Set<string>) => {
     const chosen = options().find((option) => keys.has(option.key));
-    if (chosen) props.onChoose(chosen.creation);
+    if (!chosen || choosing) return;
+    choosing = true;
+    props.onChoose(chosen.creation);
   };
 
   return (
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
+      onCloseAutoFocus={(event) => {
+        if (choosing) event.preventDefault();
+      }}
       visibleScrim
       class="w-108 max-w-[calc(100vw-2rem)]"
     >

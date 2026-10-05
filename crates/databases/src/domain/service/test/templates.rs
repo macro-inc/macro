@@ -174,7 +174,6 @@ fn the_templates_are_listed_in_picker_order_each_under_its_own_slug() {
                 "Project tracker",
                 TemplateIcon::Kanban
             ),
-            (TemplateId::Crm, "CRM", TemplateIcon::Handshake),
             (
                 TemplateId::EventPlanner,
                 "Event planner",
@@ -254,114 +253,6 @@ async fn the_project_tracker_builds_tasks_with_a_board_by_status() {
             ],
             rows: 4,
         }]
-    );
-}
-
-#[tokio::test]
-async fn the_crm_relates_contacts_and_deals_to_companies() {
-    let (world, _, detail) = create_from(TemplateId::Crm, "CRM").await;
-    let database = detail.database.id;
-    let companies = table_id(&detail, "Companies");
-    assert_eq!(
-        built(&detail, &world),
-        vec![
-            BuiltTable {
-                name: "Companies",
-                columns: vec![
-                    BuiltColumn {
-                        name: "Name",
-                        kind: ColumnKind::Text,
-                        options: vec![],
-                    },
-                    BuiltColumn {
-                        name: "Website",
-                        kind: ColumnKind::Link,
-                        options: vec![],
-                    },
-                    BuiltColumn {
-                        name: "Industry",
-                        kind: SELECT,
-                        options: vec!["Software", "Finance", "Healthcare", "Retail"],
-                    },
-                ],
-                views: vec![],
-                rows: 3,
-            },
-            BuiltTable {
-                name: "Contacts",
-                columns: vec![
-                    BuiltColumn {
-                        name: "Name",
-                        kind: ColumnKind::Text,
-                        options: vec![],
-                    },
-                    BuiltColumn {
-                        name: "Email",
-                        kind: ColumnKind::Text,
-                        options: vec![],
-                    },
-                    BuiltColumn {
-                        name: "Company",
-                        kind: ColumnKind::Relation {
-                            database,
-                            table: companies,
-                        },
-                        options: vec![],
-                    },
-                    BuiltColumn {
-                        name: "Owner",
-                        kind: PERSON,
-                        options: vec![],
-                    },
-                ],
-                views: vec![],
-                rows: 3,
-            },
-            BuiltTable {
-                name: "Deals",
-                columns: vec![
-                    BuiltColumn {
-                        name: "Name",
-                        kind: ColumnKind::Text,
-                        options: vec![],
-                    },
-                    BuiltColumn {
-                        name: "Company",
-                        kind: ColumnKind::Relation {
-                            database,
-                            table: companies,
-                        },
-                        options: vec![],
-                    },
-                    BuiltColumn {
-                        name: "Stage",
-                        kind: SELECT,
-                        options: vec!["Lead", "Qualified", "Proposal", "Won", "Lost"],
-                    },
-                    BuiltColumn {
-                        name: "Amount",
-                        kind: ColumnKind::Number,
-                        options: vec![],
-                    },
-                    BuiltColumn {
-                        name: "Owner",
-                        kind: PERSON,
-                        options: vec![],
-                    },
-                ],
-                views: vec![
-                    BuiltView::Board {
-                        name: "Pipeline",
-                        group_by: "Stage",
-                        title: "Name",
-                        lanes: vec!["Lead", "Qualified", "Proposal", "Won", "Lost"],
-                        card_fields: vec!["Company", "Amount", "Owner"],
-                    },
-                    BuiltView::Table { name: "Table" },
-                ],
-                rows: 3,
-            },
-        ]
     );
 }
 

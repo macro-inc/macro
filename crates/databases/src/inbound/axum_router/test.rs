@@ -1068,6 +1068,15 @@ async fn creating_from_a_template_reaches_the_service_as_the_caller() {
         .await
         .unwrap();
     assert_eq!(unknown.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let removed = router
+        .clone()
+        .oneshot(create(
+            Some("valid"),
+            r#"{"name": "Launch", "template": "crm"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(removed.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let anonymous = router
         .oneshot(create(
             None,
@@ -1109,12 +1118,6 @@ async fn the_template_list_answers_every_template_to_a_signed_in_caller() {
                 "name": "Project tracker",
                 "description": "Tasks with a status, an owner, a due date and a priority, on a board by status.",
                 "icon": "kanban",
-            },
-            {
-                "id": "crm",
-                "name": "CRM",
-                "description": "Companies, their contacts, and deals on a board by stage.",
-                "icon": "handshake",
             },
             {
                 "id": "event_planner",

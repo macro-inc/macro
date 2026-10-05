@@ -303,10 +303,10 @@ describe('database templates', () => {
     fetch.mockResolvedValue(
       ok([
         {
-          id: 'crm',
-          name: 'CRM',
-          description: 'Companies, contacts, and deals.',
-          icon: 'handshake',
+          id: 'reading_list',
+          name: 'Reading list',
+          description: 'Books to read, reading, and finished.',
+          icon: 'books',
         },
       ])
     );
@@ -315,10 +315,10 @@ describe('database templates', () => {
 
     expect(templates._unsafeUnwrap()).toEqual([
       {
-        id: 'crm',
-        name: 'CRM',
-        description: 'Companies, contacts, and deals.',
-        icon: 'handshake',
+        id: 'reading_list',
+        name: 'Reading list',
+        description: 'Books to read, reading, and finished.',
+        icon: 'books',
       },
     ]);
     expect(fetch.mock.calls[0][0]).toMatch(/\/databases\/templates$/);
@@ -328,17 +328,20 @@ describe('database templates', () => {
     fetch.mockResolvedValue(
       ok({
         id: 'db',
-        name: 'CRM',
+        name: 'Reading list',
         owner_id: 'owner',
         created_at: '',
         trashed_at: null,
       })
     );
 
-    await databasesClient.create({ name: 'CRM', template: 'crm' });
+    await databasesClient.create({
+      name: 'Reading list',
+      template: 'reading_list',
+    });
 
     expect(fetch.mock.calls[0][1]?.body).toBe(
-      JSON.stringify({ name: 'CRM', template: 'crm' })
+      JSON.stringify({ name: 'Reading list', template: 'reading_list' })
     );
   });
 });

@@ -83,12 +83,17 @@ fn column(input: Tokens<'_>) -> ParseResult<'_, ColumnDefinition> {
 }
 fn create(input: Tokens<'_>) -> ParseResult<'_, SchemaStatement> {
     let (input, ()) = word("create", "CREATE")(input)?;
-    cut(alt((
-        preceded(word("database", ""), identifier("a database name"))
-            .map(SchemaStatement::CreateDatabase),
-        create_table,
-    )))
-    .parse(input)
+    cut(alt((create_database, create_table))).parse(input)
+}
+fn create_database(input: Tokens<'_>) -> ParseResult<'_, SchemaStatement> {
+    let (input, ()) = word("database", "DATABASE")(input)?;
+    let (input, name) = identifier("a database name")(input)?;
+    let (input, template) = opt(preceded(
+        word("template", ""),
+        cut(identifier("a template slug")),
+    ))
+    .parse(input)?;
+    Ok((input, SchemaStatement::CreateDatabase { name, template }))
 }
 fn create_table(input: Tokens<'_>) -> ParseResult<'_, SchemaStatement> {
     let (input, ()) = word("table", "TABLE")(input)?;

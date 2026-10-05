@@ -45,12 +45,18 @@ export type DialogClosedEvent = {
   reason: DialogCloseReason;
 };
 
+/** Controls focus when a dialog hands off to another surface. */
+export type DialogCloseOptions = {
+  /** Restore the opener's focus, unless the next surface will claim it. */
+  restoreFocus?: boolean;
+};
+
 /** A stable handle to one imperative dialog entry. */
 export type DialogHandle = {
   readonly id: string;
   readonly isOpen: Accessor<boolean>;
   /** Closes this dialog. Returns false when it was already closed. */
-  close: () => boolean;
+  close: (options?: DialogCloseOptions) => boolean;
   /** Resolves once the dialog's reactive root has been disposed. */
   readonly closed: Promise<DialogClosedEvent>;
 };
@@ -96,7 +102,11 @@ function resolveProps<P extends object>(source: PropsSource<P>): P {
   return typeof source === 'function' ? source() : source;
 }
 
-function finalizeDialog(id: string, reason: DialogCloseReason): boolean {
+function finalizeDialog(
+  id: string,
+  reason: DialogCloseReason,
+  options: DialogCloseOptions = {}
+): boolean {
   const entry = dialogEntries().find((candidate) => candidate.id === id);
   if (!entry || entry.finalized) return false;
 
@@ -110,7 +120,7 @@ function finalizeDialog(id: string, reason: DialogCloseReason): boolean {
   setDialogEntries((entries) =>
     entries.filter((candidate) => candidate.id !== id)
   );
-  entry.focusLock.release();
+  entry.focusLock.release(options.restoreFocus ?? true);
   entry.resolveClosed({ id, reason });
   return true;
 }
@@ -158,7 +168,7 @@ export function openDialog<P extends ManagedDialogProps>(
   return {
     id,
     isOpen,
-    close: () => finalizeDialog(id, 'programmatic'),
+    close: (options) => finalizeDialog(id, 'programmatic', options),
     closed,
   };
 }

@@ -28,10 +28,7 @@ function DatabaseTemplatePickerDialog(
       open={props.open}
       onOpenChange={props.onOpenChange}
       templates={templates()}
-      onChoose={(creation) => {
-        props.onOpenChange(false);
-        props.onChoose(creation);
-      }}
+      onChoose={props.onChoose}
     />
   );
 }
@@ -53,5 +50,11 @@ function SuspendedDatabaseTemplatePickerDialog(
 export function openDatabaseTemplatePicker(
   onChoose: (creation: DatabaseCreation) => void
 ): DialogHandle {
-  return openDialog(SuspendedDatabaseTemplatePickerDialog, { onChoose });
+  const handle = openDialog(SuspendedDatabaseTemplatePickerDialog, {
+    onChoose: (creation) => {
+      if (!handle.close({ restoreFocus: false })) return;
+      onChoose(creation);
+    },
+  });
+  return handle;
 }

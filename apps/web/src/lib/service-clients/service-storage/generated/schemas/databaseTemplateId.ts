@@ -15,7 +15,6 @@ export type DatabaseTemplateId =
 export const DatabaseTemplateId = {
   getting_started: 'getting_started',
   project_tracker: 'project_tracker',
-  crm: 'crm',
   event_planner: 'event_planner',
   content_calendar: 'content_calendar',
   reading_list: 'reading_list',

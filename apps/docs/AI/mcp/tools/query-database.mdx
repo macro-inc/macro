@@ -36,6 +36,7 @@ A small SQL subset, compiled by Macro. Row queries run through the shared SQL en
 - **Changing a column's type:** `ALTER TABLE table ALTER COLUMN col TYPE type`,  where type is text, number, boolean, date, link, select, select_number, tag, or entity(USER), entity(DOCUMENT), entity(TASK)…, with `[]` for several values (`select[]`). Call DescribeDatabase with `includeEditingMetadata: true` for the column's `safeTypes` and `checkedTypes`. A value that does not fit, or a multi-valued cell a single-valued type would truncate, refuses the statement with counts and examples: fix those values with UPDATE, or add a new column.
 - **Schema commands** (one statement per call; edit access required):
   - `CREATE DATABASE "Sales CRM"` creates its starter table with a Name column. Call DescribeDatabase using the returned database ID before editing it; reuse that starter table.
+  - `CREATE DATABASE "Launch" TEMPLATE project_tracker` builds a database with a template's tables, columns, views and sample rows instead. Available templates: `project_tracker` (tasks on a status board), `event_planner` (parties and related invites with an RSVP board), `content_calendar` (posts by status, channel and publish date), `reading_list` (books with status and ratings), and `getting_started` (ideas on a board). Call DescribeDatabase before changing it; person and relation sample cells start empty.
   - `ALTER DATABASE "Sales CRM" RENAME TO "Sales"` and `ALTER DATABASE "Sales" REORDER TABLES (Deals, Companies)`.
   - `CREATE TABLE "Sales".Deals (Name text, Value number, Stage select OPTIONS ('Lead', 'Won'), Owner entity(USER), Company relation(Companies))`. Qualify the database or pass databaseId. Requires at least one column; the first is the row title. All columns and options are created atomically.
   - `ALTER TABLE Deals RENAME TO Opportunities`; `DROP TABLE Deals` deletes its rows, columns and views, subject to the domain's last-table and dependency protections.
@@ -45,6 +46,7 @@ A small SQL subset, compiled by Macro. Row queries run through the shared SQL en
   - Schema writes return a committed summary and database ID. Read DescribeDatabase for new IDs and names. Never repeat a CREATE just because a later schema read failed. No DROP DATABASE, IF EXISTS, constraints, or multi-statement batches.
 - **Saved views:** SaveDatabaseView and DeleteDatabaseView manage table/kanban presentation. A board groups by a single-select or single-person column; SaveDatabaseQuery saves live SQL results and charts.
 - Tables you only hold view access on are read-only.
+
 
 To change records, first SELECT the rows you mean (their ids are in `rowIds`), then UPDATE or DELETE exactly those with `WHERE row_id IN (...)`. After changing rows, SELECT the affected records to verify the actual result. On a connection failure, inspect before retrying an INSERT.
 To create a row and relate it in one go, INSERT it with the relation column set to the target row ids (`INSERT INTO invites (guest, status) VALUES (['<guest row id>'], 'Sent')`); the new row's id is in `insertedRowIds`.

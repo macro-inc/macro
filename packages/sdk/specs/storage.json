@@ -23048,14 +23048,7 @@
       "DatabaseTemplateIcon": {
         "type": "string",
         "description": "The icon a template is shown with.",
-        "enum": [
-          "sparkle",
-          "kanban",
-          "handshake",
-          "confetti",
-          "calendar",
-          "books"
-        ]
+        "enum": ["sparkle", "kanban", "confetti", "calendar", "books"]
       },
       "DatabaseTemplateId": {
         "type": "string",
@@ -23063,7 +23056,6 @@
         "enum": [
           "getting_started",
           "project_tracker",
-          "crm",
           "event_planner",
           "content_calendar",
           "reading_list"

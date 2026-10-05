@@ -15,7 +15,6 @@ export type DatabaseTemplateIcon =
 export const DatabaseTemplateIcon = {
   sparkle: 'sparkle',
   kanban: 'kanban',
-  handshake: 'handshake',
   confetti: 'confetti',
   calendar: 'calendar',
   books: 'books',

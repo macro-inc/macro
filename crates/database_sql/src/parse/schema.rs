@@ -5,8 +5,13 @@ use models_databases::ColumnKind;
 /// One schema edit. Names are resolved against the caller's visible catalog.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SchemaStatement {
-    /// Create a database with its starter table.
-    CreateDatabase(Identifier),
+    /// Create a database with its starter table or a named template.
+    CreateDatabase {
+        /// New database display name.
+        name: Identifier,
+        /// Template slug, validated by the owning database service.
+        template: Option<Identifier>,
+    },
     /// Rename a database.
     RenameDatabase {
         /// Owning database name.

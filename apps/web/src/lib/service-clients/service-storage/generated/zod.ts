@@ -4683,7 +4683,6 @@ export const createDatabaseBody = zod
       .enum([
         'getting_started',
         'project_tracker',
-        'crm',
         'event_planner',
         'content_calendar',
         'reading_list',
@@ -4780,13 +4779,12 @@ export const listDatabaseTemplatesResponseItem = zod
   .object({
     description: zod.string().describe('What it is for, in a sentence.'),
     icon: zod
-      .enum(['sparkle', 'kanban', 'handshake', 'confetti', 'calendar', 'books'])
+      .enum(['sparkle', 'kanban', 'confetti', 'calendar', 'books'])
       .describe('The icon a template is shown with.'),
     id: zod
       .enum([
         'getting_started',
         'project_tracker',
-        'crm',
         'event_planner',
         'content_calendar',
         'reading_list',

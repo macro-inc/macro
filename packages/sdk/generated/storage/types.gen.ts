@@ -4681,12 +4681,12 @@ export type DatabaseTemplate = {
 /**
  * The icon a template is shown with.
  */
-export type DatabaseTemplateIcon = 'sparkle' | 'kanban' | 'handshake' | 'confetti' | 'calendar' | 'books';
+export type DatabaseTemplateIcon = 'sparkle' | 'kanban' | 'confetti' | 'calendar' | 'books';
 
 /**
  * Which template, by its stable slug.
  */
-export type DatabaseTemplateId = 'getting_started' | 'project_tracker' | 'crm' | 'event_planner' | 'content_calendar' | 'reading_list';
+export type DatabaseTemplateId = 'getting_started' | 'project_tracker' | 'event_planner' | 'content_calendar' | 'reading_list';
 
 /**
  * A view of one table, as stored.

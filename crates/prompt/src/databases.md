@@ -36,6 +36,7 @@ Never use text for people or for Macro items: a typed name links to nothing and 
 `QueryDatabase` handles schema changes with SQL, one statement per call. Its description is the authoritative syntax reference. Schema writes return a committed summary and database id; read `DescribeDatabase` for refreshed ids and names. Never repeat CREATE because a later schema read failed.
 
 - `CREATE DATABASE` makes a database with a starter table and a Name title column. Describe it, then reuse and rename that table with `ALTER TABLE ... RENAME TO` instead of adding an extra tab. `ALTER DATABASE ... RENAME TO` retitles the database.
+- When the request matches a template, use `CREATE DATABASE "Name" TEMPLATE project_tracker` (or `event_planner`, `content_calendar`, `reading_list`, `getting_started`) to create its tables, columns, views and sample rows together. Describe the result before editing it.
 - `CREATE TABLE`, `ALTER TABLE ... RENAME TO`, `DROP TABLE`, and `ALTER DATABASE ... REORDER TABLES` add, retitle, remove, and order tabs. A database keeps at least one table.
 - `ALTER TABLE ... ADD COLUMN`, `RENAME COLUMN`, `DROP COLUMN`, and `REORDER COLUMNS` edit columns. Use `entity(USER)` for people and `relation(table)` for related rows.
 - `ALTER TABLE ... ALTER COLUMN ... ADD OPTIONS` adds select or tag labels. A write naming a label the column lacks is refused.

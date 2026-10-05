@@ -57,10 +57,6 @@ async fn every_template_builds_its_database(pool: PgPool) {
         vec![
             (TemplateId::ProjectTracker, named(&[("Tasks", 5, 4)])),
             (
-                TemplateId::Crm,
-                named(&[("Companies", 3, 3), ("Contacts", 4, 3), ("Deals", 5, 3)])
-            ),
-            (
                 TemplateId::EventPlanner,
                 named(&[("Parties", 4, 2), ("Invites", 5, 4)])
             ),

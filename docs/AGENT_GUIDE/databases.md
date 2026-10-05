@@ -6,7 +6,7 @@ picker. Focus starts on **Blank**; arrow keys move, Enter chooses, Escape or
 its first table with a Name column, and opens it with its title selected and
 ready to type. Enter saves the title and focuses A1, ready to type without
 another click. Below Blank, each template shows its icon, name and description:
-**Project tracker**, **CRM**, **Event planner**, **Content calendar**, **Reading
+**Project tracker**, **Event planner**, **Content calendar**, **Reading
 list** and **Getting started**. Choosing one creates a database under the
 template's name with its tables, columns, views and a few sample records (person
 cells are left empty), all in one request, and opens it. While the templates
@@ -377,7 +377,8 @@ Any chat, not only one opened from a database, can build databases: the assistan
 has six database tools: `ListDatabases`, `DescribeDatabase`, `QueryDatabase`,
 `SaveDatabaseQuery`, `SaveDatabaseView`, and `DeleteDatabaseView`.
 `QueryDatabase` reads and changes rows and handles schema changes through SQL
-(`CREATE`, `ALTER`, and `DROP`). The assistant reads the current schema before
+(`CREATE`, `ALTER`, and `DROP`), including `CREATE DATABASE "Name" TEMPLATE
+project_tracker` to start from a template. The assistant reads the current schema before
 editing and checks actual results before reporting success.
 
 Query tool rows say what the query did in words (**Read Invites**, **Updated 3
