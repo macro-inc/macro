@@ -207,7 +207,10 @@ test('exports SVG that draws like the PNG', async ({ page }) => {
     .filter({ hasText: 'Home' })
     .first()
     .click();
-  await page.getByTestId('fig-export-svg').click();
+  const exports = page.getByTestId('fig-export');
+  await exports.getByRole('button', { name: 'Add export' }).click();
+  await page.getByTestId('fig-export-format-0').selectOption('SVG');
+  await page.getByTestId('fig-export-button').click();
   await expect
     .poll(() => page.evaluate(() => window.figFixture.downloads()))
     .toEqual([{ name: 'Home.svg', size: expect.any(Number) }]);

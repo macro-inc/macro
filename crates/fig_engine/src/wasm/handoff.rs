@@ -61,6 +61,14 @@ impl FigFile {
             .ok_or_else(|| js_err("this page has no frames to export"))
     }
 
+    /// A layer and the layers inside it with export presets
+    /// (`Exportable[]` JSON).
+    pub fn exportables(&mut self, page: usize, id: &str) -> Result<String, JsError> {
+        let i = self.find(page, id)?;
+        let (_, scene) = self.scene.as_ref().expect("scene built above");
+        to_json(&crate::inspect::exportables(&self.doc, scene, i))
+    }
+
     /// The page's guides and its frames' grids and guides (`LayoutAids`
     /// JSON).
     #[wasm_bindgen(js_name = layoutAids)]

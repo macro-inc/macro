@@ -170,7 +170,12 @@ test('zooms with Figma’s shortcuts', async ({ page }) => {
 test('exports the selection and shows the shortcuts', async ({ page }) => {
   await open(page);
   await focusLayer(page, 'Header');
-  await page.getByTestId('fig-export-2x').click();
+  // A read-only viewer exports with presets kept for the session.
+  const exports = page.getByTestId('fig-export');
+  await exports.getByRole('button', { name: 'Add export' }).click();
+  await page.getByTestId('fig-export-size-0').fill('2x');
+  await page.getByTestId('fig-export-size-0').press('Enter');
+  await page.getByTestId('fig-export-button').click();
   await expect
     .poll(() => page.evaluate(() => window.figFixture.downloads()))
     .toEqual([{ name: 'Header@2x.png', size: expect.any(Number) }]);

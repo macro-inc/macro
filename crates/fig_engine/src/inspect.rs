@@ -16,7 +16,9 @@ pub mod prototype;
 mod variables;
 pub use colors::page_colors;
 pub use design::{DesignInfo, StyleInfo, design_info, local_styles};
-pub use handoff::{FrameAids, GridInfo, GuideInfo, LayoutAids, grid_info, layout_aids};
+pub use handoff::{
+    Exportable, FrameAids, GridInfo, GuideInfo, LayoutAids, exportables, grid_info, layout_aids,
+};
 pub use variables::{CollectionInfo, variables};
 
 /// One row of the layers panel.

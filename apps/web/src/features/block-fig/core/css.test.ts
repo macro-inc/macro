@@ -30,6 +30,7 @@ const base: NodeInfo = {
   autoLayout: null,
   constraints: null,
   exportSettings: [],
+  layoutGrids: [],
   mainComponent: null,
   description: null,
   componentProperties: [],

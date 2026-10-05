@@ -17,11 +17,17 @@ import type { PeerOverlay } from '../core/presence';
 import { rulerStep, rulerTicks } from '../core/rulers';
 import type { Guide } from '../core/snap';
 import { segmentCurve, vertexHandles } from '../core/vector';
+import {
+  drawLayoutGrids,
+  drawRulerGuides,
+  drawSpacing,
+  type LayoutAidsModel,
+} from './layout-aids-overlay';
 
 export const SELECTION_BLUE = '#0d99ff';
 export const COMPONENT_PURPLE = '#9747ff';
 export const MEASURE_RED = '#f24822';
-const RULER_SIZE = 20;
+export const RULER_SIZE = 20;
 
 export interface OverlayModel {
   camera: Camera;
@@ -49,6 +55,8 @@ export interface OverlayModel {
   darkCanvas: boolean;
   /** Points being drawn with the pen or edited. */
   vector?: VectorOverlay;
+  /** Layout grids, ruler guides, and Dev Mode spacing. */
+  layoutAids?: LayoutAidsModel;
   /** Other people on the page: their selections and pointers. */
   peers?: PeerOverlay[];
 }
@@ -395,13 +403,16 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.setTransform(m.dpr, 0, 0, m.dpr, 0, 0);
   drawPixelGrid(ctx, m);
+  if (m.layoutAids) drawLayoutGrids(ctx, m, m.layoutAids);
   drawFrameLabels(ctx, m);
   drawHover(ctx, m);
+  if (m.layoutAids) drawSpacing(ctx, m, m.layoutAids);
   drawSelection(ctx, m);
   drawVector(ctx, m);
   drawMeasurements(ctx, m);
   drawGuides(ctx, m);
   drawMarquee(ctx, m);
   drawPeers(ctx, m);
+  if (m.layoutAids?.guides) drawRulerGuides(ctx, m, m.layoutAids);
   drawRulers(ctx, m);
 }

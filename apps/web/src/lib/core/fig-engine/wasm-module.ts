@@ -45,6 +45,14 @@ export interface WasmFigFile {
   geometry: (page: number, ids: string) => string;
   /** SVG path data, page coordinates. */
   outline: (page: number, id: string) => string;
+  /** `LayoutAids` JSON. */
+  layoutAids: (page: number) => string;
+  /** `Exportable[]` JSON. */
+  exportables: (page: number, id: string) => string;
+  /** Layers exported with presets (`ExportRequest` JSON). */
+  exportFiles: (page: number, request: string) => WasmExportFile;
+  /** The page's top-level frames as a PDF. */
+  exportFramesPdf: (page: number) => Uint8Array;
   /** `PrototypeInfo` JSON. */
   prototype: (page: number) => string;
   /** `SearchHit[]` JSON. */
@@ -95,6 +103,14 @@ export interface WasmFigFile {
     images: Uint8Array | null | undefined,
     spec: string
   ) => string;
+  free: () => void;
+}
+
+/** An exported file. Mirrors `fig_engine::wasm::ExportFile`. */
+export interface WasmExportFile {
+  readonly name: string;
+  readonly mime: string;
+  readonly bytes: Uint8Array;
   free: () => void;
 }
 

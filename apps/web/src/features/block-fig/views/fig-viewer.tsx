@@ -17,7 +17,11 @@ import {
 import { match } from 'ts-pattern';
 import { CommentPins } from '../components/comment-pins';
 import { DesignPanel } from '../components/design-panel';
+import { DevInspect } from '../components/dev-inspect';
+import { ExportSection } from '../components/export-section';
 import { FigContextMenu } from '../components/fig-context-menu';
+import { LayoutGridSection } from '../components/layout-grid-section';
+import { MainMenu } from '../components/main-menu';
 import { MissingFonts } from '../components/missing-fonts';
 import { FollowFrame, PeerAvatars } from '../components/peer-presence';
 import { PrototypeNoodles } from '../components/prototype-noodles';
@@ -44,6 +48,8 @@ import { createFigEditor, type Patch } from '../primitives/create-fig-editor';
 import { createFigReview } from '../primitives/create-fig-review';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { createFontRegistry } from '../primitives/create-font-registry';
+import { createHandoff } from '../primitives/create-handoff';
+import { createLayoutAids } from '../primitives/create-layout-aids';
 import { createPeerOverlays } from '../primitives/create-peer-overlays';
 import { AssetsPanel } from './assets-panel';
 import { CommentsPanel } from './comments-panel';
@@ -103,6 +109,18 @@ export function FigViewer() {
   const [info, setInfo] = createSignal<NodeInfo>();
   const designSystem = createDesignSystem({ engine, viewer, editor });
   const styleControl = styleControlFor(designSystem);
+  /** Dev Mode: the design panel shows the Code tab. */
+  const devMode = () =>
+    !viewer.uiHidden() && viewer.designOpen() && review.panelTab() === 'code';
+  const aids = createLayoutAids({ engine, viewer, editor, devMode, info });
+  const handoff = createHandoff({
+    context,
+    engine,
+    viewer,
+    editor,
+    info,
+    devMode,
+  });
   let root!: HTMLDivElement;
   let searchInput: HTMLInputElement | undefined;
 
@@ -254,29 +272,6 @@ export function FigViewer() {
 
   // ---- export -------------------------------------------------------------
 
-  const exportSelection = async (scale: number) => {
-    const ids = viewer.selected().map((s) => s.id);
-    if (ids.length === 0) {
-      context.notifyInfo('Select a layer to export');
-      return;
-    }
-    for (const id of ids) {
-      try {
-        const blob = await engine.exportPng(viewer.page(), id, scale);
-        const name =
-          ids.length === 1 && info()?.name
-            ? info()?.name
-            : `${context.fileName()}-${id}`;
-        context.download(
-          blob,
-          `${safeName(name ?? 'export')}${scale === 1 ? '' : `@${scale}x`}.png`
-        );
-      } catch (e) {
-        context.notifyError(e instanceof Error ? e.message : 'Export failed');
-      }
-    }
-  };
-
   const copyPng = async () => {
     const id = viewer.selected()[0]?.id;
     if (!id) {
@@ -308,19 +303,6 @@ export function FigViewer() {
       svg: await engine.exportSvg(viewer.page(), id),
       name: safeName(name ?? `${context.fileName()}-${id}`),
     };
-  };
-
-  const exportSvg = async () => {
-    try {
-      const out = await selectedSvg();
-      if (!out) return;
-      context.download(
-        new Blob([out.svg], { type: 'image/svg+xml' }),
-        `${out.name}.svg`
-      );
-    } catch (e) {
-      context.notifyError(e instanceof Error ? e.message : 'Export failed');
-    }
   };
 
   /** Figma's "Copy as SVG": the markup as text. */
@@ -377,6 +359,7 @@ export function FigViewer() {
       .with('toggle-outline', () => viewer.setOutlineView((o) => !o))
       .with('toggle-rulers', () => viewer.setRulers((r) => !r))
       .with('toggle-pixel-grid', () => viewer.setPixelGrid((g) => !g))
+      .with('toggle-layout-grids', () => aids.setGrids((g) => !g))
       .with('toggle-layers', () => {
         viewer.setUiHidden(false);
         viewer.setLayersOpen((o) => !o);
@@ -387,7 +370,7 @@ export function FigViewer() {
       })
       .with('collapse-layers', () => viewer.collapseLayers())
       .with('copy-png', () => void copyPng())
-      .with('export', () => void exportSelection(2))
+      .with('export', () => void handoff.exportSelection())
       .with('find', () => {
         viewer.setUiHidden(false);
         viewer.setLayersOpen(true);
@@ -671,6 +654,13 @@ export function FigViewer() {
       onSelect: () => run('toggle-pixel-grid'),
     },
     {
+      label: 'Layout grids',
+      shortcut: IS_MAC ? '⌃G' : 'Ctrl+⇧4',
+      checked: aids.grids(),
+      onSelect: () => run('toggle-layout-grids'),
+      testId: 'fig-layout-grids-toggle',
+    },
+    {
       label: 'Rulers',
       shortcut: '⇧R',
       checked: viewer.rulers(),
@@ -764,7 +754,33 @@ export function FigViewer() {
           }}
           peers={peerOverlays}
           onPointer={collab ? setPointer : undefined}
+          aids={aids}
+          devMode={devMode}
         >
+          <Show when={!viewer.uiHidden()}>
+            <MainMenu
+              rulers={viewer.rulers()}
+              items={[
+                {
+                  label: 'Export frames to PDF…',
+                  onSelect: () => void handoff.exportFramesPdf(),
+                  testId: 'fig-menu-export-frames-pdf',
+                },
+                {
+                  label: 'Export selection…',
+                  shortcut: IS_MAC ? '⇧⌘E' : 'Ctrl+⇧E',
+                  onSelect: () => void handoff.exportSelection(),
+                  testId: 'fig-menu-export-selection',
+                },
+                'divider',
+                ...zoomItems().filter(
+                  (item) =>
+                    item !== 'divider' &&
+                    (item.label === 'Layout grids' || item.label === 'Rulers')
+                ),
+              ]}
+            />
+          </Show>
           <Show when={textEditing()}>
             {(id) => (
               <TextEditor
@@ -941,10 +957,63 @@ export function FigViewer() {
             }
             selectionCount={viewer.selected().length}
             page={viewer.pages[viewer.page()]}
-            onExport={(scale) => void exportSelection(scale)}
-            onExportSvg={() => void exportSvg()}
-            onCopySvg={() => void copySvg()}
-            onCopyPng={() => void copyPng()}
+            exportSection={
+              <Show when={info()?.id} keyed>
+                {(id) => (
+                  <ExportSection
+                    name={info()?.name ?? ""}
+                    count={1}
+                    settings={info()?.exportSettings ?? []}
+                    onChange={
+                      editor.enabled() && !id.startsWith("I")
+                        ? handoff.setExports
+                        : undefined
+                    }
+                    onExport={(settings) =>
+                      void handoff.exportSelection(settings)
+                    }
+                    preview={handoff.preview}
+                    onCopyPng={() => void copyPng()}
+                    onCopySvg={() => void copySvg()}
+                  />
+                )}
+              </Show>
+            }
+            layoutGrids={
+              <Show
+                when={
+                  info() &&
+                  ['FRAME', 'SYMBOL', 'INSTANCE'].includes(
+                    info()?.type ?? ''
+                  ) &&
+                  (editor.enabled() || (info()?.layoutGrids.length ?? 0) > 0)
+                }
+              >
+                <LayoutGridSection
+                  grids={info()?.layoutGrids ?? []}
+                  onChange={
+                    editor.enabled() && !info()?.id.startsWith('I')
+                      ? handoff.setGrids
+                      : undefined
+                  }
+                  swatches={swatches()}
+                  onPickerOpen={() => void loadSwatches()}
+                />
+              </Show>
+            }
+            code={
+              <Show when={panel().info}>
+                {(i) => (
+                  <DevInspect
+                    info={i()}
+                    design={designSystem.info()}
+                    assets={handoff.assets()}
+                    onCopy={(text) => void copyText(text)}
+                    onDownload={(id, s) => void handoff.downloadAsset(id, s)}
+                  />
+                )}
+              </Show>
+            }
             onBoolean={
               editor.enabled() ? (op) => void editor.booleanOp(op) : undefined
             }

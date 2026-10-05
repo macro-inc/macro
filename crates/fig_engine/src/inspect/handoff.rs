@@ -118,3 +118,40 @@ pub fn layout_aids(doc: &Document, scene: &Scene) -> LayoutAids {
         frames,
     }
 }
+
+/// A layer with export presets (Dev Mode's assets).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Exportable {
+    pub id: String,
+    pub name: String,
+    pub settings: Vec<crate::model::ExportSetting>,
+}
+
+/// At most this many exportable layers are listed.
+const MAX_EXPORTABLES: usize = 200;
+
+/// Layer `i` and the visible layers inside it that have export presets,
+/// in layer order.
+pub fn exportables(doc: &Document, scene: &Scene, i: SceneIdx) -> Vec<Exportable> {
+    let mut out = Vec::new();
+    let mut stack = vec![i];
+    while let Some(n) = stack.pop() {
+        if out.len() >= MAX_EXPORTABLES {
+            break;
+        }
+        let props = scene.props(doc, n);
+        if !props.visible() {
+            continue;
+        }
+        let settings = props.export_settings.as_deref().unwrap_or(&[]);
+        if !settings.is_empty() {
+            out.push(Exportable {
+                id: scene.id(doc, n),
+                name: props.name().to_owned(),
+                settings: settings.to_vec(),
+            });
+        }
+        stack.extend(scene.node(n).children.iter().rev().copied());
+    }
+    out
+}

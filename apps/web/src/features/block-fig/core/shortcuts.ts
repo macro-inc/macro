@@ -27,6 +27,7 @@ export type ViewerAction =
   | 'toggle-outline'
   | 'toggle-rulers'
   | 'toggle-pixel-grid'
+  | 'toggle-layout-grids'
   | 'toggle-layers'
   | 'toggle-design'
   | 'collapse-layers'
@@ -101,6 +102,14 @@ export function shortcutAction(
   // Ctrl+⇧+? (Figma's shortcut for the shortcuts panel), on any platform.
   if (e.ctrlKey && e.shiftKey && (key === '?' || e.code === 'Slash'))
     return 'show-shortcuts';
+
+  // Layout grids: ⌃G on macOS, Ctrl+⇧4 elsewhere (Ctrl+G groups there).
+  if (
+    mac
+      ? e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.code === 'KeyG'
+      : e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'Digit4'
+  )
+    return 'toggle-layout-grids';
 
   if (e.altKey && !mod && !otherMod) {
     if (e.shiftKey && e.code === 'KeyA') return 'remove-auto-layout';

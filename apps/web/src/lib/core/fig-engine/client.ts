@@ -9,6 +9,12 @@
  */
 
 import type { CollectionInfo, DesignInfo, StyleInfo } from './design-types';
+import type {
+  Exportable,
+  ExportedFile,
+  ExportRequest,
+  LayoutAids,
+} from './handoff-types';
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import type { PrototypeInfo } from './prototype-types';
 import type {
@@ -337,6 +343,41 @@ export class FigEngine {
 
   search(page: number, query: string, limit = 200): Promise<SearchHit[]> {
     return this.query('search', page, query, limit);
+  }
+
+  /** The page's guides and its frames' layout grids and guides. */
+  layoutAids(page: number): Promise<LayoutAids> {
+    return this.query('layoutAids', page);
+  }
+
+  /** A layer and the layers inside it with export presets. */
+  exportables(page: number, id: string): Promise<Exportable[]> {
+    return this.query('exportables', page, id);
+  }
+
+  /** Layers exported with presets: one file, or a ZIP of several. */
+  async exportFiles(
+    page: number,
+    request: ExportRequest
+  ): Promise<ExportedFile> {
+    const r = await this.primary.request({
+      kind: 'exportFiles',
+      page,
+      request: JSON.stringify(request),
+    });
+    if (r.kind !== 'file') throw new Error('nothing to export');
+    return {
+      name: r.name,
+      mime: r.mime,
+      blob: new Blob([r.bytes], { type: r.mime }),
+    };
+  }
+
+  /** "Export frames to PDF": the page's top-level frames, a page each. */
+  async exportFramesPdf(page: number): Promise<Blob> {
+    const r = await this.primary.request({ kind: 'exportFramesPdf', page });
+    if (r.kind !== 'file') throw new Error('nothing to export');
+    return new Blob([r.bytes], { type: 'application/pdf' });
   }
 
   /** The page's flows, screens, and layers with interactions. */
