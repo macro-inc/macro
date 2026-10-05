@@ -137,6 +137,11 @@ impl NodeType {
         )
     }
 
+    /// Text, laid out in lines or along a path.
+    pub fn is_text(self) -> bool {
+        matches!(self, NodeType::Text | NodeType::TextPath)
+    }
+
     /// Nodes whose children are drawn (boolean operations draw only their
     /// combined geometry; their children are operands).
     pub fn draws_children(self) -> bool {
@@ -213,6 +218,9 @@ pub enum MaskType {
 pub struct PathRef {
     pub winding: WindingRule,
     pub blob: u32,
+    /// The vector region style it is filled with (an id in
+    /// [`Props::vector_styles`]); 0 for the node's own fills.
+    pub style: u32,
 }
 
 /// Per-corner radii, clockwise from the top left.
@@ -458,6 +466,15 @@ pub struct Props {
     pub fill_style: Option<Guid>,
     pub stroke_style: Option<Guid>,
     pub effect_style: Option<Guid>,
+    /// The layers Figma generates for FigJam objects (a sticky's or shape's
+    /// background and text, a connector's line and label): paints and text
+    /// from `nodeGenerationData` merged with the layout Figma derived for
+    /// them (`derivedImmutableFrameData`), each with its guid path.
+    pub generated: Option<Arc<[Props]>>,
+    /// Fills of a vector network's regions that have their own
+    /// (`vectorData.styleOverrideTable`), by the style id their geometry
+    /// carries.
+    pub vector_styles: Option<Arc<[StyleRun]>>,
     /// On an instance's override or derived layout entry: made by the
     /// editor (and written when saving); the file's own are kept as they
     /// are.
@@ -487,7 +504,8 @@ impl Props {
             text_layout, text_style,
             symbol, derived, swapped_symbol, prop_assignments, prop_refs, prop_defs,
             override_key, auto_layout, layout_child, export_settings, boolean_operation, vector_data, constraints,
-            description, is_state_group, fill_style, stroke_style, effect_style,
+            description, is_state_group, fill_style, stroke_style, effect_style, generated,
+            vector_styles,
         );
     }
 

@@ -415,6 +415,7 @@ pub(super) fn layout(
             lines: lines.len() as u32,
             first_baseline: baselines.first().map(|b| b.y),
             baselines: baselines.into(),
+            ..TextLayout::default()
         },
         box_size,
     )

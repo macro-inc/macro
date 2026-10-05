@@ -30,7 +30,13 @@ already computed: vector and stroke outlines as command blobs, glyph outlines
 and positions for text, and the resolved layout of every instance sublayer
 (`derivedSymbolData`). The engine draws from that derived data rather than
 re-running Figma's layout, which is what makes renders match Figma without
-fonts or an auto-layout engine.
+fonts or an auto-layout engine. FigJam objects (stickies, shapes with text,
+connectors) store their visible layers the same way: paints and text in
+`nodeGenerationData`, geometry and glyphs in `derivedImmutableFrameData`,
+which the scene builds as generated layers. Older files keep image fills in
+the message's blobs (`Image.dataBlob`). Nodes using shared styles draw the
+style's paints, and image paints apply their adjustments (exposure,
+contrast, and the rest) with curves calibrated against Figma's renders.
 
 ## Design
 

@@ -305,13 +305,11 @@ impl Painter<'_> {
         let ts = Transform::from_translate(-x as f32, -y as f32)
             .pre_concat(self.node_transform(i, surface).to_skia());
         let props = self.props(i);
-        if props.node_type() == crate::model::NodeType::Text {
+        if props.node_type().is_text() {
             if let Some(layout) = &props.text_layout {
                 for g in layout.glyphs.iter() {
                     if let Some(p) = g.blob.and_then(|b| self.doc.blobs.path(b)) {
-                        let gts = ts
-                            .pre_translate(g.x, g.y)
-                            .pre_scale(g.font_size, -g.font_size);
+                        let gts = ts.pre_concat(g.to_node().to_skia());
                         mask.fill_path(&p.path, tiny_skia::FillRule::Winding, true, gts);
                     }
                 }

@@ -31,6 +31,10 @@ pub struct SceneNode {
     pub props: PropSource,
     pub parent: Option<SceneIdx>,
     pub children: Vec<SceneIdx>,
+    /// The layers Figma generates for a FigJam object ([`Props::generated`]),
+    /// drawn before its children. They are not layers of the document, so
+    /// they are kept apart from `children`.
+    pub generated: Vec<SceneIdx>,
     /// Node → page coordinates.
     pub world: Affine,
     /// Page-space bounds of everything the node draws (effects included).
@@ -40,6 +44,13 @@ pub struct SceneNode {
     /// For instances: what their sublayers were built from (see
     /// [`instance_feed`]), to tell a move from a change in what they show.
     feed: u64,
+}
+
+impl SceneNode {
+    /// The nodes directly below this one: generated layers and children.
+    pub fn below(&self) -> impl Iterator<Item = SceneIdx> + '_ {
+        self.generated.iter().chain(&self.children).copied()
+    }
 }
 
 /// A fingerprint of what an instance's sublayers are built from: its
@@ -234,9 +245,12 @@ impl Scene {
 
     /// Bounds of node `i` from its own geometry and its children's bounds.
     fn node_bounds(&self, doc: &Document, i: SceneIdx) -> Rect {
-        let own = self.own_bounds(doc, i);
+        let mut own = self.own_bounds(doc, i);
         let props = self.props(doc, i);
         let node = &self.nodes[i as usize];
+        for &g in &node.generated {
+            own = own.union(&self.nodes[g as usize].bounds);
+        }
         let mut content = Rect::EMPTY;
         if props.node_type().draws_children() {
             for &c in &node.children {
@@ -351,7 +365,7 @@ impl Scene {
                 let mut stack: Vec<SceneIdx> = if dx == 0.0 && dy == 0.0 {
                     Vec::new()
                 } else {
-                    self.nodes[i as usize].children.clone()
+                    self.nodes[i as usize].below().collect()
                 };
                 while let Some(n) = stack.pop() {
                     let node = &mut self.nodes[n as usize];
@@ -360,7 +374,7 @@ impl Scene {
                     if !node.bounds.is_empty() {
                         node.bounds = node.bounds.translate(dx, dy);
                     }
-                    stack.extend(node.children.iter().copied());
+                    stack.extend(node.below());
                 }
                 self.nodes[i as usize].bounds = self.node_bounds(doc, i);
                 dirty.insert(i);
@@ -381,7 +395,7 @@ impl Scene {
                     Affine::IDENTITY
                 };
                 order.push(n);
-                stack.extend(self.nodes[n as usize].children.iter().copied());
+                stack.extend(self.nodes[n as usize].below());
             }
             // Bounds bottom-up within the subtree.
             for &n in order.iter().rev() {
@@ -463,7 +477,7 @@ impl Scene {
         }
         let size = props.size();
         let node_type = props.node_type();
-        if node_type == NodeType::Text {
+        if node_type.is_text() {
             local = local.union(&text_bounds(props, size));
         } else if (has_fills || has_strokes || !props.effects().is_empty())
             && local.is_empty()
@@ -515,7 +529,12 @@ impl Scene {
 }
 
 fn text_bounds(props: &Props, size: Vec2) -> Rect {
-    let mut r = Rect::new(0.0, 0.0, size.x.max(0.0), size.y.max(0.0));
+    // An empty box (a FigJam object's unused label) covers nothing.
+    let mut r = if size.x > 0.0 || size.y > 0.0 {
+        Rect::new(0.0, 0.0, size.x.max(0.0), size.y.max(0.0))
+    } else {
+        Rect::EMPTY
+    };
     if let Some(layout) = &props.text_layout {
         for g in layout.glyphs.iter() {
             let fs = f64::from(g.font_size);
@@ -571,6 +590,7 @@ impl<'a> Builder<'a> {
             props,
             parent,
             children: Vec::new(),
+            generated: Vec::new(),
             world: Affine::IDENTITY,
             bounds: Rect::EMPTY,
             path,
@@ -582,10 +602,45 @@ impl<'a> Builder<'a> {
         i
     }
 
+    /// Adds the generated layers of the FigJam object at scene node `at`.
+    fn add_generated(&mut self, at: SceneIdx) {
+        let node = &self.nodes[at as usize];
+        let props = match &node.props {
+            PropSource::Doc(n) => self.doc.props(*n),
+            PropSource::Owned(p) => p,
+        };
+        let Some(layers) = props.generated.clone() else {
+            return;
+        };
+        let src = node.src;
+        let (root, prefix): (Guid, Arc<[Guid]>) = match &node.path {
+            Some((root, path)) => (*root, path.clone()),
+            None => (props.guid.unwrap_or_default(), Arc::from([] as [Guid; 0])),
+        };
+        for layer in layers.iter() {
+            let mut path = prefix.to_vec();
+            path.extend(layer.guid_path.iter().flat_map(|p| p.iter().copied()));
+            let i = self.nodes.len() as SceneIdx;
+            self.nodes.push(SceneNode {
+                src,
+                props: PropSource::Owned(Box::new(layer.clone())),
+                parent: Some(at),
+                children: Vec::new(),
+                generated: Vec::new(),
+                world: Affine::IDENTITY,
+                bounds: Rect::EMPTY,
+                path: Some((root, path.into())),
+                feed: 0,
+            });
+            self.nodes[at as usize].generated.push(i);
+        }
+    }
+
     /// Adds a document node (not inside an instance) and its subtree.
     fn add_doc_node(&mut self, idx: NodeIdx, parent: SceneIdx) {
         let doc = self.doc;
         let i = self.push(idx, PropSource::Doc(idx), Some(parent), None);
+        self.add_generated(i);
         let props = doc.props(idx);
         if props.node_type() == NodeType::Instance {
             self.nodes[i as usize].feed = instance_feed(props);
@@ -666,23 +721,21 @@ impl<'a> Builder<'a> {
         levels.pop();
     }
 
-    /// An override that only names a shared style takes the style's paints.
+    /// An override that names a shared style takes the style's paints (its
+    /// own copy may be stale, as on nodes; see `document::resolve_styles`).
     fn apply_styles(&self, p: &mut Props, o: &Props) {
         let style = |g: Option<Guid>| g.and_then(|g| self.doc.find(g)).map(|i| self.doc.props(i));
-        if o.fills.is_none()
-            && let Some(s) = style(o.fill_style)
+        if let Some(s) = style(o.fill_style)
             && s.fills.is_some()
         {
             p.fills = s.fills.clone();
         }
-        if o.strokes.is_none()
-            && let Some(s) = style(o.stroke_style)
+        if let Some(s) = style(o.stroke_style)
             && s.fills.is_some()
         {
             p.strokes = s.fills.clone();
         }
-        if o.effects.is_none()
-            && let Some(s) = style(o.effect_style)
+        if let Some(s) = style(o.effect_style)
             && s.effects.is_some()
         {
             p.effects = s.effects.clone();
@@ -758,6 +811,7 @@ impl<'a> Builder<'a> {
             None => PropSource::Doc(idx),
         };
         let i = self.push(idx, source, Some(parent), Some((root, path_arc)));
+        self.add_generated(i);
         let is_instance = match &self.nodes[i as usize].props {
             PropSource::Owned(p) => p.node_type() == NodeType::Instance,
             PropSource::Doc(n) => doc.props(*n).node_type() == NodeType::Instance,

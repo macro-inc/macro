@@ -62,6 +62,22 @@ pub struct Glyph {
     pub emoji: Option<Arc<[u32]>>,
 }
 
+impl Glyph {
+    /// Outline (em units, y up) → node coordinates: scaled to the font
+    /// size at the glyph's origin, turned with text set along a path.
+    pub fn to_node(&self) -> super::geom::Affine {
+        use super::geom::Affine;
+        let fs = f64::from(self.font_size);
+        let at = Affine::translate(f64::from(self.x), f64::from(self.y));
+        let at = if self.rotation == 0.0 {
+            at
+        } else {
+            at.mul(&Affine::rotate(-f64::from(self.rotation)))
+        };
+        at.mul(&Affine::scale(fs, -fs))
+    }
+}
+
 /// Underlines and strikethroughs, as rectangles in node coordinates.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Decoration {
@@ -93,6 +109,9 @@ pub struct TextLayout {
     pub layout_size: Option<Vec2>,
     /// Number of lines (from the baselines).
     pub lines: u32,
+    /// Text that does not fit is cut off at this character, and an ellipsis
+    /// drawn after what shows (`truncationStartIndex`).
+    pub truncated_at: Option<u32>,
     /// Where Figma puts the first line's baseline (its top plus ascent),
     /// which auto layout aligns on.
     pub first_baseline: Option<f32>,
