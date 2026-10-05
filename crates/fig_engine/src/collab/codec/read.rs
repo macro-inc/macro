@@ -6,8 +6,8 @@ use super::{
     dec_winding,
 };
 use crate::model::{
-    Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
-    Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
+    Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting,
+    Glyph, Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
     Vec2,
 };
@@ -261,6 +261,9 @@ impl<'a> Reader<'a> {
                     font_style: r.opt_arc_str()?,
                     font_size: r.opt(Self::f32)?,
                     decoration: r.opt_arc_str()?,
+                    letter_spacing: r.opt(|r| Ok((r.f32()?, r.arc_str()?)))?,
+                    line_height: r.opt(|r| Ok((r.f32()?, r.arc_str()?)))?,
+                    case: r.opt_arc_str()?,
                 })
             })?,
         })
@@ -290,6 +293,18 @@ impl<'a> Reader<'a> {
             layout_size: self.opt(Self::vec2)?,
             lines: self.u32()?,
             first_baseline: self.opt(Self::f32)?,
+            baselines: self.arc_list(|r| {
+                Ok(Baseline {
+                    first_char: r.u32()?,
+                    end_char: r.u32()?,
+                    x: r.f32()?,
+                    y: r.f32()?,
+                    width: r.f32()?,
+                    line_y: r.f32()?,
+                    line_height: r.f32()?,
+                    line_ascent: r.f32()?,
+                })
+            })?,
         })
     }
 

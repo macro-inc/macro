@@ -5,8 +5,8 @@ use super::{
     enc_node_type, enc_prop_field, enc_scale_mode, enc_winding,
 };
 use crate::model::{
-    Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
-    Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
+    Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting,
+    Glyph, Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
     Vec2,
 };
@@ -254,6 +254,9 @@ impl<'a> Writer<'a> {
                 font_style,
                 font_size,
                 decoration,
+                letter_spacing,
+                line_height,
+                case,
             } = run;
             w.u32(*id);
             w.opt(fills, |w, f| w.paints(f));
@@ -261,6 +264,13 @@ impl<'a> Writer<'a> {
             w.opt_str(font_style);
             w.opt(font_size, |w, s| w.f32(*s));
             w.opt_str(decoration);
+            for m in [letter_spacing, line_height] {
+                w.opt(m, |w, (v, unit)| {
+                    w.f32(*v);
+                    w.str(unit);
+                });
+            }
+            w.opt_str(case);
         });
     }
 
@@ -271,6 +281,7 @@ impl<'a> Writer<'a> {
             layout_size,
             lines,
             first_baseline,
+            baselines,
         } = t;
         self.list(glyphs, |w, g| {
             let Glyph {
@@ -306,6 +317,23 @@ impl<'a> Writer<'a> {
         self.opt(layout_size, |w, s| w.vec2(s));
         self.u32(*lines);
         self.opt(first_baseline, |w, v| w.f32(*v));
+        self.list(baselines, |w, b| {
+            let Baseline {
+                first_char,
+                end_char,
+                x,
+                y,
+                width,
+                line_y,
+                line_height,
+                line_ascent,
+            } = b;
+            w.u32(*first_char);
+            w.u32(*end_char);
+            for v in [x, y, width, line_y, line_height, line_ascent] {
+                w.f32(*v);
+            }
+        });
     }
 
     fn text_style(&mut self, t: &TextStyle) {

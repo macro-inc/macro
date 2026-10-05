@@ -19,17 +19,18 @@ name = "fig_render"
 required-features = ["cli"]
 
 [dependencies]
+brotli-decompressor = { workspace = true }
 clap = { workspace = true, optional = true }
 gif = { workspace = true }
 image-webp = { workspace = true }
 miniz_oxide = { workspace = true }
 png = { workspace = true }
 ruzstd = { workspace = true }
+skrifa = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tiny-skia = { workspace = true }
-ttf-parser = { workspace = true, features = ["variable-fonts"] }
 zune-core = { workspace = true }
 zune-jpeg = { workspace = true }
 

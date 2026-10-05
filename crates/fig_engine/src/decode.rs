@@ -170,7 +170,18 @@ pub fn restrict_schema(schema: &mut Schema) {
             "rotation",
         ],
     );
-    schema.keep_only("Baseline", &["firstCharacter", "lineY", "lineAscent"]);
+    schema.keep_only(
+        "Baseline",
+        &[
+            "position",
+            "width",
+            "lineY",
+            "lineHeight",
+            "lineAscent",
+            "firstCharacter",
+            "endCharacter",
+        ],
+    );
     schema.keep_only("Image", &["hash", "dataBlob"]);
     schema.keep_only(
         "SymbolData",
@@ -360,6 +371,9 @@ fn text_content(m: MsgRef) -> TextContent {
                 font_style: font.and_then(|f| f.str("style")).map(Into::into),
                 font_size: s.f32("fontSize"),
                 decoration: s.enum_name("textDecoration").map(Into::into),
+                letter_spacing: number(s.msg("letterSpacing")).map(|(v, u)| (v, u.into())),
+                line_height: number(s.msg("lineHeight")).map(|(v, u)| (v, u.into())),
+                case: s.enum_name("textCase").map(Into::into),
             })
         })
         .collect();
@@ -413,9 +427,26 @@ fn text_layout(m: MsgRef) -> Option<TextLayout> {
             style_id: d.u32("styleID").unwrap_or(0),
         })
         .collect();
+    let baselines = m
+        .msgs("baselines")
+        .map(|b| {
+            let pos = b.msg("position").map(vec2).unwrap_or_default();
+            Baseline {
+                first_char: b.u32("firstCharacter").unwrap_or(0),
+                end_char: b.u32("endCharacter").unwrap_or(0),
+                x: pos.x as f32,
+                y: pos.y as f32,
+                width: b.f32("width").unwrap_or(0.0),
+                line_y: b.f32("lineY").unwrap_or(0.0),
+                line_height: b.f32("lineHeight").unwrap_or(0.0),
+                line_ascent: b.f32("lineAscent").unwrap_or(0.0),
+            }
+        })
+        .collect();
     Some(TextLayout {
         glyphs,
         decorations,
+        baselines,
         layout_size: m.msg("layoutSize").map(vec2),
         lines: m.list("baselines").count() as u32,
         first_baseline: m

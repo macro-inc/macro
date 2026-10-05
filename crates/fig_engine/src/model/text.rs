@@ -26,6 +26,23 @@ pub struct StyleRun {
     pub font_style: Option<Arc<str>>,
     pub font_size: Option<f32>,
     pub decoration: Option<Arc<str>>,
+    /// `(value, "PIXELS" | "PERCENT")`.
+    pub letter_spacing: Option<(f32, Arc<str>)>,
+    /// `(value, "PIXELS" | "PERCENT" | "RAW")`.
+    pub line_height: Option<(f32, Arc<str>)>,
+    /// `ORIGINAL`, `UPPER`, `LOWER`, or `TITLE`.
+    pub case: Option<Arc<str>>,
+}
+
+impl StyleRun {
+    /// Whether the run overrides nothing (its characters take the node's
+    /// style).
+    pub fn is_plain(&self) -> bool {
+        StyleRun {
+            id: self.id,
+            ..StyleRun::default()
+        } == *self
+    }
 }
 
 /// One positioned glyph.
@@ -52,6 +69,22 @@ pub struct Decoration {
     pub style_id: u32,
 }
 
+/// One line of laid out text.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Baseline {
+    /// The line's characters (UTF-16 units), its line break included.
+    pub first_char: u32,
+    pub end_char: u32,
+    /// Where the line starts on its baseline, in node coordinates.
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    /// Top of the line box and its height.
+    pub line_y: f32,
+    pub line_height: f32,
+    pub line_ascent: f32,
+}
+
 /// The layout Figma derived for a text node.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextLayout {
@@ -63,6 +96,8 @@ pub struct TextLayout {
     /// Where Figma puts the first line's baseline (its top plus ascent),
     /// which auto layout aligns on.
     pub first_baseline: Option<f32>,
+    /// The lines, top to bottom (empty when the file stores none).
+    pub baselines: Arc<[Baseline]>,
 }
 
 /// The base style of a text node, for the inspector.
