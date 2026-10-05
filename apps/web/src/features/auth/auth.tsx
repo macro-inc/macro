@@ -23,6 +23,7 @@ import { MobileWebSignupView } from './views/mobile-web-signup-view';
  */
 export function Login(props: { signupMode?: boolean }) {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const email = typeof params.email === 'string' ? params.email : undefined;
   const desktopSignup = () =>
     props.signupMode === true && !isMobile() && !isNativeMobilePlatform();
@@ -47,6 +48,7 @@ export function Login(props: { signupMode?: boolean }) {
             ? (slots) => <OnboardingSignup {...slots} />
             : undefined
         }
+        onSignIn={() => navigate('/login')}
         signedIn={(user) => <PostAuthGate user={user} />}
       />
     </AuthProvider>

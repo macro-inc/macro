@@ -94,7 +94,8 @@ New desktop users enter the same flow from
 open `/app/signup`. Existing members and native mobile keep their existing routes.
 
 Signed-out `/app/signup` starts at the workspace color picker, followed by feature
-interests and security. No account is required for these slides. At the work-email
+interests and security. No account is required for these slides. Below the color
+picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
 step, Connect work email uses Google sign-up to create the Macro account and link
 the primary inbox. This step offers Google sign-up only, with no alternate email
 button. The chosen accent and work step survive the OAuth
