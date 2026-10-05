@@ -1,7 +1,9 @@
-//! Presentation files kept as document versions: the newest version's bytes
-//! in the document storage bucket, and new versions written the way the
-//! storage service's `simple_save` writes them.
+//! Files of single-file documents kept as document versions: the newest
+//! version's bytes in the document storage bucket, and new versions written
+//! the way the storage service's `simple_save` writes them. Presentations
+//! are read and written; designs are read.
 
+use crate::domain::design::DesignFiles;
 use crate::domain::presentation::PresentationFiles;
 use anyhow::Context;
 use aws_sdk_s3::primitives::ByteStream;
@@ -11,15 +13,15 @@ use sqlx::PgPool;
 
 const PPTX_MIME: &str = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
-/// Reads and writes presentation versions through Postgres and S3.
+/// Reads and writes document versions through Postgres and S3.
 #[derive(Clone)]
-pub struct S3PresentationFiles {
+pub struct S3DocumentFiles {
     db: PgPool,
     s3: aws_sdk_s3::Client,
     bucket: String,
 }
 
-impl S3PresentationFiles {
+impl S3DocumentFiles {
     /// Construct the adapter over the document storage bucket.
     pub fn new(db: PgPool, s3: aws_sdk_s3::Client, bucket: impl Into<String>) -> Self {
         Self {
@@ -28,18 +30,20 @@ impl S3PresentationFiles {
             bucket: bucket.into(),
         }
     }
-}
 
-#[async_trait::async_trait]
-impl PresentationFiles for S3PresentationFiles {
-    #[tracing::instrument(err, skip(self))]
-    async fn read(&self, document_id: &str) -> anyhow::Result<Vec<u8>> {
+    /// The latest version's bytes of a document of type `expected`.
+    async fn read_latest(
+        &self,
+        document_id: &str,
+        expected: FileType,
+        kind: &str,
+    ) -> anyhow::Result<Vec<u8>> {
         let document = macro_db_client::document::get_basic_document(&self.db, document_id)
             .await
             .context("loading the document")?;
         anyhow::ensure!(
-            document.file_type.as_deref() == Some(FileType::Pptx.as_str()),
-            "the document is not a PowerPoint (.pptx) presentation"
+            document.file_type.as_deref() == Some(expected.as_str()),
+            "the document is not a {kind}"
         );
         let (version, _) =
             macro_db_client::document::get_latest_document_version_id(&self.db, document_id)
@@ -53,14 +57,27 @@ impl PresentationFiles for S3PresentationFiles {
             .key(&key)
             .send()
             .await
-            .context("reading the presentation file")?;
+            .with_context(|| format!("reading the {kind} file"))?;
         Ok(object
             .body
             .collect()
             .await
-            .context("downloading the presentation file")?
+            .with_context(|| format!("downloading the {kind} file"))?
             .into_bytes()
             .to_vec())
+    }
+}
+
+#[async_trait::async_trait]
+impl PresentationFiles for S3DocumentFiles {
+    #[tracing::instrument(err, skip(self))]
+    async fn read(&self, document_id: &str) -> anyhow::Result<Vec<u8>> {
+        self.read_latest(
+            document_id,
+            FileType::Pptx,
+            "PowerPoint (.pptx) presentation",
+        )
+        .await
     }
 
     #[tracing::instrument(err, skip(self, bytes), fields(bytes = bytes.len()))]
@@ -104,5 +121,14 @@ impl PresentationFiles for S3PresentationFiles {
             return Err(anyhow::Error::new(error).context("uploading the presentation file"));
         }
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl DesignFiles for S3DocumentFiles {
+    #[tracing::instrument(err, skip(self))]
+    async fn read(&self, document_id: &str) -> anyhow::Result<Vec<u8>> {
+        self.read_latest(document_id, FileType::Fig, "Figma (.fig) design")
+            .await
     }
 }
