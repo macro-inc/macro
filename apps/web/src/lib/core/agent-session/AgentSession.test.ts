@@ -995,7 +995,7 @@ describe('AgentSession', () => {
   });
 
   describe('prompt telemetry', () => {
-    it('posts a prompt inside its span and ends it at the first agent output', async () => {
+    it('posts a prompt inside its span and ends it at the first painted agent text', async () => {
       let postedUnder: RecordedSpan | undefined;
       harness.control.mockImplementation(
         async (_id: string, request: { actionId: string }) => {
@@ -1047,6 +1047,31 @@ describe('AgentSession', () => {
       ] satisfies FoldedStreamEvent[]);
       AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
       await settle();
+      expect(span.ends).toBe(0);
+      expect(span.attributes['agent.prompt.first_output_part']).toBe('thought');
+
+      fold.pushSession.mockResolvedValueOnce([
+        {
+          kind: 'update',
+          message: {
+            agentSessionId: SESSION,
+            turn: 1,
+            author: { kind: 'agent' },
+            requestId: null,
+            parts: [
+              { kind: 'thought', text: 'thinking' },
+              { kind: 'text', text: 'Hello' },
+            ],
+            stop: null,
+            pending: false,
+          },
+        },
+      ] satisfies FoldedStreamEvent[]);
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+      await settle();
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      );
 
       expect(span.ends).toBe(1);
       expect(span.attributes).toMatchObject({
@@ -1055,11 +1080,15 @@ describe('AgentSession', () => {
         'agent.prompt.action_id': actionId,
         'agent.prompt.turn': 1,
         'agent.prompt.first_output_part': 'thought',
-        'agent.prompt.outcome': 'output',
+        'agent.prompt.first_text_via': 'socket',
+        'agent.prompt.outcome': 'text',
       });
+      expect(span.attributes['agent.prompt.first_text_paint_at_ms']).toEqual(
+        expect.any(Number)
+      );
       live.release();
       expect(span.ends).toBe(1);
-      expect(span.attributes['agent.prompt.outcome']).toBe('output');
+      expect(span.attributes['agent.prompt.outcome']).toBe('text');
     });
 
     it('traces no action but a prompt', async () => {

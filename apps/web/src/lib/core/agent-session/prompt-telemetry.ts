@@ -1,6 +1,6 @@
 /**
  * Telemetry for sending a prompt: from the moment a person sends it to the
- * first agent output on screen, as one span.
+ * agent's first text on screen, as one span.
  *
  * Without it the flow is several unrelated traces (the create, the load, a
  * config control, the prompt control, the server's turn) and the waits in the
@@ -22,8 +22,10 @@ import { match } from 'ts-pattern';
 
 /** How a sent prompt ended, as far as this span is concerned. */
 export type PromptOutcome =
-  /** The agent produced its first output for the prompt's turn. */
-  | 'output'
+  /** The agent's first text for the prompt's turn was painted. */
+  | 'text'
+  /** The turn ended after reasoning or tool calls, without any text. */
+  | 'no_text'
   /** The turn ended before the agent produced anything. */
   | 'no_output'
   /** The prompt was never accepted: the create, a setting, or the POST failed. */
@@ -46,7 +48,38 @@ export type PromptStage =
   /** The log confirmed the prompt: its row came back over the socket. */
   | 'confirmed'
   /** The first agent message in the prompt's turn was folded. */
-  | 'first_output';
+  | 'first_output'
+  /** The turn's first agent text was folded. */
+  | 'first_text'
+  /** The frame after the first text was folded: what a person saw. */
+  | 'first_text_paint';
+
+/**
+ * When a batch of stored frames reached this browser, and how long after the
+ * server stored the newest of them. The lag compares the server's clock with
+ * this one, so it carries their skew: read it as a distribution.
+ */
+export type FrameDelivery = {
+  /**
+   * How the batch came: pushed over the realtime socket, or read back by a
+   * snapshot refetch after the socket missed it.
+   */
+  via: 'socket' | 'snapshot';
+  /** `performance.now()` when the batch arrived, before it was folded. */
+  receivedAt: number;
+  /** Milliseconds from the server storing the batch's newest frame. */
+  lagMs: number;
+};
+
+/** The delivery of a batch of stored rows, if it carries any. */
+export function frameDelivery(
+  via: FrameDelivery['via'],
+  rows: { createdAt: string }[]
+): FrameDelivery | undefined {
+  const storedAt = Math.max(...rows.map((row) => Date.parse(row.createdAt)));
+  if (!Number.isFinite(storedAt)) return undefined;
+  return { via, receivedAt: performance.now(), lagMs: Date.now() - storedAt };
+}
 
 /**
  * How long a prompt may wait for output before it is reported as stalled.
@@ -64,6 +97,8 @@ export class PromptTrace {
   readonly #actionIds = new Set<string>();
   /** The prompt's turn, once the log confirmed it. */
   #turn: number | undefined;
+  #output = false;
+  #text = false;
   #ended = false;
   #stallTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -124,13 +159,16 @@ export class PromptTrace {
     this.stage('accepted');
   }
 
-  /** Read fold events for the prompt's confirmation and its turn's first output. */
-  observe(events: FoldedStreamEvent[]): void {
+  /**
+   * Read fold events for the prompt's confirmation and its turn's first
+   * output and text. `delivery` is how the frames they came from arrived.
+   */
+  observe(events: FoldedStreamEvent[], delivery?: FrameDelivery): void {
     if (this.#ended) return;
     try {
       for (const event of events) {
         for (const message of messagesOf(event)) {
-          this.#observeMessage(message);
+          this.#observeMessage(message, delivery);
           if (this.#ended) return;
         }
       }
@@ -158,7 +196,7 @@ export class PromptTrace {
     }
   }
 
-  #observeMessage(message: FoldedMessage): void {
+  #observeMessage(message: FoldedMessage, delivery?: FrameDelivery): void {
     if (
       this.#turn === undefined &&
       message.author.kind === 'user' &&
@@ -170,17 +208,46 @@ export class PromptTrace {
       this.stage('confirmed', { turn: message.turn });
     }
     if (this.#turn === undefined || message.turn !== this.#turn) return;
-    if (message.author.kind === 'agent') {
+    if (message.author.kind === 'agent') this.#observeAgent(message, delivery);
+    if (message.stop && !this.#text) {
+      this.#set('agent.prompt.stop', message.stop.kind);
+      this.end(this.#output ? 'no_text' : 'no_output');
+    }
+  }
+
+  #observeAgent(message: FoldedMessage, delivery?: FrameDelivery): void {
+    if (!this.#output) {
+      this.#output = true;
       this.stage('first_output', {
         first_output_part: message.parts[0]?.kind ?? 'none',
       });
-      this.end('output');
+    }
+    const text = message.parts.some(
+      (part) => part.kind === 'text' && part.text.trim() !== ''
+    );
+    if (this.#text || !text) return;
+    this.#text = true;
+    this.stage(
+      'first_text',
+      delivery && {
+        first_text_via: delivery.via,
+        first_text_delivery_ms: delivery.lagMs,
+        first_text_fold_ms: Math.round(performance.now() - delivery.receivedAt),
+      }
+    );
+    // A hidden tab never paints, and never runs animation frames either.
+    if (documentHidden()) {
+      this.#set('agent.prompt.hidden', true);
+      this.end('text');
       return;
     }
-    if (message.stop) {
-      this.#set('agent.prompt.stop', message.stop.kind);
-      this.end('no_output');
-    }
+    // Two frames: the first runs before the paint the text lands in.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        this.stage('first_text_paint');
+        this.end('text');
+      })
+    );
   }
 
   #set(name: string, value: string | number | boolean): void {
@@ -191,6 +258,14 @@ export class PromptTrace {
       // See the module comment.
     }
   }
+}
+
+function documentHidden(): boolean {
+  return (
+    typeof document === 'undefined' ||
+    typeof requestAnimationFrame === 'undefined' ||
+    document.visibilityState === 'hidden'
+  );
 }
 
 function messagesOf(event: FoldedStreamEvent): FoldedMessage[] {

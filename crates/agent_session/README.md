@@ -76,6 +76,33 @@ prompt spans also split `agent.turn.lock_wait_ms`, `agent.turn.admission_wait_ms
 and `agent.turn.first_text_ms`; their legacy `ttft_ms` can include reasoning or
 a tool call, but excludes usage and tool-result events.
 
+### From the send click to the first painted text
+
+The web app's `agent.prompt` span (service `web-app`) covers one prompt end to
+end. Every harness request made inside it carries its `traceparent`, so the
+harness's request, `redis.process`, `invoke_agent` and `chat_streaming` spans
+join the same trace. Its `*_at_ms` attributes are milliseconds from the send:
+
+| Stage | Attribute | Where |
+| --- | --- | --- |
+| New session created, loaded, configured | `agent.prompt.created_at_ms`, `loaded_at_ms`, `configured_at_ms` | browser |
+| Control POST answered, including dispatch to the runtime | `agent.prompt.accepted_at_ms` | browser |
+| `session/prompt` → first model chunk, per call | `macro.genai.chat.time_to_first_chunk_ms` on `chat_streaming` | harness |
+| `session/prompt` → first text at the session actor | `macro.genai.turn.time_to_first_text_ms` on `invoke_agent` | harness |
+| First agent output of any kind folded | `agent.prompt.first_output_at_ms` | browser |
+| First-text frame stored → received (gateway fan-out) | `agent.prompt.first_text_delivery_ms`, with `agent.prompt.first_text_via` (`socket`, or `snapshot` when a refetch caught what the socket missed) | browser |
+| Received → folded | `agent.prompt.first_text_fold_ms` | browser |
+| First text folded | `agent.prompt.first_text_at_ms` | browser |
+| First text painted | `agent.prompt.first_text_paint_at_ms` | browser |
+
+`agent.prompt.outcome` says how the span ended: `text`, `no_text` (reasoning
+or tool calls only), `no_output`, `failed`, `released`, or `stalled` (five
+minutes). A hidden tab never paints, so it ends at the first text with
+`agent.prompt.hidden`. The delivery stage compares the server's clock with the
+browser's, so read it as a distribution. A turn that calls tools before
+answering spends that time between the first model chunk and the first text:
+`macro.genai.chat.first_chunk_kind` says what each call streamed first.
+
 To investigate a slow first session in Datadog, correlate by `agent.session.id`,
 report sample counts and
 p50/p95 for initialization and first text by harness/model. Include the fraction

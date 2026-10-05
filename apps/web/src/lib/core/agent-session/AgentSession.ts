@@ -50,7 +50,7 @@ import type {
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { v7 as uuidv7 } from 'uuid';
 import { SessionLoadTrace, traceAcquire } from './load-telemetry';
-import { PromptTrace } from './prompt-telemetry';
+import { frameDelivery, PromptTrace } from './prompt-telemetry';
 import { publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
@@ -678,6 +678,16 @@ export class AgentSession {
   }
 
   private apply(inputs: FoldInput[]): Promise<void> {
+    // Taken now, not after the chain: waiting for earlier pushes is part of
+    // what a prompt's fold stage costs.
+    const pushed = inputs.flatMap((input) =>
+      input.kind === 'confirmed' ? [input.row] : []
+    );
+    const snapshot = inputs.find((input) => input.kind === 'snapshot');
+    const delivery =
+      pushed.length > 0
+        ? frameDelivery('socket', pushed)
+        : snapshot && frameDelivery('snapshot', snapshot.rows);
     const run = this.chain.then(async () => {
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);
@@ -686,7 +696,7 @@ export class AgentSession {
       if (metadata) this.setTurn(metadata.metadata.turn);
       for (const listener of this.listeners) listener(events);
       for (const prompt of this.prompts) {
-        prompt.observe(events);
+        prompt.observe(events, delivery);
         if (prompt.ended) this.prompts.delete(prompt);
       }
     });
