@@ -49,6 +49,18 @@ enum Command {
     /// Time typical edits (a drag step, a fill change) and the scene update
     /// after each.
     BenchEdit { files: Vec<PathBuf> },
+    /// Time opening each file, building its largest page, rendering that
+    /// page to fit a screen, and rendering tiles at 1× and 2×; then print
+    /// peak memory.
+    Bench {
+        /// Tile side in device pixels.
+        #[arg(long, default_value_t = 256)]
+        tile: u32,
+        /// Tiles per side of the square grid rendered at each scale.
+        #[arg(long, default_value_t = 4)]
+        grid: i32,
+        files: Vec<PathBuf>,
+    },
     /// Lay out every auto layout frame again and report the frames whose
     /// children the engine places differently from Figma.
     Relayout {
@@ -87,6 +99,12 @@ fn main() {
             for path in files {
                 override_text(&path);
             }
+        }
+        Command::Bench { tile, grid, files } => {
+            for path in files {
+                bench(&path, tile, grid);
+            }
+            println!("peak rss {} MB", peak_rss_kb() / 1024);
         }
         Command::BenchEdit { files } => {
             for path in files {
@@ -656,5 +674,116 @@ fn bench_edit(path: &Path) {
         fill.1,
         resize.0,
         resize.1
+    );
+}
+
+/// The process's peak resident set size in KB (Linux; 0 elsewhere).
+fn peak_rss_kb() -> u64 {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find_map(|l| l.strip_prefix("VmHWM:"))
+                .and_then(|v| v.trim().trim_end_matches("kB").trim().parse().ok())
+        })
+        .unwrap_or(0)
+}
+
+fn bench(path: &Path, tile: u32, grid: i32) {
+    let Ok(bytes) = std::fs::read(path) else {
+        eprintln!("{}: unreadable", path.display());
+        return;
+    };
+    let t = Instant::now();
+    let Ok(container) = Container::open(&bytes) else {
+        println!("{}: not a .fig file", stem(path));
+        return;
+    };
+    let unpack = t.elapsed();
+    let t = Instant::now();
+    let doc = match Document::from_container(container) {
+        Ok(d) => d,
+        Err(e) => {
+            println!("{}: ERROR {e}", stem(path));
+            return;
+        }
+    };
+    let decode = t.elapsed();
+    drop(bytes);
+    // The page with the most layers, and how long its first build took.
+    let (mut page, mut most, mut first_build) = (doc.pages[0], 0, std::time::Duration::ZERO);
+    for &p in &doc.pages {
+        let t = Instant::now();
+        let n = Scene::build(&doc, p).nodes.len();
+        if n > most {
+            (page, most, first_build) = (p, n, t.elapsed());
+        }
+    }
+    let t = Instant::now();
+    let scene = Scene::build(&doc, page);
+    let rebuild = t.elapsed();
+    let bounds = scene.node(scene.root()).bounds;
+    let opts = RenderOptions {
+        outline: false,
+        background: Some(doc.page_background(page)),
+    };
+    let mut images = ImageStore::default();
+    // The whole page fitted to a 1920×1080 screen, cold and then warm.
+    let scale = (1920.0 / bounds.w).min(1080.0 / bounds.h).min(4.0);
+    let fit = Viewport {
+        x: bounds.x,
+        y: bounds.y,
+        scale,
+        width: ((bounds.w * scale).ceil() as u32).clamp(1, 1920),
+        height: ((bounds.h * scale).ceil() as u32).clamp(1, 1080),
+    };
+    let t = Instant::now();
+    render::render(&doc, &scene, &mut images, &fit, opts);
+    let fit_cold = t.elapsed();
+    let t = Instant::now();
+    render::render(&doc, &scene, &mut images, &fit, opts);
+    let fit_warm = t.elapsed();
+    // A grid of tiles around the center of the largest top-level layer.
+    let focus = scene
+        .node(scene.root())
+        .children
+        .iter()
+        .map(|&c| scene.node(c).bounds)
+        .max_by(|a, b| (a.w * a.h).total_cmp(&(b.w * b.h)))
+        .unwrap_or(bounds);
+    let mut tiles = Vec::new();
+    for s in [1.0, 2.0] {
+        let side = f64::from(tile) / s;
+        let cx = ((focus.x + focus.w / 2.0) / side).floor() as i32;
+        let cy = ((focus.y + focus.h / 2.0) / side).floor() as i32;
+        let t = Instant::now();
+        let mut slowest = std::time::Duration::ZERO;
+        for iy in cy - grid / 2..cy - grid / 2 + grid {
+            for ix in cx - grid / 2..cx - grid / 2 + grid {
+                let vp = Viewport {
+                    x: f64::from(ix) * side,
+                    y: f64::from(iy) * side,
+                    scale: s,
+                    width: tile,
+                    height: tile,
+                };
+                let one = Instant::now();
+                render::render(&doc, &scene, &mut images, &vp, opts);
+                slowest = slowest.max(one.elapsed());
+            }
+        }
+        tiles.push(format!(
+            "{grid}x{grid} tiles of {tile} at {s}x {:?} (slowest {slowest:?})",
+            t.elapsed()
+        ));
+    }
+    println!(
+        "{}: unpack {unpack:?} decode {decode:?}; page {:?} ({most} layers) first build \
+         {first_build:?}, again {rebuild:?}; fit {}x{} cold {fit_cold:?} warm {fit_warm:?}; {}",
+        stem(path),
+        doc.props(page).name(),
+        fit.width,
+        fit.height,
+        tiles.join(", ")
     );
 }
