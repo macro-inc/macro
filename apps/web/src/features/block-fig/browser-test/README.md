@@ -52,7 +52,10 @@ constraints, resizing several layers and rotating one, components
 detaching), adding pages, and read-only access. `fig-shapes` covers
 boolean operations and flattening, drawing with the pen and editing
 points, SVG export (compared with the PNG) and Copy as SVG, and copying
-layers into another file through the system clipboard. `fig-design-ui` covers
+layers into another file through the system clipboard. `fig-shortcuts`
+covers the pencil (⇧P), the design palette (⌘P, which never prints), ⌘. for
+the UI, aligning and distributing, opacity digits, and swapping fill and
+stroke. `fig-design-ui` covers
 the right-click menus, the color and paint pickers (gradients, dashes,
 reordering paints), mixed values for several layers, and the layers
 panel's range selection and arrow keys. `text-editing` covers the caret

@@ -107,9 +107,15 @@ test('runs actions from the actions menu (⌘P)', async ({ page }) => {
   await canvas.focus();
   const printed = await page.evaluateHandle(() => {
     const seen = { prevented: [] as boolean[] };
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyP') seen.prevented.push(e.defaultPrevented);
-    });
+    // After the viewer's own listener (capturing on the window too, it
+    // stops the event going further).
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (e.code === 'KeyP') seen.prevented.push(e.defaultPrevented);
+      },
+      true
+    );
     return seen;
   });
   await page.keyboard.press('Control+p');
