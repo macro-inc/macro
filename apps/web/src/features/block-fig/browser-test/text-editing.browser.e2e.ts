@@ -222,8 +222,14 @@ test('lists missing fonts and uses this computer’s', async ({ page }) => {
   ]);
   await page.getByTestId('fig-use-local-fonts').click();
   await expect(notice).toBeHidden();
-  const fonts = await page.evaluate(() => window.figFixture.engine()?.fonts());
-  expect(fonts?.find((f) => f.family === 'Nowhere Grotesk')?.status).toBe(
-    'AVAILABLE'
-  );
+  // The notice hides as soon as the font is found; every worker registers
+  // it a moment later.
+  await expect
+    .poll(async () => {
+      const fonts = await page.evaluate(() =>
+        window.figFixture.engine()?.fonts()
+      );
+      return fonts?.find((f) => f.family === 'Nowhere Grotesk')?.status;
+    })
+    .toBe('AVAILABLE');
 });
