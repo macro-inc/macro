@@ -110,6 +110,7 @@ function FigHost(props: {
               notifyInfo: (message) => toast.success(message),
               canEdit: props.canEdit,
               save: (bytes) => saveFigFile(props.documentId, bytes),
+              fileKey: props.documentId,
             }}
           >
             <FigViewer />

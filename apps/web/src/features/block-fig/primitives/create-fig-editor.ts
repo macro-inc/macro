@@ -10,10 +10,23 @@
  */
 
 import type { EditResult, FigEngine } from '@core/fig-engine/client';
-import type { NodeInfo, Rect, Sizing } from '@core/fig-engine/types';
+import type {
+  NodeInfo,
+  Rect,
+  Sizing,
+  VectorNetwork,
+} from '@core/fig-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
 import { type Alignment, alignOffset } from '../core/align';
+import type { BooleanOperation } from '../core/boolean';
+import {
+  type ClipboardMeta,
+  decodeClipboard,
+  encodeClipboard,
+  pasteParent,
+} from '../core/clipboard';
 import type { Measure } from '../core/type';
+import { type PenPoint, penNetwork } from '../core/vector';
 import type { FigViewer, Selected } from './create-fig-viewer';
 
 export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
@@ -137,7 +150,19 @@ export type Op =
       x: number;
       y: number;
     }
-  | { op: 'detach'; ids: string[] };
+  | { op: 'detach'; ids: string[] }
+  | { op: 'boolean'; ids: string[]; operation: BooleanOperation }
+  | { op: 'flatten'; ids: string[] }
+  | {
+      op: 'createVector';
+      parent: string;
+      index?: number;
+      /** Page coordinates. */
+      network: VectorNetwork;
+      name?: string;
+      props?: Patch;
+    }
+  | { op: 'setVector'; id: string; network: VectorNetwork };
 
 export interface FigEditorOptions {
   engine: FigEngine;
@@ -146,6 +171,8 @@ export interface FigEditorOptions {
   canEdit: () => boolean;
   /** Stores the edited file; absent when nothing can be saved. */
   save?: (bytes: Uint8Array) => Promise<void>;
+  /** Identifies the file to the clipboard (a document id). */
+  fileKey?: string;
   /** Called with each changed page area, to re-render it. */
   onDirty: (rect: Rect) => void;
   notifyError: (message: string) => void;
@@ -170,6 +197,17 @@ export function createFigEditor(options: FigEditorOptions) {
   const [saveState, setSaveState] = createSignal<SaveState>('saved');
   /** The text layer being typed into, if any. */
   const [editingText, setEditingText] = createSignal<string>();
+  /** The points of the path the pen is drawing (page coordinates). */
+  const [penPath, setPenPath] = createSignal<PenPoint[]>();
+  /**
+   * The layer whose points are being edited, its points (page
+   * coordinates), and the selected point.
+   */
+  const [vectorEdit, setVectorEdit] = createSignal<{
+    id: string;
+    network: VectorNetwork;
+    selected?: number;
+  }>();
   let clipboard: string[] = [];
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saving: Promise<void> | undefined;
@@ -399,16 +437,98 @@ export function createFigEditor(options: FigEditorOptions) {
     await apply(ops);
   };
 
+  /**
+   * ⌘C: the selected layers go on the system clipboard as Figma puts them
+   * there (they paste into other files and tabs), and are remembered for
+   * pasting here when the clipboard cannot be written.
+   */
   const copy = () => {
     clipboard = editableIds();
+    const ids = clipboard;
+    if (ids.length === 0) return;
+    const meta: ClipboardMeta = {
+      fileKey: options.fileKey ?? '',
+      pasteID: Math.floor(Math.random() * 2 ** 31),
+      dataType: 'scene',
+      ids,
+    };
+    const html = engine
+      .copy(viewer.page(), ids)
+      .then(
+        (copied) =>
+          new Blob([encodeClipboard({ meta, copied })], { type: 'text/html' })
+      );
+    // The item is handed over now, inside the key press, and filled in
+    // when the engine has written the layers.
+    try {
+      if (typeof ClipboardItem === 'undefined') return;
+      void navigator.clipboard
+        .write([new ClipboardItem({ 'text/html': html })])
+        .catch(() => {});
+    } catch {
+      // No clipboard access: pasting here still works.
+    }
   };
 
-  const paste = async () => {
+  /** Pastes the layers copied in this file (see `copy`). */
+  const pasteHere = async () => {
     if (clipboard.length === 0) return;
     const result = await apply([
       { op: 'duplicate', ids: clipboard, dx: 0, dy: 0 },
     ]);
     await selectCreated(result);
+  };
+
+  /**
+   * ⌘V: layers on the clipboard (copied here, in another file, or in
+   * Figma) are pasted by Figma's rules: into a selected frame, beside a
+   * selected layer, or onto the page, where they were when that is in view
+   * and in the middle of the view otherwise. Without layers on the
+   * clipboard, the ones copied here are pasted.
+   */
+  const paste = async (html?: string) => {
+    const payload = html ? decodeClipboard(html) : undefined;
+    if (!payload) {
+      await pasteHere();
+      return;
+    }
+    const page = viewer.pages[viewer.page()];
+    if (!enabled() || !page) return;
+    const selection = viewer.selected();
+    const rows =
+      selection.length > 0
+        ? await engine.rows(
+            viewer.page(),
+            selection.map((s) => s.id)
+          )
+        : [];
+    const sameFile =
+      !!payload.meta && payload.meta.fileKey === (options.fileKey ?? '');
+    const parent = pasteParent(
+      selection.map((s) => ({
+        ...s,
+        type: rows.find((r) => r.id === s.id)?.type ?? 'GROUP',
+      })),
+      page.id,
+      sameFile ? (payload.meta?.ids ?? []) : []
+    );
+    const c = viewer.camera();
+    const v = viewer.viewport();
+    const run = queue.then(async () => {
+      try {
+        const result = await engine.paste(viewer.page(), payload.copied, {
+          parent,
+          view: { x: c.x, y: c.y, w: v.w / c.zoom, h: v.h / c.zoom },
+        });
+        await settle(result);
+        return result;
+      } catch (e) {
+        options.notifyError(e instanceof Error ? e.message : String(e));
+        return undefined;
+      }
+    });
+    queue = run;
+    await selectCreated(await run);
   };
 
   /** Cut layers stay pasteable: the engine can copy a deleted layer. */
@@ -417,6 +537,120 @@ export function createFigEditor(options: FigEditorOptions) {
     if (clipboard.length === 0) return;
     await apply([{ op: 'delete', ids: clipboard }]);
     viewer.select([]);
+  };
+
+  // ---- shapes --------------------------------------------------------------
+
+  /** Union, Subtract, Intersect, Exclude (⌥⇧U, S, I, X). */
+  const booleanOp = async (operation: BooleanOperation) => {
+    const targets = editableIds();
+    if (targets.length === 0) return;
+    const result = await apply([{ op: 'boolean', ids: targets, operation }]);
+    await selectCreated(result);
+  };
+
+  /** ⌘E: the selection becomes one vector layer. */
+  const flatten = async () => {
+    const targets = editableIds();
+    if (targets.length === 0) return;
+    const result = await apply([{ op: 'flatten', ids: targets }]);
+    await selectCreated(result);
+  };
+
+  /** Adds a point to the pen's path. */
+  const penAdd = (point: PenPoint) =>
+    setPenPath((points) => [...(points ?? []), point]);
+
+  /** Sets the handle of the point the pen placed last (while dragging). */
+  const penHandle = (handle: { x: number; y: number }) =>
+    setPenPath((points) => {
+      if (!points || points.length === 0) return points;
+      const next = [...points];
+      next[next.length - 1] = { ...next[next.length - 1], handle };
+      return next;
+    });
+
+  /**
+   * Ends the pen's path (Enter, Escape, or a press on its first point,
+   * which closes it): a vector layer is made, in the frame under its first
+   * point, and selected.
+   */
+  const penFinish = async (closed = false) => {
+    const points = penPath();
+    setPenPath(undefined);
+    viewer.setTool('move');
+    if (!points || points.length < 2) return undefined;
+    const parent = await viewer.containerAt(points[0]);
+    const result = await apply([
+      {
+        op: 'createVector',
+        parent,
+        network: penNetwork(points, closed),
+      },
+    ]);
+    await selectCreated(result);
+    return result?.created[0];
+  };
+
+  /** Starts editing a layer's points (double-click or Enter, as in Figma). */
+  const editVector = async (id: string) => {
+    if (!enabled() || id.startsWith('I')) return false;
+    const network = await engine.vectorNetwork(viewer.page(), id);
+    if (!network) return false;
+    setVectorEdit({ id, network });
+    return true;
+  };
+
+  const endVectorEdit = () => setVectorEdit(undefined);
+
+  const selectVertex = (index: number | undefined) =>
+    setVectorEdit((v) => v && { ...v, selected: index });
+
+  /** A point or handle drag: the layer follows live; steps undo as one. */
+  const startVectorDrag = () => {
+    const key = `vector-${++dragKey}`;
+    let wanted: VectorNetwork | undefined;
+    let running = false;
+    const pump = async () => {
+      if (running) return;
+      running = true;
+      while (wanted) {
+        const network = wanted;
+        wanted = undefined;
+        const id = vectorEdit()?.id;
+        if (!id) break;
+        await apply([{ op: 'setVector', id, network }], key);
+      }
+      running = false;
+    };
+    return {
+      to(network: VectorNetwork) {
+        setVectorEdit((v) => v && { ...v, network });
+        wanted = network;
+        void pump();
+      },
+      async end() {
+        await pump();
+        await queue;
+      },
+    };
+  };
+
+  /**
+   * Replaces the points of the layer being edited (a point deleted, say);
+   * a layer left without points is deleted.
+   */
+  const setVectorNetwork = async (network: VectorNetwork) => {
+    const edit = vectorEdit();
+    if (!edit) return;
+    if (network.vertices.length === 0) {
+      endVectorEdit();
+      await apply([{ op: 'delete', ids: [edit.id] }]);
+      viewer.select([]);
+      return;
+    }
+    setVectorEdit({ ...edit, network, selected: undefined });
+    await apply([{ op: 'setVector', id: edit.id, network }]);
   };
 
   // ---- drags ---------------------------------------------------------------
@@ -659,6 +893,18 @@ export function createFigEditor(options: FigEditorOptions) {
   return {
     enabled,
     createLine,
+    booleanOp,
+    flatten,
+    penPath,
+    penAdd,
+    penHandle,
+    penFinish,
+    vectorEdit,
+    editVector,
+    endVectorEdit,
+    selectVertex,
+    startVectorDrag,
+    setVectorNetwork,
     canUndo,
     canRedo,
     saveState,

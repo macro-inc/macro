@@ -16,6 +16,8 @@ export interface FigViewerContext {
   canEdit?: () => boolean;
   /** Stores the edited `.fig` as a new version. */
   save?: (bytes: Uint8Array) => Promise<void>;
+  /** Identifies the file on the clipboard (the document id). */
+  fileKey?: string;
 }
 
 const Context = createContext<FigViewerContext>();

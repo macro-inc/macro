@@ -24,6 +24,7 @@ import Plus from '@phosphor/plus.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
+import type { BooleanOperation } from '../core/boolean';
 import { cssColor, cssFor } from '../core/css';
 import { formatMeasure } from '../core/measure';
 import { formatLetterSpacing, formatLineHeight } from '../core/type';
@@ -33,6 +34,7 @@ import {
   ConstraintControls,
   SizingControls,
 } from './auto-layout-controls';
+import { BooleanButtons } from './boolean-controls';
 import {
   NumberField,
   PaintEditRow,
@@ -325,7 +327,12 @@ export function DesignPanel(props: {
   onAlign?: (how: Alignment) => void;
   page: PageSummary | undefined;
   onExport: (scale: number) => void;
+  onExportSvg: () => void;
+  onCopySvg: () => void;
   onCopyPng: () => void;
+  /** Boolean operations on the selection; absent when read-only. */
+  onBoolean?: (operation: BooleanOperation) => void;
+  onFlatten?: () => void;
   onCopyText: (text: string) => void;
   /** Font families text can be set in. */
   fontFamilies?: readonly string[];
@@ -360,6 +367,24 @@ export function DesignPanel(props: {
           when={props.onAlign && props.selectionCount > 0 && tab() === 'design'}
         >
           <AlignRow onAlign={(how) => props.onAlign?.(how)} />
+        </Show>
+        <Show
+          when={
+            props.onBoolean &&
+            tab() === 'design' &&
+            (props.selectionCount > 1 ||
+              props.info?.type === 'BOOLEAN_OPERATION')
+          }
+        >
+          <BooleanButtons
+            current={
+              props.info?.type === 'BOOLEAN_OPERATION'
+                ? ((props.info.booleanOperation ?? 'UNION') as BooleanOperation)
+                : undefined
+            }
+            onBoolean={(op) => props.onBoolean?.(op)}
+            onFlatten={() => props.onFlatten?.()}
+          />
         </Show>
         <Show
           when={props.info}
@@ -856,9 +881,27 @@ export function DesignPanel(props: {
                       </Button>
                     )}
                   </For>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="fig-export-svg"
+                    onClick={props.onExportSvg}
+                  >
+                    <DownloadSimple />
+                    SVG
+                  </Button>
                   <Button variant="outline" size="sm" onClick={props.onCopyPng}>
                     <Copy />
                     Copy
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="fig-copy-svg"
+                    onClick={props.onCopySvg}
+                  >
+                    <Copy />
+                    Copy as SVG
                   </Button>
                 </div>
               </Section>

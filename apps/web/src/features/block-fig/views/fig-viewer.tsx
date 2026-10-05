@@ -27,6 +27,7 @@ import {
   shortcutAction,
   type ViewerAction,
 } from '../core/shortcuts';
+import { deleteVertex, VECTOR_EDITABLE } from '../core/vector';
 import { createFigEditor } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { AssetsPanel } from './assets-panel';
@@ -50,6 +51,7 @@ export function FigViewer() {
     viewer,
     canEdit: () => context.canEdit?.() ?? false,
     save: context.save,
+    fileKey: context.fileKey,
     onDirty: (rect) => invalidate?.(rect),
     notifyError: context.notifyError,
   });
@@ -131,6 +133,47 @@ export function FigViewer() {
     }
   };
 
+  /** The single selected layer as an SVG document. */
+  const selectedSvg = async (): Promise<
+    { svg: string; name: string } | undefined
+  > => {
+    const id = viewer.selected()[0]?.id;
+    if (!id) {
+      context.notifyInfo('Select a layer to export');
+      return undefined;
+    }
+    const name = info()?.id === id ? info()?.name : undefined;
+    return {
+      svg: await engine.exportSvg(viewer.page(), id),
+      name: safeName(name ?? `${context.fileName()}-${id}`),
+    };
+  };
+
+  const exportSvg = async () => {
+    try {
+      const out = await selectedSvg();
+      if (!out) return;
+      context.download(
+        new Blob([out.svg], { type: 'image/svg+xml' }),
+        `${out.name}.svg`
+      );
+    } catch (e) {
+      context.notifyError(e instanceof Error ? e.message : 'Export failed');
+    }
+  };
+
+  /** Figma's "Copy as SVG": the markup as text. */
+  const copySvg = async () => {
+    try {
+      const out = await selectedSvg();
+      if (!out) return;
+      await navigator.clipboard.writeText(out.svg);
+      context.notifyInfo('Copied as SVG');
+    } catch {
+      context.notifyError('Could not copy the SVG');
+    }
+  };
+
   const copyText = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -197,8 +240,15 @@ export function FigViewer() {
       .with('tool-text', () => viewer.setTool('text'))
       .with('tool-line', () => viewer.setTool('line'))
       .with('tool-arrow', () => viewer.setTool('arrow'))
-      .with('undo', () => editor.undo())
-      .with('redo', () => editor.redo())
+      .with('tool-pen', () => viewer.setTool('pen'))
+      .with('undo', () => {
+        editor.endVectorEdit();
+        editor.undo();
+      })
+      .with('redo', () => {
+        editor.endVectorEdit();
+        editor.redo();
+      })
       .with('delete', () => void editor.deleteSelection())
       .with('duplicate', () => void editor.duplicateSelection())
       .with('copy', () => editor.copy())
@@ -211,6 +261,11 @@ export function FigViewer() {
       .with('create-component', () => void editor.createComponent())
       .with('detach-instance', () => void editor.detachInstance())
       .with('remove-auto-layout', () => void editor.removeAutoLayout())
+      .with('boolean-union', () => void editor.booleanOp('UNION'))
+      .with('boolean-subtract', () => void editor.booleanOp('SUBTRACT'))
+      .with('boolean-intersect', () => void editor.booleanOp('INTERSECT'))
+      .with('boolean-exclude', () => void editor.booleanOp('XOR'))
+      .with('flatten', () => void editor.flatten())
       .with('bring-forward', () => void editor.arrange('forward'))
       .with('send-backward', () => void editor.arrange('backward'))
       .with('bring-to-front', () => void editor.arrange('front'))
@@ -234,17 +289,50 @@ export function FigViewer() {
       .with('nudge-down-10', () => void editor.nudge(0, 10))
       .exhaustive();
 
-  /** Enter on a lone text layer types into it, as in Figma. */
-  const enterAction = (action: ViewerAction): ViewerAction | 'edit-text' => {
+  /**
+   * Enter on a lone text layer types into it, and on a lone shape edits its
+   * points, as in Figma.
+   */
+  const enterAction = (
+    action: ViewerAction
+  ): ViewerAction | 'edit-text' | 'edit-vector' => {
     const i = info();
     if (
-      action === 'select-children' &&
-      editor.enabled() &&
-      viewer.selected().length === 1 &&
-      i?.type === 'TEXT'
+      action !== 'select-children' ||
+      !editor.enabled() ||
+      viewer.selected().length !== 1
     )
-      return 'edit-text';
+      return action;
+    if (i?.type === 'TEXT') return 'edit-text';
+    if (i && VECTOR_EDITABLE.has(i.type)) return 'edit-vector';
     return action;
+  };
+
+  /**
+   * Keys while drawing with the pen or editing points: Enter and Escape
+   * finish, Delete removes the selected point. Returns whether it was used.
+   */
+  const shapeKey = (e: KeyboardEvent): boolean => {
+    const finish = e.key === 'Enter' || e.key === 'Escape';
+    if (editor.penPath()) {
+      if (!finish) return false;
+      void editor.penFinish(false);
+      return true;
+    }
+    const edit = editor.vectorEdit();
+    if (!edit) return false;
+    if (finish) {
+      editor.endVectorEdit();
+      return true;
+    }
+    if (
+      (e.key === 'Delete' || e.key === 'Backspace') &&
+      edit.selected !== undefined
+    ) {
+      void editor.setVectorNetwork(deleteVertex(edit.network, edit.selected));
+      return true;
+    }
+    return false;
   };
 
   const [textEditing, setTextEditing] = createSignal<string>();
@@ -262,6 +350,11 @@ export function FigViewer() {
     }
     if (e.key === 'Alt') setAltHeld(true);
     if (e.key === 'Meta' || e.key === 'Control') setDeepHeld(true);
+    if (shapeKey(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const action = shortcutAction(e, IS_MAC);
     if (!action) return;
     if (EDIT_ACTIONS.has(action) && !editor.enabled()) return;
@@ -271,7 +364,10 @@ export function FigViewer() {
     e.stopPropagation();
     const resolved = enterAction(action);
     if (resolved === 'edit-text') setTextEditing(info()?.id);
-    else run(resolved);
+    else if (resolved === 'edit-vector') {
+      const id = info()?.id;
+      if (id) void editor.editVector(id);
+    } else run(resolved);
   };
 
   const onKeyUp = (e: KeyboardEvent) => {
@@ -290,8 +386,8 @@ export function FigViewer() {
     if (!editor.enabled()) return;
     e.preventDefault();
     if (files.length === 0) {
-      // Layers copied in this file.
-      void editor.paste();
+      // Layers copied here, in another file, or in Figma.
+      void editor.paste(e.clipboardData?.getData('text/html') || undefined);
       return;
     }
     const c = viewer.camera();
@@ -454,7 +550,16 @@ export function FigViewer() {
           <Show when={!viewer.uiHidden()}>
             <ViewerToolbar
               tool={viewer.tool()}
-              onTool={viewer.setTool}
+              onTool={(tool) => {
+                if (editor.penPath()) void editor.penFinish();
+                viewer.setTool(tool);
+              }}
+              onBoolean={
+                editor.enabled() && editor.editableIds().length > 0
+                  ? (op) => void editor.booleanOp(op)
+                  : undefined
+              }
+              onFlatten={() => void editor.flatten()}
               editable={editor.enabled()}
               saveState={editor.saveState()}
               canUndo={editor.canUndo()}
@@ -496,7 +601,13 @@ export function FigViewer() {
             selectionCount={viewer.selected().length}
             page={viewer.pages[viewer.page()]}
             onExport={(scale) => void exportSelection(scale)}
+            onExportSvg={() => void exportSvg()}
+            onCopySvg={() => void copySvg()}
             onCopyPng={() => void copyPng()}
+            onBoolean={
+              editor.enabled() ? (op) => void editor.booleanOp(op) : undefined
+            }
+            onFlatten={() => void editor.flatten()}
             onCopyText={(text) => void copyText(text)}
           />
         </aside>

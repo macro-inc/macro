@@ -1,14 +1,21 @@
 /**
  * The canvas UI drawn over the rendered page, in Figma's visual language:
  * frame names, hover outlines, selection boxes with their size, ⌥
- * measurements, the marquee, rulers, and the pixel grid.
+ * measurements, the marquee, the pen's path and editable points, rulers,
+ * and the pixel grid.
  */
 
-import type { FrameRow, NodeGeometry, Rect } from '@core/fig-engine/types';
+import type {
+  FrameRow,
+  NodeGeometry,
+  Rect,
+  VectorNetwork,
+} from '@core/fig-engine/types';
 import { type Camera, pageToScreen, type Size } from '../core/camera';
 import { formatMeasure, type MeasureLine } from '../core/measure';
 import { rulerStep, rulerTicks } from '../core/rulers';
 import type { Guide } from '../core/snap';
+import { segmentCurve, vertexHandles } from '../core/vector';
 
 export const SELECTION_BLUE = '#0d99ff';
 export const COMPONENT_PURPLE = '#9747ff';
@@ -39,6 +46,19 @@ export interface OverlayModel {
   pixelGrid: boolean;
   /** Whether the canvas color is dark (labels switch to light). */
   darkCanvas: boolean;
+  /** Points being drawn with the pen or edited. */
+  vector?: VectorOverlay;
+}
+
+/** A network shown with its points (page coordinates). */
+export interface VectorOverlay {
+  network: VectorNetwork;
+  /** The selected point, whose handles show. */
+  selected?: number;
+  /** The last point is the pointer (the pen's next segment), not a point. */
+  pending?: boolean;
+  /** A press would close the path on its first point. */
+  closing?: boolean;
 }
 
 const LABEL_TYPES = new Set(['FRAME', 'SYMBOL', 'SECTION', 'INSTANCE']);
@@ -301,6 +321,50 @@ function drawRulers(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   ctx.fillRect(0, 0, RULER_SIZE, RULER_SIZE);
 }
 
+function drawVector(ctx: CanvasRenderingContext2D, m: OverlayModel) {
+  const v = m.vector;
+  if (!v) return;
+  const net = v.network;
+  const screen = (p: { x: number; y: number }) => pageToScreen(m.camera, p);
+  ctx.strokeStyle = SELECTION_BLUE;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const seg of net.segments) {
+    const [a, c1, c2, b] = segmentCurve(net, seg).map(screen);
+    ctx.moveTo(a.x, a.y);
+    ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y);
+  }
+  ctx.stroke();
+  const dot = (p: { x: number; y: number }, r: number, fill: string) => {
+    const q = screen(p);
+    ctx.beginPath();
+    ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.stroke();
+  };
+  if (v.selected !== undefined && net.vertices[v.selected]) {
+    const at = screen(net.vertices[v.selected]);
+    for (const h of vertexHandles(net, v.selected)) {
+      const q = screen(h.at);
+      ctx.beginPath();
+      ctx.moveTo(at.x, at.y);
+      ctx.lineTo(q.x, q.y);
+      ctx.stroke();
+      dot(h.at, 2.5, '#ffffff');
+    }
+  }
+  const count = v.pending ? net.vertices.length - 1 : net.vertices.length;
+  for (let i = 0; i < count; i++) {
+    const selected = i === v.selected || (v.closing && i === 0);
+    dot(
+      net.vertices[i],
+      selected ? 4 : 3.5,
+      selected ? SELECTION_BLUE : '#ffffff'
+    );
+  }
+}
+
 /** Draws the overlay; the context is in device pixels. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -310,6 +374,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   drawFrameLabels(ctx, m);
   drawHover(ctx, m);
   drawSelection(ctx, m);
+  drawVector(ctx, m);
   drawMeasurements(ctx, m);
   drawGuides(ctx, m);
   drawMarquee(ctx, m);

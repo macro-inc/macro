@@ -119,6 +119,7 @@ function Fixture() {
                 notifyError: (m) => setErrors((x) => [...x, m]),
                 notifyInfo: (m) => setNotices((x) => [...x, m]),
                 canEdit: () => editable,
+                fileKey: file ?? 'new',
                 save: async (bytes) => {
                   if (params.has('reload'))
                     await FigEngine.open(bytes.slice().buffer).then((e) =>
