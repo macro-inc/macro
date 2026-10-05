@@ -28,6 +28,7 @@ message ParentIndex guid:GUID position:string
 message ColorStop color:Color position:float
 message Image hash:byte[] name:string dataBlob:uint
 message PaintFilterMessage exposure:float contrast:float vibrance:float temperature:float tint:float highlights:float shadows:float
+message StyleId guid:GUID
 message Paint type:PaintType color:Color opacity:float visible:bool blendMode:BlendMode stops:ColorStop[] transform:Matrix image:Image imageScaleMode:ImageScaleMode paintFilter:PaintFilterMessage
 message Path windingRule:WindingRule commandsBlob:uint styleID:uint
 message Effect type:EffectType color:Color offset:Vector radius:float spread:float visible:bool
@@ -38,7 +39,7 @@ message VectorData styleOverrideTable:NodeChange[]
 message DerivedTextData layoutSize:Vector glyphs:Glyph[] truncationStartIndex:int
 message NodeGenerationData overrides:NodeChange[]
 message DerivedImmutableFrameData overrides:NodeChange[]
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float size:Vector transform:Matrix fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float backgroundColor:Color symbolData:SymbolData guidPath:GUIDPath overrideKey:GUID internalOnly:bool derivedTextData:DerivedTextData nodeGenerationData:NodeGenerationData derivedImmutableFrameData:DerivedImmutableFrameData vectorData:VectorData styleID:uint
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float size:Vector transform:Matrix fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float backgroundColor:Color symbolData:SymbolData guidPath:GUIDPath overrideKey:GUID internalOnly:bool derivedTextData:DerivedTextData nodeGenerationData:NodeGenerationData derivedImmutableFrameData:DerivedImmutableFrameData vectorData:VectorData styleID:uint styleIdForFill:StyleId
 message Blob bytes:byte[]
 message Message nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -376,4 +377,42 @@ fn turns_glyphs_on_a_path() {
         [255, 255, 255, 255],
         "not along the baseline"
     );
+}
+
+/// A node using a shared fill style shows the style's paints, even when
+/// its own copy is empty (Figma keeps the style as the source of truth).
+#[test]
+fn draws_shared_fill_styles() {
+    let bytes = file(
+        vec![
+            node(
+                5,
+                Some((1, "~")),
+                "RECTANGLE",
+                "Brand",
+                vec![
+                    ("visible", V::Bool(false)),
+                    ("fillPaints", V::List(vec![solid(0.0, 0.5, 0.0)])),
+                ],
+            ),
+            node(
+                2,
+                Some((1, "!")),
+                "RECTANGLE",
+                "Card",
+                vec![
+                    ("size", size(40.0, 40.0)),
+                    ("transform", translate(0.0, 0.0)),
+                    ("fillPaints", V::List(vec![])),
+                    (
+                        "styleIdForFill",
+                        V::Msg(vec![("guid", crate::testing::guid(5))]),
+                    ),
+                ],
+            ),
+        ],
+        vec![],
+    );
+    let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 40, 40));
+    assert_eq!(rgba(&p, 20, 20), [0, 128, 0, 255]);
 }

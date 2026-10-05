@@ -153,6 +153,7 @@ impl Document {
                 nodes[i].children = children;
             }
         }
+        resolve_styles(&mut nodes, &by_guid);
         let root = root
             .or_else(|| {
                 nodes
@@ -323,6 +324,36 @@ impl Document {
                 b: 0.96,
                 a: 1.0,
             })
+    }
+}
+
+/// Nodes that use shared styles show the styles' paints and effects, which
+/// is what Figma draws: a node's own copy can be stale or empty (when the
+/// style's paints came from a library).
+fn resolve_styles(nodes: &mut [Node], by_guid: &HashMap<Guid, NodeIdx>) {
+    let style = |g: Option<Guid>| by_guid.get(&g?).copied();
+    for i in 0..nodes.len() {
+        let p = &nodes[i].props;
+        let (fill, stroke, effect) = (
+            style(p.fill_style),
+            style(p.stroke_style),
+            style(p.effect_style),
+        );
+        if let Some(s) = fill
+            && let Some(fills) = nodes[s as usize].props.fills.clone()
+        {
+            nodes[i].props.fills = Some(fills);
+        }
+        if let Some(s) = stroke
+            && let Some(fills) = nodes[s as usize].props.fills.clone()
+        {
+            nodes[i].props.strokes = Some(fills);
+        }
+        if let Some(s) = effect
+            && let Some(effects) = nodes[s as usize].props.effects.clone()
+        {
+            nodes[i].props.effects = Some(effects);
+        }
     }
 }
 
