@@ -226,6 +226,7 @@ type ToolParserMap = {
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
+  ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadInitiative: {
     call: types.ReadInitiative;
     response: types.ProjectReadResult;
@@ -572,6 +573,10 @@ const toolParserMap = {
     call: schemas.ReadContent,
     response: schemas.ReadContentResponse,
   },
+  ReadDesign: {
+    call: schemas.ReadDesign,
+    response: schemas.ReadDesignResponse,
+  },
   ReadInitiative: {
     call: schemas.ReadInitiative,
     response: schemas.ProjectReadResult,
@@ -914,6 +919,7 @@ type ToolDataMap = {
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
+  ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadInitiative: {
     call: types.ReadInitiative;
     response: types.ProjectReadResult;

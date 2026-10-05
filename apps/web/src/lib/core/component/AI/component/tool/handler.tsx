@@ -43,6 +43,7 @@ import {
   lazyDatabaseToolHandlers,
 } from './DatabaseToolHandlers';
 import { deleteTagHandler } from './DeleteTag';
+import { readDesignHandler } from './Design';
 import { displayResultsHandler } from './DisplayResults';
 import {
   commentOnDocumentHandler,
@@ -139,6 +140,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   EditSpreadsheet: editSpreadsheetHandler,
   ReadPresentation: readPresentationHandler,
   EditPresentation: editPresentationHandler,
+  ReadDesign: readDesignHandler,
   ReadWordDocument: readWordDocumentHandler,
   EditWordDocument: editWordDocumentHandler,
   ConfigureAgent: configureAgentHandler,
