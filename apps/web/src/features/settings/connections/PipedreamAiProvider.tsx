@@ -5,7 +5,7 @@ import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { AiGrantActions } from './ai-grant-actions';
 import { capabilityFacts } from './capability-row';
 import {
@@ -26,6 +26,7 @@ import {
   SettingsSection,
 } from './primitives';
 import { providerIcon } from './provider-meta';
+import { SlackChannelImportCard } from './slack-channel-import/SlackChannelImportCard';
 import { useConnectionsView } from './view-state';
 
 const COPY: Record<
@@ -182,6 +183,17 @@ export function PipedreamAiProvider(props: {
           </IntegrationRow>
         </SettingsCard>
       </SettingsSection>
+      <Show
+        when={
+          props.provider === 'slack' &&
+          row()?.mechanism === 'pipedream' &&
+          row()?.status === 'connected'
+        }
+      >
+        <Suspense>
+          <SlackChannelImportCard />
+        </Suspense>
+      </Show>
       <DisconnectConfirmDialog
         request={disconnect()}
         onClose={() => setDisconnect(null)}

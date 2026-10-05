@@ -152,6 +152,24 @@ the shimmer.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Connections page. Personal Gmail/GitHub account links remain under Settings →
   Integrations.
+
+  To recreate Slack channels, open **Settings → Connections → Slack → Import
+  channels** (or **Connections → Slack** from the Agents workspace). The card
+  appears only for a connected, enabled Pipedream Slack account. Click **Find
+  channels** (or **Refresh** on subsequent visits), then wait for discovery and
+  member checks to update live. Search by name, purpose, or Slack channel id;
+  archived channels stay hidden until **Show archived** is checked. Select
+  individual channels or **Select all visible**, then click **Import N channels**.
+  Filtering does not clear selections. Rows progress from **Importing…** to an
+  **Imported** link; channels already imported by another team member show
+  **by a teammate** and cannot be selected again. Imported channels appear under
+  **Channels**, with the Slack name and matched Macro teammates. Member counts
+  show how many Slack members are on your team; unchecked membership is labeled
+  separately. Unmatched members are not invited. Messages, files, private
+  channels, and direct messages are not imported, and there is no ongoing sync.
+  A failed discovery shows its error and **Retry**; an empty completed discovery
+  shows **No public channels found**.
+
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
