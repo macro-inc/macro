@@ -36,7 +36,7 @@ export default defineConfig({
   optimizeDeps: { esbuildOptions: { target: 'esnext' } },
   server: {
     host: '127.0.0.1',
-    port: 3019,
+    port: Number(process.env.FIG_BROWSER_PORT ?? 3019),
     strictPort: true,
     // The fixtures and the wasm package live outside this directory.
     fs: { allow: [workspaceDirectory, corpusDirectory] },

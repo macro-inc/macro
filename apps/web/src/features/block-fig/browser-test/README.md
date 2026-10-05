@@ -22,7 +22,9 @@ design; saves stay in memory, and `?reload` reopens each one. Test-only
 - `downloads()`: names and sizes of exported files;
 - `saves()`: every saved `.fig`, oldest first.
 
-Run the browser regressions (the configuration starts or reuses the fixture):
+Run the browser regressions (the configuration starts or reuses the fixture;
+`FIG_BROWSER_PORT` picks another port than 3019 for both, so checkouts running
+side by side do not share a server):
 
 ```sh
 bunx playwright test --config src/features/block-fig/browser-test/playwright.config.ts
