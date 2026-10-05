@@ -1,11 +1,14 @@
 /**
  * A design's comments as document discussions (`/dss/messages/document/<id>`),
  * the store markdown, PDF, and spreadsheet comments share: a thread is a
- * root message with replies, resolved on the thread, mentions notify
+ * root message with replies, resolved on the thread, and mentions notify
  * through the inbox. A pinned thread's anchor is
- * `{ type: 'fig', pageId, nodeId, x, y }` (the document storage service
- * must accept this anchor kind; see the block-fig README). Whole-document
- * discussions show unpinned.
+ * `{ type: 'fig', pageId, nodeId, x, y }`. The document storage service
+ * does not accept that anchor kind yet (its `NewThreadAnchor` and
+ * `ThreadAnchor` in `crates/messages` are closed enums, and the
+ * `comms_message_threads_anchor_check` constraint lists the allowed
+ * types), so the block wires this store only behind `enableFigComments`.
+ * Whole-document discussions show unpinned.
  */
 
 import { queryClient } from '@queries/client';
