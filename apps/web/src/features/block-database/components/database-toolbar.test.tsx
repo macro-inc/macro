@@ -9,7 +9,7 @@ import {
 import { errAsync, okAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ViewChange } from '../queries/views';
+import type { ViewChange } from '../core/view-state';
 import { DatabaseToolbar } from './database-toolbar';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));

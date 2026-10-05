@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT r.id, ea.access_level AS \"access_level!: AccessLevel\"\n        FROM database_rows r\n        JOIN database_tables t ON t.id = r.table_id\n        JOIN database_entities d ON d.database_id = t.database_id\n        JOIN entity_access ea ON ea.entity_id = d.database_id\n        WHERE r.id = ANY($1)\n        AND ea.entity_type = 'database'\n        AND ea.source_id = ANY($2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "48ce5ce24d9cd5574f31c541f515ac415386872c51a2ca9e8e5c185549846d12"
+}

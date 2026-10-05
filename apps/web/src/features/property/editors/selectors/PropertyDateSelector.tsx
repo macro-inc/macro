@@ -3,7 +3,7 @@ import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import type { DateProperty } from '@property/types';
-import { useSearchInputFocus } from '@property/utils';
+import { useSearchInputFocus } from '@property/utils/focus';
 import { cn } from '@ui';
 import {
   createEffect,
