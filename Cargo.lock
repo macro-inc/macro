@@ -477,6 +477,7 @@ dependencies = [
  "tokio-retry",
  "tokio-util",
  "tower 0.5.3",
+ "tower-http",
  "tracing",
  "url",
  "utoipa",
@@ -4391,6 +4392,7 @@ name = "complete_graph"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_session",
  "anyhow",
  "apollo-compiler",
  "async-graphql",
@@ -4427,6 +4429,7 @@ dependencies = [
  "rootcause",
  "scheduled_action",
  "serde",
+ "serde_json",
  "soup",
  "soup-filter-projection",
  "soup_realtime",

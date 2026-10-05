@@ -32,6 +32,7 @@ use axum::routing::get;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::MacroAuthorizationService;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
+use tower_http::{CompressionLevel, compression::CompressionLayer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -195,7 +196,16 @@ where
     let inner = api_router(states)
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         .merge(health_router(runtime_commands_ready))
-        .layer(macro_cors::cors_layer());
+        .layer(macro_cors::cors_layer())
+        // A session log is megabytes of repetitive JSON; gzip cuts the transfer
+        // more than tenfold, and the fetch is what a session open waits on.
+        // Fastest: the default level spent ~1 s of CPU on a 13 MB log for a
+        // few percent more savings, which costs more than it saves on a LAN.
+        .layer(
+            CompressionLayer::new()
+                .gzip(true)
+                .quality(CompressionLevel::Fastest),
+        );
     let app = mount_at_root_and_prefix(inner, GATEWAY_PATH_PREFIX)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(SwaggerUi::new("/agent-harness/docs").url(

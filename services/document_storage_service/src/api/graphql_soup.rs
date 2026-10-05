@@ -1,4 +1,5 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use agent_session::outbound::postgres::PgAgentSessionRepo;
 use async_graphql::{
     Data,
     http::{ALL_WEBSOCKET_PROTOCOLS, GraphiQLSource},
@@ -14,6 +15,8 @@ use axum::{
 use axum_extra::extract::Cached;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use complete_graph::GraphqlRequestParts;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use graphql_soup::{email_mutation_thread_loader, soup_item_loader};
 use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
@@ -189,6 +192,14 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
         state.readonly_db.0.clone(),
     )));
+    data.insert(complete_graph::agent_session_log_loader(
+        PgAgentSessionRepo::new(
+            state.readonly_db.0.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(
+                state.readonly_db.0.clone(),
+            ))),
+        ),
+    ));
     data.insert(complete_graph::entity_properties_loader(
         macro_user_id.clone(),
         property_reader,

@@ -14,7 +14,7 @@ mod sdl_test;
 
 pub use edges::{
     AgentSessionBotDataLoader, AgentSessionBotLoader, GraphqlSessionBot, SoupAgentSessionEdges,
-    SoupEdges, SoupEmailThreadEdges, agent_session_bot_loader,
+    SoupEdges, SoupEmailThreadEdges, agent_session_bot_loader, agent_session_log_loader,
 };
 pub use graphql_activity::{
     ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader,
