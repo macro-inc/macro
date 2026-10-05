@@ -76,9 +76,9 @@ vi.mock('@queries/auth', () => ({
   }),
   useCreateCheckoutSessionMutation: () => ({ mutateAsync: vi.fn() }),
   useIncludedAiCentsByTier: () => () => ({
-    free: 0,
+    free: 500,
     premium: 2_000,
-    max: 2_000,
+    max: 10_000,
   }),
 }));
 vi.mock('@service-stripe/client', () => ({
@@ -122,8 +122,9 @@ describe.each([false, true])(
         const { container } = render(() => <Billing />);
 
         expect(screen.getByRole('heading', { name: 'Billing' })).toBeTruthy();
+        // Free users see their monthly cap but have no credits or usage billing.
         expect(screen.queryByTestId('usage-meter') !== null).toBe(
-          aiUsageBilling && tier !== 'free'
+          aiUsageBilling
         );
         expect(screen.queryByTestId('usage-controls') !== null).toBe(
           aiUsageBilling && tier !== 'free'
@@ -172,18 +173,42 @@ describe.each([false, true])(
       ).toBe(aiUsageBilling);
     });
 
-    it.each<PlanTier>(['free', 'premium'])(
-      'does not offer Max purchases from the %s plan',
-      (tier) => {
-        state.tier = tier;
-        render(() => <Billing />);
+    it('offers both paid plans to free users', () => {
+      state.tier = 'free';
+      const { container } = render(() => <Billing />);
 
-        expect(screen.queryByRole('button', { name: 'Get Max' })).toBeNull();
-        expect(
-          screen.queryByRole('button', { name: 'Upgrade to Max' })
-        ).toBeNull();
-      }
-    );
+      expect(screen.getByRole('button', { name: 'Upgrade now' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Get Max' })).toBeTruthy();
+      expect(
+        screen.queryByRole('button', { name: 'Upgrade to Max' })
+      ).toBeNull();
+      // Allowances come from the catalog, including the free cap.
+      expect(container.textContent?.includes('$5 of AI usage')).toBe(
+        aiUsageBilling
+      );
+      expect(container.textContent?.includes('$100 of AI usage')).toBe(
+        aiUsageBilling
+      );
+    });
+
+    it('lets a Premium payer move to Max', async () => {
+      state.tier = 'premium';
+      render(() => <Billing />);
+
+      expect(
+        screen.getByText(aiUsageBilling ? 'Need more AI?' : 'Upgrade')
+      ).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Get Max' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Max' }));
+      await waitFor(() =>
+        expect(state.changePlan).toHaveBeenCalledWith({ plan: 'max' })
+      );
+      expect(state.toastSuccess).toHaveBeenCalledWith(
+        aiUsageBilling
+          ? 'Upgraded to Max. Your larger AI allowance applies right away.'
+          : 'Upgraded to Max.'
+      );
+    });
 
     it('keeps the current Max plan visible and allows a Premium downgrade', async () => {
       state.tier = 'max';

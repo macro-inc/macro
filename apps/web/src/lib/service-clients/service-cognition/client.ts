@@ -68,8 +68,9 @@ type Success = { success: boolean };
 /**
  * Error code for a chat send refused by the AI billing gate (HTTP 402). The
  * error's `message` carries the backend's reason code
- * (`ai_allowance_exhausted`, `ai_overage_limit_reached`,
- * `ai_overage_payment_failed`) so the UI can explain and offer the fix.
+ * (`ai_allowance_exhausted`, `ai_free_allowance_exhausted`,
+ * `ai_overage_limit_reached`, `ai_overage_payment_failed`) so the UI can
+ * explain and offer the fix.
  */
 export const AI_USAGE_LIMIT_ERROR = 'AI_USAGE_LIMIT' as const;
 

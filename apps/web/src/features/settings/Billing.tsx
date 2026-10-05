@@ -36,7 +36,12 @@ const BILLING_PLAN_FEATURES: Record<
   PlanTier,
   (includedAi: string | undefined) => string[]
 > = {
-  free: () => ['Access to Haiku', 'MCP access', '5 GB storage'],
+  free: (includedAi) => [
+    'Access to Haiku',
+    ...(includedAi ? [`${includedAi} of AI usage at cost each month`] : []),
+    'MCP access',
+    '5 GB storage',
+  ],
   premium: (includedAi) => [
     'All agents',
     'All models',
@@ -283,17 +288,16 @@ export const Billing = () => {
       </SettingsSection>
 
       <Show
-        when={
-          aiUsageBilling().enabled &&
-          hasPaid() &&
-          summary.isSuccess &&
-          summary.data
-        }
+        when={aiUsageBilling().enabled && summary.isSuccess && summary.data}
       >
         {(snapshot) => (
           <SettingsSection
             title="AI usage"
-            description="Your plan includes AI each month, measured at provider cost. Beyond that, prepaid credits and usage billing keep you going."
+            description={
+              snapshot().tier === 'free'
+                ? 'Guest access includes a fixed amount of AI each month, measured at provider cost. Upgrade for more and to unlock every model.'
+                : 'Your plan includes AI each month, measured at provider cost. Beyond that, prepaid credits and usage billing keep you going.'
+            }
           >
             <SettingsCard>
               <section class="flex flex-col gap-5 p-4">
@@ -306,12 +310,14 @@ export const Billing = () => {
                   }
                 >
                   <AiUsageMeter snapshot={snapshot()} />
-                  <div class="border-t border-t-edge-muted pt-4">
-                    <AiUsageControls
-                      snapshot={snapshot()}
-                      returnUrl={returnUrl()}
-                    />
-                  </div>
+                  <Show when={snapshot().tier !== 'free'}>
+                    <div class="border-t border-t-edge-muted pt-4">
+                      <AiUsageControls
+                        snapshot={snapshot()}
+                        returnUrl={returnUrl()}
+                      />
+                    </div>
+                  </Show>
                 </Show>
               </section>
             </SettingsCard>
@@ -344,7 +350,6 @@ export const Billing = () => {
                   </ul>
                 </section>
               </SettingsCard>
-              {/*
               <SettingsCard>
                 <section class="flex flex-col gap-4 p-4">
                   <header class="flex items-center gap-2">
@@ -353,7 +358,7 @@ export const Billing = () => {
                       <PlanPrice tier="max" />
                     </div>
                     <Button
-                      class="ml-auto rounded-full py-1.5 px-3"
+                      class="ml-auto py-1.5 px-3"
                       depth={2}
                       variant="outline"
                       onClick={() => void handleCheckout('max')}
@@ -366,10 +371,8 @@ export const Billing = () => {
                   </ul>
                 </section>
               </SettingsCard>
-              */}
             </SettingsSection>
           </Match>
-          {/*
           <Match when={tier() === 'premium'}>
             <SettingsSection
               title={aiUsageBilling().enabled ? 'Need more AI?' : 'Upgrade'}
@@ -382,7 +385,7 @@ export const Billing = () => {
                       <PlanPrice tier="max" />
                     </div>
                     <Button
-                      class="ml-auto rounded-full py-1.5 px-3"
+                      class="ml-auto py-1.5 px-3"
                       depth={2}
                       variant="cta"
                       disabled={changePlan.isPending}
@@ -406,7 +409,6 @@ export const Billing = () => {
               </SettingsCard>
             </SettingsSection>
           </Match>
-          */}
           <Match when={tier() === 'max'}>
             <SettingsSection>
               <p class="px-6 text-xs text-ink-extra-muted">

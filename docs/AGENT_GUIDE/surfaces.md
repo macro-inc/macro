@@ -1848,9 +1848,9 @@ do not see it.
 
 ## Setup plan step — `/app/onboarding`
 
-The plan step shows two cards: Free and Premium. Premium starts Stripe Checkout.
-The step has no Max card or Max checkout path. A returning account that already
-has Max still sees Max named as its active plan.
+Onboarding has no plan picker; it ends with the 30-day Premium trial offer and a
+Guest continuation (see [login](login.md#desktop-onboarding)). Plans are chosen
+afterwards in **Settings → Billing**, where Guest users can buy Premium or Max.
 
 ## Settings — `/app/settings/<section>`
 
@@ -2034,17 +2034,19 @@ Existing settings URLs remain valid; `connections` still opens Integrations,
 
 `Billing` (current plan card with
 `Manage`; only in dev (`dev.macro.com/app` or a local frontend using the dev
-backend), paid plans show an **AI usage** card with the period meter, credit
-balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
-Checkout, and a `Usage billing` toggle with per-period limit pills; these
-controls and usage-billing promotional copy are hidden outside dev; an `Upgrade`
-card for Free users to buy Premium, no Max purchase or upgrade control, and a
-`Switch to Premium` link on Max; on a team the downgrade moves only the viewer's
+backend), every plan shows an **AI usage** card with the period meter; paid
+plans add the credit balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that
+redirect to Stripe Checkout, and a `Usage billing` toggle with per-period limit
+pills, while Free shows only the meter against its monthly cap; these controls
+and usage-billing promotional copy are hidden outside dev; an `Upgrade` section
+for Free users with a Premium card (`Upgrade now`) and a Max card (`Get Max`),
+an `Upgrade to Max` card on Premium (titled `Need more AI?` in dev), and a
+`Switch to Premium` link on Max; on a team a plan change moves only the viewer's
 own seat)
 
 `Team` (members list; on a paid team each row shows the seat's plan,
-and admins/owners can move an existing Max seat to Premium with the `Seat plan`
-menu; Premium seats have no Max option; moves are prorated at once). CRM (enable/disable; once enabled, a `Deal stages` section
+and admins/owners can move a seat between Premium and Max with the `Seat plan`
+menu; moves are prorated at once). CRM (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`)

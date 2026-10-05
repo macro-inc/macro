@@ -61,15 +61,31 @@ async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
         .map(|plan| (plan.tier, plan.purchasable, plan.included_ai_cents_per_seat))
         .collect::<Vec<_>>();
 
-    // The frontend reads allowances from here, so every tier it can display is listed.
+    // The frontend reads allowances from here, so every tier it can display is
+    // listed with its own configured allowance; Free's is its monthly hard cap.
     assert_eq!(
         summary,
         vec![
-            (PlanTier::Free, false, 0),
-            (PlanTier::Premium, true, pricing.included_allowance_cents()),
-            (PlanTier::Max, false, pricing.included_allowance_cents()),
+            (
+                PlanTier::Free,
+                false,
+                pricing.included_allowance_cents_for(PlanTier::Free)
+            ),
+            (
+                PlanTier::Premium,
+                true,
+                pricing.included_allowance_cents_for(PlanTier::Premium)
+            ),
+            (
+                PlanTier::Max,
+                true,
+                pricing.included_allowance_cents_for(PlanTier::Max)
+            ),
         ]
     );
+    assert_eq!(summary[0].2, 500);
+    assert_eq!(summary[1].2, 2_000);
+    assert_eq!(summary[2].2, 10_000);
 }
 
 #[test]

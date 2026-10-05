@@ -79,12 +79,12 @@ pub const MIN_STRIPE_CHARGE_CENTS: i64 = 50;
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum PlanTier {
-    /// No subscription. AI on the free model only; metered elsewhere.
+    /// No subscription. AI on the free model only, hard-capped at the
+    /// configured free allowance each calendar month; no credits or overage.
     Free,
     /// The $40/seat/month plan (recorded as the legacy `sub_opus` role).
     Premium,
-    /// The $200/seat/month plan. Its AI allowance equals Premium's until GTM
-    /// defines a Max allowance.
+    /// The $200/seat/month plan, with its own configured AI allowance.
     Max,
 }
 
@@ -98,18 +98,15 @@ impl PlanTier {
         }
     }
 
-    /// AI usage included per seat per period, in cents at provider cost: the
-    /// configured allowance ([`AiPricing::included_allowance_cents`]) for every
-    /// paid plan, nothing for Free.
+    /// AI usage included per seat per period, in cents at provider cost: this
+    /// tier's configured allowance ([`AiPricing::included_allowance_cents_for`]).
+    /// For Free this is the whole monthly cap.
     pub const fn included_ai_cents_per_seat(self, pricing: AiPricing) -> i64 {
-        if self.is_paid() {
-            pricing.included_allowance_cents()
-        } else {
-            0
-        }
+        pricing.included_allowance_cents_for(self)
     }
 
-    /// Whether this tier pays for AI at all (credits and overage need a plan).
+    /// Whether this tier pays for AI beyond its allowance (credits and overage
+    /// need a plan). Free is hard-capped at its allowance instead.
     pub const fn is_paid(self) -> bool {
         !matches!(self, PlanTier::Free)
     }
@@ -482,6 +479,9 @@ pub enum OverageChargeStatus {
 pub enum DenyReason {
     /// The plan's included AI is used up and no credits or overage remain.
     AllowanceExhausted,
+    /// The free plan's monthly AI is used up. Free has no credits or overage;
+    /// only an upgrade (or the next month) lifts it.
+    FreeAllowanceExhausted,
     /// Overage is on but the payer's per-period cap has been reached.
     OverageLimitReached,
     /// An overage charge failed; overage is paused until the payer re-enables it.
@@ -493,6 +493,7 @@ impl DenyReason {
     pub fn code(self) -> &'static str {
         match self {
             DenyReason::AllowanceExhausted => "ai_allowance_exhausted",
+            DenyReason::FreeAllowanceExhausted => "ai_free_allowance_exhausted",
             DenyReason::OverageLimitReached => "ai_overage_limit_reached",
             DenyReason::OveragePaymentFailed => "ai_overage_payment_failed",
         }
@@ -503,6 +504,9 @@ impl DenyReason {
         match self {
             DenyReason::AllowanceExhausted => {
                 "You've used this period's included AI. Add credits or turn on usage billing to keep going."
+            }
+            DenyReason::FreeAllowanceExhausted => {
+                "You've used this month's free AI. Upgrade to a paid plan to keep going."
             }
             DenyReason::OverageLimitReached => {
                 "You've reached your AI spending limit for this period. Raise the limit or add credits to keep going."

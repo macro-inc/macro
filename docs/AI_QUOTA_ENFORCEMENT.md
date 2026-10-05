@@ -34,11 +34,14 @@ Automation, DynamicCompletionsApi, ChatRename, ChannelBot, AiEditing, Import,
 AgentSession, AgentRepositoryChoice. In particular, AI editing is not exempt.
 The classification is exhaustive and server-selected, not request-controlled.
 
-Free-plan and unlimited-entitlement allowance behavior is unchanged: these users
-are not blocked by this quota policy. Model-access and resource permissions remain
-independent. Counting eligibility is not a claim that a particular user owes money;
-it does not special-case their plan. Existing paid allowance, per-seat usage,
-payer credits, overage opt-in/cap, and denial decisions remain in the legacy ledger.
+Unlimited (enterprise) entitlements are never blocked by this quota policy.
+Free-plan users are hard-capped at `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` of
+counted usage per UTC calendar month: past it, admission answers
+`ai_free_allowance_exhausted` and nothing is settled, since Free has no credits
+or overage. Model-access and resource permissions remain independent. Counting
+eligibility is not a claim that a particular user owes money; it does not
+special-case their plan. Existing paid allowance, per-seat usage, payer credits,
+overage opt-in/cap, and denial decisions remain in the legacy ledger.
 
 ### Persistence
 
@@ -69,14 +72,16 @@ independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
 there is no longer an `Environment::Develop` safeguard, so a true value settles
 in production.
 
-Pricing is two mandatory Doppler values, loaded once at startup by every host that
+Pricing is four mandatory Doppler values, loaded once at startup by every host that
 composes `ai_billing` (see [`config.rs`](../crates/ai_billing/src/config.rs) and
-[`pricing.rs`](../crates/ai_billing/src/domain/pricing.rs)):
-`AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, the usage each paid seat includes per period
-measured at provider cost, and `AI_USAGE_OVERAGE_MARKUP_PERCENT`, the whole-percent
-markup over cost applied to usage beyond it before credits are consumed or overage
-is charged. There is no default in code: a missing, malformed, or out-of-range value
-fails startup and the Doppler CI validator. The values live in `shared_ai` (`lcl`,
+[`pricing.rs`](../crates/ai_billing/src/domain/pricing.rs)): one allowance per plan,
+measured at provider cost — `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` (the free plan's
+hard cap, per user per UTC calendar month), `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
+(Premium, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
+(Max, per seat per subscription period) — and `AI_USAGE_OVERAGE_MARKUP_PERCENT`,
+the whole-percent markup over cost applied to paid usage beyond the allowance before
+credits are consumed or overage is charged. There is no default in code: a missing,
+malformed, or out-of-range value fails startup and the Doppler CI validator. The values live in `shared_ai` (`lcl`,
 `dev`, `prd`), which every participating service inherits except the authentication
 service, whose `dev` and `prd` configs carry them directly; the no-Doppler local
 stack stubs them in `BootStubEnv`. The markup is applied to the period's cumulative
@@ -121,6 +126,7 @@ errors are not permission grants and must not disclose another user's quota.
 | Result | HTTP status | Stable `code` | Retry semantics |
 | --- | --- | --- | --- |
 | Allowance exhausted | 402 | `ai_allowance_exhausted` | Policy/allowance must change; no automatic tight retry |
+| Free monthly cap reached | 402 | `ai_free_allowance_exhausted` | Only an upgrade (or the next calendar month) lifts it |
 | Spending cap reached | 402 | `ai_overage_limit_reached` | Policy/allowance must change |
 | Overage payment failed | 402 | `ai_overage_payment_failed` | Billing problem must be resolved |
 | Could not validate billing | 503 | `ai_billing_unavailable` | Retry later with bounded backoff; never execute on uncertainty |
@@ -278,9 +284,10 @@ procedure. Operators must approve and record each release gate.
    standalone agent trigger, and scheduled action. Include any separately launched
    memory/common-tool host. Use the existing Doppler-backed application config,
    not a quoted JSON string, AWS secret indirection, or a second Pulumi flag.
-   The pricing values `AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and
-   `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts whatever
-   the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
+   The pricing values `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`,
+   `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`,
+   and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
+   whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
    Verify the effective startup value for every replica/worker. Registration and
    hosted access require operator approval; code defaults are not proof of it.
 4. **Validate locally, then in an approved staging environment.** Use the checklist

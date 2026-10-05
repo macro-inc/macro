@@ -560,17 +560,25 @@ must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
 quota, but Macro-funded tools and helpers still check independently.
 
-Paid plans include a monthly AI allowance per seat, measured at provider cost;
-usage beyond it is billed at a markup. Both numbers come from Doppler
-(`AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and `AI_USAGE_OVERAGE_MARKUP_PERCENT`; $20 and
-5% in dev), never from code. When the allowance is used up and no credits or usage billing cover the
-request, sending a message answers HTTP 402 and the app opens the
-**AI usage limit** dialog (title `You've used this month's included AI`, or the
-spending-limit / failed-charge variants). It shows the same meter and controls
-as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
-`Open billing settings` button, and no Max purchase or upgrade control. Team
-members who are not the payer see a note to ask the team owner to add credits
-or turn on usage billing.
+Every plan includes a monthly AI allowance per seat, measured at provider cost;
+paid usage beyond it is billed at a markup. All of the numbers come from Doppler
+(`AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
+for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
+`AI_USAGE_OVERAGE_MARKUP_PERCENT`), never from code. When a paid allowance is
+used up and no credits or usage billing cover the request, sending a message
+answers HTTP 402 and the app opens the **AI usage limit** dialog (title
+`You've used this month's included AI`, or the spending-limit / failed-charge
+variants). It shows the same meter and controls as Settings → Billing:
+credit-pack buttons, the `Usage billing` toggle, an `Open billing settings`
+button, and `Upgrade to Max` for Premium payers (on a team this moves only the
+payer's own seat). Team members who are not the payer see a note to ask the
+team owner to add credits or turn on usage billing.
+
+The free plan is a hard cap: when its monthly allowance is used up, requests
+answer 402 with code `ai_free_allowance_exhausted` and the dialog (title
+`You've used this month's free AI`) shows the meter against the cap with an
+`Upgrade` button that opens Billing; there are no credit or usage-billing
+controls. The cap resets with the UTC calendar month.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
 

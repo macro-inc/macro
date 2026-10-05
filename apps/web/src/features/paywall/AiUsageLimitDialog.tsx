@@ -1,9 +1,8 @@
 import { AiUsageControls, AiUsageMeter } from '@app/features/settings/AiUsage';
-// import { useAnalytics } from '@app/lib/analytics/analytics-context';
-// import { toast } from '@core/component/Toast/Toast';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { toast } from '@core/component/Toast/Toast';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { useAiBillingSummaryQuery } from '@queries/auth';
-// import { useChangePlanMutation } from '@queries/auth';
+import { useAiBillingSummaryQuery, useChangePlanMutation } from '@queries/auth';
 import type { AiDenyCode } from '@service-auth/ai-billing-types';
 import { useNavigate } from '@solidjs/router';
 import { Button, Dialog, Surface } from '@ui';
@@ -11,6 +10,7 @@ import { Show, Suspense } from 'solid-js';
 
 const TITLES: Record<AiDenyCode, string> = {
   ai_allowance_exhausted: "You've used this month's included AI",
+  ai_free_allowance_exhausted: "You've used this month's free AI",
   ai_overage_limit_reached: "You've hit your AI spending limit",
   ai_overage_payment_failed: 'Your last AI usage charge failed',
 };
@@ -18,19 +18,21 @@ const TITLES: Record<AiDenyCode, string> = {
 /**
  * Shown when the backend refuses an AI request with a billing code. Offers the
  * payer the same controls as Billing settings, right where they were blocked.
+ * Free users have no controls; they are pointed at an upgrade instead.
  */
 export function AiUsageLimitDialog() {
   const { usageLimitOpen, usageLimitCode, hideUsageLimit } =
     useAiUsageLimitState();
-  // const analytics = useAnalytics();
+  const analytics = useAnalytics();
   const navigate = useNavigate();
   const summary = useAiBillingSummaryQuery({ enabled: usageLimitOpen });
-  // const changePlan = useChangePlanMutation();
+  const changePlan = useChangePlanMutation();
 
-  const title = () => TITLES[usageLimitCode() ?? 'ai_allowance_exhausted'];
+  const code = () => usageLimitCode() ?? 'ai_allowance_exhausted';
+  const title = () => TITLES[code()];
+  const free = () => code() === 'ai_free_allowance_exhausted';
   const returnUrl = () => `${window.location.origin}/app/settings/billing`;
 
-  /*
   const upgradeToMax = async () => {
     try {
       await changePlan.mutateAsync({ plan: 'max' });
@@ -42,7 +44,6 @@ export function AiUsageLimitDialog() {
       toast.failure("Couldn't upgrade. Please try again from Billing.");
     }
   };
-  */
 
   return (
     <Dialog
@@ -56,8 +57,14 @@ export function AiUsageLimitDialog() {
           <div class="flex flex-col gap-1">
             <h2 class="text-xl font-semibold text-ink">{title()}</h2>
             <p class="text-sm text-ink-extra-muted">
-              Your plan includes AI each month, measured at provider cost. Add
-              credits or turn on usage billing to keep going.
+              <Show
+                when={!free()}
+                fallback="Guest access includes a fixed amount of AI each month, measured at provider cost. Upgrade to keep going now and unlock every model."
+              >
+                Your plan includes AI each month, measured at provider cost. Add
+                credits or turn on usage billing to keep going, or move to Max
+                for a larger included amount.
+              </Show>
             </p>
           </div>
 
@@ -68,12 +75,14 @@ export function AiUsageLimitDialog() {
               {(snapshot) => (
                 <div class="flex flex-col gap-4 rounded-lg bg-active p-4">
                   <AiUsageMeter snapshot={snapshot()} />
-                  <div class="border-t border-t-edge-muted pt-4">
-                    <AiUsageControls
-                      snapshot={snapshot()}
-                      returnUrl={returnUrl()}
-                    />
-                  </div>
+                  <Show when={snapshot().tier !== 'free'}>
+                    <div class="border-t border-t-edge-muted pt-4">
+                      <AiUsageControls
+                        snapshot={snapshot()}
+                        returnUrl={returnUrl()}
+                      />
+                    </div>
+                  </Show>
                 </div>
               )}
             </Show>
@@ -100,8 +109,19 @@ export function AiUsageLimitDialog() {
               >
                 Dismiss
               </Button>
-              {/*
               <Suspense fallback={null}>
+                <Show when={summary.isSuccess && summary.data.tier === 'free'}>
+                  <Button
+                    variant="strong"
+                    class="px-3 py-1.5"
+                    onClick={() => {
+                      hideUsageLimit();
+                      navigate('/app/settings/billing');
+                    }}
+                  >
+                    Upgrade
+                  </Button>
+                </Show>
                 <Show
                   when={
                     summary.isSuccess &&
@@ -111,7 +131,7 @@ export function AiUsageLimitDialog() {
                 >
                   <Button
                     variant="strong"
-                    class="rounded-full px-3 py-1.5"
+                    class="px-3 py-1.5"
                     disabled={changePlan.isPending}
                     onClick={() => void upgradeToMax()}
                   >
@@ -119,7 +139,6 @@ export function AiUsageLimitDialog() {
                   </Button>
                 </Show>
               </Suspense>
-              */}
             </div>
           </div>
         </section>

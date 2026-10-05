@@ -49,4 +49,28 @@ describe('AiUsageMeter', () => {
     expect(screen.getByText(/Usage billing this period/)).toBeTruthy();
     expect(screen.queryByText(/Team credits:/)).toBeNull();
   });
+
+  it('shows free users only their monthly cap and the upgrade prompt', () => {
+    render(() => (
+      <AiUsageMeter
+        snapshot={{
+          ...snapshot(1),
+          tier: 'free',
+          included_cents: 500,
+          used_cents: 500,
+          credit_balance_cents: 0,
+          overage_enabled: false,
+          overage_limit_cents: 0,
+          overage_charged_cents: 0,
+          remaining_cents: 0,
+          blocked_reason: 'free_allowance_exhausted',
+        }}
+      />
+    ));
+
+    expect(screen.getByText(/of \$5 included/)).toBeTruthy();
+    expect(screen.queryByText(/Credits:/)).toBeNull();
+    expect(screen.queryByText(/Usage billing/)).toBeNull();
+    expect(screen.getByText(/Upgrade to keep going/)).toBeTruthy();
+  });
 });

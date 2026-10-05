@@ -32,6 +32,8 @@ function formatPeriodEnd(iso: string): string {
 const BLOCKED_COPY: Record<AiDenyReason, string> = {
   allowance_exhausted:
     "You've used this period's included AI. Add credits or turn on usage billing to keep going.",
+  free_allowance_exhausted:
+    "You've used this month's free AI. Upgrade to keep going.",
   overage_limit_reached:
     "You've reached your usage billing limit for this period. Raise the limit or add credits to keep going.",
   overage_payment_failed:
@@ -44,9 +46,11 @@ const DEFAULT_CREDIT_PACKS_CENTS = [1_000, 2_500, 5_000, 10_000];
 
 /**
  * The period's AI position: a meter of included usage plus credits and overage
- * headroom, and where the user stands right now.
+ * headroom, and where the user stands right now. Free users see only the
+ * meter against their monthly cap; they have no credits or usage billing.
  */
 export function AiUsageMeter(props: { snapshot: AiUsageSnapshot }) {
+  const free = () => props.snapshot.tier === 'free';
   const included = () => props.snapshot.included_cents;
   const used = () => props.snapshot.used_cents;
   const includedUsed = () => Math.min(used(), included());
@@ -91,12 +95,14 @@ export function AiUsageMeter(props: { snapshot: AiUsageSnapshot }) {
         <Show when={beyond() > 0}>
           <span>{formatCents(beyond())} beyond included</span>
         </Show>
-        <span>
-          {props.snapshot.seats > 1 ? 'Team credits' : 'Credits'}:{' '}
-          <span class="text-ink">
-            {formatCents(props.snapshot.credit_balance_cents)}
+        <Show when={!free()}>
+          <span>
+            {props.snapshot.seats > 1 ? 'Team credits' : 'Credits'}:{' '}
+            <span class="text-ink">
+              {formatCents(props.snapshot.credit_balance_cents)}
+            </span>
           </span>
-        </span>
+        </Show>
         <Show when={props.snapshot.overage_enabled}>
           <span>
             {props.snapshot.seats > 1

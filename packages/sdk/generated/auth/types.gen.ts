@@ -358,7 +358,7 @@ export type CursorModelsResponse = {
 /**
  * Why a request was refused.
  */
-export type DenyReason = 'allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
+export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -1178,7 +1178,8 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
-     * Included AI per seat per period, in cents at provider cost.
+     * Included AI per seat per period, in cents at provider cost. For the
+     * free plan this is its monthly hard cap.
      */
     included_ai_cents_per_seat: number;
     /**

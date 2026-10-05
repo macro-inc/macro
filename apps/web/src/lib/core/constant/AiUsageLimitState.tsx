@@ -13,6 +13,7 @@ const [usageLimitCode, setUsageLimitCode] = createSignal<AiDenyCode | null>(
 
 const KNOWN_CODES: readonly AiDenyCode[] = [
   'ai_allowance_exhausted',
+  'ai_free_allowance_exhausted',
   'ai_overage_limit_reached',
   'ai_overage_payment_failed',
 ];

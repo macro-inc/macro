@@ -2221,7 +2221,7 @@ async fn set_team_member_plan_is_a_no_op_when_already_on_plan() {
 }
 
 #[tokio::test]
-async fn set_team_member_plan_rejects_premium_to_max_without_side_effects() {
+async fn set_team_member_plan_upgrades_premium_seat_to_max_and_swaps_tier_role() {
     let team_id = uuid::Uuid::from_u128(5105);
     let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
     let member_id = "macro|member@example.com";
@@ -2237,23 +2237,38 @@ async fn set_team_member_plan_rejects_premium_to_max_without_side_effects() {
     let remove_calls = roles_service.remove_calls.clone();
     let service = build_member_plan_service(team_repo, customer_repo, roles_service);
 
-    let error = service
+    let member = service
         .set_team_member_plan(
             test_team_receipt::<AdminTeamRole>(team_id, &admin_id),
             &MacroUserIdStr::parse_from_str(member_id).unwrap(),
             SeatPlan::Max,
         )
         .await
-        .unwrap_err();
+        .unwrap();
 
-    assert!(matches!(
-        error,
-        SetTeamMemberPlanError::CustomerError(CustomerError::PlanUnavailable(SeatPlan::Max))
-    ));
-    assert!(move_calls.lock().unwrap().is_empty());
-    assert!(plan_calls.lock().unwrap().is_empty());
-    assert!(upsert_calls.lock().unwrap().is_empty());
-    assert!(remove_calls.lock().unwrap().is_empty());
+    assert_eq!(member.plan, SeatPlan::Max);
+    assert_eq!(
+        *move_calls.lock().unwrap(),
+        vec![("sub_team".to_string(), SeatPlan::Premium, SeatPlan::Max)]
+    );
+    assert_eq!(
+        *plan_calls.lock().unwrap(),
+        vec![(team_id, member_id.to_string(), SeatPlan::Max)]
+    );
+    assert_eq!(
+        *upsert_calls.lock().unwrap(),
+        vec![(
+            member_id.to_string(),
+            vec![RoleId::TeamSubscriber, RoleId::SubMax]
+        )]
+    );
+    assert_eq!(
+        *remove_calls.lock().unwrap(),
+        vec![(
+            member_id.to_string(),
+            vec![RoleId::SubHaiku, RoleId::SubSonnet, RoleId::SubOpus]
+        )]
+    );
 }
 
 #[tokio::test]

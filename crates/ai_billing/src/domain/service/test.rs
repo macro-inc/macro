@@ -932,8 +932,10 @@ async fn disabled_settlement_does_not_retry_pending_or_failed_charges() {
 }
 
 #[tokio::test]
-async fn free_users_are_not_gated() {
-    let (svc, ..) = premium_service(1_000_000);
+async fn free_users_are_hard_capped_at_the_free_allowance() {
+    // `FakeUsage::cents` is attributed to the first requested user, which for
+    // a free user is the user themself.
+    let (svc, repo, _, usage) = premium_service(499);
     let free = user("free@x.com");
     assert_eq!(
         svc.check_allowance(&free).await.unwrap(),
@@ -941,7 +943,70 @@ async fn free_users_are_not_gated() {
     );
     let snap = svc.snapshot(&free).await.unwrap();
     assert_eq!(snap.tier, PlanTier::Free);
-    assert_eq!(snap.used_cents, 0);
+    assert_eq!(snap.included_cents, 500);
+    assert_eq!(snap.used_cents, 499);
+    assert_eq!(snap.remaining_cents, 1);
+    assert_eq!(snap.blocked_reason, None);
+    // The free period is the calendar month: no Stripe anchor exists.
+    let month = BillingPeriod::calendar_month(Utc::now());
+    assert_eq!(
+        BillingPeriod {
+            start: snap.period_start,
+            end: snap.period_end
+        },
+        month
+    );
+    // Even a live anchor left behind by a lapsed subscription (the fake
+    // repo's settings are shared by every payer) does not move it.
+    let start = Utc::now() - chrono::Duration::days(3);
+    repo.set_period(&free, start, start + chrono::Duration::days(30))
+        .await
+        .unwrap();
+    let snap = svc.snapshot(&free).await.unwrap();
+    assert_eq!(
+        (snap.period_start, snap.period_end),
+        (month.start, month.end)
+    );
+
+    *usage.cents.lock().unwrap() = 500;
+    assert_eq!(
+        svc.check_allowance(&free).await.unwrap(),
+        AllowanceDecision::Deny(DenyReason::FreeAllowanceExhausted)
+    );
+    let snap = svc.snapshot(&free).await.unwrap();
+    assert_eq!(snap.remaining_cents, 0);
+    assert_eq!(
+        snap.blocked_reason,
+        Some(DenyReason::FreeAllowanceExhausted)
+    );
+
+    // Nothing is ever settled for a free user, and they cannot buy their way out.
+    svc.settle(&free).await.unwrap();
+    assert_eq!(repo.state.lock().unwrap().balance, 0);
+    assert!(matches!(
+        svc.update_overage(&free, true, 5_000).await,
+        Err(BillingError::FreePlan)
+    ));
+    assert!(matches!(
+        svc.create_credit_checkout(&free, 1_000, String::new(), String::new())
+            .await,
+        Err(BillingError::FreePlan)
+    ));
+}
+
+#[tokio::test]
+async fn free_users_are_not_gated_while_enforcement_is_off() {
+    let (svc, ..) = premium_service_with(AiUsageBilling::Enabled, 1_000_000);
+    let svc = svc.with_enforcement(AiUsageEnforcement::Disabled);
+    let free = user("free@x.com");
+    assert_eq!(
+        svc.check_allowance(&free).await.unwrap(),
+        AllowanceDecision::Allow
+    );
+    let snap = svc.snapshot(&free).await.unwrap();
+    assert_eq!(snap.used_cents, 1_000_000);
+    assert_eq!(snap.remaining_cents, 0);
+    assert_eq!(snap.blocked_reason, None);
 }
 
 #[tokio::test]
@@ -1774,7 +1839,7 @@ async fn position_keeps_matching_pairs_in_their_stored_order() {
     let stored = vec![
         SeatAllowance {
             user: member.clone(),
-            included_cents: 2_000,
+            included_cents: 10_000,
         },
         SeatAllowance {
             user: owner.clone(),

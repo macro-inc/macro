@@ -37,10 +37,7 @@ fn pricing_values_deserialize_from_integers_and_validate() {
     let negative = serde_json::from_value::<IncludedAllowanceCents>(serde_json::json!(-1))
         .unwrap_err()
         .to_string();
-    assert!(
-        negative.contains(AI_USAGE_INCLUDED_ALLOWANCE_CENTS),
-        "{negative}"
-    );
+    assert!(negative.contains("at least 0 cents"), "{negative}");
     let too_high = serde_json::from_value::<OverageMarkupPercent>(serde_json::json!(100))
         .unwrap_err()
         .to_string();
@@ -63,23 +60,79 @@ fn pricing_values_deserialize_from_integers_and_validate() {
 
 #[test]
 fn raw_pricing_values_parse_and_validate() {
-    let pricing = parse_ai_pricing(" 2000 ", "5").unwrap();
-    assert_eq!(pricing.included_allowance_cents(), 2_000);
+    use crate::domain::PlanTier;
+
+    let raw = |free, premium, max| RawPlanAllowances { free, premium, max };
+    let pricing = parse_ai_pricing(raw("500", " 2000 ", "10000"), "5").unwrap();
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Free), 500);
+    assert_eq!(
+        pricing.included_allowance_cents_for(PlanTier::Premium),
+        2_000
+    );
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Max), 10_000);
     assert_eq!(pricing.overage_markup_percent(), 5);
 
-    for (allowance, markup, named) in [
-        ("", "5", AI_USAGE_INCLUDED_ALLOWANCE_CENTS),
-        ("twenty dollars", "5", AI_USAGE_INCLUDED_ALLOWANCE_CENTS),
-        ("-1", "5", AI_USAGE_INCLUDED_ALLOWANCE_CENTS),
-        ("2000", "", AI_USAGE_OVERAGE_MARKUP_PERCENT),
-        ("2000", "5%", AI_USAGE_OVERAGE_MARKUP_PERCENT),
-        ("2000", "100", AI_USAGE_OVERAGE_MARKUP_PERCENT),
-        ("2000", "2.5", AI_USAGE_OVERAGE_MARKUP_PERCENT),
+    for (allowances, markup, named) in [
+        (
+            raw("", "2000", "10000"),
+            "5",
+            AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS,
+        ),
+        (
+            raw("-1", "2000", "10000"),
+            "5",
+            AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS,
+        ),
+        (
+            raw("500", "", "10000"),
+            "5",
+            AI_USAGE_INCLUDED_ALLOWANCE_CENTS,
+        ),
+        (
+            raw("500", "twenty dollars", "10000"),
+            "5",
+            AI_USAGE_INCLUDED_ALLOWANCE_CENTS,
+        ),
+        (
+            raw("500", "-1", "10000"),
+            "5",
+            AI_USAGE_INCLUDED_ALLOWANCE_CENTS,
+        ),
+        (
+            raw("500", "2000", ""),
+            "5",
+            AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS,
+        ),
+        (
+            raw("500", "2000", "-1"),
+            "5",
+            AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS,
+        ),
+        (
+            raw("500", "2000", "10000"),
+            "",
+            AI_USAGE_OVERAGE_MARKUP_PERCENT,
+        ),
+        (
+            raw("500", "2000", "10000"),
+            "5%",
+            AI_USAGE_OVERAGE_MARKUP_PERCENT,
+        ),
+        (
+            raw("500", "2000", "10000"),
+            "100",
+            AI_USAGE_OVERAGE_MARKUP_PERCENT,
+        ),
+        (
+            raw("500", "2000", "10000"),
+            "2.5",
+            AI_USAGE_OVERAGE_MARKUP_PERCENT,
+        ),
     ] {
-        let error = parse_ai_pricing(allowance, markup).unwrap_err();
+        let error = parse_ai_pricing(allowances, markup).unwrap_err();
         assert!(
             format!("{error:?}").contains(named),
-            "{allowance:?}/{markup:?}: {error:?}"
+            "{allowances:?}/{markup:?}: {error:?}"
         );
     }
 }
