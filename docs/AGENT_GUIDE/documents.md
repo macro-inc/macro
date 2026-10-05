@@ -939,6 +939,18 @@ scroll, or press **Stop**. A viewer who opens a design nobody has shared yet,
 or anyone when the sync service is unreachable, gets the stored file
 read-only.
 
+Macro AI reads designs with `ReadDesign` (`ReadContent` returns the same
+description; attaching a design points the agent at it): the pages, numbered
+from 1, each page's top-level frames and sections with ids, sizes and
+positions, the text in each frame in reading order (instances' text
+included), the components the frame's instances use, and the file's
+components with their properties and variants, styles, and variable
+collections (`fig_engine::describe`). Hidden layers are left out; `pages`
+reads only some pages. The tool reads the stored file, so edits still held
+by a live session appear once one of the editors has saved. Tools cannot
+edit designs. Search indexes each page's name, frame names, and text as one
+chunk, so content search finds a design by the words on its canvas.
+
 Layout and test hooks:
 
 - **Left panel tabs**: `fig-tab-layers` and `fig-tab-assets`. Assets

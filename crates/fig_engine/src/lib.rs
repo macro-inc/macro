@@ -6,6 +6,7 @@ pub mod boolean;
 pub mod collab;
 pub mod container;
 pub mod decode;
+pub mod describe;
 pub mod document;
 pub mod edit;
 pub mod error;

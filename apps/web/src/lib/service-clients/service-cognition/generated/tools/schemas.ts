@@ -7786,6 +7786,13 @@ export const ReadContentResponse = z.object({
   ),
 });
 
+export const ReadDesign = z.object({
+  documentId: z.string(),
+  pages: z.union([z.array(z.number().int().gte(0)), z.null()]).optional(),
+});
+
+export const ReadDesignResponse = z.object({ content: z.string() });
+
 export const ReadInitiative = z.object({
   initiativeId: z.string().uuid(),
   taskCursor: z.union([z.string(), z.null()]).optional(),

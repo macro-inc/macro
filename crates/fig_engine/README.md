@@ -63,6 +63,8 @@ render           tiles: fills, strokes (inside/outside via clipping), masks,
                  blend modes, isolation, effects (shadows, blurs), images, text
 inspect          layer rows, frames, hit tests, marquee, node info, search, SVG
                  outlines; a page's prototype (inspect/prototype)
+describe         a design summarized for AI agents and search: pages, frames,
+                 their text and components, the design system; text by page
 edit             edit operations, undo/redo, fractional-index positions;
                  auto layout (stacks re-laid out after edits); booleans,
                  flatten, and vectors (edit/shapes); pasting (edit/paste)

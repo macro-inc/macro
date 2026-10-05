@@ -42,6 +42,10 @@ pub mod word_document;
 #[cfg(feature = "ai_tools")]
 pub mod presentation;
 
+/// Reading Figma designs with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod design;
+
 #[cfg(feature = "ports")]
 pub mod ports;
 

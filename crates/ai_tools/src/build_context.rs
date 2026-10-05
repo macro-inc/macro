@@ -266,7 +266,7 @@ pub async fn build_tool_service_context_from_env(
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
-    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+    let document_files = documents::outbound::s3_document_files::S3DocumentFiles::new(
         pool.clone(),
         s3_client.clone(),
         env.document_storage_bucket.to_string(),
@@ -357,7 +357,8 @@ pub async fn build_tool_service_context_from_env(
             &side_effect_clients,
         ),
     )
-    .with_presentation_files(Arc::new(presentation_files));
+    .with_presentation_files(Arc::new(document_files.clone()))
+    .with_design_files(Arc::new(document_files));
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),

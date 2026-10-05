@@ -139,6 +139,7 @@
               "AI/mcp/tools/read-channel-thread",
               "AI/mcp/tools/read-chat",
               "AI/mcp/tools/read-content",
+              "AI/mcp/tools/read-design",
               "AI/mcp/tools/read-initiative",
               "AI/mcp/tools/read-initiative-activity",
               "AI/mcp/tools/read-metadata",
