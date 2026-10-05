@@ -162,3 +162,22 @@ export function parseDashes(text: string): number[] | null {
   if (parts.every((n) => n === 0)) return [];
   return parts.length === 1 ? [parts[0], parts[0]] : parts;
 }
+
+/**
+ * A new paint like `p`, for moving it to the other list (Figma's swap fill
+ * and stroke). Gradients keep their stops; unknown kinds are dropped.
+ */
+export function copyPaint(p: PaintInfo): PaintEdit | null {
+  const common = { opacity: p.opacity, visible: p.visible };
+  if (p.type === 'SOLID' && p.color)
+    return {
+      ...common,
+      type: 'SOLID',
+      color: rgbaToHex({ ...hexToRgba(p.color), a: p.alpha ?? 1 }),
+    };
+  if (isGradient(p.type) && p.stops)
+    return { ...common, type: p.type as PaintType, stops: stopSpecs(p.stops) };
+  if (p.type === 'IMAGE' && p.imageHash)
+    return { ...common, image: p.imageHash };
+  return null;
+}

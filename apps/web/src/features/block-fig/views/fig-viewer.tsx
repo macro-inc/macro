@@ -15,6 +15,7 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { ActionsPalette } from '../components/actions-palette';
 import { CommentPins } from '../components/comment-pins';
 import { DesignPanel } from '../components/design-panel';
 import { DevInspect } from '../components/dev-inspect';
@@ -39,6 +40,7 @@ import { rangeFills, rangeStyle, textInfoForRange } from '../core/rich-text';
 import {
   controlOwnsKey,
   EDIT_ACTIONS,
+  SELECTION_ACTIONS,
   shortcutAction,
   type ViewerAction,
 } from '../core/shortcuts';
@@ -65,6 +67,9 @@ import { LibraryUpdates } from './library-views';
 import { PresentMode } from './present-mode';
 import { TextEditor } from './text-editor';
 import { ViewerCanvas } from './viewer-canvas';
+
+/** How soon a second digit must follow the first to make an exact opacity. */
+const OPACITY_TYPING_MS = 600;
 
 const safeName = (name: string) =>
   name.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'export';
@@ -109,6 +114,7 @@ export function FigViewer() {
   const [altHeld, setAltHeld] = createSignal(false);
   const [deepHeld, setDeepHeld] = createSignal(false);
   const [showShortcuts, setShowShortcuts] = createSignal(false);
+  const [showActions, setShowActions] = createSignal(false);
   const [leftTab, setLeftTab] = createSignal<'layers' | 'assets'>('layers');
   const [info, setInfo] = createSignal<NodeInfo>();
   const designSystem = createDesignSystem({ engine, viewer, editor });
@@ -348,6 +354,47 @@ export function FigViewer() {
     if (next !== undefined) void viewer.openPage(next);
   };
 
+  /**
+   * Figma's opacity keys: a digit sets tens of percent (0 is 100%); a
+   * second one typed quickly makes it exact (4 then 5 is 45%).
+   */
+  let typedOpacity: { digit: number; at: number; key: string } | undefined;
+  let opacitySteps = 0;
+  const typeOpacity = (digit: number) => {
+    const now = performance.now();
+    const first = typedOpacity;
+    if (first && now - first.at < OPACITY_TYPING_MS) {
+      typedOpacity = undefined;
+      void editor.setProps(
+        { opacity: (first.digit * 10 + digit) / 100 },
+        first.key
+      );
+      return;
+    }
+    const key = `opacity-keys-${++opacitySteps}`;
+    typedOpacity = { digit, at: now, key };
+    void editor.setProps({ opacity: digit === 0 ? 1 : digit / 10 }, key);
+  };
+
+  /** Figma's place image (⇧⌘K): picked images go in the middle of the view. */
+  const placeImage = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = () => {
+      const files = [...(input.files ?? [])];
+      if (files.length === 0) return;
+      const c = viewer.camera();
+      const v = viewer.viewport();
+      const at = { x: c.x + v.w / 2 / c.zoom, y: c.y + v.h / 2 / c.zoom };
+      void viewer
+        .containerAt(at)
+        .then((parent) => editor.importImages(files, at, parent));
+    };
+    input.click();
+  };
+
   const run = (action: ViewerAction) =>
     match(action)
       .with('tool-move', () => viewer.setTool('move'))
@@ -364,6 +411,8 @@ export function FigViewer() {
       .with('select-all', () => void viewer.selectAll())
       .with('escape', () => {
         if (showShortcuts()) setShowShortcuts(false);
+        else if (viewer.tool() !== 'move' && viewer.tool() !== 'hand')
+          viewer.setTool('move');
         else viewer.escapeSelection();
       })
       .with('select-parent', () => viewer.selectParent())
@@ -393,6 +442,23 @@ export function FigViewer() {
         queueMicrotask(() => searchInput?.focus());
       })
       .with('show-shortcuts', () => setShowShortcuts((s) => !s))
+      .with('open-actions', () => {
+        if (!showActions()) {
+          setShowActions(true);
+          return;
+        }
+        setShowActions(false);
+        root.focus({ preventScroll: true });
+      })
+      .with('toggle-assets', () => {
+        viewer.setUiHidden(false);
+        if (viewer.layersOpen() && leftTab() === 'assets') {
+          viewer.setLayersOpen(false);
+          return;
+        }
+        viewer.setLayersOpen(true);
+        setLeftTab('assets');
+      })
       .with('tool-frame', () => viewer.setTool('frame'))
       .with('tool-rectangle', () => viewer.setTool('rectangle'))
       .with('tool-ellipse', () => viewer.setTool('ellipse'))
@@ -400,6 +466,8 @@ export function FigViewer() {
       .with('tool-line', () => viewer.setTool('line'))
       .with('tool-arrow', () => viewer.setTool('arrow'))
       .with('tool-pen', () => viewer.setTool('pen'))
+      .with('tool-pencil', () => viewer.setTool('pencil'))
+      .with('place-image', () => placeImage())
       .with('undo', () => {
         editor.endVectorEdit();
         editor.undo();
@@ -413,6 +481,7 @@ export function FigViewer() {
       .with('copy', () => editor.copy())
       .with('cut', () => void editor.cut())
       .with('paste', () => void editor.paste())
+      .with('paste-replace', () => void editor.pasteToReplace())
       .with('group', () => void editor.group())
       .with('ungroup', () => void editor.ungroup())
       .with('frame-selection', () => void editor.group(true))
@@ -440,6 +509,31 @@ export function FigViewer() {
       .with('flip-horizontal', () => void editor.flip(false))
       .with('flip-vertical', () => void editor.flip(true))
       .with('rename', () => viewer.requestRename())
+      .with('align-left', () => void editor.align('left'))
+      .with('align-center', () => void editor.align('center'))
+      .with('align-right', () => void editor.align('right'))
+      .with('align-top', () => void editor.align('top'))
+      .with('align-middle', () => void editor.align('middle'))
+      .with('align-bottom', () => void editor.align('bottom'))
+      .with('distribute-horizontal', () => void editor.distribute('horizontal'))
+      .with('distribute-vertical', () => void editor.distribute('vertical'))
+      .with('swap-fill-stroke', () => {
+        const i = info();
+        if (i) void editor.swapFillStroke(i);
+      })
+      .with(
+        'opacity-0',
+        'opacity-1',
+        'opacity-2',
+        'opacity-3',
+        'opacity-4',
+        'opacity-5',
+        'opacity-6',
+        'opacity-7',
+        'opacity-8',
+        'opacity-9',
+        (a) => typeOpacity(Number(a.slice('opacity-'.length)))
+      )
       .with('nudge-left', () => void editor.nudge(-1, 0))
       .with('nudge-right', () => void editor.nudge(1, 0))
       .with('nudge-up', () => void editor.nudge(0, -1))
@@ -559,8 +653,29 @@ export function FigViewer() {
     focus: () => root.focus({ preventScroll: true }),
   });
 
+  /** Nothing to deselect, no tool to leave, no panel to close. */
+  const escapeIdle = () =>
+    !showShortcuts() &&
+    (viewer.tool() === 'move' || viewer.tool() === 'hand') &&
+    viewer.selected().length === 0;
+
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
+    // Presenting takes its own keys.
+    if (review.presenting()) return;
+    const mod = IS_MAC ? e.metaKey : e.ctrlKey;
+    // ⌘P is the actions menu anywhere in the design, never the browser's
+    // print (Figma's quick actions; Figma's ⌘K is the app's command menu).
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyP') {
+      e.preventDefault();
+      e.stopPropagation();
+      run('open-actions');
+      return;
+    }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyK') {
+      context.suggestActions?.(() => setShowActions(true));
+      return;
+    }
     if (target.closest('input, textarea, [contenteditable="true"]')) return;
     // Menus (portaled, so their events bubble here) handle their own keys.
     if (target.closest('[role="menu"]')) return;
@@ -570,6 +685,7 @@ export function FigViewer() {
     if (review.onKey(e)) return;
     if (e.key === ' ') {
       e.preventDefault();
+      e.stopPropagation();
       setSpaceHeld(true);
       return;
     }
@@ -585,6 +701,10 @@ export function FigViewer() {
     if (EDIT_ACTIONS.has(action) && !editor.enabled()) return;
     // ⌘V goes through the paste event, which carries pasted image files.
     if (action === 'paste') return;
+    // With nothing to act on, the key is the app's (⇧← focuses the split
+    // to the left, Escape leaves a spotlighted split, ⇧⌘C copies the link).
+    if (SELECTION_ACTIONS.has(action) && viewer.selected().length === 0) return;
+    if (action === 'escape' && escapeIdle()) return;
     e.preventDefault();
     e.stopPropagation();
     const resolved = enterAction(action);
@@ -593,6 +713,29 @@ export function FigViewer() {
       const id = info()?.id;
       if (id) void editor.editVector(id);
     } else run(resolved);
+  };
+
+  /**
+   * Keys pressed in the design reach it before the app's hotkeys (which
+   * listen on the document while capturing), so where they overlap the
+   * design's shortcuts win, as in Figma: R, T, O, H, \, ⌘\, ⌘Z and others.
+   * Keys it does not use go on to the app (⌘K, ⌘S, G, /…).
+   */
+  const handledEarly = new WeakSet<Event>();
+  onMount(() => {
+    const onWindowKeyDown = (e: KeyboardEvent) => {
+      if (!(e.target instanceof Node) || !root.contains(e.target)) return;
+      handledEarly.add(e);
+      onKeyDown(e);
+    };
+    window.addEventListener('keydown', onWindowKeyDown, true);
+    onCleanup(() =>
+      window.removeEventListener('keydown', onWindowKeyDown, true)
+    );
+  });
+  /** Keys from the design's portaled popovers, which bubble here. */
+  const onPortaledKeyDown = (e: KeyboardEvent) => {
+    if (!handledEarly.has(e)) onKeyDown(e);
   };
 
   const onKeyUp = (e: KeyboardEvent) => {
@@ -705,7 +848,7 @@ export function FigViewer() {
       tabIndex={0}
       class="flex size-full min-h-0 bg-page outline-none"
       data-testid="fig-viewer"
-      onKeyDown={onKeyDown}
+      onKeyDown={onPortaledKeyDown}
       onKeyUp={onKeyUp}
       onPaste={onPaste}
     >
@@ -930,6 +1073,20 @@ export function FigViewer() {
             <ShortcutsDialog
               mac={IS_MAC}
               onClose={() => setShowShortcuts(false)}
+            />
+          </Show>
+          <Show when={showActions()}>
+            <ActionsPalette
+              mac={IS_MAC}
+              available={(action) =>
+                !EDIT_ACTIONS.has(action) || editor.enabled()
+              }
+              onRun={run}
+              onClose={(refocus) => {
+                setShowActions(false);
+                // Back to the canvas, so its shortcuts work again.
+                if (refocus) root.focus({ preventScroll: true });
+              }}
             />
           </Show>
           <FigContextMenu

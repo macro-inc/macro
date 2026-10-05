@@ -34,3 +34,28 @@ export function alignOffset(
       return { dx: 0, dy: to.y + to.h - (box.y + box.h) };
   }
 }
+
+/**
+ * Offsets spacing layers evenly between the outermost two along an axis,
+ * as Figma's distribute: three layers at least, ordered by their start.
+ */
+export function distributeOffsets(
+  boxes: { id: string; bounds: Rect }[],
+  axis: 'horizontal' | 'vertical'
+): { id: string; dx: number; dy: number }[] {
+  if (boxes.length < 3) return [];
+  const h = axis === 'horizontal';
+  const start = (r: Rect) => (h ? r.x : r.y);
+  const size = (r: Rect) => (h ? r.w : r.h);
+  const sorted = [...boxes].sort((a, b) => start(a.bounds) - start(b.bounds));
+  const first = sorted[0].bounds;
+  const end = Math.max(...sorted.map((b) => start(b.bounds) + size(b.bounds)));
+  const total = sorted.reduce((sum, b) => sum + size(b.bounds), 0);
+  const gap = (end - start(first) - total) / (sorted.length - 1);
+  let at = start(first);
+  return sorted.map((b) => {
+    const d = at - start(b.bounds);
+    at += size(b.bounds) + gap;
+    return { id: b.id, dx: h ? d : 0, dy: h ? 0 : d };
+  });
+}

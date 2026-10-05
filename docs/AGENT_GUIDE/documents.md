@@ -1080,7 +1080,9 @@ Layout and test hooks:
   paste image files to place image-filled layers. The pen (P) draws a path:
   click places a corner, drag pulls out a curve's handles, clicking the first
   point closes the path, and Enter or Escape ends an open one; the result is
-  a Vector layer with a 1 px black stroke. Double-clicking a selected shape
+  a Vector layer with a 1 px black stroke. The pencil (⇧P) draws freehand:
+  a drag becomes a smoothed open Vector layer, and the pencil stays chosen
+  until Escape or another tool. Double-clicking a selected shape
   or vector (or Enter) edits its points: drag points and handles (⌥ breaks
   a handle's mirroring), Delete removes the selected point, and Escape or a
   click elsewhere ends editing; rectangles, ellipses, and the like become
@@ -1259,7 +1261,7 @@ Layout and test hooks:
   Escape closes the picker.
 - **Toolbar** (`fig-toolbar`): Move (V), Frame (F), Rectangle (R), Ellipse
   (O), Line (L), Arrow (⇧L; ⇧ while drawing snaps lines to 45°), Pen (P),
-  Text (T), Hand (H) as `fig-tool-<name>`, the boolean menu
+  Pencil (⇧P), Text (T), Hand (H) as `fig-tool-<name>`, the boolean menu
   (`fig-boolean-menu`: `fig-menu-boolean-<union|subtract|intersect|exclude>`
   and `fig-menu-flatten`), undo/redo (`fig-undo`,
   `fig-redo`), the save state (`fig-save-state`, `data-state` is `saved`,
@@ -1338,17 +1340,35 @@ Layout and test hooks:
   ⇧N next/previous frame, PageDown/PageUp pages, Enter children, ⇧Enter and
   Esc parent, Tab/⇧Tab siblings, ⌘/Ctrl+A select all, ⇧R rulers, ⇧' pixel
   grid, ⌃G (Ctrl+⇧4 off macOS) layout grids, ⌘/Ctrl+Y outline view,
-  ⌘/Ctrl+\\ hide UI, ⌘/Ctrl+⇧C copy as PNG, ⌘/Ctrl+⇧E export. Editing:
+  ⌘/Ctrl+\\ or ⌘/Ctrl+. hide UI, ⌥1 / ⌥2 / ⌥8 layers, assets, and design
+  panels, ⌘/Ctrl+⇧C copy as PNG, ⌘/Ctrl+⇧E export. ⌘/Ctrl+P (or ⌘/) opens
+  the design palette (`fig-actions`, Figma's actions menu, never the
+  browser's print): type in `fig-actions-input`, arrows and Enter run an
+  action (`fig-action-<action>`), Escape closes it. ⌘K stays the app's
+  command menu; opened from a design it offers the palette in a hint row
+  (`command-menu-hint`, "Did you mean to open the design palette?"), which
+  ⌘P or a click opens. Editing:
   ⌘Z/⇧⌘Z undo and redo (each brings back what was selected around the
   step), ⌘D duplicate, ⌘C/⌘X/⌘V, Delete, arrows nudge (⇧ by 10), ⌘G
   group, ⇧⌘G ungroup, ⌥⌘G frame selection (like ⇧A's wrapping frame, it
   does not clip its layers), ⌘] / ⌘[ forward/backward, ⌥⌘] / ⌥⌘[
   front/back, ⇧⌘H hide,
   ⇧⌘L lock, ⇧H / ⇧V flip, ⌘R rename, ⌥⇧U union, ⌥⇧S subtract (the top layers from the
-  bottom one), ⌥⇧I intersect, ⌥⇧X exclude, and ⌘E flatten (booleans and
-  shapes into one vector layer). A boolean keeps its layers as children and
+  bottom one), ⌥⇧I intersect, ⌥⇧E (or ⌥⇧X) exclude, and ⌘E flatten
+  (booleans and shapes into one vector layer). ⌥A / ⌥H / ⌥D align left,
+  center, right and ⌥W / ⌥V / ⌥S top, middle, bottom; ⌃⌥H / ⌃⌥V (Ctrl+Alt
+  off macOS) distribute three or more layers; digits set opacity (1 is 10%,
+  0 is 100%, two quick digits such as 4 5 make 45%); ⇧X swaps fill and
+  stroke; ⇧⌘K places images; ⇧⌘R pastes to replace. A boolean keeps its layers as children and
   recomputes its shape when they change, and takes the bottom layer's fills
   and strokes.
+- **App hotkeys over a design**: while the design has focus its own keys
+  come first, so R, T, O, H, C, \\, ⌘\\, ⇧H/⇧L, ⌘Z and the others act on
+  the design rather than the app's rename, tag, leader keys, or new split.
+  Keys the design does not use stay the app's (⌘K, ⌘S, ⌘;, G, /, E, M), and
+  so do ⇧←/⇧→, ⇧H, ⇧⌘C, and Escape when there is no selection to act on
+  (focus the next split, copy the link, leave a spotlighted split). A
+  read-only design leaves the editing keys (R, T, O…) to the app.
 
 The viewer has a browser fixture that needs no backend. From `apps/web`
 (build the engine first with `just ensure-fig-engine-wasm`):
