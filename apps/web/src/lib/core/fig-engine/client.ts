@@ -146,6 +146,8 @@ export class FigEngine {
   private readonly placed = new Map<number, EngineWorker>();
   private readonly starting = new Set<EngineWorker>();
   private closed = false;
+  /** Work (a last save) that keeps the primary worker alive after close. */
+  private readonly holds = new Set<Promise<unknown>>();
   private onFailure?: (error: Error) => void;
 
   private constructor(
@@ -435,9 +437,21 @@ export class FigEngine {
     return this.primary.dead;
   }
 
+  /**
+   * Keeps the file open until `work` settles, even if it is closed first
+   * (so the save started when the editor goes away can finish).
+   */
+  retain(work: Promise<unknown>) {
+    this.holds.add(work);
+    void work.finally(() => this.holds.delete(work));
+  }
+
   close() {
     this.closed = true;
-    this.primary.terminate();
+    const primary = this.primary;
+    if (this.holds.size === 0) primary.terminate();
+    else
+      void Promise.allSettled([...this.holds]).then(() => primary.terminate());
     for (const h of this.helpers) h.terminate();
     for (const h of this.starting) h.terminate();
     this.helpers.length = 0;

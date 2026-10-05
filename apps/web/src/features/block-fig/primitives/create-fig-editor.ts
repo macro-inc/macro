@@ -224,7 +224,7 @@ export function createFigEditor(options: FigEditorOptions) {
   document.addEventListener('visibilitychange', onHidden);
   onCleanup(() => {
     document.removeEventListener('visibilitychange', onHidden);
-    void saveNow();
+    engine.retain(saveNow());
   });
 
   // ---- applying ----------------------------------------------------------

@@ -3,6 +3,9 @@
 
 use crate::error::{Result, corrupt};
 
+/// Largest entry inflated, whatever size its header claims.
+const MAX_ENTRY: usize = 1 << 30;
+
 pub(crate) struct ZipEntry {
     pub name: String,
     method: u16,
@@ -129,7 +132,11 @@ impl<'a> ZipArchive<'a> {
             0 => Ok(data.to_vec()),
             8 => miniz_oxide::inflate::decompress_to_vec_with_limit(
                 data,
-                (entry.uncompressed_size as usize).max(1 << 20) * 2,
+                usize::try_from(entry.uncompressed_size)
+                    .unwrap_or(MAX_ENTRY)
+                    .max(1 << 20)
+                    .saturating_mul(2)
+                    .min(MAX_ENTRY),
             )
             .map_err(|e| corrupt(format!("zip: {}: {e:?}", entry.name))),
             other => Err(corrupt(format!(
