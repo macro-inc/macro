@@ -1,8 +1,8 @@
+import { useSsoLogin } from '@app/features/auth/useSsoLogin';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import IconGoogle from '@icon/macro-google.svg';
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
-import { useSsoLogin } from '../useSsoLogin';
 
 /**
  * Onboarding step 0 — create the account by connecting the primary Gmail via

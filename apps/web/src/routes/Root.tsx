@@ -2,8 +2,7 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
 import { Login } from '@app/features/auth/Login';
-import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
-import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
+import MobileWebSignup from '@app/features/auth/MobileWebSignup';
 import { setCookie } from '@app/features/auth/Shared';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
@@ -14,12 +13,13 @@ import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxCo
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
 import { MeetingRouter } from '@app/features/meetings/meeting-router';
 import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
+import { MobileAuthWelcome } from '@app/features/mobile-onboarding/MobileAuthWelcome';
+import { MobileOnboarding } from '@app/features/mobile-onboarding/MobileOnboarding';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
-import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
-import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { SearchProvider } from '@app/features/soup/search/context';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
+import { InteractiveOnboardingModal } from '@app/features/tutorial/InteractiveOnboardingModal';
 import {
   AnalyticsContextProvider,
   useAnalytics,
