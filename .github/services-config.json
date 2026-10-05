@@ -253,8 +253,7 @@
         "packages/lexical-core/**",
         "docker/lexical-service.Dockerfile"
       ],
-      "stack_path": "infra/stacks/lexical-service/**",
-      "bootstrap_pending": "needs the lexical-service Doppler project (doppler-projects stack) with INTERNAL_AUTH_KEY and SYNC_SERVICE_AUTH_KEY in dev and prd"
+      "stack_path": "infra/stacks/lexical-service/**"
     },
     "unfurl-service": {
       "source_paths": [

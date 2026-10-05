@@ -130,14 +130,36 @@ export class LexicalService extends pulumi.ComponentResource {
       { tags: this.tags },
       { parent: this }
     );
-    // The Bun server reads plain env vars, not APP_SECRETS_JSON, so select
-    // each key from the Doppler sync.
-    const secrets = ['INTERNAL_AUTH_KEY', 'SYNC_SERVICE_AUTH_KEY'].map(
-      (key) => ({
-        name: key,
-        valueFrom: pulumi.interpolate`${dopplerEcsEnvironment.containerSecrets[0].valueFrom}:${key}::`,
-      })
+    // The sync-service key is the one sync-service itself checks, kept in
+    // Secrets Manager; Doppler's SYNC_SERVICE_AUTH_KEY does not authenticate.
+    const syncServiceKeyArn = aws.secretsmanager
+      .getSecretVersionOutput({ secretId: `sync-service-key-${stack}` })
+      .apply((secret) => secret.arn);
+    new aws.iam.RolePolicy(
+      `${BASE_NAME}-sync-service-key-policy`,
+      {
+        role: dopplerEcsEnvironment.executionRole.id,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: ['secretsmanager:GetSecretValue'],
+              Resource: syncServiceKeyArn,
+              Effect: 'Allow',
+            },
+          ],
+        },
+      },
+      { parent: this }
     );
+    // The Bun server reads plain env vars, not APP_SECRETS_JSON.
+    const secrets = [
+      {
+        name: 'INTERNAL_AUTH_KEY',
+        valueFrom: pulumi.interpolate`${dopplerEcsEnvironment.containerSecrets[0].valueFrom}:INTERNAL_AUTH_KEY::`,
+      },
+      { name: 'SYNC_SERVICE_AUTH_KEY', valueFrom: syncServiceKeyArn },
+    ];
 
     // service
     const service = new awsx.ecs.FargateService(
