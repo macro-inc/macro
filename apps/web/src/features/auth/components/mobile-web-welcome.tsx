@@ -1,19 +1,12 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import LogoIcon from '@icon/macro-logo.svg';
-import { A } from '@solidjs/router';
-import { createSignal, onMount } from 'solid-js';
+import { createSignal } from 'solid-js';
 
-interface MobileWebWelcomeProps {
+export function MobileWebWelcome(props: {
+  pending: boolean;
   onSignUp: (email: string) => void;
-}
-
-export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
-  const analytics = useAnalytics();
+  onLogin: () => void;
+}) {
   const [email, setEmail] = createSignal('');
-
-  onMount(() => {
-    analytics.track('mobile_web_welcome_viewed');
-  });
 
   const handleSignUp = () => {
     props.onSignUp(email());
@@ -46,6 +39,7 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
           />
           <button
             type="submit"
+            disabled={props.pending}
             class="w-full px-3 py-2.5 text-lg font-bold rounded-xs bg-accent text-surface border-none"
           >
             Sign Up
@@ -53,13 +47,16 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
         </form>
 
         <p class="text-sm text-ink/50 mt-20">Already have an account?</p>
-        <A
-          href="/login"
-          onClick={() => analytics.track('login_from_onboarding')}
+        <a
+          href="/app/login"
+          onClick={(event) => {
+            event.preventDefault();
+            props.onLogin();
+          }}
           class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 border border-edge-muted bg-transparent text-ink/50 hover:bg-hover/60"
         >
           Login
-        </A>
+        </a>
       </div>
     </div>
   );
