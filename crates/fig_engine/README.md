@@ -59,6 +59,7 @@ boolean          path union, subtract, intersect, and exclude
 vector           vector networks: the `vectorNetworkBlob` format, fill
                  regions and stroke paths, conversion from outlines
 svg              SVG export of a layer, as Figma writes it
+export           export files: PNG, JPG (its own encoder), SVG, PDF (vector), ZIPs
 text             text layout for edited text: fonts (bundled Inter, registered
                  TTF/OTF/WOFF/WOFF2, variable axes), kerning, wrapping,
                  per-character styles, caret geometry for the editor
@@ -221,6 +222,38 @@ Prototype tab does, saves, reopens, and checks the result reads the same.
 `testing::prototype_file` builds `tests/fixtures/prototype.fig`, the browser
 fixture's click-through prototype (regenerate with
 `cargo test -p fig_engine --lib write_prototype_fixture -- --ignored`).
+
+## Handoff and layout aids
+
+Layers' export presets (`exportSettings`: format, suffix, scale or fixed
+width or height, SVG outline text and `svgIDMode`, contents only, absolute
+bounds, and JPEG `quality` where the schema has it), frames' layout grids
+(`layoutGrids`: square grids, columns, and rows with count, "Auto" stored as
+`i32::MAX`, stretch/min/center/max alignment, offset, section size, gutter,
+and color), and the ruler guides of pages and frames (`guides`: axis,
+offset, and id) are read into `Props`, edited with `Op::SetExports`,
+`Op::SetLayoutGrids`, and `Op::SetGuides` (`edit::flags::EXPORTS`,
+`LAYOUT_GRIDS`, `GUIDES`), shared like every other field, and saved over the
+record's own entries, so fields the engine does not model (a preset's color
+profile, variables bound to a grid's values) survive. Designs made in Macro
+before these fields existed get Figma's types, by name, when an edit needs
+them. Grids and guides are never drawn by the renderer or exports;
+`inspect::layout_aids` hands them to the canvas overlay.
+
+`export` makes the files: PNG (the renderer), JPG (`export::jpeg`, a
+baseline encoder with libjpeg's quality scaling, over white), SVG (`svg`,
+with outline text off writing `<text>` elements and layer `id`s on
+request), and PDF (`export::pdf`). The PDF writer draws paths, solid fills,
+linear and radial gradients (shadings), image fills (JPEGs embedded as they
+are), strokes, frame clipping, opacity, and outlined text as vectors; a
+layer PDF cannot draw the same way (effects, masks, blend modes, angular or
+diamond gradients, gradients with varying alpha, tiled or adjusted images,
+translucent groups) is drawn by the renderer at 2x and placed as an image,
+so the rest stays vector. Files are named as Figma names them
+(`Icon@2x.png`, `/` in a layer name makes ZIP folders), several come as a
+stored ZIP, and `export::frames_pdf` is "Export frames to PDF" (a page's
+top-level frames, a page each). `fig_render pdf` writes that PDF for each
+file's first page.
 
 ## Editing together
 

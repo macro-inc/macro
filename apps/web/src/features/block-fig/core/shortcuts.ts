@@ -415,6 +415,7 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
       { action: 'Outline view', keys: ['mod', 'Y'] },
       { action: 'Rulers', keys: ['⇧', 'R'] },
       { action: 'Pixel grid', keys: ['⇧', "'"] },
+      { action: 'Layout grids (Ctrl+⇧4 off macOS)', keys: ['⌃', 'G'] },
       { action: 'Layers panel', keys: ['⌥', '1'] },
       { action: 'Design panel', keys: ['⌥', '8'] },
       { action: 'Collapse layers', keys: ['⌥', 'L'] },

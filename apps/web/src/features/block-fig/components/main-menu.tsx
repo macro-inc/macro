@@ -1,5 +1,5 @@
 /**
- * The main menu at the canvas's top left (Figma's menu): File items such
+ * The main menu at the left panel's top (Figma's menu): File items such
  * as "Export frames to PDF", and View toggles. Presentational.
  */
 
@@ -8,11 +8,7 @@ import { Button } from '@ui/components/Button';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import type { ZoomMenuItem } from './viewer-toolbar';
 
-export function MainMenu(props: {
-  /** Shifted below the top ruler when it shows. */
-  rulers: boolean;
-  items: (ZoomMenuItem | 'divider')[];
-}) {
+export function MainMenu(props: { items: (ZoomMenuItem | 'divider')[] }) {
   const [open, setOpen] = createSignal(false);
   let root!: HTMLDivElement;
   const onDocumentDown = (e: PointerEvent) => {
@@ -21,19 +17,10 @@ export function MainMenu(props: {
   document.addEventListener('pointerdown', onDocumentDown);
   onCleanup(() => document.removeEventListener('pointerdown', onDocumentDown));
   return (
-    <div
-      ref={root}
-      class="absolute z-10"
-      classList={{
-        'top-2 left-2': !props.rulers,
-        'top-7 left-7': props.rulers,
-      }}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
+    <div ref={root} class="relative">
       <Button
         variant="ghost"
         size="icon-md"
-        class="border border-edge-muted bg-menu shadow-sm"
         label="Main menu"
         tooltip="Main menu"
         aria-expanded={open()}

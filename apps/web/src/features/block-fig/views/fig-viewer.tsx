@@ -700,6 +700,27 @@ export function FigViewer() {
           onContextMenu={contextMenu.onLayers}
         >
           <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2 text-xs">
+            <MainMenu
+              items={[
+                {
+                  label: 'Export frames to PDF…',
+                  onSelect: () => void handoff.exportFramesPdf(),
+                  testId: 'fig-menu-export-frames-pdf',
+                },
+                {
+                  label: 'Export selection…',
+                  shortcut: IS_MAC ? '⇧⌘E' : 'Ctrl+⇧E',
+                  onSelect: () => void handoff.exportSelection(),
+                  testId: 'fig-menu-export-selection',
+                },
+                'divider',
+                ...zoomItems().filter(
+                  (item) =>
+                    item !== 'divider' &&
+                    (item.label === 'Layout grids' || item.label === 'Rulers')
+                ),
+              ]}
+            />
             <For each={['layers', 'assets'] as const}>
               {(t) => (
                 <button
@@ -757,30 +778,6 @@ export function FigViewer() {
           aids={aids}
           devMode={devMode}
         >
-          <Show when={!viewer.uiHidden()}>
-            <MainMenu
-              rulers={viewer.rulers()}
-              items={[
-                {
-                  label: 'Export frames to PDF…',
-                  onSelect: () => void handoff.exportFramesPdf(),
-                  testId: 'fig-menu-export-frames-pdf',
-                },
-                {
-                  label: 'Export selection…',
-                  shortcut: IS_MAC ? '⇧⌘E' : 'Ctrl+⇧E',
-                  onSelect: () => void handoff.exportSelection(),
-                  testId: 'fig-menu-export-selection',
-                },
-                'divider',
-                ...zoomItems().filter(
-                  (item) =>
-                    item !== 'divider' &&
-                    (item.label === 'Layout grids' || item.label === 'Rulers')
-                ),
-              ]}
-            />
-          </Show>
           <Show when={textEditing()}>
             {(id) => (
               <TextEditor
@@ -961,11 +958,11 @@ export function FigViewer() {
               <Show when={info()?.id} keyed>
                 {(id) => (
                   <ExportSection
-                    name={info()?.name ?? ""}
+                    name={info()?.name ?? ''}
                     count={1}
                     settings={info()?.exportSettings ?? []}
                     onChange={
-                      editor.enabled() && !id.startsWith("I")
+                      editor.enabled() && !id.startsWith('I')
                         ? handoff.setExports
                         : undefined
                     }
