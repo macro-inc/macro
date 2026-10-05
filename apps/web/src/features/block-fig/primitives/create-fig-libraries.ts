@@ -24,18 +24,13 @@ import type { FigLibrarySource } from '../context/fig-libraries';
 import {
   draggedAsset,
   type LibraryUpdate,
+  type LoadedLibrary,
   libraryUpdates,
   styleKind,
   withLibrary,
 } from '../core/libraries';
 import type { FigEditor } from './create-fig-editor';
 import type { FigViewer } from './create-fig-viewer';
-
-/** A library as it loads. */
-export type LoadedLibrary =
-  | { state: 'loading' }
-  | { state: 'ready'; published: PublishedLibrary }
-  | { state: 'failed'; message: string };
 
 const THUMBNAIL_SIZE = 96;
 /** Designs read to find libraries, most recently viewed first. */

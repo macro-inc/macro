@@ -20,6 +20,12 @@ export type LibraryOp =
   /** The libraries the file uses, replacing the list. */
   | { op: 'setLibraries'; libraries: LibraryRef[] };
 
+/** A library as it loads. */
+export type LoadedLibrary =
+  | { state: 'loading' }
+  | { state: 'ready'; published: PublishedLibrary }
+  | { state: 'failed'; message: string };
+
 /** A copy whose library published a newer version. */
 export interface LibraryUpdate {
   /** The library's document id. */
@@ -109,7 +115,7 @@ function folder(name: string): string {
 }
 
 /** The label an asset is searched and shown by. */
-export function assetLabel(a: PublishedAsset): string {
+function assetLabel(a: PublishedAsset): string {
   return a.set ? `${a.set} ${a.name}` : a.name;
 }
 

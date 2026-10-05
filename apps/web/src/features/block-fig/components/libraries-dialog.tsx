@@ -15,7 +15,7 @@ import XIcon from '@phosphor/x.svg';
 import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { FigLibraryDocument } from '../context/fig-libraries';
-import type { LoadedLibrary } from '../primitives/create-fig-libraries';
+import type { LoadedLibrary } from '../core/libraries';
 
 export function LibrariesDialog(props: {
   fileName: string;
