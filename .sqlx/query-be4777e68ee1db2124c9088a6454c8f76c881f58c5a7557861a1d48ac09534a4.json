@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM database_entities WHERE database_id = (SELECT database_id FROM forms WHERE id = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be4777e68ee1db2124c9088a6454c8f76c881f58c5a7557861a1d48ac09534a4"
+}

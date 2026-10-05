@@ -19,6 +19,7 @@ mod test;
 /// and Edit through edit or owner on any live form over it, so form editors
 /// can read and change their responses. View on a form grants nothing here. A
 /// database has no `SharePermission`, so there is no public-sharing arm.
+/// Both grant paths require an app entity; core storage alone is not shareable.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_database_access(
     pool: &PgPool,
@@ -42,6 +43,7 @@ pub async fn get_database_access(
 
         SELECT 'edit'
         FROM forms f
+        JOIN database_entities d ON d.database_id = f.database_id
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE f.database_id = $1
         AND f.trashed_at IS NULL
@@ -98,6 +100,7 @@ pub async fn list_database_access(
         SELECT f.database_id, 'edit'::"AccessLevel"
         FROM entity_access ea
         JOIN forms f ON f.id = ea.entity_id
+        JOIN database_entities d ON d.database_id = f.database_id
         WHERE ea.entity_type = 'form'
         AND ea.source_id = ANY($1)
         AND ea.access_level IN ('edit', 'owner')
@@ -137,6 +140,7 @@ pub async fn explain_database_access(
         r#"
         SELECT DISTINCT f.id
         FROM forms f
+        JOIN database_entities d ON d.database_id = f.database_id
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE f.database_id = $1
         AND f.trashed_at IS NULL

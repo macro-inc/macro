@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO forms (id, name, owner_id, database_id, table_id) VALUES ($1, 'Intake', $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1c86aa30aa098927b9ad75135125ef44c74e1166e607687a024a81a3e844626f"
+}

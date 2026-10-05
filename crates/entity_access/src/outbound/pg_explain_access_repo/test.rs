@@ -172,7 +172,8 @@ async fn insert_database_with_form(pool: &PgPool, audience: &str) -> (Uuid, Uuid
     let table_id = Uuid::now_v7();
     let form_id = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO databases (id, name, owner_id) VALUES ($1, 'db', 'macro|owner@team.com')"#,
+        r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'db', 'macro|owner@team.com' FROM storage"#,
         database_id,
     )
     .execute(pool)

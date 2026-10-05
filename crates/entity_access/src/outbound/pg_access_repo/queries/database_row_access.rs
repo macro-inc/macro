@@ -40,6 +40,7 @@ pub async fn get_database_row_access(
         FROM database_rows r
         JOIN database_tables t ON t.id = r.table_id
         JOIN forms f ON f.database_id = t.database_id
+        JOIN database_entities d ON d.database_id = f.database_id
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE r.id = $1
         AND f.trashed_at IS NULL
@@ -84,6 +85,7 @@ pub async fn get_database_rows_access(
         FROM database_rows r
         JOIN database_tables t ON t.id = r.table_id
         JOIN forms f ON f.database_id = t.database_id
+        JOIN database_entities d ON d.database_id = f.database_id
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE r.id = ANY($1)
         AND f.trashed_at IS NULL

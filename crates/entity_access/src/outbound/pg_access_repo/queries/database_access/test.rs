@@ -58,6 +58,86 @@ async fn core_storage_does_not_become_an_entity_through_a_stray_grant(pool: PgPo
     assert_eq!(get_database_row_database(&pool, &row).await.unwrap(), None);
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn core_storage_does_not_gain_database_access_through_a_form(pool: PgPool) {
+    use super::super::database_row_access::{get_database_row_access, get_database_rows_access};
+    let database = Uuid::now_v7();
+    let table = Uuid::now_v7();
+    let row = Uuid::now_v7();
+    let form = Uuid::now_v7();
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", database)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'Contacts', '80')",
+        table,
+        database
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO database_rows (id, table_id, position) VALUES ($1, $2, '80')",
+        row,
+        table
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO forms (id, name, owner_id, database_id, table_id) VALUES ($1, 'Intake', $2, $3, $4)",
+        form,
+        OWNER,
+        database,
+        table
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'form', $2, 'user', 'edit')",
+        form,
+        MEMBER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let member = source_ids(&pool, "member@team.com").await;
+    assert_eq!(
+        get_database_access(&pool, &database, &member)
+            .await
+            .unwrap(),
+        None
+    );
+    assert!(
+        list_database_access(&pool, &member)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        get_database_row_access(&pool, &row, &member).await.unwrap(),
+        None
+    );
+    assert!(
+        get_database_rows_access(&pool, &[row], &member)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    #[cfg(feature = "explain_binary")]
+    assert!(
+        explain_database_access(&pool, &database, &member)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
 async fn insert_database(pool: &PgPool) -> Uuid {
     let database_id = Uuid::now_v7();
     sqlx::query!(

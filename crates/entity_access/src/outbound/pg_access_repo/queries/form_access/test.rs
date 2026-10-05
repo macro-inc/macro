@@ -13,7 +13,8 @@ async fn insert_form(pool: &PgPool, audience: &str) -> Uuid {
     let table_id = Uuid::now_v7();
     let form_id = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Responses', $2)"#,
+        r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'Responses', $2 FROM storage"#,
         database_id,
         OWNER,
     )
@@ -250,7 +251,7 @@ async fn deleting_a_form_or_its_database_deletes_the_form_grants(pool: PgPool) {
         .await
         .unwrap();
     sqlx::query!(
-        r#"DELETE FROM databases WHERE id = (SELECT database_id FROM forms WHERE id = $1)"#,
+        r#"DELETE FROM database_entities WHERE database_id = (SELECT database_id FROM forms WHERE id = $1)"#,
         cascaded,
     )
     .execute(&pool)

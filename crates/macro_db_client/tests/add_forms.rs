@@ -81,7 +81,8 @@ async fn insert_form(pool: &Pool<Postgres>) -> FormFixture {
     let section_id = Uuid::now_v7();
     let question_id = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO databases (id, name, owner_id) VALUES ($1, 'RSVP', $2)"#,
+        r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'RSVP', $2 FROM storage"#,
         database_id,
         OWNER,
     )
@@ -303,7 +304,7 @@ async fn deleting_the_table_or_database_takes_the_form_and_everything_it_owns(
     .await
     .unwrap();
     sqlx::query!(
-        r#"DELETE FROM databases WHERE id = $1"#,
+        r#"DELETE FROM database_entities WHERE database_id = $1"#,
         by_database.database_id
     )
     .execute(&pool)
