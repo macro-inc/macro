@@ -1180,6 +1180,10 @@
       "crates/unfurl",
       "crates/workspace-hack"
     ],
+    "ai_engine": [
+      "crates/ai_engine",
+      "crates/fig_engine"
+    ],
     "ai_projections": [
       "crates/activity",
       "crates/agent",
@@ -9955,6 +9959,10 @@
       "crates/system_properties",
       "crates/workspace-hack"
     ],
+    "psd_engine": [
+      "crates/fig_engine",
+      "crates/psd_engine"
+    ],
     "rate_limit": [
       "crates/rate_limit",
       "crates/workspace-hack"
@@ -10257,6 +10265,7 @@
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
+      "crates/ai_engine",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/analytics_client",
@@ -10365,6 +10374,7 @@
       "crates/projects",
       "crates/prompt",
       "crates/properties",
+      "crates/psd_engine",
       "crates/rate_limit",
       "crates/reminders",
       "crates/remote_env_var",
