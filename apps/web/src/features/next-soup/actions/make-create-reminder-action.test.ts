@@ -55,10 +55,14 @@ it('rechecks the flag for stale menu entries', () => {
   action.execute([entity('email')]);
   expect(mocks.open).not.toHaveBeenCalled();
 });
-it('advances a list only after the email snooze has been saved', async () => {
+it('advances to the current next row only after the email snooze has been saved', async () => {
+  const previousNext = entity('email', 'previous-next');
   const next = entity('email', 'next');
+  const peekOffset = vi.fn(() => ({
+    row: { id: previousNext.id, original: previousNext },
+  }));
   const soup = {
-    navigate: { peekOffset: () => ({ row: { id: 'next', original: next } }) },
+    navigate: { peekOffset },
     selection: { clear: vi.fn() },
     focus: { set: vi.fn() },
   };
@@ -69,6 +73,7 @@ it('advances a list only after the email snooze has been saved', async () => {
     { advances: true, onNavigate }
   );
   expect(soup.selection.clear).not.toHaveBeenCalled();
+  peekOffset.mockReturnValue({ row: { id: next.id, original: next } });
   await mocks.open.mock.calls[0][1].onCreated();
   expect(soup.focus.set).toHaveBeenCalledWith('next');
   expect(onNavigate).toHaveBeenCalledWith({

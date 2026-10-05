@@ -127,8 +127,6 @@ async fn addresses_the_notification_at_the_email_thread() {
         .await
         .expect("notify succeeds");
 
-    // The referenced channel is reachable through the reminder's
-    // `referencedEntity` edge; the notification itself points at the reminder.
     let entity = &ingress.last()["req"]["notification_entity"];
     assert_eq!(entity["entity_type"], "email_thread");
     assert_eq!(entity["entity_id"], "thread-1");

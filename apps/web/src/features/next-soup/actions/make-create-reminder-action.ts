@@ -37,17 +37,6 @@ export const makeCreateReminderAction = (
   ) => {
     const [entity] = entities;
     if (!entity || !canExecute(entity)) return;
-    const next = [1, -1]
-      .map((direction) =>
-        soup.navigate.peekOffset(direction, {
-          wrapNavigation: false,
-          skipGroupHeaders: true,
-          skipLoadMore: true,
-        })
-      )
-      .find(
-        (candidate) => candidate && candidate.row.original.id !== entity.id
-      )?.row;
     openReminderComposer(entity, {
       onCreated: async () => {
         // A hosted email view owns pagination and its navigation history.
@@ -56,6 +45,18 @@ export const makeCreateReminderAction = (
           return;
         }
         if (opts.advances) {
+          const next = [1, -1]
+            .map((direction) =>
+              soup.navigate.peekOffset(direction, {
+                wrapNavigation: false,
+                skipGroupHeaders: true,
+                skipLoadMore: true,
+              })
+            )
+            .find(
+              (candidate) =>
+                candidate && candidate.row.original.id !== entity.id
+            )?.row;
           soup.selection.clear();
           soup.focus.set(next?.id);
           opts.onNavigate?.({
