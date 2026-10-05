@@ -270,6 +270,7 @@ impl<'a> Writer<'a> {
             decorations,
             layout_size,
             lines,
+            truncated_at,
         } = t;
         self.list(glyphs, |w, g| {
             let Glyph {
@@ -304,6 +305,7 @@ impl<'a> Writer<'a> {
         });
         self.opt(layout_size, |w, s| w.vec2(s));
         self.u32(*lines);
+        self.opt(truncated_at, |w, v| w.u32(*v));
     }
 
     fn text_style(&mut self, t: &TextStyle) {
@@ -448,6 +450,7 @@ impl<'a> Writer<'a> {
             fill_style,
             stroke_style,
             effect_style,
+            generated,
             recomputed,
         } = p;
         self.opt(guid, |w, g| w.guid(g));
@@ -569,6 +572,7 @@ impl<'a> Writer<'a> {
         for g in [fill_style, stroke_style, effect_style] {
             self.opt(g, |w, g| w.guid(g));
         }
+        self.opt(generated, |w, d| w.props_list(d));
         self.bool(*recomputed);
     }
 

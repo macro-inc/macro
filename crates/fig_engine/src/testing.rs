@@ -115,6 +115,7 @@ fn write_value(w: &mut Writer, schema: &Schema, ty: Ty, value: &V) {
         (Ty::Bool, V::Bool(b)) => w.byte(u8::from(*b)),
         (Ty::Byte, V::Uint(v)) => w.byte(*v as u8),
         (Ty::Uint, V::Uint(v)) => w.var_uint(*v),
+        (Ty::Int, V::Uint(v)) => w.var_int(*v as i32),
         (Ty::Float, V::Float(v)) => w.float(*v),
         (Ty::String, V::Str(s)) => w.string(s),
         (Ty::Def(i), V::Enum(name)) => {
@@ -216,7 +217,13 @@ pub fn node(
 /// Builds a legacy-layout `.fig` (bare `fig-kiwi` document) from node
 /// changes and blobs. The schema is deflated and the message deflated too.
 pub fn fig_file(nodes: Vec<V>, blobs: Vec<Vec<u8>>) -> Vec<u8> {
-    let schema_bytes = encode_schema(SCHEMA);
+    fig_file_with(SCHEMA, nodes, blobs)
+}
+
+/// [`fig_file`] with another schema (in [`SCHEMA`]'s text form), for tests
+/// of fields the common one leaves out.
+pub fn fig_file_with(schema_text: &str, nodes: Vec<V>, blobs: Vec<Vec<u8>>) -> Vec<u8> {
+    let schema_bytes = encode_schema(schema_text);
     let schema = Schema::decode(&schema_bytes).expect("test schema decodes");
     let message = encode(
         &schema,

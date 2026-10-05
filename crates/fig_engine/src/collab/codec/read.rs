@@ -289,6 +289,7 @@ impl<'a> Reader<'a> {
             })?,
             layout_size: self.opt(Self::vec2)?,
             lines: self.u32()?,
+            truncated_at: self.opt(Self::u32)?,
         })
     }
 
@@ -441,6 +442,7 @@ impl<'a> Reader<'a> {
             fill_style: self.opt(Self::guid)?,
             stroke_style: self.opt(Self::guid)?,
             effect_style: self.opt(Self::guid)?,
+            generated: self.opt(|r| r.arc_list(Self::props))?,
             recomputed: self.bool()?,
         })
     }

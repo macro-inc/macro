@@ -60,6 +60,9 @@ pub struct TextLayout {
     pub layout_size: Option<Vec2>,
     /// Number of lines (from the baselines).
     pub lines: u32,
+    /// Text that does not fit is cut off at this character, and an ellipsis
+    /// drawn after what shows (`truncationStartIndex`).
+    pub truncated_at: Option<u32>,
 }
 
 /// The base style of a text node, for the inspector.

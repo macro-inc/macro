@@ -101,6 +101,8 @@ const NODE_FIELDS: &[&str] = &[
     "inheritEffectStyleID",
     "backgroundPaints",
     "backgroundEnabled",
+    "derivedImmutableFrameData",
+    "nodeGenerationData",
 ];
 
 const PAINT_FIELDS: &[&str] = &[
@@ -140,9 +142,16 @@ const TEXT_FIELDS: &[&str] = &[
     "baselines",
     "glyphs",
     "decorations",
+    "truncationStartIndex",
 ];
 
-const DERIVED_TEXT_FIELDS: &[&str] = &["layoutSize", "baselines", "glyphs", "decorations"];
+const DERIVED_TEXT_FIELDS: &[&str] = &[
+    "layoutSize",
+    "baselines",
+    "glyphs",
+    "decorations",
+    "truncationStartIndex",
+];
 
 /// Narrows the schema to the fields read here.
 pub fn restrict_schema(schema: &mut Schema) {
@@ -181,6 +190,8 @@ pub fn restrict_schema(schema: &mut Schema) {
     );
     schema.keep_only("ComponentPropDef", &["id", "name", "type", "isDeleted"]);
     schema.keep_only("ExportSettings", &["suffix", "imageType", "constraint"]);
+    schema.keep_only("NodeGenerationData", &["overrides"]);
+    schema.keep_only("DerivedImmutableFrameData", &["overrides"]);
 }
 
 pub fn guid(m: MsgRef) -> Option<Guid> {
@@ -412,6 +423,9 @@ fn text_layout(m: MsgRef) -> Option<TextLayout> {
         decorations,
         layout_size: m.msg("layoutSize").map(vec2),
         lines: m.list("baselines").count() as u32,
+        truncated_at: m
+            .i32("truncationStartIndex")
+            .and_then(|i| u32::try_from(i).ok()),
     })
 }
 
@@ -696,7 +710,64 @@ pub fn props(m: MsgRef) -> Props {
     p.fill_style = style("styleIdForFill", "inheritFillStyleID");
     p.stroke_style = style("styleIdForStrokeFill", "inheritFillStyleIDForStroke");
     p.effect_style = style("styleIdForEffect", "inheritEffectStyleID");
+    p.generated = generated_layers(&m);
     p
+}
+
+/// The layers of a FigJam object (see [`Props::generated`]): one per entry
+/// of its derived layout, starting from the generation entry with the same
+/// guid path. Layers with text are text layers, drawn above the others
+/// (shapes drawn from their geometry: a connector's label background goes
+/// under its label).
+fn generated_layers(m: &MsgRef) -> Option<Arc<[Props]>> {
+    let layout = m.msg("derivedImmutableFrameData")?;
+    let generation: Vec<Props> = m
+        .msg("nodeGenerationData")
+        .map(|g| g.msgs("overrides").map(props).collect())
+        .unwrap_or_default();
+    let mut layers: Vec<Props> = layout
+        .msgs("overrides")
+        .map(props)
+        .filter_map(|derived| {
+            let path = derived.guid_path.clone().filter(|p| !p.is_empty())?;
+            let mut layer = generation
+                .iter()
+                .find(|g| g.guid_path.as_deref() == Some(&*path))
+                .cloned()
+                .unwrap_or_default();
+            layer.merge(&derived);
+            layer.guid_path = Some(path);
+            let text = layer.text_content.is_some() || layer.text_layout.is_some();
+            layer.node_type = Some(if text {
+                NodeType::Text
+            } else {
+                NodeType::Vector
+            });
+            Some(layer)
+        })
+        .collect();
+    // A connector's label sits in a box (layer 2) along the line; its text
+    // is placed within that box.
+    if m.enum_name("type") == Some("CONNECTOR")
+        && let Some(label) = layers
+            .iter()
+            .find(|l| l.node_type == Some(NodeType::Vector) && layer_index(l) == Some(2))
+            .and_then(|l| l.transform)
+    {
+        for l in layers
+            .iter_mut()
+            .filter(|l| l.node_type == Some(NodeType::Text))
+        {
+            l.transform = Some(label.mul(&l.transform.unwrap_or_default()));
+        }
+    }
+    layers.sort_by_key(|l| (l.node_type == Some(NodeType::Text), layer_index(l)));
+    (!layers.is_empty()).then(|| layers.into())
+}
+
+/// Which of its object's generated layers `l` is (the local id of its path).
+fn layer_index(l: &Props) -> Option<u32> {
+    l.guid_path.as_deref()?.last().map(|g| g.local)
 }
 
 /// Whether a node change deletes its node (`phase: REMOVED`).

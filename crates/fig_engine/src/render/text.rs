@@ -53,7 +53,16 @@ impl Painter<'_> {
                 painter.fill_shape(surface, &shape, ts, paint, size, opacity, clip);
             }
         };
+        let cut = layout.truncated_at.unwrap_or(u32::MAX);
+        // The last glyph shown before the cut, where the ellipsis goes.
+        let mut last_shown: Option<&crate::model::Glyph> = None;
         for g in layout.glyphs.iter() {
+            if g.first_char >= cut {
+                continue;
+            }
+            if last_shown.is_none_or(|l| g.first_char >= l.first_char) {
+                last_shown = Some(g);
+            }
             let Some(path) = g.blob.and_then(|b| self.doc.blobs.path(b)) else {
                 continue;
             };
@@ -82,6 +91,15 @@ impl Painter<'_> {
                 continue;
             }
             append_transformed(&mut builder, &path.path, &glyph);
+        }
+        if layout.truncated_at.is_some()
+            && let Some(g) = last_shown
+        {
+            if run_style != Some(g.style_id) {
+                flush(self, &mut builder, run_style, surface);
+                run_style = Some(g.style_id);
+            }
+            push_ellipsis(&mut builder, g);
         }
         flush(self, &mut builder, run_style, surface);
 
@@ -168,6 +186,17 @@ impl Painter<'_> {
 #[allow(dead_code)]
 fn is_solid(paint: &Paint) -> bool {
     matches!(paint.kind, PaintKind::Solid(_))
+}
+
+/// An ellipsis (three dots, sized like Inter's) after glyph `g`.
+fn push_ellipsis(pb: &mut PathBuilder, g: &crate::model::Glyph) {
+    let em = g.font_size;
+    let x = g.x + g.advance * em;
+    let r = 0.06 * em;
+    for k in 0..3 {
+        let cx = x + (0.13 + 0.27 * k as f32) * em;
+        pb.push_circle(cx, g.y - r, r);
+    }
 }
 
 /// Appends `path` mapped through `t` to `pb`.
