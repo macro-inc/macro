@@ -2,13 +2,13 @@
 
 use super::{
     BlobRef, ENTRY_VERSION, NodeState, enc_align, enc_blend, enc_effect, enc_gradient, enc_mask,
-    enc_node_type, enc_prop_field, enc_scale_mode, enc_style_type, enc_winding,
+    enc_node_type, enc_prop_field, enc_scale_mode, enc_style_type, enc_variable_type, enc_winding,
 };
 use crate::model::{
     Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
     Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    VariantOrder, VariantSpec, Vec2, VectorData,
+    Variable, VariableMode, VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -142,6 +142,7 @@ impl<'a> Writer<'a> {
             opacity,
             visible,
             blend_mode,
+            color_var,
         } = p;
         match kind {
             PaintKind::Solid(c) => {
@@ -208,6 +209,7 @@ impl<'a> Writer<'a> {
         self.f32(*opacity);
         self.bool(*visible);
         self.u8(enc_blend(*blend_mode));
+        self.opt(color_var, |w, g| w.guid(g));
     }
 
     fn paints(&mut self, paints: &[Paint]) {
@@ -404,6 +406,42 @@ impl<'a> Writer<'a> {
         self.list(list, |w, p| w.props(p));
     }
 
+    fn variable(&mut self, v: &Variable) {
+        let Variable {
+            set,
+            resolved_type,
+            values,
+        } = v;
+        self.opt(set, |w, g| w.guid(g));
+        self.u8(enc_variable_type(*resolved_type));
+        self.list(values, |w, (mode, value)| {
+            w.guid(mode);
+            match value {
+                VariableValue::Color(c) => {
+                    w.u8(0);
+                    w.color(c);
+                }
+                VariableValue::Float(f) => {
+                    w.u8(1);
+                    w.f32(*f);
+                }
+                VariableValue::Text(t) => {
+                    w.u8(2);
+                    w.str(t);
+                }
+                VariableValue::Bool(b) => {
+                    w.u8(3);
+                    w.bool(*b);
+                }
+                VariableValue::Alias(g) => {
+                    w.u8(4);
+                    w.guid(g);
+                }
+                VariableValue::Other => w.u8(5),
+            }
+        });
+    }
+
     fn prop_value(&mut self, value: &PropValue) {
         match value {
             PropValue::Bool(b) => {
@@ -485,6 +523,9 @@ impl<'a> Writer<'a> {
             variant_specs,
             variant_orders,
             props_bubbled,
+            variable,
+            variable_modes,
+            mode_by_set,
             generated,
             vector_styles,
             recomputed,
@@ -634,6 +675,20 @@ impl<'a> Writer<'a> {
             });
         });
         self.opt(props_bubbled, |w, v| w.bool(*v));
+        self.opt(variable, |w, v| w.variable(v));
+        self.opt(variable_modes, |w, list| {
+            w.list(list, |w, m| {
+                let VariableMode { id, name } = m;
+                w.guid(id);
+                w.str(name);
+            });
+        });
+        self.opt(mode_by_set, |w, list| {
+            w.list(list, |w, (set, mode)| {
+                w.guid(set);
+                w.guid(mode);
+            });
+        });
         self.opt(generated, |w, d| w.props_list(d));
         self.opt(vector_styles, |w, list| {
             w.list(list, |w, run| w.style_run(run))

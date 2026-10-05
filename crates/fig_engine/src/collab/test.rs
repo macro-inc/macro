@@ -321,6 +321,31 @@ fn set_design_system_fields(props: &mut crate::model::Props) {
         values: Arc::from([Arc::from("Small"), Arc::from("Large")]),
     }]));
     props.props_bubbled = Some(true);
+    use crate::model::{Color, Variable, VariableMode, VariableType, VariableValue};
+    props.variable = Some(Arc::new(Variable {
+        set: Some(g(20)),
+        resolved_type: VariableType::Color,
+        values: Arc::from([
+            (g(21), VariableValue::Color(Color::WHITE)),
+            (g(22), VariableValue::Alias(g(23))),
+            (g(24), VariableValue::Float(2.5)),
+            (g(25), VariableValue::Text("x".into())),
+            (g(26), VariableValue::Bool(true)),
+            (g(27), VariableValue::Other),
+        ]),
+    }));
+    props.variable_modes = Some(Arc::from([VariableMode {
+        id: g(21),
+        name: "Light".into(),
+    }]));
+    props.mode_by_set = Some(Arc::from([(g(20), g(21))]));
+    if let Some(fills) = &props.fills {
+        let mut list = fills.to_vec();
+        for p in &mut list {
+            p.color_var = Some(g(23));
+        }
+        props.fills = Some(list.into());
+    }
 }
 
 #[test]

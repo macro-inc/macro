@@ -936,3 +936,293 @@ fn a_property_added_on_a_new_variant_goes_to_its_set() {
     let names: Vec<String> = panel.properties.iter().map(|p| p.name.clone()).collect();
     assert_eq!(names, ["Label", "Disabled"]);
 }
+
+/// A file with a "Theme" collection (Light and Dark modes): `Surface`
+/// (white, black) and `Brand` (blue, then `Surface`), a frame and a
+/// rectangle in it bound to them, and an instance of a component whose
+/// layer is bound to `Surface`.
+fn variables_file() -> Vec<u8> {
+    use crate::kiwi::{Schema, schema_from_text};
+    use crate::testing::{V, color, encode, guid, node, size, translate};
+    let text = crate::save::MACRO_SCHEMA
+        .replace("WASHI_TAPE VARIABLE", "WASHI_TAPE VARIABLE VARIABLE_SET")
+        .replace(
+            "message Paint type:PaintType",
+            "enum VariableDataType BOOLEAN FLOAT STRING ALIAS COLOR\nmessage VariableID guid:GUID assetRef:AssetRef\nmessage VariableSetID guid:GUID assetRef:AssetRef\nmessage VariableAnyValue boolValue:bool textValue:string floatValue:float alias:VariableID colorValue:Color\nmessage VariableData value:VariableAnyValue dataType:VariableDataType resolvedDataType:VariableDataType\nmessage VariableDataValuesEntry modeID:GUID variableData:VariableData\nmessage VariableDataValues entries:VariableDataValuesEntry[]\nmessage VariableSetMode id:GUID name:string sortPosition:string\nmessage VariableModeBySetMapEntry variableSetID:VariableSetID variableModeID:GUID\nmessage VariableModeBySetMap entries:VariableModeBySetMapEntry[]\nmessage Paint colorVar:VariableData type:PaintType",
+        )
+        .replace(
+            "styleIdForText:StyleId",
+            "styleIdForText:StyleId variableSetID:VariableSetID variableResolvedType:VariableDataType variableDataValues:VariableDataValues variableSetModes:VariableSetMode[] variableModeBySetMap:VariableModeBySetMap",
+        );
+    let schema_bytes = schema_from_text(&text);
+    let schema = Schema::decode(&schema_bytes).unwrap();
+    let c = |r: f32, g: f32, b: f32| color(r, g, b, 1.0);
+    let bound = |rgb: V, var: u32| {
+        V::List(vec![V::Msg(vec![
+            ("type", V::Enum("SOLID")),
+            ("color", rgb),
+            ("opacity", V::Float(1.0)),
+            ("visible", V::Bool(true)),
+            (
+                "colorVar",
+                V::Msg(vec![
+                    (
+                        "value",
+                        V::Msg(vec![("alias", V::Msg(vec![("guid", guid(var))]))]),
+                    ),
+                    ("dataType", V::Enum("ALIAS")),
+                    ("resolvedDataType", V::Enum("COLOR")),
+                ]),
+            ),
+        ])])
+    };
+    let value = |mode: u32, v: V| V::Msg(vec![("modeID", guid(mode)), ("variableData", v)]);
+    let color_value = |rgb: V| {
+        V::Msg(vec![
+            ("value", V::Msg(vec![("colorValue", rgb)])),
+            ("dataType", V::Enum("COLOR")),
+            ("resolvedDataType", V::Enum("COLOR")),
+        ])
+    };
+    let alias = |var: u32| {
+        V::Msg(vec![
+            (
+                "value",
+                V::Msg(vec![("alias", V::Msg(vec![("guid", guid(var))]))]),
+            ),
+            ("dataType", V::Enum("ALIAS")),
+            ("resolvedDataType", V::Enum("COLOR")),
+        ])
+    };
+    let variable = |local: u32, name: &str, values: Vec<V>| {
+        node(
+            local,
+            Some((2, "a")),
+            "VARIABLE",
+            name,
+            vec![
+                ("variableSetID", V::Msg(vec![("guid", guid(50))])),
+                ("variableResolvedType", V::Enum("COLOR")),
+                (
+                    "variableDataValues",
+                    V::Msg(vec![("entries", V::List(values))]),
+                ),
+            ],
+        )
+    };
+    let nodes = vec![
+        node(0, None, "DOCUMENT", "Document", vec![]),
+        node(
+            1,
+            Some((0, "!")),
+            "CANVAS",
+            "Page",
+            vec![("backgroundColor", c(1.0, 1.0, 1.0))],
+        ),
+        node(
+            2,
+            Some((0, "\"")),
+            "CANVAS",
+            "Internal",
+            vec![("internalOnly", V::Bool(true))],
+        ),
+        node(
+            50,
+            Some((2, "!")),
+            "VARIABLE_SET",
+            "Theme",
+            vec![(
+                "variableSetModes",
+                V::List(vec![
+                    V::Msg(vec![("id", guid(60)), ("name", V::Str("Light".into()))]),
+                    V::Msg(vec![("id", guid(61)), ("name", V::Str("Dark".into()))]),
+                ]),
+            )],
+        ),
+        variable(
+            51,
+            "Surface",
+            vec![
+                value(60, color_value(c(1.0, 1.0, 1.0))),
+                value(61, color_value(c(0.0, 0.0, 0.0))),
+            ],
+        ),
+        variable(
+            52,
+            "Brand",
+            vec![
+                value(60, color_value(c(0.0, 0.0, 1.0))),
+                value(61, alias(51)),
+            ],
+        ),
+        node(
+            20,
+            Some((1, "!")),
+            "SYMBOL",
+            "Chip",
+            vec![
+                ("size", size(20.0, 20.0)),
+                ("transform", translate(300.0, 0.0)),
+            ],
+        ),
+        node(
+            21,
+            Some((20, "!")),
+            "RECTANGLE",
+            "Chip fill",
+            vec![
+                ("size", size(20.0, 20.0)),
+                ("transform", translate(0.0, 0.0)),
+                ("fillPaints", bound(c(1.0, 1.0, 1.0), 51)),
+            ],
+        ),
+        node(
+            10,
+            Some((1, "\"")),
+            "FRAME",
+            "Screen",
+            vec![
+                ("size", size(200.0, 100.0)),
+                ("transform", translate(0.0, 0.0)),
+                ("fillPaints", bound(c(1.0, 1.0, 1.0), 51)),
+            ],
+        ),
+        node(
+            11,
+            Some((10, "!")),
+            "RECTANGLE",
+            "Logo",
+            vec![
+                ("size", size(20.0, 20.0)),
+                ("transform", translate(10.0, 10.0)),
+                ("fillPaints", bound(c(0.0, 0.0, 1.0), 52)),
+            ],
+        ),
+        node(
+            30,
+            Some((10, "\"")),
+            "INSTANCE",
+            "Chip",
+            vec![
+                ("size", size(20.0, 20.0)),
+                ("transform", translate(50.0, 10.0)),
+                ("symbolData", V::Msg(vec![("symbolID", guid(20))])),
+            ],
+        ),
+    ];
+    let message = encode(
+        &schema,
+        "Message",
+        &[("nodeChanges", V::List(nodes)), ("blobs", V::List(vec![]))],
+    );
+    let mut out = b"fig-kiwi".to_vec();
+    out.extend_from_slice(&48u32.to_le_bytes());
+    for chunk in [schema_bytes, message] {
+        let compressed = miniz_oxide::deflate::compress_to_vec(&chunk, 6);
+        out.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
+        out.extend_from_slice(&compressed);
+    }
+    out
+}
+
+fn solid_hex(p: &Props) -> String {
+    match &p.fills()[0].kind {
+        PaintKind::Solid(c) => c.hex(),
+        _ => String::new(),
+    }
+}
+
+#[test]
+fn variables_list_with_their_modes() {
+    let d = Design::open(variables_file());
+    let collections = crate::inspect::variables(&d.doc);
+    assert_eq!(collections.len(), 1);
+    let theme = &collections[0];
+    assert_eq!(theme.name, "Theme");
+    let modes: Vec<&str> = theme.modes.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(modes, ["Light", "Dark"]);
+    let surface = &theme.variables[0];
+    assert_eq!(surface.name, "Surface");
+    assert_eq!(surface.values[1].color.as_deref(), Some("000000"));
+    assert_eq!(
+        theme.variables[1].values[1].alias.as_deref(),
+        Some("Surface")
+    );
+    let info = d.info("1:10");
+    assert_eq!(info.modes.len(), 1);
+    assert_eq!(info.modes[0].mode, None);
+    assert_eq!(info.variables.fills[0].as_ref().unwrap().name, "Surface");
+}
+
+#[test]
+fn switching_a_frames_mode_resolves_its_layers_colors() {
+    let mut d = Design::open(variables_file());
+    d.apply(r#"[{"op":"setVariableMode","ids":["1:10"],"collection":"1:50","mode":"1:61"}]"#);
+    assert_eq!(solid_hex(d.props("1:10")), "000000");
+    // An alias resolves in the frame's mode too.
+    assert_eq!(solid_hex(d.props("1:11")), "000000");
+    // Instances' layers follow, as overrides.
+    assert_eq!(solid_hex(&d.shown("I1:30;1:21")), "000000");
+    assert_eq!(d.info("1:10").modes[0].mode.as_deref(), Some("1:61"));
+    let r = d.reopened();
+    assert_eq!(solid_hex(r.props("1:11")), "000000");
+    assert_eq!(
+        r.props("1:11").fills()[0]
+            .color_var
+            .map(|g| g.to_string())
+            .as_deref(),
+        Some("1:52")
+    );
+    assert_eq!(
+        r.props("1:10").mode_by_set.as_deref().unwrap()[0]
+            .1
+            .to_string(),
+        "1:61"
+    );
+    assert_eq!(solid_hex(&r.shown("I1:30;1:21")), "000000");
+    // Back to the inherited mode.
+    d.apply(r#"[{"op":"setVariableMode","ids":["1:10"],"collection":"1:50"}]"#);
+    assert_eq!(solid_hex(d.props("1:11")), "0000FF");
+}
+
+#[test]
+fn binding_paints_to_variables() {
+    let mut d = Design::open(variables_file());
+    d.apply(r#"[{"op":"bindVariable","ids":["1:11"],"field":"FILL","index":0,"variable":"1:51"}]"#);
+    assert_eq!(solid_hex(d.props("1:11")), "FFFFFF");
+    assert_eq!(
+        d.info("1:11").variables.fills[0].as_ref().unwrap().name,
+        "Surface"
+    );
+    // Strokes too, and inside instances (as an override).
+    d.apply(r#"[{"op":"bindVariable","ids":["1:11"],"field":"STROKE","index":0,"variable":"1:52"},
+               {"op":"bindVariable","ids":["I1:30;1:21"],"field":"FILL","index":0,"variable":"1:52"}]"#);
+    assert_eq!(
+        d.props("1:11").strokes()[0]
+            .color_var
+            .map(|g| g.to_string())
+            .as_deref(),
+        Some("1:52")
+    );
+    assert_eq!(solid_hex(&d.shown("I1:30;1:21")), "0000FF");
+    assert_eq!(
+        d.reopened().shown("I1:30;1:21").fills()[0]
+            .color_var
+            .map(|g| g.to_string())
+            .as_deref(),
+        Some("1:52")
+    );
+    // Unbinding keeps the color; a color typed in detaches too.
+    d.apply(r#"[{"op":"bindVariable","ids":["1:11"],"field":"FILL","index":0}]"#);
+    assert_eq!(d.props("1:11").fills()[0].color_var, None);
+    assert_eq!(solid_hex(d.props("1:11")), "FFFFFF");
+    d.apply(r#"[{"op":"set","ids":["1:10"],"props":{"fills":[{"keep":0,"color":"FF0000"}]}}]"#);
+    assert_eq!(d.props("1:10").fills()[0].color_var, None);
+    // Only color variables bind to paints.
+    assert!(
+        d.try_apply(
+            r#"[{"op":"bindVariable","ids":["1:11"],"field":"FILL","index":0,"variable":"1:50"}]"#
+        )
+        .is_err()
+    );
+}

@@ -404,6 +404,11 @@ impl FigFile {
         to_json(&inspect::design_info(&self.doc, scene, i))
     }
 
+    /// The file's variable collections (`CollectionInfo[]` JSON).
+    pub fn variables(&self) -> Result<String, JsError> {
+        to_json(&inspect::variables(&self.doc))
+    }
+
     /// The file's shared styles (`StyleInfo[]` JSON).
     pub fn styles(&self) -> Result<String, JsError> {
         to_json(&inspect::local_styles(&self.doc))

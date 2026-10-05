@@ -3,13 +3,13 @@
 use super::{
     BlobRef, DecodeError, Decoded, ENTRY_VERSION, NodeState, UNSUPPORTED_PAINTS, dec_align,
     dec_blend, dec_effect, dec_gradient, dec_mask, dec_node_type, dec_prop_field, dec_scale_mode,
-    dec_style_type, dec_winding,
+    dec_style_type, dec_variable_type, dec_winding,
 };
 use crate::model::{
     Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
     Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    VariantOrder, VariantSpec, Vec2, VectorData,
+    Variable, VariableMode, VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -222,6 +222,7 @@ impl<'a> Reader<'a> {
             opacity: self.f32()?,
             visible: self.bool()?,
             blend_mode: dec_blend(self.u8()?),
+            color_var: self.opt(Self::guid)?,
         })
     }
 
@@ -343,6 +344,26 @@ impl<'a> Reader<'a> {
             absolute: self.opt(Self::bool)?,
             min_size: self.opt(Self::vec2)?,
             max_size: self.opt(Self::vec2)?,
+        })
+    }
+
+    fn variable(&mut self) -> Decoded<Variable> {
+        Ok(Variable {
+            set: self.opt(Self::guid)?,
+            resolved_type: dec_variable_type(self.u8()?),
+            values: self.arc_list(|r| {
+                let mode = r.guid()?;
+                let value = match r.u8()? {
+                    0 => VariableValue::Color(r.color()?),
+                    1 => VariableValue::Float(r.f32()?),
+                    2 => VariableValue::Text(r.arc_str()?),
+                    3 => VariableValue::Bool(r.bool()?),
+                    4 => VariableValue::Alias(r.guid()?),
+                    5 => VariableValue::Other,
+                    _ => return Err(DecodeError::Invalid),
+                };
+                Ok((mode, value))
+            })?,
         })
     }
 
@@ -483,6 +504,16 @@ impl<'a> Reader<'a> {
                 })
             })?,
             props_bubbled: self.opt(Self::bool)?,
+            variable: self.opt(|r| r.variable().map(Arc::new))?,
+            variable_modes: self.opt(|r| {
+                r.arc_list(|r| {
+                    Ok(VariableMode {
+                        id: r.guid()?,
+                        name: r.arc_str()?,
+                    })
+                })
+            })?,
+            mode_by_set: self.opt(|r| r.arc_list(|r| Ok((r.guid()?, r.guid()?))))?,
             generated: self.opt(|r| r.arc_list(Self::props))?,
             vector_styles: self.opt(|r| r.arc_list(Self::style_run))?,
             recomputed: self.bool()?,

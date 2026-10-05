@@ -115,6 +115,11 @@ const NODE_FIELDS: &[&str] = &[
     "variantPropSpecs",
     "stateGroupPropertyValueOrders",
     "propsAreBubbled",
+    "variableSetID",
+    "variableResolvedType",
+    "variableDataValues",
+    "variableSetModes",
+    "variableModeBySetMap",
     "backgroundPaints",
     "backgroundEnabled",
     "derivedImmutableFrameData",
@@ -137,6 +142,7 @@ const PAINT_FIELDS: &[&str] = &[
     "paintFilter",
     "originalImageWidth",
     "originalImageHeight",
+    "colorVar",
 ];
 
 const EFFECT_FIELDS: &[&str] = &[
@@ -342,7 +348,56 @@ pub fn paint(m: MsgRef) -> Paint {
             .enum_name("blendMode")
             .map(BlendMode::parse)
             .unwrap_or(BlendMode::Normal),
+        color_var: m.msg("colorVar").and_then(variable_alias),
     }
+}
+
+/// The variable a `VariableData` aliases.
+fn variable_alias(v: MsgRef) -> Option<Guid> {
+    v.msg("value")?.msg("alias")?.msg("guid").and_then(guid)
+}
+
+fn variable(m: &MsgRef) -> Option<Variable> {
+    let values = m.msg("variableDataValues")?;
+    Some(Variable {
+        set: m
+            .msg("variableSetID")
+            .and_then(|s| s.msg("guid"))
+            .and_then(guid),
+        resolved_type: m
+            .enum_name("variableResolvedType")
+            .map(VariableType::parse)
+            .unwrap_or(VariableType::Other),
+        values: values
+            .msgs("entries")
+            .filter_map(|e| {
+                let mode = e.msg("modeID").and_then(guid)?;
+                let data = e.msg("variableData")?;
+                let value = match data.msg("value") {
+                    Some(v) if data.enum_name("dataType") == Some("ALIAS") => v
+                        .msg("alias")
+                        .and_then(|a| a.msg("guid"))
+                        .and_then(guid)
+                        .map_or(VariableValue::Other, VariableValue::Alias),
+                    Some(v) => {
+                        if let Some(c) = v.msg("colorValue") {
+                            VariableValue::Color(color(c))
+                        } else if let Some(f) = v.f32("floatValue") {
+                            VariableValue::Float(f)
+                        } else if let Some(b) = v.bool("boolValue") {
+                            VariableValue::Bool(b)
+                        } else if let Some(t) = v.str("textValue") {
+                            VariableValue::Text(t.into())
+                        } else {
+                            VariableValue::Other
+                        }
+                    }
+                    None => VariableValue::Other,
+                };
+                Some((mode, value))
+            })
+            .collect(),
+    })
 }
 
 pub fn effect(m: MsgRef) -> Effect {
@@ -808,6 +863,33 @@ pub fn props(m: MsgRef) -> Props {
         );
     }
     p.props_bubbled = m.bool("propsAreBubbled");
+    p.variable = variable(&m).map(Arc::new);
+    if m.has("variableSetModes") {
+        p.variable_modes = Some(
+            m.msgs("variableSetModes")
+                .filter_map(|v| {
+                    Some(VariableMode {
+                        id: v.msg("id").and_then(guid)?,
+                        name: v.str("name").unwrap_or("").into(),
+                    })
+                })
+                .collect(),
+        );
+    }
+    if let Some(map) = m.msg("variableModeBySetMap") {
+        let entries: Arc<[(Guid, Guid)]> = map
+            .msgs("entries")
+            .filter_map(|e| {
+                Some((
+                    e.msg("variableSetID")?.msg("guid").and_then(guid)?,
+                    e.msg("variableModeID").and_then(guid)?,
+                ))
+            })
+            .collect();
+        if !entries.is_empty() {
+            p.mode_by_set = Some(entries);
+        }
+    }
     p.generated = generated_layers(&m);
     p.vector_styles = m.msg("vectorData").and_then(|v| {
         let styles: Arc<[StyleRun]> = v

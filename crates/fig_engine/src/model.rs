@@ -13,6 +13,7 @@ use std::sync::Arc;
 pub mod geom;
 pub mod paint;
 pub mod text;
+pub mod variables;
 
 pub use geom::{Affine, Rect, Vec2};
 pub use paint::{
@@ -20,6 +21,7 @@ pub use paint::{
     ImageScaleMode, Paint, PaintKind,
 };
 pub use text::{Decoration, Glyph, StyleRun, TextContent, TextLayout, TextStyle};
+pub use variables::{Variable, VariableMode, VariableType, VariableValue};
 
 /// A node id, written `session:local` (Figma's node ids).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -538,6 +540,13 @@ pub struct Props {
     /// On an instance in a component: its properties show on the
     /// component's instances ("exposed" nested instances).
     pub props_bubbled: Option<bool>,
+    /// On variable nodes: the variable's collection, kind, and values.
+    pub variable: Option<Arc<Variable>>,
+    /// On variable collections: their modes, in order (the first is the
+    /// default).
+    pub variable_modes: Option<Arc<[VariableMode]>>,
+    /// The mode a frame (or page) picks per collection: `(collection, mode)`.
+    pub mode_by_set: Option<Arc<[(Guid, Guid)]>>,
     /// The layers Figma generates for FigJam objects (a sticky's or shape's
     /// background and text, a connector's line and label): paints and text
     /// from `nodeGenerationData` merged with the layout Figma derived for
@@ -579,7 +588,7 @@ impl Props {
             description, is_state_group, fill_style, stroke_style, effect_style, generated,
             vector_styles,
             text_style_id, key, style_type, sort_position, soft_deleted, variant_specs,
-            variant_orders, props_bubbled,
+            variant_orders, props_bubbled, variable, variable_modes, mode_by_set,
         );
     }
 

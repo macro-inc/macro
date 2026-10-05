@@ -10,7 +10,7 @@
 
 use crate::model::{
     BlendMode, EffectKind, GradientKind, Guid, ImageScaleMode, MaskType, NodeType, Paint,
-    PaintKind, PropField, Props, StrokeAlign, StyleType, WindingRule,
+    PaintKind, PropField, Props, StrokeAlign, StyleType, VariableType, WindingRule,
 };
 use std::sync::Arc;
 
@@ -205,6 +205,11 @@ codes!(enc_effect, dec_effect, EffectKind, default EffectKind::Other;
 codes!(enc_prop_field, dec_prop_field, PropField, default PropField::Other;
     PropField::Visible = 0, PropField::Text = 1, PropField::SwappedSymbol = 2,
     PropField::Other = 3,
+);
+
+codes!(enc_variable_type, dec_variable_type, VariableType, default VariableType::Other;
+    VariableType::Color = 0, VariableType::Float = 1, VariableType::String = 2,
+    VariableType::Boolean = 3, VariableType::Other = 4,
 );
 
 codes!(enc_style_type, dec_style_type, StyleType, default StyleType::Other;

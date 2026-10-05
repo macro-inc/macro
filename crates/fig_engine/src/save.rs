@@ -255,6 +255,9 @@ impl<'s> Build<'s> {
         m.set(self.schema, "opacity", Value::Float(p.opacity));
         m.set(self.schema, "visible", Value::Bool(p.visible));
         self.set_enum(&mut m, "blendMode", blend_name(p.blend_mode));
+        if let Some(var) = p.color_var {
+            self.color_var(&mut m, var);
+        }
         Some(Value::Msg(Box::new(m)))
     }
 

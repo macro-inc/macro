@@ -562,6 +562,21 @@ pub enum Op {
     DeleteStyle {
         ids: Vec<String>,
     },
+    /// Binds paint `index` of layers' fills (`FILL`) or strokes (`STROKE`)
+    /// to a color variable, or unbinds it (`variable` absent).
+    BindVariable {
+        ids: Vec<String>,
+        field: String,
+        index: usize,
+        variable: Option<String>,
+    },
+    /// Makes frames use a mode of a variable collection (or inherit one,
+    /// `mode` absent).
+    SetVariableMode {
+        ids: Vec<String>,
+        collection: String,
+        mode: Option<String>,
+    },
 }
 
 /// A component property value as the editor sends it: `{"bool": true}`,
@@ -1564,7 +1579,9 @@ impl<'a> Txn<'a> {
             | Op::ApplyStyle { .. }
             | Op::CreateStyle { .. }
             | Op::EditStyle { .. }
-            | Op::DeleteStyle { .. } => self.apply_design(op)?,
+            | Op::DeleteStyle { .. }
+            | Op::BindVariable { .. }
+            | Op::SetVariableMode { .. } => self.apply_design(op)?,
         }
         Ok(())
     }

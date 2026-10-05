@@ -401,6 +401,61 @@ impl Build<'_> {
         }
     }
 
+    /// A paint's color variable (`colorVar`: an alias to the variable).
+    pub(super) fn color_var(&self, paint: &mut Msg, var: Guid) {
+        let s = self.schema;
+        let Some(def) = self.sub(paint.def, "colorVar") else {
+            return;
+        };
+        let built = (|| {
+            let mut data = Msg::new(def);
+            let any_def = self.sub(def, "value")?;
+            let mut any = Msg::new(any_def);
+            let alias_def = self.sub(any_def, "alias")?;
+            let mut alias = Msg::new(alias_def);
+            self.guid_field(&mut alias, "guid", var);
+            any.set(s, "alias", Value::Msg(Box::new(alias)));
+            data.set(s, "value", Value::Msg(Box::new(any)));
+            data.set(s, "dataType", self.enum_of(def, "dataType", "ALIAS")?);
+            data.set(
+                s,
+                "resolvedDataType",
+                self.enum_of(def, "resolvedDataType", "COLOR")?,
+            );
+            Some(data)
+        })();
+        if let Some(data) = built {
+            paint.set(s, "colorVar", Value::Msg(Box::new(data)));
+        }
+    }
+
+    /// The modes a frame picks per variable collection.
+    fn mode_by_set(&self, m: &mut Msg, modes: &[(Guid, Guid)]) {
+        let s = self.schema;
+        let Some(def) = self.sub(m.def, "variableModeBySetMap") else {
+            return;
+        };
+        let Some(entry_def) = self.sub(def, "entries") else {
+            return;
+        };
+        let entries = modes
+            .iter()
+            .map(|&(set, mode)| {
+                let mut e = Msg::new(entry_def);
+                if let Some(set_def) = self.sub(entry_def, "variableSetID") {
+                    let mut id = Msg::new(set_def);
+                    self.guid_field(&mut id, "guid", set);
+                    e.set(s, "variableSetID", Value::Msg(Box::new(id)));
+                }
+                self.guid_field(&mut e, "variableModeID", mode);
+                Value::Msg(Box::new(e))
+            })
+            .collect();
+        let mut map = Msg::new(def);
+        map.set(s, "entries", Value::List(entries));
+        m.set(s, "variableModeBySetMap", Value::Msg(Box::new(map)));
+    }
+
     /// [`flags::STYLES`]: the shared styles `p` uses, and a style node's
     /// own details. Overrides (`guid_path` set) only add references; a
     /// layer's own record drops the ones it no longer uses.
@@ -446,6 +501,9 @@ impl Build<'_> {
         }
         if let Some(v) = p.internal_only {
             m.set(s, "internalOnly", Value::Bool(v));
+        }
+        if let Some(modes) = p.mode_by_set.as_deref() {
+            self.mode_by_set(m, modes);
         }
     }
 }

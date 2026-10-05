@@ -158,6 +158,10 @@ pub struct DesignInfo {
     pub instance: Option<InstanceInfo>,
     pub component: Option<ComponentPanel>,
     pub layer: Option<LayerBindings>,
+    /// Frames (outside instances): the variable modes they can pick.
+    pub modes: Vec<super::variables::ModeChoice>,
+    /// The color variables the layer's paints are bound to.
+    pub variables: super::variables::BoundVariables,
 }
 
 /// A shared style, for the local styles list and style pickers.
@@ -565,6 +569,12 @@ pub fn design_info(doc: &Document, scene: &Scene, i: SceneIdx) -> DesignInfo {
         layer: (!in_instance && props.node_type() != NodeType::Symbol)
             .then(|| layer_bindings(doc, src))
             .flatten(),
+        modes: if !in_instance && props.node_type().is_frame_like() {
+            super::variables::mode_choices(doc, props)
+        } else {
+            Vec::new()
+        },
+        variables: super::variables::bound_variables(doc, props),
     }
 }
 

@@ -19,6 +19,7 @@ use std::sync::Arc;
 mod instances;
 mod properties;
 mod styles;
+mod variables;
 mod variants;
 
 pub(crate) use variants::parse_variant_name;
@@ -150,6 +151,33 @@ impl Txn<'_> {
             Op::DeleteStyle { ids } => {
                 for i in self.resolve_all(ids)? {
                     self.delete_style(i);
+                }
+            }
+            Op::BindVariable {
+                ids,
+                field,
+                index,
+                variable,
+            } => {
+                let variable = variable.as_deref().map(|v| self.resolve(v)).transpose()?;
+                for id in ids {
+                    self.bind_variable(id, field, *index, variable)?;
+                }
+            }
+            Op::SetVariableMode {
+                ids,
+                collection,
+                mode,
+            } => {
+                let collection = self.resolve(collection)?;
+                let mode = mode
+                    .as_deref()
+                    .map(|m| {
+                        Guid::parse(m).ok_or_else(|| FigError::Unsupported(format!("no mode {m}")))
+                    })
+                    .transpose()?;
+                for i in self.resolve_all(ids)? {
+                    self.set_variable_mode(i, collection, mode)?;
                 }
             }
             _ => {}
