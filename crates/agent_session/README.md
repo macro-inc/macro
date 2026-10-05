@@ -41,3 +41,43 @@ harnesses do not currently publish authoritative working branch facts. Soup
 retains the last captured linked-PR branch as a fallback for those sessions and
 older rows only while its captured repository matches the session's current one;
 it never substitutes the starting branch.
+
+## Initialization and first streamed text latency
+
+On each `invoke_agent` span, the session actor records independent millisecond
+measurements from sending ACP `session/prompt`:
+
+- `macro.genai.turn.time_to_first_text_ms`: first non-whitespace agent message
+  text; excludes reasoning, tool calls, and empty chunks.
+- `macro.genai.turn.time_to_first_reasoning_ms`: first non-whitespace thought.
+- `macro.genai.turn.time_to_first_tool_call_ms`: first tool call.
+- `macro.genai.turn.time_to_first_output_ms`: the existing combined metric,
+  which also counts thought/tool events and is not answer-text latency.
+
+Each milestone is recorded once per turn, regardless of content-capture policy.
+Turns without text have no text-latency measurement, rather than a zero. A
+correlated `agent first output milestone` log emits immediately with
+`output_kind` and `elapsed_ms`, so a turn need not finish before it is observable.
+These are server-observed timings, not browser render measurements, and they
+exclude work before the prompt reaches the runtime.
+
+For that preceding work, inspect `agent.init.*` spans in the harness: admission,
+preferences, egress, persistence, publishing, runtime creation, permissions, and
+attachment. `agent.init.acp` spans measure actual request-to-response time for
+`initialize`, `session/new`, `session/load`, and `session/resume`, with
+`rpc.method`, `agent.session.id`, and `outcome` (success/error/stopped). Runtime
+attachment alone is not a readiness measurement.
+
+The in-memory connector exposes `agent.mcp.initialize` and
+`agent.mcp.list_tools` durations per `server`, alongside the aggregate connector
+`dialed`, `failed`, and `elapsed_ms` fields. Servers initialize in
+parallel: compare the critical path, not the sum of their durations. In-memory
+prompt spans also split `agent.turn.lock_wait_ms`, `agent.turn.admission_wait_ms`,
+and `agent.turn.first_text_ms`; their legacy `ttft_ms` can include reasoning or
+a tool call, but excludes usage and tool-result events.
+
+To investigate a slow first session in Datadog, correlate by `agent.session.id`,
+report sample counts and
+p50/p95 for initialization and first text by harness/model. Include the fraction
+of turns with no text rather than silently counting them as fast answers. None
+of these new fields supplies historical measurements before its deployment.

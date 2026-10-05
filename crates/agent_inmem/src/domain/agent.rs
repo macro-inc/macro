@@ -11,7 +11,7 @@
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use agent::ReasoningEffort;
 use agent::types::{AssistantMessagePart, ChatMessage};
@@ -66,6 +66,11 @@ mod test;
 /// cancelling, however long the user takes. The question ends with an answer,
 /// a stop, or the connection going away.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Whole milliseconds since `started`, saturating; a span field, not a clock.
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
 
 /// What this agent calls itself in the `initialize` response. The fold
 /// recognizes the harness by this name, so it is a contract, not a label.
@@ -142,7 +147,16 @@ impl AgentState {
     /// same moment a sandboxed harness connects its servers, so the first
     /// turn already has them.
     async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
-        let tools = self.mcp.connect_dyn(dialable_servers(servers)).await;
+        let servers = dialable_servers(servers);
+        let requested = servers.len();
+        let started = Instant::now();
+        let tools = self.mcp.connect_dyn(servers).await;
+        tracing::info!(
+            servers = requested,
+            tools = tools.as_ref().map_or(0, |tools| tools.len()),
+            elapsed_ms = elapsed_ms(started),
+            "connected the session's MCP servers"
+        );
         *self
             .mcp_tools
             .lock()
@@ -585,6 +599,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         "agent.acp.prompt",
                         agent.session.id = %state.session_id,
                         gen_ai.conversation.id = %state.session_id,
+                        agent.turn.ttft_ms = tracing::field::Empty,
+                        agent.turn.first_text_ms = tracing::field::Empty,
+                        agent.turn.admission_wait_ms = tracing::field::Empty,
+                        agent.turn.lock_wait_ms = tracing::field::Empty,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
@@ -738,6 +756,8 @@ async fn run_turn(
     prompt: UserPrompt,
     cancel: CancellationToken,
 ) -> Result<StopReason, AiAdmissionError> {
+    // Include lock and admission waits in time to first output.
+    let started = Instant::now();
     // Mark every exit (including denial or a dropped connection) complete so
     // cancelled/failed requests do not remain outstanding.
     let _completed = cancel.clone().drop_guard();
@@ -746,6 +766,9 @@ async fn run_turn(
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
         turn = state.turn_lock.lock() => turn,
     };
+    let span = tracing::Span::current();
+    span.record("agent.turn.lock_wait_ms", elapsed_ms(started));
+    let admission_started = Instant::now();
     // Check at execution time, not enqueue time. Cancellation stays responsive
     // even if billing is slow, and neither denial nor cancellation adds history.
     tokio::select! {
@@ -753,6 +776,10 @@ async fn run_turn(
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
         result = admit_turn(state.admission.as_ref(), &state.owner) => result?,
     }
+    span.record(
+        "agent.turn.admission_wait_ms",
+        elapsed_ms(admission_started),
+    );
     let TurnInput {
         messages,
         model,
@@ -780,9 +807,31 @@ async fn run_turn(
     let mut accumulator = StreamAccumulator::new();
     let mut failure = None;
     let mut was_cancelled = false;
+    let mut first_part_seen = false;
+    let mut first_text_seen = false;
     loop {
         match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
             Ok(Some(Ok(part))) => {
+                let is_output = match &part {
+                    StreamPart::Content(text) | StreamPart::Thinking(text) => {
+                        !text.trim().is_empty()
+                    }
+                    StreamPart::ToolCall(_) => true,
+                    StreamPart::ToolResponse(_) | StreamPart::Usage(_) => false,
+                };
+                if !first_part_seen && is_output {
+                    first_part_seen = true;
+                    let ttft_ms = elapsed_ms(started);
+                    span.record("agent.turn.ttft_ms", ttft_ms);
+                    tracing::info!(ttft_ms, "the turn streamed its first part");
+                }
+                if !first_text_seen
+                    && let StreamPart::Content(text) = &part
+                    && !text.trim().is_empty()
+                {
+                    first_text_seen = true;
+                    span.record("agent.turn.first_text_ms", elapsed_ms(started));
+                }
                 if let Some(update) = update_for_part(&part) {
                     let notification = SessionNotification::new(acp_session_id.clone(), update);
                     if connection.send_notification(notification).is_err() {
