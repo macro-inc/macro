@@ -17,8 +17,7 @@ async fn manual_admission_keeps_error_type_and_uses_stored_owner_without_gating_
             .await
             .unwrap();
         let id = action.id.unwrap();
-        let stored_owner = MacroUserIdStr::parse_from_str(FOREIGN_USER).unwrap();
-        set_stored_owner(&service, id, Owner::User(stored_owner.clone()));
+        let stored_owner = user();
         let returned = service
             .execute_action_now(owner_receipt(id))
             .await

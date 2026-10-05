@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE github_pull_request SET updated_at = $2 WHERE github_key = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7eef7c2119d728248f3b9d5f47bd305f3870966ea08061045a942b4f32aa4e7d"
+}

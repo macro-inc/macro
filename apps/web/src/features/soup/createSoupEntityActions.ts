@@ -379,7 +379,7 @@ export function createSoupEntityActions(): {
     ) {
       middleItems.push({
         id: 'set-initiative',
-        label: 'Set project',
+        label: 'Add to project…',
         onClick: () => {
           if (isFeatureEnabled(enableProjects)) openProjectPicker();
         },

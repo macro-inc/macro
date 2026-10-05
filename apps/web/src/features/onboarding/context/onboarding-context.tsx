@@ -97,8 +97,11 @@ export type OnboardingContext = {
   joinTeam(inviteId: string): Promise<void>;
   /** The hosted checkout URL; rejects with a message fit to show. */
   startCheckout(tier: PaidPlanTier): Promise<string>;
-  /** Marks onboarding and the tutorial done and confirms the server agrees. */
-  completeOnboarding(): Promise<CompletionResult>;
+  /**
+   * Marks onboarding and the tutorial done and confirms the server agrees.
+   * `skipped` records that the user left without going through the steps.
+   */
+  completeOnboarding(options: { skipped: boolean }): Promise<CompletionResult>;
   /** Finishes a tutorial flag left behind by a completed onboarding record. */
   repairTutorial(): Promise<void>;
   applyAccent(color: string, viewerId: string): void;

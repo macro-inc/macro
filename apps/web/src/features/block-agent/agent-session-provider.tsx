@@ -25,6 +25,7 @@ import {
 } from './context/create-queue-controller';
 import { resolveSessionId } from './context/resolve-session-id';
 import { createSendNext } from './context/send-next';
+import { createSteer } from './context/steer';
 import { createInteractionController } from './primitives/create-interaction-controller';
 import type { QuoteInsert } from './ui';
 
@@ -98,6 +99,13 @@ export function AgentSessionProvider(
     expect: live.expect,
     retract: live.retract,
   });
+  const steer = createSteer({
+    currentTurn: live.currentTurn,
+    entries: queue.entries,
+    steer: queue.steer,
+    expect: live.expect,
+    retract: live.retract,
+  });
   const interactions = createInteractionController({
     sessionId,
     pending: () => live.metadata()?.pendingInteractions ?? [],
@@ -151,6 +159,7 @@ export function AgentSessionProvider(
           issue: live.issue,
           selectModel: live.selectModel,
           sendNext,
+          steer,
           interactions,
           queue,
           quoteSelection,

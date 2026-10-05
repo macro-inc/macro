@@ -1270,6 +1270,61 @@ export const runImportHandler = async (
 };
 
 /**
+ * @summary Discover candidates for user selection without auto-importing them.
+ */
+export type discoverHandlerResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type discoverHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type discoverHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type discoverHandlerResponseSuccess = discoverHandlerResponse204 & {
+  headers: Headers;
+};
+export type discoverHandlerResponseError = (
+  | discoverHandlerResponse400
+  | discoverHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type discoverHandlerResponse =
+  | discoverHandlerResponseSuccess
+  | discoverHandlerResponseError;
+
+export const getDiscoverHandlerUrl = (source: string) => {
+  return `/import/runs/${source}/discover`;
+};
+
+export const discoverHandler = async (
+  source: string,
+  options?: RequestInit
+): Promise<discoverHandlerResponse> => {
+  const res = await fetch(getDiscoverHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discoverHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as discoverHandlerResponse;
+};
+
+/**
  * @summary Dismiss one source's import section.
  */
 export type dismissRunHandlerResponse204 = {
@@ -2569,6 +2624,11 @@ export type structuredCompletionResponse402 = {
   status: 402;
 };
 
+export type structuredCompletionResponse403 = {
+  data: StructuredCompletionError;
+  status: 403;
+};
+
 export type structuredCompletionResponse500 = {
   data: StructuredCompletionError;
   status: 500;
@@ -2587,6 +2647,7 @@ export type structuredCompletionResponseError = (
   | structuredCompletionResponse400
   | structuredCompletionResponse401
   | structuredCompletionResponse402
+  | structuredCompletionResponse403
   | structuredCompletionResponse500
   | structuredCompletionResponse503
 ) & {

@@ -1,11 +1,33 @@
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { initiativeClient } from '@service-storage/initiative';
-import { useQuery } from '@tanstack/solid-query';
+import {
+  initiativeClient,
+  type mapInitiativeDetail,
+} from '@service-storage/initiative';
+import { type QueryClient, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { projectKeys } from './keys';
 import { toProjectDetail } from './project-model';
 import { projectProperties } from './project-properties';
+
+type InitiativeDetail = ReturnType<typeof mapInitiativeDetail>;
+
+const projectDetailData = (project: InitiativeDetail) => ({
+  project: toProjectDetail(project),
+  properties: projectProperties(project.properties),
+});
+
+/** Seeds the detail read from a create response, so opening it needs no request. */
+export function seedProjectDetail(
+  cache: QueryClient,
+  userId: string | undefined,
+  project: InitiativeDetail
+) {
+  cache.setQueryData(
+    projectKeys.detail(userId, project.id).queryKey,
+    projectDetailData(project)
+  );
+}
 
 /** One authorized read backs the project view and its chips and previews. */
 export function projectDetailQueryOptions(
@@ -15,13 +37,8 @@ export function projectDetailQueryOptions(
 ) {
   return {
     queryKey: projectKeys.detail(userId, projectId).queryKey,
-    queryFn: async ({ signal }: { signal: AbortSignal }) => {
-      const project = await throwOnErr(() => client.get(projectId, signal));
-      return {
-        project: toProjectDetail(project),
-        properties: projectProperties(project.properties),
-      };
-    },
+    queryFn: async ({ signal }: { signal: AbortSignal }) =>
+      projectDetailData(await throwOnErr(() => client.get(projectId, signal))),
     staleTime: 30_000,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,

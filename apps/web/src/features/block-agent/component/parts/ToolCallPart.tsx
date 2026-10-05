@@ -33,14 +33,13 @@ import { UserToolCall } from './UserToolCall';
 export function ToolCallPart(props: {
   part: ToolUsePart;
   /** Where the part sits, for the chat components Macro tools render with. */
-  context?: ToolCallContext;
+  context: ToolCallContext;
 }): JSX.Element {
   const failed = () => props.part.status === 'failed';
   // A call the log still has running once its turn is over is not running
-  // (see `settledToolStatus`). Without a turn to place it in there is no
-  // live turn either, so it settles too.
+  // (see `settledToolStatus`).
   const status = () =>
-    settledToolStatus(props.part.status, props.context?.inFlight ?? false);
+    settledToolStatus(props.part.status, props.context.inFlight);
   // The chat block's failed-tool treatment: the same row, faded, with a quiet
   // trailing label — not a separate error card.
   const common = (): ToolCallCommon => ({
@@ -143,7 +142,7 @@ export function ToolCallPart(props: {
           <UserToolCall
             detail={detail()}
             common={common()}
-            context={props.context}
+            inFlight={props.context.inFlight}
           />
         )}
       </Match>

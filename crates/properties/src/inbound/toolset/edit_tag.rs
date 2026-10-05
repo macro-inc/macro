@@ -11,8 +11,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::tag_color::TagColor;
 use super::{PropertiesToolContext, caller_team_receipt_opt};
+use crate::TagColor;
 
 /// Rename or recolor an existing tag.
 #[derive(Debug, Deserialize, JsonSchema)]

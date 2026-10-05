@@ -175,7 +175,7 @@ function toGraphqlEntityReference(
   };
 }
 
-function toGraphqlSetPropertyValue(
+export function toGraphqlSetPropertyValue(
   value: SetPropertyValue | null
 ): GraphqlSetPropertyValue | null {
   if (value === null) return null;
@@ -206,6 +206,9 @@ export function toGraphqlPropertyTargetEntityType(
   if (entityType === 'TASK') return 'DOCUMENT';
   if (entityType === 'CALENDAR_EVENT') {
     throw new Error('calendar events do not support properties');
+  }
+  if (entityType === 'CONTACT') {
+    throw new Error('crm contacts do not support properties');
   }
   return entityType;
 }

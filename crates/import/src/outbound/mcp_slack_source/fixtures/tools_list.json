@@ -1,0 +1,41 @@
+{
+  "tools": [
+    {
+      "name": "slack_v2-list-channels",
+      "description": "Synthetic fallback schema; not verified against Pipedream. List Slack conversations.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cursor": { "type": "string" },
+          "limit": { "type": "integer" },
+          "types": { "type": "string" },
+          "exclude_archived": { "type": "boolean" }
+        }
+      }
+    },
+    {
+      "name": "slack_v2-list-members-in-channel",
+      "description": "Synthetic fallback schema; not verified against Pipedream. List conversation member IDs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "channel": { "type": "string" },
+          "cursor": { "type": "string" },
+          "limit": { "type": "integer" }
+        },
+        "required": ["channel"]
+      }
+    },
+    {
+      "name": "slack_v2-list-users",
+      "description": "Synthetic fallback schema; not verified against Pipedream. List workspace users.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cursor": { "type": "string" },
+          "limit": { "type": "integer" }
+        }
+      }
+    }
+  ]
+}

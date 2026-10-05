@@ -28,7 +28,7 @@ const ENTITY_DRAG_TYPES = [
   'call',
   'crm_company',
   'crm_contact',
-  'automation',
+  'routine',
   'reminder',
   'calendar_event',
   'foreign',

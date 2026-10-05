@@ -90,3 +90,42 @@ fn the_trigger_reads_messages_and_properties() {
         ["macro.messages", "macro.properties"]
     );
 }
+
+#[test]
+fn a_task_joining_a_project_decodes_as_a_project_addition() {
+    use initiative::domain::models::InitiativeId;
+    use models_properties::{
+        EntityType, service::property_value::PropertyValue, shared::EntityReference,
+    };
+    use properties::domain::events::EntityPropertyUpdatedMetadata;
+    use system_properties::SystemPropertyKey;
+
+    let project = InitiativeId::generate();
+    let user = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let event = PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
+        entity_property_id: Uuid::now_v7(),
+        entity_id: "task-a".to_owned(),
+        entity_type: EntityType::Task,
+        property_definition_id: SystemPropertyKey::PROJECT_UUID,
+        actor_user_id: Some(user.clone()),
+        actor: None,
+        on_behalf_of: None,
+        value: Some(PropertyValue::EntityRef(vec![EntityReference {
+            entity_id: project.to_string(),
+            entity_type: EntityType::Initiative,
+            specific_message_id: None,
+        }])),
+        previous_value: None,
+        updated_at: Utc::now(),
+    });
+    let decoded = MessageTriggerEvents::decode(&record(&event))
+        .unwrap()
+        .into_trigger();
+    assert_eq!(decoded.event_type, "entity_property.updated");
+    let added = decoded.project_task.unwrap();
+    assert_eq!(added.task_id, "task-a");
+    assert_eq!(added.project_id, project);
+    assert_eq!(added.actor.actor.as_user(), Some(&user));
+    assert!(decoded.assignment.is_none());
+    assert!(decoded.posted.is_none());
+}

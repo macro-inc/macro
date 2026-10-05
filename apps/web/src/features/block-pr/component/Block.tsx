@@ -11,8 +11,11 @@ export default function PrBlock() {
   const detail = usePrDetail(() => foreignEntityId);
   return (
     <div class="size-full overflow-hidden flex flex-col relative">
-      <SidePanel.Layout>
-        <PrSidePanelSections enrichment={detail.data()?.pullRequest} />
+      <SidePanel.Layout floating>
+        <PrSidePanelSections
+          enrichment={detail.data()?.pullRequest}
+          status={detail.query.status}
+        />
         <div class="flex flex-col size-full min-w-0">
           <Show when={detail.data()}>
             {(data) => (

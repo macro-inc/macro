@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE reminder SET timezone = 'not/a/zone' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2904efc7f48bf49b74296cc94439d08e856d9fc1d6ca8a045f5cf6c07dda5777"
+}

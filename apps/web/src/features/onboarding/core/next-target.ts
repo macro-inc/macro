@@ -14,13 +14,18 @@ export function sanitizeNext(value: unknown): string | undefined {
     : undefined;
 }
 
-/** Where finishing onboarding lands: the first valid deep link, else Getting Started. */
-export function afterOnboardingTarget(
-  ...candidates: readonly unknown[]
-): string {
+function firstDeepLink(candidates: readonly unknown[]): string | undefined {
   for (const candidate of candidates) {
     const next = sanitizeNext(candidate);
     if (next) return next;
   }
-  return AFTER_SETUP_ROUTE;
+  return undefined;
 }
+
+/** Where finishing onboarding lands: the first valid deep link, else Getting Started. */
+export const afterOnboardingTarget = (...candidates: readonly unknown[]) =>
+  firstDeepLink(candidates) ?? AFTER_SETUP_ROUTE;
+
+/** Where bypassing lands: the deep link, else straight in the app — Getting Started is onboarding too. */
+export const bypassTarget = (...candidates: readonly unknown[]) =>
+  firstDeepLink(candidates) ?? DEFAULT_ROUTE;

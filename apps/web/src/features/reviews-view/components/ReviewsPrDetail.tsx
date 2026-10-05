@@ -1,6 +1,9 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { ChangesSplit } from '@app/features/changes/changes';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useRouteParams } from '@app/lib/split-router';
+import { reviewsPrRoute } from '@app/routes/routes';
+import { PrChangesProvider } from '@block-pr/component/PrChanges';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
 import { prDisplayName, prHtmlUrl } from '@block-pr/util/prKey';
 import {
@@ -13,7 +16,6 @@ import { SplitFileMenu } from '@components/app/split-layout/components/SplitFile
 import { SplitPanel } from '@components/app/split-panel';
 import { Permissions } from '@core/component/SharePermissions';
 import { onMount } from 'solid-js';
-import { reviewsPrRoute } from '../route';
 
 function ReviewsPrBreadcrumb(props: {
   foreignEntityId: string;
@@ -80,25 +82,34 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
 
   return (
     <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-        <ViewShell.TopBar class="touch:flex">
-          <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-          <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
-          <PrDetailActions url={githubUrl()} />
-        </ViewShell.TopBar>
+      <PrChangesProvider
+        foreignEntityId={props.foreignEntityId}
+        pullRequestUrl={githubUrl()}
+        pullRequestTitle={detail.data()?.pullRequest.name ?? undefined}
+        pullRequestChangeCounts={detail.changeCounts()}
+      >
         <ReviewsPrBreadcrumb
           foreignEntityId={props.foreignEntityId}
           name={name()}
           status={detail.data()?.pullRequest.status ?? undefined}
         />
-        <PrDetailContent
-          foreignEntityId={props.foreignEntityId}
-          data={detail.data()}
-          status={detail.query.status}
-          discussionSource={detail.discussionSource}
-          onRetry={() => void detail.query.refetch()}
-        />
-      </div>
+        <ChangesSplit>
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+            <ViewShell.TopBar class="touch:flex">
+              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+              <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
+              <PrDetailActions />
+            </ViewShell.TopBar>
+            <PrDetailContent
+              foreignEntityId={props.foreignEntityId}
+              data={detail.data()}
+              status={detail.query.status}
+              discussionSource={detail.discussionSource}
+              onRetry={() => void detail.query.refetch()}
+            />
+          </div>
+        </ChangesSplit>
+      </PrChangesProvider>
     </SidePanel.Root>
   );
 }

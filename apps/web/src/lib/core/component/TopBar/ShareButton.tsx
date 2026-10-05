@@ -1,6 +1,7 @@
 import { projectRouteId } from '@app/features/projects/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useChannelParticipants } from '@channel/use-channel-participants';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -57,6 +58,10 @@ import {
   fetchInitiativeSharePermissions,
   updateInitiativeSharePermissions,
 } from '@queries/initiative/share-permissions';
+import {
+  getDatabaseSharePermissions,
+  updateDatabaseSharePermissions,
+} from '@queries/storage/databases';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
@@ -70,6 +75,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import {
   Button,
+  CopyButton,
   cn,
   Dropdown,
   type ManagedDialogProps,
@@ -121,7 +127,7 @@ import {
 false && clickOutside;
 
 const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
-  itemType === 'email' || itemType === 'project';
+  itemType === 'email' || itemType === 'project' || itemType === 'database';
 
 /** Blocks, plus native entities that are shared without one. */
 type ShareBlockType = BlockName | BlockAlias | 'initiative';
@@ -141,6 +147,7 @@ async function fetchSharePermissions(id: string, itemType: ShareItemType) {
   if (itemType === 'initiative') {
     return fetchInitiativeSharePermissions(id);
   }
+  if (itemType === 'database') return getDatabaseSharePermissions(id);
   if (itemType === 'chat') {
     return cognitionApiServiceClient.getChatPermissions({ id });
   }
@@ -880,6 +887,19 @@ export function ShareModal(props: ShareModalProps) {
         });
         console.error(result);
       }
+    } else if (props.itemType === 'database') {
+      const result = await updateDatabaseSharePermissions({
+        id: props.id,
+        channelSharePermissions: [{ operation: 'remove', channelId }],
+      });
+      if (result.isOk()) {
+        await refetch();
+        toast.success('Removed channel access');
+      } else {
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
+      }
     } else if (props.itemType === 'chat') {
       const result = await cognitionApiServiceClient.updateChatPermissions({
         chat_id: props.id,
@@ -970,6 +990,13 @@ export function ShareModal(props: ShareModalProps) {
         });
       } else if (props.itemType === 'initiative') {
         result = await updateInitiativeSharePermissions(props.id, {
+          channelSharePermissions: [
+            { operation: 'replace', accessLevel, channelId },
+          ],
+        });
+      } else if (props.itemType === 'database') {
+        result = await updateDatabaseSharePermissions({
+          id: props.id,
           channelSharePermissions: [
             { operation: 'replace', accessLevel, channelId },
           ],
@@ -1169,7 +1196,10 @@ export function ShareModal(props: ShareModalProps) {
       ? {
           accessLevel: teamShareAccessLevel(),
           setAccessLevel: setTeamShareAccessLevel,
-          itemNoun: getShareItemNoun(props.itemType),
+          itemNoun:
+            props.blockAlias === 'snippet'
+              ? 'snippet'
+              : getShareItemNoun(props.itemType),
           scopeOptions: teamShareScopeOptionsForItem(props.itemType),
         }
       : undefined;
@@ -1595,19 +1625,20 @@ export function ShareTrigger(props: {
 
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
-    copyEntityLink(shareUrl(blockType(), blockId()), {
+    const result = copyEntityLink(shareUrl(blockType(), blockId()), {
       subtext:
         blockType() === 'agent' || blockType() === 'initiative'
           ? undefined
           : SHARE_LINK_SUBTEXT,
     });
     analytics.track('copy_share_link', { blockType: blockType() });
+    return result;
   });
 
   const ShareLinkAction = createMemo(() => ({
     action: (e: MouseEvent | KeyboardEvent) => {
       e.stopPropagation();
-      copyLink();
+      return copyLink();
     },
     icon: IconLink,
   }));
@@ -1639,9 +1670,9 @@ export function ShareTrigger(props: {
                 : `Share ${blockType()}`)
         }
       >
-        <Button
-          variant="ghost"
-          size="md"
+        <HeaderActionButton
+          label="Share"
+          icon={<IconShared />}
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -1650,20 +1681,17 @@ export function ShareTrigger(props: {
               props.onClick();
             }
           }}
-        >
-          <IconShared />
-          Share
-        </Button>
+        />
       </Tooltip>
 
-      <Button
+      <CopyButton
         variant="ghost"
         tooltip="Copy Share Link"
         size="icon-md"
         onClick={ShareLinkAction().action}
       >
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
-      </Button>
+      </CopyButton>
     </div>
   );
 }

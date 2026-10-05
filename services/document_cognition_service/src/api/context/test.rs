@@ -183,6 +183,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     };
     use frecency::domain::services::FrecencyQueryServiceImpl;
     use frecency::outbound::postgres::FrecencyPgStorage;
+    use github_pull_requests::{
+        domain::service::GithubPullRequestServiceImpl,
+        outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+    };
     use lexical_client::LexicalClient;
     use notification::domain::service::{
         NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -242,8 +246,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
-    let foreign_entity_service =
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone()));
+    let github_pull_request_service = GithubPullRequestServiceImpl::new(
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
+        PgGithubPullRequestRepo::new(pool.clone()),
+    );
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
         frecency_service,
@@ -253,7 +259,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
         ),
         crm::domain::service::NoOpCrmService,
-        foreign_entity_service,
+        github_pull_request_service,
         reminders::domain::service::NoOpRemindersService,
     ));
 
@@ -433,8 +439,19 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
         macro_event_broker.clone(),
+    );
+
+    let databases_tool_context = ai_tools::build_databases_tool_context(
+        pool.clone(),
+        entity_access_service.clone(),
+        ai_tools::ToolTableEventPublisher::NoOp(Default::default()),
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
+        &databases_tool_context,
+        soup_service.clone(),
+        pool.clone(),
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {
@@ -465,6 +482,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             user_email_service.clone(),
             entity_access_service.clone(),
         ),
+        databases_tool_context,
+        databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
@@ -473,11 +492,16 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         bot_tool_context: ai_tools::build_bot_tool_context(
             pool.clone(),
-            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             "http://localhost:8086".to_string(),
             None,
         ),
+        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            "test-internal-api-key".to_string(),
+        )
+        .expect("valid test coding agent context"),
         project_tool_context,
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
@@ -535,6 +559,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 Arc::new(creator),
                 recorder.clone(),
             )
+            .with_slack_source(Arc::new(
+                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+            ))
             .with_admission(admission.clone()),
         );
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(

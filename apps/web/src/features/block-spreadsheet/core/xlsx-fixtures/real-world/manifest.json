@@ -1,0 +1,314 @@
+[
+  {
+    "file": "sec-jpmorgan-10k-fy2024-financial-report.xlsx",
+    "title": "JPMorgan Chase & Co. 10-K FY2024 — SEC EDGAR Financial_Report.xlsx (XBRL financial statements + notes)",
+    "source": "https://www.sec.gov/Archives/edgar/data/19617/000001961725000270/",
+    "license": "US federal government public information (SEC)"
+  },
+  {
+    "file": "sec-educational-development-corp-10k-fy2024-financial-report.xlsx",
+    "title": "Educational Development Corp (EDUC, small-cap) 10-K FY ended 2024-02-29 — SEC EDGAR Financial_Report.xlsx",
+    "source": "https://www.sec.gov/Archives/edgar/data/31667/000118518524000577/",
+    "license": "US federal government public information (SEC)"
+  },
+  {
+    "file": "nrel-sam-ppa-single-owner-project-finance-cash-flow.xlsx",
+    "title": "NREL/NLR System Advisor Model — PPA Single Owner project-finance cash flow (Send to Excel with equations, SAM 2022.11.21)",
+    "source": "https://sam.nlr.gov/financial",
+    "license": "NLR/DOE Data & Software notice (free use/copy with notice retained)"
+  },
+  {
+    "file": "nrel-sam-residential-solar-cash-flow.xlsx",
+    "title": "NREL/NLR System Advisor Model — Residential (behind-the-meter) cash flow with equations (SAM 2020.2.29)",
+    "source": "https://sam.nlr.gov/financial",
+    "license": "NLR/DOE Data & Software notice (free use/copy with notice retained)"
+  },
+  {
+    "file": "obr-efo-ready-reckoner-spring-2025.xlsx",
+    "title": "UK Office for Budget Responsibility — Spring 2025 EFO fiscal ready-reckoner model (corrected 17 Mar 2026)",
+    "source": "https://obr.uk/data/",
+    "license": "Open Government Licence v3.0"
+  },
+  {
+    "file": "obr-public-finances-databank-2026-09.xlsx",
+    "title": "UK Office for Budget Responsibility — Public finances databank (September 2026)",
+    "source": "https://obr.uk/data/",
+    "license": "Open Government Licence v3.0"
+  },
+  {
+    "file": "zenodo-circular-economy-business-case-calculator.xlsx",
+    "title": "Circular Economy Business Case Calculator v1.1 (Hoffmann & Perau, 2026) — revenue/capex/opex/NPV business case",
+    "source": "https://zenodo.org/records/20799159",
+    "license": "CC-BY-4.0"
+  },
+  {
+    "file": "zenodo-offshore-wind-lcoe-dcf-model.xlsx",
+    "title": "LCOE model for offshore wind (Santhakumar, 2021) — discounted cash flow model",
+    "source": "https://zenodo.org/records/4437637",
+    "license": "CC-BY-4.0"
+  },
+  {
+    "file": "zenodo-surewave-floating-pv-cost-and-financial-model.xlsx",
+    "title": "SUREWAVE D7.4 — Cost model and financial analysis for offshore floating PV (Horizon Europe, 2025)",
+    "source": "https://zenodo.org/records/17534609",
+    "license": "CC-BY-4.0"
+  },
+  {
+    "file": "zenodo-debt-capacity-calculator.xlsx",
+    "title": "Debt Capacity Calculator (Cirin, 2023) — max loan sizing for annuity vs equal-principal repayment",
+    "source": "https://zenodo.org/records/7552617",
+    "license": "CC-BY-4.0"
+  },
+  {
+    "file": "zenodo-ccs-cement-post-tax-dcf-model.xlsx",
+    "title": "Cost of CO2 avoided for CCS in cement (Bey, 2026 MSc thesis) — post-tax discounted cash flow model",
+    "source": "https://zenodo.org/records/21154919",
+    "license": "CC-BY-4.0"
+  },
+  {
+    "file": "figshare-ucl-social-enterprise-financial-sustainability-model.xlsx",
+    "title": "TB Social Enterprise Financial Sustainability Model (Zaidi, UCL, 2023) — MBA project cost/revenue model",
+    "source": "https://rdr.ucl.ac.uk/articles/dataset/TB_Social_Enterprise_Financial_Sustainability_Model/22336657",
+    "license": "CC0-1.0"
+  },
+  {
+    "file": "packt-wazobia-3-statement-dcf-valuation-model.xlsx",
+    "title": "Packt 'Hands-On Financial Modeling with Microsoft Excel 2019' — Wazobia Global Ltd 3-statement + DCF valuation (v10)",
+    "source": "https://github.com/PacktPublishing/Hands-On-Financial-Modeling-with-Microsoft-Excel-2019",
+    "license": "MIT"
+  },
+  {
+    "file": "packt-project-finance-model.xlsx",
+    "title": "Packt 'Project Finance and Excel – Build Financial Models from Scratch' — project finance model",
+    "source": "https://github.com/PacktPublishing/Project-Finance-and-Excel---Build-Financial-Models-from-Scratch",
+    "license": "MIT"
+  },
+  {
+    "file": "packt-loan-amortization-schedule.xlsx",
+    "title": "Packt 'Hands-On Financial Modeling with Microsoft Excel 2019' — loan amortization schedule",
+    "source": "https://github.com/PacktPublishing/Hands-On-Financial-Modeling-with-Microsoft-Excel-2019",
+    "license": "MIT"
+  },
+  {
+    "file": "packt365-dynamic-array-functions-workbook.xlsx",
+    "title": "Packt 'Hands-On Financial Modeling with Excel for Microsoft 365' — Content for New Functions (dynamic arrays)",
+    "source": "https://github.com/PacktPublishing/Hands-On-Financial-Modeling-with-Excel-for-Microsoft-365",
+    "license": "MIT"
+  },
+  {
+    "file": "github-alibhatti23-dcf-comps-lbo-merger-model.xlsx",
+    "title": "Investment & Corporate Finance Models (alibhatti23, 2026) — trading comps, DCF, LBO, M&A accretion/dilution",
+    "source": "https://github.com/alibhatti23/investment-corporate-finance-model",
+    "license": "MIT"
+  },
+  {
+    "file": "sba-table-of-size-standards-2023.xlsx",
+    "title": "SBA Table of Size Standards (effective March 17, 2023)",
+    "source": "https://data.sba.gov/dataset/small-business-size-standards",
+    "license": "Public domain (U.S. Government work, 17 U.S.C. 105)"
+  },
+  {
+    "file": "census-monthly-retail-trade-sales-1992-present.xlsx",
+    "title": "U.S. Census Bureau - Monthly Retail Trade: Estimated Monthly Sales, 1992-present (one sheet per year)",
+    "source": "https://www.census.gov/retail/sales.html",
+    "license": "Public domain (U.S. Government work, 17 U.S.C. 105)"
+  },
+  {
+    "file": "census-susb-2022-us-sector-large-employment-size.xlsx",
+    "title": "U.S. Census Bureau - Statistics of U.S. Businesses 2022: U.S. sectors by large employment size",
+    "source": "https://www.census.gov/data/tables/2022/econ/susb/2022-susb-annual.html",
+    "license": "Public domain (U.S. Government work, 17 U.S.C. 105)"
+  },
+  {
+    "file": "bls-consumer-expenditure-2024-by-income-before-taxes.xlsx",
+    "title": "BLS Consumer Expenditure Surveys 2024 - Table 1203: Income before taxes: annual expenditure means, shares, standard errors, and relative standard errors",
+    "source": "https://www.bls.gov/cex/tables.htm",
+    "license": "Public domain (U.S. Government work, 17 U.S.C. 105)"
+  },
+  {
+    "file": "bea-gdp-key-source-data-2q2026-third.xlsx",
+    "title": "BEA - GDP Q2 2026 (third estimate): key source data and assumptions",
+    "source": "https://www.bea.gov/data/gdp/gross-domestic-product",
+    "license": "Public domain (U.S. Government work, 17 U.S.C. 105)"
+  },
+  {
+    "file": "irs-soi-2023-partnerships-table3-balance-sheets.xlsx",
+    "title": "IRS SOI Tax Stats - Partnerships 2023, Table 3: balance sheets by industrial group",
+    "source": "https://www.irs.gov/statistics/soi-tax-stats-partnership-statistics-by-sector-or-industry",
+    "license": "Public domain (U.S. Government work, 17 U.S.C. 105)"
+  },
+  {
+    "file": "gsa-per-diem-rates-fy2026-master.xlsx",
+    "title": "GSA FY2026 Per Diem Rates master file (CONUS lodging and M&IE)",
+    "source": "https://www.gsa.gov/travel/plan-a-trip/per-diem-rates/per-diem-files",
+    "license": "Public domain (U.S. Government work, 17 U.S.C. 105)"
+  },
+  {
+    "file": "fred-unrate-cpiaucsl-payems-export.xlsx",
+    "title": "FRED graph export: UNRATE, CPIAUCSL, PAYEMS (monthly)",
+    "source": "https://fred.stlouisfed.org/series/UNRATE",
+    "license": "Series data from BLS (public domain); FRED terms of use apply to the export"
+  },
+  {
+    "file": "ons-business-demography-2024-reference-tables.xlsx",
+    "title": "ONS - Business demography, UK: 2024 reference tables",
+    "source": "https://www.ons.gov.uk/businessindustryandtrade/business/activitysizeandlocation/datasets/businessdemographyreferencetable",
+    "license": "Open Government Licence v3.0 (Crown copyright)"
+  },
+  {
+    "file": "worldbank-commodity-prices-pink-sheet-monthly.xlsx",
+    "title": "World Bank Commodity Price Data (The Pink Sheet) - monthly historical prices",
+    "source": "https://www.worldbank.org/en/research/commodity-markets",
+    "license": "CC BY 4.0 (World Bank)"
+  },
+  {
+    "file": "ironcalc-template-invoice.xlsx",
+    "title": "IronCalc test template: invoice",
+    "source": "https://github.com/ironcalc/IronCalc/blob/9b1ae3fd8ed560511cb1cb8dc0b8a541bcf77edf/xlsx/tests/templates/invoice.xlsx",
+    "license": "MIT OR Apache-2.0 (IronCalc)"
+  },
+  {
+    "file": "ironcalc-template-gantt-project-tracker.xlsx",
+    "title": "IronCalc test template: Gantt project tracker",
+    "source": "https://github.com/ironcalc/IronCalc/blob/9b1ae3fd8ed560511cb1cb8dc0b8a541bcf77edf/xlsx/tests/templates/gantt_project_tracker.xlsx",
+    "license": "MIT OR Apache-2.0 (IronCalc)"
+  },
+  {
+    "file": "ironcalc-template-travel-expenses-tracker.xlsx",
+    "title": "IronCalc test template: travel expenses tracker",
+    "source": "https://github.com/ironcalc/IronCalc/blob/9b1ae3fd8ed560511cb1cb8dc0b8a541bcf77edf/xlsx/tests/templates/travel_expenses_tracker.xlsx",
+    "license": "MIT OR Apache-2.0 (IronCalc)"
+  },
+  {
+    "file": "ironcalc-example-pivots-charts-comments.xlsx",
+    "title": "IronCalc xlsx/tests/example.xlsx (feature kitchen sink)",
+    "source": "https://github.com/ironcalc/IronCalc/blob/9b1ae3fd8ed560511cb1cb8dc0b8a541bcf77edf/xlsx/tests/example.xlsx",
+    "license": "MIT OR Apache-2.0 (IronCalc)"
+  },
+  {
+    "file": "ironcalc-tables-structured-references.xlsx",
+    "title": "IronCalc calc test: Excel tables and structured references",
+    "source": "https://github.com/ironcalc/IronCalc/blob/9b1ae3fd8ed560511cb1cb8dc0b8a541bcf77edf/xlsx/tests/calc_test_no_export/tables.xlsx",
+    "license": "MIT OR Apache-2.0 (IronCalc)"
+  },
+  {
+    "file": "ironcalc-financial-pmt.xlsx",
+    "title": "IronCalc calc test: PMT (loan payment) with Excel-cached expected values",
+    "source": "https://github.com/ironcalc/IronCalc/blob/9b1ae3fd8ed560511cb1cb8dc0b8a541bcf77edf/xlsx/tests/calc_tests/FINANCIAL/PMT.xlsx",
+    "license": "MIT OR Apache-2.0 (IronCalc)"
+  },
+  {
+    "file": "poi-structured-refs-lots-with-lookups-bug57840.xlsx",
+    "title": "Apache POI test-data: StructuredRefs-lots-with-lookups.xlsx (bug 57840)",
+    "source": "https://github.com/apache/poi/blob/12c3688d130035f3dc2ca2a0f50d929456435a93/test-data/spreadsheet/StructuredRefs-lots-with-lookups.xlsx",
+    "license": "Apache-2.0 (Apache POI test-data)"
+  },
+  {
+    "file": "poi-data-validation-table-range-county-ranking.xlsx",
+    "title": "Apache POI test-data: dataValidationTableRange.xlsx (Washington county hospital ranking dashboard)",
+    "source": "https://github.com/apache/poi/blob/12c3688d130035f3dc2ca2a0f50d929456435a93/test-data/spreadsheet/dataValidationTableRange.xlsx",
+    "license": "Apache-2.0 (Apache POI test-data)"
+  },
+  {
+    "file": "poi-conditional-formatting-samples.xlsx",
+    "title": "Apache POI test-data: ConditionalFormattingSamples.xlsx",
+    "source": "https://github.com/apache/poi/blob/12c3688d130035f3dc2ca2a0f50d929456435a93/test-data/spreadsheet/ConditionalFormattingSamples.xlsx",
+    "license": "Apache-2.0 (Apache POI test-data)"
+  },
+  {
+    "file": "poi-formula-eval-test-data.xlsx",
+    "title": "Apache POI test-data: FormulaEvalTestData_Copy.xlsx (formula evaluation battery, incl. finance functions)",
+    "source": "https://github.com/apache/poi/blob/12c3688d130035f3dc2ca2a0f50d929456435a93/test-data/spreadsheet/FormulaEvalTestData_Copy.xlsx",
+    "license": "Apache-2.0 (Apache POI test-data)"
+  },
+  {
+    "file": "poi-number-format-tests-date1904.xlsx",
+    "title": "Apache POI test-data: NumberFormatTests.xlsx (TEXT() vs format string expectations)",
+    "source": "https://github.com/apache/poi/blob/12c3688d130035f3dc2ca2a0f50d929456435a93/test-data/spreadsheet/NumberFormatTests.xlsx",
+    "license": "Apache-2.0 (Apache POI test-data)"
+  },
+  {
+    "file": "poi-cvlkra-kyc-file-structure-tika3163.xlsx",
+    "title": "Apache POI test-data: CVLKRA KYC download file structure v3.1 (TIKA-3163)",
+    "source": "https://github.com/apache/poi/blob/12c3688d130035f3dc2ca2a0f50d929456435a93/test-data/spreadsheet/CVLKRA-KYC_Download_File_Structure_V3.1.xlsx",
+    "license": "Apache-2.0 (Apache POI test-data)"
+  },
+  {
+    "file": "libreoffice-forum-mso-de-104083-pivot-weeknum.xlsx",
+    "title": "LibreOffice sc test: forum-mso-de-104083.xlsx (production outflow log + pivot by calendar week)",
+    "source": "https://github.com/LibreOffice/core/blob/8f2eee739de0d78b6d70351a166bd14769807050/sc/qa/unit/data/xlsx/forum-mso-de-104083.xlsx",
+    "license": "MPL-2.0 (LibreOffice core source tree)"
+  },
+  {
+    "file": "libreoffice-forum-mso-en4-134670-sales-leads-full-column-refs.xlsx",
+    "title": "LibreOffice sc test: forum-mso-en4-134670.xlsx (sales leads pipeline dashboard)",
+    "source": "https://github.com/LibreOffice/core/blob/8f2eee739de0d78b6d70351a166bd14769807050/sc/qa/unit/data/xlsx/forum-mso-en4-134670.xlsx",
+    "license": "MPL-2.0 (LibreOffice core source tree)"
+  },
+  {
+    "file": "libreoffice-missing-path-external-shift-planning.xlsx",
+    "title": "LibreOffice sc test: MissingPathExternal.xlsx (2-shift production planning)",
+    "source": "https://github.com/LibreOffice/core/blob/8f2eee739de0d78b6d70351a166bd14769807050/sc/qa/unit/data/xlsx/MissingPathExternal.xlsx",
+    "license": "MPL-2.0 (LibreOffice core source tree)"
+  },
+  {
+    "file": "libreoffice-functions-excel-2010.xlsx",
+    "title": "LibreOffice sc test: functions-excel-2010.xlsx (Excel 2010 functions with expected results)",
+    "source": "https://github.com/LibreOffice/core/blob/8f2eee739de0d78b6d70351a166bd14769807050/sc/qa/unit/data/xlsx/functions-excel-2010.xlsx",
+    "license": "MPL-2.0 (LibreOffice core source tree)"
+  },
+  {
+    "file": "libreoffice-column-style-autofilter-linux-survey-pivots.xlsx",
+    "title": "LibreOffice sc test: column-style-autofilter.xlsx (Linux usage survey responses + 23 pivot/summary sheets)",
+    "source": "https://github.com/LibreOffice/core/blob/8f2eee739de0d78b6d70351a166bd14769807050/sc/qa/unit/data/xlsx/column-style-autofilter.xlsx",
+    "license": "MPL-2.0 (LibreOffice core source tree)"
+  },
+  {
+    "file": "sheetjs-formula-stress-test.xlsx",
+    "title": "SheetJS test_files: formula_stress_test.xlsx (every Excel 2011 function)",
+    "source": "https://docs.sheetjs.com/docs/miscellany/testing",
+    "license": "Apache-2.0 (SheetJS test_files, original root-level file)"
+  },
+  {
+    "file": "sheetjs-metadata-2019-dynamic-arrays-rich-data.xlsx",
+    "title": "SheetJS test_files: metadata_2019.xlsx (Stock/Geography data types, dynamic arrays, spill errors)",
+    "source": "https://docs.sheetjs.com/docs/miscellany/testing",
+    "license": "Apache-2.0 (SheetJS test_files, original root-level file)"
+  },
+  {
+    "file": "sheetjs-large-strings.xlsx",
+    "title": "SheetJS test_files: large_strings.xlsx (large strings and large shared-string table)",
+    "source": "https://docs.sheetjs.com/docs/miscellany/testing",
+    "license": "Apache-2.0 (SheetJS test_files, original root-level file)"
+  },
+  {
+    "file": "poi-average-tax-rates-ireland.xlsx",
+    "title": "Apache POI test-data: AverageTaxRates.xlsx (Irish average income-tax/PRSI rates by earnings, 1997-2004)",
+    "source": "https://github.com/apache/poi/blob/12c3688d130035f3dc2ca2a0f50d929456435a93/test-data/spreadsheet/AverageTaxRates.xlsx",
+    "license": "Apache-2.0 (Apache POI test-data)"
+  },
+  {
+    "file": "openxmlsdk-business-startup-costs-pl-template-missing-calcchain.xlsx",
+    "title": "Open-XML-SDK test asset: missingcalcchainpart.xlsx (Microsoft business start-up costs + P&L template)",
+    "source": "https://github.com/dotnet/Open-XML-SDK/blob/431ab05cf160248cc3885a4a766026d4f8243792/test/DocumentFormat.OpenXml.Tests.Assets/assets/TestFiles/missingcalcchainpart.xlsx",
+    "license": "MIT (.NET Foundation, Open-XML-SDK)"
+  },
+  {
+    "file": "closedxml-template-table-source-pivot-tables.xlsx",
+    "title": "ClosedXML test resource: TemplateWithTableSourcePivotTables.xlsx (pension liability hedging model)",
+    "source": "https://github.com/ClosedXML/ClosedXML/blob/09f2f21a60e821ce7fb18ca3576b272e5dd6d921/ClosedXML.Tests/Resource/TryToLoad/TemplateWithTableSourcePivotTables.xlsx",
+    "license": "MIT (ClosedXML)"
+  },
+  {
+    "file": "closedxml-data-table-formula-what-if.xlsx",
+    "title": "ClosedXML test resource: DataTableFormula-Excel-Input.xlsx (What-If Analysis data tables)",
+    "source": "https://github.com/ClosedXML/ClosedXML/blob/09f2f21a60e821ce7fb18ca3576b272e5dd6d921/ClosedXML.Tests/Resource/Other/Formulas/DataTableFormula-Excel-Input.xlsx",
+    "license": "MIT (ClosedXML)"
+  },
+  {
+    "file": "exceljs-test-issue-877-spare-parts-inventory.xlsx",
+    "title": "ExcelJS spec data: test-issue-877.xlsx (German service-technician spare-parts inventory)",
+    "source": "https://github.com/exceljs/exceljs/blob/5bed18b45e824f409b08456b59b87430ded023ab/spec/integration/data/test-issue-877.xlsx",
+    "license": "MIT (ExcelJS)"
+  }
+]

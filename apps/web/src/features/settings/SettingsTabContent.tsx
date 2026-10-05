@@ -1,7 +1,9 @@
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { Show, Suspense } from 'solid-js';
+import { CalendarSettings } from '../calendar/calendar-settings';
 import { CrmSettings as Crm } from '../crm/crm-settings';
+import { SchedulingSettings } from '../scheduling/scheduling';
 import { Account } from './Account';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
@@ -11,6 +13,7 @@ import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
 import { ConnectedAccounts } from './ConnectedAccounts';
+import { EmailSettings } from './email-settings';
 import { McpConnections } from './McpConnections';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
@@ -33,6 +36,15 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
     >
       <Show when={isCurrentTab('Account')}>
         <Account />
+      </Show>
+      <Show when={isCurrentTab('Email')}>
+        <EmailSettings />
+      </Show>
+      <Show when={isCurrentTab('Calendar')}>
+        <CalendarSettings />
+      </Show>
+      <Show when={isCurrentTab('Booking links')}>
+        <SchedulingSettings />
       </Show>
       <Show when={isCurrentTab('API Keys')}>
         <ApiKeys />

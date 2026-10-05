@@ -25,9 +25,9 @@ use crate::domain::ports::{
 /// partially created remote sessions even when preparation never returns.
 #[derive(Debug)]
 pub struct ExecutionHandle {
-    /// Caller-generated remote session ID; unused by the legacy chat runner.
+    /// Caller-generated agent session ID, available before preparation starts.
     pub session_id: Uuid,
-    /// Caller-generated initial remote action ID; unused by the legacy chat runner.
+    /// Caller-generated initial action ID for prompt delivery and status checks.
     pub action_id: Uuid,
     /// Set as soon as resource existence is established, even if preparation later fails.
     pub resource: Option<ExecutionResource>,
@@ -245,7 +245,7 @@ where
                 executor.cancellation.cancelled(),
                 executor
                     .repo
-                    .claim_action(&id, action.configuration_revision),
+                    .claim_action(&id, action.configuration_revision, action.next_run_at),
             )
             .await;
             let token = match claim {

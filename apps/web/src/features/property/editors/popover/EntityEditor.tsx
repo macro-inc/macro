@@ -119,6 +119,18 @@ function EntityEditorBody(props: EntityEditorProps) {
           onClose={closeAndSave}
         />
       </Suspense>
+      <Show
+        when={
+          props.selfFilter?.entityType === 'INITIATIVE' &&
+          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
+        }
+      >
+        <p class="border-t border-edge-muted px-3 py-2 text-xs text-ink-muted">
+          Agents assigned to this project automatically take on tasks created in
+          or moved into it. Use a shared team agent for tasks added by
+          teammates.
+        </p>
+      </Show>
     </EditorPopover>
   );
 }

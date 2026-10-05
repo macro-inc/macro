@@ -7,7 +7,7 @@ use lexical_client::types::MarkdownParseResult;
 use model::document::{DocumentMetadata, FileType};
 use model_owner::Owner;
 use models_properties::EntityType;
-use models_search::unified::is_searchable_association;
+use models_search::unified::is_searchable_file_type;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::document::UpsertDocumentArgs,
 };
@@ -20,7 +20,7 @@ use s3_key::{
 #[cfg(feature = "pdf")]
 use crate::parsers::pdf::parse_pdf_pages;
 use crate::{
-    parsers::markdown::parse_markdown_legacy,
+    parsers::{fig::parse_fig_pages, markdown::parse_markdown_legacy},
     process::document::document_info::{DocumentInfo, get_document_info},
     process::properties::to_indexed_properties,
 };
@@ -35,8 +35,9 @@ async fn upsert_document(
     let index_override = search_extractor_message.index_override.as_deref();
     // Delete existing documents for the document id
     // This ensures we replace any old nodes with new ones for editable files
+    // (a design's removed pages, for example)
     match search_extractor_message.file_type {
-        FileType::Md | FileType::Canvas => {
+        FileType::Md | FileType::Canvas | FileType::Fig => {
             tracing::debug!("deleting existing search results");
             opensearch_client
                 .delete_document(&search_extractor_message.document_id, index_override)
@@ -188,7 +189,7 @@ async fn update_search_with_parent_only_document(
 }
 
 fn should_index_parent_only(file_type: &FileType) -> bool {
-    matches!(file_type, FileType::Canvas) || !is_searchable_association(&file_type.macro_app_path())
+    matches!(file_type, FileType::Canvas) || !is_searchable_file_type(file_type)
 }
 
 /// Processes a message for a standard document and reads the updated contents from s3 and updates
@@ -328,6 +329,29 @@ pub async fn update_search_with_raw_document(
                 tracing::debug!("pdf/docx indexing skipped: pdf feature disabled");
                 vec![]
             }
+        }
+        FileType::Fig => {
+            // Decoding a design is CPU work.
+            let pages = tokio::task::spawn_blocking(move || parse_fig_pages(&content))
+                .await
+                .context("decoding the design")?
+                .context("unable to parse the design")?;
+            pages
+                .into_iter()
+                .map(|page| UpsertDocumentArgs {
+                    document_id: search_extractor_message.document_id.clone(),
+                    // The page's node id, so a page keeps its chunk.
+                    node_id: page.node_id,
+                    raw_content: None,
+                    document_name: document_name.clone(),
+                    content: page.content,
+                    owner_id: owner_id.clone(),
+                    file_type: file_type.to_string(),
+                    updated_at_millis,
+                    sub_type: sub_type.clone(),
+                    properties: vec![],
+                })
+                .collect()
         }
         FileType::Md => {
             // NOTE: this is legacy now. MD parsing mainly happens through sync service via

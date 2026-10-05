@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { existsSync, lstatSync } from 'node:fs';
 import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
@@ -120,9 +121,39 @@ function fetchSigning() {
     );
   } catch {
     throw new Error(
-      'Unable to fetch Android signing credentials. DOPPLER_TOKEN must have read access to android-release/prd.'
+      'Unable to fetch Android signing credentials. Install the Doppler CLI and authenticate with read access to android-release/prd (CI: DOPPLER_TOKEN). See docs/ANDROID_DEVELOPMENT.md.'
     );
   }
+}
+
+export async function ensureAndroidSigning(
+  directory: string,
+  propertiesPath: string
+) {
+  // Explicit local/CI configuration takes precedence over the shared local cache.
+  if (existsSync(propertiesPath)) return;
+  if (lstatSync(propertiesPath, { throwIfNoEntry: false })) {
+    throw new Error(
+      'Android keystore.properties is a broken symlink. Restore its signing files; see docs/ANDROID_DEVELOPMENT.md.'
+    );
+  }
+
+  if (lstatSync(directory, { throwIfNoEntry: false })) {
+    const properties = join(directory, 'keystore.properties');
+    if (
+      !existsSync(properties) ||
+      !existsSync(join(directory, 'upload-keystore.jks'))
+    ) {
+      throw new Error(
+        `Android signing directory ${directory} is incomplete. Restore its signing files or provision signing manually; see docs/ANDROID_DEVELOPMENT.md.`
+      );
+    }
+    await symlink(resolve(properties), propertiesPath);
+    return;
+  }
+
+  console.log(`Provisioning Android release signing in ${directory}`);
+  await provisionAndroidSigning(fetchSigning(), directory, propertiesPath);
 }
 
 export function verifyAndroidApk(
@@ -183,6 +214,8 @@ if (import.meta.main) {
       console.log(metadata.filename);
     } else if (command === 'signing' && args.length === 2) {
       await provisionAndroidSigning(fetchSigning(), args[0], args[1]);
+    } else if (command === 'ensure-signing' && args.length === 2) {
+      await ensureAndroidSigning(args[0], args[1]);
     } else if (command === 'verify' && args.length === 4) {
       const [tag, apk, buildTools, certificateFile] = args;
       verifyAndroidApk(
@@ -193,7 +226,7 @@ if (import.meta.main) {
       );
     } else {
       throw new Error(
-        'Usage: android-release.ts metadata TAG CONFIG | signing DIRECTORY PROPERTIES | verify TAG APK BUILD_TOOLS CERTIFICATE_FILE'
+        'Usage: android-release.ts metadata TAG CONFIG | signing DIRECTORY PROPERTIES | ensure-signing DIRECTORY PROPERTIES | verify TAG APK BUILD_TOOLS CERTIFICATE_FILE'
       );
     }
   } catch (error) {

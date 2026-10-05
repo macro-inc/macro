@@ -23,6 +23,6 @@ Not stored in database - computed at service layer. */
   /** Flag to indicate if this is a system property (stored in DB). */
   is_system: boolean;
   owner: PropertyOwner;
-  specific_entity_type?: PropertyDefinitionSpecificEntityType;
+  specific_entity_type: PropertyDefinitionSpecificEntityType;
   updated_at: string;
 }

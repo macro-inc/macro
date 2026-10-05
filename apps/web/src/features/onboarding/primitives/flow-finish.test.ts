@@ -106,4 +106,22 @@ describe('leaving onboarding', () => {
     expect(fake.notifications()).toHaveLength(1);
     expect(finish.finishing()).toBe(false);
   });
+
+  it('lets staff bypass from any step, recorded as skipped and landing in the app', async () => {
+    saveStep(VIEWER, 'tools');
+    const { fake, finish, navigate } = setup();
+    await finish.bypass('tools');
+    expect(fake.calls()).toContain('completeOnboarding:skipped');
+    expect(fake.events()).toEqual([
+      { event: 'onboarding_v4_bypassed', data: { step: 'tools' } },
+    ]);
+    expect(navigate).toHaveBeenCalledWith('/home');
+    expect(readSavedStep(VIEWER)).toBeUndefined();
+  });
+
+  it('keeps the deep link when bypassing', async () => {
+    const { finish, navigate } = setup({}, '/channel/launch');
+    await finish.bypass('welcome');
+    expect(navigate).toHaveBeenCalledWith('/channel/launch');
+  });
 });

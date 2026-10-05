@@ -35,6 +35,9 @@ chat = { path = "../../crates/chat", features = ["ai_tools", "outbound"] }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 crm = { path = "../../crates/crm" }
 database_env_vars = { path = "../../crates/database_env_vars" }
+# `ai_tools` for the toolset, `gateway` for the table-changed fan-out, and
+# `postgres` for the adapters behind the service.
+databases = { path = "../../crates/databases", features = ["ai_tools", "gateway", "postgres"] }
 documents = { path = "../../crates/documents", features = ["ai_tools"] }
 doppler-config = { workspace = true }
 email = { path = "../../crates/email", features = ["outbound"] }
@@ -50,6 +53,7 @@ frecency = { path = "../../crates/frecency", features = [
 ] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
+github_pull_requests = { path = "../../crates/github_pull_requests" }
 http = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_auth = { path = "../../crates/macro_auth" }

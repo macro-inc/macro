@@ -35,6 +35,9 @@ jobs:
             - 'crates/client/cache-turso/**'
             - 'crates/client/cache-wasm/**'
             - 'crates/client/turso-opfs/**'
+            - 'crates/database_sql/**'
+            - 'crates/filter_ast/**'
+            - 'crates/item_filters/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -103,6 +106,16 @@ jobs:
     - name: Generate API Types
       if: needs.path-check.outputs.api_changed == 'true'
       run: bun run gen-api -- --check
+      working-directory: apps/web
+    - name: Check Specta Types
+      if: needs.path-check.outputs.api_changed == 'true'
+      run: |
+        just gen-agent-fold-types
+        just gen-database-sql-types
+        if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated; then
+          echo "Generated wasm wire types are stale. Run 'just gen-agent-fold-types' and 'just gen-database-sql-types' in apps/web and commit the result."
+          exit 1
+        fi
       working-directory: apps/web
     - name: show sccache stats
       if: always() && needs.path-check.outputs.api_changed == 'true'

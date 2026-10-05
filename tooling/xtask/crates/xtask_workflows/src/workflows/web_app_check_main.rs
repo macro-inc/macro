@@ -79,6 +79,7 @@ fn typescript() -> Job {
             "needs.path-check.outputs.api_changed == 'true'",
         ))
         .add_step(generate_api_types())
+        .add_step(check_specta_types())
         .add_step(show_sccache_stats())
         .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
@@ -201,6 +202,25 @@ fn paths_filter() -> Step<Use> {
 fn generate_api_types() -> Step<Run> {
     Step::new("Generate API Types")
         .run("bun run gen-api -- --check")
+        .if_condition(Expression::new(
+            "needs.path-check.outputs.api_changed == 'true'",
+        ))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// `gen-api` covers the OpenAPI clients; the types specta writes from the
+/// wire types of the two browser wasm crates are regenerated here, so a Rust
+/// change cannot leave them behind.
+fn check_specta_types() -> Step<Run> {
+    Step::new("Check Specta Types")
+        .run(indoc::indoc! {r#"
+            just gen-agent-fold-types
+            just gen-database-sql-types
+            if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated; then
+              echo "Generated wasm wire types are stale. Run 'just gen-agent-fold-types' and 'just gen-database-sql-types' in apps/web and commit the result."
+              exit 1
+            fi
+        "#})
         .if_condition(Expression::new(
             "needs.path-check.outputs.api_changed == 'true'",
         ))

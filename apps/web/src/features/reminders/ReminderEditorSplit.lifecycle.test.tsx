@@ -106,3 +106,31 @@ it('keeps a same-reminder draft but resets controller state for cached A-to-B na
   expect((nextTitle as HTMLInputElement).value).toBe('Reminder B');
   expect(state.mutationInstances).toBe(2);
 });
+
+vi.mock('./views/email-reminder-details', () => ({
+  EmailReminderDetails: () => {
+    throw new Error(
+      'Mailbox-only lookup must not run for a known generic reminder'
+    );
+  },
+}));
+
+it('opens a known generic Shared email reminder without mailbox follow-up access', () => {
+  const shared = {
+    ...reminder('shared-generic', 'Private shared reminder'),
+    entityType: 'email_thread',
+    entityId: 'shared-thread',
+  } as Reminder;
+  state.queryFor = () => shared;
+  const view = render(() => (
+    <ReminderDetails
+      reminderId="shared-generic"
+      isEmailFollowup={false}
+      onClose={() => {}}
+    />
+  ));
+  expect(
+    (view.getByPlaceholderText('Reminder description') as HTMLInputElement)
+      .value
+  ).toBe('Private shared reminder');
+});

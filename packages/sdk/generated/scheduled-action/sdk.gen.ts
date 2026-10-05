@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -78,6 +78,10 @@ export class Sdk extends HeyApiClient {
     
     public deleteScheduledAction<ThrowOnError extends boolean = false>(options: Options<DeleteScheduledActionData, ThrowOnError>): RequestResult<DeleteScheduledActionResponses, DeleteScheduledActionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteScheduledActionResponses, DeleteScheduledActionErrors, ThrowOnError>({ url: '/scheduled-actions/{id}', ...options });
+    }
+    
+    public getScheduledAction<ThrowOnError extends boolean = false>(options: Options<GetScheduledActionData, ThrowOnError>): RequestResult<GetScheduledActionResponses, GetScheduledActionErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetScheduledActionResponses, GetScheduledActionErrors, ThrowOnError>({ url: '/scheduled-actions/{id}', ...options });
     }
     
     public updateScheduledAction<ThrowOnError extends boolean = false>(options: Options<UpdateScheduledActionData, ThrowOnError>): RequestResult<UpdateScheduledActionResponses, UpdateScheduledActionErrors, ThrowOnError> {

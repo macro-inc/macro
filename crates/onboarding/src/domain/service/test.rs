@@ -135,6 +135,14 @@ impl ImportService for MockImport {
         Ok(true)
     }
 
+    async fn start_discovery(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _source: ImportSource,
+    ) -> ImportResult<bool> {
+        Ok(false)
+    }
+
     async fn retry_gather(
         &self,
         _user: MacroUserIdStr<'static>,

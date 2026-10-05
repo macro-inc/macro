@@ -2,13 +2,16 @@
 
 mod comment_on_document;
 mod create_document;
+mod design;
 mod edit_document;
+mod presentation;
 mod read_content;
 mod read_metadata;
 mod rename_document;
 mod resolve_document_comment;
 mod spreadsheet;
 mod upload_file;
+mod word_document;
 
 #[cfg(test)]
 mod comment_test;
@@ -18,20 +21,25 @@ mod test;
 use crate::{
     domain::comments::{DocumentCommentReader, DocumentComments},
     domain::create::DocumentCreator,
+    domain::design::{DesignFiles, DesignService, NoDesignFiles},
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
     domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
+    domain::presentation::{NoPresentationFiles, PresentationFiles, PresentationService},
     inbound::toolset::{
         comment_on_document::CommentOnDocument,
         create_document::CreateDocument,
+        design::ReadDesign,
         edit_document::EditDocument,
+        presentation::{EditPresentation, ReadPresentation},
         read_content::ReadContent,
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
         resolve_document_comment::ResolveDocumentComment,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
         upload_file::UploadFile,
+        word_document::{EditWordDocument, ReadWordDocument},
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
@@ -92,6 +100,19 @@ pub struct DocumentToolContext<
     /// Permission-scoped deterministic spreadsheet workflows.
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
 
+    /// Reading and editing uploaded Word documents through their live copy.
+    pub word_documents: Arc<crate::domain::word_document::WordDocumentService<DSvc, EDSvc>>,
+
+    /// Reading and editing PowerPoint presentations. Hosts without a file
+    /// store keep the default, whose calls fail with a clear message; wire
+    /// one with [`Self::with_presentation_files`].
+    pub presentations: Arc<PresentationService>,
+
+    /// Reading Figma designs. Hosts without a file store keep the default,
+    /// whose calls fail with a clear message; wire one with
+    /// [`Self::with_design_files`].
+    pub designs: Arc<DesignService>,
+
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
 
@@ -131,6 +152,9 @@ impl<
             comments: self.comments.clone(),
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
+            word_documents: self.word_documents.clone(),
+            presentations: self.presentations.clone(),
+            designs: self.designs.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             admission: self.admission.clone(),
             recorder: self.recorder.clone(),
@@ -178,6 +202,11 @@ impl<
             editing.clone(),
             document_permission_jwt_secret.clone(),
         ));
+        let word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
+            service.clone(),
+            editing.clone(),
+            document_permission_jwt_secret.clone(),
+        ));
 
         Self {
             service,
@@ -189,6 +218,9 @@ impl<
             comments,
             messages,
             spreadsheet,
+            word_documents,
+            presentations: Arc::new(PresentationService::new(Arc::new(NoPresentationFiles))),
+            designs: Arc::new(DesignService::new(Arc::new(NoDesignFiles))),
             document_permission_jwt_secret,
             admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
@@ -213,6 +245,18 @@ impl<
             self.admission.clone(),
             self.recorder.clone(),
         )
+    }
+
+    /// Store presentations the presentation tools read and edit through `files`.
+    pub fn with_presentation_files(mut self, files: Arc<dyn PresentationFiles>) -> Self {
+        self.presentations = Arc::new(PresentationService::new(files));
+        self
+    }
+
+    /// Read designs the design tools describe through `files`.
+    pub fn with_design_files(mut self, files: Arc<dyn DesignFiles>) -> Self {
+        self.designs = Arc::new(DesignService::new(files));
+        self
     }
 
     /// Set the usage recorder the EditDocument tool logs worker token usage to.
@@ -291,6 +335,11 @@ where
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadPresentation, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditPresentation, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadDesign, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
 }
 
 fn comment_access_error(err: AccessError) -> ToolCallError {

@@ -4,7 +4,11 @@ import type {
   CompletionResult,
   OnboardingContext,
 } from '../context/onboarding-context';
-import { afterOnboardingTarget, sanitizeNext } from '../core/next-target';
+import {
+  afterOnboardingTarget,
+  bypassTarget,
+  sanitizeNext,
+} from '../core/next-target';
 import { clearFlowProgress, readSavedNext, saveNext } from './flow-storage';
 
 type FinishCapabilities = Pick<
@@ -53,12 +57,15 @@ export function createFlowFinish(
     });
   };
 
-  const complete = async (plan: PlanTier, planSkipped: boolean) => {
+  const leave = async (input: {
+    skipped: boolean;
+    target: string;
+    onCompleted: () => void;
+  }) => {
     if (finishing()) return;
     setFinishing(true);
-    const target = afterTarget();
     const result = await context
-      .completeOnboarding()
+      .completeOnboarding({ skipped: input.skipped })
       .catch((): CompletionResult => ({ t: 'failed' }));
     if (result.t === 'failed') {
       context.notifyFailure("Couldn't finish setup — please try again");
@@ -66,11 +73,19 @@ export function createFlowFinish(
       return;
     }
     clearFlowProgress();
-    trackCompleted(plan, planSkipped);
+    input.onCompleted();
     // Stay finishing: the flow now reads as complete, and dropping the flag
     // would let it navigate a second time, after the saved deep link is gone.
-    options.onNavigate(target);
+    options.onNavigate(input.target);
   };
+
+  // Targets resolve before completing: completion clears the saved deep link.
+  const complete = (plan: PlanTier, planSkipped: boolean) =>
+    leave({
+      skipped: false,
+      target: afterTarget(),
+      onCompleted: () => trackCompleted(plan, planSkipped),
+    });
 
   /**
    * Hand the page to Stripe WITHOUT completing the flow: both checkout legs
@@ -103,5 +118,12 @@ export function createFlowFinish(
     startPremiumCheckout,
     /** Finish after checkout confirmed payment, recording the tier Stripe returned. */
     finishPremium: (tier: PaidPlanTier = 'premium') => complete(tier, false),
+    /** Staff escape hatch: leave from any step, recorded server-side as skipped. */
+    bypass: (step: string) =>
+      leave({
+        skipped: true,
+        target: bypassTarget(options.next(), readSavedNext()),
+        onCompleted: () => context.track('onboarding_v4_bypassed', { step }),
+      }),
   };
 }

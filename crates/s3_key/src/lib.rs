@@ -11,5 +11,7 @@ pub use document_key::{
 };
 mod bulk_upload_key;
 pub use bulk_upload_key::BulkUploadStagingKey;
+mod slack_import_key;
+pub use slack_import_key::{InvalidSlackImportKey, SlackImportKey};
 mod static_file_key;
 pub use static_file_key::StaticFileKey;

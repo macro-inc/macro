@@ -5192,6 +5192,13 @@
             "description": "The number of added lines reported by GitHub, when enrichment succeeds.",
             "minimum": 0
           },
+          "assignees": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestUser"
+            },
+            "description": "The users assigned to the pull request, when known."
+          },
           "authorId": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -5234,6 +5241,13 @@
             "type": "string",
             "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
           },
+          "labels": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestLabel"
+            },
+            "description": "The pull request's labels, when known."
+          },
           "name": {
             "type": ["string", "null"],
             "description": "The GitHub pull request title, when enrichment succeeds."
@@ -5258,6 +5272,13 @@
           "repo": {
             "type": "string",
             "description": "The GitHub repository name."
+          },
+          "reviews": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestReview"
+            },
+            "description": "Each reviewer's latest submitted review, when known. Stored metadata merges this per\nreviewer, so a write that knows one review keeps the others."
           },
           "status": {
             "oneOf": [
@@ -5430,8 +5451,20 @@
       },
       "GithubLinkStatusResponse": {
         "type": "object",
-        "required": ["reauthentication_required"],
+        "required": [
+          "reauthentication_required",
+          "github_username",
+          "github_user_id"
+        ],
         "properties": {
+          "github_user_id": {
+            "type": "string",
+            "description": "Stable ID of the authenticated user's linked GitHub account."
+          },
+          "github_username": {
+            "type": "string",
+            "description": "Login of the authenticated user's linked GitHub account."
+          },
           "reauthentication_required": {
             "type": "boolean",
             "description": "Whether the user must reauthenticate their GitHub link."
@@ -5554,6 +5587,21 @@
           }
         }
       },
+      "GithubPullRequestLabel": {
+        "type": "object",
+        "description": "A label on a GitHub pull request.",
+        "required": ["name"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "The label color as six hex digits without a leading `#`, when known."
+          },
+          "name": {
+            "type": "string",
+            "description": "The label name, unique within its repository regardless of case."
+          }
+        }
+      },
       "GithubPullRequestRef": {
         "type": "object",
         "description": "A pull request reference that can be enriched with live GitHub data.",
@@ -5594,10 +5642,54 @@
           }
         }
       },
+      "GithubPullRequestReview": {
+        "type": "object",
+        "description": "A reviewer's latest submitted review on a pull request.",
+        "required": ["reviewerGithubUserId", "state"],
+        "properties": {
+          "reviewerGithubUserId": {
+            "type": "string",
+            "description": "The stable numeric GitHub user id of the reviewer, as a string."
+          },
+          "reviewerLogin": {
+            "type": ["string", "null"],
+            "description": "The reviewer's GitHub login, when known."
+          },
+          "state": {
+            "$ref": "#/components/schemas/GithubPullRequestReviewState",
+            "description": "What the review said."
+          },
+          "submittedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the review was submitted, when known."
+          }
+        }
+      },
+      "GithubPullRequestReviewState": {
+        "type": "string",
+        "description": "What a reviewer's latest review on a pull request said.",
+        "enum": ["approved", "changes_requested", "commented", "dismissed"]
+      },
       "GithubPullRequestStatus": {
         "type": "string",
         "description": "The normalized lifecycle status for a GitHub pull request.",
         "enum": ["open", "closed", "merged"]
+      },
+      "GithubPullRequestUser": {
+        "type": "object",
+        "description": "A GitHub user named on a pull request, such as an assignee.",
+        "required": ["githubUserId"],
+        "properties": {
+          "githubUserId": {
+            "type": "string",
+            "description": "The stable numeric GitHub user id, as a string."
+          },
+          "login": {
+            "type": ["string", "null"],
+            "description": "The user's GitHub login, when known."
+          }
+        }
       },
       "GmailLinkStatusResponse": {
         "type": "object",
@@ -6074,18 +6166,23 @@
         "required": [
           "tier",
           "monthly_price_cents",
-          "included_ai_cents_per_seat"
+          "included_ai_cents_per_seat",
+          "purchasable"
         ],
         "properties": {
           "included_ai_cents_per_seat": {
             "type": "integer",
             "format": "int64",
-            "description": "Included AI per seat per period, list-rate cents."
+            "description": "Included AI per seat per period, in cents at provider cost."
           },
           "monthly_price_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Monthly list price per seat, cents."
+            "description": "Monthly subscription price per seat, cents."
+          },
+          "purchasable": {
+            "type": "boolean",
+            "description": "Whether a new purchase or plan move may pick this plan today."
           },
           "tier": {
             "$ref": "#/components/schemas/PlanTier",
@@ -6126,7 +6223,7 @@
             "items": {
               "$ref": "#/components/schemas/PlanCatalogEntry"
             },
-            "description": "Free and every purchasable paid plan, cheapest first."
+            "description": "Every plan, cheapest first. Clients read allowances from here rather\nthan hard-coding them; `purchasable` marks the plans a user can buy."
           }
         }
       },
@@ -6547,22 +6644,22 @@
           "credit_balance_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Shared prepaid credit balance."
+            "description": "Shared prepaid credit balance, in customer cents."
           },
           "credits_consumed_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Shared payer credits already applied to this period."
+            "description": "Shared payer credits already applied to this period, in customer cents."
           },
           "included_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Included AI for this user's seat this period, in list-rate cents."
+            "description": "Included AI for this user's seat this period, in cents at provider cost."
           },
           "overage_charged_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Shared overage charged so far this period."
+            "description": "Shared overage charged so far this period, in customer cents."
           },
           "overage_enabled": {
             "type": "boolean",
@@ -6571,7 +6668,7 @@
           "overage_limit_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Per-period overage cap."
+            "description": "Per-period overage cap, in customer cents."
           },
           "overage_suspended": {
             "type": "boolean",
@@ -6594,7 +6691,7 @@
           "remaining_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "This seat's remaining allowance plus shared credit/overage headroom; 0\nwhen blocked."
+            "description": "Cost cents of usage this seat may still consume: its remaining allowance\nplus whatever shared credit and overage headroom pays for at the markup.\n0 when blocked."
           },
           "seats": {
             "type": "integer",
@@ -6609,7 +6706,7 @@
           "uncovered_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Team-wide usage beyond per-seat allowances that is not yet covered by\nshared credits or charges (awaiting settlement)."
+            "description": "Team-wide usage beyond per-seat allowances, at the overage markup, that\nis not yet covered by shared credits or charges (awaiting settlement).\nCustomer cents."
           },
           "unlimited": {
             "type": "boolean",
@@ -6618,7 +6715,7 @@
           "used_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "AI used by this user this period, in list-rate cents."
+            "description": "AI used by this user this period, in cents at provider cost."
           }
         }
       },

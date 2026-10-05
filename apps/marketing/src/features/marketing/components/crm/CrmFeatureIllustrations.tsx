@@ -49,6 +49,28 @@ export function CaptureIllustration() {
   );
 }
 
+export function EnrichmentIllustration() {
+  return (
+    <Illustration>
+      <g opacity=".4">
+        <rect x="26" y="52" width="52" height="34" rx="5" />
+        <path d="m27 55 25 18 25-18" />
+      </g>
+      <path d="M80 69h18" opacity=".4" stroke-dasharray="2 4" />
+      <g fill="#111">
+        <rect x="100" y="26" width="114" height="92" rx="7" />
+        <rect x="112" y="38" width="14" height="14" rx="3" />
+        <path d="M133 45h40" opacity=".7" />
+        <rect x="112" y="60" width="44" height="10" rx="5" opacity=".5" />
+        <circle cx="119" cy="65" r="2.5" opacity=".7" />
+      </g>
+      <path d="M112 82h88M112 92h88" opacity=".6" />
+      <path d="M112 102h52" opacity=".6" stroke-dasharray="3 3" />
+      <path d="m192 98 3 6 6 3-6 3-3 6-3-6-6-3 6-3Z" stroke="#b5cbbb" />
+    </Illustration>
+  );
+}
+
 export function ContextIllustration() {
   return (
     <Illustration>

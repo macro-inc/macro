@@ -6,6 +6,7 @@ import {
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import endpoints from './endpoints';
+import docx from './endpoints/docx';
 import type { Bindings } from './env';
 
 // Mirrors crates/macro_cors's ALLOWED_ORIGINS/is_allowed_origin.
@@ -56,6 +57,7 @@ app.use(
   })
 );
 app.route('/', endpoints);
+app.route('/docx', docx);
 
 // instrument() wraps fetch with a request root span, registers the global
 // tracer provider/context manager (which Telemetry.span resolves through),

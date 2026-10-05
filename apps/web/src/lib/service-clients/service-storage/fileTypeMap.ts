@@ -550,6 +550,7 @@ export const FileTypeMap = {
   ps: { extension: 'ps', mime: 'application/postscript', app: 'vector' },
   dxf: { extension: 'dxf', mime: 'image/vnd.dxf', app: 'vector' },
   dwg: { extension: 'dwg', mime: 'image/vnd.dwg', app: 'vector' },
+  fig: { extension: 'fig', mime: 'application/x-figma', app: 'vector' },
   stl: { extension: 'stl', mime: 'model/stl', app: '3d' },
   obj: { extension: 'obj', mime: 'model/obj', app: '3d' },
   fbx: { extension: 'fbx', mime: 'application/octet-stream', app: '3d' },

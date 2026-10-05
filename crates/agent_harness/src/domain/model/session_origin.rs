@@ -30,9 +30,9 @@ pub struct MentionOrigin {
 /// A task assignment that starts a session without a user-authored mention.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TaskAssignmentOrigin {
-    /// Task whose discussion receives the agent's response.
+    /// Original task whose discussion receives the session link.
     pub parent: messages::domain::models::MessageParent,
-    /// Reserved agent-authored response, also the discussion's root.
+    /// Reserved agent-authored session link, also the discussion's root.
     pub discussion_id: Uuid,
     /// User who assigned the task and owns the session.
     pub actor: MacroUserIdStr<'static>,
@@ -54,6 +54,21 @@ pub enum SessionOrigin {
 }
 
 impl SessionOrigin {
+    pub(crate) fn session_instructions(&self, configured: &str) -> Option<String> {
+        let configured = (!configured.trim().is_empty()).then(|| configured.to_owned());
+        match self {
+            Self::Mention(_) => configured,
+            Self::TaskAssignment(origin) => {
+                let task =
+                    agent_trigger::domain::task_assignment::assignment_instructions(&origin.parent);
+                Some(match configured {
+                    Some(configured) => format!("{configured}\n\n{task}"),
+                    None => task,
+                })
+            }
+        }
+    }
+
     pub(crate) fn actor(&self) -> &MacroUserIdStr<'static> {
         match self {
             Self::Mention(origin) => &origin.sender,

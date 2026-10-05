@@ -215,8 +215,8 @@ export function createFakeOnboarding(
         options.checkoutUrl?.(tier) ?? `https://checkout.stripe.test/${tier}`
       );
     },
-    completeOnboarding: async () => {
-      call('completeOnboarding');
+    completeOnboarding: async ({ skipped }) => {
+      call(skipped ? 'completeOnboarding:skipped' : 'completeOnboarding');
       if (world.failures.completion !== undefined) return { t: 'failed' };
       update((draft) => {
         draft.record.status = 'completed';

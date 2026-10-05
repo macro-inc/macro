@@ -542,3 +542,23 @@ fn initiative_hydration_targets_exact_ids_and_disables_unrequested_initiatives()
         matches!(ast.initiative_filter.as_deref(), Some(Expr::Literal(InitiativeLiteral::Id(actual))) if actual.is_nil())
     );
 }
+
+#[test]
+fn database_row_hydration_targets_exact_ids_and_rules_rows_out_otherwise() {
+    use item_filters::ast::database_row::DatabaseRowLiteral;
+    let row = Uuid::from_u128(0x70000000_0000_0000_0000_000000000001);
+
+    let ast =
+        entity_filter_ast(&[EntityType::DatabaseRow.with_entity_string(row.to_string())]).unwrap();
+    assert_eq!(
+        ast.database_row_filter.as_deref(),
+        Some(&Expr::val(DatabaseRowLiteral::Id(row)))
+    );
+
+    let ast =
+        entity_filter_ast(&[EntityType::Document.with_entity_string(row.to_string())]).unwrap();
+    assert_eq!(
+        ast.database_row_filter.as_deref(),
+        Some(&Expr::val(DatabaseRowLiteral::Id(Uuid::nil())))
+    );
+}

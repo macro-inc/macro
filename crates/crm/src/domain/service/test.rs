@@ -185,6 +185,16 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn search_contacts_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _query: &str,
+        _limit: i64,
+        _include_hidden: bool,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        unimplemented!()
+    }
+
     async fn get_contact_by_email_for_team(
         &self,
         _team_id: &uuid::Uuid,

@@ -1,5 +1,5 @@
 /**
- * The import pipeline's state, which onboarding keeps polling.
+ * Queries and mutations for the import pipeline.
  *
  * The server owns everything: gather jobs stage candidates, `POST
  * /import/run` accepts/declines them, and import jobs flip rows to
@@ -9,9 +9,29 @@
  */
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { type ImportState, importClient } from '@service-cognition/import';
+import {
+  type ImportEntity,
+  type ImportSource,
+  type ImportState,
+  importClient,
+  type SlackChannelMeta,
+} from '@service-cognition/import';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { useQuery } from '@tanstack/solid-query';
+import {
+  type UseMutationResult,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
+
+export type {
+  ImportEntity,
+  ImportEntityStatus,
+  ImportRun,
+  ImportRunStatus,
+  ImportSource,
+  ImportState,
+  SlackChannelMeta,
+} from '@service-cognition/import';
 
 const KEYS = {
   state: ['import', 'state'] as const,
@@ -56,4 +76,43 @@ export function useImportQuery(options?: { enabled?: () => boolean }) {
 
 function invalidateImportState() {
   return queryClient.invalidateQueries({ queryKey: KEYS.state });
+}
+
+/**
+ * Accept and/or decline staged rows. The server flips accepted rows to
+ * `importing` and returns immediately; completion arrives via
+ * `import_updated` pushes and polling.
+ */
+export function useRunImportMutation() {
+  return useMutation(() => ({
+    mutationFn: async (args: { importIds: string[]; discardIds: string[] }) =>
+      throwOnErr(() =>
+        importClient.runImport({
+          import_ids: args.importIds,
+          discard_ids: args.discardIds,
+        })
+      ),
+    onSuccess: () => void invalidateImportState(),
+  }));
+}
+
+/** Discover candidates for manual selection. */
+export function useDiscoverMutation(): UseMutationResult<
+  void,
+  Error,
+  ImportSource
+> {
+  return useMutation(() => ({
+    mutationFn: (source: ImportSource) =>
+      throwOnErr(() => importClient.discover(source)),
+    onSuccess: () => void invalidateImportState(),
+  }));
+}
+
+/** Slack channel metadata, only for Slack ledger rows. */
+export function slackChannelMeta(
+  entity: ImportEntity
+): SlackChannelMeta | null {
+  if (entity.source !== 'slack') return null;
+  return entity.metadata as SlackChannelMeta;
 }

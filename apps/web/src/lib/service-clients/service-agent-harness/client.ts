@@ -18,8 +18,10 @@ import type {
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
+  PullRequestSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
+  SessionPullRequestsResponse,
   SharePermissionV2,
   UpdateSharePermissionRequestV2,
 } from './generated/schemas';
@@ -229,6 +231,18 @@ export const agentHarnessServiceClient = {
     ).then((result) => result.map(() => undefined));
   },
 
+  /**
+   * Run a queued action next. Moves it to the front and cancels the turn in
+   * flight so it dispatches ahead of anything queued before it. Answers 404
+   * (`NOT_FOUND`) once the action has dispatched.
+   */
+  steerQueued(sessionId: string, actionId: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}/steer`,
+      { method: 'POST' }
+    ).then((result) => result.map(() => undefined));
+  },
+
   delete(sessionId: string) {
     return fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}`,
@@ -284,6 +298,47 @@ export const agentHarnessServiceClient = {
     return fetchWithToken<AgentSessionChangesResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/changes/refresh`,
       { method: 'POST' }
+    );
+  },
+
+  /** The pull requests linked to a session: its agent's and any a person linked. */
+  listPullRequests(sessionId: string) {
+    return fetchWithToken<SessionPullRequestsResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests`,
+      { method: 'GET' }
+    );
+  },
+
+  /** Link the pull request at `url` to a session the caller can edit. */
+  linkPullRequest(sessionId: string, url: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+        errorResponseHandler: sessionError,
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
+  /** Unlink a pull request a person linked; the agent's own stays linked. */
+  unlinkPullRequest(sessionId: string, url: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests?${new URLSearchParams({ url })}`,
+      { method: 'DELETE', errorResponseHandler: sessionError }
+    ).then((result) => result.map(() => undefined));
+  },
+
+  /** The sessions linked to the pull request at `url` that the caller can view. */
+  sessionsForPullRequest(url: string) {
+    return fetchWithToken<PullRequestSessionsResponse>(
+      `${agentHarnessHost}/agent-sessions/by-pull-request`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      }
     );
   },
 

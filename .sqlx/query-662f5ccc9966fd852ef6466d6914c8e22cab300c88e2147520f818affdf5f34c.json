@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_conversation SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE job_id = $1 AND status = 'importing'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "662f5ccc9966fd852ef6466d6914c8e22cab300c88e2147520f818affdf5f34c"
+}

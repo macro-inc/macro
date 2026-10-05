@@ -3,6 +3,7 @@ import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureConstellation } from '../../setup/components/FeatureOverview';
 import { WelcomeStep } from '../../setup/components/WelcomeSteps';
 import { FeaturePage } from '../components/FeaturePage';
+import { HomepageTrustBadges } from '../components/HomepageTrustBadges';
 import { DemoBookingEmbed } from '../components/sales/DemoBookingEmbed';
 import { SalesCalculator } from '../components/sales/SalesCalculator';
 import { formatWholeUsd } from '../core/sales-savings';
@@ -65,12 +66,11 @@ export function RouteTour() {
                 onContinue={() => {}}
                 title={
                   <>
-                    Replace Notion, Linear,
-                    <br />
-                    and Superhuman.
+                    The only app you need <br />
+                    for your entire company.
                   </>
                 }
-                description={`Email, chat, documents, tasks, CRM, and agents in one workspace, from ${formatWholeUsd(MACRO_SEAT_CENTS)} a seat.`}
+                description={`Email, chat, documents, tasks, CRM, and agents in one workspace, for ${formatWholeUsd(MACRO_SEAT_CENTS)} a seat.`}
                 action={
                   <div class="homepage-hero-action mt-6 flex justify-center pb-5">
                     <a
@@ -96,7 +96,6 @@ export function RouteTour() {
             aria-labelledby="unification-heading"
             style={SHELL_PALETTE}
           >
-            <FeatureConstellation expanded />
             <div class="unification-copy">
               <h2 id="unification-heading">
                 Replace 27+ apps
@@ -115,6 +114,13 @@ export function RouteTour() {
                   agents. One search. Linked work. Agents that can edit it.
                 </span>
               </p>
+            </div>
+            {/* Phones get the compact 8-feature ring; the full grid is too busy. */}
+            <div class="tour-constellation-desktop">
+              <FeatureConstellation expanded />
+            </div>
+            <div class="tour-constellation-mobile">
+              <FeatureConstellation />
             </div>
           </section>
 
@@ -140,11 +146,15 @@ export function RouteTour() {
           >
             <TourHeading
               id="book-title"
-              title="See Macro with your team’s work."
+              title="See how to grow your business faster."
               description="A 30-minute call with our CEO or a member of our team. Pick a time below."
             />
             <DemoBookingEmbed id="tour-booking" />
           </section>
+
+          <footer class="tour-footer">
+            <HomepageTrustBadges />
+          </footer>
         </div>
       </div>
     </FeaturePage>

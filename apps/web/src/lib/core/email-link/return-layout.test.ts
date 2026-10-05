@@ -19,19 +19,6 @@ describe('inbox link return layout', () => {
 
     expect(consumeInboxLinkReturn(LINK_ID)).toEqual({
       url: '/calendar/view/component/documents?preview=0#sel',
-      settingsReturnTo: undefined,
-    });
-  });
-
-  it('round-trips the settings return layout alongside it', () => {
-    rememberInboxLinkReturn(LINK_ID, {
-      url: '/settings/connections',
-      settingsReturnTo: '/home/md/doc-1',
-    });
-
-    expect(consumeInboxLinkReturn(LINK_ID)).toEqual({
-      url: '/settings/connections',
-      settingsReturnTo: '/home/md/doc-1',
     });
   });
 

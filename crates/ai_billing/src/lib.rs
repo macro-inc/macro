@@ -2,26 +2,27 @@
 
 //! AI billing — plan allowances, prepaid credits, and post-paid overage.
 //!
-//! # The margin model
+//! # The pricing model
 //!
-//! Every paid plan includes a monthly AI allowance equal to its list price,
-//! measured at Macro's **list rate**. The list rate is provider cost marked up
-//! so that a fully consumed allowance yields the target gross margin:
+//! Every paid seat includes a monthly AI allowance measured **at cost**: the
+//! provider's public price for what was consumed. Usage past the allowance is
+//! covered, in order, by prepaid credits (bought in one-off Stripe Checkout
+//! payments) and then by opt-in overage, billed to the payer's Stripe customer
+//! in chunks. Both are priced at cost plus a small markup:
 //!
 //! ```text
-//! list = cost / (1 - margin)       margin = 60%  =>  list = 2.5 x cost
-//! Premium: $40/mo includes $40 of AI at list  ( = $16 of provider cost)
-//! Max:     $200/mo includes $200 of AI at list ( = $80 of provider cost)
+//! allowance = INCLUDED_ALLOWANCE_CENTS   ($20 of provider cost per seat per period)
+//! extra     = cost x (100 + OVERAGE_MARKUP_PERCENT) / 100   (5% over cost)
 //! ```
 //!
-//! Usage past the allowance is covered, in order, by prepaid credits (bought
-//! in one-off Stripe Checkout payments) and then by opt-in overage, billed to
-//! the payer's Stripe customer in chunks at the same list rate. Both keep the
-//! same margin as the plan itself.
+//! Both numbers live in [`domain::pricing`]; change a constant and redeploy.
+//! Usage and allowance are **cost cents**; credits, charges, caps and packs are
+//! **customer cents**. The conversions in that module are the only place the
+//! two units meet.
 //!
 //! # Layout
 //!
-//! - [`domain`] — plan catalog, the margin math, the settlement ledger (pure),
+//! - [`domain`] — plan catalog, pricing constants, the settlement ledger (pure),
 //!   ports, and the service.
 //! - [`outbound`] — Postgres repos over `ai_usage` and the billing tables, the
 //!   Stripe gateway, the roles + teams entitlement resolver, and the recorder
@@ -46,6 +47,7 @@ pub use ai_usage::{AiFeature, AiUsageEnforcement};
 pub use domain::{
     AdmissionFuture, AiAdmissionError, AiAdmissionService, AiUsageBilling, AllowanceDecision,
     BillingAdmissionService, BillingError, BillingPeriod, BillingService, BillingSettings,
-    CREDIT_PACKS_CENTS, DenyReason, DisabledAiAdmissionService, Entitlement, PayerScope, PlanTier,
-    TARGET_GROSS_MARGIN_BPS, UsageSnapshot, list_rate_cents,
+    CREDIT_PACKS_CENTS, DenyReason, DisabledAiAdmissionService, Entitlement,
+    INCLUDED_ALLOWANCE_CENTS, OVERAGE_MARKUP_PERCENT, PayerScope, PlanTier, UsageSnapshot,
+    cost_cents, cost_cents_covered_by, extra_customer_cents,
 };

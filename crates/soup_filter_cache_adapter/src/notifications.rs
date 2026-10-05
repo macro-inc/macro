@@ -113,6 +113,7 @@ fn snapshot_facts(
         "GraphqlSoupProject" => "PROJECT",
         "GraphqlSoupChat" => "CHAT",
         "GraphqlSoupChannel" => "CHANNEL",
+        "GraphqlSoupDatabaseRow" => "DATABASE_ROW",
         _ => return Err(()),
     };
     let mut states = std::collections::BTreeMap::new();
@@ -189,6 +190,7 @@ fn association(record: &Record) -> Option<(RecordKey, Token)> {
         "PROJECT" => "GraphqlSoupProject",
         "CHAT" => "GraphqlSoupChat",
         "CHANNEL" => "GraphqlSoupChannel",
+        "DATABASE_ROW" => "GraphqlSoupDatabaseRow",
         _ => return None,
     };
     uuid::Uuid::parse_str(id).ok()?;

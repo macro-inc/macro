@@ -1,4 +1,5 @@
 import type { ListDataSource } from '@app/components/list';
+import type { EmailRowReminder } from '@app/features/reminders/core/email-row-reminder';
 import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
@@ -33,11 +34,14 @@ import { buildEmailQuery, type EmailQueryContext } from './email-query';
 import { groupEmailEntitiesByDate } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
+import { useReminderEmailSource } from './use-reminder-email-source';
 import { useScheduledEmailSource } from './use-scheduled-email-source';
 
 export type EmailDataSourceItem = SoupRow<WithNotification<EntityData>>;
 
-export type EmailDataSource = ListDataSource<EmailDataSourceItem>;
+export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
+  reminderForThread?: (threadId: string) => EmailRowReminder | undefined;
+};
 
 export type EmailDataSourceInput = Pick<
   EmailViewState,
@@ -72,6 +76,7 @@ function emailMatchesTab(
       'favorites',
       'sent',
       'scheduled',
+      'reminders',
       'calendar',
       'all',
       () => true
@@ -96,6 +101,8 @@ export function useEmailDataSource(
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
   const scheduled = useScheduledEmailSource(state);
+  const reminders = useReminderEmailSource(state, options);
+  const showsReminders = () => state.tab === 'reminders';
   const showsScheduled = () => state.tab === 'scheduled';
   const showsFavorites = () => state.tab === 'favorites';
   // Uses GraphQL favorites with enable-graphql-soup, REST otherwise. Guard
@@ -134,7 +141,8 @@ export function useEmailDataSource(
     !showsFavorites() || favoriteThreadIds() !== undefined;
   const filtersReady = () =>
     tagsReady() && (!state.search.trim() || searchFavoritesReady());
-  const sourceEnabled = () => tagsReady() && state.tab !== 'scheduled';
+  const sourceEnabled = () =>
+    tagsReady() && state.tab !== 'scheduled' && state.tab !== 'reminders';
   const searchContext = (): EmailQueryContext => ({
     ...queryContext(),
     ...(showsFavorites() ? { favoriteThreadIds: favoriteThreadIds() } : {}),
@@ -143,7 +151,7 @@ export function useEmailDataSource(
     enabled: sourceEnabled(),
   }));
   const isListPending = () =>
-    !filtersReady() || query.isLoading || query.isPlaceholderData;
+    !filtersReady() || query.isPending || query.isPlaceholderData;
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
     const context = queryContext();
@@ -173,8 +181,10 @@ export function useEmailDataSource(
   });
 
   const rawEntities = createMemo<EntityData[]>(() => {
-    // Disabled searches can retain placeholder data for the previous facets.
-    if (!filtersReady()) return [];
+    // Scheduled/Reminders disable native discovery. Reading its pending data
+    // would suspend the whole split even though that query is not fetching.
+    // Disabled searches can also retain previous-facet placeholder data.
+    if (!sourceEnabled() || !filtersReady()) return [];
 
     if (!search.isSearching()) {
       // Previous-tab/inbox rows are not valid results for the new query.
@@ -381,14 +391,28 @@ export function useEmailDataSource(
   };
 
   return {
-    items: () => (showsScheduled() ? scheduled.items() : items()),
-    isLoading: () => (showsScheduled() ? scheduled.isLoading() : isLoading()),
+    reminderForThread: (threadId) =>
+      showsReminders() ? reminders.reminderForThread?.(threadId) : undefined,
+    items: () =>
+      showsReminders()
+        ? reminders.items()
+        : showsScheduled()
+          ? scheduled.items()
+          : items(),
+    isLoading: () =>
+      showsReminders()
+        ? reminders.isLoading()
+        : showsScheduled()
+          ? scheduled.isLoading()
+          : isLoading(),
     isFetching: () => {
+      if (showsReminders()) return reminders.isFetching();
       if (showsScheduled()) return scheduled.isFetching();
       if (search.isSettling()) return true;
       return usesServiceSearch() ? search.isFetching() : query.isFetching;
     },
     error: () => {
+      if (showsReminders()) return reminders.error();
       if (showsScheduled()) return scheduled.error();
       return (
         (search.isSearching() && showsFavorites()
@@ -401,9 +425,17 @@ export function useEmailDataSource(
         undefined
       );
     },
-    hasMore: () => !showsScheduled() && hasMore(),
-    isLoadingMore: () => !showsScheduled() && isLoadingMore(),
+    hasMore: () =>
+      showsReminders() ? reminders.hasMore() : !showsScheduled() && hasMore(),
+    isLoadingMore: () =>
+      showsReminders()
+        ? reminders.isLoadingMore()
+        : !showsScheduled() && isLoadingMore(),
     loadMore: async () => {
+      if (showsReminders()) {
+        await reminders.loadMore();
+        return;
+      }
       if (showsScheduled()) return;
       if (usesServiceSearch()) {
         await search.fetchNextPage();
@@ -412,6 +444,10 @@ export function useEmailDataSource(
       await query.fetchNextPage();
     },
     refresh: async () => {
+      if (showsReminders()) {
+        await reminders.refresh();
+        return;
+      }
       if (showsScheduled()) {
         await scheduled.refresh();
         return;

@@ -173,6 +173,21 @@ test('an existing team member just confirms and moves on', async ({ page }) => {
   await expect(heading(page, 'Free Claude & GPT for 30 days.')).toBeVisible();
 });
 
+test('staff can bypass onboarding from any step', async ({ page }) => {
+  await openFixture(page, '/?view=flow', {
+    viewer: {
+      id: 'macro|wolf@macro.com',
+      email: 'wolf@macro.com',
+      tutorialComplete: false,
+      licensed: false,
+    },
+  });
+  await expect(heading(page, 'Create your workspace')).toBeVisible();
+  await page.getByRole('button', { name: 'Bypass' }).click();
+  await expectLanded(page, 'Entered Macro at /home');
+  expect((await fakeWorld(page)).record.status).toBe('completed');
+});
+
 test('a finished user is sent straight into the app', async ({ page }) => {
   await openFixture(page, '/?view=flow&next=/md/doc', {
     viewer: {

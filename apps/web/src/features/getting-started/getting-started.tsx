@@ -10,6 +10,10 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableChatV3Agents,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
@@ -35,6 +39,7 @@ import {
   themeMode,
 } from '@theme/signals/themeSignals';
 import { createEffect, createSignal, For, on, onMount, Show } from 'solid-js';
+import { startPendingSession } from '../block-agent/context/pending-session';
 import { AGENT_EXAMPLES } from './agent-examples';
 import { createGettingStartedChatOpener } from './getting-started-chat';
 import { ActionRow, SectionHeader } from './getting-started-rows';
@@ -107,6 +112,8 @@ function GettingStartedContent() {
   };
 
   const startChat = async (prompt: string): Promise<string | undefined> => {
+    if (isFeatureEnabled(enableChatV3Agents))
+      return startPendingSession({ prompt });
     const result = await createChat(
       { name: deriveChatName(prompt) },
       { source: 'getting-started' }
@@ -129,9 +136,23 @@ function GettingStartedContent() {
   };
 
   const openChatPrompt = createGettingStartedChatOpener({
-    state,
+    state: {
+      chatIdForAction: (actionId) =>
+        state.chatIdForAction(
+          isFeatureEnabled(enableChatV3Agents) ? `agent:${actionId}` : actionId
+        ),
+      rememberChat: (actionId, id) =>
+        state.rememberChat(
+          isFeatureEnabled(enableChatV3Agents) ? `agent:${actionId}` : actionId,
+          id
+        ),
+    },
     startChat,
-    openChat: (id) => openContent({ type: 'chat', id }),
+    openChat: (id) =>
+      openContent({
+        type: isFeatureEnabled(enableChatV3Agents) ? 'agent' : 'chat',
+        id,
+      }),
   });
 
   /**

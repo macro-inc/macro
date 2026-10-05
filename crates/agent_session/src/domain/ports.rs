@@ -827,7 +827,7 @@ pub trait AgentSessionRealtime {
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
-    /// Tell viewers to refetch changed session metadata.
+    /// Tell viewers to refetch changed session metadata and the durable log.
     fn publish_updated(
         &self,
         _session: AgentSessionId,
@@ -1153,6 +1153,17 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// [`AgentSessionError::QueuedControlNotFound`] once it has. `actor` as
     /// on [`Self::edit_queued_control`].
     fn remove_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Run a queued action next. Moves it to the front of the queue and, when
+    /// a turn is in flight, cancels that turn so this entry dispatches ahead
+    /// of anything queued before it. [`AgentSessionError::QueuedControlNotFound`]
+    /// once it has dispatched. `actor` as on [`Self::edit_queued_control`].
+    fn steer_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,

@@ -10,6 +10,7 @@ export {
   useAiBillingSummaryQuery,
   useChangePlanMutation,
   useCreateAiCreditCheckoutMutation,
+  useIncludedAiCentsByTier,
   useUpdateAiOverageMutation,
 } from './ai-billing';
 export {

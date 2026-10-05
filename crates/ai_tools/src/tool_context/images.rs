@@ -1,10 +1,15 @@
-//! Composition of image generation with document uploads and reference-image reads.
+//! Composition of image generation with static file uploads and reference-image reads.
 use super::{ToolDocumentService, ToolDocumentToolContext, ToolEntityAccessService};
 use std::sync::Arc;
 
 macro_env_var::env_var! {
     /// Static file bucket, used only with local AWS.
     pub struct StaticStorageBucket;
+}
+
+macro_env_var::env_var! {
+    /// Internal service authentication for static file uploads.
+    struct InternalApiKey;
 }
 
 /// Reference photos resolved by their owning domains.
@@ -19,25 +24,21 @@ pub type ToolImageReferenceReader =
         >,
     >;
 
-/// Image generation service composed with the document upload capability.
+/// Image generation service composed with the static file upload capability.
 pub type ToolImageGenerationService = image_generation::domain::service::ImageGenerationServiceImpl<
-    image_generation::outbound::documents::DocumentsImageStore<
-        documents::inbound::toolset::DefaultDocumentToolCreator<ToolDocumentService>,
-    >,
+    image_generation::outbound::static_files::StaticFileImageStore,
     ToolImageReferenceReader,
 >;
 
 /// Image-generation context shared by all AI hosts.
 pub type ToolImageGenerationToolContext =
-    image_generation::inbound::toolset::ImageGenerationToolContext<
-        ToolImageGenerationService,
-        ToolEntityAccessService,
-    >;
+    image_generation::inbound::toolset::ImageGenerationToolContext<ToolImageGenerationService>;
 
-/// Compose image generation with an already-wired document upload service.
+/// Compose static file uploads and document reference reads for image generation.
 pub fn build_image_generation_tool_context(
     documents: &ToolDocumentToolContext,
     generator: Arc<dyn image_generation::domain::ports::ImageGenerator>,
+    recorder: Arc<dyn ai_usage::UsageRecorder>,
 ) -> anyhow::Result<ToolImageGenerationToolContext> {
     // Local service URLs address the API container, while public file bytes
     // live in the static-file bucket. Providers receive bytes from this reader.
@@ -50,13 +51,21 @@ pub fn build_image_generation_tool_context(
     } else {
         macro_service_urls::StaticFileServiceUrl::new()?.to_string()
     };
-    Ok(build_with_cdn(documents, generator, cdn_base))
+    let storage = static_file_service_client::StaticFileServiceClient::new(
+        InternalApiKey::new()?.to_string(),
+        macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+    );
+    Ok(build_with_cdn(
+        documents, generator, recorder, cdn_base, storage,
+    ))
 }
 
 fn build_with_cdn(
     documents: &ToolDocumentToolContext,
     generator: Arc<dyn image_generation::domain::ports::ImageGenerator>,
+    recorder: Arc<dyn ai_usage::UsageRecorder>,
     cdn_base: String,
+    storage: static_file_service_client::StaticFileServiceClient,
 ) -> ToolImageGenerationToolContext {
     let references = image_generation::outbound::references::AttachmentImageReferenceReader::new(
         documents::inbound::attachment::DocumentAttachmentService::new(
@@ -71,12 +80,15 @@ fn build_with_cdn(
     image_generation::inbound::toolset::ImageGenerationToolContext::new(
         image_generation::domain::service::ImageGenerationServiceImpl::new(
             generator,
-            image_generation::outbound::documents::DocumentsImageStore::new(
-                documents.creator.clone(),
+            image_generation::outbound::static_files::StaticFileImageStore::new(storage),
+            Arc::new(
+                image_generation::outbound::lexical::LexicalImageMarkdownComposer::new(
+                    documents.lexical_client.clone(),
+                ),
             ),
+            recorder,
         )
         .with_reference_reader(references),
-        documents.entity_access_service.clone(),
         documents.actor,
     )
 }
@@ -89,6 +101,11 @@ pub fn build_image_generation_tool_context_test(
     build_with_cdn(
         documents,
         Arc::new(image_generation::domain::ports::UnconfiguredImageGenerator),
+        Arc::new(ai_usage::NoOpUsageRecorder),
         "https://static.example.test".to_string(),
+        static_file_service_client::StaticFileServiceClient::new(
+            "test-key".to_string(),
+            "https://static.example.test".to_string(),
+        ),
     )
 }

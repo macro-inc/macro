@@ -1,13 +1,8 @@
 use super::*;
-use crate::domain::{
-    events::{
-        InitiativeEventActor, InitiativeTasksChanged, InitiativeTopicEvent, TaskMembershipChange,
-    },
-    history::InitiativeHistory,
-};
+use crate::domain::history::InitiativeHistory;
 use activity::domain::ports::ActivityRepo;
 use activity::outbound::pg_activity_repo::PgActivityRepo;
-use activity::{ActivitySource, Actor, EntityType, Ingest};
+use activity::{Action, Activity, Actor, DomainActivity, EntityType, InitiativeTaskChange};
 use entity_access::{
     domain::{
         models::ViewAccessLevel, ports::EntityAccessService, service::EntityAccessServiceImpl,
@@ -15,6 +10,25 @@ use entity_access::{
     outbound::PgAccessRepository,
 };
 use std::sync::Arc;
+
+/// The project-side row the properties domain records when a task's Project
+/// property names the project.
+struct TaskAdded {
+    project_id: String,
+    task_id: String,
+}
+
+impl DomainActivity for TaskAdded {
+    const ENTITY_TYPE: EntityType = EntityType::Initiative;
+    fn entity_id(&self) -> &str {
+        &self.project_id
+    }
+    fn into_action(self) -> Action {
+        Action::TaskAdded(InitiativeTaskChange {
+            task_id: self.task_id,
+        })
+    }
+}
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn project_history_filters_task_events_until_task_access_is_granted(
@@ -27,26 +41,22 @@ async fn project_history_filters_task_events_until_task_access_is_granted(
     let repo = repo(pool.clone());
     let created = repo
         .create(
-            create_args(&pool, OWNER, "Shared project", &[MEMBER]).await?,
+            create_args(OWNER, "Shared project", &[MEMBER]),
             share_off(),
             TeamShareCreation::Unshared,
         )
         .await?;
-    let topic_event = InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
-        attribution: Some(InitiativeEventActor {
-            actor: Actor::new_from_user(user(OWNER)),
-            on_behalf_of: None,
-        }),
-        occurred_at: chrono::Utc::now(),
-        changes: vec![TaskMembershipChange {
+    let rows = vec![Activity::from_domain(
+        Uuid::now_v7(),
+        2,
+        Actor::new_from_user(user(OWNER)),
+        None,
+        TaskAdded {
+            project_id: created.id.to_string(),
             task_id: task_id.clone(),
-            from: None,
-            to: Some(created.id),
-        }],
-    });
-    let Ingest::Insert(rows) = topic_event.ingest(Uuid::now_v7()) else {
-        panic!("membership activity");
-    };
+        },
+        chrono::Utc::now(),
+    )];
     let activity_repo = PgActivityRepo::new(pool.clone());
     activity_repo.insert_activities(&rows).await?;
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(

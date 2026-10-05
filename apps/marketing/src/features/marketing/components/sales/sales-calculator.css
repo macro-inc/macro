@@ -35,12 +35,47 @@
 .sales-calc-result .homepage-hero-cta { width: 100%; color: #000; }
 /* Beats `.feature-page p { margin: 0 }` without !important. */
 .sales-calc .sales-calc-note { max-width: 520px; margin: 8px auto 0; color: var(--color-ink-placeholder); font-size: 12px; line-height: 1.7; text-align: center; text-wrap: balance; }
+/* Phones: one card instead of two panels, and compact controls, so team size,
+   tools, savings, and the CTA fit on one screen. */
+@media (max-width: 759px) {
+  .sales-calc { gap: 10px; }
+  .sales-calc-card { display: grid; gap: 14px; padding: 16px 14px; border: 1px solid var(--color-edge-muted); border-radius: 24px; background: var(--color-panel); }
+  .sales-calc-card > :is(.sales-calc-controls, .sales-calc-result) { --glass-backdrop: none; --glass-shadow: none; padding: 0; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; }
+  .sales-calc-card > :is(.sales-calc-controls, .sales-calc-result)::after { content: none; }
+  .sales-calc-controls { gap: 10px; }
+  .sales-calc-label { font-size: 13px; }
+  .sales-calc-stepper button { width: 34px; height: 34px; }
+  .sales-calc-stepper input { width: 44px; font-size: 16px; }
+  .sales-calc-tiers button { min-height: 34px; font-size: 13px; }
+  .sales-calc-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .sales-calc-tools button { grid-template-columns: 16px minmax(0, 1fr); gap: 2px 6px; min-height: 0; padding: 8px; border-radius: 12px; }
+  .sales-calc-tools .sales-calc-check { display: none; }
+  /* Icon and price on top, the name on its own full-width row so it fits. */
+  .sales-calc-icon { grid-area: 1 / 1; width: 16px; height: 16px; }
+  .sales-calc-price { grid-area: 1 / 2; font-size: 11px; text-align: right; }
+  .sales-calc-name { grid-area: 2 / 1 / 3 / 3; font-size: 12px; }
+  .sales-calc-price::after { content: '/mo'; }
+  .sales-calc-result { gap: 12px; padding-top: 12px; border-top: 1px solid var(--color-edge-muted); }
+  .sales-calc-lines { gap: 4px; }
+  .sales-calc-lines p { font-size: 13px; }
+  .sales-calc-saved { gap: 0; padding-top: 0; border-top: 0; font-size: 13px; }
+  .sales-calc-saved strong { font-size: 44px; }
+  .sales-calc-even { padding-top: 0; border-top: 0; font-size: 14px; }
+  .sales-calc-result .homepage-hero-cta { min-height: 48px; }
+  .sales-calc .sales-calc-note { margin-top: 0; font-size: 11px; }
+}
+/* iPhone SE and other narrow phones: room for "Superhuman" and "Salesforce". */
+@media (max-width: 359px) {
+  .sales-calc-card { padding-inline: 10px; }
+  .sales-calc-tools { gap: 4px; }
+  .sales-calc-tools button { padding: 7px 4px 7px 6px; }
+  .sales-calc-name { font-size: 10.5px; letter-spacing: -.01em; }
+}
 @media (min-width: 760px) {
-  .sales-calc { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 20px; }
+  .sales-calc-card { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 20px; }
   .sales-calc-controls { padding: 24px; }
   .sales-calc-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sales-calc-result { padding: 28px; }
-  .sales-calc-note { grid-column: 1 / -1; }
 }
 @media (hover: hover) {
   .sales-calc-tools button:hover { border-color: var(--color-edge); }

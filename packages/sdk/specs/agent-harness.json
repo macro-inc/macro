@@ -377,6 +377,65 @@
         }
       }
     },
+    "/agent-sessions/by-pull-request": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "List the sessions associated with a pull request that the caller can view.",
+        "operationId": "agent_sessions_for_pull_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PullRequestUrl"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullRequestSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/preview": {
       "post": {
         "tags": ["agent-sessions"],
@@ -1190,6 +1249,210 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/pull-requests": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "List the pull requests associated with a session the caller can view.",
+        "operationId": "list_agent_session_pull_requests",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPullRequestsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Link a pull request to a session the caller can edit.",
+        "operationId": "link_agent_session_pull_request",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PullRequestUrl"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["agent-sessions"],
+        "summary": "Unlink a pull request a person linked to a session the caller can edit. The pull request\nthe session's agent opened stays linked.",
+        "operationId": "unlink_agent_session_pull_request",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "url",
+            "in": "query",
+            "description": "The pull request's GitHub URL",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/queue": {
       "get": {
         "tags": ["agent-sessions"],
@@ -1348,6 +1611,80 @@
         "tags": ["agent-sessions"],
         "summary": "Remove a queued action before it dispatches. There is no un-sending: an\naction that already went out answers 404.",
         "operationId": "remove_queued_action",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "description": "ID the action was accepted under",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Already dispatched or never queued",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/queue/{action_id}/steer": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Run a queued action next. Moves it ahead of the rest of the queue and\ncancels the turn in flight, so this entry dispatches when that turn ends.",
+        "operationId": "steer_queued_action",
         "parameters": [
           {
             "name": "session_id",
@@ -2461,7 +2798,7 @@
       },
       "ChangesetDto": {
         "type": "object",
-        "description": "One capture of a session's changes.\n\nClients deserialize this, so both derives are used.",
+        "description": "One changeset: the files a patch touches and what happened to each.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "source",
@@ -2510,12 +2847,12 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "The capture's id; changes with every capture."
+            "description": "The changeset's id; a different id means different changes."
           },
           "patchBytes": {
             "type": "integer",
             "format": "int64",
-            "description": "Size of the patch `GET .../changes/patch` serves; zero when nothing\nchanged.",
+            "description": "Size of the patch the matching patch route serves; zero when nothing\nchanged.",
             "minimum": 0
           },
           "repository": {
@@ -2534,7 +2871,7 @@
       },
       "ChangesetSourceDto": {
         "type": "string",
-        "description": "The source of the captured diff, on the wire.",
+        "description": "The source of a changeset's diff, on the wire.",
         "enum": ["github_pull_request"]
       },
       "ChannelSharePermission": {
@@ -3048,6 +3385,22 @@
                 "enum": ["crm_contact"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A video call and its persistent chat thread.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A video call and its persistent chat thread."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["call"]
+              }
+            }
           }
         ],
         "description": "The entity whose permissions and lifecycle govern a message."
@@ -3141,6 +3494,37 @@
           }
         }
       },
+      "PullRequestLinkSource": {
+        "type": "string",
+        "description": "Who associated a pull request with a session.",
+        "enum": ["agent", "user"]
+      },
+      "PullRequestSessionsResponse": {
+        "type": "object",
+        "description": "The sessions associated with a pull request.",
+        "required": ["sessionIds"],
+        "properties": {
+          "sessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sessions associated with the pull request that the caller can view."
+          }
+        }
+      },
+      "PullRequestUrl": {
+        "type": "object",
+        "description": "A GitHub pull request, by URL.",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The pull request's GitHub URL, such as `https://github.com/owner/repo/pull/12`."
+          }
+        }
+      },
       "QueuedActionDto": {
         "type": "object",
         "description": "One action waiting in a session's queue.\n\nClients deserialize this, so both derives are used.",
@@ -3223,6 +3607,48 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          }
+        }
+      },
+      "SessionPullRequestLink": {
+        "type": "object",
+        "description": "A pull request associated with a session.",
+        "required": ["githubKey", "url", "source", "createdAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the pull request was associated with the session."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The pull request's `owner/repo/pull/number` key."
+          },
+          "linkedBy": {
+            "type": ["string", "null"],
+            "description": "The Macro user who linked it, for links a person made."
+          },
+          "source": {
+            "$ref": "#/components/schemas/PullRequestLinkSource",
+            "description": "Who associated the pull request with the session."
+          },
+          "url": {
+            "type": "string",
+            "description": "The pull request's GitHub URL."
+          }
+        }
+      },
+      "SessionPullRequestsResponse": {
+        "type": "object",
+        "description": "The pull requests associated with a session.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionPullRequestLink"
+            },
+            "description": "Pull requests, oldest link first."
           }
         }
       },

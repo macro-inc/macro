@@ -17,7 +17,7 @@ const snapshot = (seats: number): AiUsageSnapshot => ({
   seats,
   period_start: '2026-09-01T00:00:00Z',
   period_end: '2026-10-01T00:00:00Z',
-  included_cents: 4_000,
+  included_cents: 2_000,
   used_cents: 1_000,
   credits_consumed_cents: 0,
   credit_balance_cents: 2_500,
@@ -36,7 +36,7 @@ describe('AiUsageMeter', () => {
     render(() => <AiUsageMeter snapshot={snapshot(5)} />);
 
     expect(screen.getAllByText('$10')).toHaveLength(2);
-    expect(screen.getByText(/of \$40 included/)).toBeTruthy();
+    expect(screen.getByText(/of \$20 included/)).toBeTruthy();
     expect(screen.queryByText(/across 5 seats/)).toBeNull();
     expect(screen.getByText(/Team credits:/)).toBeTruthy();
     expect(screen.getByText(/Team usage billing this period/)).toBeTruthy();

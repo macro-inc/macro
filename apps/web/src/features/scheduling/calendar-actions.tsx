@@ -1,0 +1,67 @@
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { toast } from '@core/component/Toast/Toast';
+import { enableCalendarScheduling } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { useUserId } from '@core/context/user';
+import { writeClipboardData } from '@core/util/dataTransfer';
+import { getWebOrigin } from '@core/util/webOrigin';
+import GearIcon from '@phosphor/gear.svg';
+import LinkIcon from '@phosphor/link.svg';
+import { Button } from '@ui';
+import { Suspense } from 'solid-js';
+import { useSchedulingProfileQuery } from './queries/source';
+
+function Actions() {
+  const user = useUserId();
+  const settings = useSettingsState();
+  const source = useSchedulingProfileQuery(() => ({
+    id: user() ?? 'me',
+    name: 'Personal',
+    canEdit: true,
+  }));
+  const copy = async () => {
+    const profile = source.isSuccess ? source.data : undefined;
+    if (!profile?.revision || !profile.eventTypes.some((e) => e.enabled)) {
+      settings.openSettings('Booking links');
+      return;
+    }
+    if (
+      await writeClipboardData({
+        'text/plain': `${getWebOrigin()}/app/book/${encodeURIComponent(profile.id)}`,
+      })
+    )
+      toast.success('Booking link copied');
+    else toast.failure('Could not copy booking link');
+  };
+  return (
+    <div class="flex shrink-0 items-center gap-1">
+      <Button
+        variant="ghost"
+        size="sm"
+        label="Copy booking link"
+        disabled={source.isPending}
+        onClick={() => void copy()}
+      >
+        <LinkIcon class="size-3.5" />
+        <span class="hidden lg:inline">Booking link</span>
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        label="Open booking link settings"
+        onClick={() => settings.openSettings('Booking links')}
+      >
+        <GearIcon class="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+export function CalendarSchedulingActions() {
+  return (
+    <ShowFeatureFlag flag={enableCalendarScheduling}>
+      <Suspense>
+        <Actions />
+      </Suspense>
+    </ShowFeatureFlag>
+  );
+}

@@ -4,8 +4,16 @@
 /* The homepage hero and constellation sit in OnboardingShell, which uses the
    site's system font stack; .homepage-sections and .feature-page would
    otherwise give them slab and Inter. */
-.tour-hero, .tour-constellation .feature-flow, .tour-page .unification-subtext { font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
+.tour-hero, .tour-constellation .feature-flow, .tour-page .unification-subtext, .tour-footer { font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
 .feature-page .tour-cta { color: #000; }
+/* Pull the CTA up to the subtitle: 16px instead of the homepage's 36px
+   (24px row gap + 12px margin from homepage-scroll-cue.css). */
+.tour-hero .ob-welcome:has(.homepage-hero-cta) > [data-welcome-copy] > .homepage-hero-action { margin-top: -8px; }
+/* The shared header's "Talk to us" and "Open app" buttons lead off the page;
+   the booker is inline here, so hide them while this page is mounted. */
+body:has(.tour-page) .site-header-actions { display: none; }
+/* The desktop line break orphans a word on phones; balance the lines instead. */
+@media (max-width: 767px) { .tour-hero h1 { text-wrap: balance; } .tour-hero h1 br { display: none; } }
 /* `.feature-page p` also cancels the hero subtitle's `mx-auto` centering. */
 .feature-page .tour-hero p[data-welcome-copy] { margin-inline: auto; }
 /* `.feature-page p` resets margins; restore homepage-unification.css spacing. */
@@ -14,8 +22,13 @@
 /* Later sections reuse the unification heading; it sits above content instead
    of below the constellation. */
 .unification-copy.tour-heading { margin: 0 auto 48px; }
-/* OnboardingShell's hero frame: a centered card in the first viewport. */
-.tour-hero { display: flex; align-items: center; justify-content: center; min-height: 100svh; padding: 96px 0 40px; }
+/* Here the heading leads into the constellation rather than following it. */
+.tour-constellation .unification-copy { margin: 0 auto 32px; }
+.tour-constellation .feature-flow-expanded { margin-bottom: 0; }
+/* OnboardingShell's hero frame, sized to its content (not the full first
+   viewport) so "Replace 27+ apps" follows "Book a demo" 64px below. */
+.tour-hero { display: flex; align-items: center; justify-content: center; padding: 96px 0 0; }
+.homepage-unification.tour-constellation { padding-top: 56px; }
 /* OnboardingShell's tile entrance, which also centers each logo on its point. */
 @keyframes tour-orbit-in { from { opacity: 0; transform: translate(-50%, -40%) scale(.8); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 .tour-hero .ob-orbit-tile { animation: tour-orbit-in 900ms cubic-bezier(.22,1,.36,1) both; }
@@ -26,3 +39,34 @@
 .tour-section { scroll-margin-top: 80px; }
 .tour-booking { display: flex; flex-direction: column; align-items: center; padding-bottom: 0; }
 .sales-booking-embed { width: 100%; max-width: 760px; min-height: 560px; overflow: hidden; border-radius: 24px; background: var(--color-panel); }
+/* The full 15-feature grid on desktop, the compact ring on phones. */
+.tour-constellation-mobile { display: none; }
+@media (max-width: 767px) {
+  .tour-constellation-desktop { display: none; }
+  .tour-constellation-mobile { display: block; }
+}
+/* Phones: a true circle. FeatureConstellation's inline left/top put the eight
+   features on hand-tuned points in a wide box, with the core at 48%/46%; here a
+   square box, a centered core, and one feature every 45 degrees (radius 36%). */
+@media (max-width: 767px) {
+  /* Nearly full screen width (the section's own inset would squeeze it), with
+     icons and core sized to the ring so labels clear their neighbors. */
+  .tour-constellation-mobile { --ring: min(100vw - 32px, 360px); display: flex; justify-content: center; }
+  .tour-constellation-mobile .feature-flow { flex: none; width: var(--ring); height: var(--ring); margin-bottom: 40px; }
+  .tour-constellation-mobile .feature-flow-core { left: 50%; top: 50%; width: calc(var(--ring) * .2); height: calc(var(--ring) * .2); }
+  .tour-constellation-mobile .feature-flow-core svg { width: 48%; height: 48%; }
+  .tour-constellation-mobile .feature-flow-icon { width: calc(var(--ring) * .13); height: calc(var(--ring) * .13); }
+  .tour-constellation-mobile .feature-flow-icon svg { width: 44%; height: 44%; }
+  .tour-constellation-mobile .feature-flow-node > span { top: calc(100% + 6px); font-size: 11px; }
+  .tour-constellation-mobile [data-tool-tile=Google], .tour-constellation-mobile .feature-flow-halo:nth-child(1) { left: 14.0% !important; top: 50.0% !important; }
+  .tour-constellation-mobile [data-tool-tile=Slack], .tour-constellation-mobile .feature-flow-halo:nth-child(2) { left: 24.54% !important; top: 24.54% !important; }
+  .tour-constellation-mobile [data-tool-tile=Sheets], .tour-constellation-mobile .feature-flow-halo:nth-child(3) { left: 50.0% !important; top: 14.0% !important; }
+  .tour-constellation-mobile [data-tool-tile=Notion], .tour-constellation-mobile .feature-flow-halo:nth-child(4) { left: 75.46% !important; top: 24.54% !important; }
+  .tour-constellation-mobile [data-tool-tile=Linear], .tour-constellation-mobile .feature-flow-halo:nth-child(5) { left: 86.0% !important; top: 50.0% !important; }
+  .tour-constellation-mobile [data-tool-tile=HubSpot], .tour-constellation-mobile .feature-flow-halo:nth-child(6) { left: 75.46% !important; top: 75.46% !important; }
+  .tour-constellation-mobile [data-tool-tile=GitHub], .tour-constellation-mobile .feature-flow-halo:nth-child(7) { left: 50.0% !important; top: 86.0% !important; }
+  .tour-constellation-mobile [data-tool-tile=Zoom], .tour-constellation-mobile .feature-flow-halo:nth-child(8) { left: 24.54% !important; top: 75.46% !important; }
+}
+/* The homepage's a16z and security badges close the page. */
+.tour-footer { padding: 72px 0 96px; }
+.tour-footer .homepage-open-source-badges { margin: 0; }

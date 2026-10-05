@@ -1,4 +1,5 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import type { TurnState } from '@service-agent-fold/generated/types';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentInputProps } from '../ui/AgentInput';
@@ -8,11 +9,14 @@ import { AgentComposer } from './AgentComposer';
 
 const mocks = vi.hoisted(() => ({
   session: () => ({ canEdit: false as boolean | undefined }),
+  turn: () => 'idle' as TurnState,
   issue: vi.fn(),
   selectModel: vi.fn(),
   sendNext: vi.fn(),
+  steer: vi.fn(),
   editQueued: vi.fn(),
   removeQueued: vi.fn(),
+  steerQueued: vi.fn(),
   upload: vi.fn(),
   consumeNotes: vi.fn(),
   input: undefined as AgentInputProps | undefined,
@@ -20,8 +24,8 @@ const mocks = vi.hoisted(() => ({
   queued: undefined as QueuedPromptsProps | undefined,
 }));
 
-vi.mock('@app/features/agent-changes/context/agent-changes-controller', () => ({
-  useOptionalAgentChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
+vi.mock('@app/features/changes/context/changes-controller', () => ({
+  useOptionalChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
 }));
 vi.mock('@channel/Input', () => ({
   createInputAttachmentTracker: () => ({
@@ -52,9 +56,11 @@ vi.mock('../context/AgentSessionContext', () => ({
       ],
       edit: mocks.editQueued,
       remove: mocks.removeQueued,
+      steer: mocks.steerQueued,
     },
     sendNext: mocks.sendNext,
-    turn: () => 'idle',
+    steer: mocks.steer,
+    turn: () => mocks.turn(),
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -77,6 +83,7 @@ vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.turn = () => 'idle';
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
 });
@@ -113,8 +120,21 @@ describe('view-only session controls', () => {
     expect(mocks.sendNext).not.toHaveBeenCalled();
     expect(mocks.upload).not.toHaveBeenCalled();
     expect(mocks.consumeNotes).not.toHaveBeenCalled();
+    mocks.queued?.onSteer?.('queued-1');
     expect(mocks.editQueued).not.toHaveBeenCalled();
     expect(mocks.removeQueued).not.toHaveBeenCalled();
+    expect(mocks.steer).not.toHaveBeenCalled();
+    expect(mocks.queued?.onSteer).toBeUndefined();
+  });
+
+  it('steers one queued message while a turn is in flight', () => {
+    mocks.session = () => ({ canEdit: true });
+    mocks.turn = () => 'running';
+    render(() => <AgentComposer />);
+
+    expect(mocks.queued?.onSteer).toEqual(expect.any(Function));
+    mocks.queued?.onSteer?.('queued-1');
+    expect(mocks.steer).toHaveBeenCalledWith('queued-1');
   });
 
   it('reacts to a permission downgrade without remounting', () => {
@@ -150,4 +170,24 @@ describe('view-only session controls', () => {
       });
     }
   );
+});
+
+it('explicitly sends the queue head and disables it while the turn transitions', () => {
+  const [turn, setTurn] = createSignal<TurnState>('running');
+  mocks.turn = turn;
+  mocks.session = () => ({ canEdit: true });
+  render(() => <AgentComposer />);
+  expect(mocks.queued?.onSteer).toEqual(expect.any(Function));
+  const sendNext = screen.getByRole('button', {
+    name: 'Send next queued message now',
+  });
+  fireEvent.click(sendNext);
+  expect(mocks.sendNext).toHaveBeenCalledTimes(1);
+  for (const next of ['stopping', 'starting'] as const) {
+    setTurn(next);
+    expect(sendNext.hasAttribute('disabled')).toBe(true);
+    expect(mocks.queued?.onSteer).toBeUndefined();
+    fireEvent.click(sendNext);
+  }
+  expect(mocks.sendNext).toHaveBeenCalledTimes(1);
 });

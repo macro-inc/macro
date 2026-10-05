@@ -32,7 +32,6 @@ import { MobileSettings } from '@app/features/settings/MobileSettings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import { AutomationComposer } from '@block-automation/component';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
@@ -44,9 +43,12 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { DEV_MODE_ENV, enableReminders } from '@core/constant/featureFlags';
+import {
+  enableAiUsageBilling,
+  enableDatabases,
+  enableReminders,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -60,10 +62,10 @@ import {
   useNavigate,
 } from '@solidjs/router';
 import { cn, ImperativeDialogHost } from '@ui';
-import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
   createEffect,
   createMemo,
+  lazy,
   onCleanup,
   onMount,
   Show,
@@ -80,6 +82,13 @@ import { MobileDockRow } from './mobile/MobileDockRow';
 import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
+
+const StarterDatabase = lazy(async () => {
+  const module = await import(
+    '@app/features/block-database/views/starter-database'
+  );
+  return { default: module.StarterDatabase };
+});
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -103,14 +112,19 @@ export function Layout(props: RouteSectionProps) {
     () =>
       !isTouchDevice() &&
       isAuthenticated() === true &&
-      !AUTH_URLS.includes(location.pathname) &&
-      // Settings-as-the-sole-split has its own tab nav — hide app chrome.
-      !isSoloSettings()
+      !AUTH_URLS.includes(location.pathname)
   );
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
       <MobileSettingsProvider>
+        <Show when={isAuthenticated() === true}>
+          <ShowFeatureFlag flag={enableDatabases}>
+            <Suspense>
+              <StarterDatabase />
+            </Suspense>
+          </ShowFeatureFlag>
+        </Show>
         <LayoutInner {...props} />
       </MobileSettingsProvider>
     </SidebarVisibilityContext.Provider>
@@ -251,9 +265,11 @@ function LayoutInner(props: RouteSectionProps) {
           <Paywall />
         </Suspense>
       </Show>
-      <Show when={DEV_MODE_ENV && usageLimitOpen()}>
-        <AiUsageLimitDialog />
-      </Show>
+      <ShowFeatureFlag flag={enableAiUsageBilling}>
+        <Show when={usageLimitOpen()}>
+          <AiUsageLimitDialog />
+        </Show>
+      </ShowFeatureFlag>
       <div class="max-h-full grow flex">
         <ItemDndProvider>
           <Show when={isSidebarVisible()}>
@@ -294,11 +310,9 @@ function LayoutInner(props: RouteSectionProps) {
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-          <AutomationComposer />
         </Show>
       </Suspense>
       <DevStatusBar />
-      <ScreencastHotkeys />
     </div>
   );
 }

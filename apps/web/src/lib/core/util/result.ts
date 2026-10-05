@@ -37,7 +37,7 @@ export function thrownResultErrorHasCode(
 
 /** Wraps a result-returning async function to throw on error. */
 export async function throwOnErr<E extends string, T>(
-  fn: () => Promise<Result<T, ResultError<E>[]>>
+  fn: () => PromiseLike<Result<T, ResultError<E>[]>>
 ): Promise<T> {
   const result = await fn();
   if (result.isErr()) {

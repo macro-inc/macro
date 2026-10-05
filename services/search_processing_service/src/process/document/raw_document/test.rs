@@ -165,3 +165,9 @@ fn test_generate_parent_only_upsert_without_file_type() {
 
     assert!(args.is_none());
 }
+
+#[test]
+fn test_fig_content_is_indexed_but_other_vector_files_are_name_only() {
+    assert!(!should_index_parent_only(&FileType::Fig));
+    assert!(should_index_parent_only(&FileType::Ai));
+}

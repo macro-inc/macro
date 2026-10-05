@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { afterOnboardingTarget, sanitizeNext } from './next-target';
+import {
+  afterOnboardingTarget,
+  bypassTarget,
+  sanitizeNext,
+} from './next-target';
 
 describe('sanitizeNext', () => {
   it.each([
@@ -28,5 +32,12 @@ describe('afterOnboardingTarget', () => {
     expect(afterOnboardingTarget(undefined, '//evil.com')).toBe(
       '/getting-started'
     );
+  });
+});
+
+describe('bypassTarget', () => {
+  it('keeps the deep link, else enters the app instead of Getting Started', () => {
+    expect(bypassTarget(undefined, '/channel/x')).toBe('/channel/x');
+    expect(bypassTarget(undefined, undefined)).toBe('/home');
   });
 });

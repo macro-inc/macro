@@ -207,9 +207,9 @@ export function createAppOnboardingContext(): OnboardingContext {
           tier
         )
       ),
-    completeOnboarding: async () => {
+    completeOnboarding: async ({ skipped }) => {
       const [onboardingResult] = await Promise.allSettled([
-        completeOnboarding.mutateAsync({ skipped: false }),
+        completeOnboarding.mutateAsync({ skipped }),
         completeTutorial.mutateAsync(),
       ]);
       // Exiting with the row still active would leave staged candidates

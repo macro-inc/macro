@@ -101,14 +101,29 @@ other entity partitions, and notified-at sorting still use the network path.
 
 The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
 exclude done items, such as Email Important/Noise and Home Signal, without waiting
-for the server. Lists that show done items, such as Email All, keep the row. Undo
-or a failed write brings the row back, and so does a new active notification on the
-entity. To verify, mark a row done and watch it for a few seconds. It must not
-reappear once the server reply lands, and it must stay gone after a reload.
+for the server. Email All keeps the row and flips its done indicator immediately.
+Undo restores a previously admitted row even after the cache has removed it,
+without waiting for the reversal's server reply; changing filters/sort clears
+those view-local restoration snapshots. Home's separate recent-activity inclusion
+rules are unchanged. Test Done/Undo/Redo with delayed replies and verify both flat
+and grouped rows/counts. A failure must roll back only its own local intent.
+Newer in-scope activity can re-admit a row, but loading an older notification or
+activity in a separate channel thread must not. Redo targets the original exact
+notification IDs, not notifications received since the original action. A newer
+Done must win over an older retained overlay. Delay reconciliation past a minute:
+pending/stale state must not simply expire and resurrect the row. Once committed,
+mounted cache readers must acknowledge the intent before its overlay is released.
+GraphQL display intents are scoped to the authenticated viewer and login session.
+Login/logout retires old buckets; even same-account native reauthentication must
+not let old overlay Undo/Redo handles or a late refresh republish old intent.
+Verify account changes with overlapping entity IDs and a pending/failed refresh.
+After a successful Done, verify that the row stays gone after a reload.
 In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
 property edit or a rename updates the edited row in place instead of rebuilding
 every visible row. To verify, watch the row nodes with a `MutationObserver` while
-editing: only moved or removed rows should be added or removed.
+editing: only moved or removed rows should be added or removed. Rename a row and
+then drag it: its drag label/payload must use the new fields without another
+registration/layout measurement.
 
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
@@ -294,6 +309,11 @@ arrow-key browsing keeps it open. Preview headers start with **Home >**. Clickin
 sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
 show the activity list alone.
 
+Document previews opened from Home expose **Share** and **Copy Share Link** before
+the details toggle, including tasks, snippets, skills, canvases, PDFs, images,
+code, and videos. Share uses the selected item's permissions and updates when
+switching items; copied links point to the entity rather than the Home feed.
+
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
 surface: a muted dark fill or a white light-mode surface with a soft shadow,
@@ -426,6 +446,16 @@ show the previous email. A failed load must still show its error and Retry actio
 reconciling an already-open offline draft must preserve its composer and text.
 If local cache initialization fails, ordinary server threads must still load
 through the session's uncached GraphQL client, including the thread being opened.
+In that fallback, leave a thread open and mark it Done/Not Done from its list:
+only the matching open thread refreshes through GraphQL after the committed archive
+mutation, including its loaded message pages. Mark Seen/Unread and generic Soup
+refreshes must not refetch open threads. Disabled/unmounted readers must not refetch.
+Also delay cache initialization failure until after the first identity lookup fails:
+an uncertain server route must then load and participate in archive refreshes,
+while a positively identified unsynced local draft must never be sent to the server.
+Keep already-resolved server aliases through that fallback. With the normalized
+cache active, the shared email record updates the thread without an extra network
+refresh. Neither path relies on REST thread-cache invalidation.
 
 If a saved inbox selection references an unlinked account, successfully loading
 linked accounts resets the filter to All inboxes while preserving an open or
@@ -477,7 +507,23 @@ skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
 Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
-offline action followed by reconnect. Sent-only threads cannot be unarchived.
+offline action followed by reconnect. Also wait for provider/metadata synchronization
+before Undo, and repeat after reloading: an archived received thread can lose its
+inbox-sorting timestamp but must still be unarchivable. Sent-only threads and
+unsent drafts cannot be unarchived; sent mail addressed back to its sender can.
+With GraphQL Soup enabled, bulk Mark Not Done settles per email: a rejected
+sent-only/draft thread stays done, while successful and durably queued siblings
+remain restored. Only accepted
+threads get their notifications restored. Notification or list-refresh failures
+warn without rolling back accepted unarchives. Verify mixed committed/queued/
+rejected selections, partial-success counts, and that a queued sibling prevents
+shared-list refetch even when notification restoration fails. GraphQL reversals
+rely on normalized writes and their durable revalidation, not an extra REST Soup
+refetch after rows settle. Verify the open-thread header too: with GraphQL enabled,
+Mark Not Done remains available for an archived thread whose inbox timestamp is
+missing; the server decides whether its received-message history allows restoration.
+The REST path retains its timestamp preflight, whole-batch handling, notification
+ordering, and existing cache reconciliation.
 
 The service retains both replica-backed Soup reads and a primary-backed email
 writer. Email mutations and their uncached reply reloads use the primary; ordinary
@@ -911,6 +957,19 @@ viewer identity is available, document inserts into Shared are rejected.
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
 
+With `enable-databases` enabled, **My Files** includes owned databases and
+**Shared with me** includes databases shared by other owners. **All files**
+also includes accessible databases owned by others. **Search Drive** matches
+database names and **Filter → Type → Database** narrows the list. **New →
+Database** creates and opens a database from file tabs or the folder overview;
+it is absent inside a folder because databases have no folder membership yet.
+Database rows open their database block, including Enter and Open in new split.
+Use the database block's own actions to rename, share or trash it. The list
+omits unsupported duplicate, delete and move-to-folder actions for databases.
+Databases have no view history and do not appear in **Recent**, folder contents,
+or **Email attachments**. Creation time orders them when the selected sort has
+no corresponding database timestamp.
+
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
 leading filter-drawer button, like Tasks. Touch opens on **Recent** (the first
@@ -1024,7 +1083,10 @@ Quick loads skip the skeletons. Real events lay out underneath during the brief
 minimum display, then fade in as the skeletons fade out. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
-pill. Provider sync and errors still show their own states. Verify delayed occurrence
+pill. Provider backfill shows a persistent `Syncing your calendar…` banner above the
+grid, explaining that events will appear automatically and Macro remains usable.
+The banner stays visible as partial results arrive and disappears when sync finishes.
+Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
 Reduced-motion mode disables pulses and transitions. The page stays busy until the
@@ -1042,6 +1104,15 @@ flag loads or is off, those controls stay hidden and meeting routes do not mount
 call setup. Existing channel calls and the upcoming-events list remain available.
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
+During a quick or scheduled call, signed-in participants can open **Call chat**
+from its separate button at the far right of the bottom toolbar. Messages persist
+with that call session and are visible in its recording page after it ends.
+Guests do not see chat. The `@` menu includes Macro and available agents;
+mentioning one invokes it in the call thread. Reply on any live message, including
+your own, quotes it in the bottom composer. Verify the reply preserves a draft,
+an agent reply appears, and messages remain in the saved history; starting a
+new session from the same meeting link must start a separate chat thread.
+
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
@@ -1051,6 +1122,84 @@ On phones, event details use inset round action buttons and a transparent RSVP
 footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
+
+Calendar scheduling is on by default in dev. Production uses the PostHog flag
+`enable-calendar-scheduling` and stays off unless enabled remotely. Set
+`VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
+While off, the Calendar settings tab and calendar booking shortcuts are hidden;
+public booking and receipt links show an unavailable page without fetching
+scheduling data. When enabling a production rollout, include anonymous visitors
+so invitees can open those links.
+
+Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
+Scheduling lives in the separate **Settings → Booking links** item
+(`/app/settings/booking-links`), with Booking links, Availability, Booking pages,
+Teams, Bookings, and Insights in one scrolling page. The calendar toolbar’s
+booking actions open Booking links; email and integration connection shortcuts
+continue to open Calendar.
+There is no second sidebar or global owner switch. Personal and team booking links
+appear together with ownership badges. New booking link and New schedule ask which
+owner to create for when multiple editable owners are available, then open inline editors;
+event options are stacked sections. Save changes or Cancel returns to the list.
+Connected calendars offers Connect account (the existing Google consent flow),
+Connect calendar for accounts missing calendar permission, and Disconnect with
+confirmation. Disconnect removes calendar access/data, not the Gmail connection.
+Account checkboxes show/hide all child calendars; partial selection is shown as
+mixed. Individual calendars can also be shown/hidden. The account color is the
+default for its calendars; a child color overrides it. Click a color dot to open
+the theme-matched picker: drag the color field and hue slider, choose a named
+swatch, or enter a three- or six-digit hex value. Arrow keys adjust the focused
+color field (Shift makes larger steps). **Reset to default** clears the override.
+Visibility and colors share the calendar sidebar's browser-local preferences,
+survive reload, and do not change the Google calendar or booking conflict checks.
+Booking status filters use the same segmented control as the CRM sidebar.
+In Availability, each weekday has an enable switch, time ranges, an add button,
+and a copy-hours menu; select target days and Apply before saving the schedule.
+Date overrides and the searchable timezone picker sit below the weekly hours.
+Ownership badges identify Personal or Team · team name on links and availability.
+Public booking pages, bookings, and insights are grouped by owner and remain visible
+together; editing one owner does not switch the rest of the page. Search booking
+links by title, slug, or owner. Team owners/admins can edit team links; ordinary members can view them. `Event types` creates, edits,
+pauses, duplicates, previews, and copies booking links. Event settings include
+weekly availability, collective/all-host or round-robin/one-host assignment,
+notice, buffers, booking horizon, daily limits, and custom questions. New event
+types stay paused until `Accept bookings` is selected and changes are saved.
+`Availability` manages named weekly schedules and date overrides in an IANA time
+zone. Set a default schedule for new event types; a schedule cannot be deleted
+until its event types use another one. Collective and round-robin team meetings
+respect each host’s personal default hours when configured, plus busy calendars.
+`Teams` summarizes connected teams and links to team settings; the member roster
+lives in team settings. Choose hosts for a team booking link inside its editor.
+`Booking page` edits the public name and description. `Bookings` shows
+upcoming, unconfirmed, past, and cancelled meetings; admins can confirm requests,
+reschedule, or cancel them. Choose From/Through dates to load bookings (initially 30 days before and after today), then search by guest/title/email and filter by event type. Dates use your browser time zone; shorten the range if more than 5,000 bookings match.
+Cancellation asks for confirmation. After a confirmed meeting ends, an assigned
+host or team admin can mark attendance or a host/guest no-show. Pending requests
+from older configurations appear under Unconfirmed. New approval-only links are disabled;
+new links use automatic confirmation and provider calendar invitations. Existing approval
+links must switch to automatic confirmation before accepting new bookings.
+
+`Insights` reports the selected personal/team owner with 7/30/90-day or custom
+ranges, event/host filters, previous-period comparisons, event trends, meeting
+hours, no-shows, popular events, and host counts. Download exports the filtered
+bookings to CSV. Metrics use booking start dates in the default schedule’s time
+zone; failed/processing requests are excluded. Completed means ended confirmed
+bookings excluding recorded no-shows. Rescheduled counts bookings with recorded
+reschedule history. Ratings/CSAT are not shown because no survey data is collected.
+Oversized result sets return an error instead of silently truncating insights.
+
+The calendar header includes `Copy booking link` and `Open calendar scheduling
+settings`. Copy opens settings when no active personal link exists. Public
+`/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. Uncertain
+calendar writes retain the booking and show its private receipt while automatic recovery runs.
+After a network response cannot be verified, `Check booking status` retries the original request;
+do not create a replacement booking. Receipt pages poll while the calendar update is pending. Visitors
+choose their time zone, date, time, and required details. The private
+`/app/booking/:id#token` receipt supports cancellation and rescheduling; preserve
+that private link. Rescheduling dates are labelled in the availability schedule's
+time zone. Calendar provider failures show an error; they never report a
+confirmed booking. Current integrations check hosts' connected calendars and
+write invitations/Google Meet through the existing calendar service.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
@@ -1169,9 +1318,25 @@ Working locations (such as `Office` or `Home`) stay on the calendar grid but are
 excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
-section listing each connected account with a per-account `Enable` (grant calendar) or
-`Turn off` action, plus `Connect another account` to connect a new Google account
+section listing each connected account with a per-account `Enable` (grant calendar),
+`Reconnect` (expired Google authorization), or `Turn off` action, plus
+`Connect another account` to connect a new Google account
 (email + calendar).
+
+`Turn off` keeps its confirmation open with `Turning off…` until removal finishes;
+re-enabling is not offered while the old calendar is still being deleted. Reconnecting
+an inbox that used calendar requests email and calendar together, while an explicit
+calendar opt-out remains off during an email-only reconnect. Per-inbox actions
+preselect that Google account. The consent callback explains that it is finishing
+the connection, provides `Back to app`, and restores the previous layout on completion.
+It applies the grant even if the old inbox list is still loading.
+
+An AI event draft defaults to the primary inbox's primary calendar. If that calendar
+is disconnected or still syncing, the draft offers reconnection or an explicit
+calendar choice and disables submission until a usable calendar is selected. It
+does not silently send the invitation from another connected inbox.
+Failed calendar or account queries show `Could not load your calendars.` with
+`Try again`, rather than offering consent or presenting the failure as backfill.
 
 `New event` opens the compact composer with All day in the date/time fields.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
@@ -1227,6 +1392,16 @@ the copy Macro's alerts fire from and whose guest list and join link Macro recor
 editor only lets them be changed there. Answering an invitation likewise addresses the
 primary copy. The details popover and the editor act on the displayed copy, so editing or
 deleting it targets that calendar's event at Google.
+When changing only a reminder in the event editor, choose `All events` to apply it
+to the recurring series or `This event` for one occurrence. Saving preserves the
+existing dates, time zone, title, location, description, and repeat rule unless those controls
+changed. To verify, open a later occurrence of an event you were invited to,
+change the reminder, and inspect the PATCH: it should include only `reminders`
+plus the calendar and scope identifiers. Also verify that intentional edits to
+the start, end, all-day setting, title, location, description, or repeat rule are still sent.
+Test reminder removal as well as changing its time, including a series whose stored
+rule contains `INTERVAL=1`, `WKST`, differently ordered weekdays, or a precise `UNTIL`:
+an untouched rule must not be reformatted and included in a reminder-only PATCH.
 As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
 carries `Copy guest emails` and `Email guests` icon buttons. Copying puts every guest's
 address on the clipboard, comma-separated. Emailing opens a new email addressed to every
@@ -1254,8 +1429,58 @@ byline.
 ## Pull requests — `/app/reviews/pr/<foreignEntityId>`
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
-breadcrumb, PR title/status, GitHub action, discussion timeline, and Details/Checks
+breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
 side panel below the top bar. PRs are not tasks and do not appear in the Tasks list.
+Opening **Changes** slides a full-height pane in from the right beside the PR details,
+including beside the PR top bar rather than underneath it. The PR details shrink
+alongside the entry slide instead of eagerly jumping narrower. The Changes pane
+has no outer top, right, or bottom border. The PR's `+N −M` diff count pill also
+opens the pane when changes are available; it remains a passive count without a
+Changes controller or when changes are unavailable.
+Closing slides the pane fully off the right edge while expanding the left pane,
+without fading in either direction or a final width snap. From full width, the PR
+details appear behind the sliding pane, without blank space. Reopening during exit
+keeps the same pane mounted.
+The pane shell opens before the diff bodies render. Reduced-motion preferences
+disable both animations.
+The PR breadcrumb and side-panel toggle remain above the left pane. The
+**Changes** toggle stays visible in split view, ghost while closed and accent text
+on a tinted background while open; clicking it again closes the pane. There is no standalone **Open on
+GitHub** button: the pane header has no visible Changes title, and its
+`head → base · #N` is one plain-text GitHub link, underlined on hover without a
+pill background or icon. GitHub diff totals and five green/red squares appear
+beside the PR number in both split and full-width layouts. The squares summarize
+the addition/deletion mix; the numbers retain exact totals. At full width, a smaller
+PR title appears before the link. Both title and totals come from the existing PR
+query; unavailable values stay hidden, without placeholders or captured-count
+fallbacks. File headers highlight on hover. When space is tight, the smaller
+branch/PR/count metadata wraps below the title, while pane actions stay separate.
+The Changes toggle has no diff totals and becomes icon-only below 28rem of header
+width, retaining its name, tooltip, and active state. Breadcrumbs keep their existing layout.
+The full-height file tree has a fixed header with its file count on the left and
+**Hide file tree** on the right. Borderless diff controls float above the diff stack
+rather than spanning the pane in a second toolbar. Unified/Split retains text labels
+at narrow non-touch widths on the left, with diff collapse/expand and refresh on
+the right. Hiding the tree moves its count
+and **Show file tree** above the diffs, as described in
+[AI Chat](ai-chat.md#reviewing-a-linked-github-pull-request).
+Spotlighting changes hides the left pane and its top bar; **Back to the split**
+restores the prior divider position and retains the draft, diff state, and scroll.
+At host widths of 720px or less, Changes opens full-width automatically without
+that width toggle; widening restores the requested wide layout and split ratio.
+Narrow file trees start closed. **Show file tree** opens an animated drawer over the
+diffs without resizing them, including on phones. File selection, Escape, the
+backdrop, or **Hide file tree** closes the drawer and restores focus to its opener.
+The drawer does not change the saved wide-tree visibility or preferred width.
+Closing releases the drawer's dialog handlers immediately while its inert visual
+frame finishes exiting, so rapid reopening does not restore focus to a stale opener.
+The file tree has its own draggable, keyboard-resizable divider and remembers its
+width locally. Tree visibility uses the sidebar's shared width transition while
+retaining directory state and diff owners. Reduced motion skips this transition.
+The divider remains visible but inert through the tree's exit. Resizing the outer
+split or viewport settles active tree motion before applying the new geometry.
+**Copy path** briefly shows a non-pulsing success checkmark without collapsing
+the file. The PR viewer stays read-only and does not offer agent review notes.
 Copy Link from a PR in Quick Access copies `/app/reviews/pr/<foreignEntityId>`.
 Old `/app/pr/<foreignEntityId>` links redirect to Reviews. Check a copied link,
 a PR opened from a list or agent session, a second split, breadcrumb return,
@@ -1448,15 +1673,35 @@ segment to return with the same filters, layout, and list scroll position. Selec
 another sidebar view or switching Board/List closes the company details.
 Shift-click still opens the company in a separate split. Direct company links use
 the standalone company page.
-Clicking a contact in an embedded company's Contacts section appends a third
+Clicking a contact in an embedded company's Team tab appends a third
 breadcrumb: `<current view or list> > <company> > <contact>`. The CRM sidebar stays
 visible. Click the company breadcrumb or the contact's Company link to return to
 the company; click the first breadcrumb to return directly to the originating
 view. Shift-click still opens a contact in a separate split. Direct contact links
 use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
+Their information panel starts closed and opens as a floating bubble at every
+width, without shrinking the record content. Click outside the bubble or use
+the toggle to dismiss it; the open state is not restored on a later visit.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+A company is laid out like a project. Its top bar (the split header, or the
+embedded breadcrumb header) has `Overview`, `Team`, `Emails`, `Files`, `Tasks`
+and `Calls` tabs, collapsing to icons when narrow. Overview shows the name, pills
+for each domain and `Last interacted`, the generated description and the
+Discussion. Team lists the contacts with `Add contact`. Emails keeps the
+`Signal`/`All` and `Team`/`Me` toggles. Files lists non-task documents whose
+`Companies` property references the company, plus attachments of emails with
+its domains. Tasks is the Tasks list scoped to the `Companies` property; its
+`New task` composer pre-fills the company. Calls lists calls linked to the
+company, including those linked automatically from their participants. The side
+panel keeps Properties and Sharing.
+A contact has the same layout with `Overview`, `Emails`, `Files`, `Tasks` and
+`Calls`: Overview pills show the email, the company (opens it) and `Last
+interacted`. Files and Calls match on the contact's `Contacts` property and, for
+files, attachments of emails with its address. Tasks created from a contact also
+reference its company. The side panel keeps Sharing (admins only).
 
 Company and contact pages have a **Discussion** section built from the same
 message conversation as a document's Discussion: threaded replies, reactions,
@@ -1560,6 +1805,13 @@ week and with no visible scrollbar. Under ~672px the four stats read as a two-co
 value, and chips shorten. Rows stay on one line at every width. On touch devices the list rests
 below the floating page title and above the bottom toolbar.
 
+With Databases on, databases are activity entities too: creating, renaming, trashing,
+restoring, or permanently deleting one, and every write to its tables (grid edits and
+agent tools) lands on the acting user's feed as `You created/edited/deleted <database>`;
+the mention opens the database. Databases also appear in the Ctrl+K command menu under
+**All** and **Files**, ordered by creation time. Home's merged feed and the Recent view read Soup, which
+does not list databases.
+
 ## Getting Started — `/app/component/getting-started`
 
 The buttons under **Put Macro's agent to work** create a chat and send their
@@ -1582,6 +1834,12 @@ use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
 
+## Onboarding bypass — `/app/onboarding`
+
+All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
+skips the rest of the flow and leaves onboarding. Accounts on other domains
+do not see it.
+
 ## Setup plan step — `/app/onboarding`
 
 The plan step shows two cards: Free and Premium. Premium starts Stripe Checkout.
@@ -1590,16 +1848,69 @@ has Max still sees Max named as its active plan.
 
 ## Settings — `/app/settings/<section>`
 
+### Slack archive import
+
+In **Team → Connections**, **Import from Slack** appears only for team admins
+and owners with `enable-slack-archive-import` enabled. Production rollout stays
+off until explicitly enabled. Select an export ZIP, filter the grouped conversation
+picker, optionally show archived conversations, and use Space to toggle focused
+checkboxes. **Select all visible conversations** preserves selections hidden by
+filters; unchecking it or **Clear visible selection** clears only visible selections.
+Rows show stable Slack IDs
+so duplicate names remain distinguishable. Counts are advisory when available,
+otherwise “not yet counted.” Discovery moves keyboard focus to the filter.
+Slack file/canvas discussion folders (`FC:<file-id>:<title>`) are ignored, not
+imported as channels; their presence must not prevent channel discovery.
+
+Review email attribution and external membership implications, choose whether to
+include history, and confirm the immutable Slack workspace binding before
+**Import selected channels (N)**. At least one selection is required. File selection
+alone makes no server writes. Close/Escape or cancel before confirmation discards
+the archive and selection without creating a job; reopening requires choosing a
+file again. After confirmation the selected IDs/options are frozen. Closing and
+reopening then retains the upload session; keep Team Settings open until it finishes.
+The dialog restores focus to its opener, and polling should not blank Settings.
+
+Use **Job history** (including older pages) for server progress after a reload.
+It displays the persisted selected names/IDs/kinds, history option and selected
+failures/skips without the ZIP. Unselected channels are not skipped work. Reload
+recovers server tracking, **not interrupted local uploads**; finalize verified work
+with skips or cancel and explicitly confirm a new import/token.
+**Cancel import (keep partial results)** does not delete committed messages or
+channels; running work may finish. An interrupted upload offers **Recover job
+receipt**, then **Finalize with skips** or cancellation. Channel links appear only
+when the server confirms current participation and the viewer's channel list
+confirms access. Verify counters, errors and skip
+reasons at narrow widths, using synthetic exports and a test backend rather than
+importing customer data into hosted dev.
+
+For a release check, inspect the actual create request and then reload the server
+receipt: both must contain exactly the selected Slack IDs and history option.
+Select two rows with the same display name, filter both out, and confirm the
+selected total remains unchanged. Cancel before confirmation and verify there
+were no create, registration or PUT requests. An open job must reject tampered
+registration/sealing of an unselected ID; a client-only picker test is insufficient.
+Check desktop web and Tauri: opening Settings alone creates no ZIP worker, and
+signed PUTs work without dropping checksum or conditional headers. A 412 upload
+retry verifies the existing object instead of overwriting it. Keep an active job
+open through websocket disconnect/reconnect to verify polling remains usable.
+The [runbook](../SLACK_ARCHIVE_IMPORT_RUNBOOK.md) distinguishes fixture tests from
+live-backend release gates and documents staging retention and recovery.
+
 ### Email signatures
 
-In Integrations, **Edit signature** beside an owned inbox expands its editor.
-The editor uses the app's background and text colors, including in dark mode;
-explicit colors in signature content are preserved. **Close signature editor**
-(the X) or Escape while focused in that inbox row collapses it and returns focus
-to **Edit signature**. Unsaved edits remain when reopened; closing does not save
-or remove the signature.
-The inbox row's trash icon removes the inbox through the existing confirmation;
-it is separate from the signature editor's close control.
+Open **Settings → Email → Signatures**. Each owned inbox has a visible editor;
+there is no expand/collapse control. Format the text, add links or images, and
+choose **Save signature**. **Clear signature** removes only the signature, while
+**Remove inbox** in Accounts uses the existing inbox removal confirmation.
+**Add to replies & forwards** saves that preference immediately. On desktop,
+**Import from Gmail** in each inbox's header fetches that account's Gmail
+signature and saves it right away, replacing any unsaved draft; a toast reports
+when Gmail has no signature. Unsaved drafts
+survive switching settings pages. On phones, signature editing remains desktop-only;
+the replies/forwards toggle and clear action are available.
+Email accounts can also be managed from **Integrations**. Its **Email settings**
+link opens the dedicated page, and Email links to Notifications and Calendar.
 With a composer open, save a changed signature or reply-signature preference and
 verify its preview updates. Once the account refresh completes, reopen a composer
 offline and confirm it uses the saved settings.
@@ -1663,8 +1974,9 @@ same-domain signup is not added automatically.
 ### Navigation
 
 On phones, **More views → Settings** opens an inset glass sheet over the current
-page. The main page has a profile shortcut and grouped Account, Preferences,
-Workspace, and enabled agent/admin sections. Tap a row to open that settings
+page. The main page has a profile shortcut and the same grouped Blocks, Personal, Workspace,
+and Developer sections as desktop, plus enabled admin settings. Search finds
+individual settings; selecting a result opens its page and reveals the section. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
 previous scroll position. `API Keys` is desktop-only and has no row here.
 **Close settings** at the top right, Escape, an
@@ -1673,16 +1985,48 @@ menu opened inside the sheet leaves the sheet itself open. Opening Settings agai
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
-scroll, including with the keyboard open. On desktop, `/app/settings/<tab>`
-opens settings fullscreen, while `/app/home/~/settings/<tab>` docks it beside
-Home. **Open fullscreen** pushes a standalone settings URL; browser Back
-restores the preceding split layout. **Move to split** restores the app layout
-and docks the selected tab, while closing a docked settings pane minimizes it.
-A direct fullscreen link returns to Home when there is no prior app layout.
+scroll, including with the keyboard open. On desktop, Settings is an ordinary
+split view: the rail's gear button (or `Ctrl ;`) opens it in the active split
+like any other rail item, and Shift-click opens it in a new split.
+`/app/settings/<tab>` opens it as the only split with the app rail still
+visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
+sidebar matches Email and Tasks: a **Settings** title bar with the
+**Hide navigation** toggle (`Cmd .`), a rounded **Search settings** field, the
+grouped section pills, and **Log out** pinned to the bottom. Below 720px the
+sidebar becomes an overlay opened from **Show navigation**. Escape closes a
+settings split that shares the layout, or steps back to the previous view when
+it is the only split (Home when there is none). Leave settings by picking any
+other rail item; there is no separate back or fullscreen control.
 
-Left nav: General → `Account` (profile, delete account), `API Keys` (create /
-list / delete personal keys; the secret is shown only once and is sent as
-`x-macro-user-api-key`), `Notifications`, `Billing` (current plan card with
+Settings pages use the email composer’s raised surfaces on the page background.
+Section headings and controls share a white surface in light mode and the
+composer border in dark mode, with subtle row separators. The compact sidebar
+uses the shared workspace width.
+
+Left nav (feature and platform gates still apply):
+
+- **Blocks**: Email, Calendar, Agents, CRM.
+- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Billing, Mobile App.
+- **Workspace**: Team, Tags, Integrations (personal Gmail/GitHub accounts).
+- **Developer**: Agent connections, Runtimes, MCP server, API Keys, Bots.
+
+Search checks individual setting titles and keywords, tolerates common typos,
+and shows the parent page below each control result. Selecting a result opens
+that page, scrolls to its section or row, and briefly highlights it. Try
+`singature`, `email digest`, `calendar color`, or `cursor`. Arrow Down from search
+focuses the first result; Tab moves through controls normally. Escape in the
+search field clears the query. Clearing search restores the grouped navigation. Keyboard shortcuts are listed
+by category with the action on the left and keys on the right; expand **Keyboard
+preview** for the visual key map.
+Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
+The previews use the saved themes; System follows the device and exposes both
+per-mode theme selectors. Light or Dark shows its own theme selector. Each selector
+retains theme search, editing, copying, and custom theme creation.
+
+Existing settings URLs remain valid; `connections` still opens Integrations,
+`agent-connections` opens Agent connections, and `harness` aliases Runtimes.
+
+`Billing` (current plan card with
 `Manage`; only in dev (`dev.macro.com/app` or a local frontend using the dev
 backend), paid plans show an **AI usage** card with the period meter, credit
 balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
@@ -1690,18 +2034,15 @@ Checkout, and a `Usage billing` toggle with per-period limit pills; these
 controls and usage-billing promotional copy are hidden outside dev; an `Upgrade`
 card for Free users to buy Premium, no Max purchase or upgrade control, and a
 `Switch to Premium` link on Max; on a team the downgrade moves only the viewer's
-own seat),
-`Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team` (members list; on a paid team each row shows the seat's plan,
+own seat)
+
+`Team` (members list; on a paid team each row shows the seat's plan,
 and admins/owners can move an existing Max seat to Premium with the `Seat plan`
-menu; Premium seats have no Max option; moves are prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
+menu; Premium seats have no Max option; moves are prorated at once). CRM (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
-checkboxes, editable by the role set as `edit_stages_role`),
-`Integrations` (personal Gmail/GitHub accounts), `Connections` (agent tool
-connections; the same page as Agents → Connections, URL slug `agent-connections`), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`;
-`Log out`.
+checkboxes, editable by the role set as `edit_stages_role`)
+
 `Agents` unifies agent definitions and runtime configuration in one page, also used by the Agents workspace. Its `Agents` section lists team and private agents. `New agent` / `Edit <name>` open full-page forms grouped
 Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
 `Use my connected apps` (default; the agent gets whatever the person running it has
@@ -1712,7 +2053,15 @@ that opens the Pipedream Connect flow inside the page. Unconnected picks never b
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Agents → Connections for that app. The same page
-is also available as Settings → Connections.
+is also available as Settings → Agent connections.
+
+To change an agent's picture, open `Edit <name>`, choose an image with `Upload`,
+wait for `Uploading…` to finish, then click `Save changes`. Images up to 16 MB
+are uploaded to image storage; Save stays disabled during the upload. A failed
+upload shows an error and keeps the previous picture so you can retry. Verify
+the picture after reopening settings and after a page reload, then type `@` and
+the agent's name in a channel to check its mention-menu picture. Team agents
+available in all channels should refresh there without reloading the channel.
 
 With `pipedream-mcp` enabled, Connections (in Agents or Settings) has `Connected` and `Discover`
 tabs. Connected groups GitHub, Linear, Notion, and Slack tool grants by provider,
@@ -1725,12 +2074,20 @@ Provider and custom-server More menus contain Disable, Reconnect, and Disconnect
 custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
 custom servers show Connect and Remove. Disconnect/Remove require confirmation.
 Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+Enabled custom servers are offered to the owner's agent sessions (Cursor, Claude,
+Codex, macrod, in-memory) alongside connected apps, through the same session
+egress path: the sandbox sees the server under its name and a URL key, never the
+server's address or token. A disabled server is not offered. If a server's
+connection has expired, its tool calls return a message telling the agent to
+have the owner use Reconnect under Custom MCP; there is no `Connect` chip for
+custom servers. Agents configured with a fixed app selection do not receive the
+owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
 Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
 featured or offered in the Connections catalog. Personal Gmail and GitHub account
 links remain in Settings → Integrations. The native-only Connections page remains
 available when `pipedream-mcp` is disabled.
-`Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
 `Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
 `Instructions` field is a Lexical contenteditable textbox, not a textarea. It
@@ -1901,7 +2258,42 @@ first message. If startup reports a rejected setting or timeout, the first promp
 has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
 
+### Floating block information panels
+
+Actions live in the top bar immediately before Share, with consistent compact
+buttons (labels collapse on narrow headers). There are no Actions sections in
+information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
+includes Ask Macro and Create task; PDF and calls include Ask Macro; native
+projects expose Delete project with its existing confirmation dialog.
+
+Standard metadata is quiet, non-collapsible text at the bottom of each panel,
+separated by a muted divider. Owner and available timestamps share one format;
+Markdown adds word/character counts. There is no standard Details or Stats
+disclosure. Agent runtime information remains in its dedicated Session section.
+
+Block information panels float over the right side of the block without changing
+the content width or its centered position. A single rounded bubble fits its
+contents, with `edge-muted` dividers between sections. Its height is capped at
+the block height with internal scrolling. At every width it starts closed and
+acts as a split-local overlay menu on desktop. The top-right sidebar icon, rotated
+180 degrees, opens it, and clicking outside dismisses it. On touch devices the
+control uses the Phosphor info-circle icon and opens the standard bottom drawer
+with a drag handle, scrollable sections, and safe-area/keyboard-aware spacing.
+Dismiss the drawer by swiping down or tapping its backdrop. Opening is never
+restored from saved preferences or triggered by the global chrome shortcut. The 320px bubble enters
+with a slight slide from the right and a 120ms fade;
+closing fades it out in 70ms.
+This applies across Markdown/tasks,
+snippets, email, calls, agents, pull requests, projects, and all file blocks
+including PDFs, images, code, video, canvas, unknown file types, and CRM company
+and contact views (both inside the CRM workspace and in standalone blocks).
+
 ### Email reminders
+
+The global Reminders workspace uses one continuous collection with completion
+and schedule shown independently on the existing entity rows. Its persistent
+clock exposes the full schedule on hover/focus and opens the existing editor;
+see [collection verification](reminders.md#one-collection-independent-completion-and-schedule).
 
 Use **H** on one selected email or its open conversation, **Remind me** in the
 menu, or the header bell. These share the email-specific, time-first workflow

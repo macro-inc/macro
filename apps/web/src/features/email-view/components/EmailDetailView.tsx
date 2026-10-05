@@ -6,6 +6,7 @@ import type { EmailThreadHost } from '@app/features/email-thread/context/email-t
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
+import { emailThreadRoute } from '@app/routes/routes';
 import { EmailThreadControls } from '@block-email/component/EmailThreadControls';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import {
@@ -36,11 +37,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
+import { ButtonGroup } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
-import { emailThreadRoute } from '../route';
 import type { EmailThreadTarget } from '../types';
 import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
 
@@ -94,7 +95,17 @@ function EmailDetailHeader(
       <Show when={props.controlsMount}>
         {(mount) => (
           <Portal mount={mount()}>
-            <EmailThreadControls {...controls} />
+            <ButtonGroup variant="outline" size="icon-md" class="touch:hidden">
+              <EmailThreadControls {...controls} />
+              <Show when={props.listNavigation}>
+                {(navigation) => (
+                  <ListNavigationButtons
+                    navigation={navigation()}
+                    class="gap-0"
+                  />
+                )}
+              </Show>
+            </ButtonGroup>
           </Portal>
         )}
       </Show>
@@ -221,7 +232,7 @@ export function EmailDetailView(props: {
   };
 
   return (
-    <SidePanel.Root defaultOpen={false}>
+    <SidePanel.Root floating defaultOpen={false}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <ViewShell.TopBar class="touch:flex">
           <ViewBreadcrumbs.Outlet
@@ -229,11 +240,9 @@ export function EmailDetailView(props: {
             aria-label="Email location"
             fallback={<EntityDetailBreadcrumbSkeleton />}
           />
-          <div class="ml-auto flex shrink-0 items-center gap-2">
-            <div ref={setControlsMount} class="flex items-center gap-0.5" />
-            <div class="touch:hidden">
-              <ListNavigationButtons navigation={listNavigation} />
-            </div>
+          <div class="ml-auto flex shrink-0 items-center gap-1 @max-[900px]/split-header:[&_[data-header-action]]:w-8 @max-[900px]/split-header:[&_[data-header-action]]:p-0 @max-[900px]/split-header:[&_[data-header-action-label]]:hidden">
+            <div ref={setControlsMount} class="flex items-center" />
+            <SidePanel.HeaderActionsOutlet />
             <Show when={ENABLE_EMAIL_SHARING}>
               <ShareTrigger
                 onClick={openShare}

@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use agent_egress::domain::model::McpServerSlug;
+use agent_egress::domain::model::{CustomMcpServerKey, McpServerSlug};
 use mcp_toolset::client_info;
 use rmcp::ServiceExt as _;
 use rmcp::transport::StreamableHttpClientTransport;
@@ -205,6 +205,28 @@ async fn the_macro_route_names_macros_own_server() {
         vec![(
             "session-token".to_owned(),
             EgressTarget::McpServer(McpDestination::Macro)
+        )]
+    );
+}
+
+/// The custom route carries the owner's server by its URL key, the same way
+/// the harness advertises it, so the in-memory agent reaches a custom server
+/// through the proxy exactly as a sandboxed one does.
+#[tokio::test]
+async fn the_custom_route_names_the_owners_server_by_key() {
+    let egress = Arc::new(StubEgress::default());
+    let key = CustomMcpServerKey::for_url("https://wiki.example.com/mcp");
+    let uri: &'static str = Box::leak(format!("{BASE_URL}/mcp-custom/{key}").into_boxed_str());
+
+    address_only(&egress, BASE_URL, uri)
+        .await
+        .expect("405 is fine");
+
+    assert_eq!(
+        egress.seen(),
+        vec![(
+            "session-token".to_owned(),
+            EgressTarget::McpServer(McpDestination::Custom(key))
         )]
     );
 }

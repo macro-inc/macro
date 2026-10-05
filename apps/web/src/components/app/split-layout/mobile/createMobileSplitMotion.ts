@@ -1,26 +1,22 @@
 import { cn } from '@ui';
-import { onCleanup, onMount } from 'solid-js';
+import { createSignal, onCleanup, onMount } from 'solid-js';
+import type { SplitId } from '../layoutManager';
 import { createMobileForwardAnimation } from './createMobileForwardAnimation';
+import type { MobilePaneStack } from './createMobilePaneStack';
 import { createMobileSwipeBackGesture } from './createMobileSwipeBackGesture';
-import type { MobileSwipeLayout } from './createMobileSwipeLayout';
 
 const SWIPE_EDGE_THRESHOLD = 40; // px from left edge to initiate gesture
 const SWIPE_VELOCITY_THRESHOLD = 0.3; // px/ms - fast flick completes swipe
 const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
 const SWIPE_ANIMATION_MS = 88;
-const BG_PEEK_OFFSET = 110; // px the BG panel is offset left at rest; closes to 0 as FG slides away
+const BG_PEEK_OFFSET = 110; // px the pane behind is offset left at rest; closes to 0 as the front slides away
 
-type MobileSplitMotionOptions = {
-  mobileSwipeLayout: MobileSwipeLayout;
-};
-
-export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
-  const { mobileSwipeLayout } = options;
+export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
+  const { stack } = options;
 
   const forwardAnimation = createMobileForwardAnimation({
     animationMs: SWIPE_ANIMATION_MS,
     bgPeekOffset: BG_PEEK_OFFSET,
-    mobileSwipeLayout,
   });
   const swipeBackGesture = createMobileSwipeBackGesture({
     animationMs: SWIPE_ANIMATION_MS,
@@ -28,42 +24,44 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
     edgeThreshold: SWIPE_EDGE_THRESHOLD,
     velocityThreshold: SWIPE_VELOCITY_THRESHOLD,
     distanceThreshold: SWIPE_DISTANCE_THRESHOLD,
-    mobileSwipeLayout,
+    stack,
     canStart: () => forwardAnimation.phase() === 'idle',
   });
 
+  const [outgoing, setOutgoing] = createSignal<SplitId>();
+
   onMount(() => {
-    mobileSwipeLayout.setAnimatedTrigger(swipeBackGesture.trigger);
-    mobileSwipeLayout.setForwardNavigationTrigger(() => {
+    stack.setAnimatedTrigger(swipeBackGesture.trigger);
+    stack.setForwardTrigger((from) => {
+      setOutgoing(from);
       swipeBackGesture.reset();
       forwardAnimation.trigger();
     });
   });
   onCleanup(() => {
-    mobileSwipeLayout.setAnimatedTrigger(undefined);
-    mobileSwipeLayout.setForwardNavigationTrigger(undefined);
+    stack.setAnimatedTrigger(undefined);
+    stack.setForwardTrigger(undefined);
   });
 
-  const forwardPhase = forwardAnimation.phase;
-  const forwardIsActive = () => forwardPhase() !== 'idle';
+  const forwardIsActive = () => forwardAnimation.phase() !== 'idle';
 
-  function styleForSlot(isForeground: boolean) {
-    if (forwardIsActive()) {
-      return forwardAnimation.styleForSlot(isForeground);
-    }
-    return swipeBackGesture.styleForSlot(isForeground);
+  /**
+   * The pane presented as the active one. While a pane slides in, the one it
+   * covers stays active, so its floating chrome stays until the slide ends.
+   */
+  const presentedFront = () => (forwardIsActive() ? outgoing() : stack.front());
+
+  function styleFor(isFront: boolean) {
+    if (forwardIsActive()) return forwardAnimation.styleFor(isFront);
+
+    return swipeBackGesture.styleForSlot(isFront);
   }
 
-  function classForSlot(isForeground: boolean) {
+  function classFor(isFront: boolean) {
     return cn(
       'absolute inset-0',
-      {
-        'z-10': isForeground && !forwardIsActive(),
-        'z-0 pointer-events-none': !isForeground && !forwardIsActive(),
-        'z-user-highlight pointer-events-none':
-          !isForeground && forwardIsActive(),
-      },
-      !isForeground &&
+      isFront ? 'z-10' : 'z-0 pointer-events-none',
+      !isFront &&
         !swipeBackGesture.isDragging() &&
         !swipeBackGesture.isAnimatingOut() &&
         !forwardIsActive() &&
@@ -72,8 +70,9 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
   }
 
   return {
-    classForSlot,
-    styleForSlot,
+    presentedFront,
+    classFor,
+    styleFor,
     handleTransitionEnd: forwardAnimation.handleTransitionEnd,
     handleTouchStart: swipeBackGesture.handleTouchStart,
     handleTouchMove: swipeBackGesture.handleTouchMove,

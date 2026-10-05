@@ -1,9 +1,11 @@
+import { lazy } from 'solid-js';
 import { setPageSeo } from '../../../app/utils/utilSeo';
+import { DeferredDemo, DemoPlaceholder } from '../components/DeferredDemo';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import {
   ContextGraphic,
-  DiffGraphic,
+  EditingGraphic,
   LinkedWorkGraphic,
   ThreadGraphic,
 } from '../components/product/ProductGraphics';
@@ -13,188 +15,197 @@ import {
   ProductProse,
 } from '../components/product/ProductPage';
 import {
-  ReviewAgentDemo,
-  ReviewDiffDemo,
-  ReviewDiscussionDemo,
-  ReviewLinkedTaskDemo,
-  ReviewQueueDemo,
+  GithubHomeHero,
+  PrLinkDemo,
+  ReviewInboxDemo,
 } from '../components/reviews/ReviewStories';
+import { TaskGithubDemo } from '../components/tasks/TaskStories';
 import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
+
+const loadPullRequest = () => import('../components/HomepagePullRequest');
+const HomepagePullRequest = lazy(loadPullRequest);
+
+const githubFaq = [
+  {
+    q: 'Is this a GitHub replacement?',
+    a: 'No. Your code, reviews, and CI stay on GitHub. Macro brings the parts your team talks about into the workspace: notifications, PR status, and the link between a pull request and its task.',
+  },
+  {
+    q: 'What shows up in my inbox?',
+    a: 'Review requests, comments and reviews on your pull requests, mentions, and status changes on PRs you’re part of.',
+  },
+  {
+    q: 'How do pull requests link to tasks?',
+    a: (
+      <>
+        Put the task ID in the branch name, PR title, or PR description. Macro
+        links them and moves the task as the PR opens, merges, or closes. More
+        on <a href="/tasks">tasks in Macro</a>.
+      </>
+    ),
+  },
+  {
+    q: 'Can I review code in Macro?',
+    a: 'You can read the PR description and the review discussion in Macro. For the diff and approvals, Open on GitHub takes you there.',
+  },
+  {
+    q: 'Which coding agents work with Macro?',
+    a: (
+      <>
+        You can mention Cursor, Claude Code, and Codex in channels, and connect
+        any MCP client to your workspace. See{' '}
+        <a href="/agents">agents in Macro</a>.
+      </>
+    ),
+  },
+  {
+    q: 'Is there a free plan?',
+    a: (
+      <>
+        Yes. See <a href="/pricing">pricing</a> for current limits.
+      </>
+    ),
+  },
+];
 
 export function RouteGithub() {
   setPageSeo({
     title: 'Macro Reviews — Review PRs in Your Inbox',
     description:
-      'Find pull requests, read GitHub discussion, inspect agent changes, and connect code review to the task behind the work.',
+      'Review requests and PR comments land in your Macro inbox, GitHub links show live status, and tasks update themselves when pull requests open and merge.',
     path: '/github',
   });
   return (
     <ProductPage>
       <ProductHero
-        product="Reviews"
-        title={['GitHub pull requests', 'in your inbox.']}
+        product="for GitHub"
+        title={['GitHub, wired into', 'your workspace.']}
         description={[
-          'Review comments, mentions, and linked tasks.',
-          'Follow the code from request to merge.',
+          'Review requests and PR comments land in your inbox.',
+          'Link a PR to a task and it updates itself.',
         ]}
         cta="github_hero_get_started"
       />
       <WorkspaceDesktopDemo
-        view="tasks"
-        label="Explore Macro Reviews"
-        caption="Find a pull request and open its details. This interactive example uses fictional reviews."
+        view="home"
+        label="Explore GitHub in Macro"
+        caption="A sample inbox. Open a review request to read the PR."
       >
-        <ReviewQueueDemo />
+        <GithubHomeHero />
       </WorkspaceDesktopDemo>
       <nav class="feature-page-jump-links" aria-label="On this page">
-        <a href="#review-queue">
-          <LinkedWorkGraphic />
-          <span>Find your review</span>
-        </a>
-        <a href="#review-diff">
-          <DiffGraphic />
-          <span>Inspect the change</span>
-        </a>
-        <a href="#review-discussion">
+        <a href="#review-inbox">
           <ThreadGraphic />
-          <span>Read the discussion</span>
+          <span>Reviews in your inbox</span>
         </a>
-        <a href="#review-agent">
+        <a href="#pr-links">
           <ContextGraphic />
-          <span>Ask a precise question</span>
+          <span>Live PR links</span>
+        </a>
+        <a href="#pr-tasks">
+          <LinkedWorkGraphic />
+          <span>Linked to tasks</span>
+        </a>
+        <a href="#coding-agents">
+          <EditingGraphic />
+          <span>Coding agents</span>
         </a>
       </nav>
       <FeaturePageSection
-        id="review-queue"
-        title="Your GitHub review queue, in Macro."
+        id="review-inbox"
+        title="Never miss a review."
         description={
-          'Find pull requests you authored, commented on, or were mentioned in.\nOpen their descriptions, repositories, and review discussion.'
+          'Review requests, comments, and mentions on your pull requests land in Home.\nRight next to your messages, tasks, and email.'
         }
       >
         <div class="feature-page-visual">
-          <ReviewQueueDemo animate />
+          <ReviewInboxDemo />
         </div>
         <ProductProse>
           <p>
-            GitHub events bring pull requests into Macro. Involving me collects
-            the reviews you participate in, alongside the rest of your work.
-            Each pull request retains its author, repository, description, and
-            status. Search by title or open the GitHub link for repository
-            actions.
+            GitHub notifications are easy to ignore, which is how a PR sits for
+            two days waiting on a one-line review. Macro puts review requests,
+            comments on your PRs, and mentions in the same inbox as everything
+            else, so code review isn’t one more place to check. Press E when
+            you’re done, same as everything else.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="review-diff"
-        title="Read the agent’s diff."
+        id="pr-links"
+        title="Paste a PR, see its status."
         description={
-          'Open Changes in an agent session to inspect its file edits.\nAdded and removed lines show exactly what it proposes.'
+          'Pull request links turn into pills in docs and messages.\nHover one to see checks, comments, and the size of the change.'
         }
       >
         <div class="feature-page-visual">
-          <ReviewDiffDemo />
+          <PrLinkDemo />
         </div>
         <ProductProse>
           <p>
-            Coding agent sessions expose proposed file changes in a diff. You
-            can inspect the implementation alongside the prompt and the agent’s
-            explanation. A linked pull request opens the GitHub review record.
-            Its discussion is available in Macro, with a link to GitHub for the
-            repository diff.
+            Paste a pull request into a channel or a doc and Macro shows it with
+            its status: open, merged, or closed. Hover it for the repo, the
+            title, the line counts, and whether checks passed. No more “is this
+            merged yet?” in the channel.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="review-discussion"
-        title="GitHub comments, with file and line references."
+        id="pr-tasks"
+        title="Tasks and PRs, linked both ways."
         description={
-          'Read review comments and replies inside the pull request.\nFilter bot messages when you want to focus on the human discussion.'
+          'Put the task ID in a branch or PR title and the PR shows up on the task.\nOpening it moves the task to In Review. Merging it marks it done.'
         }
       >
         <div class="feature-page-visual">
-          <ReviewDiscussionDemo />
+          <TaskGithubDemo />
         </div>
         <ProductProse>
           <p>
-            Macro imports GitHub discussion, including review threads and author
-            replies. File and line references show which part of the code a
-            comment concerns. Comments and mentions appear with the pull request
-            in your workspace. You can follow the review while reading the task
-            that prompted the change.
+            This is the part our engineers like most. The task shows its pull
+            request, the pull request links back to the task, and nobody updates
+            status by hand. Opening the PR moves the task to In Review, merging
+            marks it Completed, and closing it without merging puts it back in
+            Not Started.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="review-agent"
-        title="Ask the coding agent about its change."
+        id="coding-agents"
+        title="Coding agents in your channels."
         description={
-          'Question a retry condition, a dependency, or a behavior in the diff.\nThe agent can explain the implementation using the code in its session.'
+          'Hand a bug to Cursor or Claude Code right from the conversation.\nThe agent works on the branch and comes back with a pull request.'
         }
       >
-        <div class="feature-page-visual">
-          <ReviewAgentDemo />
+        {/* dummy-workspace opts the homepage demo's controls out of the
+            site-wide button font, as on the homepage. */}
+        <div class="feature-page-visual review-agent-demo dummy-workspace">
+          <DeferredDemo
+            preload={loadPullRequest}
+            fallback={<DemoPlaceholder label="Agent session preview" />}
+          >
+            <HomepagePullRequest />
+          </DeferredDemo>
         </div>
         <ProductProse>
           <p>
-            The coding session contains the request, proposed changes, and agent
-            conversation. Ask about a specific file or branch of the
-            implementation and inspect its answer against the diff. Use your
-            review to decide the next step: request a revision, run a check, or
-            open the pull request on GitHub.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="review-task"
-        title="Task status follows the pull request."
-        description={
-          'Link a task to the code change that implements it.\nOpening the pull request moves it into review; merging completes it.'
-        }
-      >
-        <div class="feature-page-visual">
-          <ReviewLinkedTaskDemo />
-        </div>
-        <ProductProse>
-          <p>
-            GitHub events update linked tasks. A new pull request sets In
-            Review, and a merge sets Completed. The task keeps its brief, owner,
-            and discussion. Open the pull request from the task, or follow the
-            reference back to the request behind the code.
+            Most bugs start as a message. In Macro, you can @mention Cursor or
+            Claude Code in that same thread and hand it off. The agent works on
+            the branch, reports back in the channel, and the PR shows up linked
+            to the task, ready for review.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageFaq
-        id="reviews-faq"
-        eyebrow="GitHub events and linked work"
-        title="How Reviews works."
+        id="github-faq"
+        title="Questions about Macro and GitHub"
         introduction={
           <p>
-            Pull requests and review discussion in Macro, with task updates
-            driven by GitHub events.
+            Your code and CI stay on GitHub. Macro handles the parts your team
+            talks about.
           </p>
         }
-        items={[
-          {
-            q: 'What does Reviews show?',
-            a: 'Pull requests with their description, author, repository, status, changes, GitHub discussion, and available check information.',
-          },
-          {
-            q: 'Where can I inspect the diff?',
-            a: 'Agent sessions show proposed file changes in their Changes surface. The pull-request view links to GitHub for the repository diff and repository actions.',
-          },
-          {
-            q: 'Can I read GitHub comments in Macro?',
-            a: 'Yes. GitHub discussion is imported into the pull-request view, including review comments and replies.',
-          },
-          {
-            q: 'How do pull requests relate to tasks?',
-            a: 'Linked pull-request events can move a task into review and complete it when the pull request is merged.',
-          },
-          {
-            q: 'Do these examples use a real repository?',
-            a: 'No. They use fictional local data and do not run checks, post comments, or merge changes.',
-          },
-        ]}
+        items={githubFaq}
       />
       <HomepageClosing />
     </ProductPage>

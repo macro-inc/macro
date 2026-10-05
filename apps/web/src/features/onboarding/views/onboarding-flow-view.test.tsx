@@ -228,4 +228,28 @@ describe('onboarding flow', () => {
     await waitFor(() => expect(fake.calls()).toContain('repairTutorial'));
     await waitFor(() => expect(navigate).toHaveBeenCalled());
   });
+
+  it('offers staff a Bypass out of any step', async () => {
+    // Progress is saved per user, so staff start fresh on the first slide.
+    const { fake, navigate } = setup({
+      world: {
+        viewer: {
+          id: 'macro|wolf@macro.com',
+          email: 'wolf@macro.com',
+          tutorialComplete: false,
+          licensed: false,
+        },
+      },
+    });
+    await heading('Create your workspace');
+    click('Bypass');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
+    expect(fake.calls()).toContain('completeOnboarding:skipped');
+  });
+
+  it('hides Bypass from everyone else', async () => {
+    setup({ resume: 'team' });
+    await heading('Built for teams.');
+    expect(screen.queryByRole('button', { name: 'Bypass' })).toBeNull();
+  });
 });

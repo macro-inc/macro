@@ -30,7 +30,7 @@ import { useMaybeSoupView } from './soup-view-context';
 const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
   documents: ['md', 'snippet', 'spreadsheet', 'canvas', 'code', 'project'],
   tasks: ['task'],
-  agents: ['agent', 'chat', 'automation', 'skill'],
+  agents: ['agent', 'chat', 'routine', 'skill'],
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],
@@ -63,7 +63,7 @@ const CREATE_COMPANY_OPTION: CreateOption = {
  * specific list views.
  */
 const VIEW_ONLY_BLOCK_LABELS: Partial<Record<CreatableName, string>> = {
-  automation: 'Automation',
+  routine: 'Routine',
 };
 
 const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {

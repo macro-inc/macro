@@ -34,16 +34,19 @@ pub struct AiBillingErrorBody {
 pub struct PlanCatalogEntry {
     /// The tier.
     pub tier: PlanTier,
-    /// Monthly list price per seat, cents.
+    /// Monthly subscription price per seat, cents.
     pub monthly_price_cents: i64,
-    /// Included AI per seat per period, list-rate cents.
+    /// Included AI per seat per period, in cents at provider cost.
     pub included_ai_cents_per_seat: i64,
+    /// Whether a new purchase or plan move may pick this plan today.
+    pub purchasable: bool,
 }
 
 /// The plan catalog and the knobs the billing UI offers.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct PlanCatalogResponse {
-    /// Free and every purchasable paid plan, cheapest first.
+    /// Every plan, cheapest first. Clients read allowances from here rather
+    /// than hard-coding them; `purchasable` marks the plans a user can buy.
     pub plans: Vec<PlanCatalogEntry>,
     /// Credit packs a payer may buy, cents.
     pub credit_packs_cents: Vec<i64>,
@@ -282,12 +285,15 @@ pub async fn get_summary_handler<B: BillingService, Auth: MacroAuthorizationServ
 )]
 pub async fn get_plans_handler() -> Json<PlanCatalogResponse> {
     Json(PlanCatalogResponse {
-        plans: std::iter::once(PlanTier::Free)
-            .chain(SeatPlan::PURCHASABLE.into_iter().map(PlanTier::from))
+        plans: [PlanTier::Free, PlanTier::Premium, PlanTier::Max]
+            .into_iter()
             .map(|tier| PlanCatalogEntry {
                 tier,
                 monthly_price_cents: tier.monthly_price_cents(),
                 included_ai_cents_per_seat: tier.included_ai_cents_per_seat(),
+                purchasable: SeatPlan::PURCHASABLE
+                    .into_iter()
+                    .any(|plan| PlanTier::from(plan) == tier),
             })
             .collect(),
         credit_packs_cents: CREDIT_PACKS_CENTS.to_vec(),

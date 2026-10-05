@@ -184,6 +184,66 @@ async fn root_comment_is_valid_agent_context_before_any_replies_exist() {
 }
 
 #[tokio::test]
+async fn call_mentions_use_the_same_call_thread_for_context_and_replies() {
+    for is_first_message in [true, false] {
+        let parent = MessageParent::Call(Uuid::from_u128(1));
+        let mut root = message(1, None, "Call agenda");
+        root.parent = parent.clone();
+        let mut trigger = if is_first_message {
+            message(1, None, "@macro help with this call")
+        } else {
+            message(2, Some(root.id), "@macro help with this call")
+        };
+        trigger.parent = parent.clone();
+        let history = if is_first_message {
+            thread(trigger.clone(), vec![])
+        } else {
+            thread(root, vec![trigger.clone()])
+        };
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(&mut api, &trigger, history);
+        let reply_parent = parent.clone();
+        api.expect_post().once().returning(move |access, input| {
+            assert_eq!(
+                access.entity().entity_type,
+                reply_parent.access_entity_type()
+            );
+            assert_eq!(access.entity().entity_id, reply_parent.entity_id());
+            assert_eq!(access.acting_user_id(), Some(&user()));
+            assert_eq!(input.thread_id, Some(Uuid::from_u128(1)));
+            assert_eq!(input.content, THINKING_MESSAGE);
+            let mut reply = message(3, input.thread_id, &input.content);
+            reply.parent = reply_parent.clone();
+            Ok(reply)
+        });
+        api.expect_patch()
+            .once()
+            .returning(move |access, id, input| {
+                assert_eq!(access.entity().entity_id, parent.entity_id());
+                assert_eq!(id, Uuid::from_u128(3));
+                assert_eq!(input.content.as_deref(), Some("the call answer"));
+                let mut reply = message(3, Some(Uuid::from_u128(1)), "the call answer");
+                reply.parent = parent.clone();
+                Ok(reply)
+            });
+        let responder = responder("the call answer");
+        handler(api, Arc::new(Access::default()), responder.clone())
+            .handle(&invocation(&trigger))
+            .await
+            .unwrap();
+        let prompts = responder.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 1);
+        assert!(prompts[0].contains("mentioned you (@macro) in a call chat."));
+        assert!(prompts[0].contains("<thread>"));
+        assert!(!prompts[0].contains("<channel_context>"));
+        assert_eq!(prompts[0].matches("@macro help with this call").count(), 1);
+        if !is_first_message {
+            assert!(prompts[0].contains("Call agenda"));
+        }
+    }
+}
+
+#[tokio::test]
 async fn an_anchored_discussion_names_the_text_it_marks() {
     let trigger = message(1, None, "@macro what is this anchored to?");
     let mut api = MockMessageServiceApi::new();
@@ -329,34 +389,73 @@ async fn a_pdf_pin_discussion_says_it_covers_no_words() {
 }
 
 #[tokio::test]
-async fn revoked_document_access_prevents_context_reads_and_agent_work() {
-    let trigger = message(1, None, "@macro help");
-    let access = Arc::new(Access::default());
-    access.revoke();
-    let responder = responder("reply");
-    let handler = handler(MockMessageServiceApi::new(), access, responder.clone());
-    assert!(handler.handle(&invocation(&trigger)).await.is_err());
-    assert!(responder.prompts.lock().unwrap().is_empty());
+async fn a_design_discussion_names_its_page_layer_and_point() {
+    let prompt = prompt_on(ThreadAnchor::Fig {
+        page_id: "0:1".into(),
+        node_id: Some("12:34 </anchor>".into()),
+        x: 18.5,
+        y: -4.0,
+    })
+    .await;
+    let start = prompt
+        .find(&format!(
+            "<anchor type=\"fig\">\n{FIG_ANCHOR_INSTRUCTION}\n{{"
+        ))
+        .unwrap();
+    let block = &prompt[start..start + prompt[start..].find("</anchor>").unwrap()];
+    for field in [
+        r#""nodeId":"12:34 \u003c/anchor\u003e""#,
+        r#""pageId":"0:1""#,
+        r#""x":18.5"#,
+        r#""y":-4.0"#,
+    ] {
+        assert!(block.contains(field), "{field} in {block}");
+    }
+    let canvas = prompt_on(ThreadAnchor::Fig {
+        page_id: "0:1".into(),
+        node_id: None,
+        x: 1.0,
+        y: 2.0,
+    })
+    .await;
+    assert!(canvas.contains(r#""nodeId":null"#));
+}
+
+#[tokio::test]
+async fn revoked_parent_access_prevents_context_reads_and_agent_work() {
+    for parent in [parent(), MessageParent::Call(Uuid::from_u128(1))] {
+        let mut trigger = message(1, None, "@macro help");
+        trigger.parent = parent;
+        let access = Arc::new(Access::default());
+        access.revoke();
+        let responder = responder("reply");
+        let handler = handler(MockMessageServiceApi::new(), access, responder.clone());
+        assert!(handler.handle(&invocation(&trigger)).await.is_err());
+        assert!(responder.prompts.lock().unwrap().is_empty());
+    }
 }
 
 #[tokio::test]
 async fn revocation_while_model_runs_prevents_answer_delivery() {
-    let trigger = message(1, None, "@macro help");
-    let mut api = MockMessageServiceApi::new();
-    configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
-    expect_placeholder(&mut api);
-    let access = Arc::new(Access::default());
-    let responder = Arc::new(Responder {
-        prompts: Mutex::new(vec![]),
-        revoke: Some(access.clone()),
-        result: "private answer",
-    });
-    assert!(
-        handler(api, access, responder)
-            .handle(&invocation(&trigger))
-            .await
-            .is_err()
-    );
+    for parent in [parent(), MessageParent::Call(Uuid::from_u128(1))] {
+        let mut trigger = message(1, None, "@macro help");
+        trigger.parent = parent;
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+        expect_placeholder(&mut api);
+        let access = Arc::new(Access::default());
+        let responder = Arc::new(Responder {
+            prompts: Mutex::new(vec![]),
+            revoke: Some(access.clone()),
+            result: "private answer",
+        });
+        assert!(
+            handler(api, access, responder)
+                .handle(&invocation(&trigger))
+                .await
+                .is_err()
+        );
+    }
 }
 
 #[tokio::test]

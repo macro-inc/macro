@@ -159,6 +159,8 @@ export const cognitionExcluded = [
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'rejectToolCall',
+  // Channel discovery shares the app-only import workflow below.
+  'discoverHandler',
   'runImportHandler',
   'dismissRunHandler',
   'retryGatherHandler',
@@ -263,6 +265,7 @@ export const scheduledActionBacklog = [
   'createScheduledAction',
   'deleteScheduledAction',
   'executeScheduledActionNow',
+  'getScheduledAction',
   'listScheduledActionHistory',
   'listScheduledActions',
   'setScheduledActionEnabled',
@@ -287,6 +290,14 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Slack archive imports are browser-admin workflows, not SDK surface in v1.
+  'cancelSlackImport',
+  'completeSlackImportUploads',
+  'createSlackImport',
+  'finalizeSlackImport',
+  'getSlackImport',
+  'listSlackImports',
+  'registerSlackImportUploads',
   'bulkWakeupSyncServiceDocuments',
   'callWebhook',
   'checkActiveCall',
@@ -296,6 +307,8 @@ export const storageExcluded = [
   'createViewHandler',
   'deleteCollabSurface',
   'ensureCollabSurface',
+  // First-run sample content is provisioned by the app's feature-gated onboarding.
+  'ensureStarterHandler',
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',
@@ -310,6 +323,10 @@ export const storageExcluded = [
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
   'getCollabSurface',
+  // Storage for the web app's saved questions, not a user-facing surface.
+  'getDatabaseQuery',
+  // The web grid's incremental refresh after a version ping, not a user-facing surface.
+  'getDatabaseTableChanges',
   'getDocumentListHandler',
   'getDocumentLocationV3',
   'getDocumentProcessingResult',
@@ -347,8 +364,15 @@ export const storageExcluded = [
   'postItemsSoupAst',
   'postItemsSoupAstGrouped',
   'removeBotFromChannelByBot',
+  // Storage for the web app's saved questions, not a user-facing surface.
+  'saveDatabaseQuery',
+  // Live presence between viewers of a database, internal to the web app.
+  'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.
   'transcribeDictation',
+  // The web app's Ctrl+Z over the viewer's own session edits; the SDK's
+  // applyOps does not surface the journal changes an undo names.
+  'undoDatabaseChange',
   'uploadExtractFolderHandler',
   'uploadFolderHandler',
   'upsertHistoryHandler',
@@ -359,8 +383,8 @@ export const storageBacklog = [
   // Email follow-ups are available through the generated client, like reminders.
   'getEmailFollowup',
   'setEmailFollowup',
+  'listEmailReminders',
   'approveHarnessPairing',
-  'assignInitiativeTasks',
   'claimHarnessPairing',
   'createAgent',
   'createAnchor',
@@ -389,6 +413,9 @@ export const storageBacklog = [
   'getDocumentPermissionsV2',
   'getDocumentVersion',
   'getEntityPermission',
+  'getGithubPullRequest',
+  'getGithubPullRequestChanges',
+  'getGithubPullRequestChangesPatch',
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
   'getHarnessPairing',
@@ -402,6 +429,7 @@ export const storageBacklog = [
   'listInitiatives',
   'listOccurrences',
   'listReminders',
+  'listReminderCollection',
   'listTeamOutOfOffice',
   'listUserApiKeys',
   // Meeting management uses the generated client.
@@ -421,7 +449,6 @@ export const storageBacklog = [
   'setChannelPicture',
   'simpleSave',
   'toggleShareWithTeam',
-  'unassignInitiativeTask',
   'updateAgent',
   'updateInitiative',
   'updateReminder',

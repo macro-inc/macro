@@ -22,7 +22,12 @@ import type { SpreadsheetToolbarProps } from '../core/toolbar-types';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
 import { createTouchPress } from '../primitives/create-touch-press';
 import { FormulaInput } from './FormulaInput';
-import { DataFormatMenu, PasteMenu, ViewMenu } from './SpreadsheetActionMenus';
+import {
+  DataFormatMenu,
+  InsertMenu,
+  PasteMenu,
+  ViewMenu,
+} from './SpreadsheetActionMenus';
 import {
   AlignmentMenu,
   BorderMenu,
@@ -255,6 +260,7 @@ export function SpreadsheetToolbar(props: SpreadsheetToolbarProps) {
         <Divider />
         <FunctionMenu {...props} />
         <DataFormatMenu {...props} />
+        <InsertMenu {...props} />
         <ToolbarButton
           size="icon-sm"
           label="Find and replace"

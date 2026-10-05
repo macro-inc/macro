@@ -82,7 +82,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
 };
 
 /**
@@ -772,6 +772,10 @@ export type ApiEntityFilterAst = {
      */
     fef?: unknown;
     /**
+     * the filters that should be applied to GitHub pull request records, on top of `fef`
+     */
+    ghprf?: unknown;
+    /**
      * the filters that should be applied to the project entity
      */
     pf?: unknown;
@@ -853,6 +857,48 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
 export type ApiPropertyEntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
+ * A batch of ops for one database, applied in order, in one transaction,
+ * together or not at all.
+ */
+export type ApplyOpsRequest = {
+    /**
+     * The version each named table must still be at, as the caller read
+     * it. A table that moved refuses the batch as a conflict, so a schema
+     * edit made against what the caller saw does not overwrite another's.
+     * Left out, ops are last-write-wins.
+     */
+    baseVersions?: {
+        [key: string]: TableVersion;
+    };
+    /**
+     * The ops, in the order they apply, each grouped by the resource it
+     * changes (`table`, `column`, `rows`, `view`, `reorder_tables`) with a
+     * `change` saying how. Every one names a table of this database, or one
+     * an earlier op of the batch creates: tables, columns, options and
+     * views carry ids the client mints (UUIDv7), so a later op can name
+     * them. An id that already names something refuses the batch.
+     */
+    ops: Array<DatabaseOp>;
+};
+
+/**
+ * What each op of a batch did.
+ */
+export type ApplyOpsResponse = {
+    /**
+     * The journal's change for each table version the batch produced: the
+     * ids `POST /databases/{id}/changes/{change}/undo` takes.
+     */
+    changes: Array<CommittedChange>;
+    /**
+     * One result per op, in the order the ops were sent. Each is grouped as
+     * its op is: the same outer `kind`, naming the same ids, with a
+     * `change` saying what happened.
+     */
+    results: Array<OpResult>;
+};
+
+/**
  * Request to approve a pairing and register the harness.
  */
 export type ApprovePairingRequest = {
@@ -868,45 +914,6 @@ export type ApprovePairingRequest = {
      * Owning team. Omit for a private, user-owned harness.
      */
     team_id?: string | null;
-};
-
-/**
- * Status written onto one assign result.
- */
-export type AssignTaskStatus = 'assigned' | 'moved' | 'notATask' | 'notFound' | 'skippedNoPermission';
-
-/**
- * Assign-tasks HTTP body.
- */
-export type AssignTasksRequest = {
-    /**
-     * Task ids to assign, in request order.
-     */
-    taskIds: Array<string>;
-};
-
-/**
- * Assign-tasks HTTP response.
- */
-export type AssignTasksResponse = {
-    /**
-     * Outcomes in request order after dedupe.
-     */
-    results: Array<AssignTasksResult>;
-};
-
-/**
- * Per-task outcome of an assign call.
- */
-export type AssignTasksResult = {
-    /**
-     * What happened to the task.
-     */
-    status: AssignTaskStatus;
-    /**
-     * Task id this outcome describes.
-     */
-    taskId: string;
 };
 
 /**
@@ -941,6 +948,71 @@ export type AttachmentChange = {
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
+
+/**
+ * Where one viewer is inside a database right now: ephemeral, relayed to
+ * the other viewers and never stored. A missing row or column means the
+ * viewer is on the table but on no cell. Optional end row and column IDs
+ * mark the opposite corner of a rectangular cell selection.
+ */
+export type Awareness = {
+    /**
+     * The column placement of the focused cell, if any.
+     */
+    columnId?: string;
+    /**
+     * Whether the cell is open for editing.
+     */
+    editing?: boolean;
+    /**
+     * The opposite column corner of a selected rectangle, if any.
+     */
+    endColumnId?: string;
+    /**
+     * The opposite row corner of a selected rectangle, if any.
+     */
+    endRowId?: string;
+    /**
+     * Whether the viewer left the database; other viewers drop their state.
+     */
+    left?: boolean;
+    /**
+     * This mounted client's random peer id, distinct from its authenticated user.
+     * Older clients omit it and remain visible as one peer per user.
+     */
+    peerId?: string;
+    /**
+     * The row of the focused cell, if any.
+     */
+    rowId?: string;
+    /**
+     * The table the viewer is looking at.
+     */
+    tableId: string;
+};
+
+/**
+ * The [`AWARENESS_MESSAGE_TYPE`] payload: one viewer's awareness, stamped
+ * when the server relayed it so receivers can drop older relays.
+ */
+export type AwarenessRelay = {
+    /**
+     * The database the viewer is in.
+     */
+    databaseId: string;
+    /**
+     * When the server relayed it, in milliseconds since the Unix epoch.
+     */
+    relayedAt: number;
+    /**
+     * Where the viewer is.
+     */
+    state: Awareness;
+    /**
+     * The viewer.
+     */
+    userId: string;
+};
 
 export type BTreeMap = {
     [key: string]: string;
@@ -1958,6 +2030,197 @@ export type CallTokenResponse = {
 };
 
 /**
+ * Where one card sits on a board: its lane, and its fractional key there.
+ * A card whose row has since moved to another lane has no place until it is
+ * moved again.
+ */
+export type CardPosition = {
+    /**
+     * The lane.
+     */
+    lane: LaneKey;
+    /**
+     * The card's key in that lane.
+     */
+    position: string;
+    /**
+     * The card's row.
+     */
+    row: string;
+};
+
+/**
+ * Whether a column's values convert to a type.
+ */
+export type CastVerdict = 'safe' | 'checked' | 'never';
+
+/**
+ * A cell's value. It must fit the column's type: text for a text column,
+ * options of the column for a select, and so on.
+ */
+export type CellValue = {
+    type: 'text';
+    /**
+     * Free text.
+     */
+    value: string;
+} | {
+    type: 'number';
+    /**
+     * A finite number.
+     */
+    value: number;
+} | {
+    type: 'boolean';
+    /**
+     * A checkbox.
+     */
+    value: boolean;
+} | {
+    type: 'date';
+    /**
+     * A date-time.
+     */
+    value: string;
+} | {
+    type: 'link';
+    /**
+     * Complete http or https URLs; at most one for a single-valued column.
+     */
+    value: Array<string>;
+} | {
+    type: 'options';
+    /**
+     * Options of a select or tag column; at most one for a single-valued
+     * column.
+     */
+    value: Array<OptionRef>;
+} | {
+    type: 'entities';
+    /**
+     * References to Macro entities of the kind the column points at; at
+     * most one for a single-valued column.
+     */
+    value: Array<EntityRef>;
+} | {
+    type: 'rows';
+    /**
+     * Rows of the table a relation column points at.
+     */
+    value: Array<string>;
+} | {
+    type: 'clear';
+};
+
+/**
+ * One cell of a row: which column, and its new value.
+ */
+export type CellWrite = {
+    /**
+     * The column placement.
+     */
+    column: string;
+    /**
+     * The value, or [`CellValue::Clear`] to empty the cell.
+     */
+    value: CellValue;
+};
+
+/**
+ * One changed file.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangedFileDto = {
+    /**
+     * Lines added.
+     */
+    additions: number;
+    /**
+     * The diff carries no text for this file.
+     */
+    binary: boolean;
+    /**
+     * Lines removed.
+     */
+    deletions: number;
+    /**
+     * What happened to the file.
+     */
+    kind: FileChangeKindDto;
+    /**
+     * The file's hunks were left out of the patch to fit the size budget.
+     */
+    patchOmitted: boolean;
+    /**
+     * The file's path after the change, or before it for a deletion.
+     */
+    path: string;
+    /**
+     * Where a renamed file came from.
+     */
+    previousPath?: string | null;
+};
+
+/**
+ * One changeset: the files a patch touches and what happened to each.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangesetDto = {
+    /**
+     * Lines added across all files.
+     */
+    additions: number;
+    /**
+     * The side the work started from.
+     */
+    base: GitRefDto;
+    /**
+     * When the diff was taken.
+     */
+    capturedAt: string;
+    /**
+     * Lines removed across all files.
+     */
+    deletions: number;
+    /**
+     * Every changed file, in patch order.
+     */
+    files: Array<ChangedFileDto>;
+    /**
+     * The side carrying the work.
+     */
+    head: GitRefDto;
+    /**
+     * The changeset's id; a different id means different changes.
+     */
+    id: string;
+    /**
+     * Size of the patch the matching patch route serves; zero when nothing
+     * changed.
+     */
+    patchBytes: number;
+    /**
+     * `https://github.com/owner/name`, when known.
+     */
+    repository?: string | null;
+    /**
+     * Where the diff was read from.
+     */
+    source: ChangesetSourceDto;
+    /**
+     * Some files' hunks were left out of the patch.
+     */
+    truncated: boolean;
+};
+
+/**
+ * The source of a changeset's diff, on the wire.
+ */
+export type ChangesetSourceDto = 'github_pull_request';
+
+/**
  * Channel metadata in soup payloads.
  */
 export type Channel = {
@@ -2561,7 +2824,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -2576,6 +2839,302 @@ export type CollabSurfaceTokenResponse = {
      * The signed JWT to pass to the sync-service websocket connect.
      */
     token: string;
+};
+
+/**
+ * A column: the placement of a property definition on a table.
+ *
+ * The definition carries name, [`DataType`], multi-select flag, and options;
+ * this carries only where it appears and column-kind configuration.
+ */
+export type Column = {
+    config: null | ColumnConfig;
+    /**
+     * The placement's own label, which also names it in SQL; `None` shows
+     * the definition's name.
+     */
+    display_name: string | null;
+    /**
+     * Identifier of the placement.
+     */
+    id: string;
+    /**
+     * Whether the first nonempty value may settle this new text column's type.
+     */
+    infer_type: boolean;
+    /**
+     * Fractional index for column ordering.
+     */
+    position: string;
+    /**
+     * The bound property definition.
+     */
+    property_definition_id: string;
+    /**
+     * Table the column appears on.
+     */
+    table_id: string;
+};
+
+/**
+ * What changing a column to one type would do to its values: the dry run
+ * of a type change, for one target.
+ */
+export type ColumnCast = {
+    /**
+     * Whether the values convert.
+     */
+    cast: CastVerdict;
+    /**
+     * The target property type.
+     */
+    data_type: DataType;
+    /**
+     * Up to three of the values that would not convert.
+     */
+    examples: Array<string>;
+    /**
+     * For a `checked` cast, how many cells would not convert.
+     */
+    failures: number;
+    /**
+     * Whether the target holds several values.
+     */
+    is_multi_select: boolean;
+    /**
+     * Why nothing converts, for a `never` cast.
+     */
+    reason: string | null;
+    /**
+     * Whether the target is a relation to another table's rows.
+     */
+    relation: boolean;
+    specific_entity_type: null | EntityType;
+    /**
+     * For a `checked` cast with failures, what is wrong with them, as in
+     * `3 values aren't numbers`.
+     */
+    summary: string | null;
+};
+
+/**
+ * A change to one column.
+ */
+export type ColumnChange = {
+    /**
+     * The column it goes right after; left out, it goes after the
+     * table's last column.
+     */
+    after?: string;
+    /**
+     * What the column holds.
+     */
+    definition: NewColumn;
+    kind: 'create';
+} | {
+    kind: 'rename';
+    /**
+     * Its new name, unique within the table ignoring case.
+     */
+    name: string;
+    /**
+     * The name the caller saw. Given, the rename is refused if the
+     * column goes by another one now.
+     */
+    previousName?: string;
+} | {
+    kind: 'change_type';
+    /**
+     * The type it becomes.
+     */
+    to: ColumnKind;
+} | {
+    kind: 'delete';
+} | {
+    kind: 'add_options';
+    /**
+     * The options, each under an id the client mints.
+     */
+    options: Array<NewOption>;
+} | {
+    /**
+     * Its new colour, a hex string like `#RRGGBB`, or `null` to clear
+     * it; left out, it keeps its own. A tag option always has one.
+     */
+    color?: string | null;
+    kind: 'update_option';
+    /**
+     * Its new label; left out, it keeps its own. Labels are unique
+     * within a column, ignoring case.
+     */
+    label?: string;
+    /**
+     * The option.
+     */
+    option: string;
+} | {
+    kind: 'delete_option';
+    /**
+     * The option.
+     */
+    option: string;
+};
+
+/**
+ * How a change touched a column.
+ */
+export type ColumnChangeKind = 'create' | 'rename' | 'change_type' | 'delete' | 'add_options' | 'update_option' | 'delete_option' | 'reorder' | 'infer_type' | 'related';
+
+/**
+ * A relation column: its cells reference rows of another table.
+ */
+export type ColumnConfig = {
+    /**
+     * Target database.
+     */
+    database_id: string;
+    kind: 'link';
+    /**
+     * Target table.
+     */
+    table_id: string;
+};
+
+/**
+ * What a column's values become under another type, for a new column of
+ * that type beside it: the values that convert, the options they need,
+ * and how many do not convert. Nothing is changed by reading it.
+ */
+export type ColumnConversion = {
+    /**
+     * Each row whose value converts, with that value, options named by
+     * label.
+     */
+    cells: Array<ConvertedCell>;
+    /**
+     * How many values do not convert, and are left out.
+     */
+    misfits: number;
+    /**
+     * The option labels a new select or tag column needs, in order.
+     */
+    options: Array<string>;
+    /**
+     * The table's version the cells were read at; a batch writing the new
+     * column sends it as its base version.
+     */
+    tableVersion: TableVersion;
+};
+
+/**
+ * The type a column's values are converted to.
+ */
+export type ColumnConversionRequest = {
+    /**
+     * The type of the column the values would go to.
+     */
+    to: ColumnKind;
+};
+
+/**
+ * One column placement with the definition behind it.
+ */
+export type ColumnDetail = {
+    /**
+     * The placement.
+     */
+    column: Column;
+    /**
+     * The bound definition (name, type, options).
+     */
+    definition: PropertyDefinitionWithOptions;
+    /**
+     * Whether the definition belongs to something beyond this database (a
+     * person's, a team's or a system property), so changing its options
+     * changes them everywhere that property is used.
+     */
+    shared_outside_database: boolean;
+    /**
+     * The name SQL refers to the column by: its display name, quoted.
+     */
+    sql_name: string;
+    /**
+     * Whether SQL may write this column.
+     */
+    writable: boolean;
+};
+
+/**
+ * A type a column can have.
+ */
+export type ColumnKind = {
+    type: 'text';
+} | {
+    type: 'number';
+} | {
+    type: 'boolean';
+} | {
+    type: 'date';
+} | {
+    type: 'link';
+} | {
+    /**
+     * Whether a cell holds several options.
+     */
+    multi: boolean;
+    type: 'select';
+} | {
+    /**
+     * Whether a cell holds several options.
+     */
+    multi: boolean;
+    type: 'select_number';
+} | {
+    type: 'tag';
+} | {
+    /**
+     * Whether a cell holds several references.
+     */
+    multi: boolean;
+    /**
+     * What the references point at.
+     */
+    target: EntityKind;
+    type: 'entity';
+} | {
+    /**
+     * The database of the related table.
+     */
+    database: string;
+    /**
+     * The related table.
+     */
+    table: string;
+    type: 'relation';
+};
+
+/**
+ * What happened to a column.
+ */
+export type ColumnResult = {
+    kind: 'created';
+} | {
+    kind: 'renamed';
+} | {
+    kind: 'type_changed';
+} | {
+    kind: 'deleted';
+} | {
+    /**
+     * The options created, in order: those sent, less any whose label
+     * the column already had.
+     */
+    added: Array<string>;
+    kind: 'options_added';
+} | {
+    kind: 'option_updated';
+} | {
+    kind: 'option_deleted';
 };
 
 /**
@@ -2620,6 +3179,36 @@ export type CommandRejectedMetadata = {
 };
 
 /**
+ * One change a committed batch journaled: a table, the version the batch
+ * produced, and the journal's id for it.
+ */
+export type CommittedChange = {
+    /**
+     * The journal's id of the change.
+     */
+    change: number;
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * The version the batch produced.
+     */
+    version: TableVersion;
+};
+
+/**
+ * Explicit upload completion; a seal can be submitted separately with an empty list.
+ */
+export type CompleteUploads = {
+    seal?: null | ConversationSeal;
+    /**
+     * Registered identities to verify against storage (at most 50).
+     */
+    uploads: Array<UploadId>;
+};
+
+/**
  * The conferencing system backing an event's join URL.
  *
  * Macro generates only Google Meet conferences, so this distinguishes one it
@@ -2634,6 +3223,145 @@ export type CommandRejectedMetadata = {
  * so an unrelated edit never disturbs it.
  */
 export type ConferenceProvider = 'google_meet' | 'other';
+
+/**
+ * How a group's conditions combine.
+ */
+export type Conjunction = 'and' | 'or';
+
+/**
+ * Source Slack conversation ID (C, G or D prefix); unique only within a source.
+ */
+export type ConversationId = string;
+
+/**
+ * Slack conversation kind. Public Slack channels map to Macro Team, never Public.
+ */
+export type ConversationKind = 'public_channel' | 'private_channel' | 'direct_message' | 'group_direct_message';
+
+/**
+ * Full selected conversation metadata, persisted before granting any uploads.
+ */
+export type ConversationMetadata = {
+    /**
+     * Source archived flag (does not silently archive a reused Macro target).
+     */
+    archived: boolean;
+    createdAt?: null | SlackTimestamp;
+    creatorId?: null | SlackUserId;
+    /**
+     * Single archive folder name, not a backend object key.
+     */
+    folder: KeySegment;
+    /**
+     * Source conversation kind.
+     */
+    kind: ConversationKind;
+    /**
+     * Complete source member list, including members unknown to Macro.
+     */
+    memberIds: Array<SlackUserId>;
+    /**
+     * Advisory only; null means not yet counted, not zero.
+     */
+    messageCount?: number | null;
+    /**
+     * Original display name; not a storage key.
+     */
+    name: string;
+    /**
+     * Stable Slack identity.
+     */
+    slackChannelId: ConversationId;
+};
+
+/**
+ * Admin-visible progress for one selected conversation.
+ */
+export type ConversationProgress = {
+    /**
+     * Whether the selected source conversation was archived.
+     */
+    archived: boolean;
+    /**
+     * Authorized target only; absent for inaccessible reused targets.
+     */
+    channelId?: string | null;
+    /**
+     * Durably committed record counts.
+     */
+    counters: ImportCounters;
+    error?: null | ImportError;
+    /**
+     * Persisted source kind.
+     */
+    kind: ConversationKind;
+    /**
+     * Persisted source display name, never the reused Macro target's name.
+     */
+    name: string;
+    /**
+     * Null until sealed; zero is a valid sealed empty manifest.
+     */
+    partCount?: number | null;
+    /**
+     * Independent indexing state.
+     */
+    search: SearchState;
+    /**
+     * Source identity (always visible to the importing team's administrator).
+     */
+    slackChannelId: ConversationId;
+    /**
+     * Durable state.
+     */
+    status: ConversationStatus;
+    /**
+     * Number of parts whose object identity has been verified.
+     */
+    verifiedParts: number;
+    /**
+     * Non-fatal metadata/skip explanations.
+     */
+    warnings: Array<ImportWarning>;
+};
+
+/**
+ * Complete immutable expected part set for one conversation, including zero parts.
+ */
+export type ConversationSeal = {
+    /**
+     * SHA-256 of canonical descriptor lines; zero parts hash the empty byte string.
+     */
+    manifestSha256: Sha256Digest;
+    /**
+     * Exact number of registered parts, starting at index zero.
+     */
+    partCount: number;
+    /**
+     * Selected source conversation.
+     */
+    slackChannelId: ConversationId;
+};
+
+/**
+ * Durable per-conversation lifecycle.
+ */
+export type ConversationStatus = 'awaiting_uploads' | 'queued' | 'importing' | 'completed' | 'skipped' | 'failed';
+
+/**
+ * One row's converted value.
+ */
+export type ConvertedCell = {
+    /**
+     * The row.
+     */
+    row: string;
+    /**
+     * Its value under the new type.
+     */
+    value: CellValue;
+};
 
 /**
  * Query parameters for the copy document endpoint.
@@ -2934,6 +3662,16 @@ export type CreateCrmContactRequest = {
     name: string;
 };
 
+/**
+ * Request body for creating a database.
+ */
+export type CreateDatabaseRequest = {
+    /**
+     * Display name.
+     */
+    name: string;
+};
+
 export type CreateDocumentRequest = {
     /**
      * The document id if the document is being branched.
@@ -3067,12 +3805,34 @@ export type CreateEntityMentionResponse = {
 };
 
 /**
+ * Create command. Team identity is deliberately absent.
+ */
+export type CreateImport = {
+    /**
+     * Full, unique selected conversations (at most the configured bound).
+     */
+    conversations: Array<ConversationMetadata>;
+    /**
+     * Replay with the same semantic payload returns the original job; changes conflict.
+     */
+    idempotencyToken: CreateToken;
+    /**
+     * Default true at the client; false still requires users and zero-part seals.
+     */
+    includeMessageHistory: boolean;
+    /**
+     * Binding or explicit unknown-source confirmation.
+     */
+    source: SourceIdentity;
+};
+
+/**
  * Create-initiative HTTP body.
  */
 export type CreateInitiativeRequest = {
     /**
-     * Initial markdown for the description document. Not stored on the initiative; later
-     * edits happen in the document editor.
+     * Initial markdown for the description surface. Not stored on the initiative; later
+     * edits happen in the collaborative description editor.
      */
     description?: string | null;
     /**
@@ -3083,6 +3843,11 @@ export type CreateInitiativeRequest = {
      * Display name.
      */
     name: string;
+    /**
+     * Property values set as the owner within the create. A value the properties
+     * service rejects fails the whole create; no initiative is left behind.
+     */
+    propertyValues?: Array<InitialPropertyValue>;
     /**
      * Share with the owner's team at create time. Defaults to true; users without
      * a team create an unshared initiative. Explicit false skips the team grant.
@@ -3215,7 +3980,7 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
     /**
      * When and how often the reminder fires.
      */
@@ -3342,6 +4107,11 @@ export type CreateTaskResponse = {
      */
     token: string;
 };
+
+/**
+ * Client-generated create idempotency token, scoped to team and administrator.
+ */
+export type CreateToken = string;
 
 export type CreateUnthreadedAnchorRequest = CreateUnthreadedPdfAnchorRequest & {
     fileType: 'pdf';
@@ -3773,6 +4543,163 @@ export type CustomSpeakerAssignment = {
 export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
 
 /**
+ * A database: a named collection of tables, owned and shared as one entity.
+ */
+export type Database = {
+    /**
+     * Creation time.
+     */
+    created_at: string;
+    /**
+     * Identifier.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Owning user.
+     */
+    owner_id: string;
+    /**
+     * Set when trashed.
+     */
+    trashed_at: string | null;
+};
+
+/**
+ * Everything a client needs to render and edit one database: tables,
+ * column placements with their definitions, and the SQL names the query
+ * surface exposes them under.
+ */
+export type DatabaseDetail = {
+    /**
+     * The database.
+     */
+    database: Database;
+    /**
+     * The viewer's access.
+     */
+    grant: AccessLevel;
+    /**
+     * Tables in tab order.
+     */
+    tables: Array<TableDetail>;
+};
+
+/**
+ * One write to a database: its tables, columns, options, rows or views,
+ * grouped by the resource it changes. A request's ops apply in order and
+ * together, or not at all, and every op names a table of the database the
+ * request is for (or, creating one, adds it there).
+ */
+export type DatabaseOp = {
+    /**
+     * What changes.
+     */
+    change: TableChange;
+    kind: 'table';
+    /**
+     * The table; for a creation, its new id, minted by the client, which
+     * later ops of the request may name.
+     */
+    table: string;
+} | {
+    /**
+     * What changes.
+     */
+    change: ColumnChange;
+    /**
+     * The column; for a creation, its new id, minted by the client,
+     * which later ops of the request may name.
+     */
+    column: string;
+    kind: 'column';
+    /**
+     * The table.
+     */
+    table: string;
+} | {
+    /**
+     * What changes.
+     */
+    change: RowsChange;
+    kind: 'rows';
+    /**
+     * The table the rows belong to.
+     */
+    table: string;
+} | {
+    /**
+     * What changes.
+     */
+    change: ViewChange;
+    kind: 'view';
+    /**
+     * The view's table.
+     */
+    table: string;
+    /**
+     * The view; for a creation, its new id, minted by the client.
+     */
+    view: string;
+} | {
+    kind: 'reorder_tables';
+    /**
+     * Every table, in its new order.
+     */
+    order: Array<string>;
+};
+
+/**
+ * A view of one table, as stored.
+ */
+export type DatabaseView = {
+    /**
+     * When it was created.
+     */
+    createdAt: string;
+    /**
+     * The database the table belongs to.
+     */
+    databaseId: string;
+    /**
+     * The view.
+     */
+    id: string;
+    /**
+     * How it draws them.
+     */
+    layout: ViewLayout;
+    /**
+     * Its name, unique among the table's views ignoring case.
+     */
+    name: string;
+    /**
+     * Where it sorts among the table's views: a fractional key.
+     */
+    position: string;
+    /**
+     * Which rows it shows, in what order.
+     */
+    query: ViewQuery;
+    /**
+     * The table it shows.
+     */
+    tableId: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * How a date cell compares to a date-time.
+ */
+export type DateOperator = 'before' | 'after' | 'onOrBefore' | 'onOrAfter';
+
+/**
  * Response body for `DELETE /channels/mentions/{mention_id}`.
  */
 export type DeleteEntityMentionResponse = {
@@ -3798,11 +4725,6 @@ export type DeleteUnthreadedPdfAnchorRequest = {
     anchorType: 'highlight';
     uuid: string;
 };
-
-/**
- * Id of the markdown document that holds an initiative's description.
- */
-export type DescriptionDocumentId = string;
 
 /**
  * Returns basic information of a document used for some db queries
@@ -3957,6 +4879,7 @@ export type DocumentDeletedMetadata = {
      * Project the document belonged to, when any.
      */
     project_id?: string | null;
+    sub_type?: null | DocumentSubType;
 };
 
 /**
@@ -4730,6 +5653,38 @@ export type EmailFollowupResponse = {
 export type EmailReminderCondition = 'if_no_reply' | 'regardless';
 
 /**
+ * A page of original-email identities and private reminder metadata.
+ */
+export type EmailReminderPage = {
+    /**
+     * Coalesced rows in nearest-occurrence order.
+     */
+    items: Array<EmailReminderSummary>;
+    /**
+     * Progress through all examined candidates, absent at exhaustion.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * One original thread, coalescing all of its current reminder work.
+ */
+export type EmailReminderSummary = {
+    /**
+     * Number of eligible reminders attached to this thread.
+     */
+    count: number;
+    /**
+     * Nearest eligible occurrence and its owning editor capability.
+     */
+    nearest: ReminderCollectionRow;
+    /**
+     * Original email identity, never a mirror reminder identity.
+     */
+    threadId: string;
+};
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -4753,7 +5708,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
 };
 
 /**
@@ -4834,6 +5789,11 @@ export type EntityFilters = {
 };
 
 /**
+ * A kind of Macro entity a reference column can point at.
+ */
+export type EntityKind = 'USER' | 'DOCUMENT' | 'TASK' | 'COMPANY' | 'CONTACT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'PROJECT' | 'THREAD' | 'CALENDAR_EVENT' | 'INITIATIVE';
+
+/**
  * A user's permission for an entity, discriminated by entity kind.
  *
  * Items (documents, chats, projects, threads) use access levels.
@@ -4872,6 +5832,20 @@ export type EntityPermissionResponse = {
 };
 
 /**
+ * A reference to one Macro entity.
+ */
+export type EntityRef = {
+    /**
+     * The entity's id.
+     */
+    entityId: string;
+    /**
+     * What kind of entity it is; it must be the kind the column points at.
+     */
+    entityType: EntityKind;
+};
+
+/**
  * Entity reference for entity-type property values.
  */
 export type EntityReference = {
@@ -4887,7 +5861,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -5044,7 +6018,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -5066,7 +6040,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
 };
 
 /**
@@ -5078,6 +6052,11 @@ export type FavoritesList = {
      */
     favorites: Array<Favorite>;
 };
+
+/**
+ * What happened to a file, on the wire.
+ */
+export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
 
 export type FileSystemNodeWithIds = {
     document_id: string;
@@ -5107,7 +6086,7 @@ export type FileSystemNodeWithIds = {
  * - ContentType::mime_type() - Gets MIME type for ContentType
  *
  */
-export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'fig' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
 
 /**
  * Represents a file type update: either set to a specific type or clear to null.
@@ -5118,6 +6097,113 @@ export type FileTypeUpdate = {
      */
     set: FileType;
 } | 'clear';
+
+/**
+ * A test of one column's cells.
+ */
+export type FilterCondition = {
+    /**
+     * The column tested.
+     */
+    column: string;
+    /**
+     * What its cell must be. The test's kind must fit the column's type.
+     */
+    test: FilterTest;
+};
+
+/**
+ * Conditions joined by one conjunction.
+ */
+export type FilterGroup = {
+    /**
+     * The conditions and nested groups. A group without any keeps every
+     * row.
+     */
+    conditions: Array<FilterNode>;
+    /**
+     * Whether every condition must hold, or any one.
+     */
+    conjunction: Conjunction;
+};
+
+/**
+ * One entry of a group: a condition, or a group of its own.
+ */
+export type FilterNode = (FilterCondition & {
+    kind: 'condition';
+}) | (FilterGroup & {
+    kind: 'group';
+});
+
+/**
+ * What a column's cell must be, by the kind of value the column holds.
+ */
+export type FilterTest = {
+    kind: 'presence';
+    /**
+     * Empty, or not.
+     */
+    operator: PresenceOperator;
+} | {
+    kind: 'text';
+    /**
+     * How the cell compares.
+     */
+    operator: TextOperator;
+    /**
+     * The text compared against, ignoring case for the containment
+     * tests.
+     */
+    value: string;
+} | {
+    kind: 'number';
+    /**
+     * How the cell compares.
+     */
+    operator: NumberOperator;
+    /**
+     * The number compared against; finite.
+     */
+    value: number;
+} | {
+    kind: 'date';
+    /**
+     * How the cell compares.
+     */
+    operator: DateOperator;
+    /**
+     * The date-time compared against.
+     */
+    value: string;
+} | {
+    /**
+     * Whether the box is checked.
+     */
+    checked: boolean;
+    kind: 'checkbox';
+} | {
+    kind: 'options';
+    /**
+     * How the cell's options relate to these.
+     */
+    operator: SetOperator;
+    /**
+     * Options of the column; at least one.
+     */
+    options: Array<string>;
+} | {
+    /**
+     * Entity ids, or for a relation the related rows' ids; at least
+     * one.
+     */
+    entities: Array<string>;
+    kind: 'entities';
+    /**
+     * How the cell's references relate to these.
+     */
+    operator: SetOperator;
+};
 
 export type FolderItem = {
     fileType?: null | FileType;
@@ -5568,6 +6654,39 @@ export type GetUserHistoryResponse = {
 };
 
 /**
+ * One end of the compared range.
+ */
+export type GitRefDto = {
+    /**
+     * The branch name, when known.
+     */
+    name?: string | null;
+    /**
+     * The commit, when known.
+     */
+    sha?: string | null;
+};
+
+/**
+ * A label among the visible GitHub pull requests. Labels with the same name in different
+ * repositories count together.
+ */
+export type GithubLabelFacet = {
+    /**
+     * The label's most recently synced color, as six hex digits without `#`.
+     */
+    color?: string | null;
+    /**
+     * Number of visible pull requests with the label.
+     */
+    count: number;
+    /**
+     * The label's name.
+     */
+    name: string;
+};
+
+/**
  * Display-ready data for a GitHub pull request associated with a task.
  */
 export type GithubPullRequest = {
@@ -5626,6 +6745,31 @@ export type GithubPullRequest = {
 };
 
 /**
+ * Response body for `GET /github_pull_requests/{id}/changes/patch`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type GithubPullRequestChangesPatchResponse = {
+    /**
+     * The git-style unified diff of the changeset.
+     */
+    patch: string;
+};
+
+/**
+ * Response body for `GET /github_pull_requests/{id}/changes`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type GithubPullRequestChangesResponse = {
+    changeset?: null | ChangesetDto;
+    /**
+     * Why there are no changes, in a sentence the user can act on.
+     */
+    error?: string | null;
+};
+
+/**
  * A check run associated with a GitHub pull request.
  */
 export type GithubPullRequestCheckRun = {
@@ -5667,6 +6811,10 @@ export type GithubPullRequestComment = {
      * GitHub's relationship label for the author, when available.
      */
     authorAssociation?: string | null;
+    /**
+     * The stable numeric GitHub user id for the comment author, when available.
+     */
+    authorId?: number | null;
     /**
      * The GitHub login for the comment author, when available.
      */
@@ -5723,6 +6871,89 @@ export type GithubPullRequestComment = {
 };
 
 /**
+ * Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,
+ * each with the number of pull requests it covers.
+ */
+export type GithubPullRequestFacets = {
+    /**
+     * Assignees, most pull requests first.
+     */
+    assignees: Array<GithubUserFacet>;
+    /**
+     * Authors, most pull requests first.
+     */
+    authors: Array<GithubUserFacet>;
+    /**
+     * Labels, most pull requests first.
+     */
+    labels: Array<GithubLabelFacet>;
+    /**
+     * Repositories, most pull requests first.
+     */
+    repositories: Array<GithubRepositoryFacet>;
+};
+
+/**
+ * A label on a GitHub pull request.
+ */
+export type GithubPullRequestLabel = {
+    /**
+     * The label color as six hex digits without a leading `#`, when known.
+     */
+    color?: string | null;
+    /**
+     * The label name, unique within its repository regardless of case.
+     */
+    name: string;
+};
+
+/**
+ * A reviewer's latest submitted review on a pull request.
+ */
+export type GithubPullRequestReview = {
+    /**
+     * The stable numeric GitHub user id of the reviewer, as a string.
+     */
+    reviewerGithubUserId: string;
+    /**
+     * The reviewer's GitHub login, when known.
+     */
+    reviewerLogin?: string | null;
+    /**
+     * What the review said.
+     */
+    state: GithubPullRequestReviewState;
+    /**
+     * When the review was submitted, when known.
+     */
+    submittedAt?: string | null;
+};
+
+/**
+ * Where a pull request's review stands, from its reviewers' latest reviews.
+ */
+export type GithubPullRequestReviewDecision = 'approved' | 'changes_requested' | 'review_required';
+
+/**
+ * What a reviewer's latest review on a pull request said.
+ */
+export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/**
+ * A GitHub user named on a pull request, such as an assignee.
+ */
+export type GithubPullRequestUser = {
+    /**
+     * The stable numeric GitHub user id, as a string.
+     */
+    githubUserId: string;
+    /**
+     * The user's GitHub login, when known.
+     */
+    login?: string | null;
+};
+
+/**
  * Response containing all GitHub pull requests associated with a task.
  */
 export type GithubPullRequestsResponse = {
@@ -5730,6 +6961,42 @@ export type GithubPullRequestsResponse = {
      * Parsed pull requests, in repository query order.
      */
     pullRequests: Array<GithubPullRequest>;
+};
+
+/**
+ * A repository among the visible GitHub pull requests.
+ */
+export type GithubRepositoryFacet = {
+    /**
+     * Number of visible pull requests in the repository.
+     */
+    count: number;
+    /**
+     * The repository's most recently synced name, as `owner/repo`.
+     */
+    repository: string;
+    /**
+     * The numeric GitHub repository id, which survives renames and transfers.
+     */
+    repositoryId: string;
+};
+
+/**
+ * A GitHub user among the visible pull requests, as an author or an assignee.
+ */
+export type GithubUserFacet = {
+    /**
+     * Number of visible pull requests the user opened, or is assigned to.
+     */
+    count: number;
+    /**
+     * The user's numeric GitHub user id.
+     */
+    githubUserId: string;
+    /**
+     * The user's most recently synced GitHub login, when known.
+     */
+    login?: string | null;
 };
 
 /**
@@ -5980,6 +7247,179 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * Committed counters, never optimistic browser or uncommitted worker counts.
+ */
+export type ImportCounters = {
+    /**
+     * Previously committed source identities.
+     */
+    duplicates: number;
+    /**
+     * Newly persisted messages.
+     */
+    imported: number;
+    /**
+     * Source records examined through the committed checkpoint.
+     */
+    processed: number;
+    /**
+     * Newly persisted reactions.
+     */
+    reactions: number;
+    /**
+     * Unsupported, empty or otherwise deliberately skipped records.
+     */
+    skipped: number;
+};
+
+/**
+ * Public error codes; never carry raw provider errors, keys, emails or source text.
+ */
+export type ImportError = 'disabled' | 'invalid_input' | 'limit_exceeded' | 'unavailable' | 'admin_required' | 'source_mismatch' | 'conflict' | 'upload_mismatch' | 'lease_lost' | 'retryable' | 'internal';
+
+/**
+ * Configurable bounds shared with browser staging and enforced again by the worker.
+ */
+export type ImportLimits = {
+    /**
+     * Maximum selected conversations.
+     */
+    conversations: number;
+    /**
+     * Maximum historical batch payload bytes.
+     */
+    databaseBatchBytes: number;
+    /**
+     * Maximum messages in a historical batch.
+     */
+    databaseBatchMessages: number;
+    /**
+     * Maximum users, root metadata or individual day JSON bytes.
+     */
+    jsonBytes: number;
+    /**
+     * Maximum NDJSON part bytes.
+     */
+    partBytes: number;
+    /**
+     * Maximum records per part.
+     */
+    partRecords: number;
+    /**
+     * Maximum bytes per NDJSON record, including newline.
+     */
+    recordBytes: number;
+    /**
+     * Maximum descriptors or completion identities per call.
+     */
+    registrationBatch: number;
+    /**
+     * Maximum selected temporary data bytes across all uploads.
+     */
+    selectedBytes: number;
+    /**
+     * Maximum ZIP entries scanned by the browser.
+     */
+    zipEntries: number;
+};
+
+/**
+ * Admin list result, also supplying upload limits before a job exists.
+ */
+export type ImportPage = {
+    /**
+     * At most 50 job receipts, newest first.
+     */
+    jobs: Array<ImportProgress>;
+    /**
+     * Effective server limits.
+     */
+    limits: ImportLimits;
+    nextCursor?: null | JobId;
+    /**
+     * Binding summary used by the picker confirmation.
+     */
+    sourceBinding: SourceBinding;
+};
+
+/**
+ * Common receipt returned by create, completion, finalize, cancel and progress.
+ */
+export type ImportProgress = {
+    /**
+     * All selected conversations, bounded by the create limit.
+     */
+    conversations: Array<ConversationProgress>;
+    /**
+     * Persisted creation time, also the final historical-time fallback.
+     */
+    createdAt: string;
+    /**
+     * Immutable history option confirmed when creating this job.
+     */
+    includeMessageHistory: boolean;
+    /**
+     * Stable job identity.
+     */
+    jobId: JobId;
+    /**
+     * Server bounds for staging and registration.
+     */
+    limits: ImportLimits;
+    /**
+     * Registration closure time; cancellation also closes registration.
+     */
+    registrationClosedAt?: string | null;
+    /**
+     * Monotonic job revision for polling/websocket invalidation.
+     */
+    revision: number;
+    /**
+     * Immutable source confirmation from this job, not the current team binding.
+     */
+    source: SourceIdentity;
+    /**
+     * Durable job lifecycle.
+     */
+    status: JobStatus;
+    /**
+     * Last durable lifecycle/progress update.
+     */
+    updatedAt: string;
+    /**
+     * Whether users metadata is verified and pinned.
+     */
+    usersVerified: boolean;
+};
+
+/**
+ * An import is identified once, before sending, so retries cannot duplicate rows.
+ */
+export type ImportTable = {
+    /**
+     * Header names, in order. All imported values remain text.
+     */
+    columns: Array<string>;
+    /**
+     * New table's display name.
+     */
+    name: string;
+    /**
+     * Stable key for this import, retained through retries.
+     */
+    requestId: string;
+    /**
+     * Rectangular text rows. Empty fields are preserved.
+     */
+    rows: Array<Array<string>>;
+};
+
+/**
+ * Non-fatal, sanitized explanations displayed in admin progress.
+ */
+export type ImportWarning = 'creation_time_from_message' | 'creation_time_from_job' | 'unresolvable_direct_message' | 'target_unavailable' | 'uploads_incomplete';
+
+/**
  * Display attribution for a comment imported from an external document.
  */
 export type ImportedAuthor = {
@@ -6009,6 +7449,49 @@ export type InFlightTurnSummary = {
 };
 
 /**
+ * Settled schema and the version against which its first value can be written.
+ */
+export type InferColumnTypeOutcome = {
+    /**
+     * Updated placement, property definition, and SQL name.
+     */
+    column: ColumnDetail;
+    /**
+     * Version after settling the column.
+     */
+    table_version: TableVersion;
+};
+
+/**
+ * Request to settle an empty column's first-value type.
+ */
+export type InferColumnTypeRequest = {
+    /**
+     * Table version used when interpreting the first value.
+     */
+    baseVersion: TableVersion;
+    /**
+     * First-value type: STRING, NUMBER, or ENTITY.
+     */
+    dataType: DataType;
+    specificEntityType?: null | EntityType;
+};
+
+/**
+ * A property value set on a new initiative as part of its create.
+ */
+export type InitialPropertyValue = {
+    /**
+     * Property definition to set.
+     */
+    propertyDefinitionId: string;
+    /**
+     * Value, validated by the properties service like any other property write.
+     */
+    value: SetPropertyValue;
+};
+
+/**
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
@@ -6016,10 +7499,6 @@ export type InitiativeDetail = {
      * When the initiative was created.
      */
     createdAt: string;
-    /**
-     * The markdown document holding the description; open it in the editor.
-     */
-    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -6108,10 +7587,6 @@ export type InitiativeList = {
  */
 export type InitiativeSummary = {
     /**
-     * The markdown document holding the description; open it in the editor.
-     */
-    descriptionDocumentId: DescriptionDocumentId;
-    /**
      * Opaque identifier.
      */
     id: InitiativeId;
@@ -6182,6 +7657,55 @@ export type ItemWithUserAccessLevel = {
 };
 
 /**
+ * Import job identity. Generate UUIDv7 in application code.
+ */
+export type JobId = string;
+
+/**
+ * Job lifecycle. Cancellation remains in progress while any lease is active.
+ */
+export type JobStatus = 'uploading' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelling' | 'cancelled';
+
+/**
+ * Single safe source folder/key segment; never a path or authorization proof.
+ */
+export type KeySegment = string;
+
+/**
+ * How one lane shows in a board layout.
+ */
+export type Lane = {
+    /**
+     * Whether it is hidden.
+     */
+    hidden?: boolean;
+    /**
+     * The lane.
+     */
+    key: LaneKey;
+};
+
+/**
+ * A lane of a board, named by what its cards' grouping cells hold: one
+ * option of a select, one person, or nothing.
+ */
+export type LaneKey = {
+    /**
+     * The cards holding this option of the board's select column.
+     */
+    id: string;
+    kind: 'option';
+} | {
+    /**
+     * The cards naming this person in the board's person column.
+     */
+    id: string;
+    kind: 'user';
+} | {
+    kind: 'none';
+};
+
+/**
  * Latest-message bundle for soup payloads.
  */
 export type LatestMessage = {
@@ -6214,6 +7738,25 @@ export type ListWebhooksResponse = {
      * The caller's webhooks, newest first. Signing secrets are omitted.
      */
     webhooks: Array<Webhook>;
+};
+
+/**
+ * A database as listed for a viewer.
+ */
+export type ListedDatabase = {
+    /**
+     * The database.
+     */
+    database: Database;
+    /**
+     * The viewer's access.
+     */
+    grant: AccessLevel;
+    /**
+     * Tables in tab order, so discovery can find a table independently of
+     * the containing database's display name.
+     */
+    tables: Array<Table>;
 };
 
 export type LocationResponseData = {
@@ -6784,6 +8327,12 @@ export type MessageParent = {
      */
     id: string;
     type: 'crm_contact';
+} | {
+    /**
+     * A video call and its persistent chat thread.
+     */
+    id: string;
+    type: 'call';
 };
 
 /**
@@ -7032,6 +8581,54 @@ export type NewAttachment = {
 };
 
 /**
+ * What a new column holds.
+ */
+export type NewColumn = {
+    /**
+     * Let the column's first value settle its type: only for a plain
+     * text column.
+     */
+    inferType?: boolean;
+    /**
+     * The column's name, unique within the table ignoring case.
+     */
+    name: string;
+    /**
+     * For a select or tag column, the options it starts with, in
+     * order, each under an id the client mints. A select column with
+     * none accepts nothing until options are added.
+     */
+    options?: Array<NewOption>;
+    source: 'new';
+    /**
+     * Its type. A relation names the table whose rows it holds, one the
+     * caller can see.
+     */
+    type: ColumnKind;
+} | {
+    /**
+     * The property's definition.
+     */
+    property: string;
+    source: 'existing';
+};
+
+/**
+ * A select or tag option to create.
+ */
+export type NewOption = {
+    /**
+     * Its id, minted by the client; later ops of the request may name it.
+     */
+    id: string;
+    /**
+     * Its label, unique within the column ignoring case. A numeric
+     * select's labels are numbers.
+     */
+    label: string;
+};
+
+/**
  * Location supplied when creating a document discussion.
  */
 export type NewThreadAnchor = {
@@ -7092,6 +8689,45 @@ export type NewThreadAnchor = {
      */
     sheetName: string;
     type: 'spreadsheet';
+} | {
+    /**
+     * Layer the pin follows; absent or null for a pin on the bare canvas.
+     */
+    nodeId?: string | null;
+    /**
+     * Page (canvas) the pin is on.
+     */
+    pageId: string;
+    type: 'fig';
+    /**
+     * Horizontal offset from the layer's origin, or the page's when
+     * the pin is on no layer, in design units.
+     */
+    x: number;
+    /**
+     * Vertical offset, measured like `x`.
+     */
+    y: number;
+};
+
+/**
+ * A view's contents as an op creates it; the server gives it its id,
+ * position and times.
+ */
+export type NewView = {
+    /**
+     * How it draws them; a board left without a card title gets the
+     * table's first column.
+     */
+    layout: RequestedLayout;
+    /**
+     * Its name.
+     */
+    name: string;
+    /**
+     * Which rows it shows, in what order.
+     */
+    query?: ViewQuery;
 };
 
 /**
@@ -7109,6 +8745,129 @@ export type NotificationFilters = {
  * The mutually exclusive lifecycle states of a user's notification.
  */
 export type NotificationState = 'unseen' | 'seen' | 'done';
+
+/**
+ * How a number cell compares to a number.
+ */
+export type NumberOperator = 'is' | 'isNot' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
+
+/**
+ * Why an op of a batch was refused. Nothing in the batch was written.
+ */
+export type OpRefusalResponse = {
+    /**
+     * The column placement at fault, when one is.
+     */
+    column: string | null;
+    /**
+     * What is wrong.
+     */
+    message: string;
+    /**
+     * The refused op's index in the request.
+     */
+    op: number;
+    /**
+     * The row's index within the op, when one row is at fault.
+     */
+    row: number | null;
+    taken: null | TakenId;
+};
+
+/**
+ * What one op did, in the order the ops were sent, grouped as the ops are:
+ * a result's `kind` is its op's, naming the same resource, and its
+ * `change` says what happened to it.
+ */
+export type OpResult = {
+    /**
+     * What happened to it.
+     */
+    change: TableResult;
+    kind: 'table';
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * Its version once the request committed; left out when the op
+     * removed it.
+     */
+    tableVersion?: TableVersion;
+} | {
+    /**
+     * What happened to it.
+     */
+    change: ColumnResult;
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'column';
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * The table's version once the request committed.
+     */
+    tableVersion: TableVersion;
+} | {
+    /**
+     * What happened to them.
+     */
+    change: RowsResult;
+    kind: 'rows';
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * The table's version once the request committed.
+     */
+    tableVersion: TableVersion;
+} | {
+    /**
+     * What happened to it.
+     */
+    change: ViewResult;
+    kind: 'view';
+    /**
+     * The view's table.
+     */
+    table: string;
+    /**
+     * The table's version once the request committed.
+     */
+    tableVersion: TableVersion;
+    /**
+     * The view.
+     */
+    view: string;
+} | {
+    kind: 'reorder_tables';
+    /**
+     * Every table, in its new order, with its version once the request
+     * committed.
+     */
+    tables: Array<VersionedTable>;
+};
+
+/**
+ * A select option, by its id or by its label.
+ */
+export type OptionRef = {
+    /**
+     * An option the column has.
+     */
+    id: string;
+} | {
+    /**
+     * An option's label, matched without regard to case. An unknown label
+     * is refused.
+     */
+    label: string;
+};
 
 /**
  * A pending pairing, as shown to the approving user.
@@ -7482,6 +9241,11 @@ export type PreSaveDocumentResponseData = {
     presignedUrls: Array<PresignedUrl>;
 };
 
+/**
+ * Whether a cell is empty.
+ */
+export type PresenceOperator = 'isEmpty' | 'isNotEmpty';
+
 export type PresignedUrl = {
     /**
      * The presigned url used to upload the sha
@@ -7609,8 +9373,16 @@ export type PropertyDefinition = {
      */
     is_system: boolean;
     owner: PropertyOwner;
-    specific_entity_type?: null | EntityType;
+    specific_entity_type: null | EntityType;
     updated_at: string;
+};
+
+/**
+ * Property definition with its associated options (service representation).
+ */
+export type PropertyDefinitionWithOptions = {
+    definition: PropertyDefinition;
+    property_options: Array<PropertyOption>;
 };
 
 /**
@@ -7656,7 +9428,37 @@ export type PropertyInput = {
 };
 
 /**
- * Defines who owns a property - user-scoped, team-scoped, or system.
+ * A selectable option for select-type properties (service representation).
+ */
+export type PropertyOption = {
+    color: string | null;
+    created_at: string;
+    display_order: number;
+    id: string;
+    property_definition_id: string;
+    updated_at: string;
+    value: PropertyOptionValue;
+};
+
+/**
+ * The value of a property option - either a string or a number.
+ */
+export type PropertyOptionValue = {
+    type: 'string';
+    /**
+     * String value for SelectString properties
+     */
+    value: string;
+} | {
+    type: 'number';
+    /**
+     * Number value for SelectNumber properties
+     */
+    value: number;
+};
+
+/**
+ * Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.
  */
 export type PropertyOwner = {
     scope: 'user';
@@ -7664,6 +9466,9 @@ export type PropertyOwner = {
 } | {
     scope: 'team';
     team_id: string;
+} | {
+    database_id: string;
+    scope: 'database';
 } | {
     scope: 'system';
 };
@@ -7729,6 +9534,17 @@ export type PropertyValue = {
 };
 
 /**
+ * A versioned query definition.
+ */
+export type QueryDefinition = {
+    /**
+     * A read-only SELECT in the databases dialect.
+     */
+    query: string;
+    version: 1;
+};
+
+/**
  * Reaction mutation for the authenticated user.
  */
 export type ReactionInput = {
@@ -7751,6 +9567,16 @@ export type RecentlyDeletedResponseData = {
      * The items returned from the call
      */
     items: Array<Item>;
+};
+
+/**
+ * Batched registration, also used to renew an unchanged descriptor's grant.
+ */
+export type RegisterUploads = {
+    /**
+     * At most 50 descriptors; no duplicate identities in a call.
+     */
+    descriptors: Array<UploadDescriptor>;
 };
 
 /**
@@ -7784,7 +9610,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
     /**
      * Reminder id.
      */
@@ -7801,6 +9627,32 @@ export type Reminder = {
      * When the reminder was last modified.
      */
     updatedAt: string;
+};
+
+/**
+ * One continuous collection, including completed recurring reminders that still fire.
+ */
+export type ReminderCollectionPage = {
+    /**
+     * Rows in server order.
+     */
+    items: Array<ReminderCollectionRow>;
+    /**
+     * Absent only on the final page.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * A native reminder row with its source and workflow capabilities resolved in bulk.
+ */
+export type ReminderCollectionRow = {
+    emailFollowup?: null | EmailFollowup;
+    reference?: null | ReminderReference;
+    /**
+     * The caller's private reminder.
+     */
+    reminder: Reminder;
 };
 
 /**
@@ -7835,6 +9687,29 @@ export type ReminderFilters = {
      * specific `ids` or `entities` also opts in.
      */
     include?: boolean;
+};
+
+/**
+ * Display details of the entity a reminder is about, resolved alongside the
+ * reminder itself.
+ *
+ * A reminder has no block of its own — it opens, and is iconed as, whatever it
+ * references. Which block that is depends on the referenced document's file
+ * type, so resolving it client-side would mean a second fetch per row against
+ * a synchronous icon path. Reading it here keeps Soup to one round trip.
+ *
+ * Only documents populate these; every other entity type is identified by its
+ * [`EntityType`] alone.
+ */
+export type ReminderReference = {
+    /**
+     * The referenced document's file type, e.g. `md` or `pdf`.
+     */
+    fileType?: string | null;
+    /**
+     * The referenced document's sub type, e.g. `task` or `snippet`.
+     */
+    subType?: string | null;
 };
 
 /**
@@ -7942,6 +9817,42 @@ export type ReplaceCrmStagesRequest = {
 export type RequestedHarnessScope = 'private' | 'team';
 
 /**
+ * A layout as an op asks for it: a board may leave its card title out.
+ */
+export type RequestedLayout = {
+    /**
+     * How columns show, in display order. A column left out shows
+     * after the listed ones, in the table's order.
+     */
+    columns: Array<ViewColumn>;
+    kind: 'table';
+} | {
+    /**
+     * The columns a card shows under its title, in order.
+     */
+    cardFields: Array<string>;
+    /**
+     * The single-select or single-person column whose values are the
+     * lanes.
+     */
+    groupBy: string;
+    /**
+     * Whether a lane with no cards is hidden.
+     */
+    hideEmptyLanes: boolean;
+    kind: 'board';
+    /**
+     * How lanes show, in display order.
+     */
+    lanes: Array<Lane>;
+    /**
+     * The column a card is titled by. Left out, a board keeps the
+     * title it has, and a new board takes the table's first column.
+     */
+    title?: string;
+};
+
+/**
  * Per-user status of an incoming-call ring, as reported by the
  * ring-status endpoint while a native client is ringing.
  */
@@ -7955,6 +9866,152 @@ export type RingStatusResponse = {
      * The ring status for the authenticated user.
      */
     status: RingStatus;
+};
+
+/**
+ * One row's cells in a [`RowChanges::PerRow`] update.
+ */
+export type RowChange = {
+    /**
+     * Its new cells.
+     */
+    cells: Array<CellWrite>;
+    /**
+     * The row.
+     */
+    row: string;
+};
+
+/**
+ * How a change touched a row.
+ */
+export type RowChangeKind = 'insert' | 'update' | 'delete';
+
+/**
+ * Which rows an update writes, and with what.
+ */
+export type RowChanges = {
+    /**
+     * The cells each of them gets.
+     */
+    cells: Array<CellWrite>;
+    kind: 'uniform';
+    /**
+     * The rows.
+     */
+    rows: Array<string>;
+} | {
+    kind: 'per_row';
+    /**
+     * The rows and their cells, in order.
+     */
+    rows: Array<RowChange>;
+};
+
+/**
+ * One change of a row, as its history shows it.
+ */
+export type RowHistoryEntry = {
+    /**
+     * The agent acting for them, if one was.
+     */
+    actingBot: string | null;
+    /**
+     * Who made it; `null` for an internal caller, or a removed user.
+     */
+    actor: string | null;
+    /**
+     * Those columns' values it wrote, by column id; a cell it emptied is
+     * left out.
+     */
+    after: {
+        [key: string]: CellValue;
+    };
+    /**
+     * When it committed.
+     */
+    at: string;
+    /**
+     * Those columns' values before it, by column id; an empty cell is
+     * left out.
+     */
+    before: {
+        [key: string]: CellValue;
+    };
+    /**
+     * The change's id in the journal.
+     */
+    change: number;
+    /**
+     * The columns it wrote; for a removal, those the row had values in.
+     */
+    columns: Array<string>;
+    /**
+     * How it touched the row.
+     */
+    kind: RowChangeKind;
+    /**
+     * The table version it produced.
+     */
+    version: number;
+};
+
+/**
+ * A row's history.
+ */
+export type RowHistoryResponse = {
+    /**
+     * Every committed change that touched the row, newest first: who made
+     * it, when, how, and the touched columns' values before and after.
+     */
+    changes: Array<RowHistoryEntry>;
+};
+
+/**
+ * A write to a table's rows.
+ */
+export type RowsChange = {
+    kind: 'insert';
+    /**
+     * One entry per new row: the cells it starts with. Columns left out
+     * start empty.
+     */
+    rows: Array<Array<CellWrite>>;
+} | {
+    /**
+     * Which rows get which cells.
+     */
+    changes: RowChanges;
+    kind: 'update';
+} | {
+    kind: 'delete';
+    /**
+     * The rows, each named once.
+     */
+    rows: Array<string>;
+};
+
+/**
+ * What happened to a table's rows.
+ */
+export type RowsResult = {
+    kind: 'inserted';
+    /**
+     * The new rows, in the order they were sent.
+     */
+    rows: Array<string>;
+} | {
+    /**
+     * How many rows the op updated.
+     */
+    affected: number;
+    kind: 'updated';
+} | {
+    /**
+     * How many rows the op deleted.
+     */
+    affected: number;
+    kind: 'deleted';
 };
 
 export type S3ObjectInfo = {
@@ -8013,6 +10070,78 @@ export type SaveDocumentResponseData = {
      * If the document is an editable file, we provide a presigned url to save the updated file to.
      */
     presignedUrl?: string | null;
+};
+
+/**
+ * Request body for saving a query.
+ */
+export type SaveQueryRequest = {
+    /**
+     * The database whose tables win name resolution. The caller must be
+     * able to see it.
+     */
+    databaseId?: string;
+    /**
+     * What the query asks: `{"version": 1, "query": "<SELECT>"}`.
+     */
+    definition: QueryDefinition;
+};
+
+/**
+ * A stored, immutable query. Editing a question saves a new one.
+ */
+export type SavedQuery = {
+    /**
+     * When it was saved.
+     */
+    createdAt: string;
+    /**
+     * Who saved it; `null` once that user is deleted.
+     */
+    createdBy: string | null;
+    /**
+     * The database whose tables win name resolution; `null` once that
+     * database is deleted, or when none was given.
+     */
+    databaseId: string | null;
+    /**
+     * What it asks.
+     */
+    definition: QueryDefinition;
+    /**
+     * Identifier.
+     */
+    id: string;
+};
+
+/**
+ * Response from searching CRM contacts.
+ */
+export type SearchContactsResponse = {
+    /**
+     * Matching contacts, most recently interacted first.
+     */
+    contacts: Array<CrmContactResponse>;
+};
+
+/**
+ * Search publication/receipt state. Acceptance is not completed publication;
+ * even completed publication still awaits consumer indexing and refresh.
+ */
+export type SearchState = {
+    status: 'not_needed';
+} | {
+    status: 'pending';
+} | {
+    /**
+     * Receipt from the search service.
+     */
+    receiptId: string;
+    status: 'submitted';
+} | {
+    status: 'completed';
+} | {
+    status: 'failed';
 };
 
 /**
@@ -8241,6 +10370,12 @@ export type SetEmailSyncRequest = {
 };
 
 /**
+ * How a cell's options or references relate to a set of them. The first
+ * two fit a column holding one value, the last three one holding several.
+ */
+export type SetOperator = 'isAnyOf' | 'isNoneOf' | 'hasAny' | 'hasAll' | 'hasNone';
+
+/**
  * Type-safe enum for setting entity property values - provides compile-time validation.
  */
 export type SetPropertyValue = {
@@ -8274,6 +10409,11 @@ export type SetPropertyValue = {
     type: 'multi_link';
     urls: Array<string>;
 };
+
+/**
+ * SHA-256 encoded as exactly 64 lowercase hexadecimal characters.
+ */
+export type Sha256Digest = string;
 
 export type SharePermissionV2 = {
     /**
@@ -8323,6 +10463,51 @@ export type SimpleMention = {
 };
 
 /**
+ * A cell an undo left alone, because someone changed it after the change
+ * being undone.
+ */
+export type SkippedCell = {
+    /**
+     * Who changed it since, from the journal; `null` when unknown.
+     */
+    by: string | null;
+    /**
+     * The column.
+     */
+    column: string;
+    /**
+     * The row.
+     */
+    row: string;
+};
+
+/**
+ * At most fifty registered identities to verify and an optional immutable conversation seal.
+ */
+export type SlackCompleteRequest = CompleteUploads;
+
+/**
+ * Bounded full-metadata create payload. Domain validation applies effective limits again.
+ */
+export type SlackCreateRequest = CreateImport;
+
+/**
+ * At most fifty immutable upload descriptors, without client-supplied storage keys.
+ */
+export type SlackRegisterRequest = RegisterUploads;
+
+/**
+ * Slack time represented exactly as nonnegative Unix microseconds.
+ * JSON is a string with six fractional digits, never a floating-point number.
+ */
+export type SlackTimestamp = string;
+
+/**
+ * Slack member identity (U or W prefix), including USLACKBOT.
+ */
+export type SlackUserId = string;
+
+/**
  * A channel visible to the caller that matches a smart tag rule.
  */
 export type SmartTagChannelMatch = {
@@ -8348,6 +10533,25 @@ export type SmartTagPreview = {
      * Number of matching channels the caller participates in, including overflow.
      */
     totalCount: number;
+};
+
+/**
+ * A sort direction. Empty cells sort last either way.
+ */
+export type SortDirection = 'ascending' | 'descending';
+
+/**
+ * One sort key.
+ */
+export type SortKey = {
+    /**
+     * The column sorted on.
+     */
+    column: string;
+    /**
+     * Which way.
+     */
+    direction: SortDirection;
 };
 
 /**
@@ -8982,6 +11186,50 @@ export type SoupCrmDomain = {
 };
 
 /**
+ * A row of a Macro database table in the Soup feed. Its cells are its
+ * entity properties; access is its database's.
+ */
+export type SoupDatabaseRowSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Who created the row, when they still exist.
+     */
+    createdBy?: string | null;
+    /**
+     * The database the table belongs to.
+     */
+    databaseId: string;
+    /**
+     * Row identifier.
+     */
+    id: string;
+    /**
+     * The database's owner, which owns every row in it.
+     */
+    ownerId: string;
+    /**
+     * Fractional index ordering the row within its table.
+     */
+    position: string;
+    /**
+     * The table the row belongs to.
+     */
+    tableId: string;
+    /**
+     * Last modification timestamp.
+     */
+    updatedAt: string;
+};
+
+/**
  * Sub type of a document with associated properties encoded in each variant.
  * This ensures type-safety: task properties only exist when the document is a task.
  */
@@ -9228,10 +11476,6 @@ export type SoupInitiativeSoupPropertiesField = {
      */
     createdAt: string;
     /**
-     * Document holding the initiative description.
-     */
-    descriptionDocumentId?: string | null;
-    /**
      * Initiative identifier.
      */
     id: string;
@@ -9334,6 +11578,12 @@ export type SoupItem = {
      */
     data: SoupAgentSessionSoupPropertiesField;
     tag: 'agentSession';
+} | {
+    /**
+     * Database row item.
+     */
+    data: SoupDatabaseRowSoupPropertiesField;
+    tag: 'databaseRow';
 };
 
 /**
@@ -9537,7 +11787,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -9590,7 +11840,7 @@ export type SoupReminderSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
-     * Set once a one-shot reminder has fired.
+     * When the owner acknowledged the occurrence; independent of future scheduling.
      */
     completedAt?: string | null;
     /**
@@ -9685,6 +11935,61 @@ export type SoupThreadReply = {
 };
 
 /**
+ * Team's durable single-source binding, including confirmed unidentified archives.
+ */
+export type SourceBinding = {
+    kind: 'unbound';
+} | {
+    kind: 'confirmed_unknown';
+} | {
+    kind: 'known';
+    /**
+     * Bound source identity.
+     */
+    sourceId: SourceId;
+};
+
+/**
+ * Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.
+ */
+export type SourceId = string;
+
+/**
+ * Source identity supplied when creating a job. One binding per Macro team in v1.
+ */
+export type SourceIdentity = {
+    kind: 'known';
+    /**
+     * Workspace identifier in the archive.
+     */
+    sourceId: SourceId;
+} | {
+    kind: 'confirmed_unknown';
+};
+
+/**
+ * Starter result. A missing database means the user already started or removed it.
+ */
+export type StarterDatabase = {
+    /**
+     * Whether this request created the example.
+     */
+    created: boolean;
+    /**
+     * Accessible starter database, if still present.
+     */
+    databaseId: string | null;
+    /**
+     * Initial table, returned only on first creation.
+     */
+    tableId: string | null;
+    /**
+     * Initial board view, returned only on first creation.
+     */
+    viewId: string | null;
+};
+
+/**
  * The deterministic starter document ids for the current user.
  */
 export type StarterDocumentsResponse = {
@@ -9692,6 +11997,101 @@ export type StarterDocumentsResponse = {
      * Id of the user's "Macro how to guide".
      */
     how_to_guide_id: string;
+};
+
+/**
+ * A GitHub pull request as Macro stores it, read through one of the caller's records.
+ */
+export type StoredGithubPullRequest = {
+    /**
+     * Lines added across the pull request's changes.
+     */
+    additions?: number | null;
+    /**
+     * The users assigned to the pull request.
+     */
+    assignees: Array<GithubPullRequestUser>;
+    /**
+     * Stable numeric GitHub user id of the author.
+     */
+    authorGithubUserId?: string | null;
+    /**
+     * The author's GitHub login when the pull request was last synced.
+     */
+    authorLogin?: string | null;
+    base?: null | GitRefDto;
+    /**
+     * The latest check runs on the pull request's head commit.
+     */
+    checks: Array<GithubPullRequestCheckRun>;
+    /**
+     * Comments from the pull request's conversation, reviews, and review threads.
+     * Comment `authorId` intentionally retains the shared numeric GitHub comment contract;
+     * convert it to a decimal string before comparing it with `authorGithubUserId`.
+     */
+    comments: Array<GithubPullRequestComment>;
+    /**
+     * Lines deleted across the pull request's changes.
+     */
+    deletions?: number | null;
+    /**
+     * The pull request body, as GitHub markdown.
+     */
+    description?: string | null;
+    /**
+     * Whether the pull request is a draft.
+     */
+    draft: boolean;
+    /**
+     * The pull request's `owner/repo/pull/number` key.
+     */
+    githubKey: string;
+    /**
+     * When GitHub last updated the pull request.
+     */
+    githubUpdatedAt?: string | null;
+    head?: null | GitRefDto;
+    /**
+     * The caller's record for the pull request.
+     */
+    id: string;
+    /**
+     * The pull request's labels.
+     */
+    labels: Array<GithubPullRequestLabel>;
+    /**
+     * The pull request number within its repository.
+     */
+    number: number;
+    /**
+     * The repository owner the pull request was last synced under.
+     */
+    owner: string;
+    /**
+     * The repository name the pull request was last synced under.
+     */
+    repo: string;
+    /**
+     * Stable numeric GitHub user ids of the users asked to review.
+     */
+    requestedReviewerGithubUserIds: Array<string>;
+    reviewDecision?: null | GithubPullRequestReviewDecision;
+    /**
+     * Each reviewer's latest submitted review.
+     */
+    reviews: Array<GithubPullRequestReview>;
+    /**
+     * The normalized pull request status.
+     */
+    status?: null | 'open' | 'closed' | 'merged';
+    /**
+     * The pull request title.
+     */
+    title?: string | null;
+    /**
+     * The pull request's page on GitHub.
+     */
+    url: string;
 };
 
 export type String = string;
@@ -9741,9 +12141,200 @@ export type SystemSkillSummary = {
 };
 
 /**
+ * One table (tab) of a database.
+ */
+export type Table = {
+    /**
+     * Owning database.
+     */
+    database_id: string;
+    /**
+     * Identifier.
+     */
+    id: string;
+    /**
+     * Display name; also the basis of the table's SQL name.
+     */
+    name: string;
+    /**
+     * Fractional index for tab ordering.
+     */
+    position: string;
+    /**
+     * Current version.
+     */
+    version: TableVersion;
+};
+
+/**
+ * A change to a table itself.
+ */
+export type TableChange = {
+    kind: 'create';
+    /**
+     * Its name, unique within the database ignoring case.
+     */
+    name: string;
+} | {
+    kind: 'rename';
+    /**
+     * Its new name, unique within the database ignoring case.
+     */
+    name: string;
+    /**
+     * The name the caller saw. Given, the rename is refused if the
+     * table goes by another one now, so a concurrent rename is not
+     * overwritten.
+     */
+    previousName?: string;
+} | {
+    kind: 'delete';
+} | {
+    kind: 'reorder_columns';
+    /**
+     * Its columns, in their new order.
+     */
+    order: Array<string>;
+} | {
+    kind: 'reorder_views';
+    /**
+     * Its views, in their new order.
+     */
+    order: Array<string>;
+};
+
+/**
+ * The [`TABLE_CHANGED_MESSAGE_TYPE`] payload: one table's new version.
+ */
+export type TableChanged = {
+    /**
+     * The database the table belongs to.
+     */
+    databaseId: string;
+    /**
+     * The table that changed.
+     */
+    tableId: string;
+    /**
+     * The table's version after the write.
+     */
+    version: TableVersion;
+};
+
+/**
+ * What changed in a table since a version, for a reader holding it at
+ * that version.
+ */
+export type TableChanges = {
+    /**
+     * The columns that changed; any of them means the table's shape moved.
+     */
+    columns: Array<TouchedColumn>;
+    /**
+     * Whether every version since is journaled; without it, read the table
+     * whole.
+     */
+    complete: boolean;
+    /**
+     * The rows that changed, each once, as they stand now: a row added
+     * and written is `insert`, one removed is `delete`, and one added and
+     * removed since is left out.
+     */
+    rows: Array<TouchedRow>;
+    /**
+     * Whether more rows changed than are listed; then read the table whole.
+     */
+    truncated: boolean;
+    /**
+     * The version the changes reach.
+     */
+    version: number;
+};
+
+/**
+ * One table with its columns and SQL name.
+ */
+export type TableDetail = {
+    /**
+     * Columns in display order.
+     */
+    columns: Array<ColumnDetail>;
+    /**
+     * The name SQL refers to the table by: its display name quoted and
+     * qualified by the database's (`FROM "Plans"."Table 1"`).
+     */
+    sql_name: string;
+    /**
+     * The table.
+     */
+    table: Table;
+    /**
+     * The table's views, in their order.
+     */
+    views: Array<DatabaseView>;
+};
+
+/**
+ * What happened to a table.
+ */
+export type TableResult = {
+    kind: 'created';
+} | {
+    kind: 'renamed';
+} | {
+    kind: 'deleted';
+} | {
+    kind: 'columns_reordered';
+} | {
+    kind: 'views_reordered';
+    /**
+     * Every view's key, in their new order.
+     */
+    positions: Array<ViewPosition>;
+};
+
+/**
+ * Monotonic per-table version, bumped once by every committed change to a
+ * table's schema or rows. Schema edits name the version they were made
+ * against, and change events carry the new one.
+ */
+export type TableVersion = number;
+
+/**
  * How multiple `tag_option_ids` combine when filtering.
  */
 export type TagFilterMode = 'any' | 'all';
+
+/**
+ * An id a request minted for something new that already names something,
+ * which refuses the request: a retried request whose first attempt
+ * committed, or an id minted twice.
+ */
+export type TakenId = {
+    /**
+     * A table's.
+     */
+    id: string;
+    kind: 'table';
+} | {
+    /**
+     * A column's.
+     */
+    id: string;
+    kind: 'column';
+} | {
+    /**
+     * An option's.
+     */
+    id: string;
+    kind: 'option';
+} | {
+    /**
+     * A view's.
+     */
+    id: string;
+    kind: 'view';
+};
 
 /**
  * Task-only filters nested under document filters.
@@ -9798,6 +12389,11 @@ export type TeamOutOfOfficeResponse = {
 export type TeamRole = 'member' | 'admin' | 'owner';
 
 /**
+ * How a text cell compares to a text.
+ */
+export type TextOperator = 'is' | 'isNot' | 'contains' | 'doesNotContain' | 'startsWith' | 'endsWith';
+
+/**
  * A thread's location within its document. PDF geometry remains annotation-owned.
  */
 export type ThreadAnchor = {
@@ -9846,6 +12442,25 @@ export type ThreadAnchor = {
      */
     sheetName: string;
     type: 'spreadsheet';
+} | {
+    /**
+     * Layer the pin follows; absent for a pin on the bare canvas.
+     */
+    nodeId?: string | null;
+    /**
+     * Page (canvas) the pin is on.
+     */
+    pageId: string;
+    type: 'fig';
+    /**
+     * Horizontal offset from the layer's origin, or the page's when
+     * the pin is on no layer, in design units.
+     */
+    x: number;
+    /**
+     * Vertical offset, measured like `x`.
+     */
+    y: number;
 };
 
 /**
@@ -9918,6 +12533,34 @@ export type ThreadState = {
      * User who owns this discussion, including imported discussions.
      */
     user_id: string;
+};
+
+/**
+ * A column a table's changes since some version touched.
+ */
+export type TouchedColumn = {
+    /**
+     * The column.
+     */
+    column: string;
+    /**
+     * How.
+     */
+    kind: ColumnChangeKind;
+};
+
+/**
+ * A row a table's changes since some version touched, and how it stands.
+ */
+export type TouchedRow = {
+    /**
+     * How it changed overall: added, written, or removed.
+     */
+    kind: RowChangeKind;
+    /**
+     * The row.
+     */
+    row: string;
 };
 
 /**
@@ -10123,6 +12766,55 @@ export type TypingInput = {
 };
 
 /**
+ * What undoing a change did.
+ */
+export type UndoChangeResponse = {
+    /**
+     * The outcome: reverted, partly reverted with the cells others changed
+     * since left alone, or refused with why and whose change stands in the
+     * way.
+     */
+    outcome: UndoOutcome;
+};
+
+/**
+ * What undoing a change did.
+ */
+export type UndoOutcome = {
+    /**
+     * The journal's changes the undo made, one per table version; undo
+     * one of them to redo.
+     */
+    changes: Array<CommittedChange>;
+    kind: 'reverted';
+} | {
+    /**
+     * The journal's changes the undo made.
+     */
+    changes: Array<CommittedChange>;
+    kind: 'partial';
+    /**
+     * The cells left alone, each with who changed it.
+     */
+    skipped: Array<SkippedCell>;
+} | {
+    /**
+     * Whose change stands in the way, when one does.
+     */
+    by: string | null;
+    kind: 'refused';
+    /**
+     * Why.
+     */
+    reason: UndoRefusal;
+};
+
+/**
+ * Why an undo was refused. Nothing was written.
+ */
+export type UndoRefusal = 'row_in_use' | 'option_in_use' | 'not_yours' | 'not_undoable' | 'row_edited_since' | 'column_written_since' | 'changed_since' | 'already_back';
+
+/**
  * Request to replace the editable configuration of a persisted AI agent.
  */
 export type UpdateAgentRequest = {
@@ -10222,7 +12914,7 @@ export type UpdateCrmTeamSettingsRequest = {
 
 /**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
- * present is a full replace. The description is edited in its document, not here.
+ * present is a full replace. The description is edited in its collab surface, not here.
  */
 export type UpdateInitiativeRequest = {
     /**
@@ -10302,6 +12994,28 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * Immutable expected object properties, registered before signing an upload.
+ */
+export type UploadDescriptor = {
+    /**
+     * Exact byte length including delimiters.
+     */
+    byteLength: number;
+    /**
+     * Exact NDJSON record count; null for the users JSON payload.
+     */
+    recordCount?: number | null;
+    /**
+     * SHA-256 of the exact uploaded bytes, not the ETag.
+     */
+    sha256: Sha256Digest;
+    /**
+     * Manifest identity within this job.
+     */
+    upload: UploadId;
+};
+
+/**
  * The upload status of the document
  */
 export type UploadDocumentStatus = 'pending' | 'completed' | 'failed' | 'unknown';
@@ -10331,6 +13045,48 @@ export type UploadFolderRequest = {
      * The upload request id
      */
     uploadRequestId: string;
+};
+
+/**
+ * Signed upload permission returned just before PUT; never persisted as an identity.
+ */
+export type UploadGrant = {
+    /**
+     * Exact immutable descriptor being signed.
+     */
+    descriptor: UploadDescriptor;
+    /**
+     * Grant expiry; callers renew by re-registering the identical descriptor.
+     */
+    expiresAt: string;
+    /**
+     * Required signed upload headers (including checksum, content type and create-only
+     * condition). Browser-forbidden Content-Length is derived from the exact Blob bytes.
+     */
+    requiredHeaders: {
+        [key: string]: string;
+    };
+    /**
+     * Short-lived signed destination; must not be logged.
+     */
+    url: string;
+};
+
+/**
+ * Identity in a job's persisted manifest. No user-supplied object keys.
+ */
+export type UploadId = {
+    kind: 'users';
+} | {
+    kind: 'conversation_part';
+    /**
+     * Zero-based part index; sealed manifests must be contiguous.
+     */
+    partIndex: number;
+    /**
+     * Selected Slack conversation.
+     */
+    slackChannelId: ConversationId;
 };
 
 export type UpsertUserDocumentViewLocationRequest = {
@@ -10446,6 +13202,20 @@ export type Vec = Array<{
     ids?: Array<string> | null;
 }>;
 
+/**
+ * A table and its version.
+ */
+export type VersionedTable = {
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * Its version.
+     */
+    version: TableVersion;
+};
+
 export type View = {
     /**
      * It is an explicit choice that the structure of the view configuration
@@ -10460,9 +13230,176 @@ export type View = {
     userId: string;
 };
 
+/**
+ * A change to one view.
+ */
+export type ViewChange = {
+    kind: 'create';
+    /**
+     * What it shows and how.
+     */
+    view: NewView;
+} | {
+    kind: 'update';
+    /**
+     * Its new layout. A board grouped by another column forgets where
+     * its cards were; a board left without a card title keeps the one
+     * it has, or takes the table's first column.
+     */
+    layout?: RequestedLayout;
+    /**
+     * Its new name.
+     */
+    name?: string;
+    /**
+     * Its new query.
+     */
+    query?: ViewQuery;
+} | {
+    kind: 'delete';
+} | {
+    /**
+     * The card that ends up just after it, if any. Given with `before`,
+     * it must be the card right after `before`; with neither, the card
+     * goes to the end of the lane.
+     */
+    after?: string | null;
+    /**
+     * The card that ends up just before it (it lands right after this
+     * one), if any.
+     */
+    before?: string | null;
+    kind: 'move_card';
+    /**
+     * The lane it goes to: an option of a select board's column, a
+     * person for a board grouped by people, or the lane of empty cells.
+     */
+    lane: LaneKey;
+    /**
+     * The card's row.
+     */
+    row: string;
+};
+
+/**
+ * How one column shows in a table layout.
+ */
+export type ViewColumn = {
+    /**
+     * The column.
+     */
+    column: string;
+    /**
+     * Its width in pixels; the default when unset.
+     */
+    width: number | null;
+};
+
+/**
+ * How a view draws its rows.
+ */
+export type ViewLayout = {
+    /**
+     * How columns show, in display order. A column left out shows
+     * after the listed ones, in the table's order.
+     */
+    columns: Array<ViewColumn>;
+    kind: 'table';
+} | {
+    /**
+     * The columns a card shows under its title, in order.
+     */
+    cardFields: Array<string>;
+    /**
+     * The single-select or single-person column whose values are the
+     * lanes; moving a card to another lane sets this column.
+     */
+    groupBy: string;
+    /**
+     * Whether a lane with no cards is hidden.
+     */
+    hideEmptyLanes: boolean;
+    kind: 'board';
+    /**
+     * How lanes show, in display order. A lane left out shows after the
+     * listed ones: the lane of empty cells first, then options in the
+     * column's order, or people by id.
+     */
+    lanes: Array<Lane>;
+    /**
+     * The column a card is titled by, of any type. Removing it titles
+     * the cards by the table's first remaining column.
+     */
+    title: string;
+};
+
 export type ViewPatch = {
     config?: unknown;
     name?: string | null;
+};
+
+/**
+ * A view's place among its table's views.
+ */
+export type ViewPosition = {
+    /**
+     * Its key.
+     */
+    position: string;
+    /**
+     * The view.
+     */
+    view: string;
+};
+
+/**
+ * Where a board's cards sit.
+ */
+export type ViewPositionsResponse = {
+    /**
+     * The places of the cards that have one: each card's lane and its key
+     * there. Cards without a place show after the placed ones of their
+     * lane, oldest first.
+     */
+    positions: Array<CardPosition>;
+};
+
+/**
+ * Which rows of the table a view shows, and in what order: a filter and a
+ * sort, nothing that joins, groups or reshapes rows.
+ */
+export type ViewQuery = {
+    filter: null | FilterGroup;
+    /**
+     * The sort keys, first key first. Rows the keys leave tied keep the
+     * table's own order; with no keys, the table's order is the view's.
+     */
+    sort?: Array<SortKey>;
+};
+
+/**
+ * What happened to a view.
+ */
+export type ViewResult = {
+    kind: 'created';
+    /**
+     * The view as stored.
+     */
+    view: DatabaseView;
+} | {
+    kind: 'updated';
+    /**
+     * The view as stored.
+     */
+    view: DatabaseView;
+} | {
+    kind: 'deleted';
+} | {
+    kind: 'card_moved';
+    /**
+     * The positions written, the moved card's last.
+     */
+    positions: Array<CardPosition>;
 };
 
 export type ViewsResponse = {
@@ -12647,6 +15584,10 @@ export type EnsureCollabSurfaceErrors = {
      */
     404: ErrorResponse;
     /**
+     * The surface id is already in use
+     */
+    409: ErrorResponse;
+    /**
      * The surface id was deleted and cannot be reused
      */
     410: ErrorResponse;
@@ -12684,6 +15625,10 @@ export type CreateCollabSurfaceTokenErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * The surface is not initialized yet, or its id is in use
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -12913,6 +15858,36 @@ export type SetCrmCompanyNameResponses = {
 
 export type SetCrmCompanyNameResponse = SetCrmCompanyNameResponses[keyof SetCrmCompanyNameResponses];
 
+export type SearchContactsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Text the contact's email or name must contain (case-insensitive).
+         * Empty lists the most recently interacted contacts.
+         */
+        query?: string;
+        /**
+         * Maximum contacts to return (1-500, default 20).
+         */
+        limit?: number | null;
+    };
+    url: '/crm/contacts';
+};
+
+export type SearchContactsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SearchContactsError = SearchContactsErrors[keyof SearchContactsErrors];
+
+export type SearchContactsResponses = {
+    200: SearchContactsResponse;
+};
+
+export type SearchContactsResponse2 = SearchContactsResponses[keyof SearchContactsResponses];
+
 export type GetContactByEmailData = {
     body?: never;
     path?: never;
@@ -13105,6 +16080,580 @@ export type PutCrmTeamStagesResponses = {
 };
 
 export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
+
+export type ListDatabasesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/databases';
+};
+
+export type ListDatabasesErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListDatabasesError = ListDatabasesErrors[keyof ListDatabasesErrors];
+
+export type ListDatabasesResponses = {
+    200: Array<ListedDatabase>;
+};
+
+export type ListDatabasesResponse = ListDatabasesResponses[keyof ListDatabasesResponses];
+
+export type CreateDatabaseData = {
+    body: CreateDatabaseRequest;
+    path?: never;
+    query?: never;
+    url: '/databases';
+};
+
+export type CreateDatabaseErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateDatabaseError = CreateDatabaseErrors[keyof CreateDatabaseErrors];
+
+export type CreateDatabaseResponses = {
+    201: Database;
+};
+
+export type CreateDatabaseResponse = CreateDatabaseResponses[keyof CreateDatabaseResponses];
+
+export type SaveDatabaseQueryData = {
+    body: SaveQueryRequest;
+    path?: never;
+    query?: never;
+    url: '/databases/queries';
+};
+
+export type SaveDatabaseQueryErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * The database is missing or not visible
+     */
+    404: ErrorResponse;
+    /**
+     * The query is too long
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SaveDatabaseQueryError = SaveDatabaseQueryErrors[keyof SaveDatabaseQueryErrors];
+
+export type SaveDatabaseQueryResponses = {
+    201: SavedQuery;
+};
+
+export type SaveDatabaseQueryResponse = SaveDatabaseQueryResponses[keyof SaveDatabaseQueryResponses];
+
+export type GetDatabaseQueryData = {
+    body?: never;
+    path: {
+        /**
+         * Saved query id
+         */
+        query_id: string;
+    };
+    query?: never;
+    url: '/databases/queries/{query_id}';
+};
+
+export type GetDatabaseQueryErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * Missing, or not readable by the caller
+     */
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseQueryError = GetDatabaseQueryErrors[keyof GetDatabaseQueryErrors];
+
+export type GetDatabaseQueryResponses = {
+    200: SavedQuery;
+};
+
+export type GetDatabaseQueryResponse = GetDatabaseQueryResponses[keyof GetDatabaseQueryResponses];
+
+export type EnsureStarterHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/databases/starter';
+};
+
+export type EnsureStarterHandlerErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Provisioning failed; safe to retry
+     */
+    500: unknown;
+};
+
+export type EnsureStarterHandlerResponses = {
+    200: StarterDatabase;
+};
+
+export type EnsureStarterHandlerResponse = EnsureStarterHandlerResponses[keyof EnsureStarterHandlerResponses];
+
+export type GetDatabaseData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}';
+};
+
+export type GetDatabaseErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseError = GetDatabaseErrors[keyof GetDatabaseErrors];
+
+export type GetDatabaseResponses = {
+    200: DatabaseDetail;
+};
+
+export type GetDatabaseResponse = GetDatabaseResponses[keyof GetDatabaseResponses];
+
+export type ShareDatabaseAwarenessData = {
+    body: Awareness;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/awareness';
+};
+
+export type ShareDatabaseAwarenessErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ShareDatabaseAwarenessError = ShareDatabaseAwarenessErrors[keyof ShareDatabaseAwarenessErrors];
+
+export type ShareDatabaseAwarenessResponses = {
+    /**
+     * Relayed to the database's other viewers
+     */
+    204: void;
+};
+
+export type ShareDatabaseAwarenessResponse = ShareDatabaseAwarenessResponses[keyof ShareDatabaseAwarenessResponses];
+
+export type UndoDatabaseChangeData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * The change's journal id
+         */
+        change: number;
+    };
+    query?: never;
+    url: '/databases/{id}/changes/{change}/undo';
+};
+
+export type UndoDatabaseChangeErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No edit access to the database
+     */
+    403: ErrorResponse;
+    /**
+     * No such change in this database
+     */
+    404: ErrorResponse;
+    /**
+     * The table kept moving under the undo
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UndoDatabaseChangeError = UndoDatabaseChangeErrors[keyof UndoDatabaseChangeErrors];
+
+export type UndoDatabaseChangeResponses = {
+    200: UndoChangeResponse;
+};
+
+export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type ImportDatabaseTableData = {
+    body: ImportTable;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/import';
+};
+
+export type ImportDatabaseTableErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ImportDatabaseTableError = ImportDatabaseTableErrors[keyof ImportDatabaseTableErrors];
+
+export type ImportDatabaseTableResponses = {
+    200: Table;
+};
+
+export type ImportDatabaseTableResponse = ImportDatabaseTableResponses[keyof ImportDatabaseTableResponses];
+
+export type ApplyDatabaseOpsData = {
+    body: ApplyOpsRequest;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/ops';
+};
+
+export type ApplyDatabaseOpsErrors = {
+    /**
+     * An op was refused; nothing was written
+     */
+    400: OpRefusalResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No edit access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    /**
+     * A table moved from its base version, or a schema change raced another
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ApplyDatabaseOpsError = ApplyDatabaseOpsErrors[keyof ApplyDatabaseOpsErrors];
+
+export type ApplyDatabaseOpsResponses = {
+    200: ApplyOpsResponse;
+};
+
+export type ApplyDatabaseOpsResponse = ApplyDatabaseOpsResponses[keyof ApplyDatabaseOpsResponses];
+
+export type GetDatabasePermissionsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/permissions';
+};
+
+export type GetDatabasePermissionsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabasePermissionsError = GetDatabasePermissionsErrors[keyof GetDatabasePermissionsErrors];
+
+export type GetDatabasePermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type GetDatabasePermissionsResponse = GetDatabasePermissionsResponses[keyof GetDatabasePermissionsResponses];
+
+export type UpdateDatabasePermissionsData = {
+    body: UpdateSharePermissionRequestV2;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/permissions';
+};
+
+export type UpdateDatabasePermissionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateDatabasePermissionsError = UpdateDatabasePermissionsErrors[keyof UpdateDatabasePermissionsErrors];
+
+export type UpdateDatabasePermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type UpdateDatabasePermissionsResponse = UpdateDatabasePermissionsResponses[keyof UpdateDatabasePermissionsResponses];
+
+export type GetDatabaseTableChangesData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+    };
+    query: {
+        /**
+         * The table version the reader last read.
+         */
+        since: number;
+    };
+    url: '/databases/{id}/tables/{table_id}/changes';
+};
+
+export type GetDatabaseTableChangesErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseTableChangesError = GetDatabaseTableChangesErrors[keyof GetDatabaseTableChangesErrors];
+
+export type GetDatabaseTableChangesResponses = {
+    200: TableChanges;
+};
+
+export type GetDatabaseTableChangesResponse = GetDatabaseTableChangesResponses[keyof GetDatabaseTableChangesResponses];
+
+export type ListDatabaseColumnCastsData = {
+    body?: never;
+    path: {
+        id: string;
+        table_id: string;
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/casts';
+};
+
+export type ListDatabaseColumnCastsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListDatabaseColumnCastsError = ListDatabaseColumnCastsErrors[keyof ListDatabaseColumnCastsErrors];
+
+export type ListDatabaseColumnCastsResponses = {
+    200: Array<ColumnCast>;
+};
+
+export type ListDatabaseColumnCastsResponse = ListDatabaseColumnCastsResponses[keyof ListDatabaseColumnCastsResponses];
+
+export type ConvertDatabaseColumnData = {
+    body: ColumnConversionRequest;
+    path: {
+        id: string;
+        table_id: string;
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/conversion';
+};
+
+export type ConvertDatabaseColumnErrors = {
+    /**
+     * No value of the column converts to the type
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ConvertDatabaseColumnError = ConvertDatabaseColumnErrors[keyof ConvertDatabaseColumnErrors];
+
+export type ConvertDatabaseColumnResponses = {
+    200: ColumnConversion;
+};
+
+export type ConvertDatabaseColumnResponse = ConvertDatabaseColumnResponses[keyof ConvertDatabaseColumnResponses];
+
+export type InferDatabaseColumnTypeData = {
+    body: InferColumnTypeRequest;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+        /**
+         * Column id
+         */
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/infer-type';
+};
+
+export type InferDatabaseColumnTypeErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type InferDatabaseColumnTypeError = InferDatabaseColumnTypeErrors[keyof InferDatabaseColumnTypeErrors];
+
+export type InferDatabaseColumnTypeResponses = {
+    200: InferColumnTypeOutcome;
+};
+
+export type InferDatabaseColumnTypeResponse = InferDatabaseColumnTypeResponses[keyof InferDatabaseColumnTypeResponses];
+
+export type GetDatabaseRowHistoryData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+        /**
+         * Row id
+         */
+        row_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/rows/{row_id}/history';
+};
+
+export type GetDatabaseRowHistoryErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseRowHistoryError = GetDatabaseRowHistoryErrors[keyof GetDatabaseRowHistoryErrors];
+
+export type GetDatabaseRowHistoryResponses = {
+    200: RowHistoryResponse;
+};
+
+export type GetDatabaseRowHistoryResponse = GetDatabaseRowHistoryResponses[keyof GetDatabaseRowHistoryResponses];
+
+export type GetDatabaseViewPositionsData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * View id
+         */
+        view_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/views/{view_id}/positions';
+};
+
+export type GetDatabaseViewPositionsErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseViewPositionsError = GetDatabaseViewPositionsErrors[keyof GetDatabaseViewPositionsErrors];
+
+export type GetDatabaseViewPositionsResponses = {
+    200: ViewPositionsResponse;
+};
+
+export type GetDatabaseViewPositionsResponse = GetDatabaseViewPositionsResponses[keyof GetDatabaseViewPositionsResponses];
 
 export type TranscribeDictationData = {
     /**
@@ -14208,7 +17757,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -14277,7 +17826,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
         /**
          * The id of the favorited entity.
          */
@@ -14370,6 +17919,112 @@ export type InstallSyncErrors = {
      */
     401: unknown;
 };
+
+export type GetGithubPullRequestFacetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/facets';
+};
+
+export type GetGithubPullRequestFacetsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestFacetsError = GetGithubPullRequestFacetsErrors[keyof GetGithubPullRequestFacetsErrors];
+
+export type GetGithubPullRequestFacetsResponses = {
+    200: GithubPullRequestFacets;
+};
+
+export type GetGithubPullRequestFacetsResponse = GetGithubPullRequestFacetsResponses[keyof GetGithubPullRequestFacetsResponses];
+
+export type GetGithubPullRequestData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/github_pull_requests/{id}';
+};
+
+export type GetGithubPullRequestErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestError = GetGithubPullRequestErrors[keyof GetGithubPullRequestErrors];
+
+export type GetGithubPullRequestResponses = {
+    200: StoredGithubPullRequest;
+};
+
+export type GetGithubPullRequestResponse = GetGithubPullRequestResponses[keyof GetGithubPullRequestResponses];
+
+export type GetGithubPullRequestChangesData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/github_pull_requests/{id}/changes';
+};
+
+export type GetGithubPullRequestChangesErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestChangesError = GetGithubPullRequestChangesErrors[keyof GetGithubPullRequestChangesErrors];
+
+export type GetGithubPullRequestChangesResponses = {
+    200: GithubPullRequestChangesResponse;
+};
+
+export type GetGithubPullRequestChangesResponse = GetGithubPullRequestChangesResponses[keyof GetGithubPullRequestChangesResponses];
+
+export type GetGithubPullRequestChangesPatchData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * The changeset whose patch to read
+         */
+        changeset: string;
+    };
+    url: '/github_pull_requests/{id}/changes/patch';
+};
+
+export type GetGithubPullRequestChangesPatchErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestChangesPatchError = GetGithubPullRequestChangesPatchErrors[keyof GetGithubPullRequestChangesPatchErrors];
+
+export type GetGithubPullRequestChangesPatchResponses = {
+    200: GithubPullRequestChangesPatchResponse;
+};
+
+export type GetGithubPullRequestChangesPatchResponse = GetGithubPullRequestChangesPatchResponses[keyof GetGithubPullRequestChangesPatchResponses];
 
 export type CreateHarnessPairingData = {
     body: CreatePairingRequest;
@@ -14846,70 +18501,6 @@ export type UpdateInitiativeResponses = {
 };
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
-
-export type AssignInitiativeTasksData = {
-    body: AssignTasksRequest;
-    path: {
-        /**
-         * Initiative identifier.
-         */
-        initiative_id: string;
-    };
-    query?: never;
-    url: '/initiatives/{initiative_id}/tasks';
-};
-
-export type AssignInitiativeTasksErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type AssignInitiativeTasksError = AssignInitiativeTasksErrors[keyof AssignInitiativeTasksErrors];
-
-export type AssignInitiativeTasksResponses = {
-    200: AssignTasksResponse;
-};
-
-export type AssignInitiativeTasksResponse = AssignInitiativeTasksResponses[keyof AssignInitiativeTasksResponses];
-
-export type UnassignInitiativeTaskData = {
-    body?: never;
-    path: {
-        /**
-         * Initiative identifier.
-         */
-        initiative_id: string;
-        /**
-         * Task identifier.
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/initiatives/{initiative_id}/tasks/{task_id}';
-};
-
-export type UnassignInitiativeTaskErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UnassignInitiativeTaskError = UnassignInitiativeTaskErrors[keyof UnassignInitiativeTaskErrors];
-
-export type UnassignInitiativeTaskResponses = {
-    200: GenericSuccessResponse;
-};
-
-export type UnassignInitiativeTaskResponse = UnassignInitiativeTaskResponses[keyof UnassignInitiativeTaskResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;
@@ -15784,7 +19375,7 @@ export type ListRemindersData = {
         /**
          * Restrict to reminders attached to an entity of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row'>;
         /**
          * Restrict to reminders attached to these entity ids.
          */
@@ -15858,6 +19449,98 @@ export type CreateReminderResponses = {
 };
 
 export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
+
+export type ListReminderCollectionData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Omit to include both done and not-done occurrences.
+         */
+        completed?: boolean;
+        /**
+         * Page size, bounded to 1–500.
+         */
+        limit?: number;
+        /**
+         * Position returned by the previous page.
+         */
+        cursor?: string;
+    };
+    url: '/reminders/collection';
+};
+
+export type ListReminderCollectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListReminderCollectionError = ListReminderCollectionErrors[keyof ListReminderCollectionErrors];
+
+export type ListReminderCollectionResponses = {
+    200: ReminderCollectionPage;
+};
+
+export type ListReminderCollectionResponse = ListReminderCollectionResponses[keyof ListReminderCollectionResponses];
+
+export type ListEmailRemindersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Selected inboxes; omission selects all accessible inboxes.
+         */
+        inboxIds?: Array<string> | null;
+        /**
+         * Explicitly empty inbox selection.
+         */
+        noInboxes?: boolean | null;
+        /**
+         * Email archive filter, independent of reminder completion.
+         */
+        done?: boolean | null;
+        /**
+         * Email read status.
+         */
+        read?: boolean | null;
+        /**
+         * Restrict to calendar mail.
+         */
+        calendar?: boolean | null;
+        /**
+         * Repeated property-definition:select-option UUID pairs.
+         */
+        tags?: Array<string> | null;
+        /**
+         * Repeated attachment categories: pdf, image, document.
+         */
+        attachments?: Array<string> | null;
+        /**
+         * Continuation from the previous page.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum rows (1–100).
+         */
+        limit?: number | null;
+    };
+    url: '/reminders/email/collection';
+};
+
+export type ListEmailRemindersErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListEmailRemindersError = ListEmailRemindersErrors[keyof ListEmailRemindersErrors];
+
+export type ListEmailRemindersResponses = {
+    200: EmailReminderPage;
+};
+
+export type ListEmailRemindersResponse = ListEmailRemindersResponses[keyof ListEmailRemindersResponses];
 
 export type GetEmailFollowupData = {
     body?: never;
@@ -16102,6 +19785,187 @@ export type PatchViewHandlerError = PatchViewHandlerErrors[keyof PatchViewHandle
 export type PatchViewHandlerResponses = {
     200: unknown;
 };
+
+export type ListSlackImportsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        before?: JobId;
+    };
+    url: '/slack/imports';
+};
+
+export type ListSlackImportsResponses = {
+    200: ImportPage;
+};
+
+export type ListSlackImportsResponse = ListSlackImportsResponses[keyof ListSlackImportsResponses];
+
+export type CreateSlackImportData = {
+    body: SlackCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/slack/imports';
+};
+
+export type CreateSlackImportErrors = {
+    /**
+     * Authentication or team administrator access required
+     */
+    401: unknown;
+    /**
+     * Team administrator required
+     */
+    403: unknown;
+    /**
+     * Metadata limit exceeded
+     */
+    413: unknown;
+    /**
+     * Slack imports disabled or temporarily unavailable
+     */
+    503: unknown;
+};
+
+export type CreateSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type CreateSlackImportResponse = CreateSlackImportResponses[keyof CreateSlackImportResponses];
+
+export type GetSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}';
+};
+
+export type GetSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type GetSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type GetSlackImportResponse = GetSlackImportResponses[keyof GetSlackImportResponses];
+
+export type CancelSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/cancel';
+};
+
+export type CancelSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type CancelSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type CancelSlackImportResponse = CancelSlackImportResponses[keyof CancelSlackImportResponses];
+
+export type FinalizeSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/finalize';
+};
+
+export type FinalizeSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type FinalizeSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type FinalizeSlackImportResponse = FinalizeSlackImportResponses[keyof FinalizeSlackImportResponses];
+
+export type RegisterSlackImportUploadsData = {
+    body: SlackRegisterRequest;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/uploads';
+};
+
+export type RegisterSlackImportUploadsErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+    /**
+     * Body limit exceeded
+     */
+    413: unknown;
+    /**
+     * Slack imports disabled
+     */
+    503: unknown;
+};
+
+export type RegisterSlackImportUploadsResponses = {
+    200: Array<UploadGrant>;
+};
+
+export type RegisterSlackImportUploadsResponse = RegisterSlackImportUploadsResponses[keyof RegisterSlackImportUploadsResponses];
+
+export type CompleteSlackImportUploadsData = {
+    body: SlackCompleteRequest;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/uploads/complete';
+};
+
+export type CompleteSlackImportUploadsErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+    /**
+     * Immutable manifest conflict
+     */
+    409: unknown;
+    /**
+     * Body limit exceeded
+     */
+    413: unknown;
+    /**
+     * Object verification failed
+     */
+    422: unknown;
+    /**
+     * Slack imports disabled
+     */
+    503: unknown;
+};
+
+export type CompleteSlackImportUploadsResponses = {
+    200: ImportProgress;
+};
+
+export type CompleteSlackImportUploadsResponse = CompleteSlackImportUploadsResponses[keyof CompleteSlackImportUploadsResponses];
 
 export type BulkWakeupSyncServiceDocumentsData = {
     body: BulkWakeupRequest;

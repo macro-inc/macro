@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import {
   DEFAULT_MODEL,
@@ -8,7 +9,7 @@ import {
   PAID_MODELS,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CheckIcon from '@phosphor/check.svg';
@@ -39,17 +40,18 @@ const ALL_AVAILABLE: ModelOption[] = PAID_MODELS.map((id) => ({
 }));
 
 const MODEL_DESCRIPTION: Record<TModel, string> = {
-  [Model.sonnet5]: 'Everyday writing, coding, and questions',
-  [Model.opus5]: 'Complex tasks and deeper analysis',
-  [Model.fable51]: 'The most capable model for the hardest work',
+  [Model.sonnet55]: 'Everyday writing, coding, and questions',
+  [Model.opus55]: 'Complex tasks and deeper analysis',
   [Model.haiku45]: 'Quick answers and lighter tasks',
   [Model.gpt6Astra]: 'Frontier reasoning for the hardest problems',
   [Model.gpt56]: 'Reasoning, writing, and problem solving',
   [Model.gpt56Mini]: 'Fast help with everyday tasks',
+  [Model.gemini38Flash]: 'Fast answers over data and documents',
 };
 
 export function ModelSelector(props: ModelSelectorProps) {
   const [open, setOpen] = createSignal(false);
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const model = () => props.selectedModel ?? DEFAULT_MODEL;
   const options = () =>
     props.models && props.models.length > 0 ? props.models : ALL_AVAILABLE;
@@ -102,7 +104,11 @@ export function ModelSelector(props: ModelSelectorProps) {
                       {MODEL_PRETTYNAME[option.id]}
                     </span>
                     {/* Decorative: the item's accessible name stays the model. */}
-                    <Show when={DEV_MODE_ENV && modelUsageHint(option.id)}>
+                    <Show
+                      when={
+                        aiUsageBilling().enabled && modelUsageHint(option.id)
+                      }
+                    >
                       {(hint) => (
                         <span
                           aria-hidden="true"
@@ -193,7 +199,10 @@ export function ModelSelector(props: ModelSelectorProps) {
                             {MODEL_PRETTYNAME[option.id]}
                           </span>
                           <Show
-                            when={DEV_MODE_ENV && modelUsageHint(option.id)}
+                            when={
+                              aiUsageBilling().enabled &&
+                              modelUsageHint(option.id)
+                            }
                           >
                             {(hint) => (
                               <span class="text-xs text-ink-extra-muted">

@@ -1,23 +1,19 @@
-import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CrmCaptureDemo } from './CrmCaptureDemo';
 
-let visible: IntersectionObserverCallback;
+let intersections: IntersectionObserverCallback[];
 let reduced = false;
 beforeEach(() => {
-  vi.useFakeTimers();
+  intersections = [];
   reduced = false;
+  vi.useFakeTimers();
   vi.stubGlobal('fetch', vi.fn());
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      disconnect() {}
-    }
-  );
   vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
   vi.stubGlobal('matchMedia', () => ({
-    matches: reduced,
+    get matches() {
+      return reduced;
+    },
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   }));
@@ -25,112 +21,110 @@ beforeEach(() => {
     'IntersectionObserver',
     class {
       constructor(callback: IntersectionObserverCallback) {
-        visible = callback;
+        intersections.push(callback);
       }
       observe() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
       disconnect() {}
     }
   );
 });
 afterEach(() => {
   cleanup();
+  vi.advanceTimersByTime(100);
   expect(fetch).not.toHaveBeenCalled();
-  vi.clearAllTimers();
+  expect(vi.getTimerCount()).toBe(0);
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-function setVisible(isIntersecting: boolean) {
-  visible(
-    [{ isIntersecting } as IntersectionObserverEntry],
-    {} as IntersectionObserver
-  );
+function visible(value: boolean) {
+  for (const callback of intersections)
+    callback(
+      [{ isIntersecting: value } as IntersectionObserverEntry],
+      {} as IntersectionObserver
+    );
 }
+const stage = (view: ReturnType<typeof render>) =>
+  view.getByRole('button', { name: 'Change Stage' }).textContent;
+const owner = (view: ReturnType<typeof render>) =>
+  view.getByRole('button', { name: 'Change Owner' }).textContent;
 
-it('updates the shared company fields from the message and pauses offscreen', () => {
+it('lets Claude set the stage and owner, then answer in the Discussion thread', () => {
   const view = render(() => <CrmCaptureDemo />);
-  const stage = view.getByLabelText('Deal stage') as HTMLSelectElement;
-  const owner = view.getByLabelText('Company owner') as HTMLSelectElement;
-  const notes = view.getByLabelText(
-    'Company description'
-  ) as HTMLTextAreaElement;
+  expect(view.getByText(/just got off a call with Dana/)).toBeTruthy();
+  expect(stage(view)).toContain('Lead');
+  expect(owner(view)).toContain('Empty');
   vi.advanceTimersByTime(10000);
-  expect(stage.value).toBe('Lead');
-  expect(owner.value).toBe('');
-  setVisible(true);
-  vi.advanceTimersByTime(2800);
-  expect(stage.value).toBe('Demo');
-  setVisible(false);
+  expect(stage(view)).toContain('Lead');
+  visible(true);
+  vi.advanceTimersByTime(1900);
+  expect(stage(view)).toContain('Demo');
+  expect(owner(view)).toContain('Empty');
+  visible(false);
   vi.advanceTimersByTime(10000);
-  expect(owner.value).toBe('');
-  setVisible(true);
-  vi.advanceTimersByTime(1400);
-  expect(owner.value).toBe('jacob');
-  vi.advanceTimersByTime(5600);
-  expect(notes.value).toBe(
-    'Demo on Thursday. Alex is leading the rollout for The Meadow.'
+  expect(owner(view)).toContain('Empty');
+  visible(true);
+  vi.advanceTimersByTime(1900);
+  expect(owner(view)).toContain('Jacob');
+  expect(view.queryByText(/The Meadow is in Demo/)).toBeNull();
+  vi.advanceTimersByTime(1900);
+  const thread = view.container.querySelector<HTMLElement>(
+    '[data-thread-id="capture-request"]'
   );
   expect(
-    view.getByText(
-      'Updated The Meadow: demo stage, assigned to you, and Alex’s role saved in the company notes.'
-    )
+    within(thread!).getByText(/The Meadow is in Demo and you’re the owner/)
   ).toBeTruthy();
-  expect(
-    view.queryByRole('button', { name: /replay|pause|play crm/i })
-  ).toBeNull();
-  expect(vi.getTimerCount()).toBe(0);
+  expect(within(thread!).getByText('Agent')).toBeTruthy();
+  expect(view.container.querySelector('.demo-cursor')).toBeNull();
 });
 
-it('keeps user edits instead of overwriting them with the walkthrough', () => {
+it('stops the walkthrough when a visitor takes over the record', () => {
   const view = render(() => <CrmCaptureDemo />);
-  setVisible(true);
-  vi.advanceTimersByTime(2800);
-  const notes = view.getByLabelText(
-    'Company description'
-  ) as HTMLTextAreaElement;
-  fireEvent.focusIn(notes);
-  fireEvent.input(notes, { target: { value: 'My own next steps.' } });
-  vi.advanceTimersByTime(20000);
-  expect(notes.value).toBe('My own next steps.');
-  expect(
-    (view.getByLabelText('Company owner') as HTMLSelectElement).value
-  ).toBe('');
-});
-
-it('shows the completed record immediately with reduced motion', () => {
-  reduced = true;
-  const view = render(() => <CrmCaptureDemo />);
-  setVisible(true);
-  expect((view.getByLabelText('Deal stage') as HTMLSelectElement).value).toBe(
-    'Demo'
-  );
-  expect(
-    (view.getByLabelText('Company owner') as HTMLSelectElement).value
-  ).toBe('jacob');
-  expect(
-    (view.getByLabelText('Company description') as HTMLTextAreaElement).value
-  ).toBe('Demo on Thursday. Alex is leading the rollout for The Meadow.');
-  vi.advanceTimersByTime(10000);
-  expect(vi.getTimerCount()).toBe(0);
-});
-
-it('opens the linked email and returns to the same customer record', () => {
-  const view = render(() => <CrmCaptureDemo />);
-  fireEvent.click(
-    view.getByRole('button', {
-      name: 'Dana Whitfield Next steps for our team 9:41 AM',
+  visible(true);
+  vi.advanceTimersByTime(900);
+  fireEvent.pointerDown(
+    view.getByRole('group', {
+      name: 'Claude updates The Meadow from a comment in its Discussion',
     })
   );
-  expect(
-    view.getByRole('button', { name: 'Back to customer record' })
-  ).toBeTruthy();
-  expect(
-    view.getByRole('heading', { name: 'Next steps for our team' })
-  ).toBeTruthy();
-  fireEvent.click(
-    view.getByRole('button', { name: 'Back to customer record' })
+  vi.advanceTimersByTime(20000);
+  expect(stage(view)).toContain('Lead');
+  expect(owner(view)).toContain('Empty');
+  expect(view.queryByText(/The Meadow is in Demo/)).toBeNull();
+  expect(view.container.querySelector('.demo-cursor')).toBeNull();
+});
+
+it('shows the updated record and the reply at once with reduced motion', () => {
+  reduced = true;
+  const view = render(() => <CrmCaptureDemo />);
+  expect(stage(view)).toContain('Demo');
+  expect(owner(view)).toContain('Jacob');
+  expect(view.getByText(/The Meadow is in Demo/)).toBeTruthy();
+  expect(view.container.querySelector('.demo-cursor')).toBeNull();
+});
+
+it('posts a visitor’s comment and thread reply in the company Discussion', () => {
+  const view = render(() => <CrmCaptureDemo />);
+  const comment = view.getByRole('textbox', { name: 'Comment on company' });
+  expect(comment.getAttribute('placeholder')).toBe('Leave a comment...');
+  fireEvent.input(comment, { target: { value: 'Dana confirmed 12 seats.' } });
+  fireEvent.keyDown(comment, { key: 'Enter' });
+  expect(view.getByText('Dana confirmed 12 seats.')).toBeTruthy();
+  const thread = view.container.querySelector<HTMLElement>(
+    '[data-thread-id="capture-request"]'
   );
-  expect((view.getByLabelText('Company name') as HTMLInputElement).value).toBe(
-    'The Meadow'
-  );
+  fireEvent.click(within(thread!).getByRole('button', { name: 'Reply' }));
+  const reply = view.getByRole('textbox', { name: 'Thread reply' });
+  expect(reply.getAttribute('placeholder')).toBe('Send a reply');
+  fireEvent.input(reply, { target: { value: 'On it.' } });
+  fireEvent.keyDown(reply, { key: 'Enter' });
+  expect(within(thread!).getByText('On it.')).toBeTruthy();
 });

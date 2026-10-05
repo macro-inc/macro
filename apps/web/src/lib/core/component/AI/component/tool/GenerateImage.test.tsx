@@ -1,57 +1,24 @@
+import type { GenerateImageResponse } from '@service-cognition/generated/tools/types';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { generateImageHandler } from './GenerateImage';
 import { ToolErrorContext } from './ToolRenderer';
 
-const preview = vi.hoisted(() => ({
-  isSuccess: true,
-  isError: false,
-  url: 'https://storage.example/frog.png',
-  dataReads: 0,
-}));
-
-vi.mock('@queries/storage/binary-document', () => ({
-  useBinaryDocumentQuery: () => ({
-    get isSuccess() {
-      return preview.isSuccess;
-    },
-    get isError() {
-      return preview.isError;
-    },
-    get data() {
-      preview.dataReads += 1;
-      if (!preview.isSuccess) throw new Error('Pending data read');
-      return preview.url;
-    },
-  }),
-}));
-
-const splits = vi.hoisted(() => ({
-  activate: vi.fn(),
-  insertSplit: vi.fn(),
-  replaceOrInsertSplit: vi.fn(),
-}));
-
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => splits,
-}));
-
-vi.mock('@core/mobile/isTouchDevice', () => ({
-  isTouchDevice: () => false,
-}));
-
 const result = {
-  documentId: 'image-id',
-  fileName: 'frog.png',
+  staticFileId: 'image-id',
+  url: 'https://static.example/file/image-id',
   mimeType: 'image/png',
   sizeBytes: 132421,
   note: 'A frog under a leaf.',
+  width: 1536,
+  height: 1024,
 };
 
 function imageTool(
   response = true,
-  error?: string | (() => string | undefined)
+  error?: string | (() => string | undefined),
+  data: GenerateImageResponse = result
 ) {
   const failure = () => (typeof error === 'function' ? error() : error);
   return render(() => (
@@ -60,73 +27,36 @@ function imageTool(
         tool={{
           id: 'call-1',
           name: 'GenerateImage',
-          data: { prompt: 'A frog under a leaf', fileName: 'frog' },
+          data: { prompt: 'A frog under a leaf' },
         }}
         response={
-          response
-            ? { id: 'call-1', name: 'GenerateImage', data: result }
-            : undefined
+          response ? { id: 'call-1', name: 'GenerateImage', data } : undefined
         }
         chat_id="chat-1"
         message_id="message-1"
         part_index={0}
         isComplete={response || !!failure()}
-        renderContext={{ isStreaming: !response, grouped: false }}
+        renderContext={{
+          isStreaming: !response,
+          grouped: false,
+          followedBy: () => false,
+        }}
       />
     </ToolErrorContext.Provider>
   ));
 }
 
 afterEach(cleanup);
-beforeEach(() => {
-  preview.isSuccess = true;
-  preview.isError = false;
-  preview.dataReads = 0;
-  splits.activate.mockClear();
-  splits.insertSplit.mockReset().mockReturnValue({ activate: splits.activate });
-  splits.replaceOrInsertSplit
-    .mockReset()
-    .mockReturnValue({ activate: splits.activate });
-});
-
 describe('generated image result', () => {
-  it('shows the filename and image as one card that opens and activates a new app split', () => {
+  it('renders the SFS URL directly without a document card or filename', () => {
     const view = imageTool();
-    const card = view.getByRole('button', {
-      name: 'Open frog.png in a new split',
-    });
-    expect(card.getAttribute('type')).toBe('button');
-    expect(card.textContent).toBe('frog.png');
-    fireEvent.click(card);
-    expect(splits.insertSplit).toHaveBeenCalledExactlyOnceWith({
-      type: 'image',
-      id: 'image-id',
-    });
-    expect(splits.activate).toHaveBeenCalledOnce();
-    expect(splits.replaceOrInsertSplit).not.toHaveBeenCalled();
     expect(
-      view.getByRole('img', { name: 'frog.png' }).getAttribute('src')
-    ).toBe(preview.url);
-    expect(view.getByText(result.note)).toBeTruthy();
-    expect(view.queryByText('Generate image')).toBeNull();
+      view.getByRole('img', { name: 'Generated image' }).getAttribute('src')
+    ).toBe(result.url);
+    expect(view.queryByRole('button')).toBeNull();
     expect(view.queryByRole('link')).toBeNull();
-  });
-
-  it('keeps the file card while the upload is pending without reading query data', () => {
-    preview.isSuccess = false;
-    const view = imageTool();
-    expect(view.getByText('Preparing preview')).toBeTruthy();
-    expect(view.getByRole('button')).toBeTruthy();
-    expect(preview.dataReads).toBe(0);
-  });
-
-  it('keeps the file card when the preview query fails', () => {
-    preview.isSuccess = false;
-    preview.isError = true;
-    const view = imageTool();
-    expect(view.getByText('Preview unavailable')).toBeTruthy();
-    expect(view.getByRole('button')).toBeTruthy();
-    expect(preview.dataReads).toBe(0);
+    expect(view.queryByText(result.note)).toBeNull();
+    expect(view.container.textContent).toBe('');
   });
 
   it('replaces a failed image load with an inline status', () => {
@@ -134,12 +64,34 @@ describe('generated image result', () => {
     fireEvent.error(view.getByRole('img'));
     expect(view.getByText('Preview unavailable')).toBeTruthy();
     expect(view.queryByRole('img')).toBeNull();
-    expect(view.getByRole('button')).toBeTruthy();
+    expect(view.queryByRole('button')).toBeNull();
   });
 
-  it('shows the requested filename while generation is pending', () => {
+  it('reserves the same responsive box before load and after a load failure', () => {
+    const view = imageTool();
+    const image = view.getByRole('img');
+    const frame = image.parentElement!;
+    expect(image.getAttribute('width')).toBe('576');
+    expect(image.getAttribute('height')).toBe('384');
+    expect(frame.style.width).toBe('576px');
+    expect(frame.style.aspectRatio).toBe('576 / 384');
+    const style = frame.getAttribute('style');
+    fireEvent.load(image);
+    expect(frame.getAttribute('style')).toBe(style);
+    fireEvent.error(image);
+    expect(frame.getAttribute('style')).toBe(style);
+    expect(view.getByText('Preview unavailable')).toBeTruthy();
+  });
+
+  it('still renders historical results without dimensions', () => {
+    const { width: _, height: __, ...historical } = result;
+    const view = imageTool(true, undefined, historical);
+    expect(view.getByRole('img').getAttribute('src')).toBe(result.url);
+    expect(view.getByRole('img').hasAttribute('width')).toBe(false);
+  });
+
+  it('shows a status while generation is pending', () => {
     const view = imageTool(false);
-    expect(view.getByText('frog')).toBeTruthy();
     expect(view.getByText('Generating image')).toBeTruthy();
     expect(view.queryByRole('button')).toBeNull();
   });

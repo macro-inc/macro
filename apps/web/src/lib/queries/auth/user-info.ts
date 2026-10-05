@@ -5,6 +5,7 @@ import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient, queryPersistence } from '../client';
+import { resetGraphqlSoupDoneSession } from '../soup/graphql/done-session';
 import { authKeys } from './keys';
 import { hasCachedUserIdentity } from './user-info-cache';
 
@@ -55,6 +56,9 @@ export function invalidateUserInfo() {
 
 /** Invalidate all queries after a successful login. */
 export function invalidateAllAfterLogin() {
+  // Login may replace a session without visiting logout (including native auth).
+  // Invalidate old display-intent handles before refetching the new identity.
+  resetGraphqlSoupDoneSession();
   enableUserInfoQuery();
   const invalidated = queryClient.invalidateQueries();
   // Rebind this device's push registrations once the refetches above have

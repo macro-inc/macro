@@ -6,7 +6,8 @@ import SkillIcon from '@phosphor/blueprint.svg';
 import SnippetIcon from '@phosphor/brackets-curly.svg';
 import CompanyIcon from '@phosphor/building-office.svg';
 import CalendarIcon from '@phosphor/calendar.svg';
-import AutomationIcon from '@phosphor/clock-clockwise.svg';
+import RoutineIcon from '@phosphor/clock-clockwise.svg';
+import DatabaseIcon from '@phosphor/database.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
 import FileIcon from '@phosphor/file.svg';
@@ -104,7 +105,7 @@ const entityGlyphs: [
     'task',
   ],
   ['call', { type: 'call' }, PhoneIcon],
-  ['automation', { type: 'automation' }, AutomationIcon],
+  ['routine', { type: 'routine' }, RoutineIcon],
   [
     'GitHub pull request',
     { type: 'foreign', foreignSource: 'github_pull_request' },
@@ -112,11 +113,17 @@ const entityGlyphs: [
   ],
   ['company', { type: 'crm_company' }, CompanyIcon],
   ['contact', { type: 'crm_contact' }, ContactIcon],
+  ['database', { type: 'database' }, DatabaseIcon],
 ];
 
 afterEach(cleanup);
 
 describe('entity glyphs', () => {
+  it('keeps the routine icon and label for saved mentions using the old block name', () => {
+    expect(getIconConfig('automation')).toEqual(getIconConfig('routine'));
+    expect(getIconConfig('automation').icon).toBe(RoutineIcon);
+  });
+
   beforeEach(() => {
     vi.mocked(itemToBlockName).mockReset();
   });

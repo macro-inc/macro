@@ -5,7 +5,7 @@ import type {
   EntityDisplay,
   OpenEntityTarget,
 } from '../context/activity-context';
-import { type ActivityEntityType, toPropertyEntityType } from '../core/event';
+import { type ActivityEntityType, toDisplayEntityType } from '../core/event';
 
 export type EntityOpener = {
   display: EntityDisplay;
@@ -28,7 +28,7 @@ export function createEntityOpener(
   onOpen: ((target: OpenEntityTarget) => void) | undefined
 ): Accessor<EntityOpener | undefined> {
   return createMemo(() => {
-    const type = toPropertyEntityType(entityType());
+    const type = toDisplayEntityType(entityType());
     if (!type) return undefined;
     const display = context.entityDisplay(entityId, () => type);
     if (!onOpen) return { display };

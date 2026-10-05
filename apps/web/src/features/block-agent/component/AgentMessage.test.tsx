@@ -38,10 +38,17 @@ vi.mock('./parts/TextPart', () => ({
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
     part: { id: string; status: string };
-    context: { partIndex: number; inFlight: boolean };
+    context: {
+      partIndex: number;
+      inFlight: boolean;
+      followedBy: (name: string) => boolean;
+    };
   }) => (
     <div
       data-index={props.context.partIndex}
+      data-followed-by-save={String(
+        props.context.followedBy('SaveDatabaseQuery')
+      )}
       data-status={props.part.status}
       data-live={String(props.context.inFlight)}
       data-testid="tool"
@@ -172,6 +179,39 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('text').map((el) => el.textContent)).toEqual([
       'Looking.',
       'Done.',
+    ]);
+  });
+
+  it('tells each call whether a later call of the turn saves the query', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          {
+            kind: 'tool_use',
+            id: 'query',
+            name: { kind: 'mcp', server: 'macro', tool: 'QueryDatabase' },
+            status: 'completed',
+            detail: { kind: 'macro', input: {}, output: {}, error: null },
+          },
+          {
+            kind: 'tool_use',
+            id: 'save',
+            name: { kind: 'mcp', server: 'macro', tool: 'SaveDatabaseQuery' },
+            status: 'completed',
+            detail: { kind: 'macro', input: {}, output: {}, error: null },
+          },
+          text('Saved.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    expect(
+      view
+        .getAllByTestId('tool')
+        .map((el) => [el.textContent, el.dataset.followedBySave])
+    ).toEqual([
+      ['query', 'true'],
+      ['save', 'false'],
     ]);
   });
 

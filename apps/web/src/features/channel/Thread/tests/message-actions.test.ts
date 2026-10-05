@@ -103,6 +103,38 @@ describe('message-actions helpers', () => {
     );
   });
 
+  it.each([undefined, 'call-1'])(
+    'quotes a call message with thread_id %s in its canonical thread',
+    (threadId) => {
+      const value = buildReplyTargetValue({
+        parent: { type: 'call', id: 'call-1' },
+        message: {
+          ...threadReply,
+          id: threadId ? 'reply-1' : 'call-1',
+          thread_id: threadId,
+        },
+        existingValue: 'draft',
+      });
+      expect(value).toContain('"parent":{"type":"call","id":"call-1"}');
+      expect(value).toContain('"targetThreadId":"call-1"');
+      expect(value).toContain(
+        '"targetMessageId":"' + (threadId ? 'reply-1' : 'call-1') + '"'
+      );
+      expect(value).toMatch(/\n\ndraft$/);
+      expect(
+        buildReplyTargetValue({
+          parent: { type: 'call', id: 'call-1' },
+          message: {
+            ...threadReply,
+            id: threadId ? 'reply-1' : 'call-1',
+            thread_id: threadId,
+          },
+          existingValue: value,
+        })
+      ).toBe(value);
+    }
+  );
+
   it('uses browser-selected text for the reply preview', () => {
     expect(
       buildReplyTargetValue({

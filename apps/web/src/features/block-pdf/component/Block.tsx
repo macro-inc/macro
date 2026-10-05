@@ -75,7 +75,7 @@ function PdfBlockContent() {
 
   return (
     <Show when={!pdf.isNested()} fallback={<PdfDocumentContent />}>
-      <SidePanel.Layout>
+      <SidePanel.Layout floating>
         <PdfSidePanelSections />
         <div class="flex size-full min-w-0 flex-col overflow-hidden">
           <TopBar />

@@ -13,13 +13,9 @@ INSERT INTO comms_channel_participants (channel_id, role, user_id, left_at) VALU
 INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel")
 SELECT 'soup-initiative-share-' || n, CASE WHEN n = 4 THEN 'TEAM' ELSE NULL END, CASE WHEN n = 4 THEN 'view'::"AccessLevel" ELSE NULL END
 FROM generate_series(1, 6) n;
-INSERT INTO "Document" (id, name, owner, "fileType")
-SELECT ('af000000-0000-0000-0000-' || lpad(n::text, 12, '0')), 'description', 'macro|initiative-owner@test.com', 'md'
-FROM generate_series(1, 6) n;
-INSERT INTO initiative (id, name, owner_user_id, share_permission_id, description_document_id, created_at, updated_at)
+INSERT INTO initiative (id, name, owner_user_id, share_permission_id, created_at, updated_at)
 SELECT ('ad000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'Launch ' || n,
-'macro|initiative-owner@test.com', 'soup-initiative-share-' || n,
-'af000000-0000-0000-0000-' || lpad(n::text, 12, '0'), '2026-01-01', '2026-01-02'
+'macro|initiative-owner@test.com', 'soup-initiative-share-' || n, '2026-01-01', '2026-01-02'
 FROM generate_series(1, 6) n;
 -- Individual, active-channel and explicit-team grants. Row 4 uses the team link.
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES

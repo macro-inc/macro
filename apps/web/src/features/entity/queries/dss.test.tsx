@@ -68,7 +68,7 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { reminders: { deleteReminder: mocks.deleteReminder } },
 }));
 
-import { scheduledActionKeys } from '@queries/agent-schedule/keys';
+import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { callKeys } from '@queries/call/keys';
 import { notificationKeys } from '@queries/notification/keys';
 import { reminderKeys } from '@queries/reminders/keys';
@@ -326,7 +326,7 @@ describe('bulk delete GraphQL optimism', () => {
     }
   );
 
-  it('reconciles successful call/reminder/automation deletes despite sibling failures', async () => {
+  it('reconciles successful call/reminder/routine deletes despite sibling failures', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const invalidate = vi
       .spyOn(client, 'invalidateQueries')
@@ -352,8 +352,8 @@ describe('bulk delete GraphQL optimism', () => {
         entity('failed-document'),
         entity('deleted-call', 'call'),
         entity('deleted-reminder', 'reminder'),
-        entity('deleted-auto', 'automation'),
-        entity('failed-auto', 'automation'),
+        entity('deleted-auto', 'routine'),
+        entity('failed-auto', 'routine'),
       ])
     ).rejects.toBeInstanceOf(BulkDeleteFailure);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: callKeys._def });
@@ -388,7 +388,7 @@ describe('bulk delete GraphQL optimism', () => {
       mutation.mutateAsync([
         entity('failed-call', 'call'),
         entity('failed-reminder', 'reminder'),
-        entity('failed-auto', 'automation'),
+        entity('failed-auto', 'routine'),
       ])
     ).rejects.toThrow('failed call');
     expect(invalidate).not.toHaveBeenCalled();

@@ -55,11 +55,7 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
-use collab_surface::{
-    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
-    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
-    outbound::surface_init::LexicalSyncSurfaceInitializer,
-};
+use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use config::{Config, Environment};
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -89,10 +85,29 @@ use foreign_entity::{
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
-use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
+use github::domain::service::{
+    GithubSyncConfig, GithubSyncServiceImpl, InstallationTokenConfig, InstallationTokenService,
+    PullRequestIndexService,
+};
+use github::inbound::pull_request_index_router::PullRequestIndexRouterState;
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use github::outbound::pull_request_diff::GithubPullRequestDiffClient;
+use github_pull_requests::{
+    domain::service::{
+        GithubPullRequestChangesServiceImpl, GithubPullRequestChangesetStore,
+        GithubPullRequestServiceImpl,
+    },
+    inbound::{
+        axum_router::GithubPullRequestRouterState,
+        changes_router::GithubPullRequestChangesRouterState,
+    },
+    outbound::{
+        pg_github_pull_request_repo::PgGithubPullRequestRepo,
+        s3_patch_store::S3GithubPullRequestPatchStore,
+    },
+};
 use graphql_scheduled_action::ScheduledActionGraphqlContext;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use initiative::{
@@ -574,11 +589,65 @@ async fn run() -> anyhow::Result<()> {
             installation_state_secret: config.github_installation_state_secret.to_string(),
         },
         document_service.clone(),
-        foreign_entity_service.clone(),
+        Arc::new(GithubPullRequestServiceImpl::new(
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            PgGithubPullRequestRepo::new(db.clone()),
+        )),
         (*notification_ingress_service).clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
         ConnectionGatewayGithubRealtime::new(conn_gateway_client.clone()),
+    );
+
+    let github_pull_request_index_state = PullRequestIndexRouterState {
+        service: Arc::new(PullRequestIndexService::new(
+            InstallationTokenConfig {
+                client_id: config.github_sync_app_client_id.to_string(),
+                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_string(),
+            },
+            PgGithubSyncRepo::new(db.clone()),
+            GithubSyncClientImpl::default(),
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+                PgGithubPullRequestRepo::new(db.clone()),
+            ),
+        )),
+        authorization_state: authorization_state.clone(),
+    };
+
+    let github_pull_request_state = GithubPullRequestRouterState::new(
+        Arc::new(GithubPullRequestServiceImpl::new(
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            PgGithubPullRequestRepo::new(db.clone()),
+        )),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
+
+    let github_pull_request_changes_state = GithubPullRequestChangesRouterState::new(
+        Arc::new(GithubPullRequestChangesServiceImpl::new(
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+                PgGithubPullRequestRepo::new(db.clone()),
+            ),
+            GithubPullRequestChangesetStore::new(
+                GithubPullRequestDiffClient::new(InstallationTokenService::new(
+                    InstallationTokenConfig {
+                        client_id: config.github_sync_app_client_id.to_string(),
+                        private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_string(),
+                    },
+                    PgGithubSyncRepo::new(db.clone()),
+                    GithubSyncClientImpl::default(),
+                )),
+                PgGithubPullRequestRepo::new(db.clone()),
+                S3GithubPullRequestPatchStore::new(
+                    macro_aws_config::s3_client().await,
+                    config.github_pull_request_patch_bucket.to_string(),
+                ),
+            ),
+        )),
+        entity_access_service.clone(),
+        authorization_state.clone(),
     );
 
     let foreign_entity_state = ForeignEntityRouterState::new(
@@ -968,6 +1037,52 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    // Links archived calls to the CRM records of the people on them.
+    let crm_call_link_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let consumer = crm::inbound::call_archived::CallArchivedConsumer::new(
+            crm::domain::call_links::CallRecordLinker::new(
+                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                    db.clone(),
+                )),
+                crm::outbound::call_link::PgCallCrmLinker::new(
+                    db.clone(),
+                    (*system_properties_service).clone(),
+                ),
+            ),
+        );
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting CRM call-link consumer");
+                let result = consumer
+                    .run(&crm_call_link_brokers, cancellation_token.cancelled())
+                    .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("CRM call-link consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "CRM call-link consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
     // Create the SQS worker for delete document processing before config is moved.
@@ -1234,6 +1349,38 @@ async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         );
 
+    let slack_limits = slack_integration::domain::models::ImportLimits::default();
+    let slack_enabled = config.slack_import_enabled;
+    let slack_service = api::context::SlackService::new(
+        slack_integration::outbound::pg_slack_import_repo::PgSlackImportRepo::new(
+            db.clone(),
+            slack_limits,
+        ),
+        slack_integration::outbound::s3_storage::S3ImportStorage::new(
+            macro_aws_config::s3_client().await,
+            config.upload_staging_bucket.as_ref().to_owned(),
+            slack_limits,
+        )
+        .map_err(|_| anyhow::anyhow!("invalid Slack import storage configuration"))?,
+        slack_integration::outbound::import_ledger::CanonicalImportLedger::new(
+            import::outbound::pg_import_repo::PgImportRepo::new(db.clone()),
+        ),
+        slack_integration::outbound::gateway_notifier::GatewayImportNotifier::new(
+            conn_gateway_client.clone(),
+        ),
+        api::context::SlackAdminAuthorizer(
+            entity_access_service.clone(),
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+        Box::new(move |_| slack_enabled),
+        slack_limits,
+    )?;
+    let slack_state = slack_integration::inbound::axum_router::SlackRouterState {
+        service: Arc::new(slack_service),
+        entity_access_service: entity_access_service.clone(),
+        authorization_state: authorization_state.clone(),
+    };
+
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     // Additional connections for guards spanning email I/O. HTTP requests and
@@ -1251,7 +1398,8 @@ async fn run() -> anyhow::Result<()> {
         reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
             RemindersServiceImpl::new(PgRemindersRepo::new(db.clone())),
             email_followups.clone(),
-        );
+        )
+        .with_entity_access((*entity_access_service).clone());
 
     let document_creator = documents_hex::domain::create::DocumentCreator::new(
         document_service.clone(),
@@ -1262,20 +1410,18 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         ),
     );
+    let collab_surface_service = Arc::new(collab_surface::outbound::pg_collab_surface_service(
+        db.clone(),
+        lexical_client.as_ref().clone(),
+        sync_service_client.as_ref().clone(),
+        config.document_permission_jwt.as_ref().to_string(),
+    ));
+
     let initiative_service = Arc::new(
         InitiativeServiceImpl::new(
             PgInitiativeRepo::new(db.clone()),
-            initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
-                document_creator.clone(),
-                documents_hex::domain::purge::DocumentPurger::new(
-                    documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
-                        db.clone(),
-                    ),
-                    documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(
-                        sqs_client.clone(),
-                    ),
-                    macro_event_broker.clone(),
-                ),
+            initiative_description::InitiativeDescriptionSurfacesAdapter::new(
+                collab_surface_service.clone(),
             ),
             Arc::new(initiative::outbound::resources::ProjectResources::new(
                 properties_service.clone(),
@@ -1290,14 +1436,15 @@ async fn run() -> anyhow::Result<()> {
         )),
     );
 
-    let collab_surface_service = CollabSurfaceServiceImpl::new(
-        Arc::new(PgCollabSurfaceRepo::new(db.clone())),
-        Arc::new(LexicalSyncSurfaceInitializer::new(
-            lexical_client.as_ref().clone(),
-            sync_service_client.as_ref().clone(),
-        )),
-        config.document_permission_jwt.as_ref().to_string(),
-    );
+    // Shared by the databases router and the unified entity-mutation router.
+    let databases_service = Arc::new(databases::wiring::build_service(
+        db.clone(),
+        entity_access_service.clone(),
+        databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+            conn_gateway_client.as_ref().clone(),
+        ),
+        macro_event_broker.clone(),
+    ));
 
     // Individual initiative reads preserve read-after-write consistency when a
     // newly created project opens immediately. Lists retain the replica reader.
@@ -1314,7 +1461,10 @@ async fn run() -> anyhow::Result<()> {
             ),
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
             crm_service.clone(),
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+                PgGithubPullRequestRepo::new(db.clone()),
+            ),
             reminders_service.clone(),
         )
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
@@ -1342,7 +1492,10 @@ async fn run() -> anyhow::Result<()> {
                 readonly_db.clone(),
             )),
             crm_service.clone(),
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
+                PgGithubPullRequestRepo::new(readonly_db.clone()),
+            ),
             reminders_service.clone(),
         )
         .with_favorites(favorites_service.clone())
@@ -1615,6 +1768,7 @@ async fn run() -> anyhow::Result<()> {
             call_service.clone(),
             Arc::new(email_service.clone()),
             project_service.clone(),
+            databases_service.clone(),
             entity_access_service.clone(),
             Arc::new(outbound::entity_mutation::DssEntityLifecycleAdapter::new(
                 db.clone(),
@@ -1665,6 +1819,7 @@ async fn run() -> anyhow::Result<()> {
             user_api_key_service,
             authorization_state.clone(),
         ),
+        slack_state,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),
@@ -1685,8 +1840,23 @@ async fn run() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        databases_state: databases::inbound::axum_router::DatabasesRouterState::new(
+            databases_service,
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        database_starter_state: databases::inbound::starter_router::DatabaseStarterRouterState::new(
+            Arc::new(databases::domain::starter::DatabaseStarterServiceImpl::new(
+                databases::outbound::pg_starter::PgDatabaseStarterRepo::new(
+                    db.clone(),
+                    properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+                ),
+                macro_event_broker.clone(),
+            )),
+            authorization_state.clone(),
+        ),
         collab_surface_state: CollabSurfaceRouterState::new(
-            Arc::new(collab_surface_service),
+            collab_surface_service,
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
@@ -1707,6 +1877,9 @@ async fn run() -> anyhow::Result<()> {
         )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
+        github_pull_request_index_state,
+        github_pull_request_state,
+        github_pull_request_changes_state,
         foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),

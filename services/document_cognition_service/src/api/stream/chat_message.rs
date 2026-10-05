@@ -1,9 +1,9 @@
 //! HTTP endpoint for sending chat messages with streaming responses.
 use super::util::chat_message::ai_request::build_chat_messages;
-use super::util::chat_message::toolset::choose_tools_prompt;
 use super::util::chat_message::{store_conversation_messages, store_incoming_message};
 use super::util::chat_permissions;
 use crate::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
+use crate::api::tool_selection::choose_tools_prompt;
 use crate::api::utils::log;
 use crate::core::constants::DEFAULT_CHAT_NAME;
 use crate::model::stream::{
@@ -314,7 +314,7 @@ async fn send_chat_message_inner(
         .flatten();
 
     // Build the chat messages
-    let tools_prompt = choose_tools_prompt(&payload, &*ctx.all_tools_prompt);
+    let tools_prompt = choose_tools_prompt(&payload.toolset, &*ctx.all_tools_prompt);
     let ai_request = build_chat_messages(&chat, &payload, all_resolved_parts).map_err(|err| {
         tracing::error!(error=?err, "failed to build chat messages");
         ChatMessageError {
@@ -359,6 +359,7 @@ async fn send_chat_message_inner(
         ctx.clone(),
         ai_request,
         system_prompt,
+        request.toolset.clone(),
         (*user_id).clone(),
         jwt_token,
         actual_chat_id.clone(),
@@ -514,6 +515,7 @@ fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: Vec<ChatMessage>,
     system_prompt: String,
+    tool_selection: ToolSet,
     user_id: MacroUserIdStr<'static>,
     jwt_token: String,
     chat_id: String,
@@ -557,12 +559,13 @@ fn stream_and_save_message(
             yield json;
         }
 
-        let mcp_tools = {
-            use mcp_select::ConnectorSelect;
-            mcp_selector.user_toolset(&user_id).await
-        };
-        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
-            Arc::new(mcp_select::CombinedToolSet::new(static_tools, mcp_tools));
+        let toolset = crate::api::tool_selection::service_tools(
+            &tool_selection,
+            static_tools,
+            &mcp_selector,
+            &user_id,
+        )
+        .await;
         // The chat is the conversation every span of this turn belongs to
         // (`gen_ai.conversation.id`), so the turns of one chat form one session
         // in the observability backend.

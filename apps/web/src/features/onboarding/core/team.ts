@@ -5,7 +5,7 @@ export const isPlausibleEmail = (value: string) =>
   /^\S+@\S+\.\S+$/.test(value.trim());
 
 /** The part after `@`, lowercased — `undefined` when it isn't an address. */
-function emailDomain(address: string | undefined): string | undefined {
+export function emailDomain(address: string | undefined): string | undefined {
   const at = address?.lastIndexOf('@') ?? -1;
   if (!address || at < 1 || at === address.length - 1) return undefined;
   return address.slice(at + 1).toLowerCase();

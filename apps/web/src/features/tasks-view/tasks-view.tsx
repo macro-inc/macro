@@ -3,6 +3,7 @@ import { openProject } from '@app/features/projects/open-project';
 import { ProjectsTab } from '@app/features/projects/projects';
 import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
+import { projectDetailRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -23,7 +24,6 @@ import {
 import { TasksMobileTabs } from './components/TasksMobileTabs';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
-import { projectDetailRoute } from './route';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import { tasksTour } from './tour';
 import type { TasksViewStateOptions } from './types';

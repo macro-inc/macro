@@ -1,5 +1,6 @@
 import LogoIcon from '@icon/macro-logo.svg';
-import { createEffect, Match, onCleanup, Switch } from 'solid-js';
+import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
+import { BypassButton } from '../components/bypass-button';
 import {
   animateStepChange,
   focusStepHeading,
@@ -9,6 +10,7 @@ import { PlanComparison } from '../components/plan-comparison';
 import { OnboardingTrustDetails } from '../components/trust-details';
 import { useOnboardingContext } from '../context/onboarding-context';
 import type { CheckoutReturn } from '../core/checkout';
+import { canBypassOnboarding } from '../core/staff';
 import {
   isStoryStep,
   type OnboardingStep,
@@ -104,6 +106,10 @@ export function OnboardingFlowView(props: {
   };
   const advance = (outcome: StepOutcome = 'completed') =>
     goTo(flow.leave(outcome));
+  const viewerEmail = () => {
+    const viewer = context.viewer();
+    return viewer.t === 'signed-in' ? viewer.viewer.email : undefined;
+  };
   const back = () => {
     const current = step();
     const previous = current && previousOnboardingStep(current);
@@ -114,6 +120,16 @@ export function OnboardingFlowView(props: {
     <OnboardingShell
       wide
       onBack={back()}
+      overlay={
+        <Show when={canBypassOnboarding(viewerEmail()) && step()}>
+          {(current) => (
+            <BypassButton
+              disabled={finish.finishing()}
+              onBypass={() => void finish.bypass(current())}
+            />
+          )}
+        </Show>
+      }
       explainerLabel={step() === 'plan' ? 'Continue as Guest' : undefined}
       explainer={
         step() === 'plan' ? (

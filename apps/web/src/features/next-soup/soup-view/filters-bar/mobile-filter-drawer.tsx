@@ -36,6 +36,7 @@ import { useContacts } from '@queries/contacts/contacts';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
+import { toggleReminderCompletionFilter } from './reminder-completion-filter';
 import {
   buildContactLabel,
   type FilterOption,
@@ -157,6 +158,11 @@ export const MobileFilterDrawer = (props: {
     showInboxSection();
 
   const toggleFilter = (optionId: FilterOption['id']) => {
+    if (
+      currentView() === 'reminders' &&
+      toggleReminderCompletionFilter(optionId, soup.predicates, queryFilters)
+    )
+      return;
     const wasActive = soup.predicates.isActive(optionId);
     const previousDocumentTypeIds =
       currentView() === 'documents' && isDocumentTypeFilterId(optionId)

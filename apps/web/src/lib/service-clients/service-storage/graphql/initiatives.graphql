@@ -2,7 +2,6 @@ fragment InitiativeDetailFields on GraphqlSoupInitiative {
   __typename
   id
   displayName
-  descriptionDocumentId
   metadata {
     ownerId
     createdAt
@@ -44,21 +43,6 @@ query Initiative($initiativeId: ID!) {
   }
 }
 
-query TaskInitiativeReferences($taskIds: [ID!]!) {
-  user {
-    id
-    taskInitiativeReferences(taskIds: $taskIds) {
-      taskId
-      state
-      initiative {
-        __typename
-        id
-        displayName
-      }
-    }
-  }
-}
-
 mutation CreateInitiative($input: CreateInitiativeInput!) {
   createInitiative(input: $input) {
     ...InitiativeDetailFields
@@ -71,17 +55,10 @@ mutation UpdateInitiative($initiativeId: ID!, $input: UpdateInitiativeInput!) {
   }
 }
 
+mutation EnsureInitiativeDescriptionSurface($initiativeId: ID!) {
+  ensureInitiativeDescriptionSurface(initiativeId: $initiativeId)
+}
+
 mutation DeleteInitiative($initiativeId: ID!) {
   deleteInitiative(initiativeId: $initiativeId)
-}
-
-mutation AssignInitiativeTasks($initiativeId: ID!, $taskIds: [ID!]!) {
-  assignInitiativeTasks(initiativeId: $initiativeId, taskIds: $taskIds) {
-    taskId
-    status
-  }
-}
-
-mutation ClearTaskInitiative($taskId: ID!) {
-  clearTaskInitiative(taskId: $taskId)
 }

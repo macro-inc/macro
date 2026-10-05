@@ -31,9 +31,22 @@ describe('spreadsheet document validation outside sync', () => {
       ['spreadsheetBorderBottomColors', '#123456'],
     ])
       doc.getMap(root).set('A1', value);
+    doc
+      .getMap('spreadsheetImages')
+      .set('0123456789abcdef', 'data:image/png;base64,iVBORw0KGgo=');
     doc.getMap('spreadsheetSheetMetadata').set(
       'sheet1',
       JSON.stringify({
+        drawings: [
+          {
+            id: 'logo',
+            type: 'image',
+            image: '0123456789abcdef',
+            from: { row: 0, column: 0, x: 0, y: 0 },
+            width: 120,
+            height: 40,
+          },
+        ],
         merges: ['A1:C1'],
         rowHeights: { 0: 32 },
         hiddenRows: [5],
@@ -48,8 +61,8 @@ describe('spreadsheet document validation outside sync', () => {
   it.each([
     ['root', 'content', 'bad'],
     ['spreadsheetUnknown', 'A1', 'bad'],
-    ['spreadsheetValues', 'AA1', 'bad'],
-    ['spreadsheetValues', 'A1001', 'bad'],
+    ['spreadsheetValues', 'XFE1', 'bad'],
+    ['spreadsheetValues', 'A100001', 'bad'],
     ['spreadsheetValues', 'A1', 'x'.repeat(10_001)],
     ['spreadsheetValues', 'bad!sheet!A1', 'bad'],
     ['spreadsheetFontSize', 'A1', 'large'],
@@ -62,8 +75,17 @@ describe('spreadsheet document validation outside sync', () => {
       '{"name":"Sheet1","order":0,"revision":-1}',
     ],
     ['spreadsheetColumnWidths', '0', 641],
-    ['spreadsheetRowAdditions', 'peer', 1001],
+    ['spreadsheetRowAdditions', 'peer', 100_001],
+    ['spreadsheetColumnAdditions', 'peer', 16_385],
+    ['spreadsheetColumnWidths', '16384', 100],
     ['spreadsheetMeta', 'formatVersion', 2],
+    // Only raster images are stored; SVG can carry scripts.
+    [
+      'spreadsheetImages',
+      '0123456789abcdef',
+      'data:image/svg+xml;base64,PHN2Zy8+',
+    ],
+    ['spreadsheetImages', 'logo', 'data:image/png;base64,iVBORw0KGgo='],
   ])('rejects invalid %s entries', (root, key, value) => {
     const doc = workbook();
     doc.getMap(root as string).set(key as string, value);
@@ -73,10 +95,12 @@ describe('spreadsheet document validation outside sync', () => {
   });
 
   it.each([
-    '{"merges":["A1:AA1001"]}',
-    '{"rowHeights":{"1000":32}}',
-    '{"hiddenColumns":[26]}',
-    '{"freeze":{"rows":1001,"columns":1}}',
+    '{"merges":["A1:XFE1"]}',
+    '{"merges":["A1:A100001"]}',
+    '{"rowHeights":{"100000":32}}',
+    '{"hiddenColumns":[16384]}',
+    '{"freeze":{"rows":100001,"columns":1}}',
+    '{"arrayFormulas":{"A1":"B1:B3"}}',
     '{"definedNames":[{"name":"Rate","formula":false}]}',
     '{"unexpected":true}',
   ])('rejects invalid workbook metadata %s', (metadata) => {

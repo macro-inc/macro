@@ -601,3 +601,54 @@ async fn spreadsheet_ranges_are_inline_and_workbook_comments_are_discussions() {
     assert_eq!(discussions[1].kind, CommentThreadKind::Discussion);
     assert_eq!(discussions[1].anchor, CommentAnchor::Document);
 }
+
+#[tokio::test]
+async fn design_pins_are_inline_and_name_their_layer_and_point() {
+    let mut messages = MockMessageReader::new();
+    messages.expect_timeline().returning(|_, _| {
+        Ok(page(
+            vec![
+                item(
+                    message(1, None, "Layer comment"),
+                    Some(ThreadAnchor::Fig {
+                        page_id: "0:1".into(),
+                        node_id: Some("12:34".into()),
+                        x: 18.5,
+                        y: -4.0,
+                    }),
+                    vec![],
+                ),
+                item(
+                    message(2, None, "Canvas comment"),
+                    Some(ThreadAnchor::Fig {
+                        page_id: "0:1".into(),
+                        node_id: None,
+                        x: 100.0,
+                        y: 200.0,
+                    }),
+                    vec![],
+                ),
+            ],
+            None,
+        ))
+    });
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+    assert!(
+        discussions
+            .iter()
+            .all(|d| d.kind == CommentThreadKind::Inline)
+    );
+    let anchors: Vec<_> = discussions
+        .iter()
+        .map(|d| serde_json::to_value(&d.anchor).unwrap())
+        .collect();
+    assert!(anchors.contains(&serde_json::json!({
+        "type": "fig", "pageId": "0:1", "nodeId": "12:34", "x": 18.5, "y": -4.0
+    })));
+    assert!(anchors.contains(&serde_json::json!({
+        "type": "fig", "pageId": "0:1", "x": 100.0, "y": 200.0
+    })));
+}

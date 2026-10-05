@@ -12,6 +12,7 @@ import {
 import { downloadFile } from '@filesystem/download';
 import { createCallback } from '@solid-primitives/rootless';
 import { lazy, Show, Suspense } from 'solid-js';
+import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
 import { isUploadedWorkbook } from '../../block-spreadsheet/core/uploaded-workbook';
 import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { useGetFileBlob } from '../signal/blockData';
@@ -61,7 +62,7 @@ function BlockUnknownContent() {
   });
 
   return (
-    <SidePanel.Layout defaultOpen={!spreadsheet()}>
+    <SidePanel.Layout defaultOpen={!spreadsheet()} floating>
       <FileSidePanelSections />
       <div class="flex size-full min-w-0 flex-col overflow-hidden">
         <div class="relative">
@@ -78,11 +79,7 @@ function BlockUnknownContent() {
               />
             }
           >
-            <Suspense
-              fallback={
-                <div class="p-6 text-ink-muted">Opening spreadsheet…</div>
-              }
-            >
+            <Suspense fallback={<SpreadsheetSkeleton />}>
               <UploadedWorkbook />
             </Suspense>
           </Show>

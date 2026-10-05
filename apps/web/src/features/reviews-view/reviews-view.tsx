@@ -9,6 +9,7 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -16,6 +17,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
+import { GithubLabelPill } from '@entity/components/GithubLabelPill';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import {
   createMemo,
@@ -26,30 +28,38 @@ import {
   Suspense,
 } from 'solid-js';
 import {
+  activeReviewsFilterCount,
   ReviewsControls,
   ReviewsFilterDrawer,
-  type ReviewsFilterId,
 } from './components/ReviewsControls';
 import { ReviewsList } from './components/ReviewsList';
 import { ReviewsSidebar } from './components/ReviewsSidebar';
 import { createReviewsListController } from './primitives/create-reviews-list-controller';
+import { useReviewsFacetsQuery } from './queries/use-reviews-facets-query';
 import { useReviewsQuery } from './queries/use-reviews-query';
-import { filterReviews } from './reviews-filter';
+import { effectiveReviewsFilters, searchReviews } from './reviews-filter';
 import { reviewsHostedContent } from './reviews-hosted-content';
 import { reviewsTabSearch, reviewsTabSearchCodec } from './reviews-tab-search';
-import type { ReviewsScope, ReviewsSortId } from './reviews-types';
-import { reviewsPrRoute, reviewsSplitRoute } from './route';
+import {
+  EMPTY_REVIEWS_FILTERS,
+  REVIEWS_SCOPES,
+  type ReviewsFilterId,
+  type ReviewsFilterSelection,
+  type ReviewsScope,
+  type ReviewsSortId,
+  scopeMatchesViewerGithubId,
+} from './reviews-types';
 
 const REVIEW_SCOPE_TITLES: Record<ReviewsScope, string> = {
-  all: 'All PRs',
-  involving: 'Involving me',
+  all: 'Pull requests',
   authored: 'Authored by me',
+  assigned: 'Assigned to me',
+  involving: 'Involves me',
+  review_requests: 'Review requests',
 };
-const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = [
-  { value: 'involving', label: REVIEW_SCOPE_TITLES.involving },
-  { value: 'all', label: REVIEW_SCOPE_TITLES.all },
-  { value: 'authored', label: REVIEW_SCOPE_TITLES.authored },
-];
+const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = REVIEWS_SCOPES.map(
+  (scope) => ({ value: scope, label: REVIEW_SCOPE_TITLES[scope] })
+);
 function ReviewsRoot() {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -62,59 +72,46 @@ function ReviewsRoot() {
   const scope = (): ReviewsScope => tabSearch.tab;
   const scopeTitle = () => REVIEW_SCOPE_TITLES[scope()];
   const [search, setSearch] = createSignal('');
-  const [sort, setSort] = createSignal<ReviewsSortId>('updated_at');
-  const [selectedRepositories, setSelectedRepositories] = createSignal<
-    string[]
-  >([]);
-  const [selectedAuthors, setSelectedAuthors] = createSignal<string[]>([]);
-  const listEnabled = () => !params.foreignEntityId;
-  const source = useReviewsQuery(sort, scope, listEnabled);
-  const githubLink = useGithubLinkStatusQuery({ enabled: listEnabled });
+  const [sort, setSort] = createSignal<ReviewsSortId>('recently_updated');
+  const [filters, setFilters] = createSignal<ReviewsFilterSelection>(
+    EMPTY_REVIEWS_FILTERS
+  );
+  const listVisible = () => !params.foreignEntityId;
+  const githubLink = useGithubLinkStatusQuery({ enabled: listVisible });
   const viewer = useUserContext();
   const authorLogin = () =>
     githubLink.isPending ? undefined : githubLink.data?.username;
   const authorId = () =>
     githubLink.isPending ? undefined : githubLink.data?.userId;
-  const repositories = createMemo(() =>
-    [
-      ...new Set(
-        source
-          .reviews()
-          .map((review) => `${review.metadata.owner}/${review.metadata.repo}`)
-      ),
-    ]
-      .sort()
-      .map((id) => ({ id, label: id }))
+  const activeFilters = () =>
+    effectiveReviewsFilters(filters(), Boolean(authorId()));
+  const listEnabled = () =>
+    listVisible() &&
+    (!scopeMatchesViewerGithubId(scope()) || Boolean(authorId()));
+  const source = useReviewsQuery(
+    sort,
+    () => ({
+      scope: scope(),
+      filters: activeFilters(),
+      viewerGithubUserId: authorId(),
+    }),
+    listEnabled
   );
-  const authors = createMemo(() =>
-    [
-      ...new Set(
-        source
-          .reviews()
-          .flatMap((review) =>
-            review.metadata.authorLogin ? [review.metadata.authorLogin] : []
-          )
-      ),
-    ]
-      .sort()
-      .map((id) => ({ id, label: id }))
-  );
+  const facets = useReviewsFacetsQuery();
   const changeFilter = (
     group: ReviewsFilterId,
     id: string,
     selected: boolean
-  ) => {
-    const setter =
-      group === 'repository' ? setSelectedRepositories : setSelectedAuthors;
-    setter((current) => {
-      if (!selected) return current.filter((value) => value !== id);
-      return current.includes(id) ? current : [...current, id];
+  ) =>
+    setFilters((current) => {
+      const ids = current[group];
+      if (selected === ids.includes(id)) return current;
+      return {
+        ...current,
+        [group]: selected ? [...ids, id] : ids.filter((value) => value !== id),
+      };
     });
-  };
-  const clearFilters = () => {
-    setSelectedRepositories([]);
-    setSelectedAuthors([]);
-  };
+  const clearFilters = () => setFilters(EMPTY_REVIEWS_FILTERS);
   const clearSearch = () => setSearch('');
   const searchForTab = (tab: ReviewsScope) => ({
     [reviewsTabSearch.namespace]: reviewsTabSearchCodec.serialize({ tab }),
@@ -151,24 +148,25 @@ function ReviewsRoot() {
       { search: searchForTab(scope()) }
     );
   };
-  const reviews = createMemo(() =>
-    filterReviews(source.reviews(), {
-      scope: scope(),
-      authorLogin: authorLogin(),
-      authorId: authorId(),
-      search: search(),
-      repositories: selectedRepositories(),
-      authors: selectedAuthors(),
-    })
-  );
+  const reviews = createMemo(() => searchReviews(source.reviews(), search()));
   const listController = createReviewsListController(reviews, openReview);
+  const selectLabels = (labels: string[]) => {
+    setFilters((current) => ({ ...current, label: labels }));
+    if (!listVisible()) openList();
+  };
   const controls = () => ({
     sort: sort(),
     onSortChange: setSort,
-    repositories: repositories(),
-    authors: authors(),
-    selectedRepositories: selectedRepositories(),
-    selectedAuthors: selectedAuthors(),
+    repositories: facets.repositories(),
+    authors: facets.authors(),
+    assignees: facets.assignees(),
+    labels: facets.labels().map((label) => ({
+      id: label.name,
+      label: label.name,
+      content: () => <GithubLabelPill name={label.name} color={label.color} />,
+    })),
+    hasGithubIdentity: Boolean(authorId()),
+    selected: activeFilters(),
     onFilterChange: changeFilter,
     onClearFilters: clearFilters,
   });
@@ -242,8 +240,7 @@ function ReviewsRoot() {
                 : githubLink.data?.status
           }
           search={search()}
-          selectedRepositories={selectedRepositories()}
-          selectedAuthors={selectedAuthors()}
+          hasFilters={activeReviewsFilterCount(activeFilters()) > 0}
           onClearFilters={clearFilters}
           onClearSearch={clearSearch}
           onOpen={openReview}
@@ -289,6 +286,9 @@ function ReviewsRoot() {
               <ReviewsSidebar
                 scope={scope()}
                 onScopeChange={selectScope}
+                labels={facets.labels()}
+                activeLabels={filters().label}
+                onActiveLabelsChange={selectLabels}
                 onOpenReview={openReview}
                 activeForeignEntityId={params.foreignEntityId}
               />

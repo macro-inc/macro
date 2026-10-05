@@ -1,7 +1,20 @@
+import { throwOnErr } from '@core/util/result';
 import { utf8Encode } from '@core/util/string';
 import { refetchHistory } from '@queries/history/history';
 import { storageServiceClient } from '@service-storage/client';
+import type { HistoryVersionId } from '@service-sync/client';
 import { useMutation } from '@tanstack/solid-query';
+
+export function createForkMarkdownDocumentMutation() {
+  return useMutation(() => ({
+    mutationFn: (params: {
+      documentId: string;
+      documentName: string;
+      syncServiceVersion?: HistoryVersionId;
+    }) =>
+      throwOnErr(async () => await storageServiceClient.copyDocument(params)),
+  }));
+}
 
 export async function loadMarkdownCachedSnapshot(
   documentId: string

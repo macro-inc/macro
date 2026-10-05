@@ -21,6 +21,10 @@ import type {
   CursorSystemNotificationNode,
 } from './nodes/CursorSystemNotificationNode';
 import type {
+  DatabaseQueryDecoratorProps,
+  DatabaseQueryNode,
+} from './nodes/DatabaseQueryNode';
+import type {
   DateMentionDecoratorProps,
   DateMentionNode,
 } from './nodes/DateMentionNode';
@@ -99,6 +103,10 @@ export type DecoratorComponent<P extends {}> = (props: P) => any;
 // Maps node type names to their class and props types
 // This provides compile-time type safety for decorator registration
 export interface NodeDecoratorMap {
+  DatabaseQueryNode: {
+    klass: typeof DatabaseQueryNode;
+    props: DatabaseQueryDecoratorProps;
+  };
   AgentContextNode: {
     klass: typeof AgentContextNode;
     props: AgentContextDecoratorProps;

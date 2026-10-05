@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.id FROM database_starter_seeds s JOIN databases d ON d.id = s.database_id\n                   WHERE s.user_id = $1 AND d.trashed_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "92725cc3017d1e9b233927931f7e30e991781607b220d53fad753007417ad78e"
+}
