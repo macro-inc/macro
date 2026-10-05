@@ -219,6 +219,8 @@ pub struct AgentHarnessService<
     >,
     workers: Arc<SessionWorkers>,
     repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
+    warm_lifecycle: Option<Arc<dyn agent_session::domain::warm::WarmSessionLifecycle>>,
+    warm_reservations: Arc<tokio::sync::Mutex<warm::WarmReservations>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
@@ -255,6 +257,8 @@ impl<
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
             repositories: self.repositories.clone(),
+            warm_lifecycle: self.warm_lifecycle.clone(),
+            warm_reservations: Arc::clone(&self.warm_reservations),
         }
     }
 }
@@ -340,6 +344,8 @@ where
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
+            warm_lifecycle: None,
+            warm_reservations: Arc::default(),
         }
     }
 
@@ -514,3 +520,5 @@ fn into_session_error(error: HarnessError) -> AgentSessionError {
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }
 }
+
+mod warm;

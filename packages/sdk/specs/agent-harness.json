@@ -496,6 +496,35 @@
         }
       }
     },
+    "/agent-sessions/warm": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Prepare MCP connections without sending a prompt or creating a visible list row.",
+        "operationId": "warm_agent_session_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmAgentSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmAgentSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}": {
       "get": {
         "tags": ["agent-sessions"],
@@ -3868,6 +3897,35 @@
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
+              }
+            ]
+          }
+        }
+      },
+      "WarmAgentSessionRequest": {
+        "type": "object",
+        "description": "A client-minted id deduplicates warm calls without creating a conversation.",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id reserved by this browser for its next in-memory conversation."
+          }
+        }
+      },
+      "WarmAgentSessionResponse": {
+        "type": "object",
+        "description": "A bounded best-effort warm attempt; absence means normal creation should proceed.",
+        "properties": {
+          "session": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentSessionResponse",
+                "description": "Prepared session, hidden until explicitly claimed through create."
               }
             ]
           }

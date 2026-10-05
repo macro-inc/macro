@@ -53,6 +53,7 @@ async fn session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            warm: false,
             id,
             owner_id: owner,
             bot_id: bot,

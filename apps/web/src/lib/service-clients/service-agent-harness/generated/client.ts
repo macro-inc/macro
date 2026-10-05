@@ -38,6 +38,8 @@ import type {
   StatusResponse,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  WarmAgentSessionRequest,
+  WarmAgentSessionResponse,
 } from './schemas';
 
 /**
@@ -693,6 +695,49 @@ export const previewAgentSessions = async (
     status: res.status,
     headers: res.headers,
   } as previewAgentSessionsResponse;
+};
+
+/**
+ * @summary Prepare MCP connections without sending a prompt or creating a visible list row.
+ */
+export type warmAgentSessionHandlerResponse200 = {
+  data: WarmAgentSessionResponse;
+  status: 200;
+};
+
+export type warmAgentSessionHandlerResponseSuccess =
+  warmAgentSessionHandlerResponse200 & {
+    headers: Headers;
+  };
+
+export type warmAgentSessionHandlerResponse =
+  warmAgentSessionHandlerResponseSuccess;
+
+export const getWarmAgentSessionHandlerUrl = () => {
+  return `/agent-sessions/warm`;
+};
+
+export const warmAgentSessionHandler = async (
+  warmAgentSessionRequest: WarmAgentSessionRequest,
+  options?: RequestInit
+): Promise<warmAgentSessionHandlerResponse> => {
+  const res = await fetch(getWarmAgentSessionHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(warmAgentSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: warmAgentSessionHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as warmAgentSessionHandlerResponse;
 };
 
 /**

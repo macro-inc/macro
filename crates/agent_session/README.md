@@ -70,14 +70,29 @@ attachment alone is not a readiness measurement.
 
 The in-memory connector exposes `agent.mcp.initialize` and
 `agent.mcp.list_tools` durations per `server`, alongside the aggregate connector
-`dialed`, `failed`, and `elapsed_ms` fields. Servers initialize in
+`pooled`, `dialed`, `failed`, and `elapsed_ms` fields. Servers initialize in
 parallel: compare the critical path, not the sum of their durations. In-memory
 prompt spans also split `agent.turn.lock_wait_ms`, `agent.turn.admission_wait_ms`,
 and `agent.turn.first_text_ms`; their legacy `ttft_ms` can include reasoning or
 a tool call, but excludes usage and tool-result events.
 
 To investigate a slow first session in Datadog, correlate by `agent.session.id`,
-report sample counts and
+compare cold and pooled connects separately, and report sample counts and
 p50/p95 for initialization and first text by harness/model. Include the fraction
 of turns with no text rather than silently counting them as fast answers. None
 of these new fields supplies historical measurements before its deployment.
+
+Home and Agents can prepare an unprompted session through
+`POST /agent-sessions/warm`. It stays hidden until normal creation claims the
+same id for the same owner, bot, model and instructions. Reusing the session
+also reuses its egress token, which is part of the MCP pool key; creating and
+immediately deleting a throwaway session would release those cached clients.
+No model invocation or tool execution occurs during warming.
+
+The browser consumes a result once within five minutes. Unclaimed rows expire
+after ten minutes and are deleted through the managing replica. Each replica
+reserves at most 64 warm attempts per ten minutes, with at most two per user.
+The MCP pool holds at most 256 entries, evicts entries idle for ten minutes,
+and limits handshakes to 16 concurrent attempts with a 30-second timeout.
+`agent.session.warm` and `agent.session.warm_hit` on the open span distinguish
+preparation, successful reuse and ordinary creation for latency comparisons.

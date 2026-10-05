@@ -1396,6 +1396,23 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * A client-minted id deduplicates warm calls without creating a conversation.
+ */
+export type WarmAgentSessionRequest = {
+    /**
+     * Id reserved by this browser for its next in-memory conversation.
+     */
+    id: string;
+};
+
+/**
+ * A bounded best-effort warm attempt; absence means normal creation should proceed.
+ */
+export type WarmAgentSessionResponse = {
+    session?: null | AgentSessionResponse;
+};
+
+/**
  * Just a session id, for the preview variants that carry nothing else.
  *
  * Clients deserialize this, so both derives are used.
@@ -1675,6 +1692,19 @@ export type PreviewAgentSessionsResponses = {
 };
 
 export type PreviewAgentSessionsResponse2 = PreviewAgentSessionsResponses[keyof PreviewAgentSessionsResponses];
+
+export type WarmAgentSessionHandlerData = {
+    body: WarmAgentSessionRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/warm';
+};
+
+export type WarmAgentSessionHandlerResponses = {
+    200: WarmAgentSessionResponse;
+};
+
+export type WarmAgentSessionHandlerResponse = WarmAgentSessionHandlerResponses[keyof WarmAgentSessionHandlerResponses];
 
 export type DeleteAgentSessionData = {
     body?: never;

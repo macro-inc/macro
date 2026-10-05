@@ -21,6 +21,7 @@
  */
 
 import { AgentSession } from '@core/agent-session/AgentSession';
+import { takeWarmAgentSession } from '@queries/agent-session/warm';
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -91,7 +92,8 @@ export type StartPendingSessionOptions = {
 export function startPendingSession(
   options: StartPendingSessionOptions = {}
 ): string {
-  const id = uuidv7();
+  const warmId = takeWarmAgentSession(options);
+  const id = warmId ?? uuidv7();
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
   pending.set(id, {
@@ -102,16 +104,23 @@ export function startPendingSession(
     initialInput: options.initialInput,
   });
 
-  void agentHarnessServiceClient
-    .create({
-      id,
+  const create = (sessionId: string) =>
+    agentHarnessServiceClient.create({
+      id: sessionId,
       ...(options.botId ? { botId: options.botId } : {}),
       ...(options.modelOverride ? { model: options.modelOverride } : {}),
       ...(options.instructions ? { instructions: options.instructions } : {}),
       ...(options.repoUrl
         ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
         : {}),
-    } satisfies CreateAgentSessionRequest)
+    } satisfies CreateAgentSessionRequest);
+
+  // Warming is best effort. A stale reservation must not prevent a cold start.
+  void create(id)
+    .then(async (result) => {
+      if (warmId && result.isErr()) return create(uuidv7());
+      return result;
+    })
     .then(async (result) => {
       if (result.isErr()) {
         setError(

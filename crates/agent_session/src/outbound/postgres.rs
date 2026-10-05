@@ -296,6 +296,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
 impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let CreateAgentSessionParams {
+            warm,
             id,
             owner_id,
             bot_id,
@@ -342,7 +343,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         // An inline @macro mention is a one-shot on the message. It stays out
         // of the agents list and search. Every other session — the agents
         // composer, coding agents — is a list row.
-        let list_hidden = bot_id == MACRO_NEW_BOT_ID && thread_id.is_some();
+        let list_hidden = warm || (bot_id == MACRO_NEW_BOT_ID && thread_id.is_some());
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -461,9 +462,11 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         // row is what Soup's `viewed_at` and the frecency ranking read, so
         // without it a brand-new session would rank below everything the
         // owner has ever opened.
-        upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
-            .await
-            .context("failed to record the agent session in the owner's history")?;
+        if !warm {
+            upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
+                .await
+                .context("failed to record the agent session in the owner's history")?;
+        }
 
         transaction
             .commit()
@@ -709,7 +712,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 ext.last_run_id AS "external_last_run_id?"
             FROM agent_session
             LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
-            WHERE owner_id = $1
+            WHERE owner_id = $1 AND NOT list_hidden
             ORDER BY agent_session.created_at DESC, id DESC
             LIMIT $2
             "#,
@@ -1764,3 +1767,5 @@ impl<B: BotFacts + 'static> SessionAudience for PgAgentSessionRepo<B> {
         Ok(viewers)
     }
 }
+
+mod warm;

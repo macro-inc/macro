@@ -187,6 +187,8 @@ pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
 pub struct CreateAgentSessionParams {
+    /// An unclaimed warm session, hidden from lists and history.
+    pub warm: bool,
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
     /// Who created and owns the session.

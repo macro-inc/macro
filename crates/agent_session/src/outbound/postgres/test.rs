@@ -90,6 +90,7 @@ pub(super) fn new_session(
     originating_message_id: Option<Uuid>,
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        warm: false,
         repo_branch: None,
         id: AgentSessionId::new(),
         owner_id: Owner::User(user_id(OWNER)),
@@ -260,6 +261,7 @@ async fn create_refuses_an_owner_that_is_not_a_user(pool: PgPool) {
     let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let params = CreateAgentSessionParams {
+        warm: false,
         owner_id: Owner::Bot(bot_id),
         ..new_session(bot_id, None, None)
     };
@@ -317,6 +319,7 @@ async fn create_rejects_an_unknown_user_owner(pool: PgPool) {
     let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let params = CreateAgentSessionParams {
+        warm: false,
         owner_id: Owner::User(user_id("macro|missing@example.com")),
         ..new_session(bot_id, None, None)
     };
@@ -414,6 +417,7 @@ async fn instructions_round_trip_on_every_read_path(pool: PgPool) {
     let (_channel_id, thread_id, originating_message_id) =
         insert_originating_thread_fixture(&pool).await;
     let params = CreateAgentSessionParams {
+        warm: false,
         instructions: Some(INSTRUCTIONS.to_owned()),
         egress_token_hash: Some("token-hash".to_owned()),
         ..new_session(bot_id, Some(thread_id), Some(originating_message_id))
@@ -468,6 +472,7 @@ async fn mcp_server_selection_round_trips_on_every_read_path(pool: PgPool) {
         ],
     };
     let params = CreateAgentSessionParams {
+        warm: false,
         mcp_servers: selection.clone(),
         egress_token_hash: Some("mcp-token-hash".to_owned()),
         ..new_session(bot_id, Some(thread_id), Some(originating_message_id))
@@ -994,6 +999,7 @@ async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
     let someone_else = create_session(
         &repo,
         CreateAgentSessionParams {
+            warm: false,
             owner_id: Owner::User(user_id(OTHER_OWNER)),
             ..new_session(bot_id, None, None)
         },
@@ -2937,4 +2943,99 @@ async fn the_originating_channel_steers_only_shared_agents_sessions(pool: PgPool
             "bot {bot}"
         );
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn warm_sessions_are_hidden_and_claimed_only_once_by_the_owner(pool: PgPool) {
+    use crate::domain::warm::WarmSessionLifecycle;
+    let bot = create_test_bot(&pool).await;
+    let repo = test_repo(&pool);
+    let mut params = new_session(bot, None, None);
+    params.warm = true;
+    let session = AgentSessionRepo::create(&repo, params)
+        .await
+        .expect("warm session");
+    assert!(
+        repo.recent_for_owner(&user_id(OWNER), NonZeroUsize::new(10).unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let other = Owner::User(user_id("macro|other@example.com"));
+    assert!(
+        !WarmSessionLifecycle::claim(&repo, session.id, &other, bot, &session.model, None)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !WarmSessionLifecycle::claim(
+            &repo,
+            session.id,
+            &session.owner_id,
+            bot,
+            "wrong-model",
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let (left, right) = tokio::join!(
+        WarmSessionLifecycle::claim(
+            &repo,
+            session.id,
+            &session.owner_id,
+            bot,
+            &session.model,
+            None
+        ),
+        WarmSessionLifecycle::claim(
+            &repo,
+            session.id,
+            &session.owner_id,
+            bot,
+            &session.model,
+            None
+        ),
+    );
+    assert_ne!(left.unwrap(), right.unwrap());
+    assert_eq!(
+        repo.recent_for_owner(&user_id(OWNER), NonZeroUsize::new(10).unwrap())
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(repo.expire().await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn expired_warm_sessions_cannot_be_claimed(pool: PgPool) {
+    use crate::domain::warm::WarmSessionLifecycle;
+    let bot = create_test_bot(&pool).await;
+    let repo = test_repo(&pool);
+    let mut params = new_session(bot, None, None);
+    params.warm = true;
+    let session = AgentSessionRepo::create(&repo, params).await.unwrap();
+    sqlx::query!(
+        "UPDATE agent_session SET created_at = NOW() - INTERVAL '11 minutes' WHERE id = $1",
+        session.id.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(repo.expire().await.unwrap(), vec![session.id]);
+    assert!(
+        !WarmSessionLifecycle::claim(
+            &repo,
+            session.id,
+            &session.owner_id,
+            bot,
+            &session.model,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    AgentSessionRepo::delete(&repo, session.id).await.unwrap();
+    assert!(repo.expire().await.unwrap().is_empty());
 }

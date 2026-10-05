@@ -57,6 +57,7 @@ impl Modify for SecurityAddon {
         claude_auth::complete,
         claude_auth::disconnect,
         axum_router::create_agent_session_handler,
+        axum_router::warm_agent_session_handler,
         axum_router::get_agent_session_handler,
         axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,

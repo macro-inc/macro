@@ -9,6 +9,11 @@ import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const takeWarm = vi.hoisted(() => vi.fn<() => string | undefined>());
+vi.mock('@queries/agent-session/warm', () => ({
+  takeWarmAgentSession: takeWarm,
+}));
+
 const refetchSoupEntity = vi.hoisted(() => vi.fn(async () => {}));
 // Session creation refreshes Soup in the background. Keep this unit test at
 // the query boundary so real auth/network work cannot outlive its environment.
@@ -121,6 +126,7 @@ const { resolveSessionId } = await import('./resolve-session-id');
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  takeWarm.mockReset();
   refetchSoupEntity.mockClear();
   create.control.mockReset();
   create.release.mockReset();
@@ -465,3 +471,21 @@ it.each([undefined, 'explicit-user'])(
     });
   }
 );
+
+it('falls back to a cold session when claiming a warm session fails', async () => {
+  takeWarm.mockReturnValueOnce('stale-warm');
+  const placeholder = startPendingSession();
+  expect(placeholder).toBe('stale-warm');
+  create.reject?.();
+  await vi.waitFor(() => {
+    const request = vi.mocked(agentHarnessServiceClient.create).mock
+      .lastCall?.[0];
+    expect(request?.id).not.toBe('stale-warm');
+  });
+  create.resolve?.();
+  const { pendingSession } = await import('./pending-session');
+  await vi.waitFor(() =>
+    expect(pendingSession(placeholder)?.sessionId()).toBeTruthy()
+  );
+  expect(pendingSession(placeholder)?.failed()).toBe(false);
+});
