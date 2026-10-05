@@ -4,7 +4,11 @@
  * turned on or off for this file. Presentational.
  */
 
-import type { LibraryRef, LibraryStatus } from '@core/fig-engine/library-types';
+import type {
+  LibraryCopy,
+  LibraryRef,
+  LibraryStatus,
+} from '@core/fig-engine/library-types';
 import BookOpen from '@phosphor/book-open.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import XIcon from '@phosphor/x.svg';
@@ -24,6 +28,8 @@ export function LibrariesDialog(props: {
   canEdit: boolean;
   onToggle: (library: LibraryRef, on: boolean) => void;
   onPublish: () => void;
+  /** Copies of assets no enabled library offers (they stay as they are). */
+  detached: readonly LibraryCopy[];
   onClose: () => void;
 }) {
   const [query, setQuery] = createSignal('');
@@ -175,6 +181,21 @@ export function LibrariesDialog(props: {
                 </ul>
               </Show>
             </section>
+            <Show when={props.detached.length > 0}>
+              <section
+                class="flex flex-col gap-1"
+                data-testid="fig-library-detached"
+              >
+                <h3 class="font-medium text-ink-muted text-xs">Not updated</h3>
+                <p class="text-ink-muted text-xs">
+                  These came from libraries this file no longer uses, or that no
+                  longer publish them. They stay as they are.
+                </p>
+                <p class="truncate text-ink text-xs">
+                  {props.detached.map((c) => c.name).join(', ')}
+                </p>
+              </section>
+            </Show>
           </div>
         </Panel.Body>
       </Panel>

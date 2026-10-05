@@ -15,7 +15,11 @@ import {
   LibraryUpdatesNotice,
 } from '../components/library-updates';
 import { PublishDialog } from '../components/publish-dialog';
-import { groupAssets, type LibraryUpdate } from '../core/libraries';
+import {
+  detachedCopies,
+  groupAssets,
+  type LibraryUpdate,
+} from '../core/libraries';
 import type { FigLibraries } from '../primitives/create-fig-libraries';
 
 /** The Libraries button and update count for the Assets panel's header. */
@@ -71,6 +75,7 @@ export function LibrariesButton(props: {
           canEdit={libs.canEdit()}
           onToggle={(library, on) => void libs.setEnabled(library, on)}
           onPublish={() => setPublishing('open')}
+          detached={detachedCopies(libs.uses(), libs.published())}
           onClose={() => setOpen(false)}
         />
       </Show>
