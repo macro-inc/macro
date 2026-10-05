@@ -29,7 +29,7 @@ import {
   type ViewerAction,
 } from '../core/shortcuts';
 import { createFigContextMenu } from '../primitives/create-fig-context-menu';
-import { createFigEditor } from '../primitives/create-fig-editor';
+import { createFigEditor, type Patch } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { AssetsPanel } from './assets-panel';
 import { LayersPanel } from './layers-panel';
@@ -90,6 +90,50 @@ export function FigViewer() {
         });
     })
   );
+
+  // ---- design panel ---------------------------------------------------------
+
+  // A drag in the design panel (scrubbing a value, a color) sends live
+  // edits and commits on release: one undo step per drag.
+  let gesture: { what: string; key: string } | undefined;
+  let gestures = 0;
+  const gestureKey = (what: string, live: boolean) => {
+    if (gesture?.what !== what)
+      gesture = live ? { what, key: `panel-${what}-${++gestures}` } : undefined;
+    const key = gesture?.key;
+    if (!live) gesture = undefined;
+    return key;
+  };
+  const patchSelection = (patch: Patch, live: boolean) =>
+    void editor.setProps(patch, gestureKey(Object.keys(patch).join(','), live));
+  const setPageColor = (hex: string, live: boolean) => {
+    const page = viewer.pages[viewer.page()];
+    if (!page) return;
+    void editor.apply(
+      [{ op: 'set', ids: [page.id], props: { fills: [{ color: hex }] } }],
+      gestureKey('page-color', live)
+    );
+  };
+
+  /** The page's colors, offered by the color pickers (loaded on opening). */
+  const [swatches, setSwatches] = createSignal<string[]>([]);
+  const loadSwatches = async () => {
+    try {
+      setSwatches(await engine.pageColors(viewer.page()));
+    } catch {
+      setSwatches([]);
+    }
+  };
+  const addImage = async (file: File) => {
+    try {
+      return (await engine.addImage(await file.arrayBuffer())).hash;
+    } catch (e) {
+      context.notifyError(
+        e instanceof Error ? e.message : `${file.name} could not be added`
+      );
+      return undefined;
+    }
+  };
 
   // ---- export -------------------------------------------------------------
 
@@ -265,6 +309,8 @@ export function FigViewer() {
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, [contenteditable="true"]')) return;
+    // Menus (portaled, so their events bubble here) handle their own keys.
+    if (target.closest('[role="menu"]')) return;
     // A focused select or button keeps the keys it uses itself.
     const control = target.closest('select, button, a[href]');
     if (control && controlOwnsKey(control.tagName, e)) return;
@@ -504,15 +550,11 @@ export function FigViewer() {
             onAlign={
               editor.enabled() ? (how) => void editor.align(how) : undefined
             }
-            onPatch={
-              editor.enabled()
-                ? (patch, live) =>
-                    void editor.setProps(
-                      patch,
-                      live ? `panel-${Object.keys(patch).join(',')}` : undefined
-                    )
-                : undefined
-            }
+            onPatch={editor.enabled() ? patchSelection : undefined}
+            onPageColor={editor.enabled() ? setPageColor : undefined}
+            swatches={swatches()}
+            onPickerOpen={() => void loadSwatches()}
+            onAddImage={editor.enabled() ? addImage : undefined}
             onAddAutoLayout={
               editor.enabled() ? () => void editor.addAutoLayout() : undefined
             }

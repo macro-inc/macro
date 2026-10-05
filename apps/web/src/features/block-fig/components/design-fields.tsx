@@ -1,14 +1,10 @@
 /**
  * Editable fields of the design panel, in Figma's style: numbers that
  * commit on Enter or blur and scrub when their label is dragged, a name
- * field, and paint rows (color, opacity, visibility). Presentational.
+ * field, parsed values, and choices. Presentational.
  */
 
-import type { PaintInfo } from '@core/fig-engine/types';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import Minus from '@phosphor/minus.svg';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 import { evaluate } from '../core/arith';
 import { formatMeasure } from '../core/measure';
 import { isCommitKey } from '../core/shortcuts';
@@ -28,13 +24,18 @@ export function NumberField(props: {
   min?: number;
   max?: number;
   testId?: string;
-  /** `live` changes come from scrubbing (coalesce them). */
+  /** Layers in the selection differ: shows "Mixed" until typed into. */
+  mixed?: boolean;
+  /** `live` changes come from scrubbing (coalesce them); the release
+   * commits the last one. */
   onChange: (value: number, live: boolean) => void;
 }) {
   const shown = () =>
-    props.percent
-      ? `${Math.round(props.value * 100)}%`
-      : formatMeasure(props.value);
+    props.mixed
+      ? 'Mixed'
+      : props.percent
+        ? `${Math.round(props.value * 100)}%`
+        : formatMeasure(props.value);
   const [draft, setDraft] = createSignal<string>();
   const clamp = (v: number) =>
     Math.min(props.max ?? Infinity, Math.max(props.min ?? -Infinity, v));
@@ -46,13 +47,16 @@ export function NumberField(props: {
     // the current value ("+10").
     const base = props.percent ? props.value * 100 : props.value;
     const typed = text.replace(/%/g, '').trim();
-    let v = evaluate(/^[+*/]/.test(typed) ? `${base}${typed}` : typed);
+    if (typed === '') return;
+    let v = evaluate(
+      /^[+*/]/.test(typed) && !props.mixed ? `${base}${typed}` : typed
+    );
     if (v === null) return;
     if (props.percent) v /= 100;
     props.onChange(clamp(v), false);
   };
 
-  let scrub: { x: number; start: number } | undefined;
+  let scrub: { x: number; start: number; last?: number } | undefined;
   const onLabelDown = (e: PointerEvent) => {
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -61,11 +65,15 @@ export function NumberField(props: {
   const onLabelMove = (e: PointerEvent) => {
     if (!scrub) return;
     const step = (e.shiftKey ? 10 : 1) * (props.percent ? 0.01 : 1);
-    const v = scrub.start + Math.round(e.clientX - scrub.x) * step;
-    props.onChange(clamp(v), true);
+    const v = clamp(scrub.start + Math.round(e.clientX - scrub.x) * step);
+    if (v === scrub.last) return;
+    scrub.last = v;
+    props.onChange(v, true);
   };
   const onLabelUp = () => {
+    const last = scrub?.last;
     scrub = undefined;
+    if (last !== undefined) props.onChange(last, false);
   };
 
   return (
@@ -83,7 +91,7 @@ export function NumberField(props: {
         data-testid={props.testId}
         value={draft() ?? shown()}
         onFocus={(e) => {
-          setDraft(e.currentTarget.value);
+          setDraft(props.mixed ? '' : e.currentTarget.value);
           e.currentTarget.select();
         }}
         onInput={(e) => setDraft(e.currentTarget.value)}
@@ -95,7 +103,7 @@ export function NumberField(props: {
             setDraft(undefined);
             e.currentTarget.blur();
           }
-          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !props.mixed) {
             e.preventDefault();
             const step = (e.shiftKey ? 10 : 1) * (props.percent ? 0.01 : 1);
             props.onChange(
@@ -140,116 +148,6 @@ export function TextField(props: {
         }
       }}
     />
-  );
-}
-
-/** `RRGGBB` (and `AA` when translucent) for a paint's color. */
-export function paintHex(p: PaintInfo): string | undefined {
-  if (!p.color) return undefined;
-  const a = p.alpha ?? 1;
-  return a < 1
-    ? `${p.color}${Math.round(a * 255)
-        .toString(16)
-        .padStart(2, '0')
-        .toUpperCase()}`
-    : p.color;
-}
-
-/** Normalizes typed color: `#abc`, `abc`, `AABBCC`, `AABBCC80`. */
-export function normalizeHex(text: string): string | undefined {
-  let t = text.trim().replace(/^#/, '');
-  if (/^[0-9a-f]{3}$/i.test(t))
-    t = t
-      .split('')
-      .map((c) => c + c)
-      .join('');
-  if (/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(t)) return t.toUpperCase();
-  return undefined;
-}
-
-/** One editable paint: swatch, hex, opacity, visibility, and remove. */
-export function PaintEditRow(props: {
-  paint: PaintInfo;
-  swatch: string;
-  label: string;
-  testId?: string;
-  onColor: (hex: string) => void;
-  onOpacity: (opacity: number, live: boolean) => void;
-  onToggle: () => void;
-  onRemove: () => void;
-}) {
-  const p = () => props.paint;
-  const solid = () => p().type === 'SOLID';
-  let picker!: HTMLInputElement;
-  return (
-    <div
-      class="flex items-center gap-1.5 rounded-md bg-inset px-1.5 py-1"
-      data-testid={props.testId}
-      classList={{ 'opacity-60': !p().visible }}
-    >
-      <button
-        type="button"
-        aria-label="Pick color"
-        class="size-4 shrink-0 rounded-sm border border-edge-muted"
-        style={{ background: props.swatch }}
-        disabled={!solid()}
-        onClick={() => picker.click()}
-      />
-      <input
-        ref={picker}
-        type="color"
-        class="sr-only"
-        tabIndex={-1}
-        value={`#${(p().color ?? '000000').slice(0, 6)}`}
-        onInput={(e) =>
-          props.onColor(e.currentTarget.value.slice(1).toUpperCase())
-        }
-      />
-      <Show
-        when={solid()}
-        fallback={
-          <span class="min-w-0 flex-1 truncate text-ink">{props.label}</span>
-        }
-      >
-        <TextField
-          value={p().color ?? ''}
-          class="font-mono"
-          testId={props.testId ? `${props.testId}-hex` : undefined}
-          onChange={(v) => {
-            const hex = normalizeHex(v);
-            if (hex) props.onColor(hex);
-          }}
-        />
-      </Show>
-      <div class="w-14 shrink-0">
-        <NumberField
-          label=""
-          value={p().opacity}
-          percent
-          min={0}
-          max={1}
-          onChange={props.onOpacity}
-        />
-      </div>
-      <button
-        type="button"
-        aria-label={p().visible ? 'Hide' : 'Show'}
-        class="rounded p-0.5 text-ink-muted hover:text-ink"
-        onClick={props.onToggle}
-      >
-        <Show when={p().visible} fallback={<EyeSlash class="size-3.5" />}>
-          <Eye class="size-3.5" />
-        </Show>
-      </button>
-      <button
-        type="button"
-        aria-label="Remove"
-        class="rounded p-0.5 text-ink-muted hover:text-ink"
-        onClick={props.onRemove}
-      >
-        <Minus class="size-3.5" />
-      </button>
-    </div>
   );
 }
 

@@ -9,8 +9,11 @@ import Eye from '@phosphor/eye.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
 import Minus from '@phosphor/minus.svg';
 import { For, Show } from 'solid-js';
+import { cssHex, normalizeHex } from '../core/color';
 import type { EffectSpec } from '../primitives/create-fig-editor';
-import { NumberField, normalizeHex, TextField } from './design-fields';
+import { ColorPicker } from './color-picker';
+import { NumberField, TextField } from './design-fields';
+import { SwatchPopover } from './swatch-popover';
 
 const KINDS = [
   ['DROP_SHADOW', 'Drop shadow'],
@@ -39,6 +42,10 @@ function hexWithAlpha(e: EffectInfo): string {
 
 export function EffectList(props: {
   effects: EffectInfo[];
+  /** Colors the color picker offers (the page's). */
+  swatches?: readonly string[];
+  /** The color picker opened (to load the page's colors). */
+  onPickerOpen?: () => void;
   onChange: (effects: EffectSpec[], live: boolean) => void;
 }) {
   const set = (k: number, edit: EffectSpec | null, live = false) =>
@@ -129,13 +136,20 @@ export function EffectList(props: {
                 />
               </div>
               <div class="flex items-center gap-1.5 rounded-md bg-panel px-1.5 py-0.5">
-                <span
-                  class="size-3.5 shrink-0 rounded-sm border border-edge-muted"
-                  style={{
-                    background: `#${e.color}`,
-                    opacity: String(e.alpha),
+                <SwatchPopover
+                  swatch={cssHex(hexWithAlpha(e))}
+                  label="Shadow color"
+                  testId={`fig-effect-${k()}-swatch`}
+                  onOpenChange={(open) => {
+                    if (open) props.onPickerOpen?.();
                   }}
-                />
+                >
+                  <ColorPicker
+                    value={hexWithAlpha(e)}
+                    swatches={props.swatches}
+                    onChange={(color, live) => set(k(), { color }, live)}
+                  />
+                </SwatchPopover>
                 <TextField
                   value={hexWithAlpha(e)}
                   class="font-mono"

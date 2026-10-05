@@ -55,7 +55,15 @@ export function FigContextMenu(props: {
           // The chosen action decides where focus goes (a rename field).
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
-          <div class="w-full" data-testid="fig-context-menu">
+          {/* Portaled events bubble to where the menu sits (the canvas),
+              which must not take presses on items as canvas presses. */}
+          <div
+            class="w-full"
+            data-testid="fig-context-menu"
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            onPointerMove={(e) => e.stopPropagation()}
+          >
             <For each={props.entries}>
               {(entry) =>
                 entry === 'separator' ? (
