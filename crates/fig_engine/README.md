@@ -92,8 +92,9 @@ with its full schema, copies every unedited node record byte for byte,
 re-encodes edited ones with only the edited fields replaced, and appends new
 nodes (copies start from their source's record) and blobs. Fields the engine
 does not model therefore survive, and saving a large file takes about as
-long as compressing it: the new message is deflated into the archive as it
-is written, so it is never held whole beside the original. `fig_render roundtrip` checks that edited, saved,
+long as compressing it: the original message is inflated a few megabytes
+at a time as its records are copied, and the new one deflated into the
+archive as it is written, so neither is ever held whole. `fig_render roundtrip` checks that edited, saved,
 and reopened files render identically.
 
 Auto layout frames are laid out again when an edit changes them or their
