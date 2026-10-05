@@ -76,6 +76,7 @@ function setup() {
     setPatchStatus,
     setVisible,
     refreshes: () => refreshes,
+    enabledReads,
   };
 }
 
@@ -101,6 +102,33 @@ describe('createChangesModel', () => {
     dispose();
   });
 
+  it('retains displayed patch text on close without further reads and clears it for another changeset', () => {
+    const {
+      model,
+      setSummary,
+      setPatchText,
+      setVisible,
+      enabledReads,
+      dispose,
+    } = createRoot((dispose) => ({ ...setup(), dispose }));
+    setSummary(summaryWith(['a.ts']));
+    setVisible(true);
+    setPatchText(PATCH);
+    expect(model.patch()).toBe(PATCH);
+    const reads = enabledReads.length;
+    setVisible(false);
+    expect(model.patch()).toBe(PATCH);
+    setPatchText('next patch');
+    expect(model.patch()).toBe(PATCH);
+    expect(enabledReads).toHaveLength(reads);
+    const next = summaryWith(['b.ts']);
+    next.changeset!.id = 'cs-next';
+    setSummary(next);
+    expect(model.patch()).toBeUndefined();
+    setVisible(true);
+    expect(model.patch()).toBe('next patch');
+    dispose();
+  });
   it('does not wait for a patch that has no bytes', () => {
     createRoot((dispose) => {
       const { model, setSummary, setVisible } = setup();

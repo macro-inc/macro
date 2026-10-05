@@ -1,12 +1,14 @@
 import { getTokens, Model } from '@ironcalc/wasm';
+import { type DrawingPoint, isChartLiteral } from './sheet-drawings';
 import {
   formatCellAddress,
   parseCellAddress,
-  SPREADSHEET_COLUMNS,
+  SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
   type SpreadsheetCells,
 } from './spreadsheet-document';
 import type { SpreadsheetWorkbookSheet } from './workbook-document';
+import type { WorkbookSheetMetadata } from './workbook-metadata';
 
 export type AxisChange = {
   sheetId: string;
@@ -88,6 +90,110 @@ function prepareDeletion(
   return characters.join('');
 }
 
+/**
+ * Formulas kept outside cells, in a stable order: name definitions, the
+ * formulas and threshold values of conditional formats and data validation,
+ * then the ranges charts read.
+ */
+function sheetFormulas(metadata: WorkbookSheetMetadata | undefined) {
+  const formulas = (metadata?.definedNames ?? []).map((name) => name.formula);
+  for (const rule of [
+    ...(metadata?.conditionalFormats ?? []),
+    ...(metadata?.validations ?? []),
+  ]) {
+    formulas.push(...(rule.formulas ?? []));
+    if ('thresholds' in rule)
+      for (const threshold of rule.thresholds ?? [])
+        if (threshold.value !== undefined) formulas.push(threshold.value);
+  }
+  for (const drawing of metadata?.drawings ?? [])
+    if (drawing.type === 'chart')
+      formulas.push(
+        ...drawing.chart.references.filter(
+          (reference) => !isChartLiteral(reference)
+        )
+      );
+    else if (drawing.type === 'shape')
+      for (const part of drawing.shape.parts)
+        if (part.text?.link) formulas.push(part.text.link);
+  for (const pivot of metadata?.pivotTables ?? [])
+    if (pivot.source !== undefined) formulas.push(pivot.source);
+  return formulas;
+}
+
+/** Metadata with its outside-cell formulas replaced, in `sheetFormulas` order. */
+function withSheetFormulas(
+  metadata: WorkbookSheetMetadata,
+  formulas: string[]
+): WorkbookSheetMetadata {
+  let next = 0;
+  const take = () => formulas[next++];
+  const result = { ...metadata };
+  if (metadata.definedNames)
+    result.definedNames = metadata.definedNames.map((entry) => ({
+      ...entry,
+      formula: take(),
+    }));
+  if (metadata.conditionalFormats)
+    result.conditionalFormats = metadata.conditionalFormats.map((rule) => ({
+      ...rule,
+      ...(rule.formulas && { formulas: rule.formulas.map(take) }),
+      ...(rule.thresholds && {
+        thresholds: rule.thresholds.map((threshold) =>
+          threshold.value === undefined
+            ? threshold
+            : { ...threshold, value: take() }
+        ),
+      }),
+    }));
+  if (metadata.validations)
+    result.validations = metadata.validations.map((rule) => ({
+      ...rule,
+      ...(rule.formulas && { formulas: rule.formulas.map(take) }),
+    }));
+  if (metadata.drawings)
+    result.drawings = metadata.drawings.map((drawing) => {
+      if (drawing.type === 'chart')
+        return {
+          ...drawing,
+          chart: {
+            ...drawing.chart,
+            // Fixed values stay as they are.
+            references: drawing.chart.references.map((reference) =>
+              isChartLiteral(reference) ? reference : take()
+            ),
+          },
+        };
+      if (drawing.type !== 'shape') return drawing;
+      return {
+        ...drawing,
+        shape: {
+          ...drawing.shape,
+          parts: drawing.shape.parts.map((part) => {
+            if (!part.text?.link) return part;
+            const link = take();
+            // A shape whose cell is deleted keeps the text it last showed.
+            if (!link.includes('#REF!'))
+              return { ...part, text: { ...part.text, link } };
+            const { link: _link, ...text } = part.text;
+            return { ...part, text };
+          }),
+        },
+      };
+    });
+  if (metadata.pivotTables) {
+    // A pivot table whose source cells were deleted cannot be rebuilt; its
+    // values stay in the cells.
+    result.pivotTables = metadata.pivotTables.flatMap((pivot) => {
+      if (pivot.source === undefined) return [pivot];
+      const source = take();
+      return source.includes('#REF!') ? [] : [{ ...pivot, source }];
+    });
+    if (!result.pivotTables.length) delete result.pivotTables;
+  }
+  return result;
+}
+
 /** Keep cell identity, styles and all sheet references together during a structural edit. */
 export function changeWorkbookAxis(
   sheets: SpreadsheetWorkbookSheet[],
@@ -95,7 +201,13 @@ export function changeWorkbookAxis(
 ): SpreadsheetWorkbookSheet[] {
   const target = sheets.findIndex((sheet) => sheet.id === change.sheetId);
   const limit =
-    change.axis === 'row' ? SPREADSHEET_MAX_ROWS : SPREADSHEET_COLUMNS;
+    change.axis === 'row' ? SPREADSHEET_MAX_ROWS : SPREADSHEET_MAX_COLUMNS;
+  // Name definitions are moved through out-of-grid formulas below the last
+  // row, in a column that a column deletion cannot remove.
+  const helperColumn =
+    change.axis === 'column' && change.kind === 'delete' && change.index === 0
+      ? change.count
+      : 0;
   if (
     target < 0 ||
     !Number.isInteger(change.index) ||
@@ -138,6 +250,25 @@ export function changeWorkbookAxis(
       );
     return `${formatCellAddress(start.row, start.column)}:${formatCellAddress(end.row, end.column)}`;
   };
+  // Rule ranges are lists of cells and ranges; unlike formatted ranges they
+  // are clipped at the sheet's edge rather than blocking an insertion.
+  const ruleRange = (sqref: string): string | undefined => {
+    const parts = sqref.split(/\s+/).flatMap((part) => {
+      const [start, end = start] = part.split(':').map(parseCellAddress);
+      if (!start || !end) return [];
+      const first = move(start[change.axis]);
+      const last = move(end[change.axis]);
+      // A deletion removes the part only when it covers all of it.
+      if (first === undefined && last === undefined) return [];
+      start[change.axis] = first ?? change.index;
+      end[change.axis] = Math.min(limit - 1, last ?? change.index - 1);
+      if (start[change.axis] > end[change.axis]) return [];
+      const from = formatCellAddress(start.row, start.column);
+      const to = formatCellAddress(end.row, end.column);
+      return [from === to ? from : `${from}:${to}`];
+    });
+    return parts.length ? parts.join(' ') : undefined;
+  };
   const model = new Model('Sheet structure', 'en', 'UTC', 'en');
   try {
     model.pauseEvaluation();
@@ -147,20 +278,21 @@ export function changeWorkbookAxis(
     });
     sheets.forEach((sheet, index) => model.renameSheet(index, sheet.name));
     for (const [index, sheet] of sheets.entries()) {
-      for (const [nameIndex, name] of (
-        sheet.metadata?.definedNames ?? []
-      ).entries()) {
+      // A rule's formulas are relative to its first cell; references in an
+      // out-of-grid cell move the same way.
+      for (const [slot, formula] of sheetFormulas(sheet.metadata).entries())
         model.setUserInput(
           index,
-          SPREADSHEET_MAX_ROWS + 1 + nameIndex,
-          SPREADSHEET_COLUMNS + 2,
+          SPREADSHEET_MAX_ROWS + 1 + slot,
+          helperColumn + 1,
           prepareDeletion(
-            `=${name.formula.replace(/^=/, '')}`,
+            `=${formula.replace(/^=/, '')}`,
             sheet.name,
             sheets[target].name,
             change
           )
         );
+      for (const name of sheet.metadata?.definedNames ?? []) {
         if (
           /^[=]?(?:[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|TRUE|FALSE|"(?:[^"\r\n]|"")*")$/i.test(
             name.formula
@@ -222,26 +354,22 @@ export function changeWorkbookAxis(
               : cell.value,
         };
       }
-      const metadata = { ...sheet.metadata };
-      if (metadata.definedNames)
-        metadata.definedNames = metadata.definedNames.map(
-          (entry, nameIndex) => {
-            // IronCalc moves formula references but not its named-range definitions.
-            // Read each definition from an out-of-grid formula after the same move.
-            let row = SPREADSHEET_MAX_ROWS + nameIndex;
-            let column = SPREADSHEET_COLUMNS + 1;
-            if (index === target) {
-              if (change.axis === 'row') row = move(row)!;
-              else column = move(column)!;
-            }
-            return {
-              ...entry,
-              formula: model
-                .getCellContent(index, row + 1, column + 1)
-                .replace(/^=/, ''),
-            };
+      // IronCalc moves formula references but not its named-range definitions.
+      // Read each definition from an out-of-grid formula after the same move.
+      const metadata = withSheetFormulas(
+        { ...sheet.metadata },
+        sheetFormulas(sheet.metadata).map((_, slot) => {
+          let row = SPREADSHEET_MAX_ROWS + slot;
+          let column = helperColumn;
+          if (index === target) {
+            if (change.axis === 'row') row = move(row)!;
+            else column = move(column)!;
           }
-        );
+          return model
+            .getCellContent(index, row + 1, column + 1)
+            .replace(/^=/, '');
+        })
+      );
       let layout = sheet.layout;
       if (index === target) {
         if (metadata.merges)
@@ -251,6 +379,63 @@ export function changeWorkbookAxis(
           });
         if (metadata.autoFilter)
           metadata.autoFilter = range(metadata.autoFilter);
+        if (metadata.notes)
+          metadata.notes = Object.fromEntries(
+            Object.entries(metadata.notes).flatMap(([address, note]) => {
+              const position = parseCellAddress(address)!;
+              const next = move(position[change.axis]);
+              if (next === undefined || next >= limit) return [];
+              position[change.axis] = next;
+              return [[formatCellAddress(position.row, position.column), note]];
+            })
+          );
+        if (metadata.conditionalFormats)
+          metadata.conditionalFormats = metadata.conditionalFormats.flatMap(
+            (rule) => {
+              const next = ruleRange(rule.range);
+              return next ? [{ ...rule, range: next }] : [];
+            }
+          );
+        if (metadata.validations)
+          metadata.validations = metadata.validations.flatMap((rule) => {
+            const next = ruleRange(rule.range);
+            return next ? [{ ...rule, range: next }] : [];
+          });
+        if (metadata.drawings) {
+          // A drawing moves with its cells. One that stretches over cells
+          // that are all deleted goes with them, as it would have no size.
+          // A corner in deleted cells moves to where they were.
+          const corner = (point: DrawingPoint) => {
+            const index = move(point[change.axis]);
+            return index === undefined
+              ? {
+                  ...point,
+                  [change.axis]: change.index,
+                  [change.axis === 'row' ? 'y' : 'x']: 0,
+                }
+              : { ...point, [change.axis]: Math.min(limit - 1, index) };
+          };
+          metadata.drawings = metadata.drawings.flatMap((drawing) => {
+            const deleted = (point: DrawingPoint) =>
+              move(point[change.axis]) === undefined;
+            if (drawing.to && deleted(drawing.from) && deleted(drawing.to))
+              return [];
+            return [
+              {
+                ...drawing,
+                from: corner(drawing.from),
+                ...(drawing.to && { to: corner(drawing.to) }),
+              },
+            ];
+          });
+        }
+        if (metadata.pivotTables) {
+          metadata.pivotTables = metadata.pivotTables.flatMap((pivot) => {
+            const location = ruleRange(pivot.location);
+            return location ? [{ ...pivot, location }] : [];
+          });
+          if (!metadata.pivotTables.length) delete metadata.pivotTables;
+        }
         const hidden = change.axis === 'row' ? 'hiddenRows' : 'hiddenColumns';
         if (metadata[hidden])
           metadata[hidden] = metadata[hidden].flatMap((value) => {
@@ -268,24 +453,26 @@ export function changeWorkbookAxis(
                 : Math.min(limit, move(edge) ?? change.index),
           };
         }
+        // Inserting extends the sheet; deleting keeps its size, as in Excel.
+        let used = 0;
+        for (const key of Object.keys(cells))
+          used = Math.max(used, parseCellAddress(key)![change.axis] + 1);
+        const grown = (count: number) =>
+          Math.min(
+            limit,
+            Math.max(
+              count + (change.kind === 'insert' ? change.count : 0),
+              used
+            )
+          );
         if (change.axis === 'row') {
           if (metadata.rowHeights)
             metadata.rowHeights = movedRecord(metadata.rowHeights);
-          layout = {
-            ...layout,
-            rowCount: Math.min(
-              SPREADSHEET_MAX_ROWS,
-              Math.max(
-                layout.rowCount + (change.kind === 'insert' ? change.count : 0),
-                ...Object.keys(cells).map(
-                  (key) => parseCellAddress(key)!.row + 1
-                )
-              )
-            ),
-          };
+          layout = { ...layout, rowCount: grown(layout.rowCount) };
         } else
           layout = {
             ...layout,
+            columnCount: grown(layout.columnCount),
             columnWidths: movedRecord(layout.columnWidths),
           };
       }

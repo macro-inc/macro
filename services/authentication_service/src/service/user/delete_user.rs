@@ -37,6 +37,15 @@ pub trait UserDeletionGateway: Send + Sync {
         user: &MacroUserIdStr<'static>,
         account: &Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Delete the account's billing customer once every profile is gone and
+    /// before the account row that remembers the customer, so a failure here
+    /// is retried instead of orphaning the customer. Deleting the customer
+    /// also cancels any subscription it still has, so this must run after the
+    /// team subscription has been handled through `leave_teams`.
+    fn delete_billing_customer(
+        &self,
+        account: &Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
     /// Delete the account only after all profiles have been cleaned up.
     fn delete_account(&self, account: &Uuid) -> impl Future<Output = Result<(), Report>> + Send;
 }
@@ -55,5 +64,6 @@ pub async fn delete_user_data(
         gateway.delete_items(user).await?;
         gateway.delete_profile(user, account).await?;
     }
+    gateway.delete_billing_customer(account).await?;
     gateway.delete_account(account).await
 }

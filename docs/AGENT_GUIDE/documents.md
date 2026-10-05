@@ -67,10 +67,50 @@ title bar with **Ask Macro** and **Share** at the top right. The **File actions*
 ellipsis beside the title uses the same menu as documents, including rename,
 favorite, move, copy, and permission-appropriate file actions. Native spreadsheets
 use a green grid icon in file lists and search. The grid fills
-the panel beneath the formatting and formula bars. They have the `.spreadsheet` file type; uploading an
+the panel beneath the formatting and formula bars. While a workbook opens, a
+shimmering placeholder grid (status "Opening spreadsheet…") stands in for it, and
+formula cells show a short shimmer bar until their first results arrive; wait for
+real cell text before reading values. They have the `.spreadsheet` file type; uploading an
 Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
 
-You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets.
+You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets. A large workbook shows a progress bar on **Import workbook** while it is written; the page stays responsive, and one undo removes the whole import.
+
+Imported Excel workbooks keep conditional formatting, data validation and notes.
+Conditional formats recolor cells and draw data bars and icons, and they update as
+values change. A selected cell with a list rule shows an arrow at its right edge:
+click it or press Alt+Down to choose a value. Typing a value the rule does not allow
+shows the rule's message in the footer, and a "stop" rule keeps the previous value.
+A red corner marks a cell with a note; selecting the cell shows the note, and any
+input message, beside it.
+
+Images and charts (column, bar, line, area, pie, doughnut, scatter, radar,
+bubble, stock and surface, drawn as a contour) are drawn over their cells and
+move with them; charts redraw as the cells they read change. Each is a `figure`
+named after the chart title ("Chart: Revenue") or the image description. The
+toolbar's **Insert chart or image** menu (chart icon) adds a chart of the
+selected cells — or, from one cell, of the table around it, placed beside it —
+or an image file (PNG, JPEG, GIF, WebP or BMP up to 2 MB) at the active cell.
+Its **More charts** submenu holds Radar, Filled radar, Bubble, Stock and
+Contour; a stock chart needs three or four series (high, low, close, with open
+first for up-down bars), and a bubble chart reads x values from the first
+column, then values and sizes in pairs. Imported shapes, text boxes, lines,
+groups and SmartArt are drawn too, as `figure`s named after their text (or
+their name, such as "Straight Connector 2"); a shape linked to a cell shows the
+cell's value. They move, size and delete like images, and download as Excel
+wrote them (SmartArt as a group of its shapes). EMF and WMF pictures show a
+picture drawn of them and download as the original metafile. Click a drawing to select it: drag it to move it, drag a handle to
+size it, press Delete to remove it (undo restores it) or Escape to return to the
+cells. Double-click a chart, press Enter, or use its pencil button to open **Edit
+chart** (type, title, legend, the cells it charts, series in rows or columns).
+From the keyboard, Ctrl+Alt+5 (also in the Insert menu) selects the first
+drawing, Tab and Shift+Tab move between drawings, arrow keys move the selected
+one (Shift sizes it, Alt by one pixel). Pivot tables show their last values as ordinary cells; the Excel
+download keeps them, and Excel rebuilds them from their data when the file opens; pivot tables over other
+workbooks or data connections download with the data Excel saved with them (connections without saved
+passwords), for Excel to refresh from their source. GETPIVOTDATA formulas
+that read a kept pivot table calculate from its cells, so editing a value in the table updates them.
+Deleting a sheet whose data a chart on another sheet reads keeps the chart: it
+shows the values it had, which no longer change.
 
 Select a cell to inspect its address and input in the formula bar. Double-click
 a cell, start typing, or use the formula bar to edit its value. Formulas begin
@@ -201,18 +241,20 @@ Excel export writes a dated number rather than the label. Typed dates such as
 dates without choosing the Date number format. A difference of two dates stays a
 plain day count, and an explicit number format from the toolbar always wins.
 
-CSV imports a file up to 1 MB into the selection, adding rows if needed within the
-1,000 × 26 limit. Existing cells in that rectangle
-are replaced, with undo available. Excel imports accept up to 5 MB, 10 sheets, and
-1,000 rows × 26 columns per sheet. An import preview lists each sheet and warns about
-unsupported content (for example charts, validation rules, and rich text). Choose
+CSV imports a file up to 20 MB into the selection, adding rows if needed within the
+100,000 × 16,384 limit. Existing cells in that rectangle
+are replaced, with undo available. Excel imports accept up to 50 MB, 300 sheets,
+2,000,000 filled cells, and 100,000 rows × 16,384 columns (A–XFD) per sheet. The footer
+shows the sheet's size, and **+ Add columns** appends 26 more. An import preview lists
+each sheet and warns about unsupported content (for example rich text, ink and sheet
+protection). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
 while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
-current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges and named constants are retained; unsupported named expressions show explicit calculation errors. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Complex Excel features such as pivots, structured table formulas, charts, conditional formatting, validation, and rich text are not fully supported; review import notes before conversion.
+current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, shapes, text boxes, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas and rich text are not fully supported; review import notes before conversion.
 CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
 **Download as CSV** in the same menu exports only the active sheet's current
 calculated values. Clipboard menu actions use the browser clipboard; if access is

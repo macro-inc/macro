@@ -1,4 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import { parseChartReference } from '@macro-inc/spreadsheet/sheet-drawings';
 import { Button } from '@ui/components/Button';
 import {
   createDeferred,
@@ -10,6 +12,7 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { ChartDialog } from '../components/ChartDialog';
 import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import { SpreadsheetFindDialog } from '../components/SpreadsheetDialogs';
@@ -19,6 +22,7 @@ import {
 } from '../components/SpreadsheetGrid';
 import type { HeaderAction } from '../components/SpreadsheetHeaderMenu';
 import { SpreadsheetSheetTabs } from '../components/SpreadsheetSheetTabs';
+import { SpreadsheetSkeleton } from '../components/SpreadsheetSkeleton';
 import {
   FormulaBar,
   SpreadsheetToolbar,
@@ -30,22 +34,34 @@ import {
 import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comments';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import { cellEditValue } from '../core/cell-input';
+import { chartData, createChartReader } from '../core/chart-data';
 import { encodeCsv } from '../core/csv-export';
 import { formulaRangeReference } from '../core/formula-reference';
 import {
   cellAddress,
-  GRID_COLUMNS,
   positionFromAddress,
   selectionBounds,
 } from '../core/grid-selection';
 import { selectionToggleStyles } from '../core/selection-formatting';
+import {
+  listItems,
+  type RangeValues,
+  rangeAddresses,
+  validateInput,
+  validationAt,
+} from '../core/sheet-validation';
 import type { SpreadsheetCommentAnchor } from '../core/spreadsheet-comments';
-import { SPREADSHEET_MAX_ROWS } from '../core/spreadsheet-document';
+import {
+  SPREADSHEET_MAX_COLUMNS,
+  SPREADSHEET_MAX_ROWS,
+} from '../core/spreadsheet-document';
 import { spreadsheetCursors } from '../core/spreadsheet-presence';
 import type { SpreadsheetCommand } from '../core/toolbar-types';
 import { SPREADSHEET_MAX_SHEETS } from '../core/workbook-document';
+import { CSV_MAX_BYTES } from '../core/workbook-file-types';
 import { createCalculation } from '../primitives/create-calculation';
 import { createCalculationStatus } from '../primitives/create-calculation-status';
+import { createDrawingActions } from '../primitives/create-drawing-actions';
 import { createGridController } from '../primitives/create-grid-controller';
 import { createSheetActions } from '../primitives/create-sheet-actions';
 import type { SpreadsheetStore } from '../primitives/create-spreadsheet-store';
@@ -80,9 +96,51 @@ export function SpreadsheetEditor(props: {
   const calculation = createCalculation(
     props.store.cells,
     props.store.rowCount,
-    { workbook: props.store.workbook, activeSheetId: props.store.activeSheetId }
+    {
+      workbook: props.store.workbook,
+      activeSheetId: props.store.activeSheetId,
+      incremental: props.store,
+    }
   );
   const showCalculationStatus = createCalculationStatus(calculation.busy);
+  // Data validation reads lists and bounds from the rule's own sheet, a
+  // named sheet, or a defined name, using calculated values where present.
+  const sheetById = (id: string | undefined) =>
+    props.store.workbook().find((sheet) => sheet.id === id);
+  const rangeValues =
+    (homeSheetId: string | undefined): RangeValues =>
+    (sheetName, range) => {
+      const sheet =
+        sheetName === undefined
+          ? sheetById(homeSheetId)
+          : props.store
+              .workbook()
+              .find(
+                (entry) => entry.name.toLowerCase() === sheetName.toLowerCase()
+              );
+      if (!sheet) return;
+      const results = calculation.workbookValues()[sheet.id] ?? {};
+      return rangeAddresses(range).map((address) => {
+        const result = results[address];
+        if (result) return { text: result.display, number: result.number };
+        return {
+          text: cellPlainText(sheet.cells[address]?.value ?? '').replace(
+            /^'/,
+            ''
+          ),
+        };
+      });
+    };
+  const definedNames = (homeSheetId: string | undefined) => [
+    ...(sheetById(homeSheetId)?.metadata?.definedNames ?? []).filter(
+      (name) => name.local
+    ),
+    ...props.store
+      .workbook()
+      .flatMap((sheet) =>
+        (sheet.metadata?.definedNames ?? []).filter((name) => !name.local)
+      ),
+  ];
   const grid = createGridController({
     ...props.store,
     canEdit: editable,
@@ -91,8 +149,33 @@ export function SpreadsheetEditor(props: {
     hiddenRows: () => props.store.activeSheet().metadata?.hiddenRows ?? [],
     hiddenColumns: () =>
       props.store.activeSheet().metadata?.hiddenColumns ?? [],
+    validate: (sheetId, address, value) =>
+      validateInput(
+        validationAt(sheetById(sheetId)?.metadata?.validations, address),
+        value,
+        rangeValues(sheetId),
+        definedNames(sheetId)
+      ),
   });
   const values = calculation.values;
+  const activeValidation = createMemo(() =>
+    validationAt(
+      props.store.activeSheet().metadata?.validations,
+      grid.activeAddress()
+    )
+  );
+  const activeList = createMemo(() => {
+    const rule = activeValidation();
+    if (rule?.type !== 'list' || rule.dropdown === false) return;
+    const sheetId = props.store.activeSheetId();
+    return listItems(rule, rangeValues(sheetId), definedNames(sheetId));
+  });
+  const inputMessage = () => {
+    const rule = activeValidation();
+    return rule?.showPrompt && (rule.prompt || rule.promptTitle)
+      ? { title: rule.promptTitle, message: rule.prompt ?? '' }
+      : undefined;
+  };
   const workbookActions = createWorkbookActions({
     store: props.store,
     values: calculation.workbookValues,
@@ -100,11 +183,33 @@ export function SpreadsheetEditor(props: {
     commit: grid.commit,
     onExport: props.onExportXlsx,
   });
+  // A drawing to scroll to, select and focus; each request a new nonce.
+  const [revealDrawing, setRevealDrawing] = createSignal<{
+    id: string;
+    nonce: number;
+  }>();
+  const showDrawing = (id: string) =>
+    setRevealDrawing((current) => ({ id, nonce: (current?.nonce ?? 0) + 1 }));
+  let insertedDrawing: string | undefined;
+  const drawingActions = createDrawingActions({
+    store: props.store,
+    canEdit: editable,
+    selection: grid.selection,
+    values: calculation.workbookValues,
+    setNotice: (message) => actions.setNotice(message),
+    onCreated: (id) => {
+      insertedDrawing = id;
+      showDrawing(id);
+    },
+  });
+  let imageInput!: HTMLInputElement;
   const actions = createSheetActions(
     {
       cells: props.store.cells,
       values,
       rowCount: props.store.rowCount,
+      columnCount: props.store.columnCount,
+      revision: props.store.revision,
       canEdit: editable,
       busy: () => calculation.busy() || !!calculation.error(),
       setCells: props.store.setCells,
@@ -158,6 +263,13 @@ export function SpreadsheetEditor(props: {
     const pending = pendingMenuAction;
     pendingMenuAction = undefined;
     if (pending) command(pending);
+    // A drawing a menu just inserted keeps the focus.
+    const inserted = insertedDrawing;
+    insertedDrawing = undefined;
+    if (inserted) {
+      showDrawing(inserted);
+      return;
+    }
     if (
       actions.findOpen() ||
       workbookActions.preview() ||
@@ -186,34 +298,43 @@ export function SpreadsheetEditor(props: {
   const statisticsSelection = createDeferred(grid.selection, {
     timeoutMs: 100,
   });
-  const occupied = createMemo(() =>
-    [
-      ...new Set([
-        ...Object.keys(props.store.cells()),
-        ...Object.keys(values()),
-      ]),
-    ].map((address) => ({ address, position: positionFromAddress(address) }))
-  );
   const statistics = createMemo(() => {
     const bounds = selectionBounds(statisticsSelection());
-    const selected = occupied()
-      .filter(
-        ({ position }) =>
-          position &&
-          position.row >= bounds.top &&
-          position.row <= bounds.bottom &&
-          position.column >= bounds.left &&
-          position.column <= bounds.right
-      )
-      .map(({ address }) => address);
-    const numbers = selected.flatMap((address) => {
-      const number = values()[address]?.number;
-      return number !== undefined && Number.isFinite(number) ? [number] : [];
-    });
-    const count = selected.filter(
-      (address) =>
-        values()[address]?.display || props.store.cells()[address]?.value
-    ).length;
+    const cells = props.store.cells();
+    const results = values();
+    let count = 0;
+    const numbers: number[] = [];
+    const visit = (address: string) => {
+      const result = results[address];
+      if (result?.display || cells[address]?.value) count++;
+      if (result?.number !== undefined && Number.isFinite(result.number))
+        numbers.push(result.number);
+    };
+    const area =
+      (bounds.bottom - bounds.top + 1) * (bounds.right - bounds.left + 1);
+    // Small selections are walked directly; whole-sheet ones scan only
+    // populated cells instead of every empty address.
+    if (area <= 50_000) {
+      for (let row = bounds.top; row <= bounds.bottom; row++)
+        for (let column = bounds.left; column <= bounds.right; column++)
+          visit(cellAddress({ row, column }));
+    } else {
+      const seen = new Set<string>();
+      for (const source of [cells, results])
+        for (const address in source) {
+          if (seen.has(address)) continue;
+          seen.add(address);
+          const position = positionFromAddress(address);
+          if (
+            position &&
+            position.row >= bounds.top &&
+            position.row <= bounds.bottom &&
+            position.column >= bounds.left &&
+            position.column <= bounds.right
+          )
+            visit(address);
+        }
+    }
     const sum = numbers.reduce((total, number) => total + number, 0);
     const format = (value: number) =>
       new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(
@@ -307,7 +428,9 @@ export function SpreadsheetEditor(props: {
         action === 'insert-after' ||
         action === 'delete'
       ) {
-        const before = props.store.workbook();
+        // A clone keeps the pre-change cells; the live ones change in place.
+        const before = structuredClone(props.store.workbook());
+        const beforeRevision = props.store.revision();
         setStructureBusy(true);
         const next = await calculation.changeAxis(before, {
           sheetId: sheet.id,
@@ -316,7 +439,7 @@ export function SpreadsheetEditor(props: {
           count: end - start + 1,
           kind: action === 'delete' ? 'delete' : 'insert',
         });
-        props.store.applyStructure(before, next);
+        props.store.applyStructure(before, next, beforeRevision);
       } else if (action === 'resize') {
         setResizeSize(
           String(
@@ -342,17 +465,15 @@ export function SpreadsheetEditor(props: {
                   ),
                 ]),
               ];
-        if (
-          hidden.length >=
-          (axis === 'row' ? props.store.rowCount() : GRID_COLUMNS)
-        )
+        const count =
+          axis === 'row' ? props.store.rowCount() : props.store.columnCount();
+        if (hidden.length >= count)
           throw new Error(`Keep at least one ${axis} visible.`);
         props.store.setMetadata({ ...sheet.metadata, [key]: hidden });
         if (action === 'hide') {
-          const next = Array.from(
-            { length: axis === 'row' ? props.store.rowCount() : GRID_COLUMNS },
-            (_, i) => i
-          ).find((i) => !hidden.includes(i))!;
+          const hiddenSet = new Set(hidden);
+          let next = 0;
+          while (next < count && hiddenSet.has(next)) next++;
           grid.select(
             axis === 'row'
               ? { row: next, column: area.left }
@@ -419,11 +540,13 @@ export function SpreadsheetEditor(props: {
       return;
     }
     const selection = grid.selection();
-    const cells = props.store.cells();
+    const revision = props.store.revision();
     const sheetId = props.store.activeSheetId();
     const operation = grid.operationRevision();
-    if (file.size > 1_000_000) {
-      actions.setNotice('Import a CSV up to 1 MB.');
+    if (file.size > CSV_MAX_BYTES) {
+      actions.setNotice(
+        `Import a CSV up to ${CSV_MAX_BYTES / 1024 / 1024} MB.`
+      );
       return;
     }
     try {
@@ -432,7 +555,7 @@ export function SpreadsheetEditor(props: {
         !editable() ||
         grid.editing() ||
         selection !== grid.selection() ||
-        cells !== props.store.cells() ||
+        revision !== props.store.revision() ||
         sheetId !== props.store.activeSheetId() ||
         operation !== grid.operationRevision()
       ) {
@@ -562,6 +685,37 @@ export function SpreadsheetEditor(props: {
           grid.format(style);
           focusGrid();
         }}
+        onInsertChart={(type) => {
+          grid.commit();
+          actions.clearNotice();
+          drawingActions.insertChart(type);
+        }}
+        onInsertImage={() => imageInput.click()}
+        onSelectDrawings={
+          props.store.activeSheet().metadata?.drawings?.length
+            ? () => {
+                const [first] = [
+                  ...(props.store.activeSheet().metadata?.drawings ?? []),
+                ].sort(
+                  (a, b) =>
+                    a.from.row - b.from.row || a.from.column - b.from.column
+                );
+                if (first) showDrawing(first.id);
+              }
+            : undefined
+        }
+      />
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp,image/bmp"
+        class="hidden"
+        aria-label="Insert image file"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = '';
+          if (file) void drawingActions.insertImage(file);
+        }}
       />
       <input
         ref={importInput}
@@ -622,17 +776,7 @@ export function SpreadsheetEditor(props: {
           onReturnToGrid={focusGrid}
         />
       </Show>
-      <Show
-        when={props.store.ready()}
-        fallback={
-          <div
-            class="flex min-h-0 flex-1 items-center justify-center text-sm text-ink-muted"
-            role="status"
-          >
-            Opening spreadsheet…
-          </div>
-        }
-      >
+      <Show when={props.store.ready()} fallback={<SpreadsheetSkeleton />}>
         <SpreadsheetGrid
           mentions={props.mentions}
           sheetId={props.store.activeSheetId()}
@@ -642,6 +786,8 @@ export function SpreadsheetEditor(props: {
           showGridlines={showGridlines()}
           showFormulas={showFormulas()}
           rowCount={props.store.rowCount()}
+          columnCount={props.store.columnCount()}
+          defaultFont={props.store.activeSheet().metadata?.defaultFont}
           columnWidths={props.store.layout().columnWidths}
           rowHeights={props.store.activeSheet().metadata?.rowHeights}
           onResizeRow={(row, height) => {
@@ -662,6 +808,50 @@ export function SpreadsheetEditor(props: {
           onFill={grid.fill}
           onCopyMetadata={grid.copyMetadata}
           values={values()}
+          notes={props.store.activeSheet().metadata?.notes}
+          drawings={props.store.activeSheet().metadata?.drawings}
+          image={props.store.image}
+          chartData={(chart) =>
+            chartData(
+              chart,
+              createChartReader(
+                props.store.workbook,
+                calculation.workbookValues,
+                props.store.activeSheetId()
+              ),
+              definedNames(props.store.activeSheetId())
+            )
+          }
+          cellText={(reference) => {
+            const range = parseChartReference(reference);
+            return range
+              ? createChartReader(
+                  props.store.workbook,
+                  calculation.workbookValues,
+                  props.store.activeSheetId()
+                )({ ...range, bottom: range.top, right: range.left })?.[0]?.text
+              : undefined;
+          }}
+          onDeleteDrawing={drawingActions.deleteDrawing}
+          onPlaceDrawing={editable() ? drawingActions.placeDrawing : undefined}
+          onEditDrawing={(id) => drawingActions.setEditing(id)}
+          revealDrawing={revealDrawing()}
+          inputMessage={inputMessage()}
+          listItems={activeList()}
+          onPickListItem={(item) => {
+            if (!editable()) return;
+            grid.commit();
+            // A choice is literal text, even one that starts like a formula.
+            props.store.setCells({
+              [grid.activeAddress()]: {
+                value: item.startsWith('=') ? `'${item}` : item,
+              },
+            });
+          }}
+          pendingFormulas={
+            calculation.busy() &&
+            !(props.store.activeSheetId() in calculation.workbookValues())
+          }
           remoteCursors={remoteCursors()}
           comments={props.comments}
           selection={grid.selection()}
@@ -773,7 +963,8 @@ export function SpreadsheetEditor(props: {
           addRowsLabel={`Add ${Math.min(100, SPREADSHEET_MAX_ROWS - props.store.rowCount())} rows`}
         />
         <span class="hidden shrink-0 whitespace-nowrap xl:inline">
-          {props.store.rowCount()} rows × {GRID_COLUMNS} columns
+          {props.store.rowCount().toLocaleString('en-US')} rows ×{' '}
+          {props.store.columnCount().toLocaleString('en-US')} columns
         </span>
         <Show
           when={editable() && props.store.rowCount() < SPREADSHEET_MAX_ROWS}
@@ -789,6 +980,24 @@ export function SpreadsheetEditor(props: {
             }}
           >
             + Add rows
+          </Button>
+        </Show>
+        <Show
+          when={
+            editable() && props.store.columnCount() < SPREADSHEET_MAX_COLUMNS
+          }
+        >
+          <Button
+            size="sm"
+            class="max-sm:hidden touch:min-h-[44px]"
+            label="Add 26 columns"
+            onClick={() => {
+              grid.commit();
+              props.store.appendColumns(26);
+              focusGrid();
+            }}
+          >
+            + Add columns
           </Button>
         </Show>
         <span role="status" class="w-18 min-w-0 truncate max-sm:sr-only">
@@ -889,6 +1098,22 @@ export function SpreadsheetEditor(props: {
           />
         </div>
       </div>
+      <ChartDialog
+        settings={(() => {
+          const id = drawingActions.editing();
+          return id ? drawingActions.chartSettings(id) : undefined;
+        })()}
+        onApply={(settings) => {
+          const id = drawingActions.editing();
+          return id ? drawingActions.applyChart(id, settings) : undefined;
+        }}
+        onClose={() => drawingActions.setEditing(undefined)}
+        onRestoreFocus={() => {
+          const id = revealDrawing()?.id;
+          if (id) showDrawing(id);
+          else focusGrid();
+        }}
+      />
       <SpreadsheetSheetDialog
         onRestoreFocus={() => {
           focusGrid();
@@ -912,6 +1137,8 @@ export function SpreadsheetEditor(props: {
         onMode={workbookActions.setImportMode}
         error={workbookActions.importError()}
         readonly={!editable()}
+        importing={workbookActions.importing()}
+        progress={workbookActions.importProgress()}
         onConfirm={workbookActions.confirmImport}
         onClose={workbookActions.closePreview}
       />

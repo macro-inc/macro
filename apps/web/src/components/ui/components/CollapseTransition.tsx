@@ -1,5 +1,12 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { children, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import {
+  children,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+} from 'solid-js';
 import { Transition } from 'solid-transition-group';
 
 const COLLAPSE_DURATION = 140;
@@ -10,6 +17,18 @@ export type CollapseTransitionProps = {
   container?: () => HTMLElement | undefined;
   axis?: 'height' | 'width';
   collapsedSize?: number;
+  /** Resting size when an external layout solver changes size before exit. */
+  expandedSize?: number;
+  /** Animate absolutely positioned neighbors with the same timing and cleanup. */
+  companions?: (transition: {
+    opening: boolean;
+    from: number;
+    interrupted: boolean;
+  }) => readonly { target: HTMLElement; keyframes: Keyframe[] }[];
+  /** Includes exit content that stays mounted until its animation finishes. */
+  onPresenceChange?: (present: boolean) => void;
+  /** Settle active motion synchronously before an external layout change. */
+  captureController?: (controller: { finish: () => void }) => void;
   children: JSX.Element;
 };
 
@@ -17,6 +36,8 @@ export type CollapseTransitionProps = {
  * Animate a disclosure body, or its containing section when flex owns its size.
  * @do Wrap the body that opens and closes; it mounts only while `open`.
  * @do Use `axis="width"` for a side column such as a file tree beside content.
+ * @do Supply `expandedSize` when an external layout solver removes space immediately.
+ * @do Supply `companions` when absolutely positioned neighbors need matching motion.
  * @do Keep state the body needs across closing outside it; closing unmounts it.
  * @dont Do not add your own height or opacity transition to the body; the
  *   animation measures it and would fight a second one.
@@ -48,6 +69,7 @@ export function CollapseTransition(props: CollapseTransitionProps) {
   const sizeOf = (element: HTMLElement) =>
     element.getBoundingClientRect()[axis()];
   let measuredSize: number | undefined;
+  let disposed = false;
   let running:
     | { target: HTMLElement; content: HTMLElement; finish: () => void }
     | undefined;
@@ -56,14 +78,21 @@ export function CollapseTransition(props: CollapseTransitionProps) {
     if (!running) measuredSize = sizeOf(element);
   });
   onMount(() => {
+    props.captureController?.({ finish: () => running?.finish() });
     const element = container();
+    props.onPresenceChange?.(props.open);
     if (element) measuredSize = sizeOf(element);
   });
-  onCleanup(() => running?.finish());
+  onCleanup(() => {
+    disposed = true;
+    running?.finish();
+  });
 
   function animate(element: Element, opening: boolean, done: () => void) {
-    if (!(element instanceof HTMLElement)) return done();
+    if (disposed || !(element instanceof HTMLElement) || opening !== props.open)
+      return done();
 
+    props.onPresenceChange?.(true);
     const target = props.container?.() ?? element;
     const collapsedSize = props.collapsedSize ?? 0;
     const fromOpacity = running
@@ -75,9 +104,13 @@ export function CollapseTransition(props: CollapseTransitionProps) {
       ? sizeOf(running.target)
       : opening
         ? collapsedSize
-        : (measuredSize ?? sizeOf(target));
+        : (props.expandedSize ?? measuredSize ?? sizeOf(target));
+    // Capture neighbors before releasing an interrupted animation's styles.
+    const companions = untrack(() =>
+      props.companions?.({ opening, from, interrupted: running !== undefined })
+    );
     running?.finish();
-    const to = opening ? sizeOf(target) : collapsedSize;
+    const to = opening ? (props.expandedSize ?? sizeOf(target)) : collapsedSize;
     const style = getComputedStyle(target);
     const {
       min,
@@ -93,6 +126,7 @@ export function CollapseTransition(props: CollapseTransitionProps) {
       typeof target.animate !== 'function' ||
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ) {
+      props.onPresenceChange?.(opening || props.open);
       done();
       return;
     }
@@ -134,13 +168,18 @@ export function CollapseTransition(props: CollapseTransitionProps) {
       [{ opacity: fromOpacity }, { opacity: opening ? 1 : 0 }],
       options
     );
+    const companionAnimations = companions?.map(({ target, keyframes }) =>
+      target.animate(keyframes, options)
+    );
     const finish = () => {
       if (running?.finish !== finish) return;
       running = undefined;
       measuredSize = to;
+      props.onPresenceChange?.(opening || props.open);
       done();
       size.cancel();
       opacity.cancel();
+      companionAnimations?.forEach((animation) => animation.cancel());
     };
     running = { target, content: element, finish };
     size.onfinish = finish;

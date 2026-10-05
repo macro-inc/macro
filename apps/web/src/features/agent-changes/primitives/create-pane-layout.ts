@@ -16,6 +16,15 @@ import {
 } from '../core/layout';
 import { createPersistedSessionState } from './create-persisted-session-state';
 
+export const DEFAULT_TREE_WIDTH = 256;
+export const MIN_TREE_WIDTH = 144;
+export const MAX_TREE_WIDTH = 480;
+
+function clampTreeWidth(width: number): number {
+  return Number.isFinite(width)
+    ? Math.min(MAX_TREE_WIDTH, Math.max(MIN_TREE_WIDTH, width))
+    : DEFAULT_TREE_WIDTH;
+}
 export type PaneLayoutController = {
   layout: Accessor<PaneLayout>;
   changesVisible: Accessor<boolean>;
@@ -26,23 +35,34 @@ export type PaneLayoutController = {
   /** The file tree shows beside the diffs. */
   treeOpen: Accessor<boolean>;
   toggleTree: () => void;
+  /** Preferred width in pixels of the file tree. */
+  treeWidth: Accessor<number>;
+  setTreeWidth: (width: number) => void;
   toggle: () => void;
   spotlight: () => void;
   open: () => void;
   close: () => void;
 };
 
-type StoredLayout = { share: number; treeOpen: boolean };
+type StoredLayout = { share: number; treeOpen: boolean; treeWidth: number };
 
 function parseLayout(raw: unknown): StoredLayout | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
-  const { share, treeOpen } = raw as { share?: unknown; treeOpen?: unknown };
+  const { share, treeOpen, treeWidth } = raw as {
+    share?: unknown;
+    treeOpen?: unknown;
+    treeWidth?: unknown;
+  };
   return {
     share:
       typeof share === 'number'
         ? clampChangesShare(share)
         : DEFAULT_CHANGES_SHARE,
     treeOpen: typeof treeOpen === 'boolean' ? treeOpen : true,
+    treeWidth:
+      typeof treeWidth === 'number'
+        ? clampTreeWidth(treeWidth)
+        : DEFAULT_TREE_WIDTH,
   };
 }
 
@@ -55,7 +75,11 @@ export function createPaneLayout(options: {
   const [stored, setStored] = createPersistedSessionState<StoredLayout>({
     sessionId: options.sessionId,
     namespace: 'agent-changes:layout',
-    initial: () => ({ share: DEFAULT_CHANGES_SHARE, treeOpen: true }),
+    initial: () => ({
+      share: DEFAULT_CHANGES_SHARE,
+      treeOpen: true,
+      treeWidth: DEFAULT_TREE_WIDTH,
+    }),
     parse: parseLayout,
     storage: options.storage,
   });
@@ -75,6 +99,12 @@ export function createPaneLayout(options: {
     treeOpen: () => stored().treeOpen,
     toggleTree: () =>
       setStored((previous) => ({ ...previous, treeOpen: !previous.treeOpen })),
+    treeWidth: () => stored().treeWidth,
+    setTreeWidth: (width) =>
+      setStored((previous) => ({
+        ...previous,
+        treeWidth: clampTreeWidth(width),
+      })),
     toggle: () => move(toggleChanges),
     spotlight: () => move(toggleSpotlight),
     open: () => move(ensureChangesVisible),
