@@ -18,9 +18,11 @@ use std::time::Duration;
 /// stored anchor, so it gets a third of the client's 15 s default.
 const SUBSCRIPTION_PERIOD_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// [`PaymentGateway`] for hosts that gate AI requests but do not own Stripe.
-/// Reads the subscription period through the authentication service and
-/// refuses to pay like [`NoOpPaymentGateway`].
+/// [`PaymentGateway`] for the document cognition service, which gates AI
+/// requests but does not own Stripe. Reads the subscription period through the
+/// authentication service and refuses to pay like [`NoOpPaymentGateway`]. The
+/// client must present the authentication service's own key, which the other
+/// gate hosts do not hold.
 #[derive(Clone)]
 pub struct HttpPaymentGateway {
     client: Arc<AuthServiceClient>,

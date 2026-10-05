@@ -14,7 +14,7 @@ use macro_authorization::{
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_service_urls::{AgentHarnessServiceUrl, AuthServiceUrl, ConnectionGatewayUrl};
+use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl};
 use scheduled_action::config::Config;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, dispatch::EventDispatchService,
@@ -95,10 +95,6 @@ async fn main() -> Result<()> {
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
         config.enable_ai_usage_enforcement,
-        Arc::new(authentication_service_client::AuthServiceClient::new(
-            config.internal_api_key.to_string(),
-            AuthServiceUrl::new()?.to_string(),
-        )),
     );
     let sessions = Arc::new(AgentSessionClient::new(
         AgentHarnessServiceUrl::new()?.as_ref(),

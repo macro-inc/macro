@@ -133,7 +133,7 @@ use macro_event_broker::{
     MacroEventCollection as _, MacroEventConsumerService,
 };
 use macro_service_urls::{
-    AgentHarnessEgressUrl, AuthServiceUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
+    AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
     StaticFileServiceUrl,
 };
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
@@ -294,10 +294,6 @@ async fn run() -> anyhow::Result<()> {
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
         config.enable_ai_usage_enforcement,
-        Arc::new(authentication_service_client::AuthServiceClient::new(
-            config.internal_api_key.clone(),
-            AuthServiceUrl::new()?.to_string(),
-        )),
     );
     let recorder =
         ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);

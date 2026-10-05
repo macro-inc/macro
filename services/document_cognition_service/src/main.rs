@@ -489,7 +489,10 @@ async fn main() -> anyhow::Result<()> {
     // recorder below asks to settle once a payer runs past their allowance
     // and ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
     let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
-        internal_api_key.clone(),
+        config
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
         AuthServiceUrl::new()?.to_string(),
     ));
     let ai_billing = Arc::new(

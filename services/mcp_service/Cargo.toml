@@ -23,7 +23,6 @@ ai_usage = { path = "../../crates/ai_usage" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 attachment = { path = "../../crates/attachment" }
-authentication_service_client = { path = "../../crates/authentication_service_client" }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log"] }

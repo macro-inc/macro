@@ -19,7 +19,6 @@ agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 anthropic = { path = "../anthropic", features = ["toolset"] }
 attachment = { path = "../attachment" }
-authentication_service_client = { path = "../authentication_service_client" }
 static_file = { path = "../static_file", features = ["attachment"] }
 non_empty = { path = "../non_empty" }
 ai_toolset = { path = "../ai_toolset" }
