@@ -802,6 +802,7 @@ fn layout(
             layout_size: Some(box_size),
             lines: lines.len() as u32,
             first_baseline: None,
+            ..TextLayout::default()
         },
         box_size,
     )

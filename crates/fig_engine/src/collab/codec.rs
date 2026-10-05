@@ -215,8 +215,8 @@ codes!(enc_style_type, dec_style_type, StyleType, default StyleType::Other;
 /// The names unsupported paints carry (see `decode::paint`).
 pub(super) const UNSUPPORTED_PAINTS: [&str; 5] = ["emoji", "video", "pattern", "noise", "paint"];
 
-/// Image hashes the paints of `p` (and its overrides, derived layout, and
-/// text runs) reference.
+/// Image hashes the paints of `p` (and its overrides, derived layout,
+/// generated layers, and text runs) reference.
 pub fn image_hashes(p: &Props, out: &mut Vec<Arc<str>>) {
     let mut paints = |list: &Option<Arc<[Paint]>>| {
         for paint in list.as_deref().unwrap_or_default() {
@@ -235,11 +235,15 @@ pub fn image_hashes(p: &Props, out: &mut Vec<Arc<str>>) {
             paints(&run.fills);
         }
     }
+    for run in p.vector_styles.iter().flat_map(|s| s.iter()) {
+        paints(&run.fills);
+    }
     let nested: Vec<&Props> = p
         .symbol
         .iter()
         .flat_map(|s| s.overrides.iter())
         .chain(p.derived.iter().flat_map(|d| d.iter()))
+        .chain(p.generated.iter().flat_map(|d| d.iter()))
         .collect();
     for n in nested {
         image_hashes(n, out);

@@ -222,7 +222,29 @@ fn entries_round_trip_every_property() {
         }
         if let Some(t) = &mut props.text_layout {
             Arc::make_mut(t).first_baseline = Some(13.5);
+            Arc::make_mut(t).truncated_at = Some(7);
         }
+        if let Some(g) = &props.fill_geometry {
+            props.fill_geometry = Some(
+                g.iter()
+                    .map(|p| crate::model::PathRef { style: 2, ..*p })
+                    .collect(),
+            );
+        }
+        props.vector_styles = Some(Arc::from([crate::model::StyleRun {
+            id: 2,
+            fills: props.fills.clone(),
+            ..Default::default()
+        }]));
+        props.generated = Some(Arc::from([crate::model::Props {
+            guid_path: Some(Arc::from([crate::model::Guid {
+                session: 40_000_000,
+                local: 1,
+            }])),
+            text_layout: props.text_layout.clone(),
+            fills: props.fills.clone(),
+            ..Default::default()
+        }]));
         props.boolean_operation = Some("SUBTRACT".into());
         props.vector_data = Some(Arc::new(crate::model::VectorData {
             network_blob: Some(3),

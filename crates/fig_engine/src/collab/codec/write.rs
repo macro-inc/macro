@@ -132,6 +132,7 @@ impl<'a> Writer<'a> {
         self.list(paths, |w, p| {
             w.u8(enc_winding(p.winding));
             w.blob(p.blob);
+            w.u32(p.style);
         });
     }
 
@@ -246,22 +247,24 @@ impl<'a> Writer<'a> {
         } = t;
         self.str(characters);
         self.list(style_ids, |w, id| w.u32(*id));
-        self.list(styles, |w, run| {
-            let StyleRun {
-                id,
-                fills,
-                font_family,
-                font_style,
-                font_size,
-                decoration,
-            } = run;
-            w.u32(*id);
-            w.opt(fills, |w, f| w.paints(f));
-            w.opt_str(font_family);
-            w.opt_str(font_style);
-            w.opt(font_size, |w, s| w.f32(*s));
-            w.opt_str(decoration);
-        });
+        self.list(styles, |w, run| w.style_run(run));
+    }
+
+    fn style_run(&mut self, run: &StyleRun) {
+        let StyleRun {
+            id,
+            fills,
+            font_family,
+            font_style,
+            font_size,
+            decoration,
+        } = run;
+        self.u32(*id);
+        self.opt(fills, |w, f| w.paints(f));
+        self.opt_str(font_family);
+        self.opt_str(font_style);
+        self.opt(font_size, |w, s| w.f32(*s));
+        self.opt_str(decoration);
     }
 
     fn text_layout(&mut self, t: &TextLayout) {
@@ -270,6 +273,7 @@ impl<'a> Writer<'a> {
             decorations,
             layout_size,
             lines,
+            truncated_at,
             first_baseline,
         } = t;
         self.list(glyphs, |w, g| {
@@ -305,6 +309,7 @@ impl<'a> Writer<'a> {
         });
         self.opt(layout_size, |w, s| w.vec2(s));
         self.u32(*lines);
+        self.opt(truncated_at, |w, v| w.u32(*v));
         self.opt(first_baseline, |w, v| w.f32(*v));
     }
 
@@ -480,6 +485,8 @@ impl<'a> Writer<'a> {
             variant_specs,
             variant_orders,
             props_bubbled,
+            generated,
+            vector_styles,
             recomputed,
         } = p;
         self.opt(guid, |w, g| w.guid(g));
@@ -627,6 +634,10 @@ impl<'a> Writer<'a> {
             });
         });
         self.opt(props_bubbled, |w, v| w.bool(*v));
+        self.opt(generated, |w, d| w.props_list(d));
+        self.opt(vector_styles, |w, list| {
+            w.list(list, |w, run| w.style_run(run))
+        });
         self.bool(*recomputed);
     }
 

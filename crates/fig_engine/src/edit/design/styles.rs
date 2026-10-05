@@ -336,11 +336,16 @@ impl Txn<'_> {
                 continue;
             }
             let p = self.doc.props(i);
-            let refs = [p.fill_style, p.stroke_style, p.effect_style, p.text_style_id];
+            let refs = [
+                p.fill_style,
+                p.stroke_style,
+                p.effect_style,
+                p.text_style_id,
+            ];
             let in_overrides = p.symbol.as_ref().is_some_and(|sym| {
-                sym.overrides.iter().any(|o| {
-                    [o.fill_style, o.stroke_style, o.effect_style].contains(&Some(g))
-                })
+                sym.overrides
+                    .iter()
+                    .any(|o| [o.fill_style, o.stroke_style, o.effect_style].contains(&Some(g)))
             });
             if !refs.contains(&Some(g)) && !in_overrides {
                 continue;

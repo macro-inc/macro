@@ -203,8 +203,8 @@ fn remap_props(p: &mut Props, map: &mut dyn FnMut(u32) -> u32) {
         refs.as_ref().map(|r| {
             r.iter()
                 .map(|g| PathRef {
-                    winding: g.winding,
                     blob: map(g.blob),
+                    ..*g
                 })
                 .collect::<Arc<[PathRef]>>()
         })
@@ -228,6 +228,17 @@ fn remap_props(p: &mut Props, map: &mut dyn FnMut(u32) -> u32) {
         let mut v = **v;
         v.network_blob = v.network_blob.map(&mut *map);
         p.vector_data = Some(Arc::new(v));
+    }
+    if let Some(generated) = &p.generated {
+        let list: Vec<Props> = generated
+            .iter()
+            .map(|d| {
+                let mut d = d.clone();
+                remap_props(&mut d, map);
+                d
+            })
+            .collect();
+        p.generated = Some(list.into());
     }
     if let Some(derived) = &p.derived {
         let list: Vec<Props> = derived

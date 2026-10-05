@@ -382,6 +382,7 @@ impl Txn<'_> {
         };
         let p = self.edit(b, flags::GEOMETRY);
         p.fill_geometry = Some(Arc::from([PathRef {
+            style: 0,
             winding: WindingRule::NonZero,
             blob: fill,
         }]));
@@ -389,6 +390,7 @@ impl Txn<'_> {
             stroke
                 .map(|blob| {
                     Arc::from([PathRef {
+                        style: 0,
                         winding: WindingRule::NonZero,
                         blob,
                     }])
@@ -639,6 +641,7 @@ impl Txn<'_> {
             .fill_paths()
             .iter()
             .map(|(path, rule)| PathRef {
+                style: 0,
                 winding: *rule,
                 blob: self.blob(path),
             })
@@ -656,6 +659,7 @@ impl Txn<'_> {
         p.stroke_geometry = Some(
             stroke
                 .map(|blob| PathRef {
+                    style: 0,
                     winding: WindingRule::NonZero,
                     blob,
                 })
@@ -682,6 +686,7 @@ impl Txn<'_> {
             self.edit(i, flags::GEOMETRY).stroke_geometry = Some(
                 stroke
                     .map(|blob| PathRef {
+                        style: 0,
                         winding: WindingRule::NonZero,
                         blob,
                     })

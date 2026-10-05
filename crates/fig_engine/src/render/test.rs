@@ -1,6 +1,8 @@
 use super::*;
 use crate::testing::{V, fig_file, node, simple_file, size, solid, translate};
 
+mod fidelity;
+
 fn rgba(p: &Pixmap, x: u32, y: u32) -> [u8; 4] {
     let c = p.pixel(x, y).unwrap().demultiply();
     [c.red(), c.green(), c.blue(), c.alpha()]
