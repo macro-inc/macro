@@ -72,7 +72,8 @@ export function buildSimpleEntityUrl(
   entity: { type: string; id: string },
   params?: Record<string, string>
 ): string {
-  const urlString = `${getWebOrigin()}/app/${entity.type}/${entity.id}`;
+  const type = entity.type === 'routine' ? 'routines' : entity.type;
+  const urlString = `${getWebOrigin()}/app/${type}/${entity.id}`;
   const url = new URL(urlString);
   if (params) {
     for (const [key, value] of Object.entries(params)) {

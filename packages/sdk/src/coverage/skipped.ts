@@ -263,6 +263,7 @@ export const scheduledActionBacklog = [
   'createScheduledAction',
   'deleteScheduledAction',
   'executeScheduledActionNow',
+  'getScheduledAction',
   'listScheduledActionHistory',
   'listScheduledActions',
   'setScheduledActionEnabled',

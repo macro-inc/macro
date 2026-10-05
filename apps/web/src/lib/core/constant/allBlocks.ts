@@ -18,7 +18,7 @@ import {
 import { DefaultFilename } from './filename';
 
 const discoveredBlockDefinitions = Object.values<AnyBlockDefinition>(
-  import.meta.glob('../../../features/block-*/definition.ts', {
+  import.meta.glob('../../../features/*/definition.ts', {
     eager: true,
     import: 'definition',
   })
@@ -187,6 +187,7 @@ export function fileTypeToBlockName(
   if (blockOrFiletype === 'channel_message') return 'channel';
   if (blockOrFiletype === 'agent_session') return 'agent';
   if (blockOrFiletype === 'calendar_event') return 'calendar';
+  if (blockOrFiletype === 'automation') return 'routine';
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (blockOrFiletype === 'crm_company') return 'company';
@@ -331,6 +332,7 @@ export function verifyBlockName(
   name: string | undefined
 ): BlockName | BlockAlias {
   if (!name) return 'unknown';
+  if (name === 'automation') return 'routine';
   if (name === 'write') {
     if (isFeatureEnabled(enableDocxEditor)) return 'write';
     if (ENABLE_DOCX_TO_PDF) return 'pdf';

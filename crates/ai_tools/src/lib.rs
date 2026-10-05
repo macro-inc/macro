@@ -59,8 +59,8 @@ pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
 pub use search::search_toolset;
 pub use tool_context::{
     ChannelSideEffectClients, MaybeToolEventBroker, NoOpCallRtcClient, NoOpConnectionService,
-    NoOpNotificationIngress, NoOpNotificationService, NoOpScheduleContext, NoOpSnsEndpointManager,
-    NoOpTaskProperties, RequestContext, TaskPropertiesAdapter, ToolActivityToolContext,
+    NoOpNotificationIngress, NoOpNotificationService, NoOpSnsEndpointManager, NoOpTaskProperties,
+    RequestContext, RoutineToolContext, TaskPropertiesAdapter, ToolActivityToolContext,
     ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
@@ -83,8 +83,9 @@ pub use tool_context::{
     build_image_generation_tool_context, build_initiative_tool_context,
     build_message_service_with_side_effects, build_message_service_without_side_effects,
     build_project_tool_context, build_properties_service, build_properties_service_with_broker,
-    build_properties_tool_context, build_reminders_tool_context, build_skill_tool_context,
-    build_task_properties_adapter, build_team_repository, build_team_tool_context,
+    build_properties_tool_context, build_reminders_tool_context, build_routine_tool_context,
+    build_skill_tool_context, build_task_properties_adapter, build_team_repository,
+    build_team_tool_context,
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use tool_context::{build_image_generation_tool_context_test, no_op_schedule_context};
@@ -185,7 +186,8 @@ pub enum AiHost {
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
-        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset());
+        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
+        .add_subtoolset::<RoutineToolContext>(routines::inbound::routine_toolset());
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())

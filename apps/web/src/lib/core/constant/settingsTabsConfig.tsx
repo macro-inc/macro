@@ -172,7 +172,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         tab: 'Bots',
         label: 'Bots',
         icon: BotIcon,
-        keywords: ['automation', 'bot'],
+        keywords: ['routine', 'bot'],
       },
     ],
   },

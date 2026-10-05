@@ -102,6 +102,12 @@ import {
   updateReminderHandler,
 } from './Reminders';
 import { renameDocumentHandler } from './RenameDocument';
+import {
+  createRoutineHandler,
+  listRoutinesHandler,
+  readRoutineHandler,
+  updateRoutineHandler,
+} from './Routines';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
 import { searchToolsHandler } from './SearchTools';
@@ -173,6 +179,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ManageChannelParticipants: manageChannelParticipantsHandler,
   ListNotifications: listNotificationsHandler,
   ListReminders: listRemindersHandler,
+  CreateRoutine: createRoutineHandler,
+  ListRoutines: listRoutinesHandler,
+  ReadRoutine: readRoutineHandler,
+  UpdateRoutine: updateRoutineHandler,
   ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,

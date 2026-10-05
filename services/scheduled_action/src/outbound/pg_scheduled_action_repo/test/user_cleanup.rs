@@ -40,9 +40,13 @@ async fn deletes_user_actions_without_cascade_and_preserves_other_users(pool: Pg
         })
         .await
         .unwrap();
-    repo.claim_action(&enabled.id.unwrap(), enabled.configuration_revision)
-        .await
-        .unwrap();
+    repo.claim_action(
+        &enabled.id.unwrap(),
+        enabled.configuration_revision,
+        enabled.next_run_at,
+    )
+    .await
+    .unwrap();
     let event = repo.create_action(event_action()).await.unwrap();
     let other = repo
         .create_action(sample_action(user_owner(USER_B), "other"))

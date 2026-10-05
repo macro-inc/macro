@@ -9,7 +9,6 @@ use tokio_util::task::TaskTracker;
 #[cfg(test)]
 mod test;
 
-use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{DispatchEvent, InProgressExecution};
 use crate::domain::ports::{
     ScheduledActionDispatcher, ScheduledActionExecutor, ScheduledActionRepo,
@@ -145,7 +144,7 @@ where
                     Ok(candidates) => {
                         let now = Utc::now();
                         for action in candidates {
-                            if !action.enabled || !matches!(action.trigger, ActionTrigger::Cron { .. }) {
+                            if !action.enabled || !action.trigger.has_schedule() {
                                 continue;
                             }
                             let Some(next_run_at) = action.next_run_at else {

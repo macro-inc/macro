@@ -155,9 +155,6 @@
       "@block-channel/*": [
         "./src/features/block-channel/*"
       ],
-      "@block-automation/*": [
-        "./src/features/block-automation/*"
-      ],
       "@channel/*": [
         "./src/features/channel/*"
       ],

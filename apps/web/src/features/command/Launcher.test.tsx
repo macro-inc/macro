@@ -47,7 +47,6 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   isFeatureEnabled: (flag: { key: string }) =>
     flag.key === 'enable-projects' && host.projectFlag() === true,
 }));
-vi.mock('@block-automation/component', () => ({}));
 vi.mock('@block-md/observability', () => ({}));
 vi.mock('@channel/CreateChannelModal', () => ({}));
 vi.mock('@core/component/AI/component/input/ChatInput', () => ({}));

@@ -41,7 +41,7 @@ describe('toNotificationEntityRef', () => {
 
   it('has no target for entity types the notification service does not file under', () => {
     expect(
-      toNotificationEntityRef({ type: 'automation', id: 'automation-1' })
+      toNotificationEntityRef({ type: 'routine', id: 'routine-1' })
     ).toBeUndefined();
   });
 });
