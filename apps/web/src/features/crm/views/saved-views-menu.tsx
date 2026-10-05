@@ -184,8 +184,7 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
   return (
     <Dropdown open={open()} onOpenChange={handleOpenChange}>
       <Dropdown.Trigger
-        depth={2}
-        class="bg-surface"
+        variant="ghost"
         label={props.hideLabel ? 'Views' : undefined}
         aria-label={props.hideLabel ? 'Views' : undefined}
       >

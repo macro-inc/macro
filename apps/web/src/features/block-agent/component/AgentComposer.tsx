@@ -43,6 +43,7 @@ import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 import { AgentModelMenuItem } from './AgentModelMenuItem';
 import { PermissionRequest } from './PermissionRequest';
 import { promptActionOf } from './prompt-action';
+import { ToolApprovalRequest } from './ToolApprovalRequest';
 
 export function AgentComposer(props: {
   /**
@@ -61,6 +62,7 @@ export function AgentComposer(props: {
     displayName,
     userId,
     interactions,
+    toolApprovals,
     issue,
     loadFailed,
     messages,
@@ -266,6 +268,13 @@ export function AgentComposer(props: {
         {(permission) => (
           <div class="mb-2 min-w-0">
             <PermissionRequest request={permission} />
+          </div>
+        )}
+      </For>
+      <For each={toolApprovals.pending()}>
+        {(approval) => (
+          <div class="mb-2 min-w-0">
+            <ToolApprovalRequest request={approval} />
           </div>
         )}
       </For>

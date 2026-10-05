@@ -353,11 +353,9 @@ export function ProjectsCollection(props: {
               </div>
               <Dropdown>
                 <Dropdown.Trigger
-                  variant="outline"
+                  variant="ghost"
                   size="md"
                   square
-                  depth={2}
-                  class="rounded-lg bg-surface"
                   label="Filter due date"
                 >
                   <CalendarIcon />

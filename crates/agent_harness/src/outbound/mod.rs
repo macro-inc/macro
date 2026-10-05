@@ -20,6 +20,7 @@ pub(crate) mod provision;
 pub mod routing;
 pub mod runtime_registry;
 pub mod sidecar;
+pub mod tool_approvals;
 
 /// Provider-neutral in-process ACP transport.
 pub mod acp_pipe;

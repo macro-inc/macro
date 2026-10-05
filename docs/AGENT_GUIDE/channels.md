@@ -260,6 +260,8 @@ A late webhook does not require reloading the page.
 When the agent requests permission or input, the Magic Chip displays the waiting
 status for its anchored turn. Open the session to answer; editors and owners can
 respond there. The chip follows the agent's next activity after the answer.
+A tool call held for the owner's approval (a turn somebody other than the owner
+prompted) reads `Waiting for approval`; only the owner approves it, in the session.
 
 Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
@@ -896,8 +898,12 @@ This action does not enable team auto-join. Check opening and reopening,
 switching options, keyboard recipient selection, external email chips,
 cancellation, and focus restoration before sending invites.
 
-Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
-plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel
+Bubble tabs sit in their own row below the channel header:
+`Messages` / `Attachments` / `Calls` / `Participants`.
+`Ask Macro`, `Invite`, and `Call` actions remain in the header. On narrow desktop
+panes, the tab row scrolls horizontally and keeps its text labels. Standalone
+mobile channels keep view selection in the title menu. The `Calls` tab lists
+recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
 already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
@@ -907,8 +913,9 @@ instead.
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
-and name, the same tab strip, live viewer avatars, and the `Call` and
-`Ask Macro` buttons. In Chat an ellipsis follows the name and opens the same
+and name, live viewer avatars, and the `Call` and
+`Ask Macro` buttons, with the same bubble tab row below the top bar. In Chat an
+ellipsis follows the name and opens the same
 entity actions as right-clicking the conversation's rail row — `Open in new
 split`, `Rename`, `Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute
 notifications`, `Remind me`, `Copy Link`, `Copy ID` — so a channel can be
@@ -927,14 +934,29 @@ Leaving from the channel's call controls switches to `Messages` immediately.
 Disconnect and server cleanup continue after that switch; slow or failed RTC
 teardown must not leave the channel showing the join screen.
 
+`Participants` tab keeps people and bots within the available page height, with
+separate scrolling lists and fixed search/invite controls. Team access appears
+between them when available. Search uses the shared
+input group; add, invite, and new-bot actions use neutral outline buttons.
+The bots section stays compact with few or no bots. Search by display name,
+email, or role and clear the search to restore the list; scrolling a long member
+list must leave the bots section and participant controls visible.
+
 `Participants` tab:
 - `Copy invite link`, participant search box.
-- Add: combobox `name@company.com` + `Add Participant` button.
-- Each row: `<name> Member|Owner` with a `Remove participant` button (owner shows
-  `Cannot remove participant`, disabled).
+- Add: combobox `Add participants by name or email` + `Add Participant` button.
+- Dividers frame the Add Participant controls, not the scrolling list. Each row shows the display name above the
+  email, both on a single truncated line without text tooltips, and a
+  title-cased role badge on the right. Click anywhere on the row or focus it and
+  press Enter to open the DM; Shift-click opens it in a new split.
+- The separate `Remove participant` button never opens the DM (owner and current
+  user show `Cannot remove participant`, disabled).
 - Team access: `Team channel` switch (disabled until you belong to a team).
-- Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
+- Bots: `New bot`, `Search bots by name or handle` combobox, `Invite bot` — webhook-powered channel
   participants.
+- Bot rows match participant rows: name above a truncated handle/description,
+  a `Bot` badge, and a row link that opens the bot. Copy webhook and Remove are
+  separate actions that do not open the bot.
 
 ## Incoming call ringing
 

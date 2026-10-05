@@ -756,6 +756,28 @@ who has prompted or answered the session also receive an `agent_session_waiting_
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
 
+## Tool calls waiting for the session owner
+
+An agent session always runs with its owner's access. When someone else prompts it (a
+second person replying in the session's channel thread, or a bot), every tool call that
+uses that access - Macro's own tools on the owner's email, calendar, documents and so on,
+and any connected app - waits for the owner to approve it. Public lookups (`WebSearch`,
+`WebFetch`, `SelfKnowledge`) and the owner's own turns are never held. The session view
+shows a card over the composer that says what the agent wants to do, e.g. `Dave Seed asked
+the agent to read your email.` The owner sees `Approval needed` with `Decline` /
+`Always allow` / `Approve`; everyone else sees `Waiting for <owner> to approve` (`…to read
+Alice Seed's email`) and, with edit access, a `Cancel` button for when the owner is away.
+`Always allow` approves the call and stops asking about the same person's calls for the
+rest of the session: the same tool on Macro (the card says `Always allow lets Dave Seed
+read your email in this session without asking you.`), every tool of a connected app. It
+also approves that person's other waiting calls it covers, and is not offered for a bot.
+The owner also gets an `agent_session_waiting_for_input` notification. Once answered the
+transcript shows the same action (`Read your email`) with `Approved by …`, `Always allowed
+by …`, `Declined by …`, `Cancelled`, or `Not approved in time` (30 minutes for the
+in-process agent; sandboxed ones wait as long when their MCP client accepts progress, about
+four minutes otherwise). A declined or cancelled call does not run and the agent says so. The Magic Chip
+reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
+
 ## In channels
 
 Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is

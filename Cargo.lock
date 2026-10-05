@@ -274,6 +274,7 @@ dependencies = [
  "macro_auth",
  "macro_db_client",
  "macro_user_id",
+ "macro_uuid",
  "mcp_client",
  "model_owner",
  "pipedream_mcp",

@@ -1,5 +1,6 @@
 //! Shared live-request lifecycle, preserving each protocol's answer shape.
 
+use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
 use serde_json::{Value, json};
 
 use super::util::parse_log;
@@ -170,4 +171,128 @@ fn ending_stopping_and_disconnecting_clear_both_live_requests() {
             "history survives {ending}"
         );
     }
+}
+
+fn tool_approval(status: &str, resolved_by: Option<&str>) -> Value {
+    let mut params = json!({
+        "approvalId": "a1", "serverSlug": "macro", "serverName": "Macro",
+        "toolName": "ListEmails", "arguments": {"limit": 5},
+        "requestedBy": "macro|julia@macro.com", "status": status,
+    });
+    if let Some(by) = resolved_by {
+        params["resolvedBy"] = json!(by);
+    }
+    json!({"method": "_macro/tool_approval", "params": params})
+}
+
+fn approval_part(machine: &FoldMachineImpl) -> MessagePart {
+    machine
+        .messages()
+        .iter()
+        .flat_map(|message| message.parts.iter())
+        .find(|part| matches!(part, MessagePart::ToolApproval { .. }))
+        .cloned()
+        .expect("the held call is in the transcript")
+}
+
+#[test]
+fn a_held_tool_call_blocks_the_turn_until_it_is_resolved() {
+    let mut machine = FoldMachineImpl::new();
+    prompt(&mut machine, "p");
+    assert!(push(
+        &mut machine,
+        "to_server",
+        tool_approval("pending", None)
+    ));
+    assert_eq!(machine.metadata().turn, TurnState::Blocked);
+    let [PendingInteraction::ToolApproval(pending)] =
+        machine.metadata().pending_interactions.as_slice()
+    else {
+        panic!("one held call is pending");
+    };
+    assert_eq!(pending.approval_id, "a1");
+    assert_eq!(pending.tool_name, "ListEmails");
+    assert_eq!(
+        pending.requested_by.as_deref(),
+        Some("macro|julia@macro.com")
+    );
+
+    assert!(push(
+        &mut machine,
+        "to_server",
+        tool_approval("approved", Some("macro|wolf@macro.com"))
+    ));
+    assert!(machine.metadata().pending_interactions.is_empty());
+    assert_eq!(machine.metadata().turn, TurnState::Running);
+    assert!(matches!(
+        approval_part(&machine),
+        MessagePart::ToolApproval { status: ToolApprovalStatus::Approved, resolved_by: Some(by), .. }
+            if by == "macro|wolf@macro.com"
+    ));
+}
+
+#[test]
+fn a_held_tool_call_approved_for_good_says_so() {
+    let mut machine = FoldMachineImpl::new();
+    prompt(&mut machine, "p");
+    push(&mut machine, "to_server", tool_approval("pending", None));
+    assert!(matches!(
+        approval_part(&machine),
+        MessagePart::ToolApproval {
+            remembered: false,
+            ..
+        }
+    ));
+
+    let mut approved = tool_approval("approved", Some("macro|wolf@macro.com"));
+    approved["params"]["remembered"] = json!(true);
+    assert!(push(&mut machine, "to_server", approved));
+    assert!(matches!(
+        approval_part(&machine),
+        MessagePart::ToolApproval {
+            status: ToolApprovalStatus::Approved,
+            remembered: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn a_held_tool_call_outside_a_turn_or_resolved_twice_changes_nothing() {
+    let mut machine = FoldMachineImpl::new();
+    assert!(!push(
+        &mut machine,
+        "to_server",
+        tool_approval("pending", None)
+    ));
+    assert!(machine.messages().is_empty());
+
+    prompt(&mut machine, "p");
+    push(&mut machine, "to_server", tool_approval("pending", None));
+    push(&mut machine, "to_server", tool_approval("denied", None));
+    assert!(!push(
+        &mut machine,
+        "to_server",
+        tool_approval("expired", None)
+    ));
+    assert!(matches!(
+        approval_part(&machine),
+        MessagePart::ToolApproval {
+            status: ToolApprovalStatus::Denied,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn stopping_the_turn_hides_a_held_tool_call() {
+    let mut machine = FoldMachineImpl::new();
+    prompt(&mut machine, "p");
+    push(&mut machine, "to_server", tool_approval("pending", None));
+    push(
+        &mut machine,
+        "to_runtime",
+        json!({"method": "session/cancel", "params": {"sessionId": "s"}}),
+    );
+    assert!(machine.metadata().pending_interactions.is_empty());
 }

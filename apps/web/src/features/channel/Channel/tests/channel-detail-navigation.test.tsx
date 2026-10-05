@@ -72,22 +72,11 @@ vi.mock('@channel/Participants/ChannelParticipantsTab', () => ({
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalBlockOrchestrator: () => orchestrator,
 }));
-vi.mock(
-  '@components/app/split-layout/components/PriorityCollapseOverflowSensor',
-  () => ({
-    createPriorityCollapseController: () => ({
-      setRow: vi.fn(),
-      collapser: undefined,
-    }),
-    PriorityCollapseOverflowSensor: mocks.pass,
-  })
-);
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useRegisterPriorityCollapseItem: () => () => false,
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
-vi.mock('@core/component/TabsInset', () => ({ TabsInset: () => null }));
+vi.mock('@ui/components/Tabs', () => ({ Tabs: () => null }));
 vi.mock('@core/context/channels', () => ({
   useChannelName: () => () => 'channel-name',
   useChannelType: () => () => 'private',

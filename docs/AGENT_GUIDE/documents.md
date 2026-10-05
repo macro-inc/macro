@@ -1618,7 +1618,8 @@ With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemP
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
-fetch cascade.
+fetch cascade. Adding or changing a direct sibling of a document reference must
+leave the reference mounted without flashing or restarting its preview query.
 
 ## Embedded document cards
 
@@ -1980,6 +1981,13 @@ An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:
 reread and reconsider the change instead of blindly retrying. Unsynced edits
 still follow normal CRDT collaboration semantics when they reconnect.
+
+## HTML preview tabs
+
+HTML documents show `Render` and `Code` bubble tabs in a left-aligned row above
+the content, below the header, in both standalone desktop blocks and Drive
+detail views. Switch to Code to inspect or edit the source, then back to Render
+to see the current preview. Other code file types do not show this row.
 
 ## Large-document undo checks
 
