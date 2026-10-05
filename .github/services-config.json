@@ -247,6 +247,15 @@
         "image_optimizer"
       ]
     },
+    "lexical-service": {
+      "source_paths": [
+        "services/lexical-service/**",
+        "packages/lexical-core/**",
+        "docker/lexical-service.Dockerfile"
+      ],
+      "stack_path": "infra/stacks/lexical-service/**",
+      "bootstrap_pending": "needs the lexical-service Doppler project (doppler-projects stack) with INTERNAL_AUTH_KEY and SYNC_SERVICE_AUTH_KEY in dev and prd"
+    },
     "unfurl-service": {
       "source_paths": [
         "services/unfurl_service/**"
