@@ -28,6 +28,7 @@ import type { StyleKind } from '../core/design-system';
 import { formatMeasure } from '../core/measure';
 import type { MixedInfo } from '../core/mixed';
 import { formatDashes, parseDashes } from '../core/paint';
+import type { MixedTextField } from '../core/rich-text';
 import { formatLetterSpacing, formatLineHeight } from '../core/type';
 import type { Patch } from '../primitives/create-fig-editor';
 import {
@@ -207,6 +208,17 @@ function TextFields(props: { text: TextInfo }) {
   );
 }
 
+/** What the Type section offers beyond the layer's own values. */
+export interface TypeOptions {
+  /** Fields the characters selected in the text editor differ in. */
+  mixed?: ReadonlySet<MixedTextField>;
+  googleFamilies?: readonly string[];
+  /** Weights of the shown family, when known. */
+  weights?: readonly number[];
+  preview?: (family: string) => Promise<string | undefined>;
+  onFontsOpen?: () => void;
+}
+
 export function DesignPanel(props: {
   info: NodeInfo | undefined;
   selectionCount: number;
@@ -223,8 +235,10 @@ export function DesignPanel(props: {
   onBoolean?: (operation: BooleanOperation) => void;
   onFlatten?: () => void;
   onCopyText: (text: string) => void;
-  /** Font families text can be set in. */
+  /** Font families the document uses. */
   fontFamilies?: readonly string[];
+  /** The Type section's font picker and "Mixed" values. */
+  type?: TypeOptions;
   /** Adds auto layout to the selection (⇧A); absent when read-only. */
   onAddAutoLayout?: () => void;
   /** Colors the color pickers offer (the page's). */
@@ -620,6 +634,11 @@ export function DesignPanel(props: {
                       <TypeControls
                         text={t()}
                         families={props.fontFamilies ?? ['Inter']}
+                        mixed={props.type?.mixed}
+                        googleFamilies={props.type?.googleFamilies}
+                        weights={props.type?.weights}
+                        preview={props.type?.preview}
+                        onFontsOpen={props.type?.onFontsOpen}
                         onPatch={(patch, live) => props.onPatch?.(patch, live)}
                       />
                     </Show>

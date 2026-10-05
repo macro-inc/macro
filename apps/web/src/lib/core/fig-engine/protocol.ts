@@ -27,7 +27,9 @@ export type QueryMethod =
   | 'designInfo'
   | 'inRect'
   | 'exportSvg'
-  | 'vectorNetwork';
+  | 'vectorNetwork'
+  | 'fonts'
+  | 'textGeometry';
 
 export type FigRequest =
   | { id: number; kind: 'open'; bytes: ArrayBuffer }
@@ -77,6 +79,13 @@ export type FigRequest =
   | { id: number; kind: 'save' }
   | { id: number; kind: 'blank'; name: string }
   | { id: number; kind: 'addImage'; hash: string; bytes: ArrayBuffer }
+  | {
+      id: number;
+      kind: 'registerFont';
+      bytes: ArrayBuffer;
+      /** The family to register it as (else the one it names). */
+      family: string | null;
+    }
   /** Copies layers (`string[]` JSON) as a clipboard payload. */
   | { id: number; kind: 'copy'; page: number; ids: string }
   | {

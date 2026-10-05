@@ -112,10 +112,19 @@ impl FigFile {
         crate::save::blank(name)
     }
 
-    /// Makes a font family available to text editing; returns its name.
+    /// Makes a font available to text layout (TTF, OTF, collection, WOFF,
+    /// or WOFF2), named `family` when given; returns the faces it holds
+    /// (`RegisteredFace[]` JSON, empty when the file does not parse). Fonts
+    /// are shared by every file this worker opens.
     #[wasm_bindgen(js_name = registerFont)]
-    pub fn register_font(bytes: Vec<u8>) -> Option<String> {
-        crate::text::register_font(bytes)
+    pub fn register_font(bytes: Vec<u8>, family: Option<String>) -> Result<String, JsError> {
+        to_json(&crate::text::register_font(bytes, family.as_deref()))
+    }
+
+    /// The fonts the document's text uses and whether each is available
+    /// (`FontUse[]` JSON).
+    pub fn fonts(&self) -> Result<String, JsError> {
+        to_json(&crate::text::document_fonts(&self.doc))
     }
 
     /// Page-space bounds of everything drawn for `touched` nodes on the
@@ -412,6 +421,15 @@ impl FigFile {
     /// The file's shared styles (`StyleInfo[]` JSON).
     pub fn styles(&self) -> Result<String, JsError> {
         to_json(&inspect::local_styles(&self.doc))
+    }
+
+    /// A text layer's lines and caret stops (`TextGeometry` JSON, `null`
+    /// for other layers).
+    #[wasm_bindgen(js_name = textGeometry)]
+    pub fn text_geometry(&mut self, page: usize, id: &str) -> Result<String, JsError> {
+        let i = self.find(page, id)?;
+        let (_, scene) = self.scene.as_ref().expect("scene built above");
+        to_json(&inspect::text_geometry(&self.doc, scene, i))
     }
 
     /// Layer rows for several ids (`LayerRow[]` JSON), skipping unknown ids.

@@ -83,7 +83,6 @@ ignore = [
   { id = "RUSTSEC-2026-0174", reason = "http-types unmaintained, transitive via async-stripe; no safe upgrade available" },
   { id = "RUSTSEC-2026-0179", reason = "postgres-protocol 0.6.11 is transitive via pgvector; database connections are to trusted infrastructure" },
   { id = "RUSTSEC-2026-0180", reason = "postgres-protocol 0.6.11 is transitive via pgvector; database connections are to trusted infrastructure" },
-  { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained with no safe upgrade; font parsing in pptx_engine and fig_engine, pending a move to skrifa" },
   { id = "RUSTSEC-2026-0247", reason = "bitmaps is unmaintained; transitive via im <- loro, pending loro moving off im" },
   { id = "RUSTSEC-2026-0248", reason = "im is unmaintained; direct dependency of loro, no upstream migration yet" },
   { id = "RUSTSEC-2026-0251", reason = "sized-chunks is unmaintained; transitive via im <- loro, pending loro moving off im" },

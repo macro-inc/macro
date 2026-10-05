@@ -15,6 +15,7 @@ import { render } from 'solid-js/web';
 import { FigViewerProvider } from '../context/fig-viewer-context';
 import { FigViewer } from '../views/fig-viewer';
 import { CollabFixture, type FixturePerson } from './collab-fixture';
+import { fixtureFontSource } from './font-source';
 
 declare const __FIG_CORPUS_URL__: string;
 
@@ -27,6 +28,8 @@ declare global {
       downloads: () => { name: string; size: number }[];
       /** Every saved file, oldest first. */
       saves: () => Uint8Array[];
+      /** Font stylesheets and files the viewer asked for. */
+      fontRequests: () => string[];
       /** With `?collab`: the people editing together. */
       collab?: { people: () => FixturePerson[] };
     };
@@ -46,12 +49,14 @@ function Fixture() {
   const [saves, setSaves] = createSignal<Uint8Array[]>([]);
   const editable = params.has('edit') || params.has('new');
 
+  const fonts = fixtureFontSource();
   window.figFixture = {
     engine,
     errors,
     notices,
     downloads,
     saves,
+    fontRequests: fonts.requests,
   };
 
   // Several people on one design, side by side (`?collab&people=a,b`).
@@ -138,6 +143,7 @@ function Fixture() {
                 notifyInfo: (m) => setNotices((x) => [...x, m]),
                 canEdit: () => editable,
                 fileKey: file ?? 'new',
+                fonts,
                 save: async (bytes) => {
                   if (params.has('reload'))
                     await FigEngine.open(bytes.slice().buffer).then((e) =>

@@ -20,7 +20,11 @@ design; saves stay in memory, and `?reload` reopens each one. Test-only
 - `engine()`: the open `FigEngine` (queries, renders);
 - `errors()` / `notices()`: messages the viewer reported;
 - `downloads()`: names and sizes of exported files;
-- `saves()`: every saved `.fig`, oldest first.
+- `saves()`: every saved `.fig`, oldest first;
+- `fontRequests()`: font stylesheets and files the viewer fetched. The
+  fixture stands in for Google Fonts and this computer's fonts
+  (`font-source.ts`): every family is served as the bundled Inter, and
+  "Nowhere Grotesk" is installed locally.
 
 Run the browser regressions (the configuration starts or reuses the fixture;
 `FIG_BROWSER_PORT` picks another port than 3019 for both, so checkouts running
@@ -44,7 +48,10 @@ points, SVG export (compared with the PNG) and Copy as SVG, and copying
 layers into another file through the system clipboard. `fig-design-ui` covers
 the right-click menus, the color and paint pickers (gradients, dashes,
 reordering paints), mixed values for several layers, and the layers
-panel's range selection and arrow keys. `fig-design-system` opens
+panel's range selection and arrow keys. `text-editing` covers the caret
+and selection drawn from the engine's layout, word and paragraph
+selection, line moves, styling a range (⌘B/⌘U, the panel), undo in typing
+bursts, switching fonts, and the missing fonts notice. `fig-design-system` opens
 `design-system.fig` (components with boolean, text, and instance swap
 properties, a component set, and color, text, and effect styles in use,
 made by `fig_engine::testing::design_system`) and covers instance

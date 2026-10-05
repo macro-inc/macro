@@ -979,7 +979,7 @@ Layout and test hooks:
   just beyond a corner of one layer to rotate it (⇧ snaps to 15°), draw with the frame, rectangle, ellipse, and
   text tools (a click places a default size; new layers go into the frame
   under the pointer), double-click or Enter on a text layer to type into it
-  (`fig-text-editor`; Escape ends, an emptied layer is removed), and drop or
+  (see **Text editing** below), and drop or
   paste image files to place image-filled layers. The pen (P) draws a path:
   click places a corner, drag pulls out a curve's handles, clicking the first
   point closes the path, and Enter or Escape ends an open one; the result is
@@ -1027,7 +1027,11 @@ Layout and test hooks:
   `-remove`; "+" adds; drag a row's grip to reorder), stroke weight,
   position, and dashes (`fig-field-dash`: `4, 2`, or `None`), clip
   content (`fig-clip-content`), the Text section for text layers (`fig-type`:
-  family `fig-font-family`, weight `fig-font-weight`, `fig-italic`, size,
+  family `fig-font-family` (opens the font picker `fig-font-picker`: search
+  `fig-font-search`, options `fig-font-option` with `data-family`, the
+  file's fonts first, then Google Fonts, each previewed in its face; a
+  missing font shows `fig-font-missing`), weight `fig-font-weight`,
+  `fig-italic`, size,
   line height `fig-field-line-height` as `Auto`, a percentage, or pixels,
   letter spacing `fig-field-letter-spacing`, paragraph spacing, horizontal
   and vertical alignment, auto width / auto height / fixed size
@@ -1118,6 +1122,27 @@ Layout and test hooks:
   `fig-redo`), the save state (`fig-save-state`, `data-state` is `saved`,
   `unsaved`, `saving`, or `error`), the zoom menu (`fig-zoom-menu`), and the
   shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?).
+- **Text editing** (`fig-text-editing`): the text box `fig-text-box`, the
+  caret `fig-text-caret`, and selection rectangles `fig-text-selection` are
+  drawn from the engine's layout; typing goes to a hidden textarea
+  (`fig-text-editor`, which holds the selection as `selectionStart` and
+  `selectionEnd`). Click places the caret, drag or ⇧-click selects,
+  double-click selects a word and triple-click a paragraph; ↑/↓ move by
+  line, ⌘←/→ (Home/End) to the line's ends, ⌥←/→ by word, ⇧ extends;
+  ⌘B/⌘I/⌘U bold, italicize, or underline the selected characters (at a
+  caret, what is typed next); ⇧Enter is a line break within the paragraph.
+  With characters selected the Type section and fills show and change only
+  theirs, "Mixed" where they differ. ⌘Z undoes typing in bursts (a pause of
+  a second starts a new step) and keeps editing. Escape or a press elsewhere
+  on the canvas ends editing (the panels keep it); an emptied layer is
+  removed.
+- **Fonts**: text keeps Figma's layout until edited; edited text is laid out
+  in its own fonts, loaded first: fonts on this computer once permitted,
+  else Google Fonts (the files for the text's scripts, cached by the
+  browser), else Inter. A **Missing fonts** notice (`fig-missing-fonts`,
+  rows `fig-missing-font`) lists fonts neither has, with **Use fonts on
+  this computer** (`fig-use-local-fonts`, Chromium's Local Font Access
+  permission prompt).
 - **Keyboard**, as in Figma: ⇧0 100%, ⇧1 fit, ⇧2 selection, ⌘/Ctrl +/−, N and
   ⇧N next/previous frame, PageDown/PageUp pages, Enter children, ⇧Enter and
   Esc parent, Tab/⇧Tab siblings, ⌘/Ctrl+A select all, ⇧R rulers, ⇧' pixel
@@ -1145,7 +1170,9 @@ properties, and styles), or from any directory named by `FIG_CORPUS_DIR`; the he
 also opens a local `.fig`. `?edit` makes the file editable and `?new` opens a
 blank design (editable); saves stay in memory, and `?reload` reopens each one
 to check it round-trips. `window.figFixture` exposes `engine()`, `saves()`,
-`errors()`, `notices()`, and `downloads()`. `?collab` (with
+`errors()`, `notices()`, `downloads()`, and `fontRequests()`; its font
+source serves the bundled Inter for every Google family and has "Nowhere
+Grotesk" installed locally, so font tests need no network. `?collab` (with
 `&people=alice,bob`, the default) shows several people editing one file side
 by side (`fig-person-<Name>` holds each editor), each running the real
 shared-design session over an in-page sync server;

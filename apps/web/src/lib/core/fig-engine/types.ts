@@ -131,6 +131,23 @@ export interface EffectInfo {
   spread: number;
 }
 
+/** Whether a font can lay out text in its own face. */
+export type FontStatus = 'AVAILABLE' | 'STYLE_MISSING' | 'MISSING';
+
+/** A character style: what it sets differently from its layer. */
+export interface TextRun {
+  id: number;
+  fontFamily: string | null;
+  fontStyle: string | null;
+  fontSize: number | null;
+  decoration: string | null;
+  letterSpacing: [number, string] | null;
+  lineHeight: [number, string] | null;
+  case: string | null;
+  fills: PaintInfo[] | null;
+  fontStatus: FontStatus;
+}
+
 export interface TextInfo {
   characters: string;
   truncated: boolean;
@@ -146,6 +163,49 @@ export interface TextInfo {
   case: string | null;
   autoResize: string | null;
   fonts: string[];
+  fontStatus: FontStatus;
+  /** Style run id per UTF-16 unit; missing ids are 0 (the layer's style). */
+  styleIds: number[];
+  runs: TextRun[];
+}
+
+/** A family and style the document's text uses. */
+export interface FontUse {
+  family: string;
+  style: string;
+  /** Text layers using it. */
+  layers: number;
+  status: FontStatus;
+}
+
+/** A face the engine registered. */
+export interface RegisteredFace {
+  family: string;
+  style: string;
+  weight: number;
+  maxWeight: number;
+  italic: boolean;
+  variable: boolean;
+}
+
+/** One line of a text layer, in its coordinates. */
+export interface CaretLine {
+  /** Characters `start..end` (UTF-16 units, its line break included). */
+  start: number;
+  end: number;
+  top: number;
+  height: number;
+  baseline: number;
+  /** The caret's x before each character `start..=end`. */
+  xs: number[];
+}
+
+/** A text layer's lines and where it is on the page. */
+export interface TextGeometry {
+  /** Layer to page, as CSS `matrix(a, b, c, d, e, f)`. */
+  transform: [number, number, number, number, number, number];
+  lines: CaretLine[];
+  length: number;
 }
 
 export interface CornerRadii {

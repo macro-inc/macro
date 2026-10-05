@@ -93,7 +93,8 @@ impl Txn<'_> {
         if let Some(v) = patch.opacity {
             entry.opacity = Some(v.clamp(0.0, 1.0));
         }
-        if let Some(specs) = &patch.fills {
+        let text_range = patch.text_range.is_some() && shown.node_type() == NodeType::Text;
+        if let Some(specs) = patch.fills.as_ref().filter(|_| !text_range) {
             entry.fills = Some(Self::paints(shown.fills(), specs));
             entry.fill_style = None;
         }
@@ -121,7 +122,7 @@ impl Txn<'_> {
         }
         let mut relaid = false;
         if shown.node_type() == NodeType::Text
-            && let Some(change) = patch.text_change()
+            && let Some(change) = patch.text_change(&shown.clone())
         {
             crate::text::edit_props(self.doc, &mut shown, &change)?;
             entry.text_content = shown.text_content.clone();
