@@ -917,3 +917,22 @@ fn saving_keeps_figma_variable_values_in_step() {
     assert_eq!(defs[1]["initialValue"]["textValue"]["characters"], "New");
     assert!(defs[1]["sortPosition"].as_str().unwrap() > "a");
 }
+
+#[test]
+fn a_property_added_on_a_new_variant_goes_to_its_set() {
+    let mut d = Design::fixture();
+    let set = d.id("Button", NodeType::Frame);
+    d.apply(&format!(
+        r#"[{{"op":"renameVariantProperty","set":"{set}","from":"Type","to":"Kind"}}]"#
+    ));
+    let v = d.apply(&format!(r#"[{{"op":"addVariant","set":"{set}"}}]"#))[0].clone();
+    d.apply(&format!(
+        r#"[{{"op":"setVariantValue","ids":["{v}"],"property":"Kind","value":"Ghost"}}]"#
+    ));
+    d.apply(&format!(
+        r#"[{{"op":"addComponentProperty","component":"{v}","name":"Disabled","kind":"BOOL"}}]"#
+    ));
+    let panel = d.info(&v).component.unwrap();
+    let names: Vec<String> = panel.properties.iter().map(|p| p.name.clone()).collect();
+    assert_eq!(names, ["Label", "Disabled"]);
+}

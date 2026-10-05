@@ -152,8 +152,9 @@ export function ComponentSection(props: {
             allowVariant
             onCancel={() => setCreating(false)}
             onCreate={(kind, name) => {
+              const create = actions().onCreateProperty;
               setCreating(false);
-              actions().onCreateProperty(kind, name);
+              create(kind, name);
             }}
           />
         )}
