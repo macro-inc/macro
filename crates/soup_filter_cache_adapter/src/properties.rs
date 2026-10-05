@@ -95,14 +95,19 @@ fn extend_document(
     properties: Option<Vec<ExactFact>>,
 ) -> ProjectionMutation {
     document.profile = current_profile(&document.profile);
-    let Some(properties) = properties.filter(|facts| {
-        facts
-            .iter()
-            .any(|fact| fact.attribute.as_str() == "is-favorited")
-    }) else {
-        return incomplete(document.record_key, document.profile, document.partition);
-    };
-    document.exact_facts.extend(properties);
+    // Properties are required for non-channel entities. The `is-favorited` fact
+    // is optional: when present it enables `favoritesOnly` filtering; when absent
+    // the entity is treated as unknown for that predicate (neither a positive nor
+    // negative match). Requiring `is-favorited` for completeness would break
+    // cached data from before profile v6 and force a full soup refresh.
+    if document.partition != vocabulary::channel_partition() {
+        let Some(properties) = properties else {
+            return incomplete(document.record_key, document.profile, document.partition);
+        };
+        document.exact_facts.extend(properties);
+    } else if let Some(properties) = properties {
+        document.exact_facts.extend(properties);
+    }
     document.canonicalize();
     if document.validate().is_err() {
         return incomplete(document.record_key, document.profile, document.partition);
