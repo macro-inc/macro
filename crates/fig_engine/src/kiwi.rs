@@ -220,6 +220,47 @@ impl<'a> Reader<'a> {
         Ok(std::str::from_utf8(s).unwrap_or("\u{fffd}"))
     }
 
+    /// [`Reader::var_uint`] without an error value (for skipping).
+    #[inline]
+    fn var_uint_fast(&mut self) -> Option<u32> {
+        if let Some(&b) = self.bytes.get(self.at)
+            && b < 128
+        {
+            self.at += 1;
+            return Some(u32::from(b));
+        }
+        self.var_uint_long().ok()
+    }
+
+    /// Steps over a varint of at most `max` bytes; whether there was one.
+    #[inline]
+    fn skip_var_fast(&mut self, max: usize) -> bool {
+        match self.bytes.get(self.at) {
+            Some(&b) if b < 128 => {
+                self.at += 1;
+                true
+            }
+            Some(_) => self.skip_var(max).is_ok(),
+            None => false,
+        }
+    }
+
+    /// Steps over a float (one byte for zero, else four).
+    #[inline]
+    fn skip_float(&mut self) -> bool {
+        match self.bytes.get(self.at) {
+            Some(0) => {
+                self.at += 1;
+                true
+            }
+            Some(_) if self.at + 4 <= self.bytes.len() => {
+                self.at += 4;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Steps over a varint of at most `max` bytes.
     #[inline]
     fn skip_var(&mut self, max: usize) -> Result<()> {
@@ -877,18 +918,10 @@ impl<'s> Decoder<'s> {
     }
 
     pub fn skip_field(&self, r: &mut Reader, field: &Field, depth: u32) -> Result<()> {
-        if !field.array {
-            return self.skip_wire(r, field.wire, depth);
-        }
-        let len = r.var_uint()? as usize;
-        match field.wire {
-            Wire::Bool | Wire::Byte => r.advance(len),
-            wire => {
-                for _ in 0..len {
-                    self.skip_wire(r, wire, depth)?;
-                }
-                Ok(())
-            }
+        if self.skip_field_fast(r, field, depth) {
+            Ok(())
+        } else {
+            Err(corrupt("kiwi: a skipped field is truncated or unknown"))
         }
     }
 
@@ -908,44 +941,68 @@ impl<'s> Decoder<'s> {
                 Kind::Message => Wire::Message(i),
             },
         };
-        self.skip_wire(r, wire, depth)
+        if self.skip_wire(r, wire, depth) {
+            Ok(())
+        } else {
+            Err(corrupt("kiwi: a skipped value is truncated or unknown"))
+        }
     }
 
-    fn skip_wire(&self, r: &mut Reader, wire: Wire, depth: u32) -> Result<()> {
+    // Skipping walks most of a file's bytes (every field decoding does not
+    // keep), so it answers only whether it got through: no error values on
+    // the way, and the common one-byte cases first.
+
+    #[inline]
+    fn skip_field_fast(&self, r: &mut Reader, field: &Field, depth: u32) -> bool {
+        if !field.array {
+            return self.skip_wire(r, field.wire, depth);
+        }
+        let Some(len) = r.var_uint_fast() else {
+            return false;
+        };
+        let len = len as usize;
+        match field.wire {
+            Wire::Bool | Wire::Byte => r.advance(len).is_ok(),
+            Wire::Int | Wire::Uint | Wire::Enum(_) => (0..len).all(|_| r.skip_var_fast(5)),
+            Wire::Float => (0..len).all(|_| r.skip_float()),
+            wire => (0..len).all(|_| self.skip_wire(r, wire, depth)),
+        }
+    }
+
+    fn skip_wire(&self, r: &mut Reader, wire: Wire, depth: u32) -> bool {
         match wire {
-            Wire::Bool | Wire::Byte => r.advance(1),
-            Wire::Int | Wire::Uint | Wire::Enum(_) => r.skip_var(5),
-            Wire::Int64 | Wire::Uint64 => r.skip_var(10),
-            Wire::Float => {
-                if r.byte()? != 0 {
-                    r.advance(3)?;
-                }
-                Ok(())
-            }
-            Wire::String => r.skip_string(),
+            Wire::Bool | Wire::Byte => r.advance(1).is_ok(),
+            Wire::Int | Wire::Uint | Wire::Enum(_) => r.skip_var_fast(5),
+            Wire::Int64 | Wire::Uint64 => r.skip_var_fast(10),
+            Wire::Float => r.skip_float(),
+            Wire::String => r.skip_string().is_ok(),
             Wire::Struct(i) => {
-                if depth > MAX_DEPTH {
-                    return Err(corrupt("kiwi: nesting too deep"));
-                }
-                for field in &self.schema.def(i).fields {
-                    self.skip_field(r, field, depth + 1)?;
-                }
-                Ok(())
+                depth <= MAX_DEPTH
+                    && self
+                        .schema
+                        .def(i)
+                        .fields
+                        .iter()
+                        .all(|field| self.skip_field_fast(r, field, depth + 1))
             }
             Wire::Message(i) => {
                 if depth > MAX_DEPTH {
-                    return Err(corrupt("kiwi: nesting too deep"));
+                    return false;
                 }
                 let def = self.schema.def(i);
                 loop {
-                    let id = r.var_uint()?;
+                    let Some(id) = r.var_uint_fast() else {
+                        return false;
+                    };
                     if id == 0 {
-                        return Ok(());
+                        return true;
                     }
-                    let index = def
-                        .index_of_id(id)
-                        .ok_or_else(|| corrupt(format!("kiwi: {} has no field {id}", def.name)))?;
-                    self.skip_field(r, &def.fields[index as usize], depth + 1)?;
+                    let Some(index) = def.index_of_id(id) else {
+                        return false;
+                    };
+                    if !self.skip_field_fast(r, &def.fields[index as usize], depth + 1) {
+                        return false;
+                    }
                 }
             }
         }
