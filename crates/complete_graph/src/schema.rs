@@ -765,7 +765,7 @@ where
             .await
     }
 
-    /// The newest activity on a form the authenticated user can view, newest
+    /// The newest activity on a form the authenticated user can edit, newest
     /// first. Forms are not Soup items, so this stands in for the `activity`
     /// edge Soup entities carry.
     async fn form_activity(

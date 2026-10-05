@@ -1,6 +1,6 @@
 use async_graphql::{Context, ErrorExtensions as _, ID};
 use entity_access::domain::{
-    models::{AccessError, ViewAccessLevel},
+    models::{AccessError, EditAccessLevel, RequiredPermission, ViewAccessLevel},
     ports::EntityAccessService,
 };
 use graphql_common::parse_id;
@@ -27,7 +27,7 @@ where
     Reader: SoupActivityEdgeReader,
     Access: EntityAccessService,
 {
-    resolve_viewable_activity::<Reader, Access>(
+    resolve_entity_activity::<ViewAccessLevel, Reader, Access>(
         ctx,
         access,
         viewer,
@@ -42,8 +42,11 @@ where
     .await
 }
 
-/// The newest activity on a form the viewer can view, newest first. A form
-/// the viewer cannot view reads as not found, never confirming it exists.
+/// The newest activity on a form the viewer can edit, newest first. A form's
+/// timeline names everyone who responded and when, which only its editors
+/// may know: View is the respondent tier (a channel the form was posted in,
+/// or any signed-in visitor of a public form). A form the viewer cannot edit
+/// reads as not found, never confirming it exists.
 pub async fn resolve_form_activity<Reader, Access>(
     ctx: &Context<'_>,
     access: &Access,
@@ -55,7 +58,7 @@ where
     Reader: SoupActivityEdgeReader,
     Access: EntityAccessService,
 {
-    resolve_viewable_activity::<Reader, Access>(
+    resolve_entity_activity::<EditAccessLevel, Reader, Access>(
         ctx,
         access,
         viewer,
@@ -80,8 +83,8 @@ struct Timeline {
     not_found: &'static str,
 }
 
-/// The newest activity on one entity behind a view receipt.
-async fn resolve_viewable_activity<Reader, Access>(
+/// The newest activity on one entity behind a receipt at `Level`.
+async fn resolve_entity_activity<Level, Reader, Access>(
     ctx: &Context<'_>,
     access: &Access,
     viewer: &MacroUserIdStr<'static>,
@@ -90,13 +93,14 @@ async fn resolve_viewable_activity<Reader, Access>(
     limit: Option<i32>,
 ) -> async_graphql::Result<Vec<GraphqlActivityEvent>>
 where
+    Level: RequiredPermission,
     Reader: SoupActivityEdgeReader,
     Access: EntityAccessService,
 {
     let entity_id = parse_id(entity_id, timeline.id_field)?;
     let limit = parse_activity_edge_limit(limit)?;
     let receipt = access
-        .generate_entity_access_receipt::<ViewAccessLevel>(
+        .generate_entity_access_receipt::<Level>(
             viewer,
             None,
             &entity_id.to_string(),
