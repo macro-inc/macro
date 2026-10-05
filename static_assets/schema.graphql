@@ -2440,7 +2440,8 @@ input GraphqlEntityFilterAst {
 	"""
 	crmCompanyFilter: GraphqlCrmCompanyExpr
 	"""
-	Opt-in CRM contact filters, applied before email deduplication.
+	Opt-in CRM contact filters, applied before contacts are collapsed by
+	normalized email address.
 	"""
 	crmContactFilter: GraphqlCrmContactExpr
 	"""
@@ -5876,6 +5877,9 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	frecencyScore: Float
 }
 
+"""
+A team-owned CRM contact with its original record identity and shared Soup edges.
+"""
 type GraphqlSoupCrmContact implements GraphqlSoupEntity {
 	"""
 	Original CRM contact ID.

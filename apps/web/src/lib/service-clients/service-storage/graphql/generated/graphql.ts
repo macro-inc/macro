@@ -681,7 +681,10 @@ export type GraphqlEntityFilterAst = {
   chatFilter?: GraphqlChatExpr | null | undefined;
   /** The crm company filter to apply. */
   crmCompanyFilter?: GraphqlCrmCompanyExpr | null | undefined;
-  /** Opt-in CRM contact filters, applied before email deduplication. */
+  /**
+   * Opt-in CRM contact filters, applied before contacts are collapsed by
+   * normalized email address.
+   */
   crmContactFilter?: GraphqlCrmContactExpr | null | undefined;
   /** The database row filter to apply. Rows are opt-in: name a table. */
   databaseRowFilter?: GraphqlDatabaseRowExpr | null | undefined;

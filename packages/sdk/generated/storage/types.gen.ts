@@ -735,6 +735,10 @@ export type ApiEntityFilterAst = {
      */
     chanf?: unknown;
     /**
+     * Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`).
+     */
+    crmf?: unknown;
+    /**
      * the filters that should be applied to the channel-thread entity
      */
     cthf?: unknown;
@@ -11163,6 +11167,65 @@ export type SoupCrmCompanySoupPropertiesField = {
 };
 
 /**
+ * One original CRM contact record, selected from the viewer's accessible teams.
+ */
+export type SoupCrmContactSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Parent company ID.
+     */
+    companyId: string;
+    /**
+     * Parent company's display name.
+     */
+    companyName: string;
+    /**
+     * Record creation time.
+     */
+    createdAt: string;
+    /**
+     * Full email address.
+     */
+    email: string;
+    /**
+     * Earliest interaction for this team record.
+     */
+    firstInteraction: string;
+    /**
+     * Whether the contact or parent company is hidden.
+     */
+    hidden: boolean;
+    /**
+     * Original team-owned contact ID.
+     */
+    id: string;
+    /**
+     * Latest interaction for this team record.
+     */
+    lastInteraction: string;
+    /**
+     * Team-local display name, if known.
+     */
+    name?: string | null;
+    /**
+     * Team owning this record.
+     */
+    teamId: string;
+    /**
+     * Record update time.
+     */
+    updatedAt: string;
+    /**
+     * The viewer's latest visit to this record.
+     */
+    viewedAt?: string | null;
+};
+
+/**
  * A CRM domain as displayed in Soup. Mirrors the crm crate's
  * [`CrmDomain`] with a stable wire shape that the FE can rely on.
  */
@@ -11560,6 +11623,12 @@ export type SoupItem = {
      */
     data: SoupCrmCompanySoupPropertiesField;
     tag: 'crmCompany';
+} | {
+    /**
+     * Team-owned CRM contact.
+     */
+    data: SoupCrmContactSoupPropertiesField;
+    tag: 'crmContact';
 } | {
     /**
      * Foreign entity item.

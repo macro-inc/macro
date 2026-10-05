@@ -379,7 +379,8 @@ pub struct GraphqlEntityFilterAst {
     call_filter: Option<GraphqlCallExpr>,
     /// The crm company filter to apply.
     crm_company_filter: Option<GraphqlCrmCompanyExpr>,
-    /// Opt-in CRM contact filters, applied before email deduplication.
+    /// Opt-in CRM contact filters, applied before contacts are collapsed by
+    /// normalized email address.
     crm_contact_filter: Option<GraphqlCrmContactExpr>,
     /// The foreign entity filter to apply.
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,

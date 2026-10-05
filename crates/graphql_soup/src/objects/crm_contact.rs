@@ -15,6 +15,7 @@ pub struct GraphqlSoupCrmContact<E: SoupEntityEdges>(
     pub(super) Option<f64>,
 );
 
+/// A team-owned CRM contact with its original record identity and shared Soup edges.
 #[Object(name = "GraphqlSoupCrmContact")]
 impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
     /// Original CRM contact ID.
