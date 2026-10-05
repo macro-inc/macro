@@ -1,4 +1,8 @@
-import { Button, Dialog } from '@ui';
+import { formatDate } from '@core/util/date';
+import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
+import FileZipIcon from '@phosphor/file-zip.svg';
+import { ActionDialogShell, Button, cn, Dialog } from '@ui';
 import {
   createEffect,
   createRoot,
@@ -10,14 +14,26 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { ConversationPicker } from '../components/conversation-picker';
 import { ImportProgress } from '../components/import-progress';
+import {
+  DialogSectionTitle,
+  formatBytes,
+  humanize,
+  jobTone,
+  NativeCheckbox,
+  Notice,
+  type StatusDisplay,
+  StatusDot,
+} from '../components/import-ui';
 import { SlackImportCard } from '../components/slack-import-card';
-import type { ImportJob } from '../context/contracts';
+import type { ImportJob, ImportPage } from '../context/contracts';
 import { useImportContext } from '../context/import-context';
 import {
   createImportController,
   type ImportController,
+  type ImportPhase,
 } from '../primitives/import-controller';
 
 type Props = {
@@ -30,6 +46,44 @@ function terminal(job: ImportJob): boolean {
   return ['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(
     job.status
   );
+}
+
+/** Phases before any server write; closing the dialog here discards the archive. */
+const REVIEW_PHASES = new Set<ImportPhase>([
+  'idle',
+  'discovering',
+  'selecting',
+]);
+/** Phases during which the upload summary is meaningful. */
+const UPLOAD_PHASES = new Set<ImportPhase>([
+  'preparing',
+  'uploading',
+  'interrupted',
+  'finalizing',
+  'cancelling',
+  'monitoring',
+  'terminal',
+]);
+
+const SOURCE_CONFIRMATION =
+  "I confirm this archive belongs to this team's Slack workspace, including when its identity is unknown.";
+
+function phaseDisplay(phase: ImportPhase): StatusDisplay {
+  const tone = match(phase)
+    .with('idle', 'disposed', () => 'neutral' as const)
+    .with(
+      'discovering',
+      'selecting',
+      'preparing',
+      'uploading',
+      'finalizing',
+      'monitoring',
+      () => 'active' as const
+    )
+    .with('interrupted', 'cancelling', () => 'warning' as const)
+    .with('terminal', () => 'success' as const)
+    .exhaustive();
+  return { tone, label: humanize(phase) };
 }
 
 /** Confirmed jobs outlive dialog content; closing an unconfirmed review discards its file. */
@@ -47,6 +101,7 @@ export function ImportDialog(props: Props): JSX.Element {
     before,
   });
   const [controller, setController] = createSignal<ImportController>();
+  const [archive, setArchive] = createSignal<{ name: string; size: number }>();
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
   const [filter, setFilter] = createSignal('');
   const [showArchived, setShowArchived] = createSignal(false);
@@ -73,9 +128,12 @@ export function ImportDialog(props: Props): JSX.Element {
       return saved;
     return observed ?? source.page()?.jobs.find((job) => job.jobId === jobId());
   };
+  const phase = () => controller()?.phase();
   const localActive = () => {
-    const phase = controller()?.phase();
-    return phase !== undefined && !['monitoring', 'terminal'].includes(phase);
+    const current = phase();
+    return (
+      current !== undefined && !['monitoring', 'terminal'].includes(current)
+    );
   };
   const observedCompletions = new Set<string>();
   async function refreshCompleted(job: ImportJob): Promise<void> {
@@ -106,6 +164,7 @@ export function ImportDialog(props: Props): JSX.Element {
     disposeSession?.();
     disposeSession = undefined;
     setController(undefined);
+    setArchive(undefined);
     setActionError(undefined);
     setSelected(new Set<string>());
     setConfirmed(false);
@@ -116,9 +175,8 @@ export function ImportDialog(props: Props): JSX.Element {
 
   function changeOpen(next: boolean): void {
     if (!next) {
-      const phase = controller()?.phase();
-      if (phase === 'idle' || phase === 'discovering' || phase === 'selecting')
-        resetSession();
+      const current = phase();
+      if (current === undefined || REVIEW_PHASES.has(current)) resetSession();
     }
     setOpen(next);
   }
@@ -129,6 +187,7 @@ export function ImportDialog(props: Props): JSX.Element {
     resetSession();
     setJobId(undefined);
     setHistoryReceipt(undefined);
+    setArchive({ name: file.name, size: file.size });
     const session = createRoot((dispose) => {
       disposeSession = dispose;
       return createImportController({
@@ -196,7 +255,7 @@ export function ImportDialog(props: Props): JSX.Element {
   }
 
   function select(ids: string[], checked: boolean): void {
-    if (controller()?.phase() !== 'selecting') return;
+    if (phase() !== 'selecting') return;
     setSelected((previous) => {
       const next = new Set(previous);
       for (const id of ids) {
@@ -207,19 +266,22 @@ export function ImportDialog(props: Props): JSX.Element {
     });
   }
 
+  function openHistory(receipt: ImportJob): void {
+    resetSession();
+    setHistoryReceipt(undefined);
+    setJobId(receipt.jobId);
+  }
+
   const discovery = () => controller()?.discovery();
   const canCancel = () =>
-    (controller() && controller()?.phase() !== 'terminal') ||
-    (job() && !terminal(job()!));
+    (controller() && phase() !== 'terminal') || (job() && !terminal(job()!));
   const cancelPending = () =>
-    cancelling() ||
-    controller()?.phase() === 'cancelling' ||
-    job()?.status === 'cancelling';
+    cancelling() || phase() === 'cancelling' || job()?.status === 'cancelling';
   const canChooseAnother = () =>
     controller() &&
     (!localActive() ||
-      controller()?.phase() === 'selecting' ||
-      (controller()?.phase() === 'interrupted' && !discovery()));
+      phase() === 'selecting' ||
+      (phase() === 'interrupted' && !discovery()));
   const fileDisabled = () => !source.page() || localActive() || busy();
   const error = () => actionError() ?? controller()?.error();
   const warning = () => refreshWarning() ?? controller()?.warning();
@@ -245,6 +307,82 @@ export function ImportDialog(props: Props): JSX.Element {
       ? binding.sourceId
       : 'Previously confirmed unknown workspace';
   };
+  const upload = () => {
+    const current = phase();
+    return current && UPLOAD_PHASES.has(current)
+      ? controller()?.uploadProgress()
+      : undefined;
+  };
+  const recoveredUpload = () => !controller() && job()?.status === 'uploading';
+  const showProgress = () => {
+    const current = phase();
+    return Boolean(job() || (current && !REVIEW_PHASES.has(current)));
+  };
+
+  const primaryAction = (): JSX.Element => {
+    const current = phase();
+    if (current === 'selecting') {
+      return (
+        <Button
+          variant="strong"
+          depth={2}
+          disabled={!selected().size || !confirmed() || busy()}
+          onClick={() =>
+            void runAction(() =>
+              controller()!.start({
+                selectedIds: [...selected()],
+                includeMessageHistory: includeHistory(),
+                sourceConfirmed: confirmed(),
+              })
+            )
+          }
+        >
+          Import selected channels ({selected().size})
+        </Button>
+      );
+    }
+    if (current === 'interrupted' && discovery()) {
+      return (
+        <Show
+          when={controller()?.job()}
+          fallback={
+            <Button
+              variant="strong"
+              depth={2}
+              disabled={busy()}
+              onClick={() => void runAction(() => controller()!.recoverJob())}
+            >
+              Recover job receipt
+            </Button>
+          }
+        >
+          <Button
+            variant="strong"
+            depth={2}
+            disabled={busy()}
+            onClick={() =>
+              void runAction(() => controller()!.finalizeWithSkips())
+            }
+          >
+            Finalize with skips
+          </Button>
+        </Show>
+      );
+    }
+    if (recoveredUpload()) {
+      return (
+        <Button
+          variant="strong"
+          depth={2}
+          disabled={busy() || cancelling()}
+          onClick={() => void runAction(finalizeHistory)}
+        >
+          Finalize with skips
+        </Button>
+      );
+    }
+    return null;
+  };
 
   return (
     <>
@@ -258,231 +396,410 @@ export function ImportDialog(props: Props): JSX.Element {
         open={open()}
         onOpenChange={changeOpen}
         position="center"
+        class="w-160"
+        visibleScrim
         onCloseAutoFocus={(event) => {
           // The card is outside Dialog's trigger context; retain its focus owner.
           event.preventDefault();
           if (!open()) opener?.focus();
         }}
       >
-        <div class="max-h-[85dvh] overflow-y-auto p-4 sm:p-6 flex flex-col gap-4 text-ink">
-          <Dialog.Title class="text-lg font-semibold">
-            Import from Slack
-          </Dialog.Title>
-          <Dialog.Description class="text-sm text-ink-muted">
-            Select a Slack export ZIP. Parsing stays in your browser; only
-            selected conversation data is uploaded. Keep this Settings page open
-            until uploads finish.
-          </Dialog.Description>
-          <label class="flex flex-col gap-1 text-sm">
-            Slack export ZIP
-            {/* The mobile focus trap requires tabindex=-1 even on disabled inputs. */}
-            <input
-              type="file"
-              accept=".zip,application/zip"
+        <ActionDialogShell class="max-h-[85dvh]">
+          <ActionDialogShell.Body class="space-y-6">
+            <ActionDialogShell.Header>
+              <ActionDialogShell.Title>
+                Import from Slack
+              </ActionDialogShell.Title>
+              <ActionDialogShell.Description>
+                Bring conversations from a Slack export into this team. The
+                archive is read in your browser and only the conversations you
+                select are uploaded. Keep this page open until uploads finish.
+              </ActionDialogShell.Description>
+            </ActionDialogShell.Header>
+
+            <ArchivePicker
+              archive={archive()}
               disabled={fileDisabled()}
-              tabIndex={fileDisabled() ? -1 : undefined}
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                event.currentTarget.value = '';
-                void runAction(() => chooseFile(file));
-              }}
+              reading={phase() === 'discovering'}
+              onChoose={(file) => void runAction(() => chooseFile(file))}
             />
-          </label>
-          <p class="text-xs text-ink-muted">
-            Files, attachments and attachment-only messages are not imported.
-            Encrypted, multi-volume and ZIP64 archives are unsupported. This is
-            not a live Slack connection.
-          </p>
-          <Show when={!source.page() && !source.error()}>
-            <p role="status">Loading import settings…</p>
-          </Show>
-          <Show when={source.error()}>
-            <p role="alert">
-              Progress could not be refreshed. Existing server imports may still
-              be running.
-            </p>
-          </Show>
-          <Show when={error()}>{(error) => <p role="alert">{error()}</p>}</Show>
-          <Show when={warning()}>
-            {(warning) => <p role="status">{warning()}</p>}
-          </Show>
-          <Show when={controller()?.phase() === 'selecting' && discovery()}>
-            {(found) => (
-              <>
-                <ConversationPicker
-                  discovery={found()}
-                  selected={selected()}
-                  unsupported={unsupported()}
-                  filter={filter()}
-                  showArchived={showArchived()}
-                  onFilter={setFilter}
-                  onShowArchived={setShowArchived}
-                  onSelect={select}
-                />
-                <label class="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={includeHistory()}
-                    onChange={(event) =>
-                      setIncludeHistory(event.currentTarget.checked)
-                    }
+
+            <Show when={!source.page() && !source.error()}>
+              <Notice tone="info">Loading import settings…</Notice>
+            </Show>
+            <Show when={source.error()}>
+              <Notice tone="warning">
+                Progress could not be refreshed. Imports already running on the
+                server continue.
+              </Notice>
+            </Show>
+            <Show when={error()}>
+              {(error) => <Notice tone="error">{error()}</Notice>}
+            </Show>
+            <Show when={warning()}>
+              {(warning) => <Notice tone="warning">{warning()}</Notice>}
+            </Show>
+
+            <Show when={phase() === 'selecting' && discovery()}>
+              {(found) => (
+                <>
+                  <ConversationPicker
+                    discovery={found()}
+                    selected={selected()}
+                    unsupported={unsupported()}
+                    filter={filter()}
+                    showArchived={showArchived()}
+                    onFilter={setFilter}
+                    onShowArchived={setShowArchived}
+                    onSelect={select}
                   />
-                  Include message history
-                </label>
-                <p class="text-sm text-ink-muted">
-                  {found().users.length - namedAuthors()} source users have
-                  email attribution; {namedAuthors()} use Slack-name attribution
-                  via the system bot. Emails are lowercased as exported, without
-                  alias matching or a team roster lookup. External email
-                  addresses can become channel members. DMs require two distinct
-                  email-bearing members; importing never adds you as a third
-                  member.
-                </p>
-                <p class="text-sm text-ink-muted">
-                  Public Slack channels become Team channels with explicit
-                  members, never globally Public. Existing channel names, roles
-                  and membership history are preserved.
-                </p>
-                <p class="text-sm">
-                  Team source: {boundSource()}. Archive source:{' '}
-                  {archiveSource()}.
-                </p>
-                <label class="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    class="mt-1"
-                    checked={confirmed()}
-                    onChange={(event) =>
-                      setConfirmed(event.currentTarget.checked)
-                    }
-                  />
-                  I confirm this archive belongs to this team's Slack workspace,
-                  including when its identity is unknown. The source binding is
-                  immutable; this team cannot import another Slack workspace.
-                </label>
-                <Button
-                  variant="strong"
-                  disabled={!selected().size || !confirmed() || busy()}
-                  onClick={() =>
-                    void runAction(() =>
-                      controller()!.start({
-                        selectedIds: [...selected()],
-                        includeMessageHistory: includeHistory(),
-                        sourceConfirmed: confirmed(),
-                      })
-                    )
-                  }
-                >
-                  Import selected channels ({selected().size})
-                </Button>
-              </>
-            )}
-          </Show>
-          <Show when={controller() || job()}>
-            <ImportProgress
-              job={job()}
-              phase={controller()?.phase()}
-              upload={controller()?.uploadProgress()}
-              channelHref={props.channelHref}
+                  <section class="flex flex-col gap-3" aria-label="Options">
+                    <DialogSectionTitle>Options</DialogSectionTitle>
+                    <div class="divide-y divide-edge-divider overflow-hidden rounded-lg border border-edge-muted">
+                      <label class="flex items-start gap-3 px-4 py-3">
+                        <NativeCheckbox
+                          class="mt-0.5"
+                          checked={includeHistory()}
+                          aria-label="Include message history"
+                          aria-describedby="slack-import-history-hint"
+                          onChange={(event) =>
+                            setIncludeHistory(event.currentTarget.checked)
+                          }
+                        />
+                        <span class="min-w-0 flex-1">
+                          <span class="block text-sm text-ink">
+                            Include message history
+                          </span>
+                          <span
+                            id="slack-import-history-hint"
+                            class="block text-xs text-ink-muted"
+                          >
+                            Messages, threads and reactions are imported with
+                            each conversation. Files, attachments and
+                            attachment-only messages are skipped.
+                          </span>
+                        </span>
+                      </label>
+                      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-4 py-3 text-xs">
+                        <dt class="text-ink-muted">Team source</dt>
+                        <dd class="min-w-0 truncate text-ink">
+                          {boundSource()}
+                        </dd>
+                        <dt class="text-ink-muted">Archive source</dt>
+                        <dd class="min-w-0 truncate text-ink">
+                          {archiveSource()}
+                        </dd>
+                        <dt class="text-ink-muted">Members</dt>
+                        <dd class="text-ink">
+                          {found().users.length - namedAuthors()} matched by
+                          email · {namedAuthors()} attributed by Slack name
+                        </dd>
+                      </dl>
+                      <label class="flex items-start gap-3 px-4 py-3">
+                        <NativeCheckbox
+                          class="mt-0.5"
+                          checked={confirmed()}
+                          aria-label={SOURCE_CONFIRMATION}
+                          aria-describedby="slack-import-source-hint"
+                          onChange={(event) =>
+                            setConfirmed(event.currentTarget.checked)
+                          }
+                        />
+                        <span class="min-w-0 flex-1">
+                          <span class="block text-sm text-ink">
+                            {SOURCE_CONFIRMATION}
+                          </span>
+                          <span
+                            id="slack-import-source-hint"
+                            class="block text-xs text-ink-muted"
+                          >
+                            The source binding is permanent: this team cannot
+                            import another Slack workspace later.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                    <p class="text-xs text-ink-extra-muted">
+                      Public Slack channels become Team channels with explicit
+                      members, never globally public. Existing channel names,
+                      roles and membership history are preserved. External email
+                      addresses can become channel members; a DM needs two
+                      distinct email-bearing members and never adds you as a
+                      third.
+                    </p>
+                  </section>
+                </>
+              )}
+            </Show>
+
+            <Show when={showProgress()}>
+              <ImportProgress
+                job={job()}
+                phase={phase() ? phaseDisplay(phase()!) : undefined}
+                upload={upload()}
+                channelHref={props.channelHref}
+              />
+            </Show>
+            <Show when={recoveredUpload()}>
+              <Notice tone="warning">
+                Progress was recovered without the archive, and uploads do not
+                resume after a reload. Finalize with skips to process the
+                verified conversations, or cancel and start a new import.
+              </Notice>
+            </Show>
+
+            <JobHistory
+              page={source.page()}
+              activeJobId={jobId()}
+              disabled={localActive() || busy()}
+              paged={Boolean(before())}
+              onOpen={openHistory}
+              onNewest={() => setBefore(undefined)}
+              onOlder={() => setBefore(source.page()?.nextCursor)}
             />
-          </Show>
-          <p class="text-xs text-ink-muted">
-            Cancellation stops future work, not work already committed. Running
-            conversations may finish. Imported channels and messages are not
-            rolled back.
-          </p>
-          <Show when={!controller() && job()?.status === 'uploading'}>
-            <p class="text-sm text-ink-muted">
-              Server progress has been recovered without the ZIP. Local uploads
-              do not resume after reload. Finalize with skips to process
-              verified conversations, or cancel and confirm a new import.
-            </p>
+          </ActionDialogShell.Body>
+          <ActionDialogShell.Footer class="justify-between">
             <Button
-              disabled={busy() || cancelling()}
-              onClick={() => void runAction(finalizeHistory)}
-            >
-              Finalize with skips
-            </Button>
-          </Show>
-          <div class="flex flex-wrap gap-2">
-            <Show when={controller()?.phase() === 'interrupted' && discovery()}>
-              <Show
-                when={controller()?.job()}
-                fallback={
-                  <Button
-                    disabled={busy()}
-                    onClick={() =>
-                      void runAction(() => controller()!.recoverJob())
-                    }
-                  >
-                    Recover job receipt
-                  </Button>
-                }
-              >
-                <Button
-                  disabled={busy()}
-                  onClick={() =>
-                    void runAction(() => controller()!.finalizeWithSkips())
-                  }
-                >
-                  Finalize with skips
-                </Button>
-              </Show>
-            </Show>
-            <Show when={canCancel()}>
-              <Button disabled={cancelPending()} onClick={() => void cancel()}>
-                Cancel import (keep partial results)
-              </Button>
-            </Show>
-            <Show when={canChooseAnother()}>
-              <Button disabled={busy() || cancelling()} onClick={resetSession}>
-                Choose another archive
-              </Button>
-            </Show>
-            <Button
+              variant="ghost"
+              depth={2}
               disabled={busy()}
               onClick={() => void runAction(() => source.refresh())}
             >
+              <ArrowsClockwiseIcon aria-hidden="true" class="size-4" />
               Refresh progress
             </Button>
-            <Button onClick={() => changeOpen(false)}>Close</Button>
-          </div>
-          <section class="flex flex-col gap-2" aria-label="Job history">
-            <h3 class="font-medium">Job history</h3>
-            <Index each={source.page()?.jobs}>
-              {(receipt) => (
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <Show when={canCancel()}>
                 <Button
-                  class="h-auto break-all text-left justify-start"
-                  disabled={localActive() || busy()}
-                  onClick={() => {
-                    resetSession();
-                    setHistoryReceipt(undefined);
-                    setJobId(receipt().jobId);
-                  }}
+                  variant="ghost"
+                  depth={2}
+                  class="text-failure hover:text-failure"
+                  disabled={cancelPending()}
+                  onClick={() => void cancel()}
                 >
-                  {receipt().createdAt || receipt().jobId} ·{' '}
-                  {receipt().status.replaceAll('_', ' ')}
-                </Button>
-              )}
-            </Index>
-            <Show when={source.page()?.jobs.length === 0}>
-              <p class="text-sm text-ink-muted">No imports on this page.</p>
-            </Show>
-            <div class="flex flex-wrap gap-2">
-              <Show when={before()}>
-                <Button onClick={() => setBefore(undefined)}>
-                  Newest imports
+                  Cancel import
                 </Button>
               </Show>
-              <Show when={source.page()?.nextCursor}>
-                <Button onClick={() => setBefore(source.page()?.nextCursor)}>
-                  Older imports
+              <Show when={canChooseAnother()}>
+                <Button
+                  variant="ghost"
+                  depth={2}
+                  disabled={busy() || cancelling()}
+                  onClick={resetSession}
+                >
+                  Choose another archive
                 </Button>
               </Show>
+              <Button
+                variant="ghost"
+                depth={2}
+                onClick={() => changeOpen(false)}
+              >
+                Close
+              </Button>
+              {primaryAction()}
             </div>
-          </section>
-        </div>
+          </ActionDialogShell.Footer>
+        </ActionDialogShell>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * The archive drop zone. The native input stays in the DOM (visually hidden)
+ * so the accessible name, focus order and file dialog remain native.
+ */
+function ArchivePicker(props: {
+  archive: { name: string; size: number } | undefined;
+  disabled: boolean;
+  reading: boolean;
+  onChoose(file: File | undefined): void;
+}): JSX.Element {
+  const [dragging, setDragging] = createSignal(false);
+  const accept = (file: File | undefined) => {
+    setDragging(false);
+    if (props.disabled) return;
+    props.onChoose(file);
+  };
+  return (
+    <section class="flex flex-col gap-3" aria-label="Archive">
+      <DialogSectionTitle>Archive</DialogSectionTitle>
+      <div
+        class={cn(
+          'relative flex items-center gap-3 rounded-lg border border-dashed px-4 py-3 transition-colors',
+          dragging()
+            ? 'border-accent bg-accent-bg'
+            : 'border-edge-frame bg-control',
+          props.disabled ? 'opacity-60' : 'hover:border-edge hover:bg-ink/4'
+        )}
+        onDragOver={(event) => {
+          if (props.disabled) return;
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          accept(event.dataTransfer?.files?.[0]);
+        }}
+      >
+        {/* The mobile focus trap requires tabindex=-1 even on disabled inputs. */}
+        <input
+          id="slack-import-file"
+          type="file"
+          accept=".zip,application/zip"
+          class="peer sr-only"
+          aria-labelledby="slack-import-file-label"
+          aria-describedby="slack-import-file-hint"
+          disabled={props.disabled}
+          tabIndex={props.disabled ? -1 : undefined}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            accept(file);
+          }}
+        />
+        <label
+          for="slack-import-file"
+          aria-hidden="true"
+          class="absolute inset-0 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-accent"
+        />
+        <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-ink/5 text-ink-muted">
+          <FileZipIcon aria-hidden="true" class="size-5" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <div
+            id="slack-import-file-label"
+            class="text-sm font-medium text-ink"
+          >
+            Slack export ZIP
+          </div>
+          <div
+            id="slack-import-file-hint"
+            class="truncate text-xs text-ink-muted"
+          >
+            <Show
+              when={props.archive}
+              fallback="Drop the .zip exported from Slack here, or browse for it."
+            >
+              {(archive) => (
+                <>
+                  {archive().name} · {formatBytes(archive().size)}
+                  {props.reading ? ' · Reading archive…' : ''}
+                </>
+              )}
+            </Show>
+          </div>
+        </div>
+        <Show when={!props.disabled}>
+          <span class="shrink-0 text-sm font-medium text-ink-muted">
+            Browse
+          </span>
+        </Show>
+      </div>
+      <p class="text-xs text-ink-extra-muted">
+        Encrypted, multi-volume and ZIP64 archives are not supported. This is a
+        one-time import, not a live Slack connection.
+      </p>
+    </section>
+  );
+}
+
+function JobHistory(props: {
+  page: ImportPage | undefined;
+  activeJobId: string | undefined;
+  disabled: boolean;
+  paged: boolean;
+  onOpen(job: ImportJob): void;
+  onNewest(): void;
+  onOlder(): void;
+}): JSX.Element {
+  const when = (receipt: ImportJob): JSX.Element =>
+    receipt.createdAt ? (
+      <time dateTime={receipt.createdAt}>
+        {formatDate(receipt.createdAt, { showTime: true })}
+      </time>
+    ) : (
+      receipt.jobId
+    );
+  return (
+    <section class="flex flex-col gap-3" aria-label="Job history">
+      <DialogSectionTitle>Previous imports</DialogSectionTitle>
+      <Show
+        when={props.page?.jobs.length}
+        fallback={
+          <p class="text-xs text-ink-muted">
+            {props.paged
+              ? 'No older imports.'
+              : 'No imports yet for this team.'}
+          </p>
+        }
+      >
+        <ul class="divide-y divide-edge-divider overflow-hidden rounded-lg border border-edge-muted">
+          <Index each={props.page?.jobs}>
+            {(receipt) => (
+              <li>
+                <button
+                  type="button"
+                  class={cn(
+                    'flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm outline-none transition-colors hover:bg-ink/4 focus-visible:bg-ink/6 disabled:pointer-events-none disabled:opacity-50',
+                    receipt().jobId === props.activeJobId && 'bg-ink/4'
+                  )}
+                  aria-current={
+                    receipt().jobId === props.activeJobId ? 'true' : undefined
+                  }
+                  disabled={props.disabled}
+                  onClick={() => props.onOpen(receipt())}
+                >
+                  <StatusDot tone={jobTone(receipt().status)} />
+                  <span class="min-w-0 flex-1 truncate text-ink">
+                    {when(receipt())} · {humanize(receipt().status)}
+                  </span>
+                  <span class="shrink-0 text-xs text-ink-muted">
+                    {receipt().conversations.length}{' '}
+                    {receipt().conversations.length === 1
+                      ? 'conversation'
+                      : 'conversations'}{' '}
+                    ·{' '}
+                    {receipt().includeMessageHistory
+                      ? 'With history'
+                      : 'Without history'}
+                  </span>
+                  <CaretRightIcon
+                    aria-hidden="true"
+                    class="size-4 shrink-0 text-ink-extra-muted"
+                  />
+                </button>
+              </li>
+            )}
+          </Index>
+        </ul>
+      </Show>
+      <Show when={props.paged || props.page?.nextCursor}>
+        <div class="flex items-center gap-2">
+          <Show when={props.paged}>
+            <Button
+              variant="outline"
+              size="sm"
+              depth={2}
+              onClick={props.onNewest}
+            >
+              Newest imports
+            </Button>
+          </Show>
+          <Show when={props.page?.nextCursor}>
+            <Button
+              variant="outline"
+              size="sm"
+              depth={2}
+              onClick={props.onOlder}
+            >
+              Older imports
+            </Button>
+          </Show>
+        </div>
+      </Show>
+    </section>
   );
 }
