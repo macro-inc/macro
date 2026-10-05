@@ -225,7 +225,10 @@ fn corpus_merged_images_match_their_renderings() {
     let dump = std::env::var_os("PSD_DUMP_DIR").map(PathBuf::from);
     let mut mismatched = Vec::new();
     let mut count = 0;
-    for (path, file) in rendered(&files) {
+    // In ag-psd's `write` fixtures, `canvas.png` is the image written into
+    // `expected.psd`, not a rendering of the source file.
+    let written = |p: &Path| p.components().any(|c| c.as_os_str() == "write");
+    for (path, file) in rendered(&files).filter(|(p, _)| !written(p)) {
         let h = file.header;
         let mut ours = merged_rgba(&file);
         if let Some(dir) = &dump {

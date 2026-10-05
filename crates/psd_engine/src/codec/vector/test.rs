@@ -103,6 +103,7 @@ fn encodes_new_masks() {
                 Knot::corner(100.0, 90.0),
             ],
             nonzero: false,
+            joined: false,
             shape: 0,
         }],
         unlinked: true,

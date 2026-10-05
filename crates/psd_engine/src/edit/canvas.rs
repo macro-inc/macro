@@ -96,6 +96,9 @@ fn translate_layer(layer: &mut Layer, dx: i32, dy: i32) {
                 object.corners[2 * k + 1] += f64::from(dy);
             }
         }
+        LayerKind::Group {
+            artboard: Some(a), ..
+        } => a.rect = a.rect.translate(dx, dy),
         _ => {}
     }
 }
@@ -113,6 +116,9 @@ fn layer_edits_for(layer: &Layer, moved: bool) -> u64 {
     match layer.kind {
         LayerKind::Text { .. } => e |= flags::TEXT,
         LayerKind::SmartObject { .. } => e |= flags::PLACEMENT,
+        LayerKind::Group {
+            artboard: Some(_), ..
+        } => e |= flags::ARTBOARD,
         _ => {}
     }
     e
@@ -139,6 +145,34 @@ pub(super) fn translate(ctx: &mut Ctx<'_>, ids: &[u32], dx: i32, dy: i32) -> Res
         ctx.dirty_layer(i);
     }
     Ok(())
+}
+
+/// The whole pixels covering a rectangle mapped through `m`.
+fn mapped_rect(rect: IRect, m: &Matrix) -> IRect {
+    let corners = [
+        (rect.x, rect.y),
+        (rect.right(), rect.y),
+        (rect.x, rect.bottom()),
+        (rect.right(), rect.bottom()),
+    ]
+    .map(|(x, y)| apply(m, (f64::from(x), f64::from(y))));
+    let (mut left, mut top) = (f64::INFINITY, f64::INFINITY);
+    let (mut right, mut bottom) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for (x, y) in corners {
+        left = left.min(x);
+        top = top.min(y);
+        right = right.max(x);
+        bottom = bottom.max(y);
+    }
+    // Rounded first, so turns and flips (which land on whole pixels give or
+    // take rounding error) keep the size.
+    let edge = |v: f64| (v * 1e6).round() / 1e6;
+    IRect::from_ltrb(
+        edge(left).floor() as i32,
+        edge(top).floor() as i32,
+        edge(right).ceil() as i32,
+        edge(bottom).ceil() as i32,
+    )
 }
 
 /// A mask raster mapped through `m`: masks whose outside shows (default
@@ -219,6 +253,9 @@ fn transform_layer(layer: &mut Layer, m: &Matrix, interpolation: Interpolation, 
         LayerKind::Pixel => {
             layer.pixels = transform::transform(&layer.pixels, *m, interpolation);
         }
+        LayerKind::Group {
+            artboard: Some(a), ..
+        } => a.rect = mapped_rect(a.rect, m),
         LayerKind::Group { .. } | LayerKind::Fill { .. } | LayerKind::Adjustment { .. } => {}
     }
     if let Some(mask) = &layer.mask

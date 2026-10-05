@@ -200,9 +200,20 @@ fn merged_image(
         ));
     }
     let (w, h) = (doc.width, doc.height);
+    let transparent = rgba.chunks_exact(4).any(|p| p[3] != 255);
+    // Photoshop stores the colors of a merged image with transparency
+    // blended over white.
+    let matted;
+    let rgba = if transparent {
+        let mut copy = rgba.to_vec();
+        color::matte_white(&mut copy);
+        matted = copy;
+        &matted[..]
+    } else {
+        rgba
+    };
     let mut planes = color::from_rgba(doc.mode, header.depth, w, h, rgba);
     let color_count = doc.mode.color_channels();
-    let transparent = rgba.chunks_exact(4).any(|p| p[3] != 255);
     if !transparent {
         planes.truncate(color_count);
     }

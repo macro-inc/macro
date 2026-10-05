@@ -6,8 +6,8 @@
 use crate::codec::descriptor::Descriptor;
 use crate::codec::paint;
 use crate::model::{
-    Bevel, BevelStyle, BevelTechnique, BlendMode, Fill, Glow, GlowSource, GlowTechnique, Overlay,
-    Rgb, Satin, Shadow, StrokeEffect, StrokePosition,
+    Bevel, BevelStyle, BevelTechnique, BlendMode, Fill, Glow, GlowSource, GlowTechnique, Gradient,
+    Overlay, Rgb, Satin, Shadow, StrokeEffect, StrokePosition,
 };
 
 /// Bevel styles and their `BESl` ids.
@@ -77,7 +77,10 @@ pub(super) fn glow(d: &Descriptor, inner: bool) -> Glow {
         enabled: enabled(d),
         blend: paint::blend(d, "Md  ").unwrap_or(BlendMode::Screen),
         color: paint::color(d, "Clr ").unwrap_or(Rgb::new(1.0, 1.0, 190.0 / 255.0)),
-        gradient: d.object("Grad").map(paint::gradient_object),
+        gradient: d.object("Grad").map(|o| Gradient {
+            method: paint::gradient_method(d),
+            ..paint::gradient_object(o)
+        }),
         opacity: paint::percent(d, "Opct").unwrap_or(0.75),
         noise: paint::percent(d, "Nose").unwrap_or(0.0),
         technique: if d.enumeration("GlwT") == Some("PrBL") {

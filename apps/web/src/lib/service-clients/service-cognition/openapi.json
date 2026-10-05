@@ -3623,6 +3623,8 @@
           "dxf",
           "dwg",
           "fig",
+          "psd",
+          "psb",
           "stl",
           "obj",
           "fbx",

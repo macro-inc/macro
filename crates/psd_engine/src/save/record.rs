@@ -140,6 +140,7 @@ fn encode_mask(header: &Header, layer: &Layer) -> Option<(MaskData, Channel)> {
             flags: f,
             params,
             real: None,
+            tail: Vec::new(),
         },
         channel,
     ))
@@ -243,13 +244,30 @@ pub(super) fn layer_record(doc: &Document, header: &Header, layer: &Layer) -> Re
             .retain(|b| !codec::adjustment::is_adjustment_key(&b.key) && &b.key != b"CgEd");
     }
     match &layer.kind {
-        LayerKind::Group { open } => {
+        LayerKind::Group { open, artboard } => {
             if all || has(flags::OPEN | flags::BLEND | flags::KIND) {
                 r.set_block(
                     b"lsct",
                     blocks::divider_data(Divider::Group { open: *open }, layer.blend),
                 );
                 r.remove_block(b"lsdk");
+            }
+            if all || has(flags::ARTBOARD | flags::KIND) {
+                let original = source.and_then(|s| {
+                    codec::artboard::KEYS
+                        .iter()
+                        .find_map(|k| s.block(k).map(|b| (**k, &b.data[..])))
+                });
+                for k in codec::artboard::KEYS {
+                    r.remove_block(k);
+                }
+                if let Some(a) = artboard {
+                    let (key, data) = match original {
+                        Some((key, data)) => (key, codec::artboard::encode(a, Some(data))),
+                        None => (*b"artb", codec::artboard::encode(a, None)),
+                    };
+                    r.set_block(&key, data);
+                }
             }
             r.rect = [0; 4];
             r.channels = empty_channels(color_count);
@@ -377,14 +395,21 @@ pub(super) fn layer_record(doc: &Document, header: &Header, layer: &Layer) -> Re
 
     // The style.
     if has(flags::EFFECTS) {
-        let original = source
-            .and_then(|s| s.block(b"lmfx").or_else(|| s.block(b"lfx2")))
-            .map(|b| &b.data[..]);
-        for key in [b"lfx2", b"lmfx", b"lrFX"] {
+        let original = source.and_then(|s| {
+            [b"lmfx", b"lfx2", b"lfxs"]
+                .into_iter()
+                .find_map(|k| s.block(k).map(|b| (*k, &b.data[..])))
+        });
+        for key in [b"lfx2", b"lmfx", b"lfxs", b"lrFX"] {
             r.remove_block(key);
         }
         if let Some(fx) = &layer.effects {
-            let (key, data) = codec::effects::encode(fx, original);
+            let (key, data) = codec::effects::encode(fx, original.map(|(_, d)| d));
+            // A style read from `lfxs` stays there.
+            let key = match original {
+                Some((k, _)) if k == *b"lfxs" => k,
+                _ => key,
+            };
             r.set_block(&key, data);
         }
     }

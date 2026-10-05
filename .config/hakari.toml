@@ -110,6 +110,11 @@ workspace-members = [
     # browser (a wasm32 module in the viewer's workers), so it must stay
     # wasm-safe.
     "fig_engine",
+    # psd_engine and ai_engine: the Photoshop and Illustrator engines run in
+    # the browser too (wasm32 modules in their editors' workers), on top of
+    # fig_engine, so they must stay wasm-safe as well.
+    "psd_engine",
+    "ai_engine",
     # soup-filter-projection is intentionally absent: its wasm-facing adapter
     # disables the native-only default `models` feature, so the crate itself
     # does not pull workspace-hack into wasm dependency traversal.

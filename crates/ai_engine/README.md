@@ -57,6 +57,7 @@ edit         operations and undo/redo (edit/nodes, edit/tree, edit/shapes)
 save         writing the document as a PDF-based `.ai` (save/emit, text,
              paint, resources, objects)
 marks        marked content the engine writes so saved files read back
+             (groups, edited text, masked paths, hidden objects)
 collab       editing together: node states as CRDT map entries
 inspect      layers panel rows, node properties, hit tests, marquees, fonts
 describe     documents summarized for AI agents and search
@@ -136,7 +137,10 @@ redrawn, from the model. Edited text is written as outlines (so every
 application shows it as laid out here) with an invisible copy of its
 characters (search and copy work) inside `/MacroText` marked content that
 reads back as editable text. Hidden objects go in an optional content group
-that is off. Illustrator's private data is left out, so Illustrator reads
+that is off. A gradient with transparent stops is painted under a soft
+mask of its stops' opacities, as Illustrator writes it, inside `/MacroPath`
+marked content that reads back as the path. Illustrator's private data is
+left out, so Illustrator reads
 the edited PDF instead of its stale copy. Saving every sample file after
 moving everything away and back draws identically in poppler.
 
@@ -169,7 +173,6 @@ nodes get ids in the creator's session (`session << 20`). See
   each page and reads back twice.
 - Edited text is saved as outlines with invisible text; Illustrator opens it
   as outlines, the engine as text.
-- Gradient stops with transparency are drawn but saved opaque; knockout
-  groups draw as plain transparency groups.
+- Knockout groups draw as plain transparency groups.
 - Live effects, symbols, and other Illustrator-only constructs show as they
   were drawn in the PDF.

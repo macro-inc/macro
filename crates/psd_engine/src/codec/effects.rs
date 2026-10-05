@@ -163,8 +163,9 @@ fn read_block(data: &[u8]) -> Result<(u32, Descriptor, usize)> {
 }
 
 /// Reads a layer's effects from its blocks: `lmfx` or `lfx2` first, then
-/// `lrFX`. `None` when the layer has no style. (`lfxs`, which some groups
-/// have, has the same form and may be passed as either.)
+/// `lrFX`. `None` when the layer has no style. (`lfxs`, which newer files
+/// give some groups instead, has the same form and may be passed as
+/// either.)
 pub fn decode(
     lfx2: Option<&[u8]>,
     lmfx: Option<&[u8]>,

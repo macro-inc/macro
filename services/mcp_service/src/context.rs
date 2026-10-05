@@ -309,7 +309,9 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         ),
     )
     .with_presentation_files(Arc::new(document_files.clone()))
-    .with_design_files(Arc::new(document_files));
+    .with_design_files(Arc::new(document_files.clone()))
+    .with_photoshop_files(Arc::new(document_files.clone()))
+    .with_illustrator_files(Arc::new(document_files));
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
         properties_service.clone(),

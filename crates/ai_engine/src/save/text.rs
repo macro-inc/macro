@@ -5,7 +5,7 @@
 //! as editable text.
 
 use super::objects::Objects;
-use super::paint::{alpha_ops, cm, paint_ops, stroke_ops};
+use super::paint::{alpha_mask_ops, alpha_ops, cm, has_alpha, paint_ops, stroke_ops};
 use super::resources::Resources;
 use crate::file::SourceFile;
 use crate::geom::Affine;
@@ -224,7 +224,31 @@ pub fn laid_out(
     ));
     ops.push(cm(to_page));
     let outlines = crate::text::outlines(t);
-    if !outlines.is_empty() && (t.fill.is_some() || t.stroke.is_some()) {
+    let masked = t.fill.as_ref().is_some_and(has_alpha)
+        || t.stroke.as_ref().is_some_and(|s| has_alpha(&s.paint));
+    if outlines.is_empty() {
+        // Nothing shows; the invisible copy below still carries the text.
+    } else if masked {
+        // Fill and stroke each under their gradient's soft mask.
+        let bounds = outlines.bounds().unwrap_or_default();
+        if let Some(f) = &t.fill {
+            ops.push(op("q", Vec::new()));
+            ops.extend(alpha_mask_ops(f, bounds, res, objects));
+            ops.extend(paint_ops(f, false, to_page, res, objects));
+            ops.extend(super::emit::path_ops(&outlines));
+            ops.push(op("f", Vec::new()));
+            ops.push(op("Q", Vec::new()));
+        }
+        if let Some(s) = &t.stroke {
+            let reach = s.width / 2.0 * s.miter_limit.max(1.0) + 1.0;
+            ops.push(op("q", Vec::new()));
+            ops.extend(alpha_mask_ops(&s.paint, bounds.outset(reach), res, objects));
+            ops.extend(stroke_ops(s, to_page, res, objects));
+            ops.extend(super::emit::path_ops(&outlines));
+            ops.push(op("S", Vec::new()));
+            ops.push(op("Q", Vec::new()));
+        }
+    } else if t.fill.is_some() || t.stroke.is_some() {
         if let Some(f) = &t.fill {
             ops.extend(paint_ops(f, false, to_page, res, objects));
         }

@@ -5,6 +5,7 @@
 use clap::{Parser, Subcommand};
 use psd_engine::document::{self, OpenOptions};
 use psd_engine::edit::{History, Op};
+use psd_engine::model::LayerKind;
 use psd_engine::render::Renderer;
 use psd_engine::{Document, IRect, Selection};
 use std::path::{Path, PathBuf};
@@ -26,6 +27,10 @@ enum Command {
         /// Print the layer tree.
         #[arg(long)]
         tree: bool,
+        /// Print each layer's kind, effects, vector mask, and blending
+        /// ranges as JSON, then the document's patterns.
+        #[arg(long)]
+        json: bool,
     },
     /// Composite the layers to a PNG (not the stored merged image).
     Render {
@@ -150,11 +155,19 @@ fn difference(a: &[u8], b: &[u8], w: i32, h: i32) -> (f64, f64, Vec<u8>) {
 fn print_tree(doc: &Document) {
     for (i, depth) in doc.panel_order() {
         let l = doc.layer(i);
+        let kind = match &l.kind {
+            LayerKind::Pixel => "pixels",
+            LayerKind::Group { .. } => "group",
+            LayerKind::Text { .. } => "text",
+            LayerKind::Fill { .. } => "fill",
+            LayerKind::Adjustment { adjustment } => adjustment.label(),
+            LayerKind::SmartObject { .. } => "smart object",
+        };
         println!(
-            "{}{} {:?} \"{}\"{}{}",
+            "{}{} {kind} {} \"{}\"{}{}",
             "  ".repeat(depth + 1),
             l.id,
-            std::mem::discriminant(&l.kind),
+            l.blend.label(),
             l.name,
             if l.visible { "" } else { " hidden" },
             if l.opacity < 255 {
@@ -166,10 +179,38 @@ fn print_tree(doc: &Document) {
     }
 }
 
+fn print_json(doc: &Document) {
+    for (i, _) in doc.panel_order() {
+        let l = doc.layer(i);
+        let value = serde_json::json!({
+            "id": l.id,
+            "name": l.name,
+            "kind": l.kind,
+            "effects": l.effects,
+            "vectorMask": l.vector_mask,
+            "blendRanges": l.blend_ranges,
+        });
+        println!("{value}");
+    }
+    for p in &doc.patterns {
+        let value = serde_json::json!({
+            "pattern": p.id,
+            "name": p.name,
+            "width": p.width,
+            "height": p.height,
+        });
+        println!("{value}");
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     match cli.command {
-        Command::Info { files: paths, tree } => {
+        Command::Info {
+            files: paths,
+            tree,
+            json,
+        } => {
             for f in files(&paths) {
                 let Some((o, ms)) = open(&f) else { continue };
                 let d = &o.document;
@@ -187,6 +228,9 @@ fn main() {
                 }
                 if tree {
                     print_tree(d);
+                }
+                if json {
+                    print_json(d);
                 }
             }
         }

@@ -182,13 +182,17 @@ fn parse_tile_key(key: &str) -> Option<(u32, u8, u32, i32, i32)> {
     Some((id, plane, generation, x.parse().ok()?, y.parse().ok()?))
 }
 
+/// A layer's pixels and mask as the opened file has them, each with its
+/// generation: `(generation, pixels, mask)`.
+type Base = (u32, Raster, Option<(u32, Raster)>);
+
 /// One person's view of the shared maps.
 pub struct Collab {
     session: u32,
     positions: HashMap<u32, String>,
     /// Each layer's pixels and mask as the opened file has them (and the
     /// generations they are), to start a plane over from.
-    base: HashMap<u32, (u32, Raster, Option<(u32, Raster)>)>,
+    base: HashMap<u32, Base>,
     /// Hash of each layer state as last written or applied.
     states: HashMap<u32, u64>,
     /// Hash of each tile as last written or applied.

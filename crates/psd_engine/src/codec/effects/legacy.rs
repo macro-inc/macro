@@ -55,8 +55,8 @@ pub(super) fn decode(data: &[u8]) -> Result<Effects> {
                 e.u32()?;
                 let size = fixed(&mut e)?;
                 e.u32()?; // intensity
-                let angle = e.i32()? as f32;
-                let distance = e.i32()? as f32;
+                let angle = fixed(&mut e)?;
+                let distance = fixed(&mut e)?;
                 let color = color::read_binary(&mut e)?;
                 let blend = blend(&mut e)?;
                 let enabled = e.u8()? != 0;

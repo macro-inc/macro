@@ -10,7 +10,8 @@ pub(crate) mod color;
 
 use crate::codec::descriptor::{Descriptor, Id, Value};
 use crate::model::{
-    BlendMode, ColorStop, Contour, Gradient, GradientKind, OpacityStop, PatternFill, Rgb,
+    BlendMode, ColorStop, Contour, Gradient, GradientKind, GradientMethod, OpacityStop,
+    PatternFill, Rgb,
 };
 
 /// Descriptor blend mode ids, by model mode.
@@ -45,14 +46,49 @@ const BLEND_IDS: [(BlendMode, &str); 28] = [
     (BlendMode::Luminosity, "Lmns"),
 ];
 
+/// Blend modes by the long ids newer Photoshop versions write (`darken`
+/// for `Drkn`, `colorBurn` for `CBrn`, …).
+const LONG_BLEND_IDS: &[(BlendMode, &str)] = &[
+    (BlendMode::Normal, "normal"),
+    (BlendMode::Dissolve, "dissolve"),
+    (BlendMode::Darken, "darken"),
+    (BlendMode::Multiply, "multiply"),
+    (BlendMode::ColorBurn, "colorBurn"),
+    (BlendMode::LinearBurn, "linearBurn"),
+    (BlendMode::DarkerColor, "darkerColor"),
+    (BlendMode::Lighten, "lighten"),
+    (BlendMode::Screen, "screen"),
+    (BlendMode::ColorDodge, "colorDodge"),
+    (BlendMode::LinearDodge, "linearDodge"),
+    (BlendMode::LighterColor, "lighterColor"),
+    (BlendMode::Overlay, "overlay"),
+    (BlendMode::SoftLight, "softLight"),
+    (BlendMode::HardLight, "hardLight"),
+    (BlendMode::VividLight, "vividLight"),
+    (BlendMode::LinearLight, "linearLight"),
+    (BlendMode::PinLight, "pinLight"),
+    (BlendMode::HardMix, "hardMix"),
+    (BlendMode::Difference, "difference"),
+    (BlendMode::Exclusion, "exclusion"),
+    (BlendMode::Subtract, "subtract"),
+    (BlendMode::Divide, "divide"),
+    (BlendMode::Hue, "hue"),
+    (BlendMode::Saturation, "saturation"),
+    (BlendMode::Color, "color"),
+    (BlendMode::Luminosity, "luminosity"),
+    (BlendMode::PassThrough, "passThrough"),
+];
+
 /// The model blend mode of a descriptor blend mode id (`Nrml`,
-/// `linearBurn`, …); unknown ids are Normal.
+/// `linearBurn`, or the long ids of newer versions such as `darken`);
+/// unknown ids are Normal.
 pub(crate) fn blend_mode(id: &str) -> BlendMode {
     match id {
         "Sbtr" => BlendMode::Subtract,
         "pass" | "PasT" => BlendMode::PassThrough,
         _ => BLEND_IDS
             .iter()
+            .chain(LONG_BLEND_IDS)
             .find(|(_, s)| *s == id)
             .map_or(BlendMode::Normal, |(m, _)| *m),
     }
@@ -198,6 +234,68 @@ fn gradient_kind_id(kind: GradientKind) -> &'static str {
         .iter()
         .find(|(k, _)| *k == kind)
         .map_or("Lnr ", |(_, s)| s)
+}
+
+/// The enumeration type of gradient interpolation methods.
+const METHOD_TYPE: &str = "gradientInterpolationMethodType";
+
+/// Gradient interpolation methods and their ids.
+const GRADIENT_METHODS: [(GradientMethod, &str); 4] = [
+    (GradientMethod::Classic, "Gcls"),
+    (GradientMethod::Perceptual, "Perc"),
+    (GradientMethod::Linear, "Lnr "),
+    (GradientMethod::Smooth, "Smoo"),
+];
+
+/// The items naming a gradient's interpolation method: in effects, and in
+/// fill layers.
+const METHOD_KEYS: [&str; 2] = ["gs99", "gradientsInterpolationMethod"];
+
+/// The interpolation method an id names.
+pub(crate) fn method_of(id: &str) -> Option<GradientMethod> {
+    GRADIENT_METHODS
+        .iter()
+        .find(|(_, s)| *s == id)
+        .map(|(m, _)| *m)
+}
+
+/// An interpolation method's id.
+pub(crate) fn method_id(method: GradientMethod) -> &'static str {
+    GRADIENT_METHODS
+        .iter()
+        .find(|(m, _)| *m == method)
+        .map_or("Gcls", |(_, s)| s)
+}
+
+/// The interpolation method a descriptor names; classic when it names
+/// none (files from before Photoshop 2022) or one the engine doesn't know.
+pub(crate) fn gradient_method(d: &Descriptor) -> GradientMethod {
+    METHOD_KEYS
+        .iter()
+        .find_map(|k| d.enumeration(k))
+        .and_then(method_of)
+        .unwrap_or_default()
+}
+
+/// Sets the interpolation method unless the descriptor already reads as it
+/// (so a method the engine doesn't know stays while the model says
+/// classic). A descriptor naming none gets one only for a method other
+/// than classic: `gs99` in an effect, the long key in a fill layer.
+pub(crate) fn put_gradient_method(d: &mut Descriptor, method: GradientMethod) {
+    let id = method_id(method);
+    match METHOD_KEYS.iter().find(|k| d.has(k)) {
+        Some(key) if d.enumeration(key).is_some() && gradient_method(d) == method => {}
+        Some(key) => d.set(*key, enum_value(METHOD_TYPE, id)),
+        None if method == GradientMethod::Classic => {}
+        None => {
+            let key = if d.has("enab") {
+                METHOD_KEYS[0]
+            } else {
+                METHOD_KEYS[1]
+            };
+            d.set(key, enum_value(METHOD_TYPE, id));
+        }
+    }
 }
 
 /// Gradient locations run `0..=4096`.
@@ -414,8 +512,8 @@ pub(crate) fn gradient_object_descriptor(
 }
 
 /// A gradient held in a descriptor with its layout: `Grad` plus `Type`,
-/// `Angl`, `Rvrs`, `Dthr`, `Algn`, `Scl `, and `Ofst` (gradient fill
-/// layers, overlays, strokes).
+/// `Angl`, `Rvrs`, `Dthr`, the interpolation method, `Algn`, `Scl `, and
+/// `Ofst` (gradient fill layers, overlays, strokes).
 pub(crate) fn gradient(d: &Descriptor) -> Option<Gradient> {
     let mut g = gradient_object(d.object("Grad")?);
     g.kind = d
@@ -425,6 +523,7 @@ pub(crate) fn gradient(d: &Descriptor) -> Option<Gradient> {
     g.scale = percent(d, "Scl ").unwrap_or(1.0);
     g.reverse = d.bool("Rvrs").unwrap_or(false);
     g.dither = d.bool("Dthr").unwrap_or(false);
+    g.method = gradient_method(d);
     g.align_with_layer = d.bool("Algn").unwrap_or(true);
     if let Some(offset) = d.object("Ofst") {
         g.offset = (
@@ -446,6 +545,7 @@ pub(crate) fn put_gradient(d: &mut Descriptor, g: &Gradient) {
     put_enum(d, "Type", "GrdT", gradient_kind_id(g.kind));
     put_bool(d, "Rvrs", g.reverse);
     put_bool(d, "Dthr", g.dither);
+    put_gradient_method(d, g.method);
     put_bool(d, "Algn", g.align_with_layer);
     put_percent(d, "Scl ", g.scale);
     let offset = d.object("Ofst").map(|o| {

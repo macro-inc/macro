@@ -3,7 +3,7 @@
 //! them, and edited ones from the model.
 
 use super::objects::Objects;
-use super::paint::{alpha_ops, cm, paint_ops, stroke_ops};
+use super::paint::{alpha_mask_ops, alpha_ops, cm, has_alpha, paint_ops, stroke_ops};
 use super::resources::{Resources, rename};
 use super::text::{self, InvisibleFont};
 use crate::build::node_bounds;
@@ -354,6 +354,12 @@ impl<'a, 'b> PageWriter<'a, 'b> {
     /// A path written from the model.
     fn path(&mut self, n: &Node, p: &PathNode) {
         let to_page = n.transform.followed_by(&self.c2p);
+        if p.fill.as_ref().is_some_and(has_alpha)
+            || p.stroke.as_ref().is_some_and(|s| has_alpha(&s.paint))
+        {
+            self.masked_path(n, p, &to_page);
+            return;
+        }
         let mut ops = vec![op("q", Vec::new()), cm(&to_page)];
         {
             let Target { res, .. } = self.targets.last_mut().expect("target");
@@ -375,6 +381,45 @@ impl<'a, 'b> PageWriter<'a, 'b> {
             (false, false, _) => "n",
         };
         ops.push(op(paint, Vec::new()));
+        ops.push(op("Q", Vec::new()));
+        self.extend(ops);
+    }
+
+    /// A path with gradient stops that aren't opaque: its fill and its
+    /// stroke each painted under a soft mask of their stops' opacities,
+    /// in `/MacroPath` marked content that reads back as the path.
+    fn masked_path(&mut self, n: &Node, p: &PathNode, to_page: &Affine) {
+        let Target { res, .. } = self.targets.last_mut().expect("target");
+        let objects = &mut *self.shared.objects;
+        let mut ops = vec![op("q", Vec::new())];
+        ops.extend(alpha_ops(n.opacity, n.blend, res));
+        ops.push(op(
+            "BDC",
+            vec![
+                Object::name(marks::PATH),
+                Object::Dict(marks::path_props(p, to_page)),
+            ],
+        ));
+        ops.push(cm(to_page));
+        let bounds = p.data.bounds().unwrap_or_default();
+        if let Some(f) = &p.fill {
+            ops.push(op("q", Vec::new()));
+            ops.extend(alpha_mask_ops(f, bounds, res, objects));
+            ops.extend(paint_ops(f, false, to_page, res, objects));
+            ops.extend(path_ops(&p.data));
+            ops.push(op(if p.even_odd { "f*" } else { "f" }, Vec::new()));
+            ops.push(op("Q", Vec::new()));
+        }
+        if let Some(s) = &p.stroke {
+            let reach = s.width / 2.0 * s.miter_limit.max(1.0) + 1.0;
+            ops.push(op("q", Vec::new()));
+            ops.extend(alpha_mask_ops(&s.paint, bounds.outset(reach), res, objects));
+            ops.extend(stroke_ops(s, to_page, res, objects));
+            ops.extend(path_ops(&p.data));
+            ops.push(op("S", Vec::new()));
+            ops.push(op("Q", Vec::new()));
+        }
+        ops.push(op("EMC", Vec::new()));
         ops.push(op("Q", Vec::new()));
         self.extend(ops);
     }

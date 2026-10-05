@@ -326,12 +326,14 @@ fn mask_data(bytes: &[u8], has_real_mask: bool) -> Result<Option<MaskData>> {
     } else {
         None
     };
+    let tail = r.bytes(r.remaining())?.to_vec();
     Ok(Some(MaskData {
         rect,
         default_color,
         flags,
         params,
         real,
+        tail,
     }))
 }
 

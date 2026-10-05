@@ -205,3 +205,24 @@ fn gray_round_trips_through_file_samples() {
     assert_eq!(bits, [0b1010_1010, 0b1000_0000]);
     assert_eq!(to_gray(1, 9, 1, &bits), [0, 255, 0, 255, 0, 255, 0, 255, 0]);
 }
+
+#[test]
+fn merged_images_blend_over_white_and_back() {
+    let straight = [
+        0u8, 173, 226, 24, 10, 20, 30, 255, 200, 100, 0, 128, 9, 9, 9, 0,
+    ];
+    let mut stored = straight;
+    matte_white(&mut stored);
+    assert_eq!(&stored[..4], &[231, 247, 252, 24]);
+    assert_eq!(&stored[4..8], &straight[4..8], "opaque pixels stay");
+    let mut back = stored;
+    unmatte_white(&mut back);
+    for (b, s) in back.chunks_exact(4).zip(straight.chunks_exact(4)).take(3) {
+        assert_eq!(b[3], s[3]);
+        for c in 0..3 {
+            // Blending over white loses precision at low coverage.
+            let tol = 255 / u16::from(s[3]).max(1) + 1;
+            assert!(u16::from(b[c].abs_diff(s[c])) <= tol, "{b:?} vs {s:?}");
+        }
+    }
+}

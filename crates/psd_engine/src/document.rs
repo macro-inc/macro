@@ -173,7 +173,17 @@ fn build_layers(doc: &mut Document, file: &PsdFile, warnings: &mut Vec<String>) 
         };
         let mut layer = decode_record(doc, file, index, record, id, warnings);
         if let Divider::Group { open } = divider {
-            layer.kind = LayerKind::Group { open };
+            let artboard = codec::artboard::KEYS
+                .iter()
+                .find_map(|k| record.block(k))
+                .and_then(|b| match codec::artboard::decode(&b.data) {
+                    Ok(a) => Some(a),
+                    Err(e) => {
+                        warnings.push(format!("layer \"{}\": artboard: {e}", layer_name(record)));
+                        None
+                    }
+                });
+            layer.kind = LayerKind::Group { open, artboard };
             if let Some(blend) = group_blend {
                 layer.blend = blend;
             }
@@ -275,8 +285,9 @@ fn decode_record(
         }
     }
     let data = |key: &[u8; 4]| record.block(key).map(|b| &b.data[..]);
-    if data(b"lfx2").is_some() || data(b"lmfx").is_some() || data(b"lrFX").is_some() {
-        match codec::effects::decode(data(b"lfx2"), data(b"lmfx"), data(b"lrFX")) {
+    let lfx2 = data(b"lfx2").or_else(|| data(b"lfxs"));
+    if lfx2.is_some() || data(b"lmfx").is_some() || data(b"lrFX").is_some() {
+        match codec::effects::decode(lfx2, data(b"lmfx"), data(b"lrFX")) {
             Ok(effects) => layer.effects = effects,
             Err(e) => warn("effects", e),
         }
@@ -441,7 +452,8 @@ fn decode_mask(file: &PsdFile, record: &LayerRecord) -> Result<Option<LayerMask>
 }
 
 /// The merged image as RGBA (its transparency from the first alpha channel
-/// when the file says the merged image has one).
+/// when the file says the merged image has one, its colors then unblended
+/// from the white Photoshop blends them over).
 fn decode_composite(file: &PsdFile, mode: ColorMode) -> Result<Raster> {
     let header = file.header;
     let planes = channels::decode_image(&file.image, &header)?;
@@ -455,7 +467,7 @@ fn decode_composite(file: &PsdFile, mode: ColorMode) -> Result<Raster> {
     } else {
         None
     };
-    let rgba = color::to_rgba(
+    let mut rgba = color::to_rgba(
         mode,
         header.depth,
         header.width,
@@ -464,6 +476,9 @@ fn decode_composite(file: &PsdFile, mode: ColorMode) -> Result<Raster> {
         alpha,
         &file.color_mode_data,
     );
+    if alpha.is_some() {
+        color::unmatte_white(&mut rgba);
+    }
     let rect = IRect::new(0, 0, header.width as i32, header.height as i32);
     Ok(Raster::from_region(4, rect, &rgba))
 }

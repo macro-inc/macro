@@ -181,6 +181,7 @@ fn new_masks_are_at_least_twenty_bytes() {
         flags: 0,
         params: None,
         real: None,
+        tail: Vec::new(),
     });
     record.channels.push(Channel {
         id: -2,
@@ -188,7 +189,41 @@ fn new_masks_are_at_least_twenty_bytes() {
         bytes: vec![255, 0],
     });
     let again = check_photoshop_layout(&write(&file));
+    // Read back with the two bytes of padding as its tail.
+    if let Some(mask) = &mut file.layers.info.records[0].mask {
+        mask.tail = vec![0, 0];
+    }
     assert_eq!(again.layers.info, file.layers.info);
+}
+
+#[test]
+fn bytes_after_mask_parameters_are_kept() {
+    let mut file = read(&layered(&[Layer::new(b"m")], &[]).bytes()).unwrap();
+    let record = &mut file.layers.info.records[0];
+    // As ag-psd writes a mask with a density and a feather: two bytes past
+    // the parameters.
+    record.mask = Some(MaskData {
+        rect: [0, 0, 1, 2],
+        default_color: 255,
+        flags: 0x10,
+        params: Some(MaskParams {
+            user_density: Some(0),
+            user_feather: Some(2.8),
+            vector_density: None,
+            vector_feather: None,
+        }),
+        real: None,
+        tail: vec![0, 0],
+    });
+    record.channels.push(Channel {
+        id: -2,
+        compression: Compression::Raw,
+        bytes: vec![255, 0],
+    });
+    let bytes = write(&file);
+    let again = check_photoshop_layout(&bytes);
+    assert_eq!(again.layers.info, file.layers.info);
+    assert_eq!(write(&again), bytes);
 }
 
 #[test]

@@ -46,7 +46,7 @@ pub(super) fn items(class: &str) -> &'static [&'static str] {
         "SoFi" => &[LEAD[0], LEAD[1], LEAD[2], "Md  ", "Clr ", "Opct"],
         "GrFl" => &[
             LEAD[0], LEAD[1], LEAD[2], "Md  ", "Opct", "Grad", "Angl", "Type", "Rvrs", "Dthr",
-            "Algn", "Scl ", "Ofst",
+            "gs99", "Algn", "Scl ", "Ofst",
         ],
         "patternFill" => &[
             LEAD[0], LEAD[1], LEAD[2], "Md  ", "Opct", "Ptrn", "Angl", "Scl ", "Algn", "phase",
@@ -149,6 +149,7 @@ pub(super) fn glow(d: &mut Descriptor, g: &Glow, inner: bool) {
             if d.object("Grad") != Some(&object) {
                 d.set("Grad", Value::Descriptor(object));
             }
+            paint::put_gradient_method(d, gradient.method);
         }
         None => {
             d.remove("Grad");
