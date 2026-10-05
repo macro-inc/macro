@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT COUNT(*) FROM database)\n                + (SELECT COUNT(*) FROM database_entity)\n                + (SELECT COUNT(*) FROM database_tables)\n                + (SELECT COUNT(*) FROM property_definitions WHERE database_id IS NOT NULL)\n                + (SELECT COUNT(*) FROM entity_access WHERE entity_type = 'database') AS \"count!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c11887ae73ab5081f450860bb7b72ef0280ec7d586e4c572f40e0c03c6836102"
+}

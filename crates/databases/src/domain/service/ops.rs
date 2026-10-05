@@ -205,14 +205,14 @@ where
                 schema: catalog::schema_image(&entries),
                 acting_bot: viewer.acting_bot,
             },
-            creates: match target {
-                Target::New(new) => Some(new.clone()),
-                Target::Existing(_) => None,
-            },
+        };
+        let creates = match target {
+            Target::New(new) => Some(new),
+            Target::Existing(_) => None,
         };
         let outcome = self
             .cells
-            .apply_writes(&writes)
+            .apply_writes(&writes, creates)
             .await
             .map_err(repository_error)?;
         match outcome {

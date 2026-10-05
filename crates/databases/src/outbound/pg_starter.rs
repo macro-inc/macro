@@ -37,7 +37,7 @@ pub(crate) async fn claim_starter(
     }
     // Existing and trashed databases both mean the user already started.
     let owns_database = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM databases WHERE owner_id = $1) AS \"exists!\"",
+        "SELECT EXISTS(SELECT 1 FROM database_entity WHERE user_id = $1) AS \"exists!\"",
         user_id
     )
     .fetch_one(&mut **transaction)

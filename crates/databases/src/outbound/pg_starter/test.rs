@@ -75,7 +75,7 @@ const NOT_GIVEN: StarterDatabase = StarterDatabase {
 
 async fn database_count(pool: &PgPool) -> i64 {
     sqlx::query_scalar!(
-        r#"SELECT COUNT(*) AS "count!" FROM databases WHERE owner_id = $1"#,
+        r#"SELECT COUNT(*) AS "count!" FROM database_entity WHERE user_id = $1"#,
         USER
     )
     .fetch_one(pool)

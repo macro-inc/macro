@@ -34,17 +34,23 @@ pub(crate) enum Inserted {
 
 /// Lock the database row: for update when the batch adds, renames, removes
 /// or reorders tables, else shared, so its tables cannot change under the
-/// batch. `false` when it is gone or trashed.
+/// batch. `false` when the core resource is gone.
 pub(crate) async fn lock_database(
     connection: &mut PgConnection,
     database_id: DatabaseId,
     exclusive: bool,
 ) -> Result<bool, sqlx::Error> {
     if exclusive {
-        return rows::lock_live_database(connection, database_id).await;
+        return Ok(sqlx::query_scalar!(
+            "SELECT id FROM database WHERE id = $1 FOR UPDATE",
+            database_id.into_uuid()
+        )
+        .fetch_optional(connection)
+        .await?
+        .is_some());
     }
     let live = sqlx::query_scalar!(
-        "SELECT id FROM databases WHERE id = $1 AND trashed_at IS NULL FOR SHARE",
+        "SELECT id FROM database WHERE id = $1 FOR SHARE",
         database_id.into_uuid()
     )
     .fetch_optional(connection)
@@ -60,8 +66,7 @@ pub(crate) async fn lock_table_versions(
 ) -> Result<HashMap<TableId, TableVersion>, sqlx::Error> {
     let rows = sqlx::query!(
         r#"SELECT t.id, t.version FROM database_tables t
-           JOIN databases d ON d.id = t.database_id
-           WHERE t.id = ANY($1) AND d.trashed_at IS NULL
+           WHERE t.id = ANY($1)
            ORDER BY t.id
            FOR UPDATE OF t"#,
         &uuids(table_ids),

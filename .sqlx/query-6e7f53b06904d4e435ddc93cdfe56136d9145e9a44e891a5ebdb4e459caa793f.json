@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Legacy', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e7f53b06904d4e435ddc93cdfe56136d9145e9a44e891a5ebdb4e459caa793f"
+}

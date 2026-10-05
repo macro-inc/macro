@@ -19,9 +19,9 @@ use crate::domain::journal::{
 use crate::domain::models::{
     AppliedOps, Awareness, CardPosition, ChangeId, Column, ColumnCast, ColumnConversion, ColumnId,
     CreateDatabase, Database, DatabaseDetail, DatabaseError, DatabaseId, DatabaseView, FirstTable,
-    InferColumnType, InferColumnTypeOutcome, ListedDatabase, OpBatch, PropertyDefinitionId,
-    QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError, Table, TableId,
-    TableVersion, ViewId, Viewer, Writes, WritesOutcome,
+    InferColumnType, InferColumnTypeOutcome, ListedDatabase, NewDatabase, OpBatch,
+    PropertyDefinitionId, QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError,
+    Table, TableId, TableVersion, ViewId, Viewer, Writes, WritesOutcome,
 };
 use models_databases::{ColumnKind, OpResult};
 
@@ -177,6 +177,32 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<JournaledRowChange>, Self::Error>> + Send;
 }
 
+/// Reusable database storage without a Macro entity, owner grant, or trash state.
+/// Callers are trusted domain services: each consumer must authorize its own
+/// resource and validate writes before using this port. Macro database requests
+/// use [`CellStore`] to enforce the app entity's lifecycle in the transaction.
+pub trait DatabaseStorage: Send + Sync + 'static {
+    /// Persistence failure, including an attempt to delete an attached resource.
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Allocate an empty core database without creating an app entity or grants.
+    fn create_storage(&self) -> impl Future<Output = Result<DatabaseId, Self::Error>> + Send;
+
+    /// Delete unbound storage, its tables, cells, definitions and journal.
+    /// An attached app entity prevents deletion through its foreign key.
+    fn delete_storage(
+        &self,
+        id: DatabaseId,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Apply a validated batch atomically, checking resource existence and table
+    /// versions. Consumer-specific entity lifecycle and access are the caller's.
+    fn apply_storage_writes(
+        &self,
+        writes: &Writes,
+    ) -> impl Future<Output = Result<WritesOutcome, Self::Error>> + Send;
+}
+
 /// A row's cells, kept by the properties system as entity properties of the
 /// `DATABASE_ROW` entity the row id names. Authorization is the domain
 /// service's, resolved through the row's database; the store trusts its
@@ -209,13 +235,14 @@ pub trait CellStore: Send + Sync + 'static {
     /// any column binds it, each updated or deleted row checked to belong to
     /// its table, each related row to its target table, each changed option
     /// or column to its definition, and each changed table's version bumped
-    /// once. A batch that [`Writes::creates`] a database inserts it, owned
-    /// by its owner, before anything else, and for a starter first claims
+    /// once. `creates` inserts an app entity and its core resource with an
+    /// owner grant before anything else, and for a starter first claims
     /// the owner's one starter. Anything but [`WritesOutcome::Applied`]
     /// wrote nothing, beyond the claim of [`WritesOutcome::StarterTaken`].
     fn apply_writes(
         &self,
         writes: &Writes,
+        creates: Option<&NewDatabase>,
     ) -> impl Future<Output = Result<WritesOutcome, Self::Error>> + Send;
 }
 

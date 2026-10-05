@@ -30,7 +30,8 @@ use crate::domain::templates::TemplateId;
 /// Identifier of a `models_properties` property definition bound as a column.
 pub type PropertyDefinitionId = Uuid;
 
-/// A database: a named collection of tables, owned and shared as one entity.
+/// The app entity for a core database: its display metadata and ownership.
+/// A core database can exist without this entity.
 #[derive(utoipa::ToSchema, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Database {
     /// Identifier.
@@ -586,9 +587,6 @@ pub struct Writes {
     pub expected_versions: Vec<(TableId, TableVersion)>,
     /// What the batch's journal entries are built from.
     pub journal: JournalPlan,
-    /// The database the batch creates before its first write, in the same
-    /// transaction; `None` when it writes to one that exists.
-    pub creates: Option<NewDatabase>,
 }
 
 /// A database a batch of writes creates, owned by its `owner_id`.

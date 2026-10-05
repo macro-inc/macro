@@ -80,7 +80,7 @@ pub(crate) fn stored_positions(positions: &[Position]) -> Vec<String> {
     positions.iter().map(Position::to_string).collect()
 }
 
-/// A `databases` row, read by `query_as!` and mapped onto [`Database`].
+/// A `database_entity` row, read by `query_as!` and mapped onto [`Database`].
 pub(crate) struct DatabaseRecord {
     pub(crate) id: Uuid,
     pub(crate) name: String,
@@ -141,14 +141,19 @@ fn position_after(last: Option<&Position>) -> Result<Position, PositionError> {
     key_between(last, None)
 }
 
-/// Insert a database and its owner's grant inside `transaction`, so no
-/// database can exist that nobody can open.
+/// Insert the core resource and its app entity with the owner grant atomically.
 pub(crate) async fn insert_owned_database(
     transaction: &mut Transaction<'static, Postgres>,
     database: &Database,
 ) -> Result<(), PgDatabasesRepoError> {
     sqlx::query!(
-        "INSERT INTO databases (id, name, owner_id, created_at) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO database (id) VALUES ($1)",
+        database.id.into_uuid()
+    )
+    .execute(&mut **transaction)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO database_entity (database_id, name, user_id, created_at) VALUES ($1, $2, $3, $4)",
         database.id.into_uuid(),
         database.name,
         database.owner_id,
@@ -309,7 +314,7 @@ where
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<Option<DatabaseId>, Self::Error> {
         Ok(sqlx::query_scalar!(
-            r#"SELECT d.id FROM database_starter_seeds s JOIN databases d ON d.id = s.database_id
+            r#"SELECT d.database_id FROM database_starter_seeds s JOIN database_entity d ON d.database_id = s.database_id
                    WHERE s.user_id = $1 AND d.trashed_at IS NULL"#,
             user_id.as_ref(),
         )
@@ -327,7 +332,7 @@ where
     ) -> Result<Option<(Database, Vec<Table>)>, Self::Error> {
         let Some(database) = sqlx::query_as!(
             DatabaseRecord,
-            r#"SELECT id, name, owner_id, created_at, trashed_at FROM databases WHERE id = $1"#,
+            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at FROM database_entity WHERE database_id = $1"#,
             id.into_uuid()
         )
         .fetch_optional(&self.pool)
@@ -355,13 +360,16 @@ where
 
     #[tracing::instrument(err, skip(self))]
     async fn rename_database(&self, id: DatabaseId, name: &str) -> Result<bool, Self::Error> {
+        let mut transaction = self.pool.begin().await?;
+        rows::lock_legacy_database(&mut transaction, id, true).await?;
         let renamed = sqlx::query!(
-            r#"UPDATE databases SET name = $2, updated_at = now() WHERE id = $1"#,
+            r#"UPDATE database_entity SET name = $2, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
             name,
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await?;
+        transaction.commit().await?;
         Ok(renamed.rows_affected() == 1)
     }
 
@@ -371,37 +379,54 @@ where
         id: DatabaseId,
         trashed_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, Self::Error> {
+        let mut transaction = self.pool.begin().await?;
+        rows::lock_legacy_database(&mut transaction, id, true).await?;
         let trashed = sqlx::query!(
-            r#"UPDATE databases SET trashed_at = $2, updated_at = now() WHERE id = $1"#,
+            r#"UPDATE database_entity SET trashed_at = $2, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
             trashed_at,
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await?;
+        transaction.commit().await?;
         Ok(trashed.rows_affected() == 1)
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn restore_database(&self, id: DatabaseId) -> Result<bool, Self::Error> {
+        let mut transaction = self.pool.begin().await?;
+        rows::lock_legacy_database(&mut transaction, id, true).await?;
         let restored = sqlx::query!(
-            r#"UPDATE databases SET trashed_at = NULL, updated_at = now() WHERE id = $1"#,
+            r#"UPDATE database_entity SET trashed_at = NULL, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await?;
+        transaction.commit().await?;
         Ok(restored.rows_affected() == 1)
     }
 
     /// Tables, columns, rows, views and database-owned property definitions
     /// go with the database through `ON DELETE CASCADE`, and the rows' cells
     /// by trigger; `entity_access` rows are a generic side table with no
-    /// foreign key to `databases`, and the change journal outlives what it
+    /// foreign key to `database_entity`, and the change journal outlives what it
     /// describes by design, so both are purged explicitly in the same
     /// transaction.
     #[tracing::instrument(err, skip(self))]
     async fn delete_database(&self, id: DatabaseId) -> Result<(), Self::Error> {
         let mut transaction = self.pool.begin().await?;
 
+        rows::lock_legacy_database(&mut transaction, id, true).await?;
+        let entity = sqlx::query_scalar!(
+            "SELECT database_id FROM database_entity WHERE database_id = $1 FOR UPDATE",
+            id.into_uuid(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if entity.is_none() {
+            return Ok(());
+        }
+        schema::lock_database(&mut transaction, id, true).await?;
         entity_access_db_utils::delete_entity_access_rows(
             &mut transaction,
             id.as_uuid(),
@@ -410,10 +435,16 @@ where
         .await?;
         journal::purge(&mut *transaction, id).await?;
 
-        sqlx::query!(r#"DELETE FROM databases WHERE id = $1"#, id.into_uuid())
+        sqlx::query!(
+            r#"DELETE FROM database_entity WHERE database_id = $1"#,
+            id.into_uuid()
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        sqlx::query!("DELETE FROM database WHERE id = $1", id.into_uuid())
             .execute(&mut *transaction)
             .await?;
-
         transaction.commit().await?;
         Ok(())
     }
@@ -427,6 +458,9 @@ where
         actor: &crate::domain::journal::JournalActor,
     ) -> Result<Option<TableVersion>, Self::Error> {
         let mut transaction = self.pool.begin().await?;
+        if !rows::lock_live_database(&mut transaction, table.database_id, false).await? {
+            return Ok(None);
+        }
         // Row writers take this same lock before checking versions and cells.
         let current = sqlx::query_scalar!(
             "SELECT version FROM database_tables WHERE id = $1 AND database_id = $2 FOR UPDATE",
@@ -446,7 +480,7 @@ where
                   JOIN database_rows r ON r.id::text = p.entity_id
                   WHERE r.table_id = $2 AND p.property_definition_id = $3
                     AND p.entity_type = 'DATABASE_ROW')
-              AND EXISTS (SELECT 1 FROM databases WHERE id = $5 AND trashed_at IS NULL)
+              AND EXISTS (SELECT 1 FROM database_entity WHERE database_id = $5 AND trashed_at IS NULL)
             RETURNING id"#,
             column.id.into_uuid(),
             table.id.into_uuid(),
@@ -499,9 +533,9 @@ where
         Ok(sqlx::query_as!(
             DatabaseRecord,
             r#"
-            SELECT id, name, owner_id, created_at, trashed_at
-            FROM databases
-            WHERE id = ANY($1)
+            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at
+            FROM database_entity
+            WHERE database_id = ANY($1)
             ORDER BY created_at
             "#,
             &uuids(ids),

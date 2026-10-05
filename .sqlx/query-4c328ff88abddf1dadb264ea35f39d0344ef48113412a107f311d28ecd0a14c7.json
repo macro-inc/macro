@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_entity SET trashed_at = $2, updated_at = now() WHERE database_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4c328ff88abddf1dadb264ea35f39d0344ef48113412a107f311d28ecd0a14c7"
+}

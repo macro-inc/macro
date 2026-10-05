@@ -3,7 +3,7 @@
             'database_row' as "item_type",
             r.id::text as "id",
             NULL::text as "document_version_id",
-            row_database.owner_id as "user_id",
+            row_database.user_id as "user_id",
             NULL::text as "name",
             NULL::text as "branched_from_id",
             NULL::bigint as "branched_from_version_id",
@@ -33,5 +33,5 @@
         FROM GroupedItems gi
         INNER JOIN database_rows r ON r.id::text = gi.id
         INNER JOIN database_tables row_table ON row_table.id = r.table_id
-        INNER JOIN databases row_database ON row_database.id = row_table.database_id
+        INNER JOIN database_entity row_database ON row_database.database_id = row_table.database_id
         WHERE gi.item_type = 'database_row'

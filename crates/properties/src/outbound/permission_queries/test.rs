@@ -59,7 +59,7 @@ async fn database_row_owner_and_trash_come_from_its_database(
     assert!(!deleted);
 
     sqlx::query!(
-        "UPDATE databases SET trashed_at = now() WHERE id = $1",
+        "UPDATE database_entity SET trashed_at = now() WHERE database_id = $1",
         database_id
     )
     .execute(&pool)

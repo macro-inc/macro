@@ -16,6 +16,7 @@ mod apply_ops;
 mod cell_triggers;
 #[cfg(feature = "gateway")]
 mod changes;
+mod entity_split;
 #[cfg(feature = "gateway")]
 mod journal;
 #[cfg(feature = "gateway")]
@@ -48,6 +49,20 @@ impl<Properties> PgDatabasesRepo<Properties> {
         count: usize,
     ) -> Result<Option<Vec<RowRef>>, PgDatabasesRepoError> {
         let mut transaction = self.pool.begin().await?;
+        let database = sqlx::query_scalar!(
+            "SELECT database_id FROM database_tables WHERE id = $1",
+            table_id.into_uuid()
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some(database) = database else {
+            return Ok(None);
+        };
+        if !rows::lock_live_database(&mut transaction, DatabaseId::from_uuid(database), false)
+            .await?
+        {
+            return Ok(None);
+        }
         let rows = rows::append_rows(&mut transaction, table_id, created_by, count).await?;
         if rows.is_some() {
             transaction.commit().await?;
@@ -135,15 +150,17 @@ async fn commit(
     writes: Vec<Write>,
 ) -> HashMap<TableId, TableVersion> {
     let outcome = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
-        .apply_writes(&Writes {
-            database_id,
-            created_by: user(),
-            writes,
-            related_rows: Vec::new(),
-            expected_versions: Vec::new(),
-            journal: crate::domain::journal::JournalPlan::default(),
-            creates: None,
-        })
+        .apply_writes(
+            &Writes {
+                database_id,
+                created_by: user(),
+                writes,
+                related_rows: Vec::new(),
+                expected_versions: Vec::new(),
+                journal: crate::domain::journal::JournalPlan::default(),
+            },
+            None,
+        )
         .await
         .expect("the batch should run");
     let WritesOutcome::Applied { table_versions, .. } = outcome else {

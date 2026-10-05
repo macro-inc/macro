@@ -25,8 +25,9 @@ pub(super) fn settle(world: &mut World, table_id: TableId, definitions: Vec<Prop
 pub(super) fn apply_in_world(
     world: &mut World,
     writes: &Writes,
+    creates: Option<&crate::domain::models::NewDatabase>,
 ) -> Result<WritesOutcome, FakeError> {
-    if let Some(new) = &writes.creates {
+    if let Some(new) = creates {
         let owner = new.database.owner_id.clone();
         if new.starter {
             if world.starters.contains_key(&owner) {

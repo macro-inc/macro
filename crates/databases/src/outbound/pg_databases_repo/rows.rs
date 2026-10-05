@@ -11,23 +11,50 @@ use crate::domain::models::{
     DatabaseId, PropertyDefinitionId, RowId, RowRef, TableId, TableVersion,
 };
 
-/// Lock a database's row against concurrent table naming, ordering and
-/// deletion; `false` when it is gone or trashed.
+/// Hold the app entity live while a batch writes its core storage.
+/// During rollout the legacy row is locked first, matching old writers.
 pub(crate) async fn lock_live_database(
-    executor: impl PgExecutor<'_>,
+    connection: &mut PgConnection,
     database_id: DatabaseId,
+    exclusive: bool,
 ) -> Result<bool, sqlx::Error> {
+    lock_legacy_database(connection, database_id, exclusive).await?;
     let live = sqlx::query_scalar!(
-        "SELECT id FROM databases WHERE id = $1 AND trashed_at IS NULL FOR UPDATE",
+        "SELECT database_id FROM database_entity WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE",
         database_id.into_uuid()
     )
-    .fetch_optional(executor)
+    .fetch_optional(connection)
     .await?;
     Ok(live.is_some())
 }
 
+/// Keep old and new app writers in the same lock order until the legacy
+/// projection is retired. This compatibility lock is not used by core storage.
+pub(crate) async fn lock_legacy_database(
+    connection: &mut PgConnection,
+    database_id: DatabaseId,
+    exclusive: bool,
+) -> Result<(), sqlx::Error> {
+    if exclusive {
+        sqlx::query_scalar!(
+            "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
+            database_id.into_uuid()
+        )
+        .fetch_optional(connection)
+        .await?;
+    } else {
+        sqlx::query_scalar!(
+            "SELECT id FROM databases WHERE id = $1 FOR SHARE",
+            database_id.into_uuid()
+        )
+        .fetch_optional(connection)
+        .await?;
+    }
+    Ok(())
+}
+
 /// Append `count` empty rows to a live table, in order; `None` when the
-/// table is gone or its database is trashed.
+/// table is gone. The app wrapper holds the entity lifecycle lock.
 pub(crate) async fn append_rows(
     connection: &mut PgConnection,
     table_id: TableId,
@@ -38,8 +65,7 @@ pub(crate) async fn append_rows(
     // row, so positions are minted under the same lock.
     let live = sqlx::query_scalar!(
         r#"SELECT t.id FROM database_tables t
-               JOIN databases d ON d.id = t.database_id
-               WHERE t.id = $1 AND d.trashed_at IS NULL FOR UPDATE OF t"#,
+               WHERE t.id = $1 FOR UPDATE OF t"#,
         table_id.into_uuid(),
     )
     .fetch_optional(&mut *connection)
@@ -75,7 +101,7 @@ pub(crate) async fn append_rows(
 pub(crate) enum Restored {
     /// They are back.
     Applied(Vec<RowRef>),
-    /// The table is gone, or its database trashed.
+    /// The table is gone.
     TableGone,
     /// A row has one of their ids again.
     Taken(RowId),
@@ -90,8 +116,7 @@ pub(crate) async fn restore_rows(
 ) -> Result<Restored, PgDatabasesRepoError> {
     let live = sqlx::query_scalar!(
         r#"SELECT t.id FROM database_tables t
-               JOIN databases d ON d.id = t.database_id
-               WHERE t.id = $1 AND d.trashed_at IS NULL FOR UPDATE OF t"#,
+               WHERE t.id = $1 FOR UPDATE OF t"#,
         table_id.into_uuid(),
     )
     .fetch_optional(&mut *connection)

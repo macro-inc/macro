@@ -284,3 +284,49 @@ async fn a_row_carries_every_cell_as_a_property(pool: PgPool) {
         vec![(STAGE, Some(PropertyValue::SelectOption(vec![WON])))]
     );
 }
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn core_rows_stay_out_of_soup_even_with_a_stray_database_grant(pool: PgPool) {
+    let database = Uuid::now_v7();
+    let table = Uuid::now_v7();
+    let row = Uuid::now_v7();
+    sqlx::query!("INSERT INTO database (id) VALUES ($1)", database)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!("INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'Contacts', '80')", table, database)
+        .execute(&pool).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO database_rows (id, table_id, position) VALUES ($1, $2, '80')",
+        row,
+        table
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let user = viewer();
+    sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'database', $2, 'user', 'owner')", database, user.as_ref())
+        .execute(&pool).await.unwrap();
+    assert!(
+        page(
+            &pool,
+            viewer(),
+            rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(table))))
+        )
+        .await
+        .is_empty()
+    );
+    let entities = [EntityType::DatabaseRow.with_entity_string(row.to_string())];
+    assert!(
+        by_ids(
+            &pool,
+            AdvancedSortParams {
+                user_id: viewer(),
+                entities: &entities
+            }
+        )
+        .await
+        .unwrap()
+        .is_empty()
+    );
+}

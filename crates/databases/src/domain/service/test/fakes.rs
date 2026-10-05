@@ -537,7 +537,11 @@ impl CellStore for FakeCells {
             })
             .collect())
     }
-    async fn apply_writes(&self, writes: &Writes) -> Result<WritesOutcome, FakeError> {
+    async fn apply_writes(
+        &self,
+        writes: &Writes,
+        creates: Option<&crate::domain::models::NewDatabase>,
+    ) -> Result<WritesOutcome, FakeError> {
         let mut world = self.0.lock().unwrap();
         world.write_batches += 1;
         let before = (
@@ -553,7 +557,7 @@ impl CellStore for FakeCells {
             world.grants.clone(),
             world.starters.clone(),
         );
-        let outcome = apply_in_world(&mut world, writes);
+        let outcome = apply_in_world(&mut world, writes, creates);
         // A starter already given keeps only its claim, as the store commits it.
         if !matches!(
             outcome,

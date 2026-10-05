@@ -2,6 +2,7 @@
 //! shares one transaction across the schema, row identities, cells and
 //! options.
 
+mod core;
 mod transfer;
 
 use std::collections::HashMap;
@@ -21,8 +22,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::journal::{Before, JournalActor, RowImage, cell_value, row_cells};
 use crate::domain::models::{
-    NewDefinition, OptionId, PropertyDefinitionId, RowId, TableId, TakenId, Write, Writes,
-    WritesOutcome,
+    NewDatabase, NewDefinition, OptionId, PropertyDefinitionId, RowId, TableId, TakenId, Write,
+    Writes, WritesOutcome,
 };
 use crate::domain::ports::CellStore;
 use crate::outbound::pg_databases_repo::schema::{self, Inserted, Removed};
@@ -105,6 +106,18 @@ fn row_of(entity_id: &str) -> Result<RowId, PgCellStoreError> {
         .map_err(|_| PgCellStoreError::CorruptRowId(entity_id.to_string()))
 }
 
+/// Preserve the batch API's missing-table outcome when its parent is absent.
+fn missing_database(writes: &Writes) -> WritesOutcome {
+    WritesOutcome::TableNotFound(
+        writes
+            .writes
+            .iter()
+            .flat_map(|write| write.versioned_tables().iter().copied())
+            .next()
+            .unwrap_or_default(),
+    )
+}
+
 fn cells_error(error: impl std::error::Error + Send + Sync + 'static) -> PgCellStoreError {
     PgCellStoreError::Cells(Box::new(error))
 }
@@ -178,12 +191,16 @@ where
     }
 
     #[tracing::instrument(err, skip(self, writes), fields(writes = writes.writes.len()))]
-    async fn apply_writes(&self, writes: &Writes) -> Result<WritesOutcome, Self::Error> {
+    async fn apply_writes(
+        &self,
+        writes: &Writes,
+        creates: Option<&NewDatabase>,
+    ) -> Result<WritesOutcome, Self::Error> {
         // Returning before the commit drops the transaction, which rolls
         // everything back.
         let mut transaction = self.pool.begin().await?;
 
-        if let Some(new) = &writes.creates {
+        if let Some(new) = creates {
             let owner = new.database.owner_id.as_str();
             if new.starter {
                 match pg_starter::claim_starter(&mut transaction, owner).await? {
@@ -201,6 +218,42 @@ where
             }
         }
 
+        if !rows::lock_live_database(
+            &mut transaction,
+            writes.database_id,
+            writes.changes_tables(),
+        )
+        .await?
+        {
+            return Ok(missing_database(writes));
+        }
+        self.apply_in(transaction, writes).await
+    }
+}
+
+/// What one write did inside its batch: the rows it inserted, or the
+/// outcome refusing the whole batch.
+enum Applied {
+    Rows(Vec<RowId>),
+    Refused(WritesOutcome),
+}
+
+impl<Properties> PgCellStore<Properties>
+where
+    Properties: PropertiesRepo<Err = anyhow::Error>
+        + DatabaseCellWriter<Transaction = Transaction<'static, Postgres>>
+        + DatabaseOptionWriter
+        + DatabaseDefinitionWriter<Transaction = Transaction<'static, Postgres>>
+        + Send
+        + Sync
+        + 'static,
+{
+    /// Commit a core storage batch; the app wrapper takes its entity lock first.
+    async fn apply_in(
+        &self,
+        mut transaction: Transaction<'static, Postgres>,
+        writes: &Writes,
+    ) -> Result<WritesOutcome, PgCellStoreError> {
         // Parent locks precede table locks, as every writer takes them.
         if !schema::lock_database(
             &mut transaction,
@@ -209,13 +262,7 @@ where
         )
         .await?
         {
-            let table = writes
-                .writes
-                .iter()
-                .flat_map(|write| write.versioned_tables().iter().copied())
-                .next()
-                .unwrap_or_default();
-            return Ok(WritesOutcome::TableNotFound(table));
+            return Ok(missing_database(writes));
         }
         let created: Vec<TableId> = writes
             .writes
@@ -392,25 +439,7 @@ where
             changes,
         })
     }
-}
 
-/// What one write did inside its batch: the rows it inserted, or the
-/// outcome refusing the whole batch.
-enum Applied {
-    Rows(Vec<RowId>),
-    Refused(WritesOutcome),
-}
-
-impl<Properties> PgCellStore<Properties>
-where
-    Properties: PropertiesRepo<Err = anyhow::Error>
-        + DatabaseCellWriter<Transaction = Transaction<'static, Postgres>>
-        + DatabaseOptionWriter
-        + DatabaseDefinitionWriter<Transaction = Transaction<'static, Postgres>>
-        + Send
-        + Sync
-        + 'static,
-{
     /// Apply one write of a batch inside its transaction.
     async fn apply_write(
         &self,

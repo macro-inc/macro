@@ -1,8 +1,48 @@
 # Database backend
 
-Databases contain tables of typed rows. A row is a `DATABASE_ROW` entity whose
-cells are its entity properties, and column placements bind to the existing
-property definitions and value types. There is no second store.
+Databases contain tables of typed rows. Cells use the properties system's
+`DATABASE_ROW` discriminator, and column placements bind to existing property
+definitions and value types. Rows of an app database participate as entities;
+rows of core storage alone do not acquire app access. There is one cell store.
+
+## Storage and app entities
+
+`database` is the reusable storage identity. Tables, column definitions, views,
+saved queries, rows and their cells belong to that resource. A resource has no
+app name, owner, or trash state and can exist without any Macro entity.
+
+`database_entity` is the optional app entity: `name`, `user_id` (the owner),
+`created_at`, `updated_at`, and `trashed_at`. Its `database_id` is both its primary
+key and a foreign key to `database.id`. The shared identity preserves existing
+routes, grants, references and API responses. `Database` remains the app-facing
+Rust model. Soup discovery and database/row access require this entity; merely
+creating core storage does not make it a shareable Macro database.
+
+This is the first use of the singular `<kind>_entity` convention for databases.
+New app entities should follow it, keeping reusable technology separate from
+app ownership and lifecycle. Existing unrelated entities are not renamed.
+Collaboration surfaces are a similar reusable resource; this change does not
+turn them into entities or change their parent-based access model.
+
+`DatabaseStorage` exposes allocation, validated storage batches, and deletion
+without app metadata. A future CRM domain can hold its own reference to a core
+database and authorize access through its own service. Its composition root
+supplies the storage adapter. The port is trusted persistence, not a new public
+API: consumers validate their own commands and authorize their own resources.
+The Macro database service continues to use `CellStore`, which atomically creates
+the entity/owner grant when needed and holds its lifecycle lock during writes.
+Both paths use the same transaction engine, table versions, cells and journal.
+An app entity's foreign key prevents deleting its storage through the core port.
+
+During rollout, `databases` remains a compatibility projection synchronized with
+`database_entity` in both directions by triggers. Existing metadata is backfilled
+without changing IDs. App writers lock the legacy row before the entity and core,
+matching deployed binaries' lock order; core-only consumers have no legacy row.
+The legacy table, triggers and compatibility locks must be removed in a separate
+migration after all old consumers have deployed. Rollback refuses to discard
+core databases that have no app entity. Deleting an app database still deletes
+its owned storage; deleting a core database cascades its tables, definitions and
+cells, and the storage adapter purges its journal in the same transaction.
 
 ## Reads and writes
 
