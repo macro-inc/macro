@@ -35,7 +35,8 @@ export type QueryMethod =
   | 'textGeometry'
   | 'libraryStatus'
   | 'libraryAssets'
-  | 'libraryUses';
+  | 'libraryUses'
+  | 'liftPlan';
 
 export type FigRequest =
   | { id: number; kind: 'open'; bytes: ArrayBuffer }
@@ -52,6 +53,8 @@ export type FigRequest =
       outline: boolean;
       /** Lower renders first. */
       priority: number;
+      /** Only some layers (`LayersSpec` JSON); all when absent. */
+      layers?: string;
     }
   | { id: number; kind: 'cancel'; ids: number[] }
   | {

@@ -251,6 +251,11 @@ export interface NodeInfo {
   /** Relative to the containing frame (or the page). */
   x: number;
   y: number;
+  /**
+   * How moving the layer on the page changes `x` and `y`:
+   * `[m00, m01, m10, m11]` (identity unless its frame is turned).
+   */
+  panelMove: [number, number, number, number];
   width: number;
   height: number;
   rotation: number;
@@ -301,6 +306,44 @@ export interface NodeGeometry {
   corners: [Vec2, Vec2, Vec2, Vec2];
   bounds: Rect;
 }
+
+/**
+ * How to move layers by drawing them apart from the rest of the page while
+ * they are dragged. Mirrors `fig_engine::inspect::LiftPlan`.
+ */
+export interface LiftPlan {
+  /** Why the layers cannot be drawn apart; absent when they can. */
+  refused?: string | null;
+  /** The moving layers in runs of adjacent siblings, bottom first. */
+  runs: LiftRun[];
+}
+
+export interface LiftRun {
+  /** The run's layers, bottom first. */
+  ids: string[];
+  /** Page bounds of everything they draw. */
+  bounds: Rect;
+  /**
+   * Where the first of them is (its origin on the page). Renders anchored
+   * here draw the run where the lift started, however the document moved it.
+   */
+  origin: Vec2;
+  /** SVG outlines (page coordinates) of the ancestors that clip the run. */
+  clips: string[];
+  /** Page bounds of what paints after the run and before the next one. */
+  above: Rect[];
+}
+
+/**
+ * Which layers a render draws (`LayersSpec` in the engine): only some
+ * layers (their first one's origin drawn at `anchor`), all but some, or what
+ * paints after `after` and before `before`. Only some layers, and a window
+ * that does not start at the bottom of the page, render on transparency.
+ */
+export type LayersSpec =
+  | { only: string[]; anchor?: [number, number] }
+  | { skip: string[] }
+  | { after?: string | null; before?: string | null };
 
 /** A component, for the assets list. */
 export interface ComponentInfo {

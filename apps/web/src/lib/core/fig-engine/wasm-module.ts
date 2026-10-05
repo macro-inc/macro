@@ -25,7 +25,10 @@ export interface WasmFigFile {
   designInfo: (page: number, id: string) => string;
   /** `PageLayout` JSON. */
   openPage: (page: number) => string;
-  /** Premultiplied RGBA, `width × height × 4` bytes. */
+  /**
+   * RGBA, `width × height × 4` bytes: opaque, or straight alpha when
+   * `layers` (`LayersSpec` JSON) draws on transparency.
+   */
   render: (
     page: number,
     x: number,
@@ -33,8 +36,11 @@ export interface WasmFigFile {
     scale: number,
     width: number,
     height: number,
-    outline: boolean
+    outline: boolean,
+    layers?: string | null
   ) => Uint8Array;
+  /** `LiftPlan` JSON for a JSON array of ids. */
+  liftPlan: (page: number, ids: string) => string;
   /** `LayerRow[]` JSON. */
   layers: (page: number, parent?: string | null) => string;
   /** `LayerRow[]` JSON for a JSON array of ids. */

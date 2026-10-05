@@ -1462,6 +1462,48 @@ async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
     );
 }
 
+/// An engine whose turn waits on a person for twice the idle timeout - the
+/// way a tool call held for the owner does - and then answers.
+struct OwnerWaitingEngine;
+
+impl TurnEngine for OwnerWaitingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            {
+                let _waiting = request.awaiting.begin();
+                tokio::time::sleep(TURN_IDLE_TIMEOUT * 2).await;
+            }
+            let _ = parts.send(Ok(StreamPart::Content("approved".into()))).await;
+        });
+        receiver
+    }
+}
+
+/// Waiting on the owner to approve a tool call is not the turn hanging.
+#[tokio::test(start_paused = true)]
+async fn a_turn_waiting_on_the_owner_outlasts_the_idle_timeout() {
+    let (notifications, _config_options, response) =
+        with_agent(Arc::new(OwnerWaitingEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "read my email"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(spoken(&notifications), "approved");
+}
+
 #[tokio::test]
 async fn ask_without_form_support_explains_instead_of_asking() {
     let engine = Arc::new(ScriptedEngine::new(vec![]));

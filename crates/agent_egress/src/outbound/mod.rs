@@ -17,3 +17,6 @@ pub mod session_authority;
 
 /// Executing an already-addressed, already-stamped request.
 pub mod forwarder;
+
+/// Held tool calls in Postgres, and the NOTIFY that wakes their holds.
+pub mod tool_approvals;

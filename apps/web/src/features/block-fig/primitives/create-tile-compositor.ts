@@ -20,6 +20,11 @@
  *   are re-rendered at once; the margin's and the overview's wait until
  *   edits pause (and then behind the view's), so a drag does not re-render
  *   the whole page at every step.
+ * - Layers being moved are lifted (`core/lift`): what paints below them,
+ *   the layers, and what paints above them render once, in tiles, and each
+ *   frame composites them with the layers shifted, so a move drag renders
+ *   nothing per step. After the drop the lift stays up until the page's
+ *   tiles have caught up with the move.
  */
 
 import type {
@@ -27,8 +32,16 @@ import type {
   PendingTile,
   TileResult,
 } from '@core/fig-engine/client';
-import type { Rect } from '@core/fig-engine/types';
-import type { Camera, Size } from '../core/camera';
+import type { LiftPlan, Rect } from '@core/fig-engine/types';
+import type { Camera, Point, Size } from '../core/camera';
+import {
+  liftParts,
+  liftTiles,
+  offsetRect,
+  type Patch,
+  runTiles,
+  tilePatch,
+} from '../core/lift';
 import {
   quantizeScale,
   TILE,
@@ -48,6 +61,10 @@ interface Entry {
   stale?: boolean;
   lastUsed: number;
   pinned: boolean;
+  /** For a lift's part: the part of the tile it renders (else all). */
+  patch?: Patch;
+  /** The edits (see `edits`) its bitmap shows. */
+  version?: number;
 }
 
 export interface TileCompositorOptions {
@@ -77,11 +94,46 @@ export interface PageState {
 /** Longest side of the overview, in device pixels. */
 const OVERVIEW_SIDE = 2048;
 /** Quiet time after which the view counts as settled. */
-const SETTLE_MS = 140;
+const SETTLE_MS = 100;
 /** Quiet time after an edit before tiles out of view are re-rendered. */
 const EDIT_SETTLE_MS = 300;
 /** Priority of overview tiles changed by an edit: after every view tile. */
 const AFTER_VIEW = Number.MAX_SAFE_INTEGER;
+/**
+ * Priorities of a lift's tiles, ahead of the view's: the moving layers
+ * first, then what goes where they started, then the rest.
+ */
+const LIFT_RUN = -3_000_000;
+const LIFT_HOME = -2_000_000;
+const LIFT_OTHER = -1_000_000;
+/** Longest a landed lift waits for the page's tiles before dropping. */
+const LAND_TIMEOUT_MS = 2000;
+
+/** A part of a lift (see `core/lift`): its renders and their tiles. */
+interface LiftPart {
+  /** `LayersSpec` JSON. */
+  layers: string;
+  tiles: Map<string, Entry>;
+}
+
+interface Lift {
+  plan: LiftPlan;
+  /** Page tiles rendered while it is dragged leave the layers out. */
+  page: string;
+  /** Scale (device pixels per page unit) of every part's tiles. */
+  scale: number;
+  below: LiftPart;
+  runs: { part: LiftPart; clips: Path2D[] }[];
+  above: LiftPart[];
+  /** Page-space offset of the moving layers. */
+  offset: Point;
+  /** Rendering ahead of a drag that has not started: not drawn yet. */
+  hidden: boolean;
+  /** Dropped: the parts stay as they are until the lift comes down. */
+  frozen: boolean;
+  /** The move reached the document (the area it changed). */
+  landing?: { dirty: Rect; since: number };
+}
 
 export function createTileCompositor(options: TileCompositorOptions) {
   const { engine } = options;
@@ -96,6 +148,13 @@ export function createTileCompositor(options: TileCompositorOptions) {
   let lastZoom = 0;
   let zoomChangedAt = 0;
   let disposed = false;
+  /** Edits seen (invalidations), to order renders of one tile. */
+  let edits = 0;
+  /** The layers being dragged (or about to be). */
+  let lift: Lift | undefined;
+  /** Dropped lifts, oldest first, drawn until the page shows their moves. */
+  const landing: Lift[] = [];
+  let landTimer: ReturnType<typeof setTimeout> | undefined;
   /** Render timings, for diagnostics. */
   const stats = { rendered: 0, millis: 0 };
 
@@ -109,56 +168,75 @@ export function createTileCompositor(options: TileCompositorOptions) {
     }
   };
 
-  const render = (entry: Entry, priority: number) => {
+  /**
+   * What page tiles leave out: the layers of the lift being dragged, which
+   * the document may move before the drop (it shares the drag with other
+   * people as it goes) while the lift draws them.
+   */
+  const pageLayers = () =>
+    lift && !lift.hidden && !lift.frozen ? lift.page : undefined;
+
+  /** Renders a tile of the page, or of a lift's part into its tiles. */
+  const render = (entry: Entry, priority: number, part?: LiftPart) => {
     if (!page) return;
-    const rect = tileRect(entry.key);
+    const home = part?.tiles ?? cache;
+    const { key } = entry;
+    const patch = entry.patch ?? { x: 0, y: 0, w: TILE, h: TILE };
     const pending = engine.render({
       page: page.page,
-      x: rect.x,
-      y: rect.y,
-      scale: entry.key.scale,
-      width: TILE,
-      height: TILE,
+      x: (key.ix * TILE + patch.x) / key.scale,
+      y: (key.iy * TILE + patch.y) / key.scale,
+      scale: key.scale,
+      width: patch.w,
+      height: patch.h,
       outline: page.outline,
       priority,
+      layers: part?.layers ?? pageLayers(),
     });
     entry.pending = pending;
     const id = tileId(entry.key);
     const forGeneration = generation;
+    const version = edits;
+    /** A render that brought nothing: the entry goes if it holds nothing. */
+    const settleEmpty = () => {
+      if (entry.pending?.id === pending.id) entry.pending = undefined;
+      if (!entry.bitmap && !entry.pending && home.get(id) === entry)
+        home.delete(id);
+    };
     pending.promise
       .then((result: TileResult | null) => {
-        // Superseded (an edit re-requested it) or cancelled.
+        // Cancelled, or (when not current) superseded by an edit.
         const current = entry.pending?.id === pending.id;
         if (!result) {
-          if (current) {
-            entry.pending = undefined;
-            if (!entry.bitmap && cache.get(id) === entry) cache.delete(id);
-          }
+          settleEmpty();
           return;
         }
         if (
           disposed ||
-          !current ||
           forGeneration !== generation ||
-          cache.get(id) !== entry
+          home.get(id) !== entry ||
+          version < (entry.version ?? -1)
         ) {
           result.bitmap.close();
           return;
         }
+        // A render an edit superseded mid-way is still newer than what
+        // shows: it shows until the current one lands, so a stream of
+        // edits (a drag the canvas cannot lift) updates as fast as tiles
+        // render instead of waiting for the edits to pause.
         entry.bitmap?.close();
         entry.bitmap = result.bitmap;
-        entry.pending = undefined;
-        entry.stale = false;
-        stats.rendered++;
-        stats.millis += result.millis;
-        evict();
+        entry.version = version;
+        if (current) {
+          entry.pending = undefined;
+          entry.stale = false;
+          stats.rendered++;
+          stats.millis += result.millis;
+        }
+        if (!part) evict();
         options.onTile();
       })
-      .catch(() => {
-        if (entry.pending?.id !== pending.id) return;
-        entry.pending = undefined;
-        if (!entry.bitmap && cache.get(id) === entry) cache.delete(id);
-      });
+      .catch(settleEmpty);
   };
 
   const request = (key: TileKey, priority: number, pinned = false) => {
@@ -255,11 +333,231 @@ export function createTileCompositor(options: TileCompositorOptions) {
     }, EDIT_SETTLE_MS);
   };
 
+  // ---- lifting --------------------------------------------------------
+
+  /** Requests a tile of a lift's part unless it has a current one. */
+  const requestPart = (
+    part: LiftPart,
+    key: TileKey,
+    priority: number,
+    patch: Patch | undefined
+  ) => {
+    if (!patch) return;
+    const id = tileId(key);
+    const existing = part.tiles.get(id);
+    if (existing) {
+      if (existing.stale && !existing.pending) render(existing, priority, part);
+      return;
+    }
+    const entry: Entry = { key, lastUsed: ++clock, pinned: false, patch };
+    part.tiles.set(id, entry);
+    render(entry, priority, part);
+  };
+
+  /** Requests what the lift needs to draw the view at its offset. */
+  const requestLift = () => {
+    const view = lastView;
+    if (!lift || lift.frozen || !view) return;
+    const { camera, viewport } = view;
+    const { plan, scale, offset, below, runs, above } = lift;
+    // The below part differs from the page where the runs started and
+    // under what paints above them.
+    const homes = plan.runs.map((r) => r.bounds);
+    const changed = [...homes, ...plan.runs.flatMap((r) => r.above)];
+    let n = 0;
+    plan.runs.forEach((run, k) => {
+      for (const key of runTiles(run.bounds, offset, camera, viewport, scale))
+        requestPart(
+          runs[k].part,
+          key,
+          LIFT_RUN + n++,
+          tilePatch(key, [run.bounds])
+        );
+    });
+    for (const t of liftTiles(plan, offset, camera, viewport, scale)) {
+      const home = homes.some((b) => tileTouches(t.key, b));
+      const priority = (home ? LIFT_HOME : LIFT_OTHER) + n++;
+      if (t.below)
+        requestPart(below, t.key, priority, tilePatch(t.key, changed));
+      for (const k of t.above)
+        requestPart(
+          above[k],
+          t.key,
+          priority,
+          tilePatch(t.key, plan.runs[k].above)
+        );
+    }
+  };
+
+  const partsOf = (l: Lift) => [
+    l.below,
+    ...l.runs.map((r) => r.part),
+    ...l.above,
+  ];
+
+  /** Frees a lift's tiles. */
+  const discard = (l: Lift) => {
+    const cancel: number[] = [];
+    for (const part of partsOf(l)) {
+      for (const e of part.tiles.values()) {
+        e.bitmap?.close();
+        if (e.pending) cancel.push(e.pending.id);
+      }
+      part.tiles.clear();
+    }
+    engine.cancel(cancel);
+  };
+
+  /** Takes down the lift being dragged (dropped ones land on their own). */
+  const unlift = () => {
+    if (lift) discard(lift);
+    lift = undefined;
+  };
+
+  /**
+   * A lift starts being drawn: page renders queued before it would draw the
+   * layers wherever the document has them when they run, so they are
+   * queued again, leaving the layers out (`pageLayers`).
+   */
+  const holdPage = () => {
+    const cancel: number[] = [];
+    for (const [id, e] of cache) {
+      if (!e.pending) continue;
+      cancel.push(e.pending.id);
+      e.pending = undefined;
+      if (!e.bitmap) cache.delete(id);
+    }
+    engine.cancel(cancel);
+    if (lastView) schedule(lastView, false);
+  };
+
+  /**
+   * Whether the page's tiles in view show a dropped lift's move: those it
+   * changed are rendered again (or the wait ran out).
+   */
+  const landed = (l: Lift, view: ViewState): boolean => {
+    const done = l.landing;
+    if (!done) return false;
+    if (performance.now() - done.since > LAND_TIMEOUT_MS) return true;
+    const target = quantizeScale(view.camera.zoom * view.dpr);
+    return tilesFor(view.camera, view.viewport, target, 0).every((key) => {
+      if (!tileTouches(key, done.dirty)) return true;
+      if (page?.content && !tileTouches(key, page.content)) return true;
+      const e = cache.get(tileId(key));
+      return !!e?.bitmap && !e.stale && !e.pending;
+    });
+  };
+
+  /** Draws a lift over the page's tiles (see `core/lift`). */
+  const drawLift = (
+    ctx: CanvasRenderingContext2D,
+    view: ViewState,
+    l: Lift
+  ) => {
+    if (l.hidden) return;
+    const { camera, dpr } = view;
+    const { plan, scale, offset } = l;
+    const unit = camera.zoom * dpr;
+    // At the view's own scale, tiles land on whole device pixels.
+    const exact = scale === quantizeScale(unit);
+    const k = exact ? scale : unit;
+    const ox = exact ? Math.round(camera.x * scale) : camera.x * unit;
+    const oy = exact ? Math.round(camera.y * scale) : camera.y * unit;
+    // Device pixels of a tile's own pixel at the view's scale.
+    const px = exact ? 1 : unit / scale;
+    const blit = (e: Entry | undefined, dx = 0, dy = 0) => {
+      if (!e?.bitmap) return;
+      const patch = e.patch ?? { x: 0, y: 0, w: TILE, h: TILE };
+      const x = e.key.ix * TILE * px - ox + patch.x * px + dx;
+      const y = e.key.iy * TILE * px - oy + patch.y * px + dy;
+      ctx.drawImage(e.bitmap, x, y, patch.w * px, patch.h * px);
+    };
+    const tile = (part: LiftPart, key: TileKey) => part.tiles.get(tileId(key));
+    ctx.imageSmoothingEnabled = !exact;
+    ctx.imageSmoothingQuality = 'low';
+    // A tile is drawn from the parts once every part it needs is in; until
+    // then the page's tile stays, with the layers drawn over it.
+    const tiles = liftTiles(plan, offset, camera, view.viewport, scale).filter(
+      (t) =>
+        (!t.below || !!tile(l.below, t.key)?.bitmap) &&
+        t.above.every((a) => !!tile(l.above[a], t.key)?.bitmap)
+    );
+    for (const t of tiles) if (t.below) blit(tile(l.below, t.key));
+    const dx = exact ? Math.round(offset.x * scale) : offset.x * unit;
+    const dy = exact ? Math.round(offset.y * scale) : offset.y * unit;
+    l.runs.forEach((run, index) => {
+      ctx.save();
+      if (run.clips.length > 0) {
+        // The clipping ancestors stay where they are.
+        ctx.setTransform(k, 0, 0, k, -ox, -oy);
+        for (const clip of run.clips) ctx.clip(clip);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      }
+      for (const e of run.part.tiles.values()) blit(e, dx, dy);
+      ctx.restore();
+      for (const t of tiles) {
+        if (t.above.includes(index)) blit(tile(l.above[index], t.key));
+      }
+    });
+  };
+
+  /**
+   * Marks tiles touching a page rectangle as changed: visible ones are
+   * re-rendered (the old pixels stay up meanwhile), others dropped.
+   */
+  const invalidate = (rect: Rect) => {
+    edits++;
+    const cancel: number[] = [];
+    for (const [id, e] of cache) {
+      if (!tileTouches(e.key, rect)) continue;
+      if (!e.bitmap && !e.pending) {
+        cache.delete(id);
+        continue;
+      }
+      // Renders already under way still land (see `render`); the rest
+      // are dropped, and the tile renders again.
+      if (e.pending) {
+        cancel.push(e.pending.id);
+        e.pending = undefined;
+      }
+      e.stale = true;
+    }
+    engine.cancel(cancel);
+    if (page && page.content) {
+      // Edits can grow the page's content beyond its old bounds.
+      page = { ...page, content: unionContent(page.content, rect) };
+    }
+    // Other people's edits during a drag reach the lift's parts (its runs
+    // render anchored where the lift started, the rest leaves them out). A
+    // dropped lift keeps its parts: the move itself is what changed.
+    if (lift && !lift.frozen) {
+      const cancelParts: number[] = [];
+      for (const part of partsOf(lift)) {
+        for (const [id, e] of part.tiles) {
+          if (!tileTouches(e.key, rect)) continue;
+          // As for the page's tiles: a render under way still lands, but
+          // the part renders again.
+          if (e.pending) {
+            cancelParts.push(e.pending.id);
+            e.pending = undefined;
+          }
+          if (e.bitmap) e.stale = true;
+          else part.tiles.delete(id);
+        }
+      }
+      engine.cancel(cancelParts);
+      requestLift();
+    }
+    afterEdit();
+  };
+
   return {
     stats,
 
     /** Starts over for a page (or after switching outline view). */
     setPage(next: PageState) {
+      unlift();
+      for (const l of landing.splice(0)) discard(l);
       for (const e of cache.values()) {
         e.bitmap?.close();
         if (e.pending) engine.cancel([e.pending.id]);
@@ -271,28 +569,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       if (lastView) schedule(lastView, true);
     },
 
-    /**
-     * Marks tiles touching a page rectangle as changed: visible ones are
-     * re-rendered (the old pixels stay up meanwhile), others dropped.
-     */
-    invalidate(rect: Rect) {
-      const cancel: number[] = [];
-      for (const [id, e] of cache) {
-        if (!tileTouches(e.key, rect)) continue;
-        if (e.pending) {
-          cancel.push(e.pending.id);
-          e.pending = undefined;
-        }
-        if (e.bitmap) e.stale = true;
-        else cache.delete(id);
-      }
-      engine.cancel(cancel);
-      if (page && page.content) {
-        // Edits can grow the page's content beyond its old bounds.
-        page = { ...page, content: unionContent(page.content, rect) };
-      }
-      afterEdit();
-    },
+    invalidate,
 
     /** New content bounds for the same page (after edits). */
     setContent(content: Rect | undefined) {
@@ -303,6 +580,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
     /** Call on every view change; fetches what the view needs. */
     update(view: ViewState) {
       lastView = view;
+      requestLift();
       schedule(view, false);
       clearTimeout(settleTimer);
       settleTimer = setTimeout(() => {
@@ -312,6 +590,11 @@ export function createTileCompositor(options: TileCompositorOptions) {
 
     /** Draws the view from the tiles available now. */
     draw(ctx: CanvasRenderingContext2D, view: ViewState) {
+      // In order: a newer drop may sit on top of an older one's parts.
+      while (landing.length > 0 && landed(landing[0], view)) {
+        const done = landing.shift();
+        if (done) discard(done);
+      }
       const { camera, dpr } = view;
       const width = ctx.canvas.width;
       const height = ctx.canvas.height;
@@ -398,7 +681,110 @@ export function createTileCompositor(options: TileCompositorOptions) {
         ctx.imageSmoothingQuality = d.size > TILE ? 'low' : 'high';
         ctx.drawImage(d.bitmap, d.x, d.y, d.size, d.size);
       }
+      for (const l of landing) drawLift(ctx, view, l);
+      if (lift) drawLift(ctx, view, lift);
     },
+
+    /**
+     * Lifts layers to move them (see `core/lift`) at the view's scale;
+     * `hidden` renders the parts ahead of a drag without drawing them yet.
+     * Returns whether the lift is up (its clips must parse).
+     */
+    lift(plan: LiftPlan, hidden = false): boolean {
+      unlift();
+      const view = lastView;
+      if (!page || !view || plan.refused || plan.runs.length === 0)
+        return false;
+      let clips: Path2D[][];
+      try {
+        clips = plan.runs.map((r) => r.clips.map((d) => new Path2D(d)));
+      } catch {
+        return false;
+      }
+      const parts = liftParts(plan);
+      const part = (layers: unknown): LiftPart => ({
+        layers: JSON.stringify(layers),
+        tiles: new Map(),
+      });
+      lift = {
+        plan,
+        page: JSON.stringify(parts.page),
+        scale: quantizeScale(view.camera.zoom * view.dpr),
+        below: part(parts.below),
+        runs: parts.runs.map((r, k) => ({ part: part(r), clips: clips[k] })),
+        above: parts.above.map(part),
+        offset: { x: 0, y: 0 },
+        hidden,
+        frozen: false,
+      };
+      requestLift();
+      if (!hidden) holdPage();
+      return true;
+    },
+
+    /** Draws a hidden lift from now on; whether there was one. */
+    showLift(): boolean {
+      if (!lift) return false;
+      if (lift.hidden) {
+        lift.hidden = false;
+        holdPage();
+      }
+      return true;
+    },
+
+    /** Moves the lifted layers to a page-space offset from where they were. */
+    moveLift(offset: Point) {
+      if (!lift || lift.frozen) return;
+      lift.offset = offset;
+      requestLift();
+    },
+
+    /** The drop: the lift's parts stay as they are from now on. */
+    freezeLift() {
+      if (lift) lift.frozen = true;
+    },
+
+    /**
+     * The drop reached the document, which moved the layers by `moved`
+     * (`null`: not at all). Page tiles drawn meanwhile left the layers out,
+     * so the page renders again where they were and where they are, and
+     * the lift comes down once it shows them.
+     */
+    landLift(moved: Point | null) {
+      const dropped = lift;
+      lift = undefined;
+      if (!dropped) return;
+      if (dropped.hidden) {
+        // Never drawn, so the page tiles are as they were.
+        discard(dropped);
+        return;
+      }
+      dropped.frozen = true;
+      const home = dropped.plan.runs
+        .map((r) => r.bounds)
+        .reduce((a, b) => unionContent(a, b));
+      const there =
+        moved && (moved.x !== 0 || moved.y !== 0)
+          ? offsetRect(home, moved)
+          : undefined;
+      dropped.landing = {
+        dirty: there ? unionContent(home, there) : home,
+        since: performance.now(),
+      };
+      landing.push(dropped);
+      invalidate(home);
+      if (there) invalidate(there);
+      clearTimeout(landTimer);
+      landTimer = setTimeout(() => {
+        if (!disposed) options.onTile();
+      }, LAND_TIMEOUT_MS + 50);
+    },
+
+    /** Takes down the lift being dragged. */
+    unlift,
+
+    /** Whether the lift being dragged (or prepared) is `plan`'s. */
+    isLifted: (plan: LiftPlan) => lift?.plan === plan,
 
     /** Whether every tile the settled view needs is drawn sharp. */
     isSharp(view: ViewState): boolean {
@@ -411,6 +797,9 @@ export function createTileCompositor(options: TileCompositorOptions) {
 
     dispose() {
       disposed = true;
+      unlift();
+      for (const l of landing.splice(0)) discard(l);
+      clearTimeout(landTimer);
       clearTimeout(settleTimer);
       clearTimeout(editTimer);
       for (const e of cache.values()) {

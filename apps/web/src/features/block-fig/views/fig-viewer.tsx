@@ -248,9 +248,40 @@ export function FigViewer() {
     })();
   };
 
+  /**
+   * A lifted move being dragged (the canvas draws it) and the layer's values
+   * from before it, which the panel shows moved along until the values
+   * after the drop arrive (`until`: the values shown at the drop).
+   */
+  const [moving, setMoving] = createSignal<{
+    offset: Point;
+    from: NodeInfo | undefined;
+    until?: NodeInfo;
+  }>();
+  const onMove = (offset: Point | undefined) => {
+    const m = moving();
+    if (offset) setMoving({ offset, from: m && !m.until ? m.from : info() });
+    else if (m) setMoving({ ...m, until: info() });
+  };
+  const movedInfo = () => {
+    const i = info();
+    const m = moving();
+    const from = m?.from;
+    if (!i || !m || !from || viewer.selected().length !== 1) return i;
+    if (i.id !== from.id || (m.until && i !== m.until)) return i;
+    const [a, b, c, d] = from.panelMove;
+    const { x: dx, y: dy } = m.offset;
+    return {
+      ...i,
+      x: from.x + a * dx + b * dy,
+      y: from.y + c * dx + d * dy,
+      bounds: { ...from.bounds, x: from.bounds.x + dx, y: from.bounds.y + dy },
+    };
+  };
+
   /** The design panel's layer, showing the text editor's selection. */
   const panel = () => {
-    const i = info();
+    const i = movedInfo();
     const range = editor.textSelection();
     if (!i?.text || !range || range.id !== i.id || range.start === range.end)
       return { info: i, mixed: undefined };
@@ -939,6 +970,7 @@ export function FigViewer() {
           }}
           peers={peerOverlays}
           onPointer={collab ? setPointer : undefined}
+          onMove={onMove}
           aids={aids}
           devMode={devMode}
           drop={

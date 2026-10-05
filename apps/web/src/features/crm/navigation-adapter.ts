@@ -29,8 +29,10 @@ export async function copyCrmRecordLink(target: {
   try {
     await navigator.clipboard.writeText(buildSimpleEntityUrl(target));
     toast.success('Link copied to clipboard');
+    return true;
   } catch {
     toast.failure('Could not copy link. Please try again.');
+    return false;
   }
 }
 export function createAppCrmNavigation(): ReturnType<

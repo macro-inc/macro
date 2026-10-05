@@ -96,7 +96,8 @@ export function createFigLibraries(options: {
       // A file that fails to answer keeps the last state.
     }
   };
-  createEffect(on(viewer.editVersion, () => void loadState()));
+  // File-wide, so once per pause in a stream of edits (a drag's steps).
+  createEffect(on(viewer.editsSettled, () => void loadState()));
 
   /** Starts (or stops) keeping the publishing state current. */
   const watchStatus = (on: boolean) => {

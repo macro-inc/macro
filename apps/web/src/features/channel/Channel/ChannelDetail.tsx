@@ -16,16 +16,9 @@ import { DebugSuspense } from '@channel/DebugSuspense';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
-  createPriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
-import {
-  useRegisterPriorityCollapseItem,
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
-import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
@@ -47,9 +40,9 @@ import {
   ChannelSurface,
   type ChannelTargetRequest,
 } from './ChannelSurface';
-import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
+import { ChannelTabProvider } from './ChannelTabContext';
+import { ChannelTabs } from './ChannelTabs';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
-import { toIconTabItems } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
 import {
   isJoinCallRequested,
@@ -60,7 +53,6 @@ import {
 import {
   canUseInlineCallTab,
   normalizeChannelTab,
-  useChannelTabItems,
 } from './use-channel-tab-items';
 
 export type ChannelDetailContext = {
@@ -113,35 +105,6 @@ export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
   );
 }
 
-/**
- * The channel's tab strip. Given the top bar's `collapser`, the strip
- * registers as its first item to give up space, dropping text labels for
- * icons when the bar overflows and taking them back as room returns.
- */
-export function ChannelDetailTabs(props: {
-  channelId: string;
-  collapser?: PriorityCollapser;
-}) {
-  const { activeTab, setActiveTab } = useChannelTab();
-  const tabs = useChannelTabItems(props.channelId);
-  // Read once by design: a registration lives for the component's lifetime.
-  const isCollapsed = props.collapser
-    ? useRegisterPriorityCollapseItem(props.collapser, {
-        id: 'channel-tabs',
-        priority: 1,
-      })
-    : () => false;
-
-  return (
-    <TabsInset
-      class="shrink-0"
-      list={isCollapsed() ? toIconTabItems(tabs()) : tabs()}
-      value={activeTab()}
-      onChange={(value) => setActiveTab(value as ChannelTabId)}
-    />
-  );
-}
-
 export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
@@ -187,26 +150,13 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   );
 }
 
-/**
- * Channel top bar: leading content and tabs share one priority-collapse row
- * so a narrow pane shrinks the tabs to icons before the title truncates.
- * `leading` replaces the default title (a host's breadcrumbs, say).
- */
+/** Channel identity and actions; content navigation lives below this bar. */
 export function ChannelDetailTopBar(
   props: ChannelDetailHeaderProps & { leading?: JSX.Element }
 ) {
-  const collapse = createPriorityCollapseController();
-
   return (
-    // py-0 gives the clipping sensor the bar's full height; the tab track is
-    // taller than the padded content box and would be cut off.
-    <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
-      <PriorityCollapseOverflowSensor
-        controller={collapse}
-        truncateAsLastResort
-        class="relative h-full min-w-0 shrink overflow-hidden"
-        contentClass="flex h-full items-center gap-3"
-      >
+    <ViewShell.TopBar class="gap-3">
+      <div class="flex min-w-0 shrink items-center gap-3 overflow-hidden">
         <DebugSuspense name="ChannelDetail.title">
           <Show
             when={props.leading}
@@ -220,13 +170,7 @@ export function ChannelDetailTopBar(
             {props.leading}
           </Show>
         </DebugSuspense>
-        <DebugSuspense name="ChannelDetail.tab-strip">
-          <ChannelDetailTabs
-            channelId={props.channelId}
-            collapser={collapse.collapser}
-          />
-        </DebugSuspense>
-      </PriorityCollapseOverflowSensor>
+      </div>
       <DebugSuspense name="ChannelDetail.actions">
         <ChannelDetailActions
           channelId={props.channelId}
@@ -370,6 +314,9 @@ function ChannelDetailContent(props: ChannelDetailProps) {
             />
           </DebugSuspense>
           <div class="flex min-h-0 flex-1 flex-col px-2">
+            <DebugSuspense name="ChannelDetail.tabs">
+              <ChannelTabs channelId={channelId} />
+            </DebugSuspense>
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <DebugSuspense name="ChannelDetail.messages">
