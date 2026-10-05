@@ -1,13 +1,15 @@
 /// A [`rig_agent::agent::AgentHook`] that bridges rig lifecycle events into
 /// [`StreamPart`] items sent through a channel.
 use crate::AgentError;
-use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
+use crate::stream::{McpInfo, StreamPart, ToolCall, ToolCallStart, ToolResponse, Usage};
 use ai_toolset::{SearchableTool, ToolInfo};
 use rig_agent::agent::hook::{
     AgentHook, HookContext, InvalidToolCallAction, InvalidToolCallContext, ObservationAction,
-    StreamResponseFinish, TextDelta, ToolCallAction, ToolResultAction, ToolResultEvent,
+    StreamResponseFinish, TextDelta, ToolCallAction, ToolCallDelta, ToolResultAction,
+    ToolResultEvent,
 };
 use rig_agent::tool::ToolOutput;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -79,6 +81,29 @@ pub struct BridgeInputs {
     pub register_loaded: RegisterFn,
     /// Finishes user tools mid-turn, when the host can.
     pub user_tool_finisher: Option<UserToolFinisher>,
+    /// Report tool calls while the model is still writing them (see
+    /// [`StreamPart::ToolCallStarted`]).
+    pub stream_tool_calls: bool,
+}
+
+/// A call announced from its first argument delta and not yet finished.
+struct StartedCall {
+    /// rig's correlation id, shared by the call's deltas and (for every
+    /// provider rig ships) the finished call.
+    internal_call_id: String,
+    tool_name: String,
+    /// The id the announcement went out under.
+    id: String,
+}
+
+/// The ids streamed calls were announced under, so the finished call and its
+/// result are reported under the same one.
+#[derive(Default)]
+struct StreamedCalls {
+    started: Vec<StartedCall>,
+    /// Finished calls awaiting their result: rig's internal id to the id the
+    /// call was reported under.
+    finished: HashMap<String, String>,
 }
 
 /// The answer a user tool gives when it has not been finished.
@@ -113,6 +138,9 @@ pub struct StreamBridge {
     /// Finishes a user tool's pending answer before the model reads it, on
     /// hosts that can reach the user mid-turn (see [`UserToolFinisher`]).
     user_tool_finisher: Option<UserToolFinisher>,
+    /// Calls announced before they finished; `None` when the loop does not
+    /// stream tool calls.
+    streamed: Option<Arc<Mutex<StreamedCalls>>>,
     /// the user has requested the stream stop
     cancel: CancellationToken,
 }
@@ -138,6 +166,7 @@ impl StreamBridge {
             loaded_buffer,
             register_loaded,
             user_tool_finisher,
+            stream_tool_calls,
         } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
         (
@@ -148,6 +177,7 @@ impl StreamBridge {
                 register_loaded,
                 searchable_catalog,
                 user_tool_finisher,
+                streamed: stream_tool_calls.then(Arc::default),
                 cancel,
             },
             rx,
@@ -234,6 +264,58 @@ impl StreamBridge {
         }
     }
 
+    /// Announce a tool call on its first delta - the one that names it - and
+    /// forward each argument fragment after it.
+    ///
+    /// The announcement's id is rig's internal one: it is the only id a delta
+    /// is guaranteed to share with the finished call, and the one a call
+    /// without a provider `call_id` (Anthropic's) is reported under anyway.
+    pub(crate) fn handle_tool_call_delta(
+        &self,
+        internal_call_id: &str,
+        tool_name: Option<&str>,
+        delta: &str,
+    ) -> ObservationAction {
+        if self.cancel.is_cancelled() {
+            return ObservationAction::stop(CANCELLED_REASON);
+        }
+        let Some(streamed) = &self.streamed else {
+            return ObservationAction::Continue;
+        };
+        let mut streamed = streamed.lock().expect("streamed calls poisoned");
+        let known = streamed
+            .started
+            .iter()
+            .find(|call| call.internal_call_id == internal_call_id)
+            .map(|call| call.id.clone());
+        let id = match (known, tool_name) {
+            (Some(id), _) => id,
+            (None, Some(tool_name)) => {
+                let id = internal_call_id.to_owned();
+                streamed.started.push(StartedCall {
+                    internal_call_id: internal_call_id.to_owned(),
+                    tool_name: tool_name.to_owned(),
+                    id: id.clone(),
+                });
+                let _ = self.tx.send(Ok(StreamPart::ToolCallStarted(ToolCallStart {
+                    id: id.clone(),
+                    name: tool_name.to_owned(),
+                    mcp: self.mcp_info(tool_name),
+                })));
+                id
+            }
+            // rig names a call before forwarding any of its arguments.
+            (None, None) => return ObservationAction::Continue,
+        };
+        if !delta.is_empty() {
+            let _ = self.tx.send(Ok(StreamPart::ToolCallArgs {
+                id,
+                delta: delta.to_owned(),
+            }));
+        }
+        ObservationAction::Continue
+    }
+
     pub(crate) fn handle_tool_call(
         &self,
         tool_name: &str,
@@ -248,8 +330,18 @@ impl StreamBridge {
             .ok()
             .filter(serde_json::Value::is_object)
             .unwrap_or_else(|| serde_json::json!({}));
-        let id = tool_call_id.unwrap_or(internal_call_id).to_owned();
-        let mcp = (self.routing)(tool_name).map(|i| match i {
+        let id = self.finished_call_id(tool_name, tool_call_id, internal_call_id);
+        let _ = self.tx.send(Ok(StreamPart::ToolCall(ToolCall {
+            id,
+            name: tool_name.to_owned(),
+            json,
+            mcp: self.mcp_info(tool_name),
+        })));
+        ToolCallAction::Run
+    }
+
+    fn mcp_info(&self, tool_name: &str) -> Option<McpInfo> {
+        (self.routing)(tool_name).map(|i| match i {
             ToolInfo::ExternalTool {
                 service_name,
                 tool_name,
@@ -259,14 +351,58 @@ impl StreamBridge {
                 tool_name,
                 display_name,
             },
-        });
-        let _ = self.tx.send(Ok(StreamPart::ToolCall(ToolCall {
-            id,
-            name: tool_name.to_owned(),
-            json,
-            mcp,
-        })));
-        ToolCallAction::Run
+        })
+    }
+
+    /// The id a finished call is reported under: the one it was announced
+    /// under when it streamed, else the provider's, else rig's.
+    ///
+    /// A finished call is matched to its announcement by rig's internal id,
+    /// falling back to the oldest open announcement of the same tool for a
+    /// provider that does not carry the id through.
+    fn finished_call_id(
+        &self,
+        tool_name: &str,
+        tool_call_id: Option<&str>,
+        internal_call_id: &str,
+    ) -> String {
+        let unstreamed = tool_call_id.unwrap_or(internal_call_id).to_owned();
+        let Some(streamed) = &self.streamed else {
+            return unstreamed;
+        };
+        let mut streamed = streamed.lock().expect("streamed calls poisoned");
+        let announced = streamed
+            .started
+            .iter()
+            .position(|call| call.internal_call_id == internal_call_id)
+            .or_else(|| {
+                streamed
+                    .started
+                    .iter()
+                    .position(|call| call.tool_name == tool_name)
+            });
+        let id = match announced {
+            Some(at) => streamed.started.remove(at).id,
+            None => unstreamed,
+        };
+        streamed
+            .finished
+            .insert(internal_call_id.to_owned(), id.clone());
+        id
+    }
+
+    /// The id a tool result is reported under: its call's.
+    fn result_id(&self, tool_call_id: Option<&str>, internal_call_id: &str) -> String {
+        self.streamed
+            .as_ref()
+            .and_then(|streamed| {
+                streamed
+                    .lock()
+                    .expect("streamed calls poisoned")
+                    .finished
+                    .remove(internal_call_id)
+            })
+            .unwrap_or_else(|| tool_call_id.unwrap_or(internal_call_id).to_owned())
     }
 
     pub(crate) async fn handle_tool_result(
@@ -290,7 +426,7 @@ impl StreamBridge {
             (self.register_loaded)(pending).await;
         }
 
-        let id = tool_call_id.unwrap_or(internal_call_id).to_owned();
+        let id = self.result_id(tool_call_id, internal_call_id);
         let json = if is_success {
             presentation_json(presentation)
         } else {
@@ -360,6 +496,14 @@ impl StreamBridge {
 impl AgentHook for StreamBridge {
     async fn on_text_delta(&self, _ctx: &HookContext, event: TextDelta<'_>) -> ObservationAction {
         self.handle_text_delta(event.delta)
+    }
+
+    async fn on_tool_call_delta(
+        &self,
+        _ctx: &HookContext,
+        event: ToolCallDelta<'_>,
+    ) -> ObservationAction {
+        self.handle_tool_call_delta(event.internal_call_id, event.tool_name, event.delta)
     }
 
     async fn on_invalid_tool_call(

@@ -621,6 +621,155 @@ async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
     );
 }
 
+/// The tool frames of a turn, one line each: what a reader of the log sees
+/// happen to its calls.
+fn tool_frames(notifications: &[SessionNotification]) -> Vec<String> {
+    let status = |status: Option<ToolCallStatus>| {
+        status.map_or_else(
+            || "-".to_owned(),
+            |status| {
+                serde_json::to_value(status)
+                    .expect("a status serializes")
+                    .to_string()
+            },
+        )
+    };
+    let input = |input: Option<&serde_json::Value>| {
+        input.map_or_else(|| "-".to_owned(), serde_json::Value::to_string)
+    };
+    notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(format!(
+                "open {} {} {} {}",
+                call.tool_call_id.0,
+                call.title,
+                status(Some(call.status)),
+                input(call.raw_input.as_ref())
+            )),
+            SessionUpdate::ToolCallUpdate(update) => Some(format!(
+                "update {} {} {}",
+                update.tool_call_id.0,
+                status(update.fields.status),
+                input(update.fields.raw_input.as_ref())
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A call the model is still writing opens `pending` at once, is peeked at
+/// as its arguments stream - at most once per window, so a burst of
+/// fragments is one peek - and starts under the same id once finished.
+#[tokio::test]
+async fn a_streamed_tool_call_opens_pending_and_is_peeked_at_while_written() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"query\":\"road".into(),
+        },
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "map\"}".into(),
+        },
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            json: serde_json::json!({"query": "roadmap"}),
+            mcp: None,
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-1".into(),
+            json: serde_json::json!({"hits": 1}),
+            name: "NameSearch".into(),
+        }),
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "find the roadmap"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    assert_eq!(
+        tool_frames(&notifications),
+        vec![
+            r#"open call-1 NameSearch "pending" -"#,
+            r#"update call-1 - {"query":"road"}"#,
+            r#"update call-1 "in_progress" {"query":"roadmap"}"#,
+            r#"update call-1 "completed" -"#,
+        ]
+    );
+    let open = notifications
+        .iter()
+        .find_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(call),
+            _ => None,
+        })
+        .expect("the call opened");
+    assert_eq!(
+        open.meta.clone().map(serde_json::Value::Object),
+        Some(serde_json::json!({"macro": {"toolName": "NameSearch"}})),
+        "the fold reads the tool's name from the opening frame"
+    );
+}
+
+/// A turn that ends while the model is still writing a call closes the
+/// call's row as failed, and the call - which never ran - stays out of the
+/// history the next turn is built from.
+#[tokio::test]
+async fn a_call_the_turn_ends_while_writing_closes_and_stays_out_of_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::Content("On it.".into()),
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "CreateDocument".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"title\":\"Pl".into(),
+        },
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        for prompt in ["write it up", "again"] {
+            connection
+                .send_request(text_prompt(&session, prompt))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        }
+    })
+    .await;
+
+    let frames = tool_frames(&notifications);
+    assert_eq!(
+        frames[..3],
+        [
+            r#"open call-1 CreateDocument "pending" -"#.to_owned(),
+            r#"update call-1 - {"title":"Pl"}"#.to_owned(),
+            r#"update call-1 "failed" -"#.to_owned(),
+        ]
+    );
+    assert_eq!(
+        engine.requests()[1].messages,
+        vec![
+            "write it up".to_owned(),
+            "On it.".to_owned(),
+            "again".to_owned()
+        ]
+    );
+}
+
 #[tokio::test]
 async fn turns_accumulate_history_and_send_the_model() {
     let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));

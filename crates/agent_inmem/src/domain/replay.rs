@@ -25,7 +25,7 @@ use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams}
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::Message;
 use futures::future::BoxFuture;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::domain::agent::close_dangling_tool_calls;
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
@@ -59,6 +59,7 @@ pub trait FrameSource: Send + Sync + 'static {
 pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryEntry> {
     let mut history = Vec::new();
     let mut open: Option<(UserPrompt, Vec<AssistantMessagePart>)> = None;
+    let mut writing = WritingCalls::default();
 
     for frame in frames {
         match frame {
@@ -75,6 +76,7 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 };
                 let prompt = UserPrompt::from_blocks(&prompt.prompt);
                 close_turn(&mut history, &mut open);
+                writing = WritingCalls::default();
                 if prompt.is_compact_command() {
                     // Compaction dropped everything before it from the
                     // model's context; replaying it back would undo that.
@@ -98,7 +100,7 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 // An update outside any turn (the compact acknowledgement,
                 // status chatter) is presentation, not conversation.
                 if let Some((_, parts)) = open.as_mut() {
-                    apply_update(parts, notification.update);
+                    apply_update(parts, &mut writing, notification.update);
                 }
             }
             _ => {}
@@ -158,9 +160,47 @@ pub fn replay_reasoning_effort(frames: &[Message]) -> ReasoningEffort {
     current
 }
 
+/// Calls the turn opened `pending` - the model was still writing them - by
+/// id, with the title they opened under. The live agent only adds a call to
+/// its history once it is finished, so replay holds these back until the
+/// update that starts them, and a call the turn ended in the middle of never
+/// enters the history at all.
+#[derive(Default)]
+struct WritingCalls(HashMap<String, String>);
+
 /// Fold one `session/update` back into the open turn's parts.
-fn apply_update(parts: &mut Vec<AssistantMessagePart>, update: SessionUpdate) {
+fn apply_update(
+    parts: &mut Vec<AssistantMessagePart>,
+    writing: &mut WritingCalls,
+    update: SessionUpdate,
+) {
     match update {
+        SessionUpdate::ToolCall(call) if call.status == ToolCallStatus::Pending => {
+            writing
+                .0
+                .insert(call.tool_call_id.0.to_string(), call.title);
+        }
+        SessionUpdate::ToolCallUpdate(update)
+            if writing.0.contains_key(update.tool_call_id.0.as_ref()) =>
+        {
+            let id = update.tool_call_id.0.to_string();
+            match update.fields.status {
+                // A peek at the arguments so far.
+                Some(ToolCallStatus::Pending) | None => {}
+                Some(ToolCallStatus::InProgress) => {
+                    let name = writing.0.remove(&id).unwrap_or_default();
+                    parts.push(AssistantMessagePart::ToolCall {
+                        name,
+                        json: update.fields.raw_input.unwrap_or(serde_json::Value::Null),
+                        id,
+                    });
+                }
+                // Closed before the model finished writing it: it never ran.
+                Some(_) => {
+                    writing.0.remove(&id);
+                }
+            }
+        }
         SessionUpdate::AgentMessageChunk(chunk) => {
             let ContentBlock::Text(text) = chunk.content else {
                 return;

@@ -803,6 +803,11 @@ row opens; syntax highlighting may appear after the diff text. Opening a session
 or expanding a group should leave the app responsive, even when the session
 contains many file edits.
 
+On Macro's in-memory agent, a tool row appears as soon as the model names the
+call and its input fills in while the model writes it; the call runs once its
+arguments are complete. A call left unfinished when the turn ends shows as
+failed and is not replayed into later turns.
+
 `DisplayResults` renders its dynamic view directly in the reply and stays visible
 without opening a tool row. It breaks tool groups before and after itself,
 including while pending; later calls start a separate group.

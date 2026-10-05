@@ -258,3 +258,82 @@ fn only_confirmed_effort_replays_and_removal_resets_it() {
     frames.push(config_response(serde_json::json!({ "configOptions": [] })));
     assert_eq!(replay_reasoning_effort(&frames), ReasoningEffort::Default);
 }
+
+/// A call streamed as the model wrote it replays as the finished call: the
+/// peeks at its arguments are presentation, and the update that started it
+/// carries the arguments the model actually sent.
+#[test]
+fn a_streamed_call_replays_with_its_finished_arguments() {
+    let history = replay_history(vec![
+        prompt_frame("find the roadmap"),
+        update_frame(SessionUpdate::ToolCall(
+            AcpToolCall::new("call-1", "NameSearch").status(ToolCallStatus::Pending),
+        )),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "call-1",
+            ToolCallUpdateFields::new().raw_input(serde_json::json!({"query": "road"})),
+        ))),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "call-1",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::InProgress)
+                .raw_input(serde_json::json!({"query": "roadmap"})),
+        ))),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "call-1",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(serde_json::json!({"hits": 1})),
+        ))),
+    ]);
+
+    let [HistoryEntry::User(_), HistoryEntry::Assistant(parts)] = history.as_slice() else {
+        panic!("one turn should replay, got {history:#?}");
+    };
+    assert_eq!(
+        parts.as_slice(),
+        [
+            AssistantMessagePart::ToolCall {
+                name: "NameSearch".to_owned(),
+                json: serde_json::json!({"query": "roadmap"}),
+                id: "call-1".to_owned(),
+            },
+            AssistantMessagePart::ToolCallResponseJson {
+                name: "NameSearch".to_owned(),
+                json: serde_json::json!({"hits": 1}),
+                id: "call-1".to_owned(),
+            },
+        ]
+    );
+}
+
+/// A call the turn stopped in the middle of writing never ran, and the live
+/// agent never put it in the history; replay leaves it out too.
+#[test]
+fn a_call_stopped_while_being_written_does_not_replay() {
+    let history = replay_history(vec![
+        prompt_frame("write it up"),
+        update_frame(message_chunk("On it.")),
+        update_frame(SessionUpdate::ToolCall(
+            AcpToolCall::new("call-1", "CreateDocument").status(ToolCallStatus::Pending),
+        )),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "call-1",
+            ToolCallUpdateFields::new().raw_input(serde_json::json!({"title": "Plan"})),
+        ))),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "call-1",
+            ToolCallUpdateFields::new().status(ToolCallStatus::Failed),
+        ))),
+    ]);
+
+    let [HistoryEntry::User(_), HistoryEntry::Assistant(parts)] = history.as_slice() else {
+        panic!("one turn should replay, got {history:#?}");
+    };
+    assert_eq!(
+        parts.as_slice(),
+        [AssistantMessagePart::Text {
+            text: "On it.".to_owned()
+        }]
+    );
+}
