@@ -53,14 +53,27 @@ const pageOnly = (r: FigRequest) =>
   r.kind === 'thumbnail' ||
   (r.kind === 'query' && PAGE_QUERIES.has(r.method));
 
-/** Requests that change the file or depend on the order of changes. */
-const changesFile = (r: FigRequest) =>
-  r.kind === 'open' ||
-  r.kind === 'edit' ||
-  r.kind === 'paste' ||
-  r.kind === 'addImage' ||
-  r.kind === 'enableCollab' ||
-  r.kind === 'collabChanges';
+/**
+ * Requests that only read the file; any other may change it (or depend on
+ * the order of changes), so nothing is served ahead of it.
+ */
+const READS = new Set<FigRequest['kind']>([
+  'query',
+  'openPage',
+  'render',
+  'export',
+  'exportFiles',
+  'exportFramesPdf',
+  'thumbnail',
+  'copy',
+  'save',
+  'libraryPackage',
+  'nodeThumbnail',
+  'registerFont',
+  'blank',
+]);
+
+const changesFile = (r: FigRequest) => !READS.has(r.kind);
 
 const partlyDecoded = () =>
   file !== undefined && !trapped && !file.isComplete();

@@ -716,27 +716,31 @@ impl FigFile {
     /// What publishing the file as a library would change
     /// (`LibraryStatus` JSON).
     #[wasm_bindgen(js_name = libraryStatus)]
-    pub fn library_status(&self) -> Result<String, JsError> {
+    pub fn library_status(&mut self) -> Result<String, JsError> {
+        self.complete()?;
         to_json(&crate::library::status(&self.doc))
     }
 
     /// The file's published library assets (`PublishedLibrary` JSON).
     #[wasm_bindgen(js_name = libraryAssets)]
-    pub fn library_assets(&self) -> Result<String, JsError> {
+    pub fn library_assets(&mut self) -> Result<String, JsError> {
+        self.complete()?;
         to_json(&crate::library::published(&self.doc))
     }
 
     /// The libraries the file uses and its copies of their assets
     /// (`LibraryUse` JSON).
     #[wasm_bindgen(js_name = libraryUses)]
-    pub fn library_uses(&self) -> Result<String, JsError> {
+    pub fn library_uses(&mut self) -> Result<String, JsError> {
+        self.complete()?;
         to_json(&crate::library::uses(&self.doc))
     }
 
     /// The assets named by `keys` (`string[]` JSON) with what they use, for
     /// another file to import.
     #[wasm_bindgen(js_name = libraryPackage)]
-    pub fn library_package(&self, keys: &str) -> Result<Clipboard, JsError> {
+    pub fn library_package(&mut self, keys: &str) -> Result<Clipboard, JsError> {
+        self.complete()?;
         let keys: Vec<String> = serde_json::from_str(keys).map_err(js_err)?;
         let copied = crate::library::package(&self.doc, &self.original, &keys).map_err(js_err)?;
         Ok(Clipboard {
@@ -777,6 +781,9 @@ impl FigFile {
     /// `size` pixels; empty when it draws nothing.
     #[wasm_bindgen(js_name = nodeThumbnail)]
     pub fn node_thumbnail(&mut self, id: &str, size: u32) -> Vec<u8> {
+        if self.complete().is_err() {
+            return Vec::new();
+        }
         crate::model::Guid::parse(id)
             .and_then(|g| self.thumbnails.render(&self.doc, &mut self.images, g, size))
             .unwrap_or_default()
