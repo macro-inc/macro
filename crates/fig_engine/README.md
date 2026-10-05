@@ -27,7 +27,13 @@ bytes stay in the message, nested values go to tables reused for the next
 node change) and builds the node's properties from it; what is built from a
 field is shared with every node change whose field has the same bytes, so
 instances of one component share their overrides and derived layout, and
-repeated paints, effects, text, and names are stored once.
+repeated paints, effects, text, and names are stored once. The browser
+opens files lazily (`Document::open_lazy`): every node change is first read
+only for its place in the tree, and what the first page shows (with the
+components and styles it uses) is decoded in full; other pages are decoded
+when they are opened, and the rest in slices while the worker is idle.
+`fig_render lazy` checks that every page and the completed file match a
+full open.
 
 The message is a flat list of node changes (each with a GUID, a parent GUID,
 and a fractional-index position string) plus blobs. Figma stores what it

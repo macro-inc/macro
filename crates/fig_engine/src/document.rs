@@ -5,9 +5,9 @@ use crate::container::{Container, Encoded};
 use crate::decode;
 use crate::error::{FigError, Result, corrupt};
 use crate::geometry::{self, ParsedPath};
-use crate::kiwi::{Decoder, Flat, Kind, MsgRef, Reader, Schema};
-use crate::model::{Guid, NodeType, Props};
-use std::collections::HashMap;
+use crate::kiwi::{Decoder, Flat, FlatShared, Kind, MsgRef, Reader, Schema};
+use crate::model::{Guid, NodeType, PropValue, Props};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
 
 /// Index of a node in [`Document::nodes`].
@@ -98,6 +98,9 @@ pub struct Document {
     /// Records of layers pasted from another file, in this file's schema,
     /// which saving starts from (as a copy starts from its source's record).
     pub foreign: HashMap<Guid, Arc<[u8]>>,
+    /// For a file opened lazily ([`Document::open_lazy`]): the nodes not
+    /// decoded yet.
+    pending: Option<Box<Pending>>,
 }
 
 impl Document {
@@ -115,17 +118,48 @@ impl Document {
     }
 
     pub fn from_container(container: Container) -> Result<Document> {
+        Self::decode_container(container, false)
+    }
+
+    /// Opens a `.fig` file (as [`Document::open_shared`]) decoding only what
+    /// its first page shows: every node's place in the tree is read, but
+    /// only the pages, the internal canvas (styles, variables), the first
+    /// page, and the components those use are decoded in full. The rest is
+    /// decoded by [`Document::decode_page`], [`Document::decode_some`], or
+    /// [`Document::complete`]; until [`Document::is_complete`], only scenes
+    /// of decoded pages may be built, and nothing else may read the nodes.
+    pub fn open_lazy(bytes: &Arc<Vec<u8>>) -> Result<Document> {
+        let container = Container::open_shared(bytes)?;
+        let mut doc = Self::decode_container(container, true)?;
+        if let Some(&first) = doc.pages.first() {
+            doc.decode_page(first)?;
+        }
+        Ok(doc)
+    }
+
+    fn decode_container(container: Container, lazy: bool) -> Result<Document> {
         let mut schema = Schema::decode(&container.schema)?;
         decode::restrict_schema(&mut schema);
+        // Lazily, node changes are first read for their skeleton only.
+        let skeleton = if lazy {
+            let mut skeleton = Schema::decode(&container.schema)?;
+            skeleton.keep_only("NodeChange", decode::SKELETON_FIELDS);
+            Some(skeleton)
+        } else {
+            None
+        };
         let mut table = NodeTable::default();
         let MessageParts {
             blobs: ranges,
             images: embedded,
-        } = read_message(&schema, &container.message, &mut table)?;
+            node_def,
+        } = read_message(&schema, skeleton.as_ref(), &container.message, &mut table)?;
         let NodeTable {
             mut nodes,
             by_guid,
             by_override_key,
+            starts,
+            more,
         } = table;
 
         // Link parents; children are ordered by their fractional position.
@@ -159,7 +193,10 @@ impl Document {
                 nodes[i].children = children;
             }
         }
-        resolve_styles(&mut nodes, &by_guid);
+        if !lazy {
+            let all = 0..nodes.len() as NodeIdx;
+            resolve_styles(&mut nodes, &by_guid, all);
+        }
         let root = root
             .or_else(|| {
                 nodes
@@ -210,7 +247,27 @@ impl Document {
                 });
             }
         }
-        drop(container.message);
+        let pending = match node_def {
+            Some(node_def) if lazy => {
+                let remaining = starts.iter().filter(|&&s| s != DECODED).count();
+                let expanded = vec![false; nodes.len()];
+                Some(Box::new(Pending {
+                    schema,
+                    node_def,
+                    message: container.message,
+                    starts,
+                    more,
+                    expanded,
+                    remaining,
+                    cursor: 0,
+                    shared: FlatShared::default(),
+                }))
+            }
+            _ => {
+                drop(container.message);
+                None
+            }
+        };
         let original_blobs = ranges.len();
         let next_guid = Guid {
             session: nodes
@@ -242,7 +299,167 @@ impl Document {
             next_guid,
             glyph_cache: HashMap::new(),
             foreign: HashMap::new(),
+            pending,
         })
+    }
+
+    /// Whether every node is decoded (always, unless opened lazily).
+    pub fn is_complete(&self) -> bool {
+        self.pending.is_none()
+    }
+
+    /// Whether node `index` is decoded.
+    pub fn is_decoded(&self, index: NodeIdx) -> bool {
+        self.pending
+            .as_ref()
+            .is_none_or(|p| p.starts.get(index as usize) == Some(&DECODED))
+    }
+
+    /// Decodes a page (or any subtree) of a lazily opened file, with the
+    /// components and styles it uses.
+    pub fn decode_page(&mut self, page: NodeIdx) -> Result<()> {
+        if self.is_complete() {
+            return Ok(());
+        }
+        let mut seeds = Vec::new();
+        let mut stack = vec![page];
+        while let Some(n) = stack.pop() {
+            seeds.push(n);
+            stack.extend(&self.nodes[n as usize].children);
+        }
+        self.decode_closure(seeds)
+    }
+
+    /// Decodes about `count` more nodes of a lazily opened file (with what
+    /// they use); returns whether the file is complete.
+    pub fn decode_some(&mut self, count: usize) -> Result<bool> {
+        let Some(pending) = &mut self.pending else {
+            return Ok(true);
+        };
+        let mut seeds = Vec::with_capacity(count.min(pending.remaining));
+        while seeds.len() < count && pending.cursor < pending.starts.len() {
+            if pending.starts[pending.cursor] != DECODED {
+                seeds.push(pending.cursor as NodeIdx);
+            }
+            pending.cursor += 1;
+        }
+        self.decode_closure(seeds)?;
+        Ok(self.is_complete())
+    }
+
+    /// Decodes everything a lazily opened file has not decoded yet.
+    pub fn complete(&mut self) -> Result<()> {
+        while !self.decode_some(usize::MAX)? {}
+        Ok(())
+    }
+
+    /// Decodes the pending nodes among `seeds`, then what they use: the
+    /// components their instances (and swaps) show, whole and with their
+    /// ancestors (component sets), and their shared styles.
+    fn decode_closure(&mut self, seeds: Vec<NodeIdx>) -> Result<()> {
+        let Some(mut pending) = self.pending.take() else {
+            return Ok(());
+        };
+        let result = self.decode_with(&mut pending, seeds);
+        if pending.remaining > 0 {
+            self.pending = Some(pending);
+        }
+        result
+    }
+
+    fn decode_with(&mut self, pending: &mut Pending, mut work: Vec<NodeIdx>) -> Result<()> {
+        let Pending {
+            schema,
+            node_def,
+            message,
+            starts,
+            more,
+            expanded,
+            remaining,
+            shared,
+            ..
+        } = pending;
+        let mut flat = Flat::with_shared(message, std::mem::take(shared));
+        let mut decoded = Vec::new();
+        let mut embedded = Vec::new();
+        let mut refs = Vec::new();
+        let mut seen = HashSet::new();
+        let mut failed = None;
+        // Seeds first, in order: what they use is pushed after them.
+        work.reverse();
+        while let Some(i) = work.pop() {
+            let at = i as usize;
+            if starts[at] == DECODED {
+                continue;
+            }
+            if decoded.len() % RESERVE_EVERY == 0 {
+                reserve_heap(RESERVE_BYTES);
+            }
+            let later = more.get(&i).map(Vec::as_slice).unwrap_or_default();
+            let mut props: Option<Props> = None;
+            for &start in std::iter::once(&starts[at]).chain(later) {
+                flat.clear();
+                let mut r = Reader {
+                    bytes: message,
+                    at: start as usize,
+                };
+                let slot = match flat.decode(schema, &mut r, *node_def) {
+                    Ok(slot) => slot,
+                    Err(e) => {
+                        failed.get_or_insert(e);
+                        continue;
+                    }
+                };
+                let m = MsgRef::flat(schema, &flat, slot);
+                decode::embedded_images(&m, &mut embedded);
+                let p = decode::props(m);
+                match &mut props {
+                    Some(first) => first.merge(&p),
+                    None => props = Some(p),
+                }
+            }
+            starts[at] = DECODED;
+            *remaining -= 1;
+            let Some(props) = props else { continue };
+            refs.clear();
+            references(&props, &mut refs, &mut seen);
+            self.nodes[at].props = props;
+            decoded.push(i);
+            for g in &refs {
+                let Some(&r) = self.by_guid.get(g) else {
+                    continue;
+                };
+                // A component's whole subtree is instantiated, and its
+                // ancestors (a component set) describe its variants.
+                if std::mem::replace(&mut expanded[r as usize], true) {
+                    continue;
+                }
+                let mut stack = vec![r];
+                while let Some(n) = stack.pop() {
+                    if starts[n as usize] != DECODED {
+                        work.push(n);
+                    }
+                    stack.extend(&self.nodes[n as usize].children);
+                }
+                let mut up = self.nodes[r as usize].parent;
+                while let Some(a) = up {
+                    if starts[a as usize] != DECODED {
+                        work.push(a);
+                    }
+                    up = self.nodes[a as usize].parent;
+                }
+            }
+        }
+        *shared = flat.into_shared();
+        decoded.sort_unstable();
+        resolve_styles(&mut self.nodes, &self.by_guid, decoded.iter().copied());
+        for (hash, blob) in embedded {
+            if let Some(bytes) = self.blobs.bytes(blob) {
+                let bytes = bytes.to_vec();
+                self.images.entry(hash).or_insert(Encoded::Owned(bytes));
+            }
+        }
+        failed.map_or(Ok(()), Err)
     }
 
     /// Adds an encoded image (PNG, JPEG, GIF, or WebP) for image fills,
@@ -357,9 +574,14 @@ const RESERVE_BYTES: usize = 8 << 20;
 /// Nodes that use shared styles show the styles' paints and effects, which
 /// is what Figma draws: a node's own copy can be stale or empty (when the
 /// style's paints came from a library).
-fn resolve_styles(nodes: &mut [Node], by_guid: &HashMap<Guid, NodeIdx>) {
+fn resolve_styles(
+    nodes: &mut [Node],
+    by_guid: &HashMap<Guid, NodeIdx>,
+    which: impl Iterator<Item = NodeIdx>,
+) {
     let style = |g: Option<Guid>| by_guid.get(&g?).copied();
-    for i in 0..nodes.len() {
+    for i in which {
+        let i = i as usize;
         let p = &nodes[i].props;
         let (fill, stroke, effect) = (
             style(p.fill_style),
@@ -384,6 +606,73 @@ fn resolve_styles(nodes: &mut [Node], by_guid: &HashMap<Guid, NodeIdx>) {
     }
 }
 
+/// [`Pending::starts`] of a node that is decoded.
+const DECODED: u32 = u32::MAX;
+
+/// What a lazily opened file has not decoded yet: the message, and where
+/// each node's records are in it.
+struct Pending {
+    /// The schema nodes are decoded with ([`decode::restrict_schema`]).
+    schema: Schema,
+    node_def: u32,
+    message: Vec<u8>,
+    /// Per node, where its first record starts in `message` ([`DECODED`]
+    /// once it is decoded).
+    starts: Vec<u32>,
+    /// Later records of the same nodes (clipboard data), in file order.
+    more: HashMap<NodeIdx, Vec<u32>>,
+    /// Nodes whose whole subtree was decoded for what uses them.
+    expanded: Vec<bool>,
+    /// How many nodes are not decoded.
+    remaining: usize,
+    /// Where [`Document::decode_some`] goes on from.
+    cursor: usize,
+    /// What decoded node changes share ([`MsgRef::shared`]).
+    shared: FlatShared,
+}
+
+/// The nodes `p` draws from besides its subtree: the components its
+/// instance, overrides, and property values show, and its shared styles.
+/// `seen` skips lists shared by many nodes after the first.
+fn references(p: &Props, out: &mut Vec<Guid>, seen: &mut HashSet<usize>) {
+    out.extend(p.swapped_symbol);
+    out.extend(
+        [
+            p.fill_style,
+            p.stroke_style,
+            p.effect_style,
+            p.text_style_id,
+        ]
+        .into_iter()
+        .flatten(),
+    );
+    for a in p.prop_assignments.iter().flat_map(|a| a.iter()) {
+        if let PropValue::Symbol(g) = a.value {
+            out.push(g);
+        }
+    }
+    for d in p.prop_defs.iter().flat_map(|d| d.iter()) {
+        if let Some(PropValue::Symbol(g)) = d.initial {
+            out.push(g);
+        }
+    }
+    if let Some(s) = &p.symbol {
+        out.extend(s.symbol_id);
+        if seen.insert(s.overrides.as_ptr() as usize) {
+            for o in s.overrides.iter() {
+                references(o, out, seen);
+            }
+        }
+    }
+    for list in [&p.derived, &p.generated].into_iter().flatten() {
+        if seen.insert(list.as_ptr() as usize) {
+            for d in list.iter() {
+                references(d, out, seen);
+            }
+        }
+    }
+}
+
 /// The nodes of a file as its node changes stream in, so each decoded node is
 /// moved once rather than staged in a second list of the whole file.
 #[derive(Default)]
@@ -391,6 +680,10 @@ struct NodeTable {
     nodes: Vec<Node>,
     by_guid: HashMap<Guid, NodeIdx>,
     by_override_key: HashMap<Guid, Guid>,
+    /// Read lazily: where each node's first record starts.
+    starts: Vec<u32>,
+    /// Read lazily: later records of the same nodes.
+    more: HashMap<NodeIdx, Vec<u32>>,
 }
 
 impl NodeTable {
@@ -399,15 +692,25 @@ impl NodeTable {
         self.by_guid.reserve(count);
     }
 
-    fn add(&mut self, p: Props) {
+    /// Adds a decoded node, or (`start`, read lazily) a node's skeleton
+    /// and where its record starts.
+    fn add(&mut self, p: Props, start: Option<u32>) {
         let Some(guid) = p.guid else { return };
         if let Some(key) = p.override_key {
             self.by_override_key.insert(key, guid);
         }
         match self.by_guid.get(&guid) {
             // A later change to the same node (clipboard data) updates it.
-            Some(&existing) => self.nodes[existing as usize].props.merge(&p),
+            Some(&existing) => {
+                self.nodes[existing as usize].props.merge(&p);
+                if let Some(start) = start {
+                    self.more.entry(existing).or_default().push(start);
+                }
+            }
             None => {
+                if let Some(start) = start {
+                    self.starts.push(start);
+                }
                 self.by_guid.insert(guid, self.nodes.len() as NodeIdx);
                 self.nodes.push(Node {
                     props: p,
@@ -428,12 +731,21 @@ struct MessageParts {
     blobs: Vec<(u32, u32)>,
     /// Image files carried in blobs: hash and blob index.
     images: Vec<(String, u32)>,
+    /// The `NodeChange` definition, when there were node changes.
+    node_def: Option<u32>,
 }
 
 /// Reads the top-level `Message`, converting node changes one at a time so
 /// the generic decoded form of the whole file never exists at once. Returns
 /// the blobs as ranges of `data`, and the image files carried in blobs.
-fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<MessageParts> {
+/// With a `skeleton` schema, node changes are read only for their skeleton
+/// ([`decode::skeleton`]) and where they start.
+fn read_message(
+    schema: &Schema,
+    skeleton: Option<&Schema>,
+    data: &[u8],
+    table: &mut NodeTable,
+) -> Result<MessageParts> {
     let root = schema
         .def_index("Message")
         .ok_or_else(|| corrupt("the schema has no Message type"))?;
@@ -441,6 +753,7 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<M
     let mut r = Reader::new(data);
     let mut ranges = Vec::new();
     let mut images = Vec::new();
+    let mut node_type = None;
     let mut flat = Flat::new(data);
     let def = schema.def(root);
     loop {
@@ -453,6 +766,7 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<M
             .ok_or_else(|| corrupt(format!("kiwi: Message has no field {id}")))?;
         match (field.name.as_str(), field.ty) {
             ("nodeChanges", crate::kiwi::Ty::Def(node_def)) if field.array => {
+                node_type = Some(node_def);
                 let count = r.var_uint()? as usize;
                 table.reserve(count.min(1 << 20));
                 for i in 0..count {
@@ -460,11 +774,17 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<M
                         reserve_heap(RESERVE_BYTES);
                     }
                     flat.clear();
-                    let slot = flat.decode(schema, &mut r, node_def)?;
-                    let m = MsgRef::flat(schema, &flat, slot);
-                    if !decode::is_removed(&m) {
+                    let start = r.at as u32;
+                    let slot = flat.decode(skeleton.unwrap_or(schema), &mut r, node_def)?;
+                    let m = MsgRef::flat(skeleton.unwrap_or(schema), &flat, slot);
+                    if decode::is_removed(&m) {
+                        continue;
+                    }
+                    if skeleton.is_some() {
+                        table.add(decode::skeleton(m), Some(start));
+                    } else {
                         decode::embedded_images(&m, &mut images);
-                        table.add(decode::props(m));
+                        table.add(decode::props(m), None);
                     }
                 }
             }
@@ -481,6 +801,7 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<M
     Ok(MessageParts {
         blobs: ranges,
         images,
+        node_def: node_type,
     })
 }
 

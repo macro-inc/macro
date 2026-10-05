@@ -3,6 +3,12 @@
 //! Structured values cross the boundary as JSON strings; pixels as
 //! premultiplied RGBA bytes. Every call names a page by index; the worker
 //! keeps the most recently used page expanded.
+//!
+//! A file opens lazily ([`Document::open_lazy`]): what the first page shows
+//! is decoded at once, other pages when they are opened, and the rest in
+//! slices the worker asks for when idle (`decodeSome`). Rendering and the
+//! page-local queries (layers, hit tests, geometry) work on a page that is
+//! decoded; everything else decodes the whole file first.
 
 use crate::collab::{Collab, EntryChange};
 use crate::document::{Document, NodeIdx};
@@ -91,12 +97,12 @@ pub struct FigFile {
 
 #[wasm_bindgen]
 impl FigFile {
-    /// Opens a `.fig` file.
+    /// Opens a `.fig` file, decoding what its first page shows.
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: Vec<u8>) -> Result<FigFile, JsError> {
         console_error_panic_hook::set_once();
         let original = std::sync::Arc::new(bytes);
-        let doc = Document::open_shared(&original).map_err(js_err)?;
+        let doc = Document::open_lazy(&original).map_err(js_err)?;
         Ok(FigFile {
             doc,
             scene: None,
@@ -105,6 +111,24 @@ impl FigFile {
             history: History::default(),
             collab: None,
         })
+    }
+
+    /// Whether the whole file is decoded.
+    #[wasm_bindgen(js_name = isComplete)]
+    pub fn is_complete(&self) -> bool {
+        self.doc.is_complete()
+    }
+
+    /// Decodes about `nodes` more nodes; returns whether the whole file is
+    /// decoded.
+    #[wasm_bindgen(js_name = decodeSome)]
+    pub fn decode_some(&mut self, nodes: usize) -> Result<bool, JsError> {
+        self.doc.decode_some(nodes).map_err(js_err)
+    }
+
+    /// Decodes the rest of the file, for what reads more than a page.
+    fn complete(&mut self) -> Result<(), JsError> {
+        self.doc.complete().map_err(js_err)
     }
 
     /// A new, empty design (a `.fig` file with one page).
@@ -123,7 +147,8 @@ impl FigFile {
 
     /// The fonts the document's text uses and whether each is available
     /// (`FontUse[]` JSON).
-    pub fn fonts(&self) -> Result<String, JsError> {
+    pub fn fonts(&mut self) -> Result<String, JsError> {
+        self.complete()?;
         to_json(&crate::text::document_fonts(&self.doc))
     }
 
@@ -218,6 +243,7 @@ impl FigFile {
         session: u32,
         base_blobs: Option<u32>,
     ) -> Result<String, JsError> {
+        self.complete()?;
         let (collab, changes) = Collab::new(&mut self.doc, session, base_blobs);
         self.collab = Some(collab);
         to_json(&changes)
@@ -266,7 +292,8 @@ impl FigFile {
     }
 
     /// The edited file, as `.fig` bytes.
-    pub fn save(&self) -> Result<Vec<u8>, JsError> {
+    pub fn save(&mut self) -> Result<Vec<u8>, JsError> {
+        self.complete()?;
         crate::save::save(&self.doc, &self.original).map_err(js_err)
     }
 
@@ -312,7 +339,15 @@ impl FigFile {
         })
     }
 
+    /// The page expanded, for anything: the whole file is decoded first.
     fn scene(&mut self, page: usize) -> Result<&Scene, JsError> {
+        self.complete()?;
+        self.page_scene(page)
+    }
+
+    /// The page expanded, for what reads only the page (rendering, layers,
+    /// hit tests): only what the page shows need be decoded.
+    fn page_scene(&mut self, page: usize) -> Result<&Scene, JsError> {
         let stale = self.scene.as_ref().is_none_or(|(p, _)| *p != page);
         if stale {
             let &node = self
@@ -320,13 +355,28 @@ impl FigFile {
                 .pages
                 .get(page)
                 .ok_or_else(|| js_err(crate::FigError::NoSuchPage(page)))?;
-            self.scene = Some((page, Scene::build(&self.doc, node)));
+            self.doc.decode_page(node).map_err(js_err)?;
+            let mut scene = Scene::build(&self.doc, node);
+            // Decoding the page decodes what it shows; should a layer still
+            // come from a node that is not decoded, the page is built again
+            // from the whole file.
+            if !self.doc.is_complete() && scene.nodes.iter().any(|n| !self.doc.is_decoded(n.src)) {
+                self.complete()?;
+                scene = Scene::build(&self.doc, node);
+            }
+            self.scene = Some((page, scene));
         }
         Ok(&self.scene.as_ref().expect("scene built above").1)
     }
 
     fn find(&mut self, page: usize, id: &str) -> Result<SceneIdx, JsError> {
         self.scene(page)?;
+        self.find_on_page(page, id)
+    }
+
+    /// [`FigFile::find`] for what reads only the page.
+    fn find_on_page(&mut self, page: usize, id: &str) -> Result<SceneIdx, JsError> {
+        self.page_scene(page)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         scene
             .find(&self.doc, id)
@@ -336,7 +386,7 @@ impl FigFile {
     /// Expands a page; returns its bounds and frames (`PageLayout` JSON).
     #[wasm_bindgen(js_name = openPage)]
     pub fn open_page(&mut self, page: usize) -> Result<String, JsError> {
-        self.scene(page)?;
+        self.page_scene(page)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         to_json(&PageLayout {
             bounds: scene.node(scene.root()).bounds,
@@ -359,7 +409,7 @@ impl FigFile {
         height: u32,
         outline: bool,
     ) -> Result<Vec<u8>, JsError> {
-        self.scene(page)?;
+        self.page_scene(page)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         let background = Some(self.doc.page_background(scene.page));
         let pixmap = render::render(
@@ -386,9 +436,9 @@ impl FigFile {
     /// layers panel (`LayerRow[]` JSON).
     pub fn layers(&mut self, page: usize, parent: Option<String>) -> Result<String, JsError> {
         let index = match &parent {
-            Some(id) => self.find(page, id)?,
+            Some(id) => self.find_on_page(page, id)?,
             None => {
-                self.scene(page)?;
+                self.page_scene(page)?;
                 0
             }
         };
@@ -422,12 +472,14 @@ impl FigFile {
     }
 
     /// The file's variable collections (`CollectionInfo[]` JSON).
-    pub fn variables(&self) -> Result<String, JsError> {
+    pub fn variables(&mut self) -> Result<String, JsError> {
+        self.complete()?;
         to_json(&inspect::variables(&self.doc))
     }
 
     /// The file's shared styles (`StyleInfo[]` JSON).
-    pub fn styles(&self) -> Result<String, JsError> {
+    pub fn styles(&mut self) -> Result<String, JsError> {
+        self.complete()?;
         to_json(&inspect::local_styles(&self.doc))
     }
 
@@ -443,7 +495,7 @@ impl FigFile {
     /// Layer rows for several ids (`LayerRow[]` JSON), skipping unknown ids.
     pub fn rows(&mut self, page: usize, ids: &str) -> Result<String, JsError> {
         let ids: Vec<String> = serde_json::from_str(ids).map_err(js_err)?;
-        self.scene(page)?;
+        self.page_scene(page)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         let rows: Vec<_> = ids
             .iter()
@@ -463,7 +515,7 @@ impl FigFile {
         y: f64,
         tolerance: f64,
     ) -> Result<String, JsError> {
-        self.scene(page)?;
+        self.page_scene(page)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         let chain = inspect::hit_test(&self.doc, scene, Vec2::new(x, y), tolerance);
         let rows: Vec<_> = chain
@@ -475,7 +527,7 @@ impl FigFile {
 
     /// Layers from the page's child down to `id` (`LayerRow[]` JSON).
     pub fn ancestry(&mut self, page: usize, id: &str) -> Result<String, JsError> {
-        let i = self.find(page, id)?;
+        let i = self.find_on_page(page, id)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         let rows: Vec<_> = scene
             .ancestry(i)
@@ -488,7 +540,7 @@ impl FigFile {
     /// Frame corners and bounds of layers (`NodeGeometry[]` JSON).
     pub fn geometry(&mut self, page: usize, ids: &str) -> Result<String, JsError> {
         let ids: Vec<String> = serde_json::from_str(ids).map_err(js_err)?;
-        self.scene(page)?;
+        self.page_scene(page)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         let out: Vec<NodeGeometry> = ids
             .iter()
@@ -506,13 +558,14 @@ impl FigFile {
 
     /// SVG path data of a layer's outline in page coordinates.
     pub fn outline(&mut self, page: usize, id: &str) -> Result<String, JsError> {
-        let i = self.find(page, id)?;
+        let i = self.find_on_page(page, id)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         Ok(inspect::outline(&self.doc, scene, i))
     }
 
     /// The file's components, page by page (`ComponentInfo[]` JSON).
-    pub fn components(&self) -> Result<String, JsError> {
+    pub fn components(&mut self) -> Result<String, JsError> {
+        self.complete()?;
         to_json(&inspect::components(&self.doc))
     }
 
@@ -545,9 +598,9 @@ impl FigFile {
         height: f64,
     ) -> Result<String, JsError> {
         let index = match &parent {
-            Some(id) => self.find(page, id)?,
+            Some(id) => self.find_on_page(page, id)?,
             None => {
-                self.scene(page)?;
+                self.page_scene(page)?;
                 0
             }
         };

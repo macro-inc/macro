@@ -96,6 +96,25 @@ impl<'d> Flat<'d> {
         }
     }
 
+    /// Empty tables for messages read from `data`, going on sharing what
+    /// an earlier table over the same data shared ([`Flat::into_shared`]).
+    pub fn with_shared(data: &'d [u8], shared: FlatShared) -> Self {
+        Self {
+            shared: RefCell::new(shared.shared),
+            strings: RefCell::new(shared.strings),
+            ..Self::new(data)
+        }
+    }
+
+    /// What was shared between the messages decoded here, to go on sharing
+    /// it in another table over the same data.
+    pub fn into_shared(self) -> FlatShared {
+        FlatShared {
+            shared: self.shared.into_inner(),
+            strings: self.strings.into_inner(),
+        }
+    }
+
     /// Forgets the decoded messages (keeping the tables' memory, and what
     /// was shared).
     pub fn clear(&mut self) {
@@ -266,6 +285,14 @@ impl<'d> Flat<'d> {
             .ok()
             .map(|at| &fields[at])
     }
+}
+
+/// What a [`Flat`] shared between its messages, kept apart from the
+/// tables: the values refer to the data by position only.
+#[derive(Default)]
+pub struct FlatShared {
+    shared: Shared,
+    strings: super::FxSet<Arc<str>>,
 }
 
 /// What was built from fields, by the bytes they were read from.

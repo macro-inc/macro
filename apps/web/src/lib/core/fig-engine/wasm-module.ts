@@ -10,6 +10,10 @@
 
 /** One open `.fig` file. Mirrors `fig_engine::wasm::FigFile`. */
 export interface WasmFigFile {
+  /** Whether the whole file is decoded (opening decodes the first page). */
+  isComplete: () => boolean;
+  /** Decodes about `nodes` more nodes; whether the file is complete. */
+  decodeSome: (nodes: number) => boolean;
   /** `FileSummary` JSON. */
   summary: () => string;
   components: () => string;

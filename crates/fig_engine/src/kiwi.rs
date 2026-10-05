@@ -14,7 +14,7 @@ use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 
 mod flat;
-pub use flat::Flat;
+pub use flat::{Flat, FlatShared};
 use flat::{FlatVal, Shared};
 
 /// FxHash: field names are short and trusted-shape, so a multiply-rotate

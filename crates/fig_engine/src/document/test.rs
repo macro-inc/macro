@@ -176,3 +176,94 @@ fn keeps_only_blob_bytes() {
     assert_eq!((b.x, b.y, b.w, b.h), (0.0, 0.0, 10.0, 10.0));
     assert!(doc.blobs.bytes(2).is_none());
 }
+
+/// Every node's properties and place in the tree (NaN compares as itself).
+fn snapshot(doc: &Document) -> Vec<String> {
+    doc.nodes
+        .iter()
+        .map(|n| format!("{:?} {:?} {:?}", n.props, n.parent, n.children))
+        .collect()
+}
+
+#[test]
+fn opens_lazily_with_what_the_first_page_shows() {
+    let bytes = std::sync::Arc::new(fig_file(
+        vec![
+            node(0, None, "DOCUMENT", "Document", vec![]),
+            node(1, Some((0, "a")), "CANVAS", "One", vec![]),
+            node(2, Some((0, "b")), "CANVAS", "Two", vec![]),
+            node(
+                3,
+                Some((1, "a")),
+                "INSTANCE",
+                "Button",
+                vec![(
+                    "symbolData",
+                    V::Msg(vec![("symbolID", crate::testing::guid(5))]),
+                )],
+            ),
+            node(4, Some((2, "a")), "FRAME", "Holder", vec![]),
+            node(5, Some((4, "a")), "SYMBOL", "Button", vec![]),
+            node(
+                6,
+                Some((5, "a")),
+                "RECTANGLE",
+                "Fill",
+                vec![("size", size(4.0, 2.0))],
+            ),
+            node(7, Some((2, "b")), "RECTANGLE", "Elsewhere", vec![]),
+            // A later change to a node not decoded yet.
+            V::Msg(vec![
+                ("guid", crate::testing::guid(7)),
+                ("name", V::Str("Renamed".into())),
+            ]),
+        ],
+        vec![],
+    ));
+    let full = Document::open_shared(&bytes).unwrap();
+    let mut lazy = Document::open_lazy(&bytes).unwrap();
+    assert!(!lazy.is_complete());
+    let decoded: Vec<bool> = (0..lazy.nodes.len() as NodeIdx)
+        .map(|i| lazy.is_decoded(i))
+        .collect();
+    // The pages, the first page, and the component its instance shows
+    // (whole, with its ancestors); not the other page's other layers.
+    assert_eq!(decoded, [true, true, true, true, true, true, true, false]);
+    let (a, b) = (
+        crate::Scene::build(&full, full.pages[0]),
+        crate::Scene::build(&lazy, lazy.pages[0]),
+    );
+    assert_eq!(a.nodes.len(), 3);
+    assert_eq!(b.nodes.len(), a.nodes.len());
+    for i in 0..a.nodes.len() as u32 {
+        assert_eq!(a.props(&full, i), b.props(&lazy, i));
+    }
+    assert!(lazy.decode_some(1).unwrap());
+    assert!(lazy.is_complete());
+    assert_eq!(names(&lazy, lazy.pages[1]), ["Holder", "Renamed"]);
+    assert_eq!(snapshot(&lazy), snapshot(&full));
+}
+
+#[test]
+fn completes_a_lazy_open_as_a_full_one() {
+    for bytes in [
+        crate::testing::showcase_file(),
+        crate::testing::design_system::design_system_file(),
+    ] {
+        let bytes = std::sync::Arc::new(bytes);
+        let full = Document::open_shared(&bytes).unwrap();
+        let mut lazy = Document::open_lazy(&bytes).unwrap();
+        for &page in &full.pages {
+            lazy.decode_page(page).unwrap();
+            let (a, b) = (
+                crate::Scene::build(&full, page),
+                crate::Scene::build(&lazy, page),
+            );
+            assert_eq!(a.nodes.len(), b.nodes.len());
+            assert!(b.nodes.iter().all(|n| lazy.is_decoded(n.src)));
+        }
+        lazy.complete().unwrap();
+        assert_eq!(snapshot(&lazy), snapshot(&full));
+        assert_eq!(lazy.images.len(), full.images.len());
+    }
+}

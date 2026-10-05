@@ -73,7 +73,7 @@ impl FigFile {
     /// JSON).
     #[wasm_bindgen(js_name = layoutAids)]
     pub fn layout_aids(&mut self, page: usize) -> Result<String, JsError> {
-        self.scene(page)?;
+        self.page_scene(page)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
         to_json(&crate::inspect::layout_aids(&self.doc, scene))
     }

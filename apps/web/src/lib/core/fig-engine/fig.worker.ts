@@ -9,10 +9,16 @@
  * Requests are queued and served one at a time: queries first, in arrival
  * order, then renders by priority. Renders not yet started can be
  * cancelled.
+ *
+ * A file opens with what its first page shows decoded; the worker decodes
+ * the rest in slices while it is idle. Until then, requests that read only
+ * an open page (renders, layers, hit tests) go ahead of reads that need the
+ * whole file, which wait for those slices; a change to the file keeps the
+ * order and decodes the rest at once.
  */
 
 import { match } from 'ts-pattern';
-import type { FigRequest, FigResponse } from './protocol';
+import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import { isWasmTrap, loadFigEngineWasm, type WasmFigFile } from './wasm-module';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
@@ -25,6 +31,39 @@ const queries: Exclude<FigRequest, Render>[] = [];
 const renders: Render[] = [];
 let scheduled = false;
 let busy = false;
+
+/** Nodes decoded per idle slice (some tens of milliseconds on large files). */
+const DECODE_SLICE = 2048;
+
+/** Queries that read only a page, answered before the file is decoded. */
+const PAGE_QUERIES = new Set<QueryMethod>([
+  'summary',
+  'layers',
+  'rows',
+  'hitTest',
+  'ancestry',
+  'geometry',
+  'outline',
+  'inRect',
+  'layoutAids',
+]);
+
+const pageOnly = (r: FigRequest) =>
+  r.kind === 'openPage' ||
+  r.kind === 'thumbnail' ||
+  (r.kind === 'query' && PAGE_QUERIES.has(r.method));
+
+/** Requests that change the file or depend on the order of changes. */
+const changesFile = (r: FigRequest) =>
+  r.kind === 'open' ||
+  r.kind === 'edit' ||
+  r.kind === 'paste' ||
+  r.kind === 'addImage' ||
+  r.kind === 'enableCollab' ||
+  r.kind === 'collabChanges';
+
+const partlyDecoded = () =>
+  file !== undefined && !trapped && !file.isComplete();
 
 const channel = new MessageChannel();
 channel.port1.onmessage = () => {
@@ -323,27 +362,50 @@ async function serve(request: FigRequest) {
   }
 }
 
+function takeRender(): Render | undefined {
+  if (renders.length === 0) return undefined;
+  let best = 0;
+  for (let i = 1; i < renders.length; i++) {
+    if (renders[i].priority < renders[best].priority) best = i;
+  }
+  return renders.splice(best, 1)[0];
+}
+
+/** The request to serve next, or `decode` for a slice of the file. */
+function next(): FigRequest | 'decode' | undefined {
+  if (!partlyDecoded()) return queries.shift() ?? takeRender();
+  // In order once a change waits: the first request that needs the whole
+  // file decodes the rest.
+  if (queries.some(changesFile)) return queries.shift();
+  const local = queries.findIndex(pageOnly);
+  if (local >= 0) return queries.splice(local, 1)[0];
+  // Reads of the whole file wait for the slices; renders do not.
+  return takeRender() ?? 'decode';
+}
+
 async function pump() {
   if (busy) return;
   busy = true;
   try {
-    let next: FigRequest | undefined = queries.shift();
-    if (!next && renders.length > 0) {
-      let best = 0;
-      for (let i = 1; i < renders.length; i++) {
-        if (renders[i].priority < renders[best].priority) best = i;
+    const request = next();
+    if (!request) return;
+    if (request === 'decode') {
+      try {
+        openFile().decodeSome(DECODE_SLICE);
+      } catch (error) {
+        // Decoding the rest failed: what needs it fails when served.
+        if (isWasmTrap(error)) trapped = true;
       }
-      next = renders.splice(best, 1)[0];
+      return;
     }
-    if (!next) return;
     try {
-      await serve(next);
+      await serve(request);
     } catch (error) {
-      fail(next.id, error);
+      fail(request.id, error);
     }
   } finally {
     busy = false;
-    if (queries.length > 0 || renders.length > 0) schedule();
+    if (queries.length > 0 || renders.length > 0 || partlyDecoded()) schedule();
   }
 }
 

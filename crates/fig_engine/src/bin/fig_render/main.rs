@@ -2,6 +2,7 @@
 //! and fidelity scores against the thumbnails Figma embeds in its files.
 
 mod collab;
+mod lazy;
 mod pdf;
 mod prototype;
 mod text;
@@ -121,11 +122,17 @@ enum Command {
         /// Only open each file.
         #[arg(long)]
         open: bool,
+        /// Open as the browser does: the first page, then the rest.
+        #[arg(long)]
+        lazy: bool,
         files: Vec<PathBuf>,
     },
     /// Edit each file as one person and check that a second person, both
     /// saves, and someone joining from the saved file see the same design.
     Collab { files: Vec<PathBuf> },
+    /// Open each file lazily, as the browser does: time the first page, and
+    /// check every page's scene and the completed document match a full open.
+    Lazy { files: Vec<PathBuf> },
     /// Lay out every auto layout frame again and report the frames whose
     /// children the engine places differently from Figma.
     Relayout {
@@ -220,10 +227,11 @@ fn main() {
             tile,
             grid,
             open,
+            lazy,
             files,
         } => {
             for path in files {
-                bench(&path, tile, grid, open);
+                bench(&path, tile, grid, open, lazy);
             }
             println!("peak rss {} MB", peak_rss_kb() / 1024);
         }
@@ -299,6 +307,11 @@ fn main() {
         Command::Collab { files } => {
             for path in files {
                 collab::check(&path);
+            }
+        }
+        Command::Lazy { files } => {
+            for path in files {
+                lazy::check(&path);
             }
         }
         Command::Compare { out, files } => {
@@ -1085,12 +1098,41 @@ fn peak_rss_kb() -> u64 {
         .unwrap_or(0)
 }
 
-fn bench(path: &Path, tile: u32, grid: i32, open_only: bool) {
+fn bench(path: &Path, tile: u32, grid: i32, open_only: bool, lazy: bool) {
     let Ok(bytes) = std::fs::read(path).map(std::sync::Arc::new) else {
         eprintln!("{}: unreadable", path.display());
         return;
     };
     heap_mb();
+    if lazy {
+        let t = Instant::now();
+        let mut doc = match Document::open_lazy(&bytes) {
+            Ok(d) => d,
+            Err(e) => {
+                println!("{}: ERROR {e}", stem(path));
+                return;
+            }
+        };
+        let first = t.elapsed();
+        let (heap, heap_peak) = heap_mb();
+        let t = Instant::now();
+        let page = Scene::build(&doc, doc.pages[0]);
+        let scene = t.elapsed();
+        drop(page);
+        let t = Instant::now();
+        let done = doc.complete();
+        let rest = t.elapsed();
+        let (heap_rest, peak_rest) = heap_mb();
+        println!(
+            "{}: lazy open {first:?} heap {heap} MB (peak {heap_peak} MB), first page scene \
+             {scene:?}; the rest {rest:?} ({}) heap {heap_rest} MB (peak {peak_rest} MB)",
+            stem(path),
+            done.map_or_else(|e| e.to_string(), |()| "ok".into())
+        );
+        if open_only {
+            return;
+        }
+    }
     let t = Instant::now();
     let Ok(container) = Container::open_shared(&bytes) else {
         println!("{}: not a .fig file", stem(path));

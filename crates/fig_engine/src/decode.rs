@@ -674,6 +674,40 @@ fn layout_child(m: &MsgRef) -> Option<LayoutChild> {
     (child != LayoutChild::default()).then_some(child)
 }
 
+/// The fields of a node change that opening a file lazily reads of every
+/// node before decoding any in full: identity, place in the tree, type,
+/// and what marks pages and override keys ([`skeleton`]).
+pub const SKELETON_FIELDS: &[&str] = &[
+    "guid",
+    "parentIndex",
+    "type",
+    "phase",
+    "internalOnly",
+    "overrideKey",
+];
+
+/// The [`SKELETON_FIELDS`] of a node change, read as [`props`] reads them.
+pub fn skeleton(m: MsgRef) -> Props {
+    let mut p = Props {
+        guid: m.msg("guid").and_then(guid),
+        ..Props::default()
+    };
+    if let Some(parent) = m.msg("parentIndex") {
+        p.parent = parent.msg("guid").and_then(guid);
+        p.position = parent
+            .str("position")
+            .map(Into::into)
+            .or_else(|| parent.u32("position").map(|n| format!("{n:010}").into()));
+    }
+    p.node_type = m
+        .enum_name("type")
+        .or_else(|| m.str("type"))
+        .map(NodeType::parse);
+    p.internal_only = m.bool("internalOnly");
+    p.override_key = m.msg("overrideKey").and_then(guid);
+    p
+}
+
 /// Reads one `NodeChange` (a node, an override, or derived layout).
 pub fn props(m: MsgRef) -> Props {
     let mut p = Props {
