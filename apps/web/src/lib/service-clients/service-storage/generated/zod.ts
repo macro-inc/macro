@@ -39425,7 +39425,7 @@ export const listEmailRemindersResponse = zod
           })
           .describe('An original thread with its active snooze.')
       )
-      .describe('Coalesced rows in nearest-occurrence order.'),
+      .describe('Original threads ordered by their snooze return time.'),
     nextCursor: zod
       .string()
       .nullish()

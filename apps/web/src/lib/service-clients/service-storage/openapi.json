@@ -24134,7 +24134,7 @@
             "items": {
               "$ref": "#/components/schemas/EmailReminderSummary"
             },
-            "description": "Coalesced rows in nearest-occurrence order."
+            "description": "Original threads ordered by their snooze return time."
           },
           "nextCursor": {
             "type": ["string", "null"],

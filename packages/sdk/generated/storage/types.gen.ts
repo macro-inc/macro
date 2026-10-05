@@ -5629,7 +5629,7 @@ export type EmailReminderCondition = 'if_no_reply' | 'regardless';
  */
 export type EmailReminderPage = {
     /**
-     * Coalesced rows in nearest-occurrence order.
+     * Original threads ordered by their snooze return time.
      */
     items: Array<EmailReminderSummary>;
     /**
