@@ -32,6 +32,12 @@ import {
   type MagicChipInteraction,
   type MagicChipPresentation,
 } from './presentation';
+import {
+  peekResolvedMagicChip,
+  readResolvedMagicChip,
+  rememberResolvedMagicChip,
+  resolvedMagicChipStoreAvailable,
+} from './resolved-cache';
 
 function magicChipStatus(
   status: SessionStatusDto
@@ -100,7 +106,10 @@ function upsert(
  * The header names the persona and model from the session row and the fold.
  *
  * The fold is the shared {@link AgentSession} for the id, so a chip and a
- * block showing the same session fold it once between them.
+ * block showing the same session fold it once between them. A turn that has
+ * settled is remembered. An anchored chip for a turn already resolved renders
+ * that passage and does not fetch or refold the log. A chip that follows the
+ * latest turn stays on the live session, because another turn can still start.
  */
 export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
@@ -110,6 +119,8 @@ export function createMagicChipModel(props: MagicChipData): {
 } {
   const [loading, setLoading] = createSignal(true);
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
+  /** Settled passage restored from the cache, before any fold. */
+  const [cachedMarkdown, setCachedMarkdown] = createSignal<string>();
   const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
   // Guard pending data so a cold query cannot suspend the surrounding editor.
   const session = () =>
@@ -124,28 +135,36 @@ export function createMagicChipModel(props: MagicChipData): {
   // The last system event's wire name, which the fold carries as status.
   const latestEvent = () => metadata()?.status ?? undefined;
 
-  const live = AgentSession.acquire(props.agentSessionId);
+  // Acquired only when this chip has to fold. A remembered turn never takes
+  // a reference, so scrolling it back into view does not reopen the log.
+  let live: AgentSession | undefined;
+  let unsubscribe: (() => void) | undefined;
+  // A chip scrolled out of a virtualized list mid-load releases the session,
+  // which rejects the load or the snapshot. That is not a fault.
+  let released = false;
+
   const applyEvents = (events: FoldedStreamEvent[]) => {
     for (const event of events) {
       if (event.kind === 'replace') setMessages(event.messages);
       else if (event.kind === 'metadata') setMetadata(event.metadata);
       else setMessages((current) => upsert(current, event.message));
     }
+    rememberSettledTurn();
   };
-  const unsubscribe = live.subscribe(applyEvents);
-  // A chip scrolled out of a virtualized list mid-load releases the session,
-  // which rejects the load or the snapshot. That is not a fault.
-  let released = false;
+
   async function loadSession() {
+    const current = live;
+    if (!current) return;
     try {
-      await live.load();
+      await current.load();
       if (released) return;
 
-      const snapshot = await live.snapshot();
+      const snapshot = await current.snapshot();
       if (released) return;
 
       setMessages(snapshot.messages);
       setMetadata(snapshot.metadata);
+      rememberSettledTurn();
     } catch (error: unknown) {
       if (!released) {
         console.error('[magic-chip] session log could not be folded', error);
@@ -154,12 +173,21 @@ export function createMagicChipModel(props: MagicChipData): {
       if (!released) setLoading(false);
     }
   }
-  void loadSession();
+
+  function attachLive(): AgentSession | undefined {
+    if (released) return undefined;
+    if (live) return live;
+    const sessionLive = AgentSession.acquire(props.agentSessionId);
+    live = sessionLive;
+    unsubscribe = sessionLive.subscribe(applyEvents);
+    void loadSession();
+    return sessionLive;
+  }
 
   onCleanup(() => {
     released = true;
-    unsubscribe();
-    live.release();
+    unsubscribe?.();
+    live?.release();
   });
 
   // Fold patches can arrive out of order. Follow the highest turn, including
@@ -171,6 +199,64 @@ export function createMagicChipModel(props: MagicChipData): {
       pending().reduce((latest, request) => Math.max(latest, request.turn), 0)
     );
 
+  function rememberSettledTurn() {
+    const currentTurn = turn();
+    const messagesForTurn = messages().filter(
+      (message) => message.turn === currentTurn
+    );
+    // Settled depends on the response's stop, not on lifecycle or questions.
+    const derived = deriveMagicChipPresentation({
+      persistedStatus: props.status,
+      latestEvent: latestEvent(),
+      prompt: messagesForTurn.find((message) => message.author.kind === 'user'),
+      response: messagesForTurn.find(
+        (message) => message.author.kind === 'agent'
+      ),
+    });
+    if (derived.kind !== 'settled') return;
+    rememberResolvedMagicChip({
+      agentSessionId: props.agentSessionId,
+      turn: currentTurn,
+      markdown: derived.markdown,
+    });
+  }
+
+  function adoptResolved(markdown: string) {
+    setCachedMarkdown(markdown);
+    setLoading(false);
+  }
+
+  async function readResolvedOrFold(turnNumber: number) {
+    const hit = await readResolvedMagicChip(props.agentSessionId, turnNumber);
+    if (released) return;
+    if (hit) {
+      adoptResolved(hit.markdown);
+      return;
+    }
+    attachLive();
+  }
+
+  function boot() {
+    const anchored = props.promptedMessage?.turn;
+    // An unanchored chip follows the latest turn, which can still move.
+    if (anchored === undefined) {
+      attachLive();
+      return;
+    }
+    const warm = peekResolvedMagicChip(props.agentSessionId, anchored);
+    if (warm) {
+      adoptResolved(warm.markdown);
+      return;
+    }
+    // Without IndexedDB, fold immediately. Waiting on a store that cannot
+    // exist would only delay the load.
+    if (!resolvedMagicChipStoreAvailable()) {
+      attachLive();
+      return;
+    }
+    void readResolvedOrFold(anchored);
+  }
+
   // An anchored chip only offers interactions from its own turn.
   const pendingForTurn = () =>
     pending().filter((request) => request.turn === turn());
@@ -178,7 +264,11 @@ export function createMagicChipModel(props: MagicChipData): {
     sessionId: () => props.agentSessionId,
     pending: pendingForTurn,
     canEdit,
-    issue: (action) => live.issue(action),
+    issue: (action) => {
+      const sessionLive = attachLive();
+      if (!sessionLive) throw new Error('agent session released');
+      return sessionLive.issue(action);
+    },
     onFailure: toast.failure,
   });
   const asking = (): MagicChipInteraction | undefined => {
@@ -208,6 +298,9 @@ export function createMagicChipModel(props: MagicChipData): {
     };
   };
 
+  // Before the memo, so a remembered turn's first read is already settled.
+  boot();
+
   // Memoized: the view reads these from many places per flush, and a fold
   // pushes a frame per streamed chunk.
   const presentation = createMemo(() => {
@@ -215,6 +308,10 @@ export function createMagicChipModel(props: MagicChipData): {
     const messagesForTurn = messages().filter(
       (message) => message.turn === currentTurn
     );
+    const remembered = cachedMarkdown();
+    if (messagesForTurn.length === 0 && remembered) {
+      return { kind: 'settled' as const, markdown: remembered };
+    }
     return deriveMagicChipPresentation({
       persistedStatus: persistedStatus(),
       latestEvent: latestEvent(),
