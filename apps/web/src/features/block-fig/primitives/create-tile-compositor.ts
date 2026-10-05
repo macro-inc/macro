@@ -29,6 +29,7 @@ import type {
 import type { Rect } from '@core/fig-engine/types';
 import type { Camera, Size } from '../core/camera';
 import {
+  createCoverage,
   quantizeScale,
   TILE,
   type TileKey,
@@ -317,10 +318,29 @@ export function createTileCompositor(options: TileCompositorOptions) {
         });
       const viewW = view.viewport.w / camera.zoom;
       const viewH = view.viewport.h / camera.zoom;
-      for (const scale of ordered) {
+      // Tiles are opaque: picked sharpest first, a tile goes unpainted where
+      // sharper ones already cover all of it (most of the view, once the
+      // exact tiles are in), so coarse stand-ins are drawn only in the gaps.
+      const coverage = createCoverage(width, height);
+      const content = page.content;
+      if (content) {
+        coverage.addOutside(
+          (content.x - camera.x) * unit,
+          (content.y - camera.y) * unit,
+          content.w * unit,
+          content.h * unit
+        );
+      }
+      const draws: {
+        bitmap: ImageBitmap;
+        exact: boolean;
+        x: number;
+        y: number;
+        size: number;
+      }[] = [];
+      for (let k = ordered.length - 1; k >= 0; k--) {
+        const scale = ordered[k];
         const exact = scale === target;
-        ctx.imageSmoothingEnabled = !exact;
-        ctx.imageSmoothingQuality = 'high';
         for (const e of cache.values()) {
           if (!e.bitmap || e.key.scale !== scale) continue;
           const r = tileRect(e.key);
@@ -342,8 +362,18 @@ export function createTileCompositor(options: TileCompositorOptions) {
             y = e.key.iy * TILE - Math.round(camera.y * scale);
             size = TILE;
           }
-          ctx.drawImage(e.bitmap, x, y, size, size);
+          if (coverage.covers(x, y, size, size)) continue;
+          coverage.add(x, y, size, size);
+          draws.push({ bitmap: e.bitmap, exact, x, y, size });
         }
+      }
+      for (let k = draws.length - 1; k >= 0; k--) {
+        const d = draws[k];
+        ctx.imageSmoothingEnabled = !d.exact;
+        // Enlarged stand-ins are blurry either way; bilinear filtering
+        // costs a fraction of bicubic. Reductions keep mipmapped filtering.
+        ctx.imageSmoothingQuality = d.size > TILE ? 'low' : 'high';
+        ctx.drawImage(d.bitmap, d.x, d.y, d.size, d.size);
       }
     },
 

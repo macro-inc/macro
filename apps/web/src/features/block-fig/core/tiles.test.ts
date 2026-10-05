@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { quantizeScale, TILE, tileRect, tilesFor, tileTouches } from './tiles';
+import {
+  createCoverage,
+  quantizeScale,
+  TILE,
+  tileRect,
+  tilesFor,
+  tileTouches,
+} from './tiles';
 
 describe('tiles', () => {
   it('quantizes scales to four significant digits', () => {
@@ -43,5 +50,21 @@ describe('tiles', () => {
     const key = { scale: 1, ix: 0, iy: 0 };
     expect(tileTouches(key, { x: 500, y: 500, w: 100, h: 100 })).toBe(true);
     expect(tileTouches(key, { x: 600, y: 0, w: 100, h: 100 })).toBe(false);
+  });
+
+  it('tells what opaque drawing already covers', () => {
+    const coverage = createCoverage(256, 256);
+    expect(coverage.covers(0, 0, 64, 64)).toBe(false);
+    // Only cells lying wholly inside a rectangle count as covered.
+    coverage.add(10, 0, 118, 256);
+    expect(coverage.covers(32, 0, 96, 256)).toBe(true);
+    expect(coverage.covers(16, 0, 64, 64)).toBe(false);
+    coverage.add(0, 0, 32, 256);
+    expect(coverage.covers(0, 0, 128, 256)).toBe(true);
+    expect(coverage.covers(0, 0, 129, 10)).toBe(false);
+    // Outside the content nothing is drawn, so it counts as covered.
+    coverage.addOutside(-50, -50, 200, 100);
+    expect(coverage.covers(0, 64, 256, 192)).toBe(true);
+    expect(coverage.covers(0, 0, 256, 64)).toBe(false);
   });
 });

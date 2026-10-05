@@ -78,3 +78,56 @@ export function tileTouches(key: TileKey, rect: Rect): boolean {
     rect.y < t.y + t.h
   );
 }
+
+/** Side of a coverage cell, in device pixels. */
+const CELL = 32;
+
+/**
+ * What opaque drawing already covers on a canvas, in cells of `CELL` device
+ * pixels. Drawing tiles sharpest first, a coarser tile can be skipped when
+ * sharper ones cover everything it would show.
+ */
+export function createCoverage(width: number, height: number) {
+  const cols = Math.max(1, Math.ceil(width / CELL));
+  const rows = Math.max(1, Math.ceil(height / CELL));
+  const cells = new Uint8Array(cols * rows);
+  /** The cells a rectangle touches, or (`whole`) lies over entirely. */
+  const span = (x: number, y: number, w: number, h: number, whole: boolean) => {
+    const start = whole ? Math.ceil : Math.floor;
+    const end = whole ? Math.floor : Math.ceil;
+    return {
+      c0: Math.max(0, start(x / CELL)),
+      r0: Math.max(0, start(y / CELL)),
+      c1: Math.min(cols, end((x + w) / CELL)),
+      r1: Math.min(rows, end((y + h) / CELL)),
+    };
+  };
+  return {
+    /** Whether everything a rectangle would show is covered already. */
+    covers(x: number, y: number, w: number, h: number): boolean {
+      const { c0, r0, c1, r1 } = span(x, y, w, h, false);
+      for (let r = r0; r < r1; r++) {
+        for (let c = c0; c < c1; c++) if (!cells[r * cols + c]) return false;
+      }
+      return true;
+    },
+    /** Records an opaque rectangle (the cells it lies over entirely). */
+    add(x: number, y: number, w: number, h: number) {
+      const { c0, r0, c1, r1 } = span(x, y, w, h, true);
+      if (c1 <= c0) return;
+      for (let r = r0; r < r1; r++) cells.fill(1, r * cols + c0, r * cols + c1);
+    },
+    /** Records everything outside a rectangle (where nothing is drawn). */
+    addOutside(x: number, y: number, w: number, h: number) {
+      const { c0, r0, c1, r1 } = span(x, y, w, h, false);
+      for (let r = 0; r < rows; r++) {
+        if (r < r0 || r >= r1 || c1 <= c0) {
+          cells.fill(1, r * cols, (r + 1) * cols);
+        } else {
+          cells.fill(1, r * cols, r * cols + c0);
+          cells.fill(1, r * cols + c1, (r + 1) * cols);
+        }
+      }
+    },
+  };
+}
