@@ -5,6 +5,11 @@
 //! alignment, and a frame that hugs its content takes the content's size,
 //! which can in turn re-lay out its own auto layout parent.
 //!
+//! The rules follow what Figma stores in its files (`fig_render relayout`
+//! checks them against real ones): hidden frames keep their layout, lines
+//! and turned layers that fill are centred in their space, rows can align
+//! on text baselines, and strokes take up room when a frame includes them.
+//!
 //! Wrapping stacks and grids keep the positions Figma stored.
 
 use super::{Patch, Txn, flags};
