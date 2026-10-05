@@ -8,6 +8,7 @@ export const EMAIL_TAB_IDS = [
   'calendar',
   'drafts',
   'shared',
+  'archived',
   'all',
 ] as const;
 
@@ -23,6 +24,7 @@ const EMAIL_TAB_LABELS = {
   calendar: 'Calendar',
   drafts: 'Drafts',
   shared: 'Shared',
+  archived: 'Archived',
   all: 'All',
 } as const satisfies Record<EmailTab, string>;
 

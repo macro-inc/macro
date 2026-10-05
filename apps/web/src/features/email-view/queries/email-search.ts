@@ -26,8 +26,9 @@ const nonEmailFilters: EntityFilters = {
   reminder_filters: { ids: [NIL_UUID] },
 };
 
-// Search has no draft/sent scoping, so those tabs (like All) search the
-// user's own threads — the same reach the legacy mail search had.
+// Search has no draft, sent, or archive scoping, so those tabs (like All)
+// search the user's own threads. Archive state, like drafts, is trimmed
+// client-side because search cannot express it.
 function tabFilters(tab: EmailTab): EmailFilters {
   return match(tab)
     .with('important', () => ({ importance: true, shared: 'exclude' as const }))
@@ -37,6 +38,7 @@ function tabFilters(tab: EmailTab): EmailFilters {
       shared: 'exclude' as const,
     }))
     .with('shared', () => ({ shared: 'only' as const }))
+    .with('archived', () => ({ shared: 'exclude' as const }))
     .with(
       'favorites',
       'drafts',

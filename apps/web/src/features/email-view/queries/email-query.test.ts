@@ -141,6 +141,7 @@ describe('buildEmailQuery', () => {
       ['calendar', 'all'],
       ['drafts', 'drafts'],
       ['shared', 'all'],
+      ['archived', 'all'],
       ['all', 'all'],
     ]);
 
@@ -190,6 +191,26 @@ describe('buildEmailQuery', () => {
     expect(calendar).toContain(serialize({ l: { CalendarOnly: true } }));
     expect(calendar).toContain(serialize({ l: { Shared: 'exclude' } }));
     expect(shared).toEqual({ l: { Shared: 'only' } });
+  });
+
+  it('lists archived mail on the All view, done and unshared', () => {
+    const args = buildEmailQuery(contextFor({ tab: 'archived' }));
+
+    expect(args.body.emailView).toBe('all');
+    const ef = serialize(args.body.ef);
+    expect(ef).toContain(serialize({ l: { InboxVisible: false } }));
+    expect(ef).toContain(serialize({ l: { Shared: 'exclude' } }));
+
+    const input = makeGraphqlSoupInput(args);
+    expect(input.initial?.emailView).toBe('ALL');
+    expect(input.initial?.filters?.emailFilter).toEqual({
+      tree: {
+        and: {
+          left: { literal: { inboxVisible: false } },
+          right: { literal: { shared: 'EXCLUDE' } },
+        },
+      },
+    });
   });
 
   it('leaves the inbox unscoped when every inbox is selected', () => {
@@ -346,6 +367,13 @@ describe('buildEmailSearchRequest', () => {
     // both tabs' results instead (see tabFilters).
     expect(filtersFor('drafts')).toEqual({});
     expect(filtersFor('sent')).toEqual({});
+  });
+
+  it('excludes shared threads from archived search', () => {
+    const filtersFor = (tab: EmailTab) =>
+      requestFor({ tab }).filters.email_filters;
+
+    expect(filtersFor('archived')).toEqual({ shared: 'exclude' });
   });
 
   it('restricts to the selected inboxes', () => {

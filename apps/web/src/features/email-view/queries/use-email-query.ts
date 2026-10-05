@@ -60,7 +60,7 @@ export type UseEmailDataSourceOptions = {
 /**
  * The server owns importance, calendar, sent and inbox scoping, so — as with
  * the legacy presets' client filters — only the shapes a cached entity can
- * contradict are re-checked here.
+ * contradict are re-checked here, including archive state.
  */
 function emailMatchesTab(
   entity: EmailEntity,
@@ -69,6 +69,7 @@ function emailMatchesTab(
 ): boolean {
   return match(tab)
     .with('drafts', () => entity.isDraft)
+    .with('archived', () => entity.done === true)
     .with('shared', () => userId !== undefined && entity.ownerId !== userId)
     .with(
       'important',
