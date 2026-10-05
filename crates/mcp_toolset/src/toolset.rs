@@ -1,5 +1,7 @@
 //! The toolset over connected servers.
 
+use tracing::Instrument as _;
+
 use crate::McpServer;
 use crate::call_tool_result::CallToolResultExt;
 use crate::mangle::{Mangled, MangledName};
@@ -67,7 +69,12 @@ impl RemoteMcpToolSet {
     #[tracing::instrument(skip_all, fields(servers = servers.len(), subject = ?subject))]
     pub async fn from_connected(servers: Vec<ConnectedServer>, subject: Option<String>) -> Self {
         let listings = futures::future::join_all(servers.into_iter().map(|server| async move {
-            match server.client.list_all_tools().await {
+            match server
+                .client
+                .list_all_tools()
+                .instrument(tracing::info_span!("agent.mcp.list_tools", server = %server.name))
+                .await
+            {
                 Ok(tools) => Some((server.name, server.client, tools)),
                 Err(error) => {
                     tracing::warn!(
@@ -128,6 +135,11 @@ impl RemoteMcpToolSet {
             _connections: connections,
             subject,
         }))
+    }
+
+    /// How many tools were discovered across every connected server.
+    pub fn len(&self) -> usize {
+        self.0.tools.len()
     }
 
     /// Returns `true` when no tools were discovered.
