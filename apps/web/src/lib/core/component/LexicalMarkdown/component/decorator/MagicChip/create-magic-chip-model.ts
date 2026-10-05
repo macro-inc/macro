@@ -13,6 +13,7 @@ import { createInteractionController } from '@app/features/block-agent/primitive
 import { describeToolCall } from '@app/features/block-agent/state/tool-approval-wording';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -116,6 +117,7 @@ export function createMagicChipModel(props: MagicChipData): {
   const session = () =>
     queryReadyGate(sessionQuery) ? sessionQuery.data : undefined;
   const canEdit = () => session()?.canEdit;
+  const userId = useUserId();
   const persistedStatus = () => {
     const status = session()?.status;
     return (status ? magicChipStatus(status) : undefined) ?? props.status;
@@ -194,7 +196,7 @@ export function createMagicChipModel(props: MagicChipData): {
         action: `Wants to ${describeToolCall(
           { slug: request.serverSlug, name: request.serverName },
           request.toolName,
-          "the owner's"
+          session()?.ownerId === userId() ? 'your' : "the owner's"
         )}`,
       };
     }
