@@ -17,7 +17,7 @@ pub fn spread(n: usize) -> Vec<String> {
     (1..=n)
         .map(|k| {
             let mut v = (k * step).min(span - 1);
-            if v % base == 0 {
+            if v.is_multiple_of(base) {
                 v += 1;
             }
             let mut out = [b'0'; 4];
