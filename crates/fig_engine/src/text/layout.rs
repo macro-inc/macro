@@ -11,6 +11,8 @@ use crate::model::{
 use std::collections::HashMap;
 use std::sync::Arc;
 
+const LINE_SEPARATOR: char = '\u{2028}';
+
 /// How the box follows the text (Figma's `textAutoResize`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum AutoResize {
@@ -185,9 +187,11 @@ pub(super) fn layout(
         if line.glyphs.is_empty() {
             line.style = s;
         }
-        if ch == '\n' {
+        // A line separator (Shift+Enter in Figma) breaks the line but not
+        // the paragraph.
+        if ch == '\n' || ch == LINE_SEPARATOR {
             line.width = line_width(&line.glyphs);
-            let next = Line::new(s, true, unit + 1);
+            let next = Line::new(s, ch == '\n', unit + 1);
             lines.push(std::mem::replace(&mut line, next));
             x = 0.0;
             prev = None;

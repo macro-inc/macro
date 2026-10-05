@@ -147,6 +147,13 @@ fn faces(data: &'static [u8], family: Option<&str>) -> Vec<FontFile> {
             };
             let italic = !matches!(attrs.style, skrifa::attribute::Style::Normal)
                 || parse_style(&style).italic;
+            // Static fonts split per weight may all be named "Regular".
+            let style = if axes.is_empty() && (parse_style(&style).weight - weights.0).abs() > 100.0
+            {
+                style_name(weights.0, italic)
+            } else {
+                style
+            };
             let width = axis(WDTH).map_or(attrs.stretch.ratio() * 100.0, |a| a.2);
             Some(FontFile {
                 data,
@@ -300,9 +307,6 @@ pub enum FontStatus {
 
 /// How far a face is from what a style asks for (0: a match).
 fn distance(f: &FontFile, style: &str, want: &StyleRequest) -> f32 {
-    if squash(&f.style) == squash(style) && f.axes.is_empty() {
-        return 0.0;
-    }
     let (lo, hi) = f.weights;
     let weight = if want.weight < lo {
         lo - want.weight
@@ -321,7 +325,36 @@ fn distance(f: &FontFile, style: &str, want: &StyleRequest) -> f32 {
     } else {
         (f.width - want.width).abs() * 4.0
     };
+    // A face named as asked matches when its weight is near (a "Book" at
+    // 350); fonts split per weight often all call themselves "Regular".
+    if squash(&f.style) == squash(style) && weight <= 100.0 && slant == 0.0 {
+        return 0.0;
+    }
     weight + slant + width
+}
+
+/// Figma's name for a weight and slant ("Semi Bold Italic").
+pub fn style_name(weight: f32, italic: bool) -> String {
+    const NAMES: [(f32, &str); 9] = [
+        (100.0, "Thin"),
+        (200.0, "Extra Light"),
+        (300.0, "Light"),
+        (400.0, "Regular"),
+        (500.0, "Medium"),
+        (600.0, "Semi Bold"),
+        (700.0, "Bold"),
+        (800.0, "Extra Bold"),
+        (900.0, "Black"),
+    ];
+    let name = NAMES
+        .iter()
+        .min_by(|a, b| (a.0 - weight).abs().total_cmp(&(b.0 - weight).abs()))
+        .map_or("Regular", |n| n.1);
+    match (name, italic) {
+        (_, false) => name.to_string(),
+        ("Regular", true) => "Italic".to_string(),
+        (_, true) => format!("{name} Italic"),
+    }
 }
 
 /// The faces that show `family` in `style`, best first (faces sharing its
