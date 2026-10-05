@@ -12,7 +12,7 @@ export function useAiUsagePreview() {
 
   const withPreview = (snapshot: AiUsageSnapshot | undefined) => {
     if (!snapshot || !active()) return snapshot;
-    // Free accounts currently have no dollar allowance in the billing summary.
+    // A display-only fallback lets previews work before the metered backend deploys.
     const included =
       snapshot.included_cents > 0 ? snapshot.included_cents : 4_000;
     return {
@@ -27,7 +27,10 @@ export function useAiUsagePreview() {
       overage_suspended: false,
       uncovered_cents: 0,
       remaining_cents: 0,
-      blocked_reason: 'allowance_exhausted' as const,
+      blocked_reason:
+        snapshot.tier === 'free'
+          ? ('free_allowance_exhausted' as const)
+          : ('allowance_exhausted' as const),
     };
   };
 

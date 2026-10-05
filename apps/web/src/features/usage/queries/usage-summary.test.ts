@@ -10,8 +10,8 @@ const snapshot: AiUsageSnapshot = {
   seats: 1,
   period_start: '2026-10-01T00:00:00Z',
   period_end: '2026-11-01T00:00:00Z',
-  included_cents: 0,
-  used_cents: 0,
+  included_cents: 500,
+  used_cents: 250,
   credits_consumed_cents: 0,
   credit_balance_cents: 2_500,
   overage_enabled: false,
@@ -19,14 +19,14 @@ const snapshot: AiUsageSnapshot = {
   overage_charged_cents: 0,
   overage_suspended: false,
   uncovered_cents: 0,
-  remaining_cents: 2_500,
+  remaining_cents: 250,
 };
 
 describe('usage billing access', () => {
   it('marks a Free payer as ineligible for credit purchases', () => {
     expect(toUsageSummary(snapshot)).toMatchObject({
       billingAccess: 'free',
-      monthlyPercent: 0,
+      monthlyPercent: 50,
       creditBalanceCents: 2_500,
     });
   });
@@ -48,6 +48,16 @@ describe('usage billing access', () => {
       billingAccess: 'free',
       monthlyPercent: 25,
     });
+  });
+
+  it('shows an exhausted Free allowance without granting access to legacy credits', () => {
+    expect(
+      toUsageSummary({
+        ...snapshot,
+        used_cents: 500,
+        blocked_reason: 'free_allowance_exhausted',
+      })
+    ).toMatchObject({ billingAccess: 'free', monthlyPercent: 100 });
   });
 
   it.each(['premium', 'max'] as const)(

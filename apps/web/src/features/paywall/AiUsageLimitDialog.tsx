@@ -10,6 +10,7 @@ import { useAiUsagePreview } from './ai-usage-preview';
 
 const TITLES: Record<AiDenyCode, string> = {
   ai_allowance_exhausted: "You've used this month's included AI",
+  ai_free_allowance_exhausted: "You've used this month's free AI",
   ai_overage_limit_reached: "You've hit your AI spending limit",
   ai_overage_payment_failed: 'Your last AI usage charge failed',
 };
@@ -27,7 +28,9 @@ export function AiUsageLimitDialog() {
   const usagePreview = useAiUsagePreview();
   const usageSnapshot = () =>
     usagePreview.withPreview(summary.isSuccess ? summary.data : undefined);
-  const freePlan = () => usageSnapshot()?.tier === 'free';
+  const freePlan = () =>
+    usageLimitCode() === 'ai_free_allowance_exhausted' ||
+    usageSnapshot()?.tier === 'free';
 
   const title = () => TITLES[usageLimitCode() ?? 'ai_allowance_exhausted'];
 
@@ -45,11 +48,11 @@ export function AiUsageLimitDialog() {
               {title()}
             </Dialog.Title>
             <Dialog.Description class="text-sm text-ink-extra-muted">
-              {usageSnapshot()
-                ? freePlan()
-                  ? 'Subscribe to a paid plan to keep going.'
-                  : 'Add additional credits to keep going.'
-                : 'Check your plan and usage options to keep going.'}
+              {freePlan()
+                ? 'Subscribe to a paid plan to keep going.'
+                : usageSnapshot()
+                  ? 'Add additional credits to keep going.'
+                  : 'Check your plan and usage options to keep going.'}
             </Dialog.Description>
           </div>
 

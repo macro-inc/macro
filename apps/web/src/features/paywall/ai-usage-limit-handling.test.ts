@@ -79,12 +79,20 @@ const spendingActions = [
   ],
 ] as const;
 
-test.each(spendingActions)(
-  '%s returns a typed refusal without opening UI in the client',
-  async (_name, action) => {
+test.each(
+  spendingActions.flatMap(([name, action]) =>
+    ['ai_allowance_exhausted', 'ai_free_allowance_exhausted'].map((reason) => ({
+      name,
+      action,
+      reason,
+    }))
+  )
+)(
+  '$name returns a typed $reason refusal without opening UI in the client',
+  async ({ action, reason }) => {
     fetch.mockResolvedValueOnce(
       Response.json(
-        { code: 'ai_allowance_exhausted', error: 'Usage blocked' },
+        { code: reason, error: 'Usage blocked' },
         { status: 402 }
       )
     );
@@ -92,18 +100,19 @@ test.each(spendingActions)(
     expect(result._unsafeUnwrapErr()).toEqual([
       {
         code: AI_USAGE_LIMIT_ERROR,
-        reason: 'ai_allowance_exhausted',
+        reason,
         message: 'Usage blocked',
       },
     ]);
     expect(state.usageLimitOpen()).toBe(false);
     expect(handleAiUsageLimitError(result._unsafeUnwrapErr())).toBe(true);
-    expect(state.usageLimitCode()).toBe('ai_allowance_exhausted');
+    expect(state.usageLimitCode()).toBe(reason);
   }
 );
 
 test.each([
   'ai_allowance_exhausted',
+  'ai_free_allowance_exhausted',
   'ai_overage_limit_reached',
   'ai_overage_payment_failed',
 ])(

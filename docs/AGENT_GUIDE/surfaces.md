@@ -2012,7 +2012,7 @@ uses the shared workspace width.
 Left nav (feature and platform gates still apply):
 
 - **Blocks**: Email, Calendar, Agents, CRM.
-- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Billing, Mobile App.
+- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Mobile App.
 - **Workspace**: Team, Tags, Integrations (personal Gmail/GitHub accounts).
 - **Developer**: Agent connections, Runtimes, MCP server, API Keys, Bots.
 
@@ -2032,17 +2032,29 @@ retains theme search, editing, copying, and custom theme creation.
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` opens Agent connections, and `harness` aliases Runtimes.
 
-`Billing` (current plan card with
-`Manage`; only in dev (`dev.macro.com/app` or a local frontend using the dev
-backend), every plan shows an **AI usage** card with the period meter; paid
-plans add the credit balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that
-redirect to Stripe Checkout, and a `Usage billing` toggle with per-period limit
-pills, while Free shows only the meter against its monthly cap; these controls
-and usage-billing promotional copy are hidden outside dev; an `Upgrade` section
-for Free users with a Premium card (`Upgrade now`) and a Max card (`Get Max`),
-an `Upgrade to Max` card on Premium (titled `Need more AI?` in dev), and a
-`Switch to Premium` link on Max; on a team a plan change moves only the viewer's
-own seat)
+`Usage` appears directly above Billing, including for Free accounts. Its
+**Monthly limit** meter displays a percentage using the backend's current-period
+usage and allowance. The info button explains AI agent chat and AI document
+editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
+**Need more usage?** with `$25` / `$50` / `$100` / `Other`. Supported amounts
+redirect to Stripe Checkout; unsupported custom amounts are disabled. Free
+accounts see `View plans` instead of purchase or reload controls; paid team
+members who are not the payer cannot manage billing.
+
+The **Automatic reload** switch opens **Auto-Reload** without toggling directly.
+It contains Minimum balance (default `$10`), Target balance (default `$100`),
+optional Maximum monthly spend (`No limit`), a payment-method management link,
+and the automatic-charge warning. Balance-triggered reload is not implemented
+by the backend yet, so saving is disabled outside its explicit developer preview.
+Existing postpaid usage billing is shown separately and can be turned off by the
+payer. Local **Developer tools** can preview 100% usage or Auto-Reload without
+changing account billing; Reset preview restores server data.
+
+`Billing` shows the current plan and `Manage`, an `Upgrade` section for Free
+users with Premium (`Upgrade now`) and Max (`Get Max`), an `Upgrade to Max` card
+on Premium, and a `Switch to Premium` link on Max. On a team, a plan change moves
+only the viewer's own seat. Plan allowance copy uses the backend catalog and
+still follows the `enable-ai-usage-billing` flag; usage controls live in Usage.
 
 `Team` (members list; on a paid team each row shows the seat's plan,
 and admins/owners can move a seat between Premium and Max with the `Seat plan`

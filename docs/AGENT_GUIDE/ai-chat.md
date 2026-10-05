@@ -535,12 +535,12 @@ than treating it as approval or repeatedly sending the prompt.
 
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
-Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
-are shown only when the `enable-ai-usage-billing` PostHog flag is on (default on
-in frontend development builds). Normal paid-model access rules
-still apply everywhere. Backend enforcement does not depend on those frontend
-controls, and enabling it does not enable credit collection; that needs
-`ENABLE_AI_USAGE_BILLING`. There is no new upgrade prompt in this rollout.
+Settings → Usage and the AI usage-limit dialog are available for every plan.
+Usage displays the current period as a **Monthly limit** percentage; its info
+button explains that AI agent chat and AI document editing count toward the limit.
+Plan allowance copy and comparisons still follow `enable-ai-usage-billing`.
+Model pickers have no usage multipliers. Normal paid-model access rules still
+apply. Backend enforcement and credit collection remain independent policies.
 
 Session creation and spending controls also return 402/503 for admission failures.
 Waiting prompts are checked again before execution: exhaustion removes rejected
@@ -568,26 +568,31 @@ for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
 used up and no credits or usage billing cover the request, sending a message
 answers HTTP 402 and the app opens the **AI usage limit** dialog (title
 `You've used this month's included AI`, or the spending-limit / failed-charge
-variants). It shows the same meter and controls as Settings → Billing:
-credit-pack buttons, the `Usage billing` toggle, an `Open billing settings`
-button, and `Upgrade to Max` for Premium payers (on a team this moves only the
-payer's own seat). Team members who are not the payer see a note to ask the
-team owner to add credits or turn on usage billing.
+variants). It shows **Monthly limit**, the message `Add additional credits to
+keep going.`, and an `Open usage settings` button. Credit purchases live in
+Settings → Usage; subscription changes live in Settings → Billing.
 
 The free plan is a hard cap: when its monthly allowance is used up, requests
-answer 402 with code `ai_free_allowance_exhausted` and the dialog (title
-`You've used this month's free AI`) shows the meter against the cap with an
-`Upgrade` button that opens Billing; there are no credit or usage-billing
-controls. The cap resets with the UTC calendar month.
+answer 402 with code `ai_free_allowance_exhausted`. The dialog title is
+`You've used this month's free AI`; it says `Subscribe to a paid plan to keep
+going.` and offers `View plans`, which opens Billing. This upgrade path remains
+available while the usage summary loads or fails. Free users cannot buy credits
+or enable Auto-Reload. The cap resets with the UTC calendar month.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
+
+AI service clients return typed quota errors without opening UI. Foreground
+mutation failures and direct session/edit actions present the shared dialog;
+ordinary HTTP failures and background queries do not. Document AI-edit refusals
+apply no edits and open this dialog instead of the generic `AI edit failed`
+toast. Legacy chat tool errors carrying a recognized quota code also open it.
 
 ### Quota manual checks
 
 Use an isolated local backend with local billing fixtures, not real hosted
 accounts. See [quota rollout and coverage](../AI_QUOTA_ENFORCEMENT.md) for setup
 and the full matrix. Record both browser behavior and the Network/protocol result;
-existing UI does not promise a dedicated quota dialog outside development mode.
+recognized foreground quota refusals open the shared dialog in every frontend environment.
 
 1. With the flag absent/false across all hosts, send a legacy chat and a managed
    session prompt. Confirm ordinary behavior and new uncounted usage rows.
@@ -604,12 +609,20 @@ existing UI does not promise a dedicated quota dialog outside development mode.
    work remains without a retry loop and that Stop still works.
 4. Invoke AI editing on an editable document and an independent AI tool with the
    exhausted fixture. Confirm failed results and unchanged document content. Check
-   manual editing and dictation still work. A successful chat whose optional rename
+   the usage-limit dialog opens, with a subscription CTA for Free or a Usage
+   settings CTA for paid accounts. Check manual editing and dictation still work. A successful chat whose optional rename
    is refused keeps its existing/default title rather than failing the chat.
 5. Set false consistently and restart/redeploy all local processes. Retry refused
    work explicitly and confirm recovery, new uncounted rows, and unchanged counted
    history. Do not erase history to simulate rollback or claim that rollback is a
    quota reset. Check cancellation in both flag states.
+
+For frontend-only checks against dev, use Settings → Usage → **Developer tools**
+to simulate 100% usage and open the limit dialog, then reset the preview. This is
+a display override, not a quota change. To test actual refusal handling without
+hosted AI spending, intercept only the tested AI request in Chrome DevTools and
+return the matching 402 body; restore the response afterward. Backend admission
+and settlement tests still require the isolated backend fixtures above.
 
 ## Start a doc-scoped chat
 

@@ -112,7 +112,12 @@ export function Usage() {
       ? {
           exhausted: usagePreview.active,
           simulateExhausted: () => usagePreview.setActive(true),
-          openLimitDialog: () => showUsageLimit('ai_allowance_exhausted'),
+          openLimitDialog: () =>
+            showUsageLimit(
+              summary.isSuccess && summary.data.tier === 'free'
+                ? 'ai_free_allowance_exhausted'
+                : 'ai_allowance_exhausted'
+            ),
           previewAutoReload: () => setAutoReloadPreview(true),
           reset: () => {
             usagePreview.setActive(false);

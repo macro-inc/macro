@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import {
   DEFAULT_MODEL,

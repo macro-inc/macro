@@ -84,10 +84,6 @@ vi.mock('@queries/auth', () => ({
 vi.mock('@service-stripe/client', () => ({
   stripeServiceClient: { createPortalSession: vi.fn() },
 }));
-vi.mock('./AiUsage', () => ({
-  AiUsageMeter: () => <div data-testid="usage-meter">AI usage meter</div>,
-  AiUsageControls: () => <div data-testid="usage-controls">Add credits</div>,
-}));
 vi.mock('@ui', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: { children: JSX.Element }) => <>{props.children}</>,
@@ -116,19 +112,14 @@ describe.each([false, true])(
     });
 
     it.each<PlanTier>(['free', 'premium', 'max'])(
-      'keeps %s subscription controls and gates usage UI and copy on the flag',
+      'keeps %s subscription controls and gates allowance copy on the flag',
       (tier) => {
         state.tier = tier;
         const { container } = render(() => <Billing />);
 
         expect(screen.getByRole('heading', { name: 'Billing' })).toBeTruthy();
-        // Free users see their monthly cap but have no credits or usage billing.
-        expect(screen.queryByTestId('usage-meter') !== null).toBe(
-          aiUsageBilling
-        );
-        expect(screen.queryByTestId('usage-controls') !== null).toBe(
-          aiUsageBilling && tier !== 'free'
-        );
+        expect(screen.queryByRole('heading', { name: 'AI usage' })).toBeNull();
+        expect(screen.queryByText('Add credits')).toBeNull();
         expect(container.textContent?.includes('of AI usage')).toBe(
           aiUsageBilling
         );
@@ -162,15 +153,11 @@ describe.each([false, true])(
       expect(screen.getByRole('button', { name: 'Manage' })).toBeTruthy();
     });
 
-    it('keeps unlimited plans free of credit controls', () => {
+    it('keeps usage management in its own settings page for unlimited plans', () => {
       state.unlimited = true;
       render(() => <Billing />);
-      expect(screen.queryByTestId('usage-controls')).toBeNull();
-      expect(
-        screen.queryByText(
-          'Your enterprise plan includes unlimited AI usage.'
-        ) !== null
-      ).toBe(aiUsageBilling);
+      expect(screen.queryByText('Add credits')).toBeNull();
+      expect(screen.queryByRole('heading', { name: 'AI usage' })).toBeNull();
     });
 
     it('offers both paid plans to free users', () => {

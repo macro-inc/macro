@@ -10,6 +10,7 @@ export type AiUsageLimitError = ResultError<typeof AI_USAGE_LIMIT_ERROR> & {
 
 const KNOWN_CODES: readonly AiDenyCode[] = [
   'ai_allowance_exhausted',
+  'ai_free_allowance_exhausted',
   'ai_overage_limit_reached',
   'ai_overage_payment_failed',
 ];

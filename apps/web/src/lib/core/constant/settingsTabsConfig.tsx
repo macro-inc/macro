@@ -124,16 +124,16 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         keywords: ['alerts', 'email', 'sound'],
       },
       {
-        tab: 'Usage',
-        label: 'Usage',
-        icon: GaugeIcon,
-        keywords: ['ai', 'limit', 'credits', 'reload', 'usage'],
-      },
-      {
         tab: 'Shortcuts',
         label: 'Keyboard shortcuts',
         icon: KeyboardIcon,
         keywords: ['keyboard', 'hotkey', 'keybinding'],
+      },
+      {
+        tab: 'Usage',
+        label: 'Usage',
+        icon: GaugeIcon,
+        keywords: ['ai', 'limit', 'credits', 'reload', 'usage'],
       },
       {
         tab: 'Billing',

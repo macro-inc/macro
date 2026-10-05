@@ -109,13 +109,19 @@ settles on summary reads, overage changes, and credit purchases. Enable both
 together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
-The frontend is not tied to this flag. The usage meter, credit packs,
-usage-billing controls, the out-of-credits dialog, the "$N of AI usage" plan
-copy, and model usage multipliers are gated by the frontend's
-`enable-ai-usage-billing` PostHog flag (`enableAiUsageBilling` in
-`apps/web/src/lib/core/constant/featureFlags.ts`). It defaults on in
-development builds and follows PostHog elsewhere, independent of backend
-settlement; `VITE_ENABLE_AI_USAGE_BILLING` overrides it locally.
+The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
+dialog are visible for all plans. Foreground AI actions recognize the four quota
+codes below; clients return typed errors, and presentation happens in the app's
+mutation subscription or direct session/edit action handlers. Generic HTTP errors
+and background queries do not open dialogs. Free refusals offer a paid plan;
+paid refusals link to Usage settings. The monthly percentage uses
+`GET /ai-billing/summary`; plan allowances use `GET /ai-billing/plans`.
+Plan allowance copy and comparisons follow the `enable-ai-usage-billing` PostHog
+flag (`enableAiUsageBilling` in `apps/web/src/lib/core/constant/featureFlags.ts`),
+which defaults on in development builds and follows PostHog elsewhere;
+`VITE_ENABLE_AI_USAGE_BILLING` overrides it locally. Model usage multipliers have
+been removed. The Auto-Reload UI has no balance-triggered backend yet and cannot
+save outside its explicit display-only developer preview.
 
 ## Public failure contracts
 

@@ -14,17 +14,7 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ModelOption, ModelSelector } from './ModelSelector';
 
-const state = vi.hoisted(() => ({ aiUsageBilling: false, mobile: false }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableAiUsageBilling: { key: 'enable-ai-usage-billing', override: undefined },
-}));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({
-    enabled: state.aiUsageBilling,
-    payload: undefined,
-    loading: false,
-  }),
-}));
+const state = vi.hoisted(() => ({ mobile: false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => state.mobile }));
 vi.mock('@components/app/mobile/MobileDrawer', () => {
   const Slot = (props: { children?: JSX.Element }) => (
@@ -46,7 +36,6 @@ vi.mock('@components/app/mobile/MobileDrawer', () => {
 });
 
 beforeEach(() => {
-  state.aiUsageBilling = false;
   state.mobile = false;
 });
 afterEach(cleanup);
@@ -131,23 +120,6 @@ describe('ModelSelector: availability', () => {
     expect(container.textContent).toContain('Opus 5.5');
     expect(container.textContent).toContain('Haiku 4.5');
   });
-
-  it.each([
-    { aiUsageBilling: false, mobile: false },
-    { aiUsageBilling: true, mobile: false },
-    { aiUsageBilling: false, mobile: true },
-    { aiUsageBilling: true, mobile: true },
-  ])(
-    'gates usage multipliers on enable-ai-usage-billing ($aiUsageBilling), mobile=$mobile',
-    ({ aiUsageBilling, mobile }) => {
-      state.aiUsageBilling = aiUsageBilling;
-      state.mobile = mobile;
-      const { container } = render(() => (
-        <ModelSelector models={ALL_PAID} onSelect={() => {}} />
-      ));
-      expect(container.textContent?.includes('× usage')).toBe(aiUsageBilling);
-    }
-  );
 
   it('grays out and locks inaccessible models, leaving accessible ones clean', () => {
     // A free user: only the fast model is available.

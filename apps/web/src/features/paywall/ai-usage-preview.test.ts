@@ -51,19 +51,19 @@ describe('AI usage preview', () => {
     expect(useAiUsagePreview().withPreview(snapshot)).toBe(snapshot);
   });
 
-  it('uses a positive preview allowance for a Free account', () => {
+  it('uses the backend allowance and Free refusal reason in the preview', () => {
     useAiUsagePreview().setActive(true);
     const preview = useAiUsagePreview().withPreview({
       ...snapshot,
       tier: 'free',
-      included_cents: 0,
-      used_cents: 0,
+      included_cents: 500,
+      used_cents: 250,
     });
     expect(preview).toMatchObject({
       tier: 'free',
-      included_cents: 4_000,
-      used_cents: 4_000,
-      blocked_reason: 'allowance_exhausted',
+      included_cents: 500,
+      used_cents: 500,
+      blocked_reason: 'free_allowance_exhausted',
     });
   });
 
