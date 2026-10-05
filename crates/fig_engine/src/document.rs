@@ -115,7 +115,7 @@ impl Document {
         let mut schema = Schema::decode(&container.schema)?;
         decode::restrict_schema(&mut schema);
         let mut table = NodeTable::default();
-        let ranges = read_message(&schema, &container.message, &mut table)?;
+        let (ranges, embedded) = read_message(&schema, &container.message, &mut table)?;
         let NodeTable {
             mut nodes,
             by_guid,
@@ -195,6 +195,14 @@ impl Document {
                 (at, bytes.len() as u32)
             })
             .collect();
+        let mut images = container.images;
+        for (hash, blob) in embedded {
+            if let Some(&(start, len)) = ranges.get(blob as usize) {
+                images.entry(hash).or_insert_with(|| {
+                    Encoded::Owned(data[start as usize..(start + len) as usize].to_vec())
+                });
+            }
+        }
         drop(container.message);
         let original_blobs = ranges.len();
         let next_guid = Guid {
@@ -220,7 +228,7 @@ impl Document {
                 ranges,
                 paths,
             },
-            images: container.images,
+            images,
             thumbnail: container.thumbnail,
             file_name,
             original_blobs,
@@ -358,14 +366,19 @@ impl NodeTable {
 
 /// Reads the top-level `Message`, converting node changes one at a time so
 /// the generic decoded form of the whole file never exists at once. Returns
-/// the blobs as ranges of `data`.
-fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<Vec<(u32, u32)>> {
+/// the blobs as ranges of `data`, and the image files carried in blobs.
+fn read_message(
+    schema: &Schema,
+    data: &[u8],
+    table: &mut NodeTable,
+) -> Result<(Vec<(u32, u32)>, Vec<(String, u32)>)> {
     let root = schema
         .def_index("Message")
         .ok_or_else(|| corrupt("the schema has no Message type"))?;
     let decoder = Decoder::new(schema);
     let mut r = Reader::new(data);
     let mut ranges = Vec::new();
+    let mut images = Vec::new();
     let def = schema.def(root);
     loop {
         let id = r.var_uint()?;
@@ -383,6 +396,7 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<V
                     let msg = decoder.decode(&mut r, node_def)?;
                     let m = MsgRef::new(schema, &msg);
                     if !decode::is_removed(&m) {
+                        decode::embedded_images(&m, &mut images);
                         table.add(decode::props(m));
                     }
                 }
@@ -397,7 +411,7 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<V
             _ => decoder.skip_field(&mut r, field, 0)?,
         }
     }
-    Ok(ranges)
+    Ok((ranges, images))
 }
 
 fn read_blob(

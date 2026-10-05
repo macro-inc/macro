@@ -770,6 +770,27 @@ fn layer_index(l: &Props) -> Option<u32> {
     l.guid_path.as_deref()?.last().map(|g| g.local)
 }
 
+/// Image files a node change carries in the message's blobs (older files
+/// keep image fills there rather than beside the document): `(hash, blob)`
+/// for each image paint with a `dataBlob`, its overrides' included.
+pub fn embedded_images(m: &MsgRef, out: &mut Vec<(String, u32)>) {
+    for field in ["fillPaints", "strokePaints", "backgroundPaints"] {
+        for paint in m.msgs(field) {
+            if let Some(image) = paint.msg("image")
+                && let Some(blob) = image.u32("dataBlob")
+                && let Some(hash) = image.bytes("hash").filter(|h| !h.is_empty())
+            {
+                out.push((hex(hash), blob));
+            }
+        }
+    }
+    if let Some(symbol) = m.msg("symbolData") {
+        for o in symbol.msgs("symbolOverrides") {
+            embedded_images(&o, out);
+        }
+    }
+}
+
 /// Whether a node change deletes its node (`phase: REMOVED`).
 pub fn is_removed(m: &MsgRef) -> bool {
     m.enum_name("phase") == Some("REMOVED")

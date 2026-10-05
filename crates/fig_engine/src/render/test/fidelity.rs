@@ -26,7 +26,7 @@ struct Vector x:float y:float
 struct Matrix m00:float m01:float m02:float m10:float m11:float m12:float
 message ParentIndex guid:GUID position:string
 message ColorStop color:Color position:float
-message Image hash:byte[] name:string
+message Image hash:byte[] name:string dataBlob:uint
 message PaintFilterMessage exposure:float contrast:float vibrance:float temperature:float tint:float highlights:float shadows:float
 message Paint type:PaintType color:Color opacity:float visible:bool blendMode:BlendMode stops:ColorStop[] transform:Matrix image:Image imageScaleMode:ImageScaleMode paintFilter:PaintFilterMessage
 message Path windingRule:WindingRule commandsBlob:uint
@@ -237,4 +237,45 @@ fn places_connector_labels_and_truncates_text() {
         .map(|x| 255 - u32::from(rgba(&p, x, 34)[0]))
         .sum();
     assert!(ink > 100, "an ellipsis after the kept glyphs ({ink})");
+}
+
+/// Older files carry image fills in the message's blobs (`Image.dataBlob`)
+/// rather than as files beside the document.
+#[test]
+fn draws_images_stored_in_blobs() {
+    let mut red = Pixmap::new(2, 2).unwrap();
+    red.fill(tiny_skia::Color::from_rgba8(255, 0, 0, 255));
+    let png = crate::images::encode_png(&red);
+    let image = V::Msg(vec![
+        ("type", V::Enum("IMAGE")),
+        ("opacity", V::Float(1.0)),
+        ("visible", V::Bool(true)),
+        ("imageScaleMode", V::Enum("FILL")),
+        (
+            "image",
+            V::Msg(vec![
+                ("hash", V::Bytes(vec![0xab; 20])),
+                ("dataBlob", V::Uint(1)),
+            ]),
+        ),
+    ]);
+    let bytes = file(
+        vec![node(
+            2,
+            Some((1, "!")),
+            "RECTANGLE",
+            "Photo",
+            vec![
+                ("size", size(40.0, 40.0)),
+                ("transform", translate(10.0, 10.0)),
+                ("fillPaints", V::List(vec![image])),
+                ("fillGeometry", fill_geometry(0)),
+            ],
+        )],
+        vec![square(0.0, 0.0, 40.0, 40.0), png],
+    );
+    let doc = Document::open(&bytes).unwrap();
+    assert!(doc.images.contains_key(&"ab".repeat(20)));
+    let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 60, 60));
+    assert_eq!(rgba(&p, 30, 30), [255, 0, 0, 255]);
 }
