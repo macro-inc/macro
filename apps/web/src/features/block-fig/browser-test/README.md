@@ -44,7 +44,13 @@ points, SVG export (compared with the PNG) and Copy as SVG, and copying
 layers into another file through the system clipboard. `fig-design-ui` covers
 the right-click menus, the color and paint pickers (gradients, dashes,
 reordering paints), mixed values for several layers, and the layers
-panel's range selection and arrow keys.
+panel's range selection and arrow keys. `fig-design-system` opens
+`design-system.fig` (components with boolean, text, and instance swap
+properties, a component set, and color, text, and effect styles in use,
+made by `fig_engine::testing::design_system`) and covers instance
+properties, variant switching, swapping and resetting instances, editing
+a component set's variants and properties, binding layers to properties,
+and applying, creating, renaming, and detaching styles.
 
 `?collab` opens several people on one design side by side
 (`&people=alice,bob` by default), each with the real shared-design session
