@@ -103,7 +103,7 @@ const Block: Component = () => {
   return (
     <DocumentBlockContainer>
       <div
-        class="size-full bg-surface flex flex-col relative"
+        class="size-full flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
           onDragEnd: () => setIsDragging(false),
