@@ -1,11 +1,15 @@
-import type { ItemDragOverlayData } from '@app/components/app/ItemDragAndDrop';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import DotsSixVerticalIcon from '@phosphor/dots-six-vertical.svg';
 import CloseIcon from '@phosphor/x.svg';
 import {
+  closestCenter,
   createSortable,
+  DragDropProvider,
+  DragDropSensors,
+  type DragEventHandler,
+  DragOverlay,
   maybeTransformStyle,
   SortableProvider,
   useDragDropContext,
@@ -24,11 +28,6 @@ import {
   setSidebarItemVisible,
 } from './use-sidebar-prefs';
 
-type SidebarNavDragData = ItemDragOverlayData & {
-  dragType: 'sidebar-nav';
-  name: string;
-};
-
 const [customizeSidebarOpen, setCustomizeSidebarOpen] = createSignal(false);
 
 export { setCustomizeSidebarOpen };
@@ -39,12 +38,43 @@ function useNavReorderMode(): 'drag' | 'buttons' {
   return canDrag && !isTouchDevice() ? 'drag' : 'buttons';
 }
 
-function CustomizeNavList(props: { ids: string[]; children: JSX.Element }) {
-  const dnd = useDragDropContext();
+function CustomizeNavList(props: {
+  items: SidebarNextNavItem[];
+  onDragEnd: DragEventHandler;
+  children: JSX.Element;
+}) {
   return (
-    <Show when={dnd !== null} fallback={props.children}>
-      <SortableProvider ids={props.ids}>{props.children}</SortableProvider>
-    </Show>
+    // Sort against the original row positions. The app's DOM hit detector
+    // follows animated rows and makes the target oscillate as they move away.
+    <DragDropProvider
+      collisionDetector={closestCenter}
+      onDragEnd={props.onDragEnd}
+    >
+      <DragDropSensors />
+      <SortableProvider
+        ids={props.items
+          .filter((item) => item.id !== 'home')
+          .map((item) => item.id)}
+      >
+        {props.children}
+      </SortableProvider>
+      <DragOverlay class="z-drag pointer-events-none">
+        {(draggable) => (
+          <Show when={props.items.find((item) => item.id === draggable?.id)}>
+            {(item) => (
+              <div class="flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5 text-sm text-ink shadow-md">
+                <DotsSixVerticalIcon class="size-7 p-1.5 text-ink-muted" />
+                <Dynamic
+                  component={item().icon}
+                  class="size-4 text-ink-muted"
+                />
+                <span>{item().label}</span>
+              </div>
+            )}
+          </Show>
+        )}
+      </DragOverlay>
+    </DragDropProvider>
   );
 }
 
@@ -63,15 +93,7 @@ function CustomizeNavRow(props: {
 
   const sortable =
     !isHome() && reorderMode === 'drag'
-      ? createSortable(props.item.id, {
-          dragType: 'sidebar-nav',
-          get name() {
-            return props.item.label;
-          },
-          overlayIcon: () => (
-            <Dynamic component={props.item.icon} class="size-4" />
-          ),
-        } satisfies SidebarNavDragData)
+      ? createSortable(props.item.id)
       : undefined;
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -88,7 +110,9 @@ function CustomizeNavRow(props: {
       style={sortable ? maybeTransformStyle(sortable.transform) : undefined}
       class={cn(
         'flex items-center gap-2 rounded-lg px-2 py-1.5',
-        !!dndState?.active.draggable && 'transition-transform',
+        !!dndState?.active.draggable &&
+          !sortable?.isActiveDraggable &&
+          'transition-transform',
         sortable?.isActiveDraggable && 'opacity-40'
       )}
     >
@@ -166,19 +190,15 @@ function CustomizeNavRow(props: {
 export function CustomizeSidebarModal(props: { gates: NavItemGates }) {
   const items = () => customizableNavItems(props.gates);
   const orderIds = () => items().map((item) => item.id);
-  const sortableIds = () => orderIds().filter((id) => id !== 'home');
-
-  const [, dndActions] = useDragDropContext() ?? [];
-  dndActions?.onDragEnd(({ draggable, droppable }) => {
-    if (draggable.data.dragType !== 'sidebar-nav') return;
-    if (!droppable || droppable.data.dragType !== 'sidebar-nav') return;
+  const onDragEnd: DragEventHandler = ({ draggable, droppable }) => {
+    if (!droppable) return;
     const ids = orderIds();
     reorderSidebarItems(
       ids.indexOf(String(draggable.id)),
       ids.indexOf(String(droppable.id)),
       ids
     );
-  });
+  };
 
   const moveByDirection = (itemId: string, direction: -1 | 1) => {
     const ids = orderIds();
@@ -211,7 +231,7 @@ export function CustomizeSidebarModal(props: { gates: NavItemGates }) {
             Home always stays first.
           </Dialog.Description>
 
-          <CustomizeNavList ids={sortableIds()}>
+          <CustomizeNavList items={items()} onDragEnd={onDragEnd}>
             <For each={items()}>
               {(item, index) => (
                 <CustomizeNavRow
