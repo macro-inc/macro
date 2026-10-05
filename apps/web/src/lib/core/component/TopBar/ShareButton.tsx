@@ -51,6 +51,7 @@ import {
 import {
   setCallRecordTeamShareCache,
   sharePermissionFromCallRecord,
+  updateCallChannelShare,
   updateCallTeamShare,
   useCallRecordQuery,
 } from '@queries/call/call';
@@ -967,6 +968,26 @@ export function ShareModal(props: ShareModalProps) {
         });
         console.error(result);
       }
+    } else if (props.itemType === 'call') {
+      const result = await updateCallChannelShare(props.id, {
+        channelSharePermissions: [
+          {
+            operation: 'remove',
+            channelId,
+          },
+        ],
+      });
+      if (!result.isErr()) {
+        refetch();
+        toast.success('Removed channel access', {
+          subtext: 'Channel no longer has access to this call',
+        });
+      } else {
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
+        console.error(result);
+      }
     }
   });
 
@@ -1052,6 +1073,16 @@ export function ShareModal(props: ShareModalProps) {
             ],
           },
           threadId: props.id,
+        });
+      } else if (props.itemType === 'call') {
+        result = await updateCallChannelShare(props.id, {
+          channelSharePermissions: [
+            {
+              operation: 'replace',
+              accessLevel,
+              channelId,
+            },
+          ],
         });
       }
 
