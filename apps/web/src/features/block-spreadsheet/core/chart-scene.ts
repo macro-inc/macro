@@ -30,6 +30,8 @@ export type ChartShape =
       y: number;
       r: number;
       fill: string;
+      opacity?: number;
+      stroke?: string;
       tip?: string;
     }
   | {
@@ -112,7 +114,9 @@ function extent(plots: ChartPlotData[], categories: number): [number, number] {
     else
       for (const series of plot.series)
         for (const value of series.values) if (value !== null) see(value);
-    if (plot.kind !== 'line' && plot.kind !== 'scatter') see(0);
+    // Bars and areas grow from zero; lines and prices need not.
+    if (plot.kind === 'column' || plot.kind === 'bar' || plot.kind === 'area')
+      see(0);
   }
   if (!Number.isFinite(low)) return [0, 1];
   // Like Excel, an axis starts at zero unless the values sit far from it.
@@ -159,22 +163,34 @@ export function chartScene(
   const round = data.plots.find(
     (plot) => plot.kind === 'pie' || plot.kind === 'doughnut'
   );
-  // Legend entries: slices of a pie, otherwise visible series.
+  const surface = data.plots.find((plot) => plot.kind === 'surface');
+  const bands = surface && surfaceBands(surface, data.palette);
+  // Legend entries: slices of a pie, bands of a surface, otherwise series.
   const entries = round
     ? data.categories.map((name, index) => ({
         name,
         color: data.palette[index % data.palette.length],
         line: false,
       }))
-    : data.plots.flatMap((plot) =>
-        plot.series
-          .filter((series) => !series.noFill || plot.kind === 'line')
-          .map((series) => ({
-            name: series.name,
-            color: series.color,
-            line: plot.kind === 'line' || plot.kind === 'scatter',
-          }))
-      );
+    : bands
+      ? bands.entries
+      : data.plots.flatMap((plot) =>
+          plot.series
+            // Prices draw as high-low lines and bars, not as their series.
+            .filter(
+              (series) =>
+                plot.kind !== 'stock' &&
+                (!series.noFill || plot.kind === 'line')
+            )
+            .map((series) => ({
+              name: series.name,
+              color: series.color,
+              line:
+                plot.kind === 'line' ||
+                plot.kind === 'scatter' ||
+                (plot.kind === 'radar' && !plot.filled),
+            }))
+        );
   if (data.legend && entries.length) {
     const swatch = 8 * scale;
     const row = font * 1.6;
@@ -253,10 +269,28 @@ export function chartScene(
     roundChart(shapes, round, data, { top, bottom, left, right });
     return { shapes };
   }
+  const radar = data.plots.filter((plot) => plot.kind === 'radar');
+  if (radar.length) {
+    radarChart(shapes, radar, data, { top, bottom, left, right }, font, scale);
+    return { shapes };
+  }
+  if (surface && bands) {
+    surfaceChart(
+      shapes,
+      surface,
+      data,
+      { top, bottom, left, right },
+      font,
+      bands
+    );
+    return { shapes };
+  }
   const primary = data.plots.filter((plot) => !plot.secondary);
   const secondary = data.plots.filter((plot) => plot.secondary);
   const horizontal = primary.some((plot) => plot.kind === 'bar');
-  const scatter = data.plots.find((plot) => plot.kind === 'scatter');
+  const scatter = data.plots.find(
+    (plot) => plot.kind === 'scatter' || plot.kind === 'bubble'
+  );
   const count = Math.max(1, data.categories.length);
   const valueScale = (plots: ChartPlotData[], range: [number, number]) => {
     const scale = scaleLinear()
@@ -407,6 +441,8 @@ export function chartScene(
         horizontal,
         axis.format
       );
+    else if (plot.kind === 'stock')
+      stocks(shapes, plot, data, axis.scale, center, band, axis.format, scale);
     else lines(shapes, plot, data, axis.scale, center, axis.format, scale);
   }
   shapes.push(
@@ -643,23 +679,54 @@ function scatterChart(
     range: [number, number]
   ) => { scale: Scale; ticks: number[]; format: (value: number) => string }
 ) {
-  const plots = data.plots.filter((plot) => plot.kind === 'scatter');
-  const xs = plots.flatMap((plot) =>
-    plot.series.flatMap((series) => series.x ?? [])
+  const plots = data.plots.filter(
+    (plot) => plot.kind === 'scatter' || plot.kind === 'bubble'
   );
-  const xPlot: ChartPlotData = {
-    kind: 'scatter',
-    series: [
-      {
-        name: '',
-        color: '',
-        values: xs,
-        sample: undefined,
-      } satisfies ChartSeriesData,
-    ],
+  // The largest bubble's radius: a quarter of the smaller side across, as
+  // Excel draws bubbles at its default scale.
+  const bubble = plots.some((plot) => plot.kind === 'bubble')
+    ? Math.min(box.right - box.left, box.bottom - box.top) / 8
+    : 0;
+  /** An axis over values, widened so the largest bubble fits inside. */
+  const axis = (
+    values: (number | null)[],
+    format: string | undefined,
+    range: [number, number]
+  ) => {
+    const over = (extra: number[]) =>
+      valueScale(
+        [
+          {
+            kind: 'scatter',
+            series: [
+              {
+                name: '',
+                color: '',
+                values: [...values, ...extra],
+                sample: format,
+              } satisfies ChartSeriesData,
+            ],
+          },
+        ],
+        range
+      );
+    const first = over([]);
+    const numbers = values.filter((value): value is number => value !== null);
+    if (!bubble || !numbers.length) return first;
+    const [low, high] = first.scale.domain();
+    const margin = (bubble * (high - low)) / Math.abs(range[1] - range[0]);
+    return over([Math.min(...numbers) - margin, Math.max(...numbers) + margin]);
   };
-  const x = valueScale([xPlot], [box.left, box.right]);
-  const y = valueScale(plots, [box.bottom, box.top]);
+  const x = axis(
+    plots.flatMap((plot) => plot.series.flatMap((series) => series.x ?? [])),
+    undefined,
+    [box.left, box.right]
+  );
+  const y = axis(
+    plots.flatMap((plot) => plot.series.flatMap((series) => series.values)),
+    sample(plots),
+    [box.bottom, box.top]
+  );
   for (const tick of y.ticks) {
     shapes.push({
       type: 'line',
@@ -699,14 +766,44 @@ function scatterChart(
       role: 'label',
     });
   }
+  // Bubble areas follow their sizes.
+  const largest = Math.max(
+    0,
+    ...plots.flatMap((plot) =>
+      plot.series.flatMap((series) =>
+        (series.sizes ?? []).map((size) => Math.abs(size ?? 0))
+      )
+    )
+  );
   for (const plot of plots)
     for (const series of plot.series) {
       const points = series.values.flatMap((value, index) => {
         const at = series.x?.[index];
         return value === null || at === null || at === undefined
           ? []
-          : [{ x: x.scale(at), y: y.scale(value), value, at }];
+          : [{ x: x.scale(at), y: y.scale(value), value, at, index }];
       });
+      if (plot.kind === 'bubble') {
+        for (const point of points) {
+          const size = series.sizes?.[point.index];
+          const radius =
+            size === null || size === undefined || !largest
+              ? bubble / 2
+              : Math.sqrt(Math.abs(size) / largest) * bubble;
+          if (radius > 0)
+            shapes.push({
+              type: 'circle',
+              x: point.x,
+              y: point.y,
+              r: radius,
+              fill: series.color,
+              opacity: 0.75,
+              stroke: 'var(--color-surface)',
+              tip: `${series.name}: (${x.format(point.at)}, ${y.format(point.value)})${size === null || size === undefined ? '' : `, ${size}`}`,
+            });
+        }
+        continue;
+      }
       if (!series.noLine && points.length > 1)
         shapes.push({
           type: 'path',
@@ -762,6 +859,289 @@ function roundChart(
       stroke: 'var(--color-surface)',
       strokeWidth: 1,
       tip: `${data.categories[index] ?? ''}: ${Math.round((slice.value / (total || 1)) * 1000) / 10}%`,
+    });
+  });
+}
+
+const polygon = (points: [number, number][]) =>
+  `M${points.map(([x, y]) => `${x},${y}`).join('L')}Z`;
+
+/** A radar chart: one spoke per category, values outward from the center. */
+function radarChart(
+  shapes: ChartShape[],
+  plots: ChartPlotData[],
+  data: ChartData,
+  box: Box,
+  font: number,
+  zoom: number
+) {
+  const count = Math.max(
+    3,
+    data.categories.length,
+    ...plots.flatMap((plot) =>
+      plot.series.map((series) => series.values.length)
+    )
+  );
+  const cx = (box.left + box.right) / 2;
+  const cy = (box.top + box.bottom) / 2;
+  const radius =
+    Math.min(box.right - box.left, box.bottom - box.top) / 2 - font * 1.6;
+  if (radius < 10) return;
+  const values = plots.flatMap((plot) =>
+    plot.series.flatMap((series) =>
+      series.values.filter((value): value is number => value !== null)
+    )
+  );
+  const scale = scaleLinear()
+    .domain([Math.min(0, ...values), Math.max(0, ...values) || 1])
+    .range([0, radius])
+    .nice(5);
+  const ticks = scale.ticks(5);
+  const format = tickFormat(
+    sample(plots),
+    ticks.length > 1 ? ticks[1] - ticks[0] : 1
+  );
+  const angle = (index: number) => -Math.PI / 2 + (2 * Math.PI * index) / count;
+  const at = (index: number, distance: number): [number, number] => [
+    cx + distance * Math.cos(angle(index)),
+    cy + distance * Math.sin(angle(index)),
+  ];
+  for (const tick of ticks) {
+    const distance = scale(tick);
+    if (distance <= 0) continue;
+    shapes.push({
+      type: 'path',
+      d: polygon(
+        Array.from({ length: count }, (_, index) => at(index, distance))
+      ),
+      stroke: 'var(--color-edge-muted)',
+      strokeWidth: 1,
+    });
+    shapes.push({
+      type: 'text',
+      x: cx + 3 * zoom,
+      y: cy - distance,
+      text: format(tick),
+      anchor: 'start',
+      size: font * 0.9,
+      role: 'label',
+      baseline: 'middle',
+    });
+  }
+  for (let index = 0; index < count; index++) {
+    const [x, y] = at(index, radius);
+    shapes.push({ type: 'line', x1: cx, y1: cy, x2: x, y2: y, role: 'grid' });
+    const [labelX, labelY] = at(index, radius + font * 0.9);
+    const cosine = Math.cos(angle(index));
+    shapes.push({
+      type: 'text',
+      x: labelX,
+      y: labelY,
+      text: truncate(data.categories[index] ?? `${index + 1}`, radius, font),
+      anchor: Math.abs(cosine) < 0.3 ? 'middle' : cosine > 0 ? 'start' : 'end',
+      size: font,
+      role: 'label',
+      baseline: 'middle',
+    });
+  }
+  for (const plot of plots)
+    for (const series of plot.series) {
+      const points = series.values.flatMap((value, index) =>
+        value === null ? [] : [{ at: at(index, scale(value)), value, index }]
+      );
+      if (!points.length) continue;
+      shapes.push({
+        type: 'path',
+        d: polygon(points.map((point) => point.at)),
+        stroke: series.color,
+        strokeWidth: (plot.filled ? 1 : 2) * zoom,
+        ...(plot.filled && { fill: series.color, opacity: 0.5 }),
+        tip: series.name,
+      });
+      if (!plot.filled)
+        for (const point of points)
+          shapes.push({
+            type: 'circle',
+            x: point.at[0],
+            y: point.at[1],
+            r: 2.5 * zoom,
+            fill: series.color,
+            tip: `${series.name} · ${data.categories[point.index] ?? point.index + 1}: ${format(point.value)}`,
+          });
+    }
+}
+
+/**
+ * Stock prices, as Excel draws them: a line from each category's highest
+ * value to its lowest, and a bar from the first series (open) to the last
+ * (close), white when it rose, or else a tick at the close.
+ */
+function stocks(
+  shapes: ChartShape[],
+  plot: ChartPlotData,
+  data: ChartData,
+  scale: Scale,
+  center: (index: number) => number,
+  band: number,
+  format: (value: number) => string,
+  zoom: number
+) {
+  const first = plot.series[0];
+  const last = plot.series.at(-1);
+  const width = Math.max(3 * zoom, band * 0.5);
+  const count = Math.max(
+    data.categories.length,
+    ...plot.series.map((series) => series.values.length)
+  );
+  for (let index = 0; index < count; index++) {
+    const label = data.categories[index] ?? `${index + 1}`;
+    const x = center(index);
+    const values = plot.series
+      .map((series) => series.values[index])
+      .filter(
+        (value): value is number => value !== null && value !== undefined
+      );
+    if (!values.length) continue;
+    const high = Math.max(...values);
+    const low = Math.min(...values);
+    if (high !== low)
+      shapes.push({
+        type: 'path',
+        d: `M${x},${scale(high)}V${scale(low)}`,
+        stroke: 'var(--color-ink-muted)',
+        strokeWidth: zoom,
+        tip: `${label}: high ${format(high)}, low ${format(low)}`,
+      });
+    const open = first?.values[index] ?? null;
+    const close = last?.values[index] ?? null;
+    if (plot.upDown && open !== null && close !== null) {
+      const top = scale(Math.max(open, close));
+      const bottom = Math.max(top + 1, scale(Math.min(open, close)));
+      shapes.push({
+        type: 'path',
+        d: `M${x - width / 2},${top}H${x + width / 2}V${bottom}H${x - width / 2}Z`,
+        fill: close >= open ? 'var(--color-surface)' : 'var(--color-ink)',
+        stroke: 'var(--color-ink)',
+        strokeWidth: zoom,
+        tip: `${label}: open ${format(open)}, close ${format(close)}`,
+      });
+    } else if (close !== null)
+      shapes.push({
+        type: 'path',
+        d: `M${x},${scale(close)}H${x + width / 2}`,
+        stroke: 'var(--color-ink)',
+        strokeWidth: 1.5 * zoom,
+        tip: `${last?.name ?? 'Close'} · ${label}: ${format(close)}`,
+      });
+  }
+}
+
+/** A surface's value bands, as a legend shows them, and each value's band. */
+function surfaceBands(plot: ChartPlotData, palette: string[]) {
+  const values = plot.series.flatMap((series) =>
+    series.values.filter((value): value is number => value !== null)
+  );
+  const scale = scaleLinear()
+    .domain([Math.min(0, ...values), Math.max(...values, 1)])
+    .nice(Math.min(8, palette.length));
+  const ticks = scale.ticks(Math.min(8, palette.length));
+  const format = tickFormat(
+    sample([plot]),
+    ticks.length > 1 ? ticks[1] - ticks[0] : 1
+  );
+  const count = Math.max(1, ticks.length - 1);
+  return {
+    entries: Array.from({ length: count }, (_, index) => ({
+      name: `${format(ticks[index])}–${format(ticks[index + 1] ?? ticks[index])}`,
+      color: palette[index % palette.length],
+      line: false,
+    })),
+    band: (value: number) => {
+      let index = 0;
+      while (index < count - 1 && value >= ticks[index + 1]) index++;
+      return index;
+    },
+    format,
+  };
+}
+
+/**
+ * A surface seen from above, as Excel's contour charts show it: a cell per
+ * category and series, colored by its value's band.
+ */
+function surfaceChart(
+  shapes: ChartShape[],
+  plot: ChartPlotData,
+  data: ChartData,
+  box: Box,
+  font: number,
+  bands: ReturnType<typeof surfaceBands>
+) {
+  const rows = plot.series.length;
+  const columns = Math.max(
+    1,
+    data.categories.length,
+    ...plot.series.map((series) => series.values.length)
+  );
+  if (!rows) return;
+  const labelWidth = Math.min(
+    (box.right - box.left) * 0.3,
+    Math.max(...plot.series.map((series) => series.name.length), 1) *
+      font *
+      CHARACTER_WIDTH +
+      6
+  );
+  const left = box.left + labelWidth;
+  const bottom = box.bottom - font * 1.6;
+  const width = (box.right - left) / columns;
+  const height = (bottom - box.top) / rows;
+  if (width <= 0 || height <= 0) return;
+  // The first series is at the bottom, as on Excel's series axis.
+  plot.series.forEach((series, row) => {
+    const y = bottom - (row + 1) * height;
+    series.values.forEach((value, column) => {
+      if (value === null) return;
+      shapes.push({
+        type: 'rect',
+        x: left + column * width,
+        y,
+        width: width + 0.5,
+        height: height + 0.5,
+        fill: bands.entries[bands.band(value)].color,
+        tip: `${series.name} · ${data.categories[column] ?? column + 1}: ${bands.format(value)}`,
+      });
+    });
+    shapes.push({
+      type: 'text',
+      x: left - 4,
+      y: y + height / 2,
+      text: truncate(series.name, labelWidth - 6, font),
+      anchor: 'end',
+      size: font,
+      role: 'label',
+      baseline: 'middle',
+    });
+  });
+  const every = Math.max(
+    1,
+    Math.ceil(
+      (Math.max(...data.categories.map((label) => label.length), 1) *
+        font *
+        CHARACTER_WIDTH +
+        4) /
+        width
+    )
+  );
+  data.categories.forEach((label, column) => {
+    if (column % every) return;
+    shapes.push({
+      type: 'text',
+      x: left + (column + 0.5) * width,
+      y: bottom + font * 1.2,
+      text: truncate(label, width * every - 2, font),
+      anchor: 'middle',
+      size: font,
+      role: 'label',
     });
   });
 }

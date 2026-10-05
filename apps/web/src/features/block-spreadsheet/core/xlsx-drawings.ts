@@ -276,14 +276,12 @@ const CHART_TYPES: Record<string, ChartKind | 'bar'> = {
   ofPieChart: 'pie',
   doughnutChart: 'doughnut',
   scatterChart: 'scatter',
+  radarChart: 'radar',
+  bubbleChart: 'bubble',
+  stockChart: 'stock',
+  surfaceChart: 'surface',
+  surface3DChart: 'surface',
 };
-const UNSUPPORTED_CHARTS = new Set([
-  'radarChart',
-  'bubbleChart',
-  'stockChart',
-  'surfaceChart',
-  'surface3DChart',
-]);
 const LEGENDS = {
   r: 'right',
   tr: 'right',
@@ -315,7 +313,6 @@ export function readChart(
   let titleSeen = false;
   let titleDeleted = false;
   let legend: SheetChart['legend'];
-  let unsupported = false;
   // Element names from the chart root down, without prefixes.
   const stack: string[] = [];
   let plot: PendingPlot | undefined;
@@ -354,6 +351,7 @@ export function readChart(
       series.categories = index;
     else if (series && (part === 'val' || part === 'yVal'))
       series.values = index;
+    else if (series && part === 'bubbleSize') series.sizes = index;
   };
   parse(bytes, path, (parser) => {
     parser.on('opentag', (node) => {
@@ -389,10 +387,12 @@ export function readChart(
             plot: { kind: kind === 'bar' ? 'column' : kind, series: [] },
             axes: [],
           };
-        } else if (parent === 'plotArea' && UNSUPPORTED_CHARTS.has(node.local))
-          unsupported = true;
-        else if (plot && parent === plot.local) {
+        } else if (plot && parent === plot.local) {
           if (node.local === 'barDir') plot.direction = value.val;
+          else if (node.local === 'radarStyle' && value.val === 'filled')
+            plot.plot.filled = true;
+          else if (node.local === 'hiLowLines') plot.plot.hiLow = true;
+          else if (node.local === 'upDownBars') plot.plot.upDown = true;
           else if (node.local === 'grouping')
             plot.plot.grouping =
               value.val === 'stacked' || value.val === 'percentStacked'
@@ -523,10 +523,6 @@ export function readChart(
       }
     });
   });
-  if (unsupported)
-    warnings.add(
-      'Radar, bubble, stock and surface charts are kept for export but not drawn.'
-    );
   const xml = new TextDecoder().decode(bytes);
   const kept = chartSource(xml, theme);
   if (!kept)
@@ -803,7 +799,9 @@ export function readSheetDrawings(options: {
 
 // Export -------------------------------------------------------------------
 
-export type ChartValues = (reference: string) => ChartValue[] | undefined;
+/** A cell a chart reads, with the Excel number format it displays with. */
+export type CellChartValue = ChartValue & { format?: string };
+export type ChartValues = (reference: string) => CellChartValue[] | undefined;
 
 const RELATIONSHIPS =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -821,11 +819,15 @@ const numberText = (value: number) =>
     ? String(value)
     : String(Number(value.toPrecision(15)));
 
+/** The number format of the first number among values, as Excel caches it. */
+const numberFormat = (values: CellChartValue[] | undefined) =>
+  values?.find((value) => value.number !== undefined)?.format || 'General';
+
 /** Points of a cache or of fixed values, as Excel writes them. */
 function points(
   prefix: string,
   kind: 'number' | 'text',
-  values: ChartValue[]
+  values: CellChartValue[]
 ): string {
   const element = (local: string) => `${prefix}${local}`;
   const items = values
@@ -840,7 +842,7 @@ function points(
     )
     .join('');
   return kind === 'number'
-    ? `<${element('formatCode')}>General</${element('formatCode')}><${element('ptCount')} val="${values.length}"/>${items}`
+    ? `<${element('formatCode')}>${xml(numberFormat(values))}</${element('formatCode')}><${element('ptCount')} val="${values.length}"/>${items}`
     : `<${element('ptCount')} val="${values.length}"/>${items}`;
 }
 
@@ -848,7 +850,7 @@ function points(
 function cache(
   prefix: string,
   kind: 'numRef' | 'strRef',
-  values: ChartValue[] | undefined
+  values: CellChartValue[] | undefined
 ): string {
   if (!values?.length) return '';
   const local = kind === 'numRef' ? 'numCache' : 'strCache';
@@ -981,6 +983,9 @@ function keptChart(
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${withCaches}`;
 }
 
+/** The id of a surface chart's series axis. */
+const SERIES_AXIS = 5;
+
 /** A chart part made from what Macro knows of the chart. */
 function generatedChart(chart: SheetChart, values: ChartValues): string {
   const reference = (index: number | undefined, kind: 'numRef' | 'strRef') =>
@@ -989,17 +994,32 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
       : dataSource('c:', kind, chart.references[index], values);
   const palette = chart.colors ?? themeAccents([]);
   let seriesIndex = 0;
-  const groups = chart.plots.map((plot) => {
+  // Excel opens a stock chart of three or four series only; others are
+  // written as lines.
+  const plots = chart.plots.map((plot) =>
+    plot.kind === 'stock' && (plot.series.length < 3 || plot.series.length > 4)
+      ? { ...plot, kind: 'line' as const }
+      : plot
+  );
+  const groups = plots.map((plot) => {
     const axes = plot.secondary ? [3, 4] : [1, 2];
     const series = plot.series
       .map((value) => {
         const index = seriesIndex++;
         const color = (value.color ?? palette[index % palette.length]).slice(1);
         const solid = `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>`;
-        const fill =
-          plot.kind === 'line' || plot.kind === 'scatter'
-            ? `<c:spPr><a:ln w="28575" cap="rnd">${value.noLine ? '<a:noFill/>' : solid}<a:round/></a:ln></c:spPr>`
-            : plot.kind === 'pie' || plot.kind === 'doughnut'
+        const lined =
+          plot.kind === 'line' ||
+          plot.kind === 'scatter' ||
+          (plot.kind === 'radar' && !plot.filled);
+        const fill = lined
+          ? `<c:spPr><a:ln w="28575" cap="rnd">${value.noLine ? '<a:noFill/>' : solid}<a:round/></a:ln></c:spPr>`
+          : plot.kind === 'stock'
+            ? // Prices are drawn by high-low lines and up-down bars.
+              '<c:spPr><a:ln w="19050"><a:noFill/></a:ln></c:spPr>'
+            : plot.kind === 'pie' ||
+                plot.kind === 'doughnut' ||
+                plot.kind === 'surface'
               ? ''
               : `<c:spPr>${value.noFill ? '<a:noFill/>' : solid}</c:spPr>`;
         // A fixed name is written as its text.
@@ -1017,25 +1037,36 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
             : label
               ? `<c:tx><c:v>${xml(label)}</c:v></c:tx>`
               : '';
-        const categories =
-          plot.kind === 'scatter'
-            ? value.categories === undefined
-              ? ''
-              : `<c:xVal>${reference(value.categories, 'numRef')}</c:xVal>`
-            : value.categories === undefined
-              ? ''
-              : `<c:cat>${reference(value.categories, 'strRef')}</c:cat>`;
-        const numbers =
-          plot.kind === 'scatter'
-            ? `<c:yVal>${reference(value.values, 'numRef')}</c:yVal>`
-            : `<c:val>${reference(value.values, 'numRef')}</c:val>`;
+        const xy = plot.kind === 'scatter' || plot.kind === 'bubble';
+        const categories = xy
+          ? value.categories === undefined
+            ? ''
+            : `<c:xVal>${reference(value.categories, 'numRef')}</c:xVal>`
+          : value.categories === undefined
+            ? ''
+            : `<c:cat>${reference(value.categories, 'strRef')}</c:cat>`;
+        const numbers = xy
+          ? `<c:yVal>${reference(value.values, 'numRef')}</c:yVal>${
+              plot.kind === 'bubble'
+                ? `<c:bubbleSize>${reference(value.sizes ?? value.values, 'numRef')}</c:bubbleSize><c:bubble3D val="0"/>`
+                : ''
+            }`
+          : `<c:val>${reference(value.values, 'numRef')}</c:val>`;
         const marker =
-          plot.kind === 'line'
+          plot.kind === 'line' || plot.kind === 'stock'
             ? '<c:marker><c:symbol val="none"/></c:marker>'
-            : plot.kind === 'scatter'
+            : plot.kind === 'scatter' || (plot.kind === 'radar' && !plot.filled)
               ? '<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>'
               : '';
-        return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/>${name}${fill}${plot.kind === 'column' || plot.kind === 'bar' ? '<c:invertIfNegative val="0"/>' : ''}${marker}${categories}${numbers}${plot.kind === 'line' || plot.kind === 'scatter' ? '<c:smooth val="0"/>' : ''}</c:ser>`;
+        const inverted =
+          plot.kind === 'column' ||
+          plot.kind === 'bar' ||
+          plot.kind === 'bubble';
+        const smooth =
+          plot.kind === 'line' ||
+          plot.kind === 'scatter' ||
+          plot.kind === 'stock';
+        return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/>${name}${fill}${inverted ? '<c:invertIfNegative val="0"/>' : ''}${marker}${categories}${numbers}${smooth ? '<c:smooth val="0"/>' : ''}</c:ser>`;
       })
       .join('');
     const grouping = plot.grouping ?? 'clustered';
@@ -1073,10 +1104,30 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
         () =>
           `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>${series}${axisIds}</c:scatterChart>`
       )
+      .with(
+        'radar',
+        () =>
+          `<c:radarChart><c:radarStyle val="${plot.filled ? 'filled' : 'marker'}"/><c:varyColors val="0"/>${series}${axisIds}</c:radarChart>`
+      )
+      .with(
+        'bubble',
+        () =>
+          `<c:bubbleChart><c:varyColors val="0"/>${series}<c:bubbleScale val="100"/><c:showNegBubbles val="0"/>${axisIds}</c:bubbleChart>`
+      )
+      .with(
+        'stock',
+        () =>
+          `<c:stockChart>${series}${plot.hiLow ? '<c:hiLowLines/>' : ''}${plot.upDown ? '<c:upDownBars><c:gapWidth val="150"/><c:upBars/><c:downBars/></c:upDownBars>' : ''}${axisIds}</c:stockChart>`
+      )
+      .with(
+        'surface',
+        () =>
+          `<c:surfaceChart><c:wireframe val="0"/>${series}${axisIds}<c:axId val="${SERIES_AXIS}"/></c:surfaceChart>`
+      )
       .exhaustive();
   });
   const axisPairs = [false, true].flatMap((secondary) => {
-    const plot = chart.plots.find(
+    const plot = plots.find(
       (value) =>
         !!value.secondary === secondary &&
         value.kind !== 'pie' &&
@@ -1093,12 +1144,34 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
       : horizontal
         ? 'b'
         : 'l';
-    const categoryAxis =
-      plot.kind === 'scatter'
-        ? `<c:valAx><c:axId val="${category}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="${secondary ? 1 : 0}"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="${value}"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>`
-        : `<c:catAx><c:axId val="${category}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="${secondary ? 1 : 0}"/><c:axPos val="${categoryPosition}"/><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="${value}"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>`;
-    const valueAxis = `<c:valAx><c:axId val="${value}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${valuePosition}"/>${secondary ? '' : '<c:majorGridlines/>'}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="${category}"/><c:crosses val="${secondary ? 'max' : 'autoZero'}"/><c:crossBetween val="${plot.kind === 'scatter' ? 'midCat' : 'between'}"/></c:valAx>`;
-    return [categoryAxis, valueAxis];
+    const xy = plot.kind === 'scatter' || plot.kind === 'bubble';
+    // Axes format their labels like the cells, as Excel saves them.
+    const formatOf = (index: number | undefined) =>
+      xml(
+        index === undefined
+          ? 'General'
+          : numberFormat(
+              parseChartLiteral(chart.references[index]) ??
+                values(chart.references[index])
+            )
+      );
+    const categoryFormat = formatOf(plot.series[0]?.categories);
+    const valueFormat =
+      plot.grouping === 'percentStacked'
+        ? '0%'
+        : formatOf(plot.series[0]?.values);
+    // A stock chart's dates are categories, evenly spaced as Macro draws them.
+    const automatic = plot.kind === 'stock' ? 0 : 1;
+    const categoryAxis = xy
+      ? `<c:valAx><c:axId val="${category}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="${secondary ? 1 : 0}"/><c:axPos val="b"/><c:numFmt formatCode="${categoryFormat}" sourceLinked="1"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="${value}"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>`
+      : `<c:catAx><c:axId val="${category}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="${secondary ? 1 : 0}"/><c:axPos val="${categoryPosition}"/><c:numFmt formatCode="${categoryFormat}" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="${value}"/><c:crosses val="autoZero"/><c:auto val="${automatic}"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>`;
+    const valueAxis = `<c:valAx><c:axId val="${value}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${valuePosition}"/>${secondary ? '' : '<c:majorGridlines/>'}<c:numFmt formatCode="${valueFormat}" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="${category}"/><c:crosses val="${secondary ? 'max' : 'autoZero'}"/><c:crossBetween val="${xy || plot.kind === 'surface' ? 'midCat' : 'between'}"/></c:valAx>`;
+    // A surface also has an axis of its series.
+    const seriesAxis =
+      plot.kind === 'surface'
+        ? `<c:serAx><c:axId val="${SERIES_AXIS}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="${value}"/><c:crosses val="autoZero"/></c:serAx>`
+        : '';
+    return [categoryAxis, valueAxis, seriesAxis];
   });
   const title = chart.title
     ? `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>${xml(chart.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>`
@@ -1106,8 +1179,12 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
   const legend = chart.legend
     ? `<c:legend><c:legendPos val="${chart.legend[0]}"/><c:overlay val="0"/></c:legend>`
     : '';
+  // A surface seen from above, as Excel saves contour charts.
+  const view = plots.some((plot) => plot.kind === 'surface')
+    ? '<c:view3D><c:rotX val="90"/><c:rotY val="0"/><c:rAngAx val="0"/><c:perspective val="0"/></c:view3D>'
+    : '';
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<c:chartSpace xmlns:c="${CHART_NAMESPACE}" xmlns:a="${DRAWING}" xmlns:r="${RELATIONSHIPS}"><c:roundedCorners val="0"/><c:chart>${title}<c:plotArea><c:layout/>${groups.join('')}${axisPairs.join('')}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
+<c:chartSpace xmlns:c="${CHART_NAMESPACE}" xmlns:a="${DRAWING}" xmlns:r="${RELATIONSHIPS}"><c:roundedCorners val="0"/><c:chart>${title}${view}<c:plotArea><c:layout/>${groups.join('')}${axisPairs.join('')}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
 }
 
 /** A chart part for export: the one imported when it still fits. */

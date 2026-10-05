@@ -17,8 +17,10 @@ import {
   chartFromLayout,
   chartLayout,
   chartType,
+  chartTypeProblem,
   dataRegion,
   guessLayout,
+  layoutSeries,
   withChartType,
 } from '../core/chart-builder';
 import { createChartReader } from '../core/chart-data';
@@ -125,7 +127,13 @@ export function createDrawingActions(options: {
       );
       return;
     }
-    const chart = chartFromLayout(type, sheet.name, guessLayout(region, value));
+    const layout = guessLayout(region, value, type);
+    const problem = chartTypeProblem(type, layoutSeries(type, layout));
+    if (problem) {
+      options.setNotice(problem);
+      return;
+    }
+    const chart = chartFromLayout(type, sheet.name, layout);
     if (!chart) {
       options.setNotice('The selected cells have no values to chart.');
       return;
@@ -252,22 +260,33 @@ export function createDrawingActions(options: {
     if (dataChanged) {
       const target = parseChartReference(settings.range.trim());
       if (!target) return 'Enter the cells to chart, like A1:C7.';
+      const type = settings.type ?? 'column';
+      const layout = {
+        range: target,
+        orientation: settings.orientation,
+        firstRow: settings.firstRow,
+        firstColumn: settings.firstColumn,
+      };
+      const problem = chartTypeProblem(type, layoutSeries(type, layout));
+      if (problem) return problem;
       const rebuilt = chartFromLayout(
-        settings.type ?? 'column',
+        type,
         target.sheet ?? home,
-        {
-          range: target,
-          orientation: settings.orientation,
-          firstRow: settings.firstRow,
-          firstColumn: settings.firstColumn,
-        },
+        layout,
         chart
       );
       if (!rebuilt)
         return 'Those cells have no values beside their names and labels.';
       chart = rebuilt;
-    } else if (settings.type && settings.type !== before?.type)
-      chart = withChartType(chart, settings.type);
+    } else if (settings.type && settings.type !== before?.type) {
+      const changed = withChartType(chart, settings.type);
+      if (!changed)
+        return chartTypeProblem(
+          settings.type,
+          chart.plots.flatMap((plot) => plot.series).length
+        );
+      chart = changed;
+    }
     const { source: _source, pivot: _pivot, ...rest } = chart;
     write(
       drawings().map((value) =>

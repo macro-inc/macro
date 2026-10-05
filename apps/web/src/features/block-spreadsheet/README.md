@@ -306,7 +306,10 @@ compare formula, error, and formatting behavior before replacing it.
   Plain-text clipboard data and cut preserve raw formulas verbatim.
 - The toolbar's Insert menu adds a chart of the selection (from one cell, of
   the block of filled cells around it, read as Excel reads it:
-  `core/chart-builder.ts`) or an image file, as one undoable change. Drawings
+  `core/chart-builder.ts`) or an image file, as one undoable change. Its More
+  charts submenu holds radar, filled radar, bubble (x values, then pairs of
+  values and sizes), stock (three or four series: high, low and close, with
+  open first for up-down bars) and contour charts. Drawings
   move by dragging and keyboard arrows and size by their handles;
   `primitives/create-drawing-actions.ts` writes them, and the Edit chart
   dialog changes a chart's type, title, legend and data. Edited charts are
@@ -364,16 +367,20 @@ Import keeps what Excel calculates and shows:
   content) into `metadata.drawings`, anchored to cells so they move and stretch
   with rows and columns. PNG, JPEG, GIF, WebP and BMP images up to 2 MB (16 MB
   per workbook) are stored once each in the `spreadsheetImages` root map, keyed
-  by a hash of their bytes. Column, bar, line, area, pie, doughnut and scatter
-  charts keep their type, grouping, secondary axis, title, legend, series
-  colors and the ranges they read; `core/chart-data.ts` reads those ranges from
-  calculated values, and `core/chart-scene.ts` lays the chart out for
-  `components/SpreadsheetChart.tsx`, so charts follow edits. The chart part is
+  by a hash of their bytes. Column, bar, line, area, pie, doughnut, scatter,
+  radar, bubble, stock and surface charts keep their type, grouping, secondary
+  axis, title, legend, series colors and the ranges they read;
+  `core/chart-data.ts` reads those ranges from calculated values, and
+  `core/chart-scene.ts` lays the chart out for
+  `components/SpreadsheetChart.tsx`, so charts follow edits. Radar charts draw
+  a spoke per category; bubbles are sized by area, the largest a quarter of the
+  plot across, as at Excel's default scale; stock charts draw high-low lines and
+  up-down bars from the first series to the last; surface charts are drawn from
+  above in bands of value, as Excel's contour charts. The chart part is
   kept without its cached values (theme colors resolved), and export writes it
   back with its current ranges and fresh caches; charts without it, or too large
-  to keep, are written from what Macro knows. Radar, stock, bubble and
-  surface charts are exported but not drawn; shapes, text boxes, SmartArt and
-  EMF/WMF images are not imported.
+  to keep, are written from what Macro knows, with axes formatted like their
+  cells. Shapes, text boxes, SmartArt and EMF/WMF images are not imported.
 - Pivot tables. `core/xlsx-pivots.ts` keeps each pivot table's definition and its
   cache definition without records, marked to refresh on load, in
   `metadata.pivotTables`; Macro shows the values Excel last saved, and Excel or
@@ -405,10 +412,11 @@ evaluation, `@` as Excel stores it, and the same column default as Macro so that
 Excel → Macro → Excel round trips are stable.
 
 `core/xlsx-drawings.test.ts` and `core/xlsx-pivots.test.ts` cover drawings and
-pivot tables with `core/xlsx-fixtures/drawings.xlsx` (charts and an image written
-by openpyxl) and corpus workbooks. Exports were also checked with openpyxl and
-LibreOffice, which draws the same charts and rebuilds pivot tables from edited
-data.
+pivot tables with `core/xlsx-fixtures/drawings.xlsx` and
+`core/xlsx-fixtures/chart-types.xlsx` (charts and an image written by openpyxl)
+and corpus workbooks. Exports were also checked with openpyxl and LibreOffice,
+which draws the same charts (surface charts aside, which it cannot draw) and
+rebuilds pivot tables from edited data.
 
 `core/xlsx-corpus.test.ts` imports, recalculates, exports and reimports the
 real-world workbooks in `core/xlsx-fixtures/real-world/` (finance models,
@@ -440,6 +448,7 @@ calculation and Excel workers. Its Playwright suite covers formula autocomplete
 and range picking, menu/dialog focus, sheet navigation, read-only transitions,
 Excel round trips, imported conditional formatting, data validation and notes,
 imported charts and images (following edits, Delete and undo, and download),
+radar, bubble, stock and contour charts,
 workbook import undo, and formatting without remounts or flashes.
 Its separate mobile suite uses Android Chrome and iPhone WebKit emulation for
 touch editing, formula suggestions, selection/reference handles, menus, sheets,

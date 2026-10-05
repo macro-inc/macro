@@ -4,6 +4,8 @@
 
 `drawings.xlsx` holds charts (clustered columns, a line, a pie, stacked bars, an area, a scatter, a doughnut and columns with a line on a secondary axis, some reading another sheet) and a PNG logo, all written by openpyxl. Regenerate it with `python3 generate-drawings.py` (needs openpyxl and Pillow).
 
+`chart-types.xlsx` holds radar (marker and filled), bubble, stock (open-high-low-close with up-down bars, and high-low-close) and contour charts written by openpyxl. Regenerate it with `python3 generate-chart-types.py`.
+
 The financial fixture covers cross-sheet and absolute/mixed references, global and local names, NPV/IRR/XIRR/PMT, SUMIFS, INDEX/MATCH, IFERROR, precision, accounting negative/zero sections, scaling, multiples, percentages, elapsed time, Excel's 1900 leap-day compatibility, fonts/colors, double borders, merges, hidden rows/columns/sheets, row heights, filters, and frozen panes. Tests check independently specified results, native Loro save/reopen, value and style edits, and Excel import/export round trips.
 
 The namespaced fixture uses valid prefixed OOXML and absolute package relationship targets, including a table relationship. This catches parser assumptions that are not part of the Excel file format. Tables are intentionally represented as ordinary cells with an import warning.

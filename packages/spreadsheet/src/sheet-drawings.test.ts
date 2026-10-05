@@ -62,7 +62,17 @@ describe('sheet drawings', () => {
       'an unknown chart kind',
       {
         ...chart,
-        chart: { ...chart.chart, plots: [{ kind: 'radar', series: [] }] },
+        chart: { ...chart.chart, plots: [{ kind: 'funnel', series: [] }] },
+      },
+    ],
+    [
+      'a plot option that is not set',
+      {
+        ...chart,
+        chart: {
+          ...chart.chart,
+          plots: [{ kind: 'radar', filled: false, series: [] }],
+        },
       },
     ],
     [

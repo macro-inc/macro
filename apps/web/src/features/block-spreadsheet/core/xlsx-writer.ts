@@ -9,7 +9,6 @@ import {
 import { parseWorkbookMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import { strToU8, zipSync } from 'fflate';
 import type { CalculatedCell } from './calculation';
-import type { ChartValue } from './chart-data';
 import {
   DEFAULT_COLUMN_WIDTH,
   formatCellAddress,
@@ -26,7 +25,14 @@ import {
   XLSX_MAX_EXPANDED_BYTES,
   XLSX_MAX_SHEETS,
 } from './workbook-file-types';
-import { chartPart, drawingPart, imageFile, themePart } from './xlsx-drawings';
+import {
+  type CellChartValue,
+  type ChartValues,
+  chartPart,
+  drawingPart,
+  imageFile,
+  themePart,
+} from './xlsx-drawings';
 import {
   addFunctionPrefixes,
   exportImplicitIntersections,
@@ -39,7 +45,11 @@ import {
   differentialXml,
   notesParts,
 } from './xlsx-sheet-rules';
-import { type XlsxCellStyle, xlsxCellStyle } from './xlsx-styles';
+import {
+  cellNumberFormat,
+  type XlsxCellStyle,
+  xlsxCellStyle,
+} from './xlsx-styles';
 
 const MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const RELATIONSHIPS =
@@ -360,32 +370,41 @@ function quoteSheet(name: string) {
 function chartValues(
   sheets: WorkbookFileData['sheets'],
   home: WorkbookFileData['sheets'][number]
-) {
+): ChartValues {
   const byName = new Map(
     sheets.map((sheet) => [sheet.name.toLowerCase(), sheet])
   );
-  return (reference: string): ChartValue[] | undefined => {
+  return (reference) => {
     const range = parseChartReference(reference);
     const sheet = range?.sheet ? byName.get(range.sheet.toLowerCase()) : home;
     if (!range || !sheet) return;
-    const values: ChartValue[] = [];
+    const values: CellChartValue[] = [];
     for (let row = range.top; row <= range.bottom; row++)
       for (let column = range.left; column <= range.right; column++) {
         if (values.length >= 100_000) return values;
         const address = formatCellAddress(row, column);
+        const cell = sheet.cells[address];
+        // Charts format their axes and caches like the cells they read.
+        const format = cell && cellNumberFormat(cell);
         const result = sheet.values?.[address];
         if (result) {
           values.push({
             text: result.display,
-            ...(result.number !== undefined && { number: result.number }),
+            ...(result.number !== undefined && {
+              number: result.number,
+              ...(format && { format }),
+            }),
           });
           continue;
         }
-        const text = sheet.cells[address]?.value ?? '';
+        const text = cell?.value ?? '';
         const number = text.trim() === '' ? Number.NaN : Number(text);
         values.push({
           text,
-          ...(Number.isFinite(number) && { number }),
+          ...(Number.isFinite(number) && {
+            number,
+            ...(format && { format }),
+          }),
         });
       }
     return values;

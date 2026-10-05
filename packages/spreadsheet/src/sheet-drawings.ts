@@ -31,6 +31,10 @@ export const CHART_KINDS = [
   'pie',
   'doughnut',
   'scatter',
+  'radar',
+  'bubble',
+  'stock',
+  'surface',
 ] as const;
 export type ChartKind = (typeof CHART_KINDS)[number];
 export const CHART_GROUPINGS = [
@@ -56,6 +60,8 @@ export type ChartSeries = {
   noFill?: boolean;
   /** A line or scatter series drawn as markers only. */
   noLine?: boolean;
+  /** A bubble series' sizes. */
+  sizes?: number;
 };
 
 /** Series drawn the same way, on the primary or the secondary value axis. */
@@ -63,6 +69,11 @@ export type ChartPlot = {
   kind: ChartKind;
   grouping?: ChartGrouping;
   secondary?: boolean;
+  /** A radar chart's areas are filled. */
+  filled?: boolean;
+  /** A stock chart's lines from high to low, and bars from open to close. */
+  hiLow?: boolean;
+  upDown?: boolean;
   series: ChartSeries[];
 };
 
@@ -244,8 +255,10 @@ function validSeries(value: unknown, references: number): boolean {
         'color',
         'noFill',
         'noLine',
+        'sizes',
       ].includes(key)
     ) &&
+    (series.sizes === undefined || reference(series.sizes)) &&
     (series.noFill === undefined || series.noFill === true) &&
     (series.noLine === undefined || series.noLine === true) &&
     text(series.name, 1_000) &&
@@ -261,7 +274,18 @@ function validPlot(value: unknown, references: number): boolean {
   const plot = value as Record<string, unknown>;
   return (
     Object.keys(plot).every((key) =>
-      ['kind', 'grouping', 'secondary', 'series'].includes(key)
+      [
+        'kind',
+        'grouping',
+        'secondary',
+        'filled',
+        'hiLow',
+        'upDown',
+        'series',
+      ].includes(key)
+    ) &&
+    ['filled', 'hiLow', 'upDown'].every(
+      (key) => plot[key] === undefined || plot[key] === true
     ) &&
     (CHART_KINDS as readonly unknown[]).includes(plot.kind) &&
     (plot.grouping === undefined ||

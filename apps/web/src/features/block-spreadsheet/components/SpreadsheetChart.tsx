@@ -34,7 +34,14 @@ function Shape(props: { shape: ChartShape }) {
       </path>
     ))
     .with({ type: 'circle' }, (shape) => (
-      <circle cx={shape.x} cy={shape.y} r={shape.r} fill={shape.fill}>
+      <circle
+        cx={shape.x}
+        cy={shape.y}
+        r={shape.r}
+        fill={shape.fill}
+        opacity={shape.opacity}
+        stroke={shape.stroke}
+      >
         <Show when={shape.tip}>{(tip) => <title>{tip()}</title>}</Show>
       </circle>
     ))

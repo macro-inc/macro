@@ -45,6 +45,14 @@ function numberFormatCode(style: Required<SpreadsheetCellStyle>) {
   }[style.format];
 }
 
+/** The Excel number format code a cell displays with. */
+export function cellNumberFormat(cell: SpreadsheetCellStyle): string {
+  return (
+    cell.numberFormat ||
+    numberFormatCode({ ...SPREADSHEET_DEFAULT_STYLE, ...cell })
+  );
+}
+
 /** Map an Excel number format to Macro's format vocabulary, retaining the
  * original code whenever Macro's built-in format would display differently. */
 export function readNumberFormat(format: string): SpreadsheetCellStyle {

@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import type { SheetDrawing } from '@macro-inc/spreadsheet/sheet-drawings';
+import type {
+  SheetChart,
+  SheetDrawing,
+} from '@macro-inc/spreadsheet/sheet-drawings';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { type ChartReader, chartData } from './chart-data';
@@ -8,7 +11,7 @@ import { chartScene } from './chart-scene';
 import { formatCellAddress } from './spreadsheet-document';
 import type { WorkbookFileData } from './workbook-file-types';
 import { decodeXlsx, encodeXlsx } from './xlsx-codec';
-import { chartPart } from './xlsx-drawings';
+import { chartPart, readChart } from './xlsx-drawings';
 import { withLightness } from './xlsx-stylesheet';
 
 const fixture = () =>
@@ -337,7 +340,6 @@ describe('Excel drawings', () => {
     );
     const imported = await decodeXlsx(zipSync(files));
     expect(imported.warnings).toEqual([
-      'Radar, bubble, stock and surface charts are kept for export but not drawn.',
       'Images in formats browsers cannot show, such as EMF and WMF, are not imported.',
       'Shapes, text boxes and SmartArt are not imported.',
     ]);
@@ -379,6 +381,7 @@ describe('Excel drawings', () => {
             { name: 'Gap', noFill: true, noLine: true },
           ],
         },
+        { kind: 'radar', series: [{ name: 'Radar' }] },
       ],
     });
     expect(plan.chart.title).toBeUndefined();
@@ -464,5 +467,128 @@ describe('fixed chart values', () => {
     );
     expect(part).toContain('<c:tx><c:v>Budget</c:v></c:tx>');
     expect(part).toContain('<c:numLit>');
+  });
+});
+
+describe('radar, bubble, stock and contour charts', () => {
+  const cells = (column: string) => `'Data'!$${column}$2:$${column}$5`;
+  /** A chart part read back as Macro reads Excel's. */
+  const reread = (part: string) => {
+    const path = 'xl/charts/chart1.xml';
+    const warnings = new Set<string>();
+    const chart = readChart(
+      {
+        names: [path],
+        read: (name) => (name === path ? strToU8(part) : undefined),
+      },
+      path,
+      [],
+      warnings
+    );
+    expect([...warnings]).toEqual([]);
+    return chart;
+  };
+  /** Series of columns after labels in column A, as Macro makes them. */
+  const columns = (names: string[]) => ({
+    series: names.map((column, index) => ({
+      name: column,
+      categories: index * 2,
+      values: index * 2 + 1,
+    })),
+    references: names.flatMap((column) => [cells('A'), cells(column)]),
+  });
+  const radar = columns(['B', 'C']);
+  const prices = columns(['B', 'C', 'D', 'E']);
+  // Stock series have no lines of their own.
+  const stock = {
+    ...prices,
+    series: prices.series.map((series) => ({ ...series, noLine: true })),
+  };
+  const surface = columns(['B', 'C']);
+  const charts: SheetChart[] = [
+    {
+      plots: [{ kind: 'radar', filled: true, series: radar.series }],
+      references: radar.references,
+    },
+    {
+      plots: [
+        { kind: 'bubble', series: [{ categories: 0, values: 1, sizes: 2 }] },
+      ],
+      references: [cells('A'), cells('B'), cells('C')],
+    },
+    {
+      plots: [
+        { kind: 'stock', hiLow: true, upDown: true, series: stock.series },
+      ],
+      references: stock.references,
+    },
+    {
+      plots: [{ kind: 'surface', series: surface.series }],
+      references: surface.references,
+    },
+  ];
+
+  it('writes each kind as Excel does and reads it back unchanged', () => {
+    for (const chart of charts) {
+      const part = chartPart(chart, () => undefined);
+      const again = reread(part);
+      expect(again?.references).toEqual(chart.references);
+      expect(
+        again?.plots.map(({ series, ...plot }) => ({
+          ...plot,
+          series: series.map(({ color: _color, ...rest }) => rest),
+        }))
+      ).toEqual(chart.plots);
+    }
+    const [radar, bubble, stock, surface] = charts.map((chart) =>
+      chartPart(chart, () => undefined)
+    );
+    expect(radar).toContain('<c:radarStyle val="filled"/>');
+    expect(bubble).toContain(
+      `<c:bubbleSize><c:numRef><c:f>'Data'!$C$2:$C$5</c:f></c:numRef></c:bubbleSize>`
+    );
+    expect(stock).toMatch(/<c:hiLowLines\/><c:upDownBars>/);
+    // Excel saves a contour chart as a surface seen from above.
+    expect(surface).toContain('<c:view3D><c:rotX val="90"/>');
+    expect(surface).toContain('<c:serAx><c:axId val="5"/>');
+  });
+
+  it('formats axes like their cells, and spaces stock dates evenly', () => {
+    const part = chartPart(charts[2], (reference) =>
+      reference === cells('A')
+        ? [{ text: 'Mar 4', number: 45355, format: 'mmm d' }]
+        : [{ text: '$102.00', number: 102, format: '"$"#,##0.00' }]
+    );
+    expect(part).toContain(
+      '<c:catAx><c:axId val="1"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="mmm d" sourceLinked="1"/>'
+    );
+    expect(part).toContain('<c:auto val="0"/>');
+    expect(part).toContain(
+      '<c:numFmt formatCode="&quot;$&quot;#,##0.00" sourceLinked="1"/>'
+    );
+    expect(part).toContain(
+      '<c:numCache><c:formatCode>&quot;$&quot;#,##0.00</c:formatCode>'
+    );
+  });
+
+  it('writes a stock chart Excel cannot open as lines', () => {
+    const part = chartPart(
+      {
+        plots: [
+          {
+            kind: 'stock',
+            hiLow: true,
+            series: [
+              { categories: 0, values: 1 },
+              { categories: 2, values: 3 },
+            ],
+          },
+        ],
+        references: [cells('A'), cells('B'), cells('A'), cells('C')],
+      },
+      () => undefined
+    );
+    expect(part).not.toContain('stockChart');
+    expect(reread(part)?.plots[0].kind).toBe('line');
   });
 });

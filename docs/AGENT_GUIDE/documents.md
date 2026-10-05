@@ -83,13 +83,17 @@ shows the rule's message in the footer, and a "stop" rule keeps the previous val
 A red corner marks a cell with a note; selecting the cell shows the note, and any
 input message, beside it.
 
-Images and charts (column, bar, line, area, pie, doughnut and scatter) are drawn
-over their cells and move with them; charts redraw as the cells they read change.
-Each is a `figure` named after the chart title ("Chart: Revenue") or the image
-description. The toolbar's **Insert chart or image** menu (chart icon) adds a
-chart of the selected cells — or, from one cell, of the table around it, placed
-beside it — or an image file (PNG, JPEG, GIF, WebP or BMP up to 2 MB) at the
-active cell. Click a drawing to select it: drag it to move it, drag a handle to
+Images and charts (column, bar, line, area, pie, doughnut, scatter, radar,
+bubble, stock and surface, drawn as a contour) are drawn over their cells and
+move with them; charts redraw as the cells they read change. Each is a `figure`
+named after the chart title ("Chart: Revenue") or the image description. The
+toolbar's **Insert chart or image** menu (chart icon) adds a chart of the
+selected cells — or, from one cell, of the table around it, placed beside it —
+or an image file (PNG, JPEG, GIF, WebP or BMP up to 2 MB) at the active cell.
+Its **More charts** submenu holds Radar, Filled radar, Bubble, Stock and
+Contour; a stock chart needs three or four series (high, low, close, with open
+first for up-down bars), and a bubble chart reads x values from the first
+column, then values and sizes in pairs. Click a drawing to select it: drag it to move it, drag a handle to
 size it, press Delete to remove it (undo restores it) or Escape to return to the
 cells. Double-click a chart, press Enter, or use its pencil button to open **Edit
 chart** (type, title, legend, the cells it charts, series in rows or columns).
@@ -234,8 +238,8 @@ CSV imports a file up to 20 MB into the selection, adding rows if needed within 
 are replaced, with undo available. Excel imports accept up to 50 MB, 300 sheets,
 2,000,000 filled cells, and 100,000 rows × 16,384 columns (A–XFD) per sheet. The footer
 shows the sheet's size, and **+ Add columns** appends 26 more. An import preview lists
-each sheet and warns about unsupported content (for example charts, validation rules,
-and rich text). Choose
+each sheet and warns about unsupported content (for example shapes, text boxes and
+rich text). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed

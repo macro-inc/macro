@@ -35,8 +35,10 @@ immediate typing after adding or duplicating sheets, returning focus from toolba
 fields, range formatting/sorting, and footer controls down to a 360-pixel panel.
 Imported conditional formatting, validation lists and notes, imported charts
 and images (drawn over their cells, following edits, deleted and restored with
-undo, and kept in the download), and creating, editing, moving and sizing charts
-and images with the pointer and the keyboard have their own suites. The imported workbook was
+undo, and kept in the download), radar, bubble, stock and contour charts
+(imported, redrawn after edits, inserted from More charts and downloaded), and
+creating, editing, moving and sizing charts and images with the pointer and the
+keyboard have their own suites. The imported workbook was
 created independently with openpyxl; the exported file is reopened using ExcelJS
 to check formula caches and workbook structure. Failure traces and screenshots
 stay in this directory's ignored `test-results/` folder.

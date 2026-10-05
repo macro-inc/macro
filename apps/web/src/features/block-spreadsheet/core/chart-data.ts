@@ -23,8 +23,10 @@ export type ChartSeriesData = {
   name: string;
   color: string;
   values: (number | null)[];
-  /** The x values of a scatter series. */
+  /** The x values of a scatter or bubble series. */
   x?: (number | null)[];
+  /** A bubble series' sizes. */
+  sizes?: (number | null)[];
   noFill?: boolean;
   noLine?: boolean;
   /** How the first value displays, to format the axis like the cells. */
@@ -35,6 +37,9 @@ export type ChartPlotData = {
   kind: ChartKind;
   grouping?: ChartGrouping;
   secondary?: boolean;
+  filled?: boolean;
+  hiLow?: boolean;
+  upDown?: boolean;
   series: ChartSeriesData[];
 };
 
@@ -137,11 +142,16 @@ export function chartData(
     kind: plot.kind,
     ...(plot.grouping && { grouping: plot.grouping }),
     ...(plot.secondary && { secondary: true }),
+    ...(plot.filled && { filled: true }),
+    ...(plot.hiLow && { hiLow: true }),
+    ...(plot.upDown && { upDown: true }),
     series: plot.series.map((series) => {
       const index = count++;
       const points = values(series.values) ?? [];
       const labels = values(series.categories);
-      if (plot.kind !== 'scatter' && labels && !categories)
+      // Scatter and bubble charts plot numbers on both axes.
+      const xy = plot.kind === 'scatter' || plot.kind === 'bubble';
+      if (!xy && labels && !categories)
         categories = labels.map((value) => value.text);
       // A pivot chart's series are named as its pivot table names them.
       const name =
@@ -156,10 +166,20 @@ export function chartData(
         name,
         color: series.color ?? palette[index % palette.length],
         values: points.map((value) => value.number ?? null),
-        ...(plot.kind === 'scatter' && {
-          x: labels
-            ? labels.map((value) => value.number ?? null)
-            : points.map((_, point) => point + 1),
+        // Text among the x values numbers the points 1, 2, 3, as in Excel.
+        ...(xy && {
+          x:
+            labels &&
+            !labels.some(
+              (value) => value.number === undefined && value.text.trim()
+            )
+              ? labels.map((value) => value.number ?? null)
+              : points.map((_, point) => point + 1),
+        }),
+        ...(plot.kind === 'bubble' && {
+          sizes: (values(series.sizes) ?? points.map(() => undefined)).map(
+            (value) => value?.number ?? null
+          ),
         }),
         ...(series.noFill && { noFill: true }),
         ...(series.noLine && { noLine: true }),

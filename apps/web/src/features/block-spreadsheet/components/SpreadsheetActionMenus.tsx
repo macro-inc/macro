@@ -1,5 +1,6 @@
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import ChartBar from '@phosphor/chart-bar.svg';
 import Clipboard from '@phosphor/clipboard-text.svg';
 import Download from '@phosphor/download-simple.svg';
@@ -101,7 +102,7 @@ export function InsertMenu(props: SpreadsheetToolbarProps) {
     >
       <Dropdown.Group>
         <Dropdown.GroupLabel>Chart of the selected cells</Dropdown.GroupLabel>
-        <For each={CHART_TYPES}>
+        <For each={CHART_TYPES.filter((type) => !('more' in type))}>
           {(type) => (
             <Dropdown.Item
               closeOnSelect
@@ -111,6 +112,26 @@ export function InsertMenu(props: SpreadsheetToolbarProps) {
             </Dropdown.Item>
           )}
         </For>
+        <Dropdown.Sub>
+          <Dropdown.SubTrigger>
+            More charts
+            <CaretRight class="size-3.5 shrink-0" />
+          </Dropdown.SubTrigger>
+          <Dropdown.SubContent>
+            <Dropdown.Group>
+              <For each={CHART_TYPES.filter((type) => 'more' in type)}>
+                {(type) => (
+                  <Dropdown.Item
+                    closeOnSelect
+                    onSelect={() => props.onInsertChart?.(type.id)}
+                  >
+                    {type.label}
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
+          </Dropdown.SubContent>
+        </Dropdown.Sub>
       </Dropdown.Group>
       <Dropdown.Separator class="my-1 h-px border-0 bg-edge-muted" />
       <Dropdown.Group>
