@@ -214,6 +214,10 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'project') {
       fileType = 'project';
       itemType = 'project';
+    } else if (blockName === 'form') {
+      // A form reference: posting it grants the channel View on the form.
+      fileType = 'form';
+      itemType = 'form';
     } else if (blockName === 'initiative') {
       // A task project, never a document id.
       fileType = 'initiative';

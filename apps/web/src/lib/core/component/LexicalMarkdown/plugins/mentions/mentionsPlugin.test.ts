@@ -1,3 +1,4 @@
+import { authoredMentions } from '@channel/Input/message-payload';
 import {
   $convertMentionToCard,
   $createDocumentCardNode,
@@ -57,6 +58,50 @@ function discrete(editor: LexicalEditor, change: () => void) {
 }
 
 describe('mentionsPlugin', () => {
+  it('sends an inline form mention as a form reference, and drops it when the mention is removed', () => {
+    const editor = createEditor({
+      nodes: SupportedNodeTypes,
+      onError: (error) => {
+        throw error;
+      },
+    });
+    editor.setRootElement(document.createElement('div'));
+    const created: ItemMention[] = [];
+    const removed: ItemMention[] = [];
+    mentionsPlugin({
+      onCreateMention: (mention) => created.push(mention),
+      onRemoveMention: (mention) => removed.push(mention),
+    })(editor);
+    editor.update(
+      () => {
+        const paragraph = $createParagraphNode();
+        paragraph.append(
+          $createDocumentMentionNode({
+            documentId: 'form-1',
+            documentName: 'Workshop ideas',
+            blockName: 'form',
+          })
+        );
+        $getRoot().append(paragraph);
+      },
+      { discrete: true }
+    );
+    expect(created).toEqual([
+      {
+        itemType: 'form',
+        itemId: 'form-1',
+        fileType: 'form',
+        documentName: 'Workshop ideas',
+        channelType: undefined,
+      },
+    ]);
+    expect(authoredMentions(created)).toEqual([
+      { entity_type: 'form', entity_id: 'form-1' },
+    ]);
+    editor.update(() => $getRoot().clear(), { discrete: true });
+    expect(removed).toEqual([{ itemType: 'form', itemId: 'form-1' }]);
+  });
+
   it('reports a document card put into a composer as a reference, and its removal', () => {
     const { editor, created, removed } = composer();
     discrete(editor, () => {
