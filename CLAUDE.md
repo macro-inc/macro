@@ -29,6 +29,7 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 
 | Task | Guide |
 | --- | --- |
+| Building on reusable technology or separating it from an app entity | [ABSTRACT_TECH skill](.agents/skills/abstract-tech/SKILL.md) |
 | Rust code, builds, or tests | [Rust development](docs/RUST_DEVELOPMENT.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/DATABASE_DEVELOPMENT.md) |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |

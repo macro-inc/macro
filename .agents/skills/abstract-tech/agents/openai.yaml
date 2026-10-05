@@ -1,0 +1,3 @@
+interface:
+  display_name: "ABSTRACT_TECH"
+  short_description: "Reuse core technology through domain ports"
