@@ -172,7 +172,6 @@ describe('buildEmailQuery', () => {
     expect(body.callf).toEqual({ l: { CallId: NIL } });
     expect(body.fef).toEqual({ l: { id: NIL } });
     expect(body.ccf).toEqual({ l: { id: NIL } });
-    expect(body.remf).toEqual({ l: { id: NIL } });
     expect(body.ef).toEqual({ '!': { l: { ThreadId: NIL } } });
   });
 

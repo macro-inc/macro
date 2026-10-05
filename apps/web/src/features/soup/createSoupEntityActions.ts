@@ -25,7 +25,7 @@ import {
   makeShareAction,
 } from '@app/features/next-soup/actions';
 import {
-  markReminderSeenOnOpen,
+  markCalendarNotificationSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -240,7 +240,6 @@ export function createSoupEntityActions(): {
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
       // Reminder route claims perform identity reuse when the action runs.
-      if (entity.type === 'reminder') return entity;
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
@@ -261,7 +260,7 @@ export function createSoupEntityActions(): {
         });
       }
 
-      markReminderSeenOnOpen(entity, notificationSource);
+      markCalendarNotificationSeenOnOpen(entity, notificationSource);
 
       // Match row navigation, including a thread row's driving message.
       await openEntityInSplitFromUnifiedList(entity, {

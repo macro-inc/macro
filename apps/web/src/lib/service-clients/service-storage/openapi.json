@@ -16912,7 +16912,7 @@
         "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
         "properties": {
           "asf": {
-            "description": "Filters applied to agent sessions (wire key `asf`). Like reminders,\nempty/omitted returns **no** agent sessions: they are opt-in, so the\ncaller must send `inc`, an id, or an owner to get any."
+            "description": "Filters applied to agent sessions (wire key `asf`). An\nempty/omitted returns **no** agent sessions: they are opt-in, so the\ncaller must send `inc`, an id, or an owner to get any."
           },
           "calf": {
             "description": "filters applied to canonical calendar events"
@@ -16967,9 +16967,6 @@
           },
           "propf": {
             "description": "the filters that should be applied based on entity properties"
-          },
-          "remf": {
-            "description": "Filters applied to reminders (wire key `remf`). Unlike every other\nfilter here, empty/omitted returns **no** reminders: they are opt-in,\nso the caller must send `inc`, an id, or an entity to get any."
           }
         }
       },
@@ -24027,7 +24024,7 @@
           "reminderId": {
             "type": "string",
             "format": "uuid",
-            "description": "Its ordinary reminder, used by the existing alert/management surfaces."
+            "description": "Identity of the snooze and its delivery records."
           },
           "revision": {
             "type": "string",
@@ -24147,18 +24144,12 @@
       },
       "EmailReminderSummary": {
         "type": "object",
-        "description": "One original thread, coalescing all of its current reminder work.",
-        "required": ["threadId", "nearest", "count"],
+        "description": "An original thread with its active snooze.",
+        "required": ["threadId", "followup"],
         "properties": {
-          "count": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Number of eligible reminders attached to this thread.",
-            "minimum": 0
-          },
-          "nearest": {
-            "$ref": "#/components/schemas/ReminderCollectionRow",
-            "description": "Nearest eligible occurrence and its owning editor capability."
+          "followup": {
+            "$ref": "#/components/schemas/EmailFollowup",
+            "description": "Active snooze, including the revision required for edits or removal."
           },
           "threadId": {
             "type": "string",
@@ -24280,10 +24271,6 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
-          },
-          "reminder_filters": {
-            "$ref": "#/components/schemas/ReminderFilters",
-            "description": "the bundled [ReminderFilters]"
           },
           "tag_filter_mode": {
             "$ref": "#/components/schemas/TagFilterMode",
@@ -30890,216 +30877,6 @@
         },
         "additionalProperties": false
       },
-      "Reminder": {
-        "type": "object",
-        "description": "A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.",
-        "required": [
-          "id",
-          "description",
-          "schedule",
-          "nextRunAt",
-          "enabled",
-          "createdAt",
-          "updatedAt"
-        ],
-        "properties": {
-          "completedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "Set once the owner marks the reminder as dealt with. Firing does not\nset it — a delivered reminder is waiting on its owner, not finished."
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the reminder was created."
-          },
-          "description": {
-            "type": "string",
-            "description": "What to remind the user about."
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "When false, the dispatcher skips this reminder."
-          },
-          "entityId": {
-            "type": ["string", "null"],
-            "description": "Id of the associated entity, when the reminder is attached to one."
-          },
-          "entityType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "type": "string",
-                "description": "The type of an entity in Macro",
-                "enum": [
-                  "user",
-                  "chat",
-                  "channel",
-                  "channel_message",
-                  "document",
-                  "project",
-                  "email_thread",
-                  "calendar_event",
-                  "team",
-                  "call",
-                  "foreign_entity",
-                  "static_file",
-                  "crm_company",
-                  "crm_contact",
-                  "reminder",
-                  "skill",
-                  "agent_session",
-                  "scheduled_action",
-                  "initiative",
-                  "database",
-                  "database_row"
-                ]
-              }
-            ],
-            "description": "Type of the associated entity, when the reminder is attached to one."
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Reminder id."
-          },
-          "nextRunAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The next firing, derived from `schedule` on write."
-          },
-          "schedule": {
-            "$ref": "#/components/schemas/ReminderSchedule",
-            "description": "When and how often the reminder fires."
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the reminder was last modified."
-          }
-        }
-      },
-      "ReminderCollectionRow": {
-        "type": "object",
-        "description": "A native reminder row with its source and workflow capabilities resolved in bulk.",
-        "required": ["reminder"],
-        "properties": {
-          "emailFollowup": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/EmailFollowup",
-                "description": "Present only for an email-follow-up mirror, never inferred from its target type."
-              }
-            ]
-          },
-          "reference": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ReminderReference",
-                "description": "Document display metadata, if applicable."
-              }
-            ]
-          },
-          "reminder": {
-            "$ref": "#/components/schemas/Reminder",
-            "description": "The caller's private reminder."
-          }
-        }
-      },
-      "ReminderFilters": {
-        "type": "object",
-        "description": "Filters for reminders.",
-        "properties": {
-          "completed": {
-            "type": ["boolean", "null"],
-            "description": "Filter on whether the owner has marked the reminder done. `None` returns\nboth."
-          },
-          "entities": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
-          },
-          "fired": {
-            "type": ["boolean", "null"],
-            "description": "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
-          },
-          "ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Reminder ids to filter by. Empty to include all of the caller's reminders."
-          },
-          "include": {
-            "type": "boolean",
-            "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
-          }
-        }
-      },
-      "ReminderReference": {
-        "type": "object",
-        "description": "Display details of the entity a reminder is about, resolved alongside the\nreminder itself.\n\nA reminder has no block of its own — it opens, and is iconed as, whatever it\nreferences. Which block that is depends on the referenced document's file\ntype, so resolving it client-side would mean a second fetch per row against\na synchronous icon path. Reading it here keeps Soup to one round trip.\n\nOnly documents populate these; every other entity type is identified by its\n[`EntityType`] alone.",
-        "properties": {
-          "fileType": {
-            "type": ["string", "null"],
-            "description": "The referenced document's file type, e.g. `md` or `pdf`."
-          },
-          "subType": {
-            "type": ["string", "null"],
-            "description": "The referenced document's sub type, e.g. `task` or `snippet`."
-          }
-        }
-      },
-      "ReminderSchedule": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "Fires once, at a fixed instant.",
-            "required": ["remindAt", "type"],
-            "properties": {
-              "remindAt": {
-                "type": "string",
-                "format": "date-time",
-                "description": "The instant to fire at."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["once"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Fires repeatedly, on a cron schedule evaluated in `timezone`.",
-            "required": ["cron", "timezone", "type"],
-            "properties": {
-              "cron": {
-                "type": "string",
-                "description": "Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 * * *` and\n`0 0 9 * * *` are the same schedule and both read back as the latter."
-              },
-              "timezone": {
-                "type": "string",
-                "description": "The timezone the cron expression is evaluated in."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["recurring"]
-              }
-            }
-          }
-        ],
-        "description": "When a reminder fires."
-      },
       "RemoveParticipantsRequest": {
         "type": "object",
         "description": "Request to remove participants.",
@@ -33881,21 +33658,6 @@
           },
           {
             "type": "object",
-            "description": "Reminder item.",
-            "required": ["data", "tag"],
-            "properties": {
-              "data": {
-                "$ref": "#/components/schemas/SoupReminder_SoupPropertiesField",
-                "description": "Reminder item."
-              },
-              "tag": {
-                "type": "string",
-                "enum": ["reminder"]
-              }
-            }
-          },
-          {
-            "type": "object",
             "description": "Agent session item.",
             "required": ["data", "tag"],
             "properties": {
@@ -34175,178 +33937,6 @@
             ]
           }
         }
-      },
-      "SoupReminderReference": {
-        "type": "object",
-        "description": "The entity a reminder is about, resolved server-side.\n\nA reminder has no block of its own — it opens, and is iconed as, whatever it\nreferences. Which block that is depends on the referenced document's file\ntype, and the client's icon path is synchronous, so this is resolved here\nrather than costing a fetch per row.",
-        "required": ["id", "entityType"],
-        "properties": {
-          "entityType": {
-            "oneOf": [
-              {
-                "type": "string",
-                "description": "The type of an entity in Macro",
-                "enum": [
-                  "user",
-                  "chat",
-                  "channel",
-                  "channel_message",
-                  "document",
-                  "project",
-                  "email_thread",
-                  "calendar_event",
-                  "team",
-                  "call",
-                  "foreign_entity",
-                  "static_file",
-                  "crm_company",
-                  "crm_contact",
-                  "reminder",
-                  "skill",
-                  "agent_session",
-                  "scheduled_action",
-                  "initiative",
-                  "database",
-                  "database_row"
-                ]
-              }
-            ],
-            "description": "The referenced entity's type."
-          },
-          "fileType": {
-            "type": ["string", "null"],
-            "description": "File type, when the reference is a document — `md`, `pdf`, and so on."
-          },
-          "id": {
-            "type": "string",
-            "description": "The referenced entity's id."
-          },
-          "subType": {
-            "type": ["string", "null"],
-            "description": "Sub type, when the reference is a task or snippet document."
-          }
-        }
-      },
-      "SoupReminderSchedule": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "Fires once, at a fixed instant.",
-            "required": ["remindAt", "type"],
-            "properties": {
-              "remindAt": {
-                "type": "string",
-                "format": "date-time",
-                "description": "The instant to fire at."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["once"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Fires repeatedly, on a cron schedule evaluated in `timezone`.",
-            "required": ["cron", "timezone", "type"],
-            "properties": {
-              "cron": {
-                "type": "string",
-                "description": "Cron expression, normalized to the 6-field form."
-              },
-              "timezone": {
-                "type": "string",
-                "description": "The timezone the cron expression is evaluated in."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["recurring"]
-              }
-            }
-          }
-        ],
-        "description": "How often a reminder fires, flattened for the wire.\n\nThe domain's [`ReminderSchedule`] is an internally-tagged enum carrying a\nvalidated cron type; Soup only needs enough to render \"once\" vs \"every\nweekday at 9am\", so the cron is exposed as a plain string."
-      },
-      "SoupReminder_SoupPropertiesField": {
-        "allOf": [
-          {
-            "type": "object",
-            "description": "Property fields that can be flattened into property-bearing Soup items.",
-            "required": ["properties"],
-            "properties": {
-              "properties": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SoupProperty"
-                },
-                "description": "Properties attached to the entity."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "id",
-              "description",
-              "schedule",
-              "nextRunAt",
-              "enabled",
-              "createdAt",
-              "updatedAt"
-            ],
-            "properties": {
-              "completedAt": {
-                "type": ["string", "null"],
-                "format": "date-time",
-                "description": "When the owner acknowledged the occurrence; independent of future scheduling."
-              },
-              "createdAt": {
-                "type": "string",
-                "format": "date-time",
-                "description": "When the reminder was created."
-              },
-              "description": {
-                "type": "string",
-                "description": "What to remind the user about. Doubles as the display name."
-              },
-              "enabled": {
-                "type": "boolean",
-                "description": "When false, the dispatcher skips this reminder."
-              },
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "description": "The reminder id."
-              },
-              "nextRunAt": {
-                "type": "string",
-                "format": "date-time",
-                "description": "The next firing. This is what Soup sorts reminders on."
-              },
-              "referencedEntity": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SoupReminderReference",
-                    "description": "The entity this reminder is about, when attached to one, with enough\ndetail for the client to render and open it without a second fetch."
-                  }
-                ]
-              },
-              "schedule": {
-                "$ref": "#/components/schemas/SoupReminderSchedule",
-                "description": "When and how often the reminder fires."
-              },
-              "updatedAt": {
-                "type": "string",
-                "format": "date-time",
-                "description": "When the reminder was last modified."
-              }
-            }
-          }
-        ],
-        "description": "A reminder as displayed in Soup.\n\nReminders are user-owned rather than shared, so unlike most Soup items they\ncarry no access metadata — the repository only ever returns the caller's own."
       },
       "SoupThreadInfo": {
         "type": "object",

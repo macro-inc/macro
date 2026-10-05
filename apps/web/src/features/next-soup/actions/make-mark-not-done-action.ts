@@ -137,7 +137,7 @@ async function restoreEmailNotifications(
 
 /**
  * Reverses a mark-done: unarchives email threads and restores their
- * notifications, and un-completes reminders. GraphQL validates unarchive
+ * notifications. GraphQL validates unarchive
  * eligibility on the server. Each thread settles independently, including
  * queued writes; only a completely failed email selection rejects the action.
  */

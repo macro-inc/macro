@@ -2,9 +2,8 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::{PgRemindersRepo, ReminderRow, RemindersRepoErr};
+use super::{PgRemindersRepo, RemindersRepoErr};
 use crate::domain::{
-    collection::ReminderCollectionRow,
     email_collection::{EmailReminderCandidate, EmailReminderCursor, EmailReminderSummary},
     email_followup::FollowupRecord,
 };
@@ -19,11 +18,11 @@ impl PgRemindersRepo {
         limit: u32,
     ) -> Result<Vec<EmailReminderCandidate>, RemindersRepoErr> {
         // The active workflow index guarantees one snooze per user/thread.
-        // Fired and legacy generic reminders are not part of this collection.
+        // Only workflows with unfinished inbox work belong to this collection.
         let rows = sqlx::query!(
             r#"
             SELECT r.entity_id AS "thread_id!", r.next_run_at,
-                to_jsonb(r) AS "reminder!", f.payload AS followup
+                r.id AS reminder_id, f.payload AS followup
             FROM reminder r
             JOIN reminder_email_followup f ON f.reminder_id = r.id AND f.user_id = $1
             WHERE r.user_id = $1 AND r.entity_type = 'email_thread' AND r.entity_id IS NOT NULL
@@ -44,22 +43,16 @@ impl PgRemindersRepo {
             .into_iter()
             .map(|row| {
                 let summary = (|| {
-                    let stored: ReminderRow = serde_json::from_value(row.reminder).ok()?;
                     let record: FollowupRecord = serde_json::from_value(row.followup).ok()?;
                     if record.user_id.as_ref() != user.as_ref()
                         || record.followup.thread_id != row.thread_id
-                        || record.followup.reminder_id != stored.id
+                        || record.followup.reminder_id != row.reminder_id
                     {
                         return None;
                     }
                     Some(EmailReminderSummary {
                         thread_id: row.thread_id,
-                        nearest: ReminderCollectionRow {
-                            reminder: stored.into_reminder().ok()?,
-                            reference: None,
-                            email_followup: Some(record.followup),
-                        },
-                        count: 1,
+                        followup: record.followup,
                     })
                 })();
                 if summary.is_none() {

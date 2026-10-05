@@ -163,10 +163,6 @@ export function filterSoupItemByRequestBody(
           data.id
         )
     )
-    .with(
-      { tag: 'reminder' },
-      ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
-    )
     .with({ tag: 'initiative' }, ({ data }) => {
       const filters = body.initiative_filters;
       // Match the server's opt-in rule; cached projects never leak into tasks

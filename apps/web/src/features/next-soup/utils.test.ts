@@ -60,10 +60,8 @@ const operationMocks = vi.hoisted(() => {
     invalidateQueries: vi.fn(
       async (_options: { queryKey?: readonly unknown[] }) => {}
     ),
-    invalidateRemindersById: vi.fn(),
     invalidateSoupEntity: vi.fn(async () => {}),
     openExternalUrl: vi.fn(),
-    setReminderCompleted: vi.fn(async () => {}),
     updateNotificationsForEntities: vi.fn(
       async (): Promise<Array<{ id: string }>> => []
     ),
@@ -110,10 +108,6 @@ vi.mock('@queries/notification/user-notifications', () => ({
   bulkMarkNotificationsAsUndone: operationMocks.bulkMarkNotificationsAsUndone,
   restoreUserNotifications: vi.fn(),
   snapshotUserNotifications: vi.fn(() => []),
-}));
-vi.mock('@queries/reminders/reminders', () => ({
-  invalidateRemindersById: operationMocks.invalidateRemindersById,
-  setReminderCompleted: operationMocks.setReminderCompleted,
 }));
 vi.mock('@queries/soup/cache', () => ({
   getSoupEntityById: vi.fn(),
@@ -174,7 +168,6 @@ import {
   getDocumentCommentTarget,
   getRowClickFallbackLocation,
   markChannelNotificationsSeenOnOpen,
-  openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
 } from './utils';
@@ -194,96 +187,6 @@ afterEach(() => {
   setGlobalSplitManager(undefined);
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
-});
-
-describe('reminder navigation', () => {
-  const reminder = {
-    type: 'reminder',
-    id: 'reminder-1',
-    name: 'Review reminder navigation',
-  } as EntityData;
-
-  it.each([false, true])(
-    'uses the reminder route for list opening (new split: %s)',
-    async (openInNewSplit) => {
-      const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
-      setGlobalSplitManager({
-        activeSplit: () => undefined,
-        openWithSplit,
-      } as unknown as SplitManager);
-
-      await openEntityInSplitFromUnifiedList(reminder, { openInNewSplit });
-
-      expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          type: 'component',
-          id: 'reminder-detail',
-          params: { reminderId: 'reminder-1' },
-        }),
-        expect.objectContaining({
-          activate: true,
-          preferNewSplit: openInNewSplit,
-          search: {},
-        })
-      );
-    }
-  );
-
-  it('opens an attached task in its requested Drive route rather than reusing another document', async () => {
-    const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
-    setGlobalSplitManager({
-      activeSplit: () => undefined,
-      openWithSplit,
-    } as unknown as SplitManager);
-    await openEntityInSplitFromUnifiedList(
-      {
-        ...reminder,
-        referencedEntity: {
-          id: 'task-b',
-          type: 'document',
-          fileType: 'md',
-          subType: 'task',
-        },
-      } as EntityData,
-      {}
-    );
-    expect(openWithSplit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'component',
-        id: 'documents',
-        entryMetadata: expect.objectContaining({
-          route: expect.objectContaining({
-            matches: expect.arrayContaining([
-              expect.objectContaining({
-                params: { documentId: 'task-b', documentType: 'task' },
-              }),
-            ]),
-          }),
-        }),
-      }),
-      expect.objectContaining({ allowDuplicate: true })
-    );
-  });
-
-  it('opens an attached email directly in a new tab', () => {
-    openEntityInNewTab({
-      entity: {
-        ...reminder,
-        referencedEntity: { id: 'email-1', type: 'email' },
-      } as EntityData,
-    });
-    expect(operationMocks.openExternalUrl).toHaveBeenCalledWith(
-      expect.stringMatching(/\/app\/email\/email-1$/)
-    );
-  });
-
-  it('uses the same reminder component URL for a new browser tab', () => {
-    openEntityInNewTab({ entity: reminder });
-
-    expect(operationMocks.openExternalUrl).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(/\/app\/reminder\/reminder-1$/)
-    );
-  });
 });
 
 describe('agent session search navigation', () => {

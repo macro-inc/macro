@@ -169,15 +169,6 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
-  it('excludes reminders from completion actions', async () => {
-    const reminder = { type: 'reminder', id: 'legacy' } as EntityData;
-    const { action, dispose } = createAction();
-    expect(action.canExecute(reminder)).toBe(false);
-    await action.execute([reminder]);
-    expect(mocks.mutateAsync).not.toHaveBeenCalled();
-    dispose();
-  });
-
   it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
@@ -458,9 +449,4 @@ describe('makeMarkDoneAction', () => {
     });
     dispose();
   });
-});
-
-it('keeps original Email Reminders rows eligible for the email archive action', async () => {
-  const { canExecuteMarkDoneOnView } = await import('./make-mark-done-action');
-  expect(canExecuteMarkDoneOnView('mail', 'reminders')).toBe(true);
 });

@@ -921,7 +921,6 @@ pub type ToolSoupService = SoupImpl<
     ToolCallRecordQueryService,
     crm::domain::service::NoOpCrmService,
     ToolGithubPullRequestService,
-    reminders::domain::service::NoOpRemindersService,
 >;
 
 /// No-op notification service for properties (tools don't send assignment notifications)

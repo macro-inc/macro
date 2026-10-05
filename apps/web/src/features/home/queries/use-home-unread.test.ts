@@ -279,14 +279,6 @@ describe('Home unread presence', () => {
       },
       {
         ...base,
-        type: 'reminder',
-        description: 'Reminder',
-        scheduleType: 'once',
-        nextRunAt: NOW,
-        enabled: true,
-      },
-      {
-        ...base,
         type: 'foreign',
         foreignSource: 'unknown',
         rawForeignSource: 'test',
@@ -341,7 +333,7 @@ describe('Home unread presence', () => {
     }
   );
 
-  it.each(['signal', 'noise', 'reminders'] as const)(
+  it.each(['signal', 'noise'] as const)(
     'reuses membership for the %s tab',
     (tab) => {
       const inbox = setup(tab);
@@ -365,17 +357,6 @@ describe('Home unread presence', () => {
         withNotifications(channel, [notification('channel')]),
         emailRow,
         noisyEmail,
-        withNotifications(
-          {
-            ...base,
-            type: 'reminder' as const,
-            description: 'Reminder',
-            scheduleType: 'once' as const,
-            nextRunAt: '2026-09-24T12:00:00Z',
-            enabled: true,
-          },
-          [notification('reminder')]
-        ),
       ];
       for (const row of rows) {
         expect(inbox.hasUnreadEntity([row])).toBe(

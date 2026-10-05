@@ -195,7 +195,6 @@ use models_soup::project::SoupProject;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
 };
-use reminders::domain::models::{Reminder, ReminderSchedule};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
@@ -641,8 +640,6 @@ use utoipa::OpenApi;
             CreateChannelLabelRequest,
             RenameChannelLabelRequest,
             SetChannelLabelRequest,
-            Reminder,
-            ReminderSchedule,
             // databases
             Database,
             DatabaseTable,

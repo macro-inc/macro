@@ -13,12 +13,6 @@ import {
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
-  REMINDER_DETAIL_COMPONENT_ID,
-  REMINDER_DETAIL_ROUTE_ID,
-  reminderDetailContent,
-  reminderIdFromDetailContent,
-} from '@app/features/reminders/reminder-navigation';
-import {
   ROUTINE_CREATE_ROUTE_ID,
   ROUTINE_DETAIL_ROUTE_ID,
   ROUTINES_ROUTE_ID,
@@ -81,7 +75,6 @@ export function decodeLegacyPair(
 
   if (type === 'component') {
     // Reminder list/detail surfaces are native routes only.
-    if (id === 'reminders' || id === REMINDER_DETAIL_COMPONENT_ID) return;
     // Preview Pair placeholders must never reach the view registry.
     return {
       type: 'component',
@@ -238,19 +231,6 @@ export function splitLocationFromContent(
         : undefined
     );
   }
-  const reminderId =
-    content.type === 'component' && content.id === REMINDER_DETAIL_COMPONENT_ID
-      ? reminderIdFromDetailContent(content)
-      : undefined;
-  if (reminderId) {
-    return {
-      route: paneRoute({
-        id: REMINDER_DETAIL_ROUTE_ID,
-        params: { reminderId },
-      }),
-    };
-  }
-
   if (
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
@@ -394,14 +374,6 @@ export function splitContentFromLocation(
     if (typeof routineId === 'string' && routineId.length > 0)
       return routineContent(routineId);
     throw new Error('Invalid routine detail split route');
-  }
-
-  if (root.id === REMINDER_DETAIL_ROUTE_ID) {
-    const { reminderId } = routeParams(location.route);
-    if (typeof reminderId === 'string' && reminderId.length > 0) {
-      return reminderDetailContent(reminderId);
-    }
-    throw new Error('Invalid reminder detail split route');
   }
 
   if (root.id.startsWith('view-'))

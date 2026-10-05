@@ -49,8 +49,7 @@ are pills and the leading sliders button opens one drawer containing Sort, Group
 Filters (including Tags). The mobile bottom dock has the Ask AI input, a separate **+ Task**
 button, and Search.
 
-**Keyboard:** Focus one task and press **H** to set or edit its reminder, even
-inside an expanded group. **←** collapses the focused item or its parent group.
+**Keyboard:** **H** and **←** collapse the focused item or its parent group.
 On a focused group header, **H** collapses only that group; pressing it again
 does nothing. Typing H in a text field remains ordinary input.
 

@@ -375,15 +375,6 @@ fn every_deferred_partition_must_be_proven_empty() {
     );
 
     let mut ast = excluded_deferred_partitions();
-    ast.reminder_filter = Some(Arc::new(Expr::val(
-        item_filters::ast::reminder::ReminderLiteral::Include,
-    )));
-    assert_eq!(
-        check_soup_flat_v1(&ast, request()),
-        Eligibility::Unsupported(UnsupportedReason::Partition("reminder"))
-    );
-
-    let mut ast = excluded_deferred_partitions();
     ast.agent_session_filter = Some(Arc::new(Expr::val(
         item_filters::ast::agent_session::AgentSessionLiteral::Include,
     )));

@@ -24,7 +24,6 @@ const tabTypes: Record<HomeTab, ReadonlySet<HomeTypeFilter>> = {
     'calendar',
   ]),
   noise: new Set(['email']),
-  reminders: new Set(),
 };
 
 function readFilter(selection: FacetSelection): boolean | undefined {
@@ -99,7 +98,6 @@ export function buildHomeSearchRequest(
     email_filters: { email_thread_ids: [NIL_UUID] },
     foreign_entity_filters: { ids: [NIL_UUID] },
     project_filters: { project_ids: [NIL_UUID] },
-    reminder_filters: { ids: [NIL_UUID] },
   };
 
   if (types.has('calendar')) {

@@ -2,8 +2,7 @@
 
 Reminders snooze email conversations. They are available only inside Email;
 there is no global Reminders sidebar item, standalone reminder, task reminder,
-recurrence editor, or reminder AI tool. Old reminder routes redirect to
-**Email → Reminders**. Calendar event alarms remain separate.
+recurrence editor, or reminder AI tool. Calendar event alarms remain separate.
 
 ## Snooze or change a conversation
 
@@ -45,7 +44,7 @@ condition. A stale undo cannot overwrite a newer edit.
 With reminders enabled, **Reminders** appears beside **Scheduled** in Email's
 sidebar and mobile selector. Scheduled contains outgoing send-later messages.
 Reminders contains original conversations with active snoozes, ordered by return
-time. Fired, cancelled, removed, and legacy generic reminders are excluded.
+time. Fired, cancelled, and removed snoozes are excluded.
 Archived conversations remain here while snoozed. Each row has one clock; click,
 tap, or keyboard-activate it to reopen that conversation's reminder menu.
 Opening the row itself opens the email.

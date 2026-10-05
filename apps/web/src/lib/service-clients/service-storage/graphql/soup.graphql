@@ -328,27 +328,6 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		createdAt
 		updatedAt
 	}
-	... on GraphqlSoupReminder {
-		reminderDescription: description
-		scheduleType
-		remindAt
-		cron
-		timezone
-		nextRunAt
-		enabled
-		completedAt
-		createdAt
-		updatedAt
-		referencedEntity {
-			id
-			entityType
-			fileType
-			subType
-		}
-		properties {
-			...SoupPropertyFields
-		}
-	}
 	... on GraphqlSoupCalendarEvent {
 		calendarEventTitle: title
 		calendarEventStatus: status

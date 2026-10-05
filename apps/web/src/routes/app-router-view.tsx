@@ -20,7 +20,6 @@ import { GettingStartedRouteView } from '@app/features/getting-started/route-vie
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { HomeEntityDetailRouteView } from '@app/features/home/components/HomeEntityDetailRouteView';
-import { HomeReminderDetailRouteView } from '@app/features/home/components/HomeReminderDetailRouteView';
 import {
   HomeCalendarRouteView,
   HomeDetailRouteView,
@@ -33,10 +32,6 @@ import {
   RecentRouteView,
   SearchRouteView,
 } from '@app/features/next-soup/route-views';
-import {
-  ReminderDetailRouteView,
-  RemindersRouteView,
-} from '@app/features/reminders/route-views';
 import {
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
@@ -116,7 +111,6 @@ import {
   homeChannelRoute,
   homeDocumentRoute,
   homePreviewRoute,
-  homeReminderRoute,
   homeSplitRoute,
   inboxLinkCallbackRoute,
   internalInviteLinksRoute,
@@ -133,8 +127,6 @@ import {
   projectTaskRoute,
   publicBookingRoute,
   recentRoute,
-  reminderDetailRoute,
-  remindersRoute,
   reviewsPrRoute,
   reviewsSplitRoute,
   routineCreateRoute,
@@ -273,10 +265,6 @@ export function AppRouterView() {
             component={HomeEntityDetailRouteView}
           />
           <Route
-            definition={homeReminderRoute}
-            component={HomeReminderDetailRouteView}
-          />
-          <Route
             definition={homePreviewRoute}
             component={HomeDetailRouteView}
           />
@@ -287,11 +275,6 @@ export function AppRouterView() {
         />
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
-        <Route
-          definition={reminderDetailRoute}
-          component={ReminderDetailRouteView}
-        />
-        <Route definition={remindersRoute} component={RemindersRouteView} />
         <Route definition={agentsViewRoute} component={AgentsRouteView} />
         <Route definition={emailSplitRoute} component={MailRouteView}>
           <Route

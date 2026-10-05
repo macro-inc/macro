@@ -24,7 +24,6 @@ model-entity = { path = "../model-entity" }
 model_owner = { path = "../model_owner" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
-reminders = { path = "../reminders", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }

@@ -4,15 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { SoupAgentSessionSoupPropertiesField } from './soupAgentSessionSoupPropertiesField';
 import type { SoupItemOneOfTwothreeTag } from './soupItemOneOfTwothreeTag';
-import type { SoupReminderSoupPropertiesField } from './soupReminderSoupPropertiesField';
 
 /**
- * Reminder item.
+ * Agent session item.
  */
 export type SoupItemOneOfTwothree = {
-  /** Reminder item. */
-  data: SoupReminderSoupPropertiesField;
+  /** Agent session item. */
+  data: SoupAgentSessionSoupPropertiesField;
   tag: SoupItemOneOfTwothreeTag;
 };

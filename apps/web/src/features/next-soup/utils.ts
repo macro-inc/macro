@@ -15,12 +15,6 @@ import {
 } from '@app/features/calendar-view/types';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { projectRouteId } from '@app/features/projects/core/route';
-import {
-  openReminderDetail,
-  reminderDetailDestination,
-  reminderDetailUrl,
-} from '@app/features/reminders/reminder-navigation';
-import { reminderSourceContent } from '@app/features/reminders/reminder-source';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -48,7 +42,6 @@ import {
 import {
   enableCalendarUi,
   enableGraphqlSoup,
-  enableReminders,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -80,7 +73,6 @@ import {
   isSearchEntity,
   isWithNotification,
   queryKeys,
-  type ReminderEntity,
   type SearchLocation,
   toNotificationEntity,
   type WithNotification,
@@ -269,20 +261,6 @@ export const openEntityInNewTab = ({
   location?: SearchLocation;
 }) => {
   location ??= getRowClickFallbackLocation(entity);
-  if (entity.type === 'reminder') {
-    if (!isFeatureEnabled(enableReminders)) return;
-    const source = reminderSourceContent(entity);
-    openExternalUrl(
-      source
-        ? new URL(
-            `/app/${source.type}/${encodeURIComponent(source.id)}`,
-            window.location.origin
-          ).toString()
-        : reminderDetailUrl(entity.id)
-    );
-    return;
-  }
-
   // Build URL for the entity
   let entityPath: string;
   if (entity.type === 'initiative') {
@@ -708,44 +686,6 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
-  if (entity.type === 'reminder') {
-    if (!isFeatureEnabled(enableReminders)) return;
-    const sourceContent =
-      splitHandle?.content() ?? splitManager.activeSplit()?.content();
-    const sourceListView =
-      sourceContent?.type === 'component' && isListViewID(sourceContent.id)
-        ? sourceContent.id
-        : undefined;
-    const source = reminderSourceContent(entity);
-    if (source) {
-      const hostedContent = driveHostedContent(source, {
-        allowDocuments: !isTouchDevice(),
-      });
-      const referredFrom = options.referredFrom ?? sourceListView;
-      let content = hostedContent ?? source;
-      if (splitHandle && referredFrom && isListViewID(referredFrom)) {
-        content = withListNavigationSource(content, splitHandle);
-      }
-      splitManager.openWithSplit(content, {
-        allowDuplicate: allowDuplicate || hostedContent !== undefined,
-        activate: true,
-        handle: splitHandle,
-        preferNewSplit: openInNewSplit,
-        mergeHistory,
-        referredFrom: options.referredFrom ?? sourceListView,
-      });
-      return;
-    }
-    openReminderDetail(entity.id, {
-      manager: splitManager,
-      handle: splitHandle,
-      openInNewSplit,
-      mergeHistory,
-      referredFrom: options.referredFrom ?? sourceListView,
-    });
-    return;
-  }
-
   const blockOrchestrator = splitManager.getOrchestrator();
 
   if (entity.type === 'channel' && entity.unreadNotifications !== undefined) {
@@ -892,25 +832,13 @@ export function markChannelNotificationsSeenOnOpen(
   });
 }
 
-/**
- * Mark a reminder's notification read when the user opens it.
- *
- * Every other entity type gets this for free from the block it opens into,
- * which mounts `DebouncedNotificationReadMarker`. A reminder has no block of
- * its own — it navigates to whatever it references, and that block's marker
- * clears the referenced entity's notifications, not the reminder's. So opening
- * is the only signal we get, and without this the row keeps its unread dot
- * forever.
- *
- * Seen, not done: the reminder stays in Signal until the user dismisses it.
- */
-export function markReminderSeenOnOpen(
+/** Mark calendar-event notifications seen when opening their occurrence. */
+export function markCalendarNotificationSeenOnOpen(
   entity: EntityData,
   notificationSource: NotificationSource
 ) {
-  // Calendar events share the reminder situation: they open the calendar
-  // component split, which has no block to clear the notification either.
-  if (entity.type !== 'reminder' && entity.type !== 'calendar_event') return;
+  // Calendar events open a component split without a block to clear notifications.
+  if (entity.type !== 'calendar_event') return;
   void markNotificationsForEntityAsReadInBackground(notificationSource, {
     type: entity.type,
     id: entity.id,
@@ -977,14 +905,6 @@ export function calendarViewTargetForEntity(
   };
 }
 
-/**
- * The minimal reminder selection accepted by Home's feature-owned detail route.
- */
-export type ReminderPreviewSelection = Pick<
-  ReminderEntity,
-  'id' | 'type' | 'referencedEntity'
->;
-
 // TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
   return (
@@ -1017,12 +937,6 @@ function getEntitySplitContent(entity: EntityData) {
       })
       .with({ type: 'crm_contact' }, (entity) => {
         return { type: 'contact' as const, id: entity.id };
-      })
-      .with({ type: 'reminder' }, (entity) => {
-        return (
-          reminderSourceContent(entity) ??
-          reminderDetailDestination(entity.id).content
-        );
       })
       // Calendar events open the singleton Calendar application view; the open
       // path branches before reaching here, so this only serves duplicate checks.
@@ -1663,9 +1577,8 @@ export async function executeMarkEntitiesDone(args: {
 
   if (rejected) {
     // Real refetch to reconcile server state with the UI after the caller
-    // rolls back its optimistic cache writes. `allSettled` means some
-    // reminders may have been written even though the caller rolls all of
-    // them back, so they have to be reconciled too, not just the emails.
+    // rolls back its optimistic cache writes. Some email or notification
+    // writes may have succeeded before another operation failed.
     await Promise.all([
       ...(!hasQueuedEmail
         ? [

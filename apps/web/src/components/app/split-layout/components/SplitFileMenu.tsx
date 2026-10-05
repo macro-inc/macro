@@ -427,10 +427,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   // other reminder surfaces re-evaluate per interaction and don't need this.
   const remindersFlag = useFeatureFlag(enableReminders);
 
-  // Injected here rather than per-block so every block rendering this menu gets
-  // it, the way Favorite does. Entity types the reminders API cannot mint an
-  // access receipt for (channel messages/threads) return undefined and are
-  // filtered out.
+  // Offer the shared snooze command for email conversations.
   const reminderOp = (): SplitFileMenuAction | undefined => {
     if (!remindersFlag().enabled) return undefined;
     const entity = menuEntity();

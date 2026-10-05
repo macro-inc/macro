@@ -18,11 +18,9 @@ export function soupItemMatchesHomeTab(
   item: SoupApiItem,
   tab: HomeTab
 ): boolean {
-  if (item.tag === 'reminder') return false;
   return match(tab)
     .with(
       'signal',
-      'reminders',
       () => item.tag !== 'emailThread' || item.data.isSignal === true
     )
     .with(

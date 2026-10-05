@@ -24,7 +24,6 @@ import {
   isGithubPrEntity,
   isProjectContainedEntity,
   isProjectEntity,
-  isReminderEntity,
   isRoutineEntity,
   isTaskEntity,
 } from '../../types/entity';
@@ -42,7 +41,6 @@ import {
   GithubPullRequestChecksIndicator,
   GithubPullRequestPills,
 } from './foreign';
-import { ReminderWideContent } from './reminder';
 import { RoutineWideContent } from './routine';
 import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
@@ -159,9 +157,6 @@ export function WideLayout(props: LayoutProps) {
           </Match>
           <Match when={isRoutineEntity(props.entity) && props.entity}>
             {(entity) => <RoutineWideContent entity={entity()} />}
-          </Match>
-          <Match when={isReminderEntity(props.entity) && props.entity}>
-            {(entity) => <ReminderWideContent entity={entity()} />}
           </Match>
           <Match when={props.entity.type === 'calendar_event' && props.entity}>
             {(entity) => <CalendarWideContent entity={entity()} />}

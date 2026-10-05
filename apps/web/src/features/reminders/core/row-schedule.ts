@@ -1,24 +1,21 @@
-import type { ReminderEntity } from '@entity';
+import type { EmailFollowup } from '@service-storage/generated/schemas/emailFollowup';
 import { formatReminderOccurrence } from './schedule-instant';
 
-/** Workflow progress is independent of its generic reminder's enabled flag. */
+/** Describe the email snooze's schedule and inbox restoration state. */
 export function emailReminderScheduleLabel(
-  reminder: ReminderEntity,
+  followup: EmailFollowup,
   now: number,
   viewerTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 ): string {
-  const followup = reminder.emailFollowup;
-  if (!followup) return 'Schedule unavailable';
   const instant = formatReminderOccurrence(
-    reminder.nextRunAt,
+    followup.remindAt,
     viewerTimezone,
     viewerTimezone
   );
   if (!instant) return 'Schedule unavailable';
   const status = {
     archiving: 'Scheduling return',
-    pending:
-      new Date(reminder.nextRunAt).getTime() <= now ? 'Due' : 'Returning',
+    pending: new Date(followup.remindAt).getTime() <= now ? 'Due' : 'Returning',
     returning: 'Returning to inbox',
     returned: 'Returned',
     cancelled: 'Cancelled',

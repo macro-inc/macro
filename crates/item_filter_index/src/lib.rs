@@ -17,7 +17,6 @@ use item_filters::ast::{
     foreign_entity::ForeignEntityLiteral,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
-    reminder::ReminderLiteral,
 };
 use predicate_index::{
     ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
@@ -397,14 +396,6 @@ fn check_soup_flat(
     // These opt-in partitions are empty when omitted. The UI's confine()
     // also excludes them with a positive nil ID. Accept only proven emptiness,
     // not arbitrary trees over partitions that have no local index.
-    if ast.reminder_filter.as_deref().is_some_and(|expr| {
-        !proves_none(
-            expr,
-            |literal| matches!(literal, ReminderLiteral::Id(id) if id.is_nil()),
-        )
-    }) {
-        return Eligibility::Unsupported(UnsupportedReason::Partition("reminder"));
-    }
     if ast.agent_session_filter.as_deref().is_some_and(|expr| {
         !proves_none(
             expr,

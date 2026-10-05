@@ -408,51 +408,6 @@ export type DatabaseEntity = EntityBase & {
   grant: AccessLevel;
 };
 
-export type ReminderEntity = EntityBase & {
-  type: 'reminder';
-  /** What to remind the user about. Doubles as {@link EntityBase.name}. */
-  description: string;
-  /** The entity the reminder is about, when it is attached to one. Clicking a
-   * reminder navigates here rather than to the reminder itself, and the row
-   * borrows this entity's icon.
-   *
-   * `type` is already mapped to the display {@link EntityType} (`email`,
-   * `foreign`), not the canonical API names (`email_thread`,
-   * `foreign_entity`). `fileType`/`subType` are resolved server-side and only
-   * present for documents — without them a referenced document has no
-   * resolvable block, since the icon and open paths are both synchronous.
-   *
-   * A reminder never references another reminder — the mapper yields
-   * `undefined` for that — so the type excludes it and the reference stays
-   * assignable to the preview/open helpers, which only know real targets. */
-  referencedEntity?: {
-    id: string;
-    // Calendar events are excluded alongside reminders: neither has a
-    // previewable block, and the mapper yields `undefined` for both.
-    // Databases are not Soup entities, so nothing can point a reminder at one.
-    type: Exclude<
-      EntityType,
-      'reminder' | 'calendar_event' | 'initiative' | 'database'
-    >;
-    fileType?: string;
-    subType?: string;
-  };
-  /** Whether the reminder fires once or on a cron schedule. */
-  scheduleType: 'once' | 'recurring';
-  /** Cron expression, for a recurring reminder. */
-  cron?: string;
-  /** Timezone the cron is evaluated in, for a recurring reminder. */
-  timezone?: string;
-  /** The next firing. Soup orders reminders on this. */
-  nextRunAt: DateValue;
-  /** When false, the dispatcher skips this reminder. */
-  enabled: boolean;
-  /** When the owner acknowledged the occurrence; recurring schedules can remain enabled. */
-  completedAt?: DateValue | null;
-  /** Owning email workflow; these mirrors must be rescheduled through Remind me. */
-  emailFollowup?: import('@service-storage/generated/schemas/emailFollowup').EmailFollowup;
-};
-
 /** Normalized time shape of a calendar event soup row. */
 export type CalendarEventEntityTime =
   | { kind: 'timed'; startsAt: string; endsAt: string }
@@ -509,7 +464,6 @@ export type EntityData =
   | CrmContactEntity
   | DatabaseEntity
   | RoutineEntity
-  | ReminderEntity
   | CalendarEventEntity
   | ForeignEntity;
 
@@ -528,7 +482,6 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_contact',
   'database',
   'routine',
-  'reminder',
   'calendar_event',
   'foreign',
 ]);
@@ -630,12 +583,6 @@ export const isProjectEntity = (
 
 export const isCallEntity = (entity: EntityData): entity is CallEntity => {
   return entity.type === 'call';
-};
-
-export const isReminderEntity = (
-  entity: EntityData
-): entity is ReminderEntity => {
-  return entity.type === 'reminder';
 };
 
 export const isRoutineEntity = (

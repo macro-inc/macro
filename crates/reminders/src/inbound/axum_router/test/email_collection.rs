@@ -1,11 +1,9 @@
 //! Exercise scan/fill against real grouped reminder storage and explicit access decisions.
 use super::*;
-use crate::domain::models::ReminderSchedule;
 use crate::{
     domain::{
         email_collection::{EmailReminderQuery, EmailReminderViewer, service},
-        models::NewReminder,
-        ports::{Clock, RemindersRepo},
+        ports::Clock,
     },
     outbound::pg_reminders_repo::PgRemindersRepo,
 };
@@ -107,25 +105,13 @@ async fn setup(
         .collect();
     for (i, id) in ids.iter().enumerate() {
         let when = instant(2, 12) + chrono::Duration::seconds(i as i64);
-        let reminder = repo
-            .create_reminder(
-                &viewer().user_id,
-                &NewReminder {
-                    description: format!("private {i}"),
-                    entity: Some(EntityType::EmailThread.with_entity_string(id.to_string())),
-                    schedule: ReminderSchedule::Once { remind_at: when },
-                    next_run_at: when,
-                },
-            )
-            .await
-            .unwrap();
         use crate::domain::email_followup::{
             EmailFollowup, EmailFollowupRepo, EmailReminderCondition, FollowupRecord, FollowupState,
         };
         repo.save_followup(
             &FollowupRecord {
                 followup: EmailFollowup {
-                    reminder_id: reminder.id,
+                    reminder_id: Uuid::now_v7(),
                     thread_id: *id,
                     link_id: Uuid::now_v7(),
                     condition: EmailReminderCondition::IfNoReply,

@@ -51,8 +51,8 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
   const { mapGraphqlNotification } = await import('./graphql-soup');
   const mapped = mapGraphqlNotification({
     id: 'notification-1',
-    entityId: 'reminder-1',
-    entityType: 'REMINDER',
+    entityId: 'thread-1',
+    entityType: 'EMAIL_THREAD',
     eventType: 'reminder',
     state: 'UNSEEN',
     sent: true,
@@ -67,6 +67,8 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
       reminderScheduledFor: '2026-09-21T10:00:00Z',
     },
   });
+  expect(mapped.entity_type).toBe('email_thread');
+  expect(mapped.entity_id).toBe('thread-1');
   expect(mapped.notification_metadata).toEqual({
     tag: 'reminder',
     content: {

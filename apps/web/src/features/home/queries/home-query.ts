@@ -19,7 +19,6 @@ export type HomeQueryCapabilities = {
   calendar: boolean;
   foreignEntities: boolean;
   notifiedSort: boolean;
-  reminders: boolean;
   snippets: boolean;
 };
 
@@ -106,7 +105,7 @@ function tabClause(
   userId: string | undefined
 ): FacetClause {
   return match(tab)
-    .with('signal', 'reminders', () => signalClause(capabilities, now, userId))
+    .with('signal', () => signalClause(capabilities, now, userId))
     .with('noise', noiseClause)
     .exhaustive();
 }

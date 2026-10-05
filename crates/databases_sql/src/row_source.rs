@@ -386,7 +386,6 @@ fn rows_filter(
         github_pull_request_filter: None,
         // Reminders, agent sessions and initiatives are opt-in: left empty,
         // they are excluded.
-        reminder_filter: None,
         agent_session_filter: None,
         initiative_filter: None,
         database_row_filter: Some(Arc::new(rows)),

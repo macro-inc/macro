@@ -24,8 +24,6 @@ import {
   ProjectsListView,
   ProjectView,
 } from '@app/features/projects/project-view';
-import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
-import { RemindersRouteView } from '@app/features/reminders/route-views';
 import { ReviewsRouteView } from '@app/features/reviews-view/route-views';
 import { RoutineCreator } from '@app/features/routines/routine-creator';
 import { SettingsRouteView } from '@app/features/settings/route-views';
@@ -226,7 +224,6 @@ registerComponent('getting-started', () => <GettingStartedRouteView />);
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
-registerComponent('reminders', () => <RemindersRouteView />);
 registerComponent(
   'routines',
   () => <AgentsRouteView />,
@@ -366,7 +363,6 @@ registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');
   return <ComposeSkill {...params} />;
 });
-registerComponent(REMINDER_DETAIL_COMPONENT_ID, () => <RemindersRouteView />);
 
 registerComponent(
   'import-linear',

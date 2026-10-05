@@ -428,7 +428,6 @@ pub(crate) async fn populate_properties(
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
-                | SoupItem::Reminder(_)
                 | SoupItem::AgentSession(_) => None,
                 SoupItem::DatabaseRow(x) => properties_map.get(&x.id.to_string()),
             }

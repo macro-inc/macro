@@ -7,12 +7,10 @@ import { openReminderComposer } from '../reminder-composer';
 export function EmailRowSchedule(props: { reminder: EmailRowReminder }) {
   const now = useReminderClock();
   const edit = () => {
-    const reminder = props.reminder.nearest;
-    const reference = reminder.referencedEntity;
-    if (reference?.type !== 'email') return;
+    const reminder = props.reminder;
     openReminderComposer({
       type: 'email',
-      id: reference.id,
+      id: reminder.threadId,
       name: reminder.name,
     });
   };
@@ -28,7 +26,7 @@ export function EmailRowSchedule(props: { reminder: EmailRowReminder }) {
       }}
     >
       <ReminderScheduleIndicator
-        label={emailReminderScheduleLabel(props.reminder.nearest, now())}
+        label={emailReminderScheduleLabel(props.reminder, now())}
         onEdit={edit}
       />
     </span>

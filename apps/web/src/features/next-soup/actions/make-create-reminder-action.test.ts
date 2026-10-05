@@ -30,7 +30,6 @@ it.each([
   'project',
   'call',
   'calendar_event',
-  'reminder',
   'routine',
 ] as const)('does not offer or open reminders for %s', (type) => {
   const action = makeCreateReminderAction();

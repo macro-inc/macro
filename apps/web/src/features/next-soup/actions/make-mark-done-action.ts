@@ -47,10 +47,10 @@ export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
   return VALID_MARK_DONE_LIST_VIEWS.includes(`${view}-${tabId}`);
 };
 
-/** Already-done emails and reminders coexist with actionable rows in unified
+/** Already-done emails coexist with actionable rows in unified
  * collections, so mark-done skips them rather than acknowledging twice. */
 const isMarkDoneTarget = (e: EntityData) =>
-  !(e.type === 'email' && e.done === true) && e.type !== 'reminder';
+  !(e.type === 'email' && e.done === true);
 
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;

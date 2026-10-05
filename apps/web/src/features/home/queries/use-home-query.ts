@@ -38,7 +38,6 @@ import {
   noiseFilter,
   signalFilter,
 } from '../../next-soup/filters/inbox-filters';
-import { scheduledRemindersFilter } from '../../next-soup/filters/predicates';
 import { HOME_FACETS, type HomeFacetContext } from '../home-facets';
 import type { HomeTab, HomeViewState } from '../types';
 import { homeClock, homeTimestamp } from './home-date-buckets';
@@ -74,7 +73,6 @@ function matchesCapabilities(
 ): boolean {
   if (entity.type === 'calendar_event') return capabilities.calendar;
   if (entity.type === 'foreign') return capabilities.foreignEntities;
-  if (entity.type === 'reminder') return capabilities.reminders;
   if (isSnippetEntity(entity)) return capabilities.snippets;
 
   return true;
@@ -108,7 +106,6 @@ function matchesTab(
       );
     })
     .with('noise', () => noiseFilter(entity) && notDone())
-    .with('reminders', () => scheduledRemindersFilter(entity))
     .exhaustive();
 }
 
@@ -128,7 +125,6 @@ export function useHomeEntitiesQuery(
     calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
-    reminders: false,
     snippets: isFeatureEnabled(enableSnippets),
   });
 

@@ -97,8 +97,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     if (
       entity.type === 'database' ||
       entity.type === 'channel_message' ||
-      entity.type === 'channel_thread' ||
-      entity.type === 'reminder'
+      entity.type === 'channel_thread'
     ) {
       return false;
     }
@@ -113,9 +112,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
   const execute = async (entities: EntityData[]) => {
     const emails = entities.filter(isEmailEntity);
-    const rest = entities.filter(
-      (e) => e.type !== 'reminder' && e.type !== 'email'
-    );
+    const rest = entities.filter((e) => e.type !== 'email');
 
     if (emails.length > 0) {
       reportTrashedEmails(trashEmailThreads(emails), emails.length);
@@ -175,9 +172,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     ];
 
     const emailEntities = entities.filter(isEmailEntity);
-    const nonEmailEntities = entities.filter(
-      (e) => e.type !== 'email' && e.type !== 'reminder'
-    );
+    const nonEmailEntities = entities.filter((e) => e.type !== 'email');
 
     const cleanup = createDeletionCleanup();
     let remainingEntities: EntityData[] = nonEmailEntities;

@@ -18,7 +18,31 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::service::NoOpRemindersService;
+struct FakeRemindersService;
+impl RemindersService for FakeRemindersService {
+    async fn list_email_reminders(
+        &self,
+        _: crate::domain::email_collection::EmailReminderViewer,
+        _: crate::domain::email_collection::EmailReminderQuery,
+    ) -> Result<crate::domain::email_collection::EmailReminderPage, ReminderError> {
+        unreachable!()
+    }
+    async fn get_email_followup(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> Result<Option<crate::domain::email_followup::EmailFollowup>, ReminderError> {
+        unreachable!()
+    }
+    async fn execute_email_followup(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: Uuid,
+        _: crate::domain::email_followup::EmailFollowupCommand,
+    ) -> Result<crate::domain::email_followup::EmailFollowup, ReminderError> {
+        unreachable!()
+    }
+}
 use entity_access::domain::models::EntityAccessReceipt;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -218,7 +242,7 @@ impl EntityAccessService for FakeEntityAccessService {
 
 fn build_router(access: FakeEntityAccessService) -> axum::Router {
     reminders_router(RemindersRouterState::new(
-        Arc::new(NoOpRemindersService),
+        Arc::new(FakeRemindersService),
         Arc::new(access),
         MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
     ))

@@ -26,8 +26,6 @@ pub enum GraphqlSoupEntityType {
     ForeignEntity,
     /// Calendar event entity.
     CalendarEvent,
-    /// Reminder entity.
-    Reminder,
     /// AI coding agent session entity.
     AgentSession,
     /// Row of a Macro database table.
@@ -103,11 +101,11 @@ impl GraphqlSoupEntityType {
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::CalendarEvent => Self::CalendarEvent,
-            EntityType::Reminder => Self::Reminder,
             EntityType::AgentSession => Self::AgentSession,
             EntityType::Initiative => Self::Initiative,
             EntityType::DatabaseRow => Self::DatabaseRow,
             EntityType::User
+            | EntityType::Reminder
             | EntityType::Team
             | EntityType::StaticFile
             | EntityType::CrmContact
@@ -130,7 +128,6 @@ impl GraphqlSoupEntityType {
             Self::CrmCompany => EntityType::CrmCompany,
             Self::ForeignEntity => EntityType::ForeignEntity,
             Self::CalendarEvent => EntityType::CalendarEvent,
-            Self::Reminder => EntityType::Reminder,
             Self::AgentSession => EntityType::AgentSession,
             Self::Initiative => EntityType::Initiative,
             Self::DatabaseRow => EntityType::DatabaseRow,

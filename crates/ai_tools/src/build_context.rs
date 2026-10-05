@@ -265,7 +265,6 @@ pub async fn build_tool_service_context_from_env(
         ),
         crm::domain::service::NoOpCrmService,
         github_pull_request_service,
-        reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;

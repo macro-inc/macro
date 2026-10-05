@@ -70,16 +70,6 @@ beforeEach(() => {
 });
 
 describe('makeDeleteAction.execute', () => {
-  const reminder = entity('reminder', { ownerId: '' });
-
-  it('ignores stale standalone reminder selections', async () => {
-    await execute([reminder]);
-
-    expect(mocks.openBulkEditModal).not.toHaveBeenCalled();
-    expect(mocks.trashEmails).not.toHaveBeenCalled();
-    expect(mocks.success).not.toHaveBeenCalled();
-  });
-
   it('still confirms for everything else', async () => {
     await execute([entity('document')]);
 
@@ -99,16 +89,6 @@ describe('makeDeleteAction.execute', () => {
     ];
     onFinish();
     expect(onDeleted).toHaveBeenCalledWith([doc]);
-  });
-
-  it('excludes stale reminders from a mixed selection', async () => {
-    const doc = entity('document', { id: 'doc-1' });
-
-    await execute([reminder, doc]);
-
-    expect(mocks.openBulkEditModal).toHaveBeenCalledWith(
-      expect.objectContaining({ entities: [doc] })
-    );
   });
 
   // The confirmation modal deletes through the DSS mutation, which cannot
@@ -510,9 +490,5 @@ describe('makeDeleteAction.canExecute', () => {
     expect(canExecute(entity('channel'))).toBe(false);
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);
-  });
-
-  it('refuses standalone reminders', () => {
-    expect(canExecute(entity('reminder', { ownerId: '' }))).toBe(false);
   });
 });

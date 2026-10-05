@@ -149,7 +149,7 @@ use properties::{
 };
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use reminders::{
-    domain::service::{RemindersServiceImpl, dispatch::ReminderDispatchService},
+    domain::service::dispatch::ReminderDispatchService,
     inbound::{axum_router::RemindersRouterState, dispatch_worker::DispatchWorker},
     outbound::{
         notification_notifier::NotificationReminderNotifier, pg_reminders_repo::PgRemindersRepo,
@@ -1397,7 +1397,6 @@ async fn run() -> anyhow::Result<()> {
     );
     let reminders_service =
         reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
-            RemindersServiceImpl::new(PgRemindersRepo::new(db.clone())),
             email_followups.clone(),
         )
         .with_entity_access((*entity_access_service).clone());
@@ -1466,7 +1465,6 @@ async fn run() -> anyhow::Result<()> {
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
                 PgGithubPullRequestRepo::new(db.clone()),
             ),
-            reminders_service.clone(),
         )
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
             db.clone(),
@@ -1497,7 +1495,6 @@ async fn run() -> anyhow::Result<()> {
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
                 PgGithubPullRequestRepo::new(readonly_db.clone()),
             ),
-            reminders_service.clone(),
         )
         .with_favorites(favorites_service.clone())
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(

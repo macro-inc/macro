@@ -40,22 +40,15 @@ impl<I: NotificationIngress> ReminderNotifier for NotificationReminderNotifier<I
     // `DueReminder` carries both the owner's macro user id — which embeds their
     // email — and the private email subject. Only the
     // reminder id is safe to put in a span.
-    #[tracing::instrument(err, skip_all, fields(reminder_id = %due.reminder.id))]
+    #[tracing::instrument(err, skip_all, fields(reminder_id = %due.reminder_id))]
     async fn notify(&self, due: &DueReminder) -> Result<(), Self::Err> {
-        let Some(thread_id) = due
-            .reminder
-            .entity_id
-            .as_ref()
-            .filter(|_| due.reminder.entity_type == Some(EntityType::EmailThread))
-        else {
-            return Err(NotifyError);
-        };
         let request = SendNotificationRequestBuilder {
-            notification_entity: EntityType::EmailThread.with_entity_string(thread_id.clone()),
+            notification_entity: EntityType::EmailThread
+                .with_entity_string(due.thread_id.to_string()),
             secondary_notification_entity: None,
             notification: ReminderMetadata {
-                reminder_id: due.reminder.id,
-                description: due.reminder.description.clone(),
+                reminder_id: due.reminder_id,
+                description: due.description.clone(),
                 // Retraction must distinguish a previous firing from a newer snooze.
                 scheduled_for: Some(due.scheduled_for),
             },
@@ -74,7 +67,7 @@ impl<I: NotificationIngress> ReminderNotifier for NotificationReminderNotifier<I
             .send_notification(request)
             .await
             .map_err(|e| {
-                tracing::error!(error = ?e, reminder_id = %due.reminder.id, "reminder notification rejected");
+                tracing::error!(error = ?e, reminder_id = %due.reminder_id, "reminder notification rejected");
                 NotifyError
             })?;
 

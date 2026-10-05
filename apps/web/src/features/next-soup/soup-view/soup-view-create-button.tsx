@@ -130,7 +130,7 @@ export const SoupViewCreateButton = () => {
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
   const isCreatableEnabled = useCreatableEnabled();
-  const soupView = useMaybeSoupView();
+  const _soupView = useMaybeSoupView();
 
   const currentView = createMemo(() => {
     const content = panel.handle.content();
@@ -143,9 +143,6 @@ export const SoupViewCreateButton = () => {
   // one thing you make from that list rather than triage into it.
   const createView = createMemo(() => {
     const view = currentView();
-    if (view === 'home' && soupView?.activeTab() === 'reminders') {
-      return 'reminders';
-    }
     return view;
   });
 

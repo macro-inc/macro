@@ -151,36 +151,11 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
-## In-app reminder alerts
+## Email reminder delivery
 
-With reminders enabled, an unseen reminder notification produces a persistent
-alert while the Macro tab is visible, including when DevTools, the address bar,
-or another window has keyboard focus. Browser notification permission is not
-required. Returning to a hidden tab also surfaces unseen reminders from the
-loaded notification feed. Alerts do not activate the full notification history
-query: live arrivals are buffered independently while the tab is hidden.
-Multiple occurrences share one alert, with up to three descriptions and a count
-of the rest; normal save/copy toasts do not replace it.
-
-**Open reminder** opens the reminder details, including standalone reminders.
-For a group, **View reminders** opens the reminders list. Opening acknowledges
-the alert only after navigation applies; a rejected or superseded navigation
-leaves the card actionable. Opening or closing acknowledges it only in this
-browser account; it does not complete, delete, or snooze a reminder.
-Acknowledgements survive reloads and synchronize between tabs on the same origin.
-A later occurrence of a recurring reminder alerts again.
-Seeing or completing its notification elsewhere also removes it from the alert.
-
-Existing item-level notification mutes and snoozes also hide matching reminder
-alerts. Snoozing does not acknowledge the occurrence: an unseen alert can return
-when the snooze expires, without requiring another network event. The alert does
-not add a new per-occurrence Snooze control.
-
-When verifying, intercept notification responses in an owned browser tab and
-inject unseen reminder fixtures instead of scheduling real hosted reminders.
-Check permission denied, a burst of reminders before history loads, hide/show,
-reload after dismissal, mute/unmute, snooze expiry, and desktop/mobile widths. This foreground path does not deliver browser
-push when Macro is closed.
+An email snooze returns its original conversation to the inbox and adds a
+notification to that email row in Home. It has no separate reminder toast or
+detail view. See [Email reminders](reminders.md#delivery-and-undo).
 
 ## Home (desktop) / Notifications (mobile) — `/app/home`
 
@@ -2327,15 +2302,13 @@ and contact views (both inside the CRM workspace and in standalone blocks).
 
 ### Email reminders
 
-The global Reminders workspace uses one continuous collection with completion
-and schedule shown independently on the existing entity rows. Its persistent
-clock exposes the full schedule on hover/focus and opens the existing editor;
-see [collection verification](reminders.md#one-collection-independent-completion-and-schedule).
+Email's **Reminders** tab contains original conversations with active snoozes,
+ordered by return time. Each row's clock opens the shared reminder command menu;
+see [collection verification](reminders.md#email--reminders).
 
 Use **H** on one selected email or its open conversation, **Remind me** in the
-menu, or the header bell. These share the email-specific, time-first workflow
-in [Reminders](reminders.md#email-follow-ups-h). A successful new reminder moves
-out of the inbox and advances within that surface's filtered list. Cancel and
-failed saves keep the current email. H on a pending follow-up edits it; Remove
-returns it to the inbox. The bell's label identifies pending time or returned
-status. Bare H in a reply or search field must remain ordinary typing.
+menu, or the header bell. These share the [email reminder menu](reminders.md#snooze-or-change-a-conversation).
+A confirmed save archives the thread and advances within the invoking list.
+Cancel and failed saves keep the current email. H on a pending snooze edits it;
+**Remove reminder** returns it to the inbox. Bare H in a reply or search field
+remains ordinary typing.

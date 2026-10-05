@@ -50,9 +50,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
   enableInboxNotifiedSort,
-  enableReminders,
   enableSupportedSoupForeignEntities,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -287,16 +285,6 @@ const resolveTabId = (
 ): string => {
   const config = VIEW_TAB_PRESETS[view];
   if (!remembered || !(remembered in config.tabs)) return config.default;
-  // A remembered tab can also be flag-gated out of the tab bar (see
-  // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
-  // off would leave a hidden tab active, still querying reminders.
-  if (
-    view === 'home' &&
-    remembered === 'reminders' &&
-    !isFeatureEnabled(enableReminders)
-  ) {
-    return config.default;
-  }
   return remembered;
 };
 
@@ -383,12 +371,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       : undefined;
 
   const initialFilters = resolveInitialViewFilters({
-    view: initialView,
-    rememberedTab:
-      initialEntryState?.['soup.tab'] ??
-      (filterPersistenceEnabled() && initialView
-        ? persistedActiveTabs()[initialView]
-        : undefined),
     entry: { query: initialEntryQuery, predicates: initialEntryPredicates },
     persisted: {
       query: initialPersistedQuery,
@@ -710,13 +692,11 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   // inbox's All and Reminders tabs stay on update recency even when a row
   // carries a notification stamp from a Signal page or a live delivery.
   const clientSort = createMemo((): SortConfig<SoupEntity>[] =>
-    activeListView() === 'reminders'
-      ? []
-      : presetSortMethod() === 'notified_at'
-        ? [SORT_CONFIGS.notified_at]
-        : config().sortMethod?.() === 'touched_by_me'
-          ? []
-          : soup.sort.active()
+    presetSortMethod() === 'notified_at'
+      ? [SORT_CONFIGS.notified_at]
+      : config().sortMethod?.() === 'touched_by_me'
+        ? []
+        : soup.sort.active()
   );
 
   const isClientPropertyGroup = createMemo(
@@ -880,12 +860,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
             : undefined;
 
         const filters = resolveInitialViewFilters({
-          view,
-          rememberedTab:
-            entryState?.['soup.tab'] ??
-            (filterPersistenceEnabled() && view
-              ? persistedActiveTabs()[view]
-              : undefined),
           entry: { query: entryQuery, predicates: entryPredicates },
           persisted: { query: persistedQuery, predicates: savedPredicates },
           initial: {
