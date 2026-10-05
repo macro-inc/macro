@@ -202,6 +202,28 @@ fn strokes_take_their_width_outside_inside_or_centered() {
 }
 
 #[test]
+fn upper_strokes_knock_lower_ones_out() {
+    let stroke = |size| StrokeEffect {
+        enabled: true,
+        blend: BlendMode::Multiply,
+        opacity: 1.0,
+        size,
+        position: StrokePosition::Outside,
+        fill: Fill::Solid { color: Rgb::BLACK },
+    };
+    // The first stroke is drawn topmost.
+    let (s, _) = run(&Effects {
+        strokes: vec![stroke(2.0), stroke(6.0)],
+        ..Effects::default()
+    });
+    let (lower, upper) = (&s.beside[0].cov, &s.beside[1].cov);
+    assert_eq!((upper.get(39, 50), upper.get(37, 50)), (1.0, 0.0));
+    // Beside the shape the wide stroke shows only past the narrow one.
+    let row: Vec<f32> = (32..40).map(|x| lower.get(x, 50)).collect();
+    assert_eq!(row, [0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0]);
+}
+
+#[test]
 fn overlays_stack_pattern_then_gradient_then_color() {
     let overlay = |fill: Fill, blend| Overlay {
         enabled: true,
