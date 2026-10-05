@@ -14,13 +14,16 @@ import type {
   CopiedLayers,
   EntryChange,
   FileSummary,
+  FontUse,
   LayerRow,
   NodeGeometry,
   NodeInfo,
   PageLayout,
   PasteSpec,
   Rect,
+  RegisteredFace,
   SearchHit,
+  TextGeometry,
   VectorNetwork,
 } from './types';
 
@@ -349,6 +352,40 @@ export class FigEngine {
   }
 
   /** One layer (and what it holds) as an SVG document. */
+  /** The fonts the document's text uses and whether each is available. */
+  fonts(): Promise<FontUse[]> {
+    return this.query('fonts');
+  }
+
+  /** A text layer's lines and caret stops, for the text editor. */
+  textGeometry(page: number, id: string): Promise<TextGeometry | null> {
+    return this.query('textGeometry', page, id);
+  }
+
+  /**
+   * Makes a font available to text layout in every worker (TTF, OTF,
+   * WOFF, or WOFF2), as `family` when given. Resolves to the faces the
+   * primary worker registered (none when the file is not a font).
+   */
+  async registerFont(
+    bytes: ArrayBuffer,
+    family?: string
+  ): Promise<RegisteredFace[]> {
+    for (const h of [...this.helpers, ...this.starting]) {
+      const copy = bytes.slice(0);
+      h.request({ kind: 'registerFont', bytes: copy, family: family ?? null }, [
+        copy,
+      ]).catch(() => {});
+    }
+    const copy = bytes.slice(0);
+    const r = await this.primary.request(
+      { kind: 'registerFont', bytes: copy, family: family ?? null },
+      [copy]
+    );
+    if (r.kind !== 'query') throw new Error('unexpected response');
+    return JSON.parse(r.json) as RegisteredFace[];
+  }
+
   exportSvg(page: number, id: string): Promise<string> {
     return this.query('exportSvg', page, id);
   }

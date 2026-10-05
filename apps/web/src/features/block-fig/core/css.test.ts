@@ -111,6 +111,9 @@ describe('css', () => {
         case: null,
         autoResize: null,
         fonts: [],
+        fontStatus: 'AVAILABLE',
+        styleIds: [],
+        runs: [],
       },
     });
     expect(lines).toContain('color: #333333;');
@@ -139,6 +142,9 @@ describe('css', () => {
         case: null,
         autoResize: null,
         fonts: [],
+        fontStatus: 'AVAILABLE',
+        styleIds: [],
+        runs: [],
       },
     });
     expect(lines).toContain('text-align: justify;');

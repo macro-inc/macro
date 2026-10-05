@@ -17,14 +17,16 @@ import {
 import { match } from 'ts-pattern';
 import { DesignPanel } from '../components/design-panel';
 import { FigContextMenu } from '../components/fig-context-menu';
+import { MissingFonts } from '../components/missing-fonts';
 import { FollowFrame, PeerAvatars } from '../components/peer-presence';
 import { ShortcutsDialog } from '../components/shortcuts-dialog';
 import { ViewerToolbar } from '../components/viewer-toolbar';
 import { useFigViewerContext } from '../context/fig-viewer-context';
 import { type Point, zoomLabel } from '../core/camera';
-import { type MixedInfo, mergeInfos } from '../core/mixed';
+import { MIXED, type MixedInfo, mergeInfos } from '../core/mixed';
 import { stepPage } from '../core/pages';
 import { type FigPeer, storesFile } from '../core/presence';
+import { rangeFills, rangeStyle, textInfoForRange } from '../core/rich-text';
 import {
   controlOwnsKey,
   EDIT_ACTIONS,
@@ -35,6 +37,7 @@ import { deleteVertex, VECTOR_EDITABLE } from '../core/vector';
 import { createFigContextMenu } from '../primitives/create-fig-context-menu';
 import { createFigEditor, type Patch } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
+import { createFontRegistry } from '../primitives/create-font-registry';
 import { createPeerOverlays } from '../primitives/create-peer-overlays';
 import { AssetsPanel } from './assets-panel';
 import { LayersPanel } from './layers-panel';
@@ -110,6 +113,13 @@ export function FigViewer() {
 
   // Several selected layers: their shared and mixed values.
   const [mixed, setMixed] = createSignal<MixedInfo>();
+
+  // Fonts for laying out edited text; what the document uses changes as
+  // it is edited.
+  const fonts = createFontRegistry({ engine, source: context.fonts });
+  createEffect(
+    on(viewer.editVersion, () => void fonts.refresh(), { defer: true })
+  );
   let mixedRequest = 0;
   const loadMixed = async (ids: string[], request: number) => {
     try {
@@ -144,8 +154,52 @@ export function FigViewer() {
     if (!live) gesture = undefined;
     return key;
   };
-  const patchSelection = (patch: Patch, live: boolean) =>
-    void editor.setProps(patch, gestureKey(Object.keys(patch).join(','), live));
+  /**
+   * A panel change: to the characters selected in the text editor when
+   * there are some, after loading a font it switches to.
+   */
+  const patchSelection = (patch: Patch, live: boolean) => {
+    const what = gestureKey(Object.keys(patch).join(','), live);
+    const range = editor.textSelection();
+    const ranged =
+      range && range.start !== range.end && range.id === info()?.id
+        ? { ...patch, textRange: [range.start, range.end] as [number, number] }
+        : patch;
+    const text = info()?.text;
+    if (!text || (!patch.fontFamily && !patch.fontStyle)) {
+      void editor.setProps(ranged, what);
+      return;
+    }
+    const style = rangeStyle(text, range?.start ?? 0, range?.end ?? 0);
+    const family =
+      patch.fontFamily ??
+      (style.fontFamily === MIXED ? text.fontFamily : style.fontFamily) ??
+      'Inter';
+    const fontStyle =
+      patch.fontStyle ??
+      (style.fontStyle === MIXED ? null : style.fontStyle) ??
+      'Regular';
+    void (async () => {
+      await fonts.ensure(family, fontStyle, text.characters);
+      await editor.setProps(ranged, what);
+      await fonts.refresh();
+    })();
+  };
+
+  /** The design panel's layer, showing the text editor's selection. */
+  const panel = () => {
+    const i = info();
+    const range = editor.textSelection();
+    if (!i?.text || !range || range.id !== i.id || range.start === range.end)
+      return { info: i, mixed: undefined };
+    const { text, mixed } = textInfoForRange(i.text, range.start, range.end);
+    const fills = rangeFills(i.text, range.start, range.end);
+    return {
+      info: { ...i, text, fills: fills && fills !== MIXED ? fills : i.fills },
+      mixed,
+    };
+  };
+  const shownFamily = () => panel().info?.text?.fontFamily ?? undefined;
   const setPageColor = (hex: string, live: boolean) => {
     const page = viewer.pages[viewer.page()];
     if (!page) return;
@@ -694,12 +748,20 @@ export function FigViewer() {
                 viewer={viewer}
                 editor={editor}
                 engine={engine}
+                fonts={fonts}
                 onDone={() => {
                   setTextEditing(undefined);
                   root.focus({ preventScroll: true });
                 }}
               />
             )}
+          </Show>
+          <Show when={editor.enabled() && fonts.missing().length > 0}>
+            <MissingFonts
+              fonts={fonts.missing()}
+              canUseLocal={fonts.canUseLocalFonts()}
+              onUseLocal={() => void fonts.useLocalFonts()}
+            />
           </Show>
           <Show when={viewer.loadingPage()}>
             <div class="pointer-events-none absolute inset-0 flex items-center justify-center text-ink-muted text-sm">
@@ -776,7 +838,22 @@ export function FigViewer() {
       <Show when={showDesign()}>
         <aside class="flex w-64 shrink-0 flex-col border-edge-muted border-l bg-panel">
           <DesignPanel
-            info={info()}
+            info={panel().info}
+            fontFamilies={[
+              ...new Set([
+                'Inter',
+                ...fonts.documentFonts().map((f) => f.family),
+              ]),
+            ]}
+            type={{
+              mixed: panel().mixed,
+              googleFamilies: fonts.families().map((f) => f.family),
+              weights: shownFamily()
+                ? fonts.weightsOf(shownFamily() ?? '')
+                : undefined,
+              preview: fonts.preview,
+              onFontsOpen: () => void fonts.loadCatalog(),
+            }}
             onAlign={
               editor.enabled() ? (how) => void editor.align(how) : undefined
             }

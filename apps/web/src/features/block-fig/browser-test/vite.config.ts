@@ -25,7 +25,13 @@ const corpusDirectory =
 
 export default defineConfig({
   root: directory,
-  define: { __FIG_CORPUS_URL__: JSON.stringify(`/@fs${corpusDirectory}`) },
+  define: {
+    __FIG_CORPUS_URL__: JSON.stringify(`/@fs${corpusDirectory}`),
+    // The font the fixture's stand-in font sources serve.
+    __FIG_FONT_URL__: JSON.stringify(
+      `/@fs${workspaceDirectory}crates/fig_engine/fonts/InterVariable.ttf`
+    ),
+  },
   cacheDir: `${directory}/.vite`,
   plugins: [
     solidPlugin(),

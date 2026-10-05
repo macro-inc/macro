@@ -5,6 +5,7 @@
 
 import type { EditResult, FigEngine } from '@core/fig-engine/client';
 import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
+import type { LocalFont } from '../core/fonts';
 import type { FigPeer, FigPresence, Version } from '../core/presence';
 
 /** Presence of the other people in a shared design. */
@@ -39,6 +40,29 @@ export interface FigSharing {
   close: () => void;
 }
 
+/** A font on this computer, with its file. */
+export interface LocalFontFile extends LocalFont {
+  bytes: () => Promise<ArrayBuffer>;
+}
+
+/**
+ * Where text layout gets fonts (`queries/font-source.ts`): Google Fonts
+ * stylesheets and files (cached), and the fonts on this computer.
+ */
+export interface FigFontSource {
+  /** A stylesheet's text (Google's css2 API). */
+  stylesheet: (url: string) => Promise<string>;
+  /** A font file. */
+  file: (url: string) => Promise<ArrayBuffer>;
+  /**
+   * The fonts on this computer, asking permission first (call from a user
+   * gesture); absent where the browser cannot list them.
+   */
+  localFonts?: () => Promise<LocalFontFile[]>;
+  /** Fonts on this computer already permitted, without asking. */
+  grantedLocalFonts?: () => Promise<LocalFontFile[] | null>;
+}
+
 export interface FigViewerContext {
   engine: FigEngine;
   fileName: () => string;
@@ -55,6 +79,8 @@ export interface FigViewerContext {
   collaboration?: FigCollaboration;
   /** The live edits of a shared design. */
   sharing?: FigSharing;
+  /** Fonts for laying out edited text (Inter alone without it). */
+  fonts?: FigFontSource;
 }
 
 const Context = createContext<FigViewerContext>();

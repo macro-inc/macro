@@ -166,6 +166,12 @@ async function serve(request: FigRequest) {
         case 'exportSvg':
           json = JSON.stringify(f.exportSvg(a as number, b as string));
           break;
+        case 'fonts':
+          json = f.fonts();
+          break;
+        case 'textGeometry':
+          json = f.textGeometry(a as number, b as string);
+          break;
         case 'vectorNetwork':
           json = f.vectorNetwork(a as number, b as string) ?? 'null';
           break;
@@ -244,6 +250,17 @@ async function serve(request: FigRequest) {
         request.spec
       );
       post({ id: request.id, ok: true, kind: 'edit', json });
+      return;
+    }
+    case 'registerFont': {
+      // Fonts belong to the worker (every file it opens), so they can
+      // arrive before the file.
+      const wasm = await loadFigEngineWasm();
+      const json = wasm.FigFile.registerFont(
+        new Uint8Array(request.bytes),
+        request.family ?? undefined
+      );
+      post({ id: request.id, ok: true, kind: 'query', json });
       return;
     }
     case 'blank': {

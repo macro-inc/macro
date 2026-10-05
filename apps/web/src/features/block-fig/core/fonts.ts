@@ -6,7 +6,7 @@
  * Figma family and style.
  */
 
-import { parseStyle, styleName } from './type';
+import { parseStyle } from './type';
 
 /** A Google Fonts family: name, category, styles, and variable axes. */
 export interface GoogleFamily {
@@ -60,24 +60,6 @@ export function googleFamilies(): Promise<GoogleFamily[]> {
   return catalog;
 }
 
-/** Figma style names a family offers ("Regular", "Bold Italic"…). */
-export function familyStyles(f: GoogleFamily): string[] {
-  const variable = f.axes.find(([tag]) => tag === 'wght');
-  const named = [100, 200, 300, 400, 500, 600, 700, 800, 900];
-  const upright = variable
-    ? named.filter((w) => w >= variable[1] && w <= variable[2])
-    : f.weights;
-  const italic = variable
-    ? f.italics.length > 0
-      ? upright
-      : []
-    : f.italics;
-  return [
-    ...upright.map((w) => styleName(w, false)),
-    ...italic.map((w) => styleName(w, true)),
-  ];
-}
-
 /**
  * The css2 request for a family: its variable axes as ranges (so one file
  * per subset covers every weight), or each of its weights.
@@ -85,7 +67,9 @@ export function familyStyles(f: GoogleFamily): string[] {
 export function googleCssUrl(f: GoogleFamily, text?: string): string {
   const family = encodeURIComponent(f.family).replace(/%20/g, '+');
   const italic = f.italics.length > 0;
-  const ranged = f.axes.filter(([tag]) => ['opsz', 'wdth', 'wght'].includes(tag));
+  const ranged = f.axes.filter(([tag]) =>
+    ['opsz', 'wdth', 'wght'].includes(tag)
+  );
   let spec: string;
   if (ranged.some(([tag]) => tag === 'wght')) {
     const tags = [...(italic ? ['ital'] : []), ...ranged.map(([t]) => t)];
@@ -203,15 +187,15 @@ const squash = (s: string) => s.toLowerCase().replace(/[\s_-]/g, '');
  * The local fonts of a Figma family, best match for `style` first: the
  * same style name, else the same weight and slant.
  */
-export function localFontsFor(
-  fonts: LocalFont[],
+export function localFontsFor<T extends LocalFont>(
+  fonts: T[],
   family: string,
   style: string
-): LocalFont[] {
+): T[] {
   const name = squash(family);
   const own = fonts.filter((f) => squash(f.family) === name);
   const want = parseStyle(style);
-  const score = (f: LocalFont) => {
+  const score = (f: T) => {
     if (squash(f.style) === squash(style)) return 0;
     const got = parseStyle(f.style);
     return (
