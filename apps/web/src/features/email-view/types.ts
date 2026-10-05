@@ -1,20 +1,11 @@
 import type { FacetSelection } from '@app/features/soup';
+import type { EmailTab } from './constants';
 
 /**
  * Existing tab ids match the legacy mail view (`important` is Signal).
  * Favorites extends that list; entity action capabilities use `${view}-${tab}`.
  */
-export type EmailTab =
-  | 'important'
-  | 'noise'
-  | 'favorites'
-  | 'sent'
-  | 'scheduled'
-  | 'reminders'
-  | 'calendar'
-  | 'drafts'
-  | 'shared'
-  | 'all';
+export type { EmailTab };
 
 export type EmailFilterGroupId =
   | 'read'

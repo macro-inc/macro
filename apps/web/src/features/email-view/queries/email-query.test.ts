@@ -6,6 +6,7 @@ import type { EntityData, WithNotification } from '@entity';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { describe, expect, it, vi } from 'vitest';
+import { EMAIL_TAB_IDS } from '../constants';
 import type { EmailTab } from '../types';
 import {
   buildEmailQuery,
@@ -40,17 +41,6 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 
 const NIL = '00000000-0000-0000-0000-000000000000';
-const TABS: EmailTab[] = [
-  'important',
-  'noise',
-  'favorites',
-  'sent',
-  'scheduled',
-  'calendar',
-  'drafts',
-  'shared',
-  'all',
-];
 
 const serialize = (value: unknown) => JSON.stringify(value);
 
@@ -141,19 +131,20 @@ describe('buildEmailQuery', () => {
   });
 
   it('lists the server view each tab reads from', () => {
-    expect(TABS.map((tab) => [tab, emailViewForTab(tab)])).toEqual([
+    expect(EMAIL_TAB_IDS.map((tab) => [tab, emailViewForTab(tab)])).toEqual([
       ['important', 'inbox'],
       ['noise', 'inbox'],
       ['favorites', 'all'],
       ['sent', 'sent'],
       ['scheduled', 'drafts'],
+      ['reminders', 'all'],
       ['calendar', 'all'],
       ['drafts', 'drafts'],
       ['shared', 'all'],
       ['all', 'all'],
     ]);
 
-    for (const tab of TABS) {
+    for (const tab of EMAIL_TAB_IDS) {
       expect(buildEmailQuery(contextFor({ tab })).body.emailView).toBe(
         emailViewForTab(tab)
       );
