@@ -219,14 +219,22 @@ where
         };
         match read {
             Ok(Some(period)) => {
+                let Some(adopted) = period.adopted(anchor, now) else {
+                    tracing::warn!(
+                        period_start = %period.start,
+                        period_end = %period.end,
+                        "subscription period past the stored anchor does not contain now; metering the fallback period"
+                    );
+                    return BillingPeriod::current(anchor, now);
+                };
                 let _ = self
                     .repo
-                    .set_period(payer, period.start, period.end)
+                    .set_period(payer, adopted.start, adopted.end)
                     .await
                     .inspect_err(
                         |e| tracing::warn!(error = ?e, "storing the subscription period failed"),
                     );
-                BillingPeriod::current(Some((period.start, period.end)), now)
+                adopted
             }
             Ok(None) => {
                 tracing::debug!("no subscription period to read; metering the fallback period");

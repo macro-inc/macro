@@ -424,6 +424,43 @@ fn billing_period_covering_needs_an_anchor_that_contains_now() {
 }
 
 #[test]
+fn billing_period_adopted_starts_at_the_stored_end_and_contains_now() {
+    let subscription = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 2, 3, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 3, 3, 0, 0, 0).unwrap(),
+    };
+    let now = Utc.with_ymd_and_hms(2026, 2, 20, 12, 0, 0).unwrap();
+
+    assert_eq!(
+        subscription.adopted(None, now),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 2, 3, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 3, 3, 0, 0, 0).unwrap(),
+        }),
+        "no anchor"
+    );
+    assert_eq!(
+        subscription.adopted(
+            Some((
+                Utc.with_ymd_and_hms(2026, 1, 15, 0, 0, 0).unwrap(),
+                Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+            )),
+            now
+        ),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 3, 3, 0, 0, 0).unwrap(),
+        }),
+        "overlapping anchor"
+    );
+    assert_eq!(
+        subscription.adopted(None, Utc.with_ymd_and_hms(2026, 3, 10, 0, 0, 0).unwrap()),
+        None,
+        "ended before now"
+    );
+}
+
+#[test]
 fn plan_tier_from_roles_prefers_max() {
     use roles_and_permissions::domain::model::RoleId;
     use std::collections::HashSet;

@@ -195,6 +195,24 @@ impl BillingPeriod {
         (start <= now && now < end).then_some(Self { start, end })
     }
 
+    /// The part of this subscription window to store and meter after the
+    /// stored anchor.
+    ///
+    /// The start moves up to the anchor's end because the store refuses a start
+    /// that overlaps the stored window. `None` when that part does not contain
+    /// `now`, because it is then not a period to meter.
+    pub fn adopted(
+        self,
+        anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
+        now: DateTime<Utc>,
+    ) -> Option<Self> {
+        let start = match anchor {
+            Some((_, stored_end)) => self.start.max(stored_end),
+            None => self.start,
+        };
+        Self::covering(Some((start, self.end)), now)
+    }
+
     /// The period immediately before this one, assuming the same length in
     /// whole months (one month for calendar periods).
     pub fn previous(&self) -> Self {

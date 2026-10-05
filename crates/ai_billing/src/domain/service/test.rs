@@ -253,7 +253,17 @@ impl BillingRepo for FakeRepo {
         end: DateTime<Utc>,
     ) -> Result<()> {
         let mut state = self.state.lock().unwrap();
-        state.settings.period_anchor = Some((start, end));
+        // Same guard as `PgBillingRepo::set_period`, which returns `Ok` when it refuses a write.
+        let applies = match state.settings.period_anchor {
+            None => true,
+            Some((stored_start, stored_end)) => {
+                (start > stored_start && start >= stored_end)
+                    || (start == stored_start && end > start)
+            }
+        };
+        if applies {
+            state.settings.period_anchor = Some((start, end));
+        }
         state
             .period_writes
             .push((payer.as_ref().to_string(), start, end));
@@ -1877,6 +1887,118 @@ async fn ended_anchor_is_refreshed_from_the_subscription_before_rolling_forward(
         repo.settings(&payer).await.unwrap().period_anchor,
         Some((d(2026, 4, 10), d(2026, 5, 10)))
     );
+}
+
+#[tokio::test]
+async fn overlapping_subscription_window_starts_at_the_stored_end() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    repo.set_period(&payer, d(2026, 1, 15), d(2026, 2, 15))
+        .await
+        .unwrap();
+    payments.set_period(PeriodReply::Found(BillingPeriod {
+        start: d(2026, 2, 3),
+        end: d(2026, 3, 3),
+    }));
+
+    let position = svc
+        .position(&payer, d(2026, 2, 20) + chrono::Duration::hours(12))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        position.period,
+        BillingPeriod {
+            start: d(2026, 2, 15),
+            end: d(2026, 3, 3),
+        }
+    );
+    assert_eq!(
+        repo.period_writes(),
+        vec![
+            (
+                "macro|payer@x.com".to_string(),
+                d(2026, 1, 15),
+                d(2026, 2, 15)
+            ),
+            (
+                "macro|payer@x.com".to_string(),
+                d(2026, 2, 15),
+                d(2026, 3, 3)
+            ),
+        ]
+    );
+    assert_eq!(
+        repo.settings(&payer).await.unwrap().period_anchor,
+        Some((d(2026, 2, 15), d(2026, 3, 3)))
+    );
+
+    svc.position(&payer, d(2026, 2, 21)).await.unwrap();
+    assert_eq!(
+        payments.period_requests(),
+        vec![("cus_123".to_string(), SubscriptionScope::Personal)],
+        "the stored window answers the second read"
+    );
+}
+
+#[tokio::test]
+async fn unrolled_subscription_window_rolls_the_anchor_and_stores_nothing() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    repo.set_period(&payer, d(2026, 3, 18), d(2026, 4, 18))
+        .await
+        .unwrap();
+    payments.set_period(PeriodReply::Found(BillingPeriod {
+        start: d(2026, 3, 18),
+        end: d(2026, 4, 18),
+    }));
+
+    let position = svc
+        .position(&payer, d(2026, 4, 18) + chrono::Duration::minutes(30))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        position.period,
+        BillingPeriod {
+            start: d(2026, 4, 18),
+            end: d(2026, 5, 18),
+        }
+    );
+    assert_eq!(
+        repo.period_writes(),
+        vec![(
+            "macro|payer@x.com".to_string(),
+            d(2026, 3, 18),
+            d(2026, 4, 18)
+        )],
+        "only the seeded anchor was written"
+    );
+    assert_eq!(
+        repo.settings(&payer).await.unwrap().period_anchor,
+        Some((d(2026, 3, 18), d(2026, 4, 18)))
+    );
+}
+
+#[tokio::test]
+async fn subscription_window_after_now_keeps_the_calendar_month_and_stores_nothing() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_period(PeriodReply::Found(BillingPeriod {
+        start: d(2026, 4, 19),
+        end: d(2026, 5, 19),
+    }));
+
+    let position = svc.position(&payer, apr_18_noon()).await.unwrap();
+
+    assert_eq!(
+        position.period,
+        BillingPeriod {
+            start: d(2026, 4, 1),
+            end: d(2026, 5, 1),
+        }
+    );
+    assert!(repo.period_writes().is_empty());
 }
 
 #[tokio::test]
