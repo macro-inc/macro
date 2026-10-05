@@ -5,6 +5,7 @@
 use clap::{Parser, Subcommand};
 use psd_engine::document::{self, OpenOptions};
 use psd_engine::edit::{History, Op};
+use psd_engine::model::LayerKind;
 use psd_engine::render::Renderer;
 use psd_engine::{Document, IRect, Selection};
 use std::path::{Path, PathBuf};
@@ -150,11 +151,19 @@ fn difference(a: &[u8], b: &[u8], w: i32, h: i32) -> (f64, f64, Vec<u8>) {
 fn print_tree(doc: &Document) {
     for (i, depth) in doc.panel_order() {
         let l = doc.layer(i);
+        let kind = match &l.kind {
+            LayerKind::Pixel => "pixels",
+            LayerKind::Group { .. } => "group",
+            LayerKind::Text { .. } => "text",
+            LayerKind::Fill { .. } => "fill",
+            LayerKind::Adjustment { adjustment } => adjustment.label(),
+            LayerKind::SmartObject { .. } => "smart object",
+        };
         println!(
-            "{}{} {:?} \"{}\"{}{}",
+            "{}{} {kind} {} \"{}\"{}{}",
             "  ".repeat(depth + 1),
             l.id,
-            std::mem::discriminant(&l.kind),
+            l.blend.label(),
             l.name,
             if l.visible { "" } else { " hidden" },
             if l.opacity < 255 {

@@ -57,10 +57,14 @@ pub fn decode(data: &[u8], width: u32, height: u32) -> Result<VectorMask> {
         match selector {
             CLOSED_LENGTH | OPEN_LENGTH => {
                 body.u16()?; // the knot count, which the knots that follow give
-                let op = match body.i16()? {
+                let code = body.i16()?;
+                // -1: the subpath continues the previous one's shape.
+                let joined = code == -1 && !mask.subpaths.is_empty();
+                let op = match code {
                     0 => PathOp::Exclude,
                     2 => PathOp::Subtract,
                     3 => PathOp::Intersect,
+                    -1 => mask.subpaths.last().map_or(PathOp::Combine, |s| s.op),
                     _ => PathOp::Combine,
                 };
                 let nonzero = body.u16()? == NONZERO;
@@ -71,6 +75,7 @@ pub fn decode(data: &[u8], width: u32, height: u32) -> Result<VectorMask> {
                     op,
                     knots: Vec::new(),
                     nonzero,
+                    joined,
                     shape,
                 });
             }
@@ -92,6 +97,7 @@ pub fn decode(data: &[u8], width: u32, height: u32) -> Result<VectorMask> {
                         op: PathOp::Combine,
                         knots: Vec::new(),
                         nonzero: false,
+                        joined: false,
                         shape: 0,
                     });
                 }
@@ -137,6 +143,7 @@ pub fn encode(mask: &VectorMask, width: u32, height: u32) -> Vec<u8> {
         });
         w.u16(subpath.knots.len().min(usize::from(u16::MAX)) as u16);
         w.i16(match subpath.op {
+            _ if subpath.joined => -1,
             PathOp::Exclude => 0,
             PathOp::Combine => 1,
             PathOp::Subtract => 2,

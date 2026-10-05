@@ -165,6 +165,9 @@ pub struct MaskData {
     pub params: Option<MaskParams>,
     /// The real user mask.
     pub real: Option<RealMask>,
+    /// Bytes after the fields, as the file had them (padding, or what
+    /// another writer added), written back unchanged.
+    pub tail: Vec<u8>,
 }
 
 /// An additional layer information block (document level or per layer).

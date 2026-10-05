@@ -480,11 +480,7 @@ fn interpolate<const N: usize>(
             // Photoshop eases transitions as smoothness rises.
             let eased = k * k * (3.0 - 2.0 * k);
             k += (eased - k) * smoothness.clamp(0.0, 1.0) * 0.5;
-            let mut out = [0.0; N];
-            for i in 0..N {
-                out[i] = a.2[i] + (b.2[i] - a.2[i]) * k;
-            }
-            return out;
+            return std::array::from_fn(|i| a.2[i] + (b.2[i] - a.2[i]) * k);
         }
     }
     stops.last().expect("not empty").2
@@ -1350,6 +1346,10 @@ pub struct Subpath {
     /// Filled by the nonzero winding rule rather than even-odd.
     #[serde(default)]
     pub nonzero: bool,
+    /// Part of the previous subpath's shape (filled with it, by its rule
+    /// and operation) rather than a shape of its own.
+    #[serde(default)]
+    pub joined: bool,
     /// The live shape (the index of its entry in the layer's `vogk`
     /// origination data) it was drawn as.
     #[serde(default)]

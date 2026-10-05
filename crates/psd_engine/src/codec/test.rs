@@ -168,6 +168,7 @@ fn damaged_blocks_never_panic() {
             op: PathOp::Subtract,
             knots: vec![Knot::corner(1.0, 2.0), Knot::corner(3.0, 4.0)],
             nonzero: true,
+            joined: false,
             shape: 1,
         }],
         ..VectorMask::default()

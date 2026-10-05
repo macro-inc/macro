@@ -152,7 +152,7 @@ impl<'a> Reader<'a> {
         let n = self.u8()? as usize;
         let s = self.bytes(n)?;
         let used = n + 1;
-        if pad > 1 && used % pad != 0 {
+        if pad > 1 && !used.is_multiple_of(pad) {
             self.skip((pad - used % pad).min(self.remaining()))?;
         }
         Ok(s)
@@ -285,7 +285,7 @@ impl Writer {
         self.u8(s.len() as u8);
         self.bytes(s);
         let used = s.len() + 1;
-        if pad > 1 && used % pad != 0 {
+        if pad > 1 && !used.is_multiple_of(pad) {
             self.zeros(pad - used % pad);
         }
     }
@@ -333,7 +333,7 @@ impl Writer {
     /// Pads with zeros to a multiple of `n` bytes from `from`.
     pub fn pad_from(&mut self, from: usize, n: usize) {
         let used = self.buf.len() - from;
-        if n > 1 && used % n != 0 {
+        if n > 1 && !used.is_multiple_of(n) {
             self.zeros(n - used % n);
         }
     }
