@@ -11,6 +11,7 @@ use crate::domain::model::{
     is_macro_staff, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
     sanitize_response_headers,
 };
+use crate::domain::observed_body::{ObservedBody, StreamIdentity};
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
 
 #[cfg(test)]
@@ -217,6 +218,13 @@ where
             request.headers_mut().insert(name.clone(), value.clone());
         }
 
+        // A GET on an MCP target opens the server's event stream. Those are
+        // the requests a client reopens in a loop when the upstream keeps
+        // closing them, so its body is watched to its end - the one place the
+        // upstream's side of the loop can be seen.
+        let event_stream =
+            matches!(target, EgressTarget::McpServer(_)) && *request.method() == Method::GET;
+
         let mut response = self.forward.forward(request).await?;
         sanitize_response_headers(response.headers_mut());
 
@@ -231,6 +239,27 @@ where
                 %status,
                 "upstream answered with a failure status"
             );
+        }
+
+        if event_stream {
+            let identity = StreamIdentity {
+                session: grant.session,
+                upstream: target.name(),
+                status: response.status().as_u16(),
+                content_type: response
+                    .headers()
+                    .get(http::header::CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned),
+            };
+            tracing::info!(
+                session = %identity.session,
+                upstream = %identity.upstream,
+                status = identity.status,
+                content_type = identity.content_type.as_deref(),
+                "MCP event stream opened"
+            );
+            return Ok(response.map(|body| ObservedBody::new(body, identity).boxed_unsync()));
         }
 
         Ok(response)

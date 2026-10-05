@@ -25,6 +25,8 @@ github = { path = "../github", default-features = false, features = [
   "sync",
 ] }
 http = { workspace = true }
+# Wrapping upstream event-stream bodies so their lifetime and volume get logged.
+http-body = { workspace = true }
 http-body-util = { workspace = true }
 lru = { workspace = true }
 # Signing Macro API tokens, with the same shared vocabulary
@@ -51,5 +53,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+futures = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
+uuid = { workspace = true }
 tower = { workspace = true }
