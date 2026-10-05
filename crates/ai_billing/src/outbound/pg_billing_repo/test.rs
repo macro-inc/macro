@@ -9,7 +9,7 @@ fn payer() -> MacroUserIdStr<'static> {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn legacy_anchor_accepts_end_corrections_but_not_stale_or_overlapping_starts(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool);
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
     let start = DateTime::from_timestamp(1_800_000_000, 0).unwrap();
     let end = start + chrono::Duration::days(30);
     repo.set_period(&payer(), start, end).await.unwrap();
@@ -71,7 +71,7 @@ async fn charge_rows(pool: &PgPool) -> i64 {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn settings_default_and_roundtrip(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool);
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
     assert_eq!(
         repo.settings(&payer()).await.unwrap(),
         BillingSettings::default()
@@ -120,7 +120,7 @@ async fn settings_default_and_roundtrip(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn credit_purchases_are_idempotent_on_stripe_reference(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool);
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
     assert!(
         repo.record_credit_purchase(&payer(), 2_500, "cs_a")
             .await
@@ -142,7 +142,7 @@ async fn credit_purchases_are_idempotent_on_stripe_reference(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn settlement_consumes_credits_then_reserves_overage(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool);
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
     let period_start = Utc::now() - chrono::Duration::days(10);
     repo.record_credit_purchase(&payer(), 500, "cs_1")
         .await
@@ -205,7 +205,7 @@ async fn settlement_consumes_credits_then_reserves_overage(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool);
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
     let period_start = Utc::now() - chrono::Duration::days(10);
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
     let pending = repo
@@ -270,7 +270,7 @@ async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn settlement_retries_a_failed_charge_instead_of_reserving_a_new_one(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let period_start = Utc::now() - chrono::Duration::days(10);
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
 
@@ -315,7 +315,7 @@ async fn settlement_retries_a_failed_charge_instead_of_reserving_a_new_one(pool:
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn credits_can_replace_a_failed_charge_that_was_never_invoiced(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let period_start = Utc::now() - chrono::Duration::days(10);
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
 
@@ -352,7 +352,7 @@ async fn credits_can_replace_a_failed_charge_that_was_never_invoiced(pool: PgPoo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn credits_do_not_replace_a_failed_charge_with_a_collectible_invoice(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let period_start = Utc::now() - chrono::Duration::days(10);
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
 
@@ -401,7 +401,7 @@ async fn credits_do_not_replace_a_failed_charge_with_a_collectible_invoice(pool:
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn settlement_collects_a_reservation_whose_collector_died(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let period_start = Utc::now() - chrono::Duration::days(10);
     repo.update_overage(&payer(), true, 10_000).await.unwrap();
 
@@ -440,7 +440,7 @@ async fn settlement_collects_a_reservation_whose_collector_died(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool);
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
     let period_start = Utc::now() - chrono::Duration::days(40);
     repo.update_overage(&payer(), true, 600).await.unwrap();
 
@@ -470,7 +470,7 @@ async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: P
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let payer = payer();
     let now = Utc::now()
         .duration_trunc(chrono::Duration::microseconds(1))
@@ -618,7 +618,7 @@ async fn seat_generation(pool: &PgPool, payer: &str) -> Option<i64> {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let payer = payer();
     let now = Utc::now();
     let open_start = (now - chrono::Duration::days(1))
@@ -735,7 +735,7 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn store_open_allowance_does_not_write_a_stale_generation(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let now = Utc::now();
     let open = BillingPeriod {
         start: (now - chrono::Duration::days(1))
@@ -814,7 +814,7 @@ async fn store_open_allowance_does_not_write_a_stale_generation(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn release_open_seat_without_an_allowance_row_bumps_generation(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let now = Utc::now();
     let open = BillingPeriod {
         start: (now - chrono::Duration::days(1))
@@ -861,7 +861,7 @@ async fn release_open_seat_without_an_allowance_row_bumps_generation(pool: PgPoo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rows_frozen_before_the_cost_column_read_as_the_current_allowance(pool: PgPool) {
-    let repo = PgBillingRepo::new(pool.clone());
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let payer = payer();
     let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
     let users = vec![payer.as_ref().to_string(), member.as_ref().to_string()];
@@ -914,11 +914,11 @@ async fn rows_frozen_before_the_cost_column_read_as_the_current_allowance(pool: 
             vec![
                 SeatAllowance {
                     user: payer.clone(),
-                    included_cents: INCLUDED_ALLOWANCE_CENTS,
+                    included_cents: AiPricing::testing().included_allowance_cents(),
                 },
                 SeatAllowance {
                     user: member.clone(),
-                    included_cents: INCLUDED_ALLOWANCE_CENTS,
+                    included_cents: AiPricing::testing().included_allowance_cents(),
                 },
             ]
         );

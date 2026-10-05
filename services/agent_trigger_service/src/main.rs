@@ -141,6 +141,7 @@ async fn run() -> anyhow::Result<()> {
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
         config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
     );
     let task_context = ProjectTaskAssignmentContext::new(
         DssTaskAssignmentContext::new(

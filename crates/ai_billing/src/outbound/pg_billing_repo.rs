@@ -6,7 +6,7 @@
 //! model and is still written, with the same values, so a pre-cutover binary keeps
 //! working during a deploy; it is never read here. A row whose cost column is
 //! missing or does not match its roster was frozen by that older binary, and
-//! every seat in it is priced at the current allowance.
+//! every seat in it is priced at the configured allowance.
 
 #[cfg(test)]
 mod test;
@@ -14,10 +14,9 @@ mod test;
 use super::pg_funding_repo::{credit_commitments, lock_payer, postpaid_commitments};
 use crate::domain::financial::legacy_cap_remaining;
 use crate::domain::{
-    AllowanceStore, BillingError, BillingRepo, BillingSettings, INCLUDED_ALLOWANCE_CENTS,
-    OpenPeriodStart, OverageChargeStatus, PendingCharge, PeriodAllowance, PeriodLedger, Result,
-    SeatAllowance, SeatGeneration, SettlementOutcome, SettlementPolicy, SettlementState,
-    plan_settlement,
+    AiPricing, AllowanceStore, BillingError, BillingRepo, BillingSettings, OpenPeriodStart,
+    OverageChargeStatus, PendingCharge, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
+    SeatGeneration, SettlementOutcome, SettlementPolicy, SettlementState, plan_settlement,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -29,12 +28,14 @@ use std::str::FromStr;
 #[derive(Clone)]
 pub struct PgBillingRepo {
     pool: PgPool,
+    pricing: AiPricing,
 }
 
 impl PgBillingRepo {
-    /// Create a repo over a connection pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    /// Create a repo over a connection pool. `pricing` prices frozen rosters
+    /// that predate the per-seat cost column.
+    pub fn new(pool: PgPool, pricing: AiPricing) -> Self {
+        Self { pool, pricing }
     }
 }
 
@@ -230,7 +231,11 @@ impl BillingRepo for PgBillingRepo {
         .map_err(storage)?;
         row.map(|r| {
             Ok(PeriodAllowance {
-                seats: parse_seat_allowances(r.billed_users, r.included_cost_cents_by_user)?,
+                seats: parse_seat_allowances(
+                    r.billed_users,
+                    r.included_cost_cents_by_user,
+                    self.pricing,
+                )?,
             })
         })
         .transpose()
@@ -727,14 +732,15 @@ async fn read_period_ledger(
 
 /// Pair a frozen roster with its cost-cent allowances. A missing or mismatched
 /// cost array means an older binary wrote the row; every seat then gets the
-/// current allowance, which is what that binary's seats are entitled to now.
+/// configured allowance, which is what that binary's seats are entitled to now.
 fn parse_seat_allowances(
     billed_users: Vec<String>,
     included_cost_cents_by_user: Option<Vec<i64>>,
+    pricing: AiPricing,
 ) -> Result<Vec<SeatAllowance>> {
     let included_cents_by_user = match included_cost_cents_by_user {
         Some(cents) if cents.len() == billed_users.len() => cents,
-        _ => vec![INCLUDED_ALLOWANCE_CENTS; billed_users.len()],
+        _ => vec![pricing.included_allowance_cents(); billed_users.len()],
     };
     billed_users
         .into_iter()

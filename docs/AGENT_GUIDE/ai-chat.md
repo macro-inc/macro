@@ -498,9 +498,10 @@ must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
 quota, but Macro-funded tools and helpers still check independently.
 
-In dev, paid plans include a monthly AI allowance of $20 per seat, measured at
-provider cost; usage beyond it is billed at a small markup (both are constants in
-`crates/ai_billing/src/domain/pricing.rs`). When it is used up and no credits or usage billing cover the
+Paid plans include a monthly AI allowance per seat, measured at provider cost;
+usage beyond it is billed at a markup. Both numbers come from Doppler
+(`AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and `AI_USAGE_OVERAGE_MARKUP_PERCENT`; $20 and
+5% in dev), never from code. When the allowance is used up and no credits or usage billing cover the
 request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
 spending-limit / failed-charge variants). It shows the same meter and controls

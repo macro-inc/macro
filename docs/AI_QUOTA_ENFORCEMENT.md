@@ -69,18 +69,24 @@ independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
 there is no longer an `Environment::Develop` safeguard, so a true value settles
 in production.
 
-Pricing is two constants in
-[`pricing.rs`](../crates/ai_billing/src/domain/pricing.rs): each paid seat includes
-`INCLUDED_ALLOWANCE_CENTS` ($20) of usage per period measured at provider cost, and
-usage beyond that is converted to customer money at `OVERAGE_MARKUP_PERCENT` (5%)
-over cost before credits are consumed or overage is charged. The markup is applied
-to the period's cumulative chargeable cost, so settling in chunks books the same
-money as settling once. Change a constant and redeploy to change pricing. The
-plan catalog (`GET /ai-billing/plans`) publishes `included_ai_cents_per_seat`
-for every tier, and the frontend reads allowances from it
+Pricing is two mandatory Doppler values, loaded once at startup by every host that
+composes `ai_billing` (see [`config.rs`](../crates/ai_billing/src/config.rs) and
+[`pricing.rs`](../crates/ai_billing/src/domain/pricing.rs)):
+`AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, the usage each paid seat includes per period
+measured at provider cost, and `AI_USAGE_OVERAGE_MARKUP_PERCENT`, the whole-percent
+markup over cost applied to usage beyond it before credits are consumed or overage
+is charged. There is no default in code: a missing, malformed, or out-of-range value
+fails startup and the Doppler CI validator. The values live in `shared_ai` (`lcl`,
+`dev`, `prd`), which every participating service inherits except the authentication
+service, whose `dev` and `prd` configs carry them directly; the no-Doppler local
+stack stubs them in `BootStubEnv`. The markup is applied to the period's cumulative
+chargeable cost, so settling in chunks books the same money as settling once.
+Change the values in Doppler and redeploy to change pricing. The plan catalog
+(`GET /ai-billing/plans`) publishes `included_ai_cents_per_seat` for every tier,
+and the frontend reads allowances from it
 (`useIncludedAiCentsByTier`) rather than hard-coding them. Frozen per-period
 rosters keep their cost amounts in `ai_billing_period_allowance.included_cost_cents_by_user`;
-rows written before that column existed are priced at the current allowance.
+rows written before that column existed are priced at the configured allowance.
 
 Only two hosts participate:
 
@@ -272,6 +278,9 @@ procedure. Operators must approve and record each release gate.
    standalone agent trigger, and scheduled action. Include any separately launched
    memory/common-tool host. Use the existing Doppler-backed application config,
    not a quoted JSON string, AWS secret indirection, or a second Pulumi flag.
+   The pricing values `AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and
+   `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts whatever
+   the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
    Verify the effective startup value for every replica/worker. Registration and
    hosted access require operator approval; code defaults are not proof of it.
 4. **Validate locally, then in an approved staging environment.** Use the checklist

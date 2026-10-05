@@ -489,6 +489,7 @@ async fn main() -> anyhow::Result<()> {
     // collection (Stripe) lives in the authentication service, which the
     // recorder below asks to settle once a payer runs past their allowance
     // and ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
+    let ai_pricing = config.ai_pricing();
     let ai_billing = Arc::new(
         ai_billing::domain::BillingServiceImpl::new(
             ai_billing::outbound::RolesTeamsEntitlementSource::new(
@@ -496,8 +497,9 @@ async fn main() -> anyhow::Result<()> {
                 teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
             ),
             ai_billing::outbound::PgUsageReader::new(db.clone()),
-            ai_billing::outbound::PgBillingRepo::new(db.clone()),
+            ai_billing::outbound::PgBillingRepo::new(db.clone(), ai_pricing),
             ai_billing::outbound::NoOpPaymentGateway,
+            ai_pricing,
         )
         .with_enforcement(config.enable_ai_usage_enforcement),
     );

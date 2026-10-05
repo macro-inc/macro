@@ -29,7 +29,7 @@ use super::models::{
     AllowanceDecision, BillingPeriod, BillingSettings, DenyReason, Entitlement,
     MIN_STRIPE_CHARGE_CENTS, PeriodLedger, PlanTier, UsageSnapshot,
 };
-use super::pricing::cost_cents_covered_by;
+use super::pricing::AiPricing;
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// The overage policy in force for one settlement.
@@ -106,7 +106,8 @@ pub fn plan_settlement(state: SettlementState, policy: SettlementPolicy) -> Sett
 
 /// Assemble the API-facing snapshot from the resolved inputs. `used_cost_cents`
 /// is this seat's usage at cost; `shared_chargeable_customer_cents` is the
-/// payer's cumulative usage beyond all seat allowances, already marked up.
+/// payer's cumulative usage beyond all seat allowances, already marked up at
+/// `pricing`.
 #[expect(
     clippy::too_many_arguments,
     reason = "snapshot assembly keeps its resolved billing inputs explicit"
@@ -120,8 +121,9 @@ pub fn build_snapshot(
     shared_chargeable_customer_cents: i64,
     ledger: PeriodLedger,
     credit_balance_cents: i64,
+    pricing: AiPricing,
 ) -> UsageSnapshot {
-    let included_cents = entitlement.included_ai_cents();
+    let included_cents = entitlement.included_ai_cents(pricing);
     let shared_covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
     let uncovered_cents = (shared_chargeable_customer_cents - shared_covered).max(0);
     let overage_room = if settings.overage_active() {
@@ -137,7 +139,7 @@ pub fn build_snapshot(
             + credit_balance_cents.max(0)
             + overage_room)
             .max(0);
-        seat_remaining.saturating_add(cost_cents_covered_by(shared_headroom))
+        seat_remaining.saturating_add(pricing.cost_cents_covered_by(shared_headroom))
     };
 
     let mut snapshot = UsageSnapshot {

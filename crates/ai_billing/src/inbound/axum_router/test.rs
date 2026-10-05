@@ -1,5 +1,6 @@
 use super::{ReturnUrlError, get_plans_handler, validate_return_url};
-use crate::domain::{INCLUDED_ALLOWANCE_CENTS, PlanTier};
+use crate::domain::{AiPricing, PlanTier};
+use axum::extract::State;
 
 #[test]
 fn return_urls_must_be_https_on_the_calling_origin() {
@@ -49,7 +50,8 @@ fn return_urls_must_be_https_on_the_calling_origin() {
 
 #[tokio::test]
 async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
-    let plans = get_plans_handler().await.0.plans;
+    let pricing = AiPricing::testing();
+    let plans = get_plans_handler(State(pricing)).await.0.plans;
     let summary = plans
         .iter()
         .map(|plan| (plan.tier, plan.purchasable, plan.included_ai_cents_per_seat))
@@ -60,8 +62,8 @@ async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
         summary,
         vec![
             (PlanTier::Free, false, 0),
-            (PlanTier::Premium, true, INCLUDED_ALLOWANCE_CENTS),
-            (PlanTier::Max, false, INCLUDED_ALLOWANCE_CENTS),
+            (PlanTier::Premium, true, pricing.included_allowance_cents()),
+            (PlanTier::Max, false, pricing.included_allowance_cents()),
         ]
     );
 }

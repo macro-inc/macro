@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    AllowanceDecision, BillingPeriod, BillingSettings, Entitlement, PlanTier, Result,
+    AiPricing, AllowanceDecision, BillingPeriod, BillingSettings, Entitlement, PlanTier, Result,
     UsageSnapshot, ledger::build_snapshot,
 };
 use ai_usage::domain::{Result as UsageResult, UsageError};
@@ -164,6 +164,7 @@ async fn record_with_policy(
             chargeable_cents,
             Default::default(),
             0,
+            AiPricing::testing(),
         ),
     });
     let trigger = FakeTrigger::default();
