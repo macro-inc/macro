@@ -236,6 +236,9 @@ The database's own share dialog explains derived access with the new
   column as a question.
 - Drive, Quick Access, activity and search list forms the way they list
   databases (same flag-gated code paths with a `form` entry).
+  Drive and Quick Access use `/forms/accessible`: a form viewer can discover
+  their forms without gaining access to the linked databases. This listing
+  includes granted forms, not every form with a public audience.
 
 ## 8. Mentions and previews
 

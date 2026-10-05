@@ -369,7 +369,8 @@ Mounted at `/forms` in `services/document_storage_service/src/api.rs` next to
 | Route | Receipt | Does |
 | --- | --- | --- |
 | `POST /forms` | user | §6 |
-| `GET /forms?database_id=` | view on database | forms over that database, for the grid's chip |
+| `GET /forms?databaseId=` | view on database | forms over that database, for the grid's chip |
+| `GET /forms/accessible` | user | live forms granted to this caller, including channel/team grants, with each access level; powers Drive and Quick Access without database access |
 | `GET /forms/{id}` | view, public ok | `FormDetail`: form, sections, questions joined with column name, kind, options; never rows |
 | `PATCH /forms/{id}` | edit; audience, status, closes_at, tally_visible need owner | metadata |
 | `PUT /forms/{id}/layout` | edit | replace sections and questions atomically; validates columns belong to the table, widgets fit, gates name earlier columns, every question's section exists |
