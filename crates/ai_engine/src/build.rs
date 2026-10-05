@@ -689,7 +689,7 @@ impl Sink for Builder<'_, '_> {
                 opacity,
                 blend,
             } => {
-                let mut node = Node::new(0, NodeKind::Text(kind));
+                let mut node = Node::new(0, NodeKind::Text(*kind));
                 node.edits = 0;
                 node.transform = transform;
                 node.opacity = opacity;

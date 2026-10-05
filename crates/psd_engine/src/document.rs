@@ -330,13 +330,17 @@ fn decode_kind(record: &LayerRecord, warn: &mut dyn FnMut(&str, PsdError)) -> La
             Err(e) => warn("fill", e),
         }
     }
-    // Brightness/Contrast layers carry `brit` and the newer `CgEd`.
-    let adjustment = record.block(b"CgEd").or_else(|| {
-        record
-            .tagged
-            .iter()
-            .find(|b| codec::adjustment::is_adjustment_key(&b.key))
-    });
+    // An adjustment's own block comes first; a `CgEd` after another
+    // adjustment's block only names its preset. Brightness/Contrast layers
+    // carry `brit` and the newer `CgEd`, which holds the modern settings.
+    let adjustment = record
+        .tagged
+        .iter()
+        .find(|b| codec::adjustment::is_adjustment_key(&b.key))
+        .map(|first| match &first.key {
+            b"brit" => record.block(b"CgEd").unwrap_or(first),
+            _ => first,
+        });
     if let Some(block) = adjustment {
         match codec::adjustment::decode(&block.key, &block.data) {
             Ok(adjustment) => {
