@@ -165,6 +165,8 @@ pub enum Initiator {
     Chat,
     /// Imported from an administrator-uploaded archive.
     Archive,
+    /// Staged by the user from Settings (the pick-channels flow).
+    Manual,
 }
 
 /// Lifecycle of a gather run (one per user × source).
@@ -212,6 +214,94 @@ impl SlackConversationId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+/// A stable Slack user ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackUserId(String);
+
+impl SlackUserId {
+    /// Validate the source ID without trimming or name normalization.
+    pub fn new(value: &str) -> Option<Self> {
+        valid_slack_id(value, b"UW").then(|| Self(value.to_owned()))
+    }
+
+    /// The exact source identifier.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// The kind of conversation reported by Slack.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlackConversationKind {
+    /// A public workspace channel.
+    PublicChannel,
+    /// An invite-only workspace channel.
+    PrivateChannel,
+    /// A one-to-one direct message.
+    DirectMessage,
+    /// A multi-person direct message.
+    GroupDirectMessage,
+}
+
+/// A conversation read from a live Slack workspace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackConversation {
+    /// Stable source identity.
+    pub id: SlackConversationId,
+    /// Conversation name.
+    pub name: String,
+    /// Source conversation kind, independent of the Macro target kind.
+    pub kind: SlackConversationKind,
+    /// Whether Slack has archived this conversation.
+    pub archived: bool,
+    /// Member count reported by Slack, when available.
+    pub member_count: Option<u64>,
+    /// Conversation purpose, when set.
+    pub purpose: Option<String>,
+}
+
+/// One page of live Slack conversations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackConversationPage {
+    /// Conversations on this page.
+    pub conversations: Vec<SlackConversation>,
+    /// Opaque continuation cursor; `None` means the final page.
+    pub next_cursor: Option<String>,
+}
+
+/// One page of a live Slack conversation's members.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackMemberPage {
+    /// Slack user IDs on this page.
+    pub members: Vec<SlackUserId>,
+    /// Opaque continuation cursor; `None` means the final page.
+    pub next_cursor: Option<String>,
+}
+
+/// A user read from a live Slack workspace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackUser {
+    /// Stable source identity.
+    pub id: SlackUserId,
+    /// Display name reported by Slack.
+    pub display_name: String,
+    /// Email, when the workspace exposes it.
+    pub email: Option<String>,
+    /// Whether this user is a bot.
+    pub is_bot: bool,
+    /// Whether this user has been deactivated.
+    pub deleted: bool,
+}
+
+/// One page of live Slack users.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackUserPage {
+    /// Users on this page.
+    pub users: Vec<SlackUser>,
+    /// Opaque continuation cursor; `None` means the final page.
+    pub next_cursor: Option<String>,
 }
 
 /// A stable Slack workspace ID.
@@ -313,8 +403,8 @@ const MAX_TEXT: usize = 300;
 const MAX_LONG_TEXT: usize = 4_000;
 /// Cap for summaries and purposes.
 const MAX_SUMMARY: usize = 600;
-/// Cap on Slack participant lists.
-const MAX_PARTICIPANTS: usize = 25;
+/// Cap on matched Slack participants, bounded by Macro team size, not channel size.
+const MAX_PARTICIPANTS: usize = 100;
 
 /// Truncate to a character boundary at most `max` bytes in.
 fn truncated(s: String, max: usize) -> String {
@@ -415,9 +505,18 @@ pub struct SlackChannelMeta {
     pub channel_id: Option<String>,
     /// The channel's purpose/topic, when set.
     pub purpose: Option<String>,
-    /// The channel's most relevant members, when discoverable.
+    /// Slack members matched to the Macro team roster when discovery resolved membership.
     #[serde(default)]
     pub participants: Vec<SlackParticipant>,
+    /// Total human members in the Slack channel.
+    #[serde(default)]
+    pub member_count: Option<u64>,
+    /// Whether Slack has archived this channel.
+    #[serde(default)]
+    pub archived: bool,
+    /// Whether `participants` reflects a live membership read.
+    #[serde(default)]
+    pub members_resolved: bool,
 }
 
 impl SlackChannelMeta {
@@ -435,6 +534,9 @@ impl SlackChannelMeta {
                     email: truncate_opt(p.email, MAX_TEXT),
                 })
                 .collect(),
+            member_count: self.member_count,
+            archived: self.archived,
+            members_resolved: self.members_resolved,
         }
     }
 }

@@ -2,9 +2,11 @@
 
 use super::models::{
     ImportEntity, ImportRun, ImportSource, ImportSourceBinding, ImportStatus, ImportTargetKey,
-    ImportTargetKind, ImportTargetReservation, Initiator, RunStatus, SlackWorkspaceId,
+    ImportTargetKind, ImportTargetReservation, Initiator, RunStatus, SlackConversationId,
+    SlackConversationPage, SlackMemberPage, SlackUserPage, SlackWorkspaceId,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -39,6 +41,67 @@ pub enum ImportError {
 
 /// Result alias for import operations.
 pub type Result<T> = std::result::Result<T, ImportError>;
+
+/// Errors reading a live Slack workspace.
+#[derive(Debug, Error)]
+pub enum SlackSourceError {
+    /// The user has no Slack connector.
+    #[error("Slack is not connected")]
+    NotConnected,
+    /// The connector lacks a required capability.
+    #[error("Slack connector capability unavailable: {0}")]
+    ToolsUnavailable(&'static str),
+    /// Slack temporarily refused reads due to rate limiting.
+    #[error("Slack rate limit exceeded")]
+    RateLimited {
+        /// Provider-supplied delay before retrying, when available.
+        retry_after: Option<Duration>,
+    },
+    /// The connection lacks a required Slack permission scope.
+    #[error("missing Slack scope: {0}")]
+    MissingScope(String),
+    /// Any other source failure.
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+/// Opens live Slack workspace sessions for import discovery and membership reads.
+pub trait SlackWorkspaceSource: Send + Sync + 'static {
+    /// Workspace reader scoped to one gather or one import batch.
+    type Session: SlackWorkspaceSession;
+
+    /// Open a session scoped to one gather or one import batch.
+    /// Returns [`SlackSourceError::NotConnected`] when the user has no Slack
+    /// connector, or [`SlackSourceError::ToolsUnavailable`] when the connector
+    /// lacks a needed capability.
+    fn open(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = std::result::Result<Self::Session, SlackSourceError>> + Send;
+}
+
+/// Paginated workspace reads scoped to one gather or one import batch.
+/// Pass `None` to read the first page, then the returned continuation cursor.
+pub trait SlackWorkspaceSession: Send + Sync {
+    /// List conversations visible to the connected user.
+    fn list_conversations(
+        &self,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackConversationPage, SlackSourceError>> + Send;
+
+    /// List the members of one Slack conversation.
+    fn conversation_members(
+        &self,
+        conversation: &SlackConversationId,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackMemberPage, SlackSourceError>> + Send;
+
+    /// List the workspace user directory.
+    fn list_users(
+        &self,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackUserPage, SlackSourceError>> + Send;
+}
 
 /// Persistence for the import ledger and gather runs.
 ///
