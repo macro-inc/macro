@@ -154,7 +154,7 @@ pub enum FormSource {
     /// A new database named like the form, whose one table, "Responses",
     /// starts with only the form's own columns.
     New,
-    /// An existing table, one the caller can edit. The form starts with a
+    /// An existing table in a database the caller owns. The form starts with a
     /// question per column.
     Table {
         /// The table's database.

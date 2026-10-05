@@ -233,7 +233,9 @@ The database's own share dialog explains derived access with the new
 - Database top bar: a "Forms" chip after the table tabs when
   `useFormsForDatabaseQuery` is non-empty, listing forms over the current
   table; click opens the builder. With none, the table's "+ view" menu gets
-  "Form" which creates one with `source: Table` and opens it.
+  "Form" which creates one with `source: Table` and opens it. Creation over
+  an existing table requires database Owner; hide creation controls for
+  editors and viewers while retaining navigation to their existing forms.
 - Delete-table confirmation names the forms that will be deleted with it.
 - Column delete confirmation mentions "asked by <form>" when a form has the
   column as a question.

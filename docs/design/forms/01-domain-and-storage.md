@@ -248,7 +248,9 @@ never see rows.
   (a table with no columns is fine for databases; if that rule turns out to
   differ, keep `Name` off the layout instead). The form starts with one empty
   `questions` section.
-- `source: Table { database_id, table_id }`: requires edit on the database.
+- `source: Table { database_id, table_id }`: requires Owner on the database.
+  This prevents an editor from creating an owned form whose derived database
+  Edit would survive revocation of the original grant.
   Managed columns are found or created. One section is made holding a question
   per existing column in column order, excluding the managed ones, each with
   the default widget.
