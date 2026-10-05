@@ -71,6 +71,8 @@ text             text layout for edited text: fonts (bundled Inter, registered
                  per-character styles, caret geometry for the editor
 save             writing `.fig`: patch edited records, splice the rest; blank
                  files; the clipboard document (save/clipboard)
+library          team libraries: keys and versions, what changed since a
+                 publish, packages of assets for other files
 wasm             the worker API (`FigFile`)
 ```
 
@@ -197,6 +199,49 @@ followed) for the layers they affect, instances' layers as overrides.
 `inspect::design_info`, `inspect::local_styles`, and `inspect::variables`
 describe all of this to the design panel.
 
+## Team libraries
+
+`library` and `edit::library` hold Figma's team libraries: a file
+publishes its components, component sets, styles, and variables, and other
+files use them. `Op::PublishLibrary` gives every asset a key (40 hex digits
+from the library's document id and the asset's id, kept once given) and a
+version, a hash of the modeled properties of its layers and the versions of
+the components, styles, and variables it uses (geometry, glyphs, and
+instance layout Figma derives are left out; numbers are taken at the
+precision files store them, so versions survive saving). They are written
+in Figma's fields: `isSymbolPublishable`/`isPublishable`,
+`sharedSymbolVersion`/`version`, and `publishedVersion`; names starting
+with `_` or `.` stay private (keyed, unlisted). The document node records
+what was published and the publisher's note as Macro `pluginData`
+(`pluginID` `macro`, other plugins' entries kept), so `library::status`
+lists new, changed, and removed assets for "Changes to publish", and
+`library::published` the assets a file using the library sees.
+
+`library::package` writes the assets a file asks for, a variant bringing
+its set, with everything they use, as a copy (the clipboard format, on its
+internal page). `History::import_library` copies them onto the file's
+internal canvas as Figma does: components stay components with their key,
+`sourceLibraryKey` (the library's document id), `publishID` (their id
+there), and the version they were copied at, and `componentKey` on
+components. Every id in the package (nodes, property definitions, modes,
+override paths, the records' `GUID`s) moves into a session range of its
+own for that library (sessions from 2³¹, which files and people editing
+together do not use), the same each time, so a later version lands on the
+same nodes: `update` replaces a copy's layers in place, instances keep their
+overrides, and instances of updated components (and of the file's own
+components holding them) are laid out again, overridden text included;
+updated styles and variables reach the layers using them. Copies already
+in the file are kept unless updating, components a removed variant's
+instances still show stay, and `then` ops (`key:<key>` names an asset)
+place an instance, apply a style, or bind a variable in the same undoable
+step. Records travel translated into the file's schema, as pasting does;
+schemas without the library fields get them on save. `Op::SetLibraries`
+stores the libraries a file uses on its document node.
+`fig_render library` publishes each file, checks nothing is left to
+publish after saving and reopening, places up to eight of its components
+in a blank design through packages, and compares the saved instances'
+pixels with the library's components.
+
 ## Prototypes
 
 Prototype interactions decode into `Props::interactions` from
@@ -299,6 +344,7 @@ cargo run -p fig_engine --features cli --release --bin fig_render -- render --ou
 cargo run -p fig_engine --features cli --release --bin fig_render -- compare --out out FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- collab FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- prototype FILE.fig…
+cargo run -p fig_engine --features cli --release --bin fig_render -- library FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- text --fonts DIR --verbose FILE.fig…
 ```
 

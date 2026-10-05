@@ -950,6 +950,34 @@ Layout and test hooks:
   an instance, and ⌥⌘B detaches an instance into ordinary layers (nested
   instances too). Components of one set are listed under the set's name;
   right-clicking selected components offers `fig-menu-combine-as-variants`.
+- **Team libraries** (Assets tab): the book button (`fig-assets-libraries`)
+  opens the Libraries dialog (`fig-libraries-dialog`). "This file" shows the
+  publishing state (`fig-library-status`) and **Publish…**
+  (`fig-library-publish`), which opens `fig-publish-dialog`: the changes
+  since the last publish (`fig-publish-change`: New, Changed, or Removed
+  components, component sets, styles, and variables, with descriptions), a
+  note (`fig-publish-note`), and `fig-publish-confirm`. Names starting with
+  `_` or `.` stay private. Below, the other `.fig` designs the person can
+  open (`fig-library-row`, `data-library` is the document id, searchable
+  with `fig-libraries-search`) each have a switch that turns the library on
+  for this file (stored in the file, so collaborators share it); a row
+  notes its published asset count, "Not published", or "Unavailable". Each
+  enabled library gets a section in Assets (`fig-library-assets`): its
+  components as thumbnails (`fig-library-asset`, `data-key`; click to place
+  an instance in the middle of the view, or drag one onto the canvas),
+  grouped by component set or name folder, then its color, text, and effect
+  styles and its variables (click applies to the selection: a style, or a
+  color variable bound to the first fill). Inserting copies the component
+  with what it uses (nested components, styles, variables, images) onto the
+  internal canvas as Figma does, so it is not listed with the file's own
+  components. When a library publishes newer versions of what the file
+  uses, **Library updates available** (`fig-library-updates`, bottom left;
+  `fig-assets-updates` in the Assets header) opens the review
+  (`fig-library-review`): each changed asset (`fig-library-update`) with
+  this file's copy beside the published version, the library's note,
+  `fig-library-update-one`, and `fig-library-update-all`. Updating keeps
+  instances' overrides; it is one undo step. Libraries are read when the
+  design opens and again when the Libraries dialog opens.
 - **Layers panel** (`fig-layers-panel`, toggled with ⌥1): layer search
   (`fig-layer-search`, ⌘/Ctrl+F; results are `fig-search-hit`), the pages list
   (`fig-page` buttons; pages named only with dashes are dividers; editors
@@ -1267,7 +1295,12 @@ Grotesk" installed locally, so font tests need no network. `?collab` (with
 by side (`fig-person-<Name>` holds each editor), each running the real
 shared-design session over an in-page sync server;
 `window.figFixture.collab.people()` gives each person's `engine()`,
-`saves()`, `status()`, and `peers()`. The Playwright suite runs with
+`saves()`, `status()`, and `peers()`. `?libraries` keeps two designs in
+memory, the library "Design system" (`design-system.fig`, or `&library=`)
+and a blank "App", opened one at a time with `fig-fixture-open-<id>`
+(`design-system`, `app`; `&open=app` starts there); saves replace the
+stored design, and `window.figFixture.libraries` has `open(id)`,
+`current()`, and `reads(id)`. The Playwright suite runs with
 `bunx playwright test --config src/features/block-fig/browser-test/playwright.config.ts`
 (set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
 installed). The sections above were verified on this fixture; the `/app/fig`
