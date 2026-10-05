@@ -27,6 +27,7 @@ run-local.fish
 # to be named `build`, and the rule was silently dropping new files added to it
 # (a new `test.rs` there is ignored, and `git status` stays clean about it).
 !/tooling/xtask/crates/xtask_local/src/local/build/
+!/crates/ai_engine/src/build/
 **/*.tsbuildinfo
 **/*.log
 **/result
