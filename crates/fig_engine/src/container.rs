@@ -188,6 +188,11 @@ pub(crate) fn decompress(chunk: &[u8]) -> Result<Vec<u8>> {
         let mut cursor = chunk;
         let decoder = ruzstd::decoding::StreamingDecoder::new(&mut cursor)
             .map_err(|e| corrupt(format!("zstd: {e}")))?;
+        // Frames say how large they inflate to (0 when they do not): read
+        // into one allocation of that size rather than doubling into it,
+        // which would briefly hold half as much again and copy it all.
+        let size = decoder.decoder.content_size().min(MAX_CHUNK as u64);
+        out.reserve_exact(size as usize);
         decoder
             .take(MAX_CHUNK as u64 + 1)
             .read_to_end(&mut out)
