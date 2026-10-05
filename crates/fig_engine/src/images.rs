@@ -246,7 +246,6 @@ impl ImageStore {
 
     /// Drops the least recently drawn levels until the store fits its
     /// budget.
-
     fn evict(&mut self) {
         let mut total: usize = self.entries.values().flatten().map(Entry::bytes).sum();
         while total > self.budget {

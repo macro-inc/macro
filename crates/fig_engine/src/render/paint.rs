@@ -5,7 +5,7 @@
 //! gradients are centered on (0.5, 0.5) with radius 0.5, and an angular
 //! gradient sweeps clockwise from the +x axis around (0.5, 0.5).
 
-use super::{Painter, Shape, Surface};
+use super::{Painter, Shape, Surface, fill_rule};
 use crate::model::{
     Affine, ColorStop, GradientKind, ImagePaint, ImageScaleMode, Paint, PaintKind, Rect, Vec2,
 };
@@ -15,6 +15,34 @@ use tiny_skia::{
 };
 
 impl Painter<'_> {
+    /// A vector network's fill geometry, each region with its own fills
+    /// where its style has them and the node's elsewhere.
+    pub(crate) fn fill_regions(
+        &mut self,
+        props: &crate::model::Props,
+        ts: &Affine,
+        surface: &mut Surface,
+        clip: Option<&Mask>,
+        opacity: f32,
+    ) {
+        let styles = props.vector_styles.as_deref().unwrap_or_default();
+        let size = props.size();
+        for g in props.fill_geometry() {
+            let Some(path) = self.doc.blobs.path(g.blob) else {
+                continue;
+            };
+            let shape = Shape::Blob(path, fill_rule(g.winding));
+            let fills = styles
+                .iter()
+                .find(|s| g.style != 0 && s.id == g.style)
+                .and_then(|s| s.fills.as_deref())
+                .unwrap_or(props.fills());
+            for paint in fills.iter().filter(|p| p.is_visible()) {
+                self.fill_shape(surface, &shape, ts, paint, size, opacity, clip);
+            }
+        }
+    }
+
     /// Fills `shape` (node coordinates, `ts` node → surface) with `paint`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn fill_shape(

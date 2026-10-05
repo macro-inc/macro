@@ -634,34 +634,6 @@ impl<'a> Painter<'a> {
         shapes
     }
 
-    /// A vector network's fill geometry, each region with its own fills
-    /// where its style has them and the node's elsewhere.
-    fn fill_regions(
-        &mut self,
-        props: &Props,
-        ts: &Affine,
-        surface: &mut Surface,
-        clip: Option<&Mask>,
-        opacity: f32,
-    ) {
-        let styles = props.vector_styles.as_deref().unwrap_or_default();
-        let size = props.size();
-        for g in props.fill_geometry() {
-            let Some(path) = self.doc.blobs.path(g.blob) else {
-                continue;
-            };
-            let shape = Shape::Blob(path, fill_rule(g.winding));
-            let fills = styles
-                .iter()
-                .find(|s| g.style != 0 && s.id == g.style)
-                .and_then(|s| s.fills.as_deref())
-                .unwrap_or(props.fills());
-            for paint in fills.iter().filter(|p| p.is_visible()) {
-                self.fill_shape(surface, &shape, ts, paint, size, opacity, clip);
-            }
-        }
-    }
-
     /// Every shape the node draws (fills, else strokes), for masks.
     fn shapes(&self, i: SceneIdx) -> Vec<Shape> {
         let mut shapes = self.fill_shapes(i);

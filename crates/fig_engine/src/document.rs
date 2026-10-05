@@ -118,7 +118,10 @@ impl Document {
         let mut schema = Schema::decode(&container.schema)?;
         decode::restrict_schema(&mut schema);
         let mut table = NodeTable::default();
-        let (ranges, embedded) = read_message(&schema, &container.message, &mut table)?;
+        let MessageParts {
+            blobs: ranges,
+            images: embedded,
+        } = read_message(&schema, &container.message, &mut table)?;
         let NodeTable {
             mut nodes,
             by_guid,
@@ -399,14 +402,18 @@ impl NodeTable {
     }
 }
 
+/// What [`read_message`] returns besides the nodes.
+struct MessageParts {
+    /// The blobs, as ranges of the message.
+    blobs: Vec<(u32, u32)>,
+    /// Image files carried in blobs: hash and blob index.
+    images: Vec<(String, u32)>,
+}
+
 /// Reads the top-level `Message`, converting node changes one at a time so
 /// the generic decoded form of the whole file never exists at once. Returns
 /// the blobs as ranges of `data`, and the image files carried in blobs.
-fn read_message(
-    schema: &Schema,
-    data: &[u8],
-    table: &mut NodeTable,
-) -> Result<(Vec<(u32, u32)>, Vec<(String, u32)>)> {
+fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<MessageParts> {
     let root = schema
         .def_index("Message")
         .ok_or_else(|| corrupt("the schema has no Message type"))?;
@@ -446,7 +453,10 @@ fn read_message(
             _ => decoder.skip_field(&mut r, field, 0)?,
         }
     }
-    Ok((ranges, images))
+    Ok(MessageParts {
+        blobs: ranges,
+        images,
+    })
 }
 
 fn read_blob(
