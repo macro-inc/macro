@@ -46,7 +46,10 @@ builder is saved.
 
 `/poll` opens a small inline composer in place of the menu: a question
 field, two option fields with "Add option", and two toggles, "Multiple
-answers" and "Show results before voting" (default on). Posting it:
+answers" and "Show results to respondents" (default on). The latter controls
+`tally_visible`: off keeps tallies editor-only, including after a response.
+The label must not promise after-vote results that this flag does not grant.
+Posting it:
 
 1. `POST /forms` with `source: New`, `name` = the question. The service
    makes the database "<question>" with table "Responses" (RFC 01 §6).

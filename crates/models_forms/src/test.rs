@@ -422,3 +422,19 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
         })
     );
 }
+
+#[test]
+fn table_source_openapi_uses_the_serialized_field_names() {
+    use utoipa::PartialSchema;
+
+    let schema = serde_json::to_value(FormSource::schema()).unwrap();
+    let table = &schema["oneOf"][1];
+    let properties = table["properties"].as_object().unwrap();
+    assert!(properties.contains_key("databaseId"));
+    assert!(properties.contains_key("tableId"));
+    assert!(!properties.contains_key("database_id"));
+    assert!(!properties.contains_key("table_id"));
+    let required = table["required"].as_array().unwrap();
+    assert!(required.contains(&json!("databaseId")));
+    assert!(required.contains(&json!("tableId")));
+}

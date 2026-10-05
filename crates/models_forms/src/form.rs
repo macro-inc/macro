@@ -158,9 +158,11 @@ pub enum FormSource {
     /// question per column.
     Table {
         /// The table's database.
+        #[serde(rename = "databaseId")]
         #[schema(value_type = Uuid)]
         database_id: DatabaseId,
         /// The table.
+        #[serde(rename = "tableId")]
         #[schema(value_type = Uuid)]
         table_id: TableId,
     },
