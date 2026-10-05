@@ -93,6 +93,8 @@ export interface PageState {
 
 /** Longest side of the overview, in device pixels. */
 const OVERVIEW_SIDE = 2048;
+/** A quick first image, before rendering the visible area at full detail. */
+const FIRST_OVERVIEW_SIDE = 512;
 /** Quiet time after which the view counts as settled. */
 const SETTLE_MS = 100;
 /** Quiet time after an edit before tiles out of view are re-rendered. */
@@ -157,6 +159,85 @@ export function createTileCompositor(options: TileCompositorOptions) {
   let landTimer: ReturnType<typeof setTimeout> | undefined;
   /** Render timings, for diagnostics. */
   const stats = { rendered: 0, millis: 0 };
+  // Effects that cross layer boundaries cannot use a lifted sprite. During
+  // those gestures, replace complete viewport frames instead of mixing tiles
+  // from different edit positions. Keep only one render in flight.
+  let interactive = false;
+  let preview: { bitmap: ImageBitmap; view: ViewState } | undefined;
+  let previewPending: PendingTile | undefined;
+  let previewDirty = false;
+  let previewGeneration = 0;
+  let previewPixels = 512;
+
+  const clearPreview = () => {
+    previewGeneration++;
+    preview?.bitmap.close();
+    preview = undefined;
+    if (previewPending) engine.cancel([previewPending.id]);
+    previewPending = undefined;
+    previewDirty = false;
+  };
+
+  const renderPreview = async () => {
+    if (previewPending || !previewDirty || !lastView || !page) return;
+    const view = lastView;
+    const { w, h } = view.viewport;
+    if (w <= 0 || h <= 0) return;
+    previewDirty = false;
+    const epoch = previewGeneration;
+    const ratio = Math.min(view.dpr, previewPixels / Math.max(w, h));
+    const job = engine.render({
+      page: page.page,
+      x: view.camera.x,
+      y: view.camera.y,
+      scale: view.camera.zoom * ratio,
+      width: Math.max(1, Math.ceil(w * ratio)),
+      height: Math.max(1, Math.ceil(h * ratio)),
+      outline: page.outline,
+      priority: -4_000_000,
+    });
+    previewPending = job;
+    try {
+      const result = await job.promise;
+      if (!result) return;
+      if (disposed || epoch !== previewGeneration) {
+        result.bitmap.close();
+        return;
+      }
+      preview?.bitmap.close();
+      preview = { bitmap: result.bitmap, view };
+      // Keep expensive blur/shadow scenes near a 20ms raster budget while
+      // moving. Full-resolution tiles replace this preview after release.
+      const adjustment = Math.max(
+        0.75,
+        Math.min(1.25, Math.sqrt(20 / Math.max(1, result.millis)))
+      );
+      previewPixels = Math.max(384, Math.min(768, previewPixels * adjustment));
+      options.onTile();
+    } finally {
+      if (previewPending?.id === job.id) {
+        previewPending = undefined;
+        if (previewDirty) void requestPreview();
+      }
+    }
+  };
+
+  const requestPreview = async () => {
+    try {
+      await renderPreview();
+    } catch {
+      /* Keep the last complete frame. */
+    }
+  };
+
+  const sharp = (view: ViewState) => {
+    const target = quantizeScale(view.camera.zoom * view.dpr);
+    return tilesFor(view.camera, view.viewport, target, 0).every((key) => {
+      if (page?.content && !tileTouches(key, page.content)) return true;
+      const entry = cache.get(tileId(key));
+      return !!entry?.bitmap && !entry.stale && !entry.pending;
+    });
+  };
 
   const evict = () => {
     const live = [...cache.values()].filter((e) => !e.pinned && e.bitmap);
@@ -255,15 +336,15 @@ export function createTileCompositor(options: TileCompositorOptions) {
     render(entry, priority);
   };
 
-  const overviewScale = () => {
+  const overviewScale = (side: number) => {
     const c = page?.content;
     if (!c || !(c.w > 0 && c.h > 0)) return undefined;
-    return quantizeScale(Math.min(OVERVIEW_SIDE / Math.max(c.w, c.h), 64));
+    return quantizeScale(Math.min(side / Math.max(c.w, c.h), 64));
   };
 
   /** The overview's tiles, first of all unless `priority` says otherwise. */
-  const requestOverview = (priority = -1) => {
-    const scale = overviewScale();
+  const requestOverview = (priority = -1, pixels = OVERVIEW_SIDE) => {
+    const scale = overviewScale(pixels);
     const c = page?.content;
     if (!scale || !c) return;
     const side = TILE / scale;
@@ -324,6 +405,11 @@ export function createTileCompositor(options: TileCompositorOptions) {
    * overview's once edits pause (behind the view's).
    */
   const afterEdit = () => {
+    if (interactive) {
+      previewDirty = true;
+      void requestPreview();
+      return;
+    }
     if (lastView) schedule(lastView, false);
     clearTimeout(editTimer);
     editTimer = setTimeout(() => {
@@ -554,8 +640,34 @@ export function createTileCompositor(options: TileCompositorOptions) {
   return {
     stats,
 
+    /** Whole-frame fallback for moves whose effects cannot be lifted. */
+    beginInteractive() {
+      interactive = true;
+      clearTimeout(settleTimer);
+      clearTimeout(editTimer);
+      const cancelled: number[] = [];
+      for (const [id, entry] of cache) {
+        if (entry.pending) cancelled.push(entry.pending.id);
+        entry.pending = undefined;
+        if (!entry.bitmap) cache.delete(id);
+      }
+      engine.cancel(cancelled);
+      previewDirty = true;
+      void requestPreview();
+    },
+
+    endInteractive() {
+      interactive = false;
+      // The complete preview stays visible until every final visible tile
+      // is ready; never reveal a checkerboard of old and new positions.
+      afterEdit();
+      options.onTile();
+    },
+
     /** Starts over for a page (or after switching outline view). */
     setPage(next: PageState) {
+      interactive = false;
+      clearPreview();
       unlift();
       for (const l of landing.splice(0)) discard(l);
       for (const e of cache.values()) {
@@ -565,7 +677,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       cache.clear();
       generation++;
       page = next;
-      requestOverview();
+      requestOverview(-1, FIRST_OVERVIEW_SIDE);
       if (lastView) schedule(lastView, true);
     },
 
@@ -580,16 +692,43 @@ export function createTileCompositor(options: TileCompositorOptions) {
     /** Call on every view change; fetches what the view needs. */
     update(view: ViewState) {
       lastView = view;
+      if (interactive) {
+        previewDirty = true;
+        void requestPreview();
+        return;
+      }
       requestLift();
       schedule(view, false);
       clearTimeout(settleTimer);
       settleTimer = setTimeout(() => {
-        if (lastView && !disposed) schedule(lastView, true);
+        if (lastView && !disposed) {
+          schedule(lastView, true);
+          requestOverview(AFTER_VIEW);
+        }
       }, SETTLE_MS);
     },
 
-    /** Draws the view from the tiles available now. */
+    /** Draws available tiles; returns whether content (or an empty page) is ready. */
     draw(ctx: CanvasRenderingContext2D, view: ViewState) {
+      if (!interactive && (preview || previewPending) && sharp(view))
+        clearPreview();
+      if (preview) {
+        const { camera, viewport, dpr } = view;
+        const old = preview.view;
+        const scale = (camera.zoom / old.camera.zoom) * dpr;
+        ctx.fillStyle = page?.background ?? '#f5f5f5';
+        ctx.fillRect(0, 0, viewport.w * dpr, viewport.h * dpr);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'low';
+        ctx.drawImage(
+          preview.bitmap,
+          (old.camera.x - camera.x) * camera.zoom * dpr,
+          (old.camera.y - camera.y) * camera.zoom * dpr,
+          old.viewport.w * scale,
+          old.viewport.h * scale
+        );
+        return true;
+      }
       // In order: a newer drop may sit on top of an older one's parts.
       while (landing.length > 0 && landed(landing[0], view)) {
         const done = landing.shift();
@@ -600,7 +739,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       const height = ctx.canvas.height;
       ctx.fillStyle = page?.background ?? '#f5f5f5';
       ctx.fillRect(0, 0, width, height);
-      if (!page) return;
+      if (!page) return false;
       const target = quantizeScale(camera.zoom * dpr);
       const unit = camera.zoom * dpr;
       // Coarse scales first, then sharper ones on top; far sharper tiles
@@ -683,6 +822,12 @@ export function createTileCompositor(options: TileCompositorOptions) {
       }
       for (const l of landing) drawLift(ctx, view, l);
       if (lift) drawLift(ctx, view, lift);
+      return (
+        draws.length > 0 ||
+        !page.content ||
+        page.content.w <= 0 ||
+        page.content.h <= 0
+      );
     },
 
     /**
@@ -797,6 +942,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
 
     dispose() {
       disposed = true;
+      clearPreview();
       unlift();
       for (const l of landing.splice(0)) discard(l);
       clearTimeout(landTimer);

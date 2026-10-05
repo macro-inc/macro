@@ -1,3 +1,4 @@
+import { InspectorSelect } from './inspector-select';
 /**
  * The design panel section for a main component, component set, or
  * variant: its variant properties (renamed, removed, or, on a variant, its
@@ -72,27 +73,17 @@ function NewProperty(props: {
       class="flex flex-col gap-1.5 rounded-md bg-inset p-2"
       data-testid="fig-new-property"
     >
-      <select
-        class="rounded-md bg-panel px-1.5 py-0.5 text-ink outline-none"
+      <InspectorSelect
+        label="Property type"
         value={kind()}
-        data-testid="fig-new-property-kind"
-        onChange={(e) =>
-          setKind(e.currentTarget.value as PropertyKind | 'VARIANT')
-        }
-      >
-        <For
-          each={
-            (props.allowVariant
-              ? ['VARIANT', 'BOOL', 'TEXT', 'INSTANCE_SWAP']
-              : ['BOOL', 'TEXT', 'INSTANCE_SWAP']) as (
-              | PropertyKind
-              | 'VARIANT'
-            )[]
-          }
-        >
-          {(k) => <option value={k}>{PROPERTY_KIND_LABELS[k]}</option>}
-        </For>
-      </select>
+        testId="fig-new-property-kind"
+        options={(
+          (props.allowVariant
+            ? ['VARIANT', 'BOOL', 'TEXT', 'INSTANCE_SWAP']
+            : ['BOOL', 'TEXT', 'INSTANCE_SWAP']) as (PropertyKind | 'VARIANT')[]
+        ).map((value) => ({ value, label: PROPERTY_KIND_LABELS[value] }))}
+        onChange={setKind}
+      />
       <input
         class="rounded-md bg-panel px-1.5 py-0.5 text-ink outline-none"
         value={shown()}

@@ -164,7 +164,9 @@ interface FigEngineWasmModule {
 let modulePromise: Promise<FigEngineWasmModule> | undefined;
 
 /** Loads and initializes the wasm module once per worker; a failed load is tried again. */
-export function loadFigEngineWasm(): Promise<FigEngineWasmModule> {
+export function loadFigEngineWasm(
+  module?: WebAssembly.Module
+): Promise<FigEngineWasmModule> {
   if (!modulePromise) {
     modulePromise = (async () => {
       try {
@@ -175,7 +177,7 @@ export function loadFigEngineWasm(): Promise<FigEngineWasmModule> {
         // The generated JS's own relative wasm URL 404s in production; a static
         // `new URL` makes vite emit and rewrite the binary.
         const wasmUrl = new URL('./wasm/fig_engine_bg.wasm', import.meta.url);
-        await mod.default({ module_or_path: wasmUrl });
+        await mod.default({ module_or_path: module ?? wasmUrl });
         return mod;
       } catch (error) {
         modulePromise = undefined;

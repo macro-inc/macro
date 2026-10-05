@@ -9,6 +9,7 @@ export function Section(props: {
   children: JSX.Element;
   /** A "+" action in the header (add a fill, say). */
   onAdd?: () => void;
+  addLabel?: string;
   /** A "−" action in the header (remove auto layout, say). */
   onRemove?: () => void;
   /** More header controls, before "+" (a style picker, say). */
@@ -17,18 +18,18 @@ export function Section(props: {
 }) {
   return (
     <section
-      class="border-edge-muted border-b px-3 py-3"
+      class="fig-inspector-section border-edge-frame border-b px-4 py-2"
       data-testid={props.testId}
     >
-      <div class="mb-2 flex items-center justify-between gap-1">
-        <h3 class="mr-auto font-semibold text-ink text-xs">{props.title}</h3>
+      <div class="flex h-6 items-center justify-between gap-1">
+        <h3 class="mr-auto font-medium text-ink text-xs">{props.title}</h3>
         {props.actions}
         <Show when={props.onAdd}>
           {(add) => (
             <button
               type="button"
-              aria-label={`Add ${props.title.toLowerCase()}`}
-              class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+              aria-label={props.addLabel ?? `Add ${props.title.toLowerCase()}`}
+              class="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
               onClick={() => add()()}
             >
               <Plus class="size-3.5" />
@@ -40,7 +41,7 @@ export function Section(props: {
             <button
               type="button"
               aria-label={`Remove ${props.title.toLowerCase()}`}
-              class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+              class="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
               onClick={() => remove()()}
             >
               <Minus class="size-3.5" />
@@ -48,7 +49,9 @@ export function Section(props: {
           )}
         </Show>
       </div>
-      <div class="flex flex-col gap-1.5">{props.children}</div>
+      <div class="fig-inspector-section-body flex flex-col gap-2">
+        {props.children}
+      </div>
     </section>
   );
 }

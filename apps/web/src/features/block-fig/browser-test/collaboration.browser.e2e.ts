@@ -105,7 +105,7 @@ test('edits, selections, and pointers reach the other person', async ({
 
   // Undo is Alice's own, and Bob sees it.
   await alice.click({ position: { x: 10, y: 10 } });
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(0);
   await expect.poll(() => pixel(bob, 0.25, 0.76)).not.toEqual([217, 217, 217]);
 

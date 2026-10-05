@@ -273,7 +273,9 @@ impl FigFile {
         session: u32,
         base_blobs: Option<u32>,
     ) -> Result<String, JsError> {
-        self.complete()?;
+        // IDs, original blob count and image keys are present in the lazy
+        // skeleton. Joining an unedited design must not decode other pages.
+        // Applying remote changes and local edits still complete the file.
         let (collab, changes) = Collab::new(&mut self.doc, session, base_blobs);
         self.collab = Some(collab);
         to_json(&changes)

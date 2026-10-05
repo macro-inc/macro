@@ -41,6 +41,7 @@ import { resizedOrigin } from '../core/rotation';
 import type { Measure } from '../core/type';
 import { type PenPoint, pencilPoints, penNetwork } from '../core/vector';
 import type { FigViewer, Selected } from './create-fig-viewer';
+import { resolveFrameDrop } from './resolve-frame-drop';
 
 export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 
@@ -462,15 +463,22 @@ export function createFigEditor(options: FigEditorOptions) {
    * `quiet` steps re-render and reload nothing (a lifted move's steps,
    * which the canvas draws itself).
    */
-  const apply = (ops: Op[], coalesce?: string, quiet = false) => {
-    if (!enabled() || ops.length === 0) return Promise.resolve(undefined);
+  const apply = (
+    ops: Op[] | ((page: number) => Promise<Op[]>),
+    coalesce?: string,
+    quiet = false
+  ) => {
+    if (!enabled() || (Array.isArray(ops) && ops.length === 0))
+      return Promise.resolve(undefined);
     const run = queue.then(async () => {
       try {
         // Other people's changes that arrived first apply first.
         await pullShared();
         const page = viewer.page();
+        const resolved = typeof ops === 'function' ? await ops(page) : ops;
+        if (resolved.length === 0) return undefined;
         const before = viewer.selected();
-        const result = await engine.apply(page, ops, coalesce);
+        const result = await engine.apply(page, resolved, coalesce);
         // A drag's later steps coalesce into its first: keep that one's.
         if (result.undoStep !== null && !stepSelections.has(result.undoStep)) {
           stepSelections.set(result.undoStep, { page, before });
@@ -534,6 +542,24 @@ export function createFigEditor(options: FigEditorOptions) {
     const targets = ids();
     if (targets.length === 0) return Promise.resolve(undefined);
     return apply([{ op: 'set', ids: targets, props: patch }], coalesce);
+  };
+
+  const toggleLocked = (targets = ids()) => {
+    const page = viewer.page();
+    return apply(async (currentPage) => {
+      if (currentPage !== page || targets.length === 0) return [];
+      // Read after queued and remote edits, never from the inspector or a
+      // cached layer row. Several layers unlock only when all are locked.
+      const rows = await engine.rows(page, targets);
+      if (rows.length === 0) return [];
+      return [
+        {
+          op: 'set',
+          ids: rows.map((row) => row.id),
+          props: { locked: rows.some((row) => !row.locked) },
+        },
+      ];
+    });
   };
 
   const deleteSelection = async () => {
@@ -1007,17 +1033,22 @@ export function createFigEditor(options: FigEditorOptions) {
     const key = `drag-${++dragKey}`;
     let applied = { x: 0, y: 0 };
     let wanted = { x: 0, y: 0 };
-    let running = false;
+    let running: Promise<void> | undefined;
     const pump = async () => {
-      if (running) return;
-      running = true;
-      while (wanted.x !== applied.x || wanted.y !== applied.y) {
-        const dx = wanted.x - applied.x;
-        const dy = wanted.y - applied.y;
-        applied = { ...wanted };
-        await apply([{ op: 'translate', ids: targets, dx, dy }], key);
+      if (running) return running;
+      running = (async () => {
+        while (wanted.x !== applied.x || wanted.y !== applied.y) {
+          const dx = wanted.x - applied.x;
+          const dy = wanted.y - applied.y;
+          applied = { ...wanted };
+          await apply([{ op: 'translate', ids: targets, dx, dy }], key);
+        }
+      })();
+      try {
+        await running;
+      } finally {
+        running = undefined;
       }
-      running = false;
     };
     return {
       /** Total page-space offset from the drag's start. */
@@ -1025,12 +1056,17 @@ export function createFigEditor(options: FigEditorOptions) {
         wanted = { x: dx, y: dy };
         void pump();
       },
-      async end() {
+      async end(at?: Point) {
         await pump();
-        // Settle what was dragged into its auto layout slot.
-        if (applied.x !== 0 || applied.y !== 0)
-          await apply([{ op: 'reflow', ids: targets }], key);
         await queue;
+        if (applied.x !== 0 || applied.y !== 0) {
+          const ops = at
+            ? await resolveFrameDrop(engine, viewer.page(), targets, at)
+            : [];
+          ops.push({ op: 'reflow', ids: targets });
+          await apply(ops, key);
+          if (at) await viewer.selectIds(targets);
+        }
       },
     };
   };
@@ -1048,15 +1084,19 @@ export function createFigEditor(options: FigEditorOptions) {
     let applied = { x: 0, y: 0 };
     let moved = { x: 0, y: 0 };
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const step = async (last: boolean) => {
+    const step = async (last: boolean, at?: Point) => {
       const dx = wanted.x - applied.x;
       const dy = wanted.y - applied.y;
       applied = { ...wanted };
       const ops: Op[] =
         dx !== 0 || dy !== 0 ? [{ op: 'translate', ids: targets, dx, dy }] : [];
-      // Settle what was dragged into its auto layout slot.
-      if (last && (applied.x !== 0 || applied.y !== 0))
+      if (last && (applied.x !== 0 || applied.y !== 0)) {
+        if (at)
+          ops.push(
+            ...(await resolveFrameDrop(engine, viewer.page(), targets, at))
+          );
         ops.push({ op: 'reflow', ids: targets });
+      }
       const result = await apply(ops, key, !last);
       if (result) moved = { x: moved.x + dx, y: moved.y + dy };
     };
@@ -1069,10 +1109,12 @@ export function createFigEditor(options: FigEditorOptions) {
           void step(false);
         }, GESTURE_PUSH_MS);
       },
-      async end() {
+      async end(at?: Point) {
         clearTimeout(timer);
         timer = undefined;
-        await step(true);
+        await queue;
+        await step(true, at);
+        if (at) await viewer.selectIds(targets);
         return moved;
       },
     };
@@ -1313,6 +1355,7 @@ export function createFigEditor(options: FigEditorOptions) {
     undo: () => history('undo'),
     redo: () => history('redo'),
     setProps,
+    toggleLocked,
     deleteSelection,
     duplicateSelection,
     group,

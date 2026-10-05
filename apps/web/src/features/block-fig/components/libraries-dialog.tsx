@@ -69,7 +69,7 @@ export function LibrariesDialog(props: {
     <Dialog
       open
       onOpenChange={(open) => !open && props.onClose()}
-      class="w-120"
+      class="fig-editor-theme w-120"
     >
       <Panel depth={2} class="rounded-xl *:max-h-[80vh]">
         <Panel.Body scroll>

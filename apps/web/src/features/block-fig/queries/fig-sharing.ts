@@ -111,7 +111,10 @@ export async function shareFigEngine(
   });
 
   // Everything shared before this person arrived.
-  await engine.applyRemote(0, readEntries(doc));
+  const entries = readEntries(doc).filter(
+    (entry) => entry.container !== 'figMeta'
+  );
+  if (entries.length > 0) await engine.applyRemote(0, entries);
 
   return {
     pull: async (page: number): Promise<EditResult | null> => {
