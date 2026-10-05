@@ -67,4 +67,12 @@ describe('tiles', () => {
     expect(coverage.covers(0, 64, 256, 192)).toBe(true);
     expect(coverage.covers(0, 0, 256, 64)).toBe(false);
   });
+
+  it('aligns coverage to the exact tiles, leaving no seams between them', () => {
+    const coverage = createCoverage(1000, 600, { x: -100, y: -7 });
+    for (const x of [-100, 412, 924]) {
+      for (const y of [-7, 505]) coverage.add(x, y, TILE, TILE);
+    }
+    expect(coverage.covers(0, 0, 1000, 600)).toBe(true);
+  });
 });

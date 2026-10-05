@@ -321,7 +321,10 @@ export function createTileCompositor(options: TileCompositorOptions) {
       // Tiles are opaque: picked sharpest first, a tile goes unpainted where
       // sharper ones already cover all of it (most of the view, once the
       // exact tiles are in), so coarse stand-ins are drawn only in the gaps.
-      const coverage = createCoverage(width, height);
+      const coverage = createCoverage(width, height, {
+        x: -Math.round(camera.x * target),
+        y: -Math.round(camera.y * target),
+      });
       const content = page.content;
       if (content) {
         coverage.addOutside(

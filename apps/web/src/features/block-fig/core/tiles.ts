@@ -85,21 +85,31 @@ const CELL = 32;
 /**
  * What opaque drawing already covers on a canvas, in cells of `CELL` device
  * pixels. Drawing tiles sharpest first, a coarser tile can be skipped when
- * sharper ones cover everything it would show.
+ * sharper ones cover everything it would show. Cells are aligned to
+ * `origin`, a corner of the exact scale's tiles (a multiple of `CELL`
+ * pixels wide), so those tiles cover whole cells and leave no seams.
  */
-export function createCoverage(width: number, height: number) {
-  const cols = Math.max(1, Math.ceil(width / CELL));
-  const rows = Math.max(1, Math.ceil(height / CELL));
+export function createCoverage(
+  width: number,
+  height: number,
+  origin = { x: 0, y: 0 }
+) {
+  const mod = (v: number) => ((v % CELL) + CELL) % CELL;
+  // Canvas pixel x lies at x + shiftX in cell space.
+  const shiftX = CELL - mod(origin.x);
+  const shiftY = CELL - mod(origin.y);
+  const cols = Math.max(1, Math.ceil((width + shiftX) / CELL));
+  const rows = Math.max(1, Math.ceil((height + shiftY) / CELL));
   const cells = new Uint8Array(cols * rows);
   /** The cells a rectangle touches, or (`whole`) lies over entirely. */
   const span = (x: number, y: number, w: number, h: number, whole: boolean) => {
     const start = whole ? Math.ceil : Math.floor;
     const end = whole ? Math.floor : Math.ceil;
     return {
-      c0: Math.max(0, start(x / CELL)),
-      r0: Math.max(0, start(y / CELL)),
-      c1: Math.min(cols, end((x + w) / CELL)),
-      r1: Math.min(rows, end((y + h) / CELL)),
+      c0: Math.max(0, start((x + shiftX) / CELL)),
+      r0: Math.max(0, start((y + shiftY) / CELL)),
+      c1: Math.min(cols, end((x + shiftX + w) / CELL)),
+      r1: Math.min(rows, end((y + shiftY + h) / CELL)),
     };
   };
   return {
