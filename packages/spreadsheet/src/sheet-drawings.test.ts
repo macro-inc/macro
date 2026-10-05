@@ -91,6 +91,87 @@ describe('sheet drawings', () => {
     expect(validDrawings([drawing])).toBe(false);
   });
 
+  it('accepts shapes of parts with outlines, lines and text', () => {
+    const shape: SheetDrawing = {
+      id: 'note',
+      type: 'shape',
+      name: 'Note',
+      from: { row: 1, column: 1, x: 0, y: 0 },
+      to: { row: 4, column: 3, x: 0, y: 0 },
+      shape: {
+        parts: [
+          {
+            x: 0,
+            y: 0,
+            width: 0.5,
+            height: 1,
+            geometry: 'roundRect',
+            adjust: { adj: 16_667 },
+            rotation: 90,
+            flipH: true,
+            fill: '#FFF2CC',
+            opacity: 0.5,
+            line: {
+              color: '#BF9000',
+              width: 1.33,
+              dash: 'dash',
+              tail: 'triangle',
+            },
+            text: {
+              paragraphs: [
+                {
+                  align: 'center',
+                  runs: [{ text: 'Total\nnext', bold: true, size: 11 }],
+                },
+                { runs: [], size: 11 },
+              ],
+              anchor: 'middle',
+              insets: [10, 5, 10, 5],
+              clip: true,
+              link: "'Sales'!$B$5",
+            },
+          },
+          {
+            x: 0.5,
+            y: 0,
+            width: 0.5,
+            height: 0,
+            paths: [{ d: 'M0,1L0.5,0C0.6,-0.5 1,-0.27 1,0Z', fill: false }],
+          },
+        ],
+        source: '<xdr:sp/>',
+      },
+    };
+    expect(validDrawings([shape])).toBe(true);
+    const part = shape.type === 'shape' ? shape.shape.parts[0] : undefined;
+    const variant = (patch: Record<string, unknown>) => [
+      { ...shape, shape: { parts: [{ ...part, ...patch }] } },
+    ];
+    expect(validDrawings(variant({ paths: [{ d: 'M0,0 url(x)' }] }))).toBe(
+      false
+    );
+    expect(validDrawings(variant({ fill: 'red' }))).toBe(false);
+    expect(validDrawings(variant({ line: { width: 1, head: 'spiral' } }))).toBe(
+      false
+    );
+    expect(
+      validDrawings(
+        variant({
+          text: { paragraphs: [{ runs: [{ text: 'x', href: 'y' }] }] },
+        })
+      )
+    ).toBe(false);
+    expect(validDrawings(variant({ adjust: [1, 2] }))).toBe(false);
+  });
+
+  it('keeps metafiles, which drawings show through a preview', () => {
+    expect(validImageUrl('data:image/x-emf;base64,AQAAAGwAAAA=')).toBe(true);
+    expect(validDrawings([{ ...image, preview: '0123456789abcdef' }])).toBe(
+      true
+    );
+    expect(validDrawings([{ ...image, preview: 'logo.png' }])).toBe(false);
+  });
+
   it('rejects repeated ids', () => {
     expect(validDrawings([image, { ...chart, id: 'logo' }])).toBe(false);
   });

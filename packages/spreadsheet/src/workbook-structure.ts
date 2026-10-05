@@ -113,6 +113,9 @@ function sheetFormulas(metadata: WorkbookSheetMetadata | undefined) {
           (reference) => !isChartLiteral(reference)
         )
       );
+    else if (drawing.type === 'shape')
+      for (const part of drawing.shape.parts)
+        if (part.text?.link) formulas.push(part.text.link);
   for (const pivot of metadata?.pivotTables ?? [])
     if (pivot.source !== undefined) formulas.push(pivot.source);
   return formulas;
@@ -149,20 +152,35 @@ function withSheetFormulas(
       ...(rule.formulas && { formulas: rule.formulas.map(take) }),
     }));
   if (metadata.drawings)
-    result.drawings = metadata.drawings.map((drawing) =>
-      drawing.type === 'chart'
-        ? {
-            ...drawing,
-            chart: {
-              ...drawing.chart,
-              // Fixed values stay as they are.
-              references: drawing.chart.references.map((reference) =>
-                isChartLiteral(reference) ? reference : take()
-              ),
-            },
-          }
-        : drawing
-    );
+    result.drawings = metadata.drawings.map((drawing) => {
+      if (drawing.type === 'chart')
+        return {
+          ...drawing,
+          chart: {
+            ...drawing.chart,
+            // Fixed values stay as they are.
+            references: drawing.chart.references.map((reference) =>
+              isChartLiteral(reference) ? reference : take()
+            ),
+          },
+        };
+      if (drawing.type !== 'shape') return drawing;
+      return {
+        ...drawing,
+        shape: {
+          ...drawing.shape,
+          parts: drawing.shape.parts.map((part) => {
+            if (!part.text?.link) return part;
+            const link = take();
+            // A shape whose cell is deleted keeps the text it last showed.
+            if (!link.includes('#REF!'))
+              return { ...part, text: { ...part.text, link } };
+            const { link: _link, ...text } = part.text;
+            return { ...part, text };
+          }),
+        },
+      };
+    });
   if (metadata.pivotTables) {
     // A pivot table whose source cells were deleted cannot be rebuilt; its
     // values stay in the cells.

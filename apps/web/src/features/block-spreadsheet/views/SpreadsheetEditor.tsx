@@ -1,5 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import { parseChartReference } from '@macro-inc/spreadsheet/sheet-drawings';
 import { Button } from '@ui/components/Button';
 import {
   createDeferred,
@@ -821,6 +822,16 @@ export function SpreadsheetEditor(props: {
               definedNames(props.store.activeSheetId())
             )
           }
+          cellText={(reference) => {
+            const range = parseChartReference(reference);
+            return range
+              ? createChartReader(
+                  props.store.workbook,
+                  calculation.workbookValues,
+                  props.store.activeSheetId()
+                )({ ...range, bottom: range.top, right: range.left })?.[0]?.text
+              : undefined;
+          }}
           onDeleteDrawing={drawingActions.deleteDrawing}
           onPlaceDrawing={editable() ? drawingActions.placeDrawing : undefined}
           onEditDrawing={(id) => drawingActions.setEditing(id)}

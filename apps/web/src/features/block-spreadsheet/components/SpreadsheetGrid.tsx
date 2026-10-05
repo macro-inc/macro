@@ -197,6 +197,8 @@ export function SpreadsheetGrid(props: {
   drawings?: SheetDrawing[];
   image?: (key: string) => string | undefined;
   chartData?: (chart: SheetChart) => ChartData;
+  /** The text a cell shows, for shapes linked to it. */
+  cellText?: (reference: string) => string | undefined;
   onDeleteDrawing?: (id: string) => void;
   /** Move or size a drawing: its new anchors, at 100% zoom. */
   onPlaceDrawing?: (id: string, placement: DrawingPlacement) => void;
@@ -1872,6 +1874,8 @@ export function SpreadsheetGrid(props: {
                 scale={scale()}
                 image={(key) => props.image?.(key)}
                 chartData={(chart) => props.chartData!(chart)}
+                cellText={(reference) => props.cellText?.(reference)}
+                font={props.defaultFont?.name}
                 selected={selectedDrawing()}
                 readonly={props.readonly || !props.onPlaceDrawing}
                 onSelect={setSelectedDrawing}

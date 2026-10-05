@@ -234,6 +234,43 @@ export function deleteSpreadsheetSheet(
     if (!value) continue;
     let changed = false;
     const drawings = value.drawings?.map((drawing) => {
+      if (drawing.type === 'shape') {
+        // A shape showing a cell of the sheet keeps the text it showed.
+        const parts = drawing.shape.parts.map((part) => {
+          const link = part.text?.link;
+          const range =
+            link && readsSheet(link) ? parseChartReference(link) : undefined;
+          if (!part.text || !range) return part;
+          changed = true;
+          const { link: _link, ...text } = part.text;
+          const shown = values({
+            ...range,
+            bottom: range.top,
+            right: range.left,
+          })[0]?.text;
+          const first = text.paragraphs.flatMap(
+            (paragraph) => paragraph.runs
+          )[0];
+          return {
+            ...part,
+            text:
+              shown === undefined
+                ? text
+                : {
+                    ...text,
+                    paragraphs: [
+                      {
+                        ...(text.paragraphs[0]?.align && {
+                          align: text.paragraphs[0].align,
+                        }),
+                        runs: [{ ...first, text: shown }],
+                      },
+                    ],
+                  },
+          };
+        });
+        return { ...drawing, shape: { ...drawing.shape, parts } };
+      }
       if (drawing.type !== 'chart') return drawing;
       const references = drawing.chart.references.map((reference, index) => {
         const range = readsSheet(reference)
@@ -389,8 +426,12 @@ export function prepareSpreadsheetImport(
     for (const drawing of input.metadata?.drawings ?? [])
       if (
         drawing.type === 'image' &&
-        !(drawing.image in images) &&
-        stored.get(drawing.image) === undefined
+        [drawing.image, drawing.preview].some(
+          (key) =>
+            key !== undefined &&
+            !(key in images) &&
+            stored.get(key) === undefined
+        )
       )
         throw new Error('A workbook image is missing.');
   return {

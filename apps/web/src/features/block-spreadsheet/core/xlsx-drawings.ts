@@ -13,14 +13,30 @@ import {
   type SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
 import { match } from 'ts-pattern';
+import {
+  finishColor,
+  type PendingColor,
+  resolveSchemeColors,
+  schemeColor,
+  themeAccents,
+} from './drawingml-colors';
 import { base64, imageKey, imageType, MAX_IMAGE_BYTES } from './image-data';
+import { metafileKind } from './metafile';
 import {
   SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
 } from './spreadsheet-document';
 import type { XlsxArchive } from './xlsx-archive';
 import { attributes, parse, relationships } from './xlsx-parts';
-import { withLightness } from './xlsx-stylesheet';
+import {
+  diagramShape,
+  elementBuilder,
+  readShape,
+  shapeName,
+  shapeSource,
+  shapeXml,
+  type XmlElement,
+} from './xlsx-shapes';
 
 export const EMU_PER_PIXEL = 9525;
 const XDR =
@@ -57,11 +73,13 @@ function importImage(
   if (state.imageKeys.has(path)) return state.imageKeys.get(path);
   let key: string | undefined;
   const bytes = archive.read(path);
-  const type = bytes && imageType(bytes);
+  // Metafiles are kept, and shown through a picture of them.
+  const metafile = bytes && metafileKind(bytes);
+  const type = bytes && (imageType(bytes) ?? (metafile && `x-${metafile}`));
   if (!bytes) key = undefined;
   else if (!type)
     warnings.add(
-      'Images in formats browsers cannot show, such as EMF and WMF, are not imported.'
+      'Images in formats Macro cannot read, such as TIFF, are not imported.'
     );
   else if (
     bytes.length > MAX_IMAGE_BYTES ||
@@ -103,97 +121,6 @@ function point(marker: Marker | undefined): DrawingPoint | undefined {
 
 const pixels = (emu: number) =>
   Math.max(1, Math.min(100_000, Math.round(emu / EMU_PER_PIXEL)));
-
-const SCHEME_COLORS: Record<string, number> = {
-  bg1: 0,
-  lt1: 0,
-  tx1: 1,
-  dk1: 1,
-  bg2: 2,
-  lt2: 2,
-  tx2: 3,
-  dk2: 3,
-  accent1: 4,
-  accent2: 5,
-  accent3: 6,
-  accent4: 7,
-  accent5: 8,
-  accent6: 9,
-  hlink: 10,
-  folHlink: 11,
-};
-/** Office's default theme accents, for workbooks without a theme. */
-const DEFAULT_ACCENTS = [
-  '4472C4',
-  'ED7D31',
-  'A5A5A5',
-  'FFC000',
-  '5B9BD5',
-  '70AD47',
-];
-
-/** A DrawingML color being read: its base and the modifiers that follow. */
-type PendingColor = { hex?: string; modifiers: [string, number][] };
-
-function finishColor(color: PendingColor): string | undefined {
-  let hex = color.hex;
-  if (!hex) return;
-  let multiply = 1;
-  let offset = 0;
-  for (const [name, value] of color.modifiers) {
-    const amount = value / 100_000;
-    if (name === 'lumMod') multiply *= amount;
-    else if (name === 'lumOff') offset += amount;
-    else if (name === 'shade' || name === 'tint') {
-      const channels = [0, 2, 4].map(
-        (index) => Number.parseInt(hex!.slice(index, index + 2), 16) / 255
-      );
-      hex = channels
-        .map((channel) =>
-          Math.round(
-            (name === 'shade'
-              ? channel * amount
-              : channel * amount + 1 - amount) * 255
-          )
-            .toString(16)
-            .padStart(2, '0')
-        )
-        .join('')
-        .toUpperCase();
-    }
-  }
-  if (multiply !== 1 || offset)
-    hex = withLightness(hex, (lightness) => lightness * multiply + offset);
-  return `#${hex.toUpperCase()}`;
-}
-
-/** Office's default theme colors, by `SCHEME_COLORS` index. */
-const DEFAULT_THEME = [
-  'FFFFFF',
-  '000000',
-  'E7E6E6',
-  '44546A',
-  ...DEFAULT_ACCENTS,
-  '0563C1',
-  '954F72',
-];
-
-/** A scheme color of the theme as RRGGBB, Office's when it has none. */
-function schemeColor(
-  theme: (string | undefined)[],
-  name: string
-): string | undefined {
-  const index = SCHEME_COLORS[name];
-  if (index === undefined) return;
-  return theme[index] ?? DEFAULT_THEME[index];
-}
-
-/** The theme's accent colors as #RRGGBB, Office's when it has none. */
-export function themeAccents(theme: (string | undefined)[]): string[] {
-  return DEFAULT_ACCENTS.map(
-    (fallback, index) => `#${theme[4 + index] ?? fallback}`
-  );
-}
 
 /** A namespace prefix as it is matched in a pattern. */
 const escaped = (prefix: string) => prefix.replace(/[.]/g, '\\.');
@@ -247,20 +174,7 @@ function chartSource(
     /xmlns:([A-Za-z_][\w.-]*)="http:\/\/schemas\.openxmlformats\.org\/drawingml\/2006\/main"/.exec(
       source
     )?.[1];
-  if (drawing)
-    source = source.replace(
-      new RegExp(
-        `<${drawing}:schemeClr val="(\\w+)"\\s*(?:/>|>([\\s\\S]*?)</${drawing}:schemeClr>)`,
-        'g'
-      ),
-      (element: string, scheme: string, modifiers: string | undefined) => {
-        const color = schemeColor(theme, scheme);
-        if (!color) return element;
-        return modifiers === undefined
-          ? `<${drawing}:srgbClr val="${color}"/>`
-          : `<${drawing}:srgbClr val="${color}">${modifiers}</${drawing}:srgbClr>`;
-      }
-    );
+  if (drawing) source = resolveSchemeColors(source, drawing, theme);
   return source.length <= MAX_CHART_SOURCE_LENGTH ? source : undefined;
 }
 
@@ -576,8 +490,56 @@ type PendingAnchor = {
         extent?: { cx: number; cy: number };
       }
     | { type: 'chart'; id?: string; name?: string }
+    | {
+        type: 'shape';
+        builder: ReturnType<typeof elementBuilder>;
+        element?: XmlElement;
+      }
+    | {
+        type: 'diagram';
+        name?: string;
+        /** The diagram's data part, which names its drawing. */
+        data?: string;
+        extent?: { cx: number; cy: number };
+      }
     | { type: 'other' };
 };
+
+/** Markup compatibility's elements, which wrap content and its fallback. */
+const WRAPPERS = new Set(['AlternateContent', 'Choice', 'Fallback']);
+
+/** A SmartArt drawing part, at most. */
+const MAX_DIAGRAM_BYTES = 4 * 1024 * 1024;
+const DIAGRAM = 'http://schemas.openxmlformats.org/drawingml/2006/diagram';
+
+/** SmartArt's drawing part, through its data part's link to it. */
+function diagramDrawing(
+  archive: XlsxArchive,
+  relations: ReturnType<typeof relationships>,
+  data: string | undefined
+): XmlElement | undefined {
+  const dataPath = data ? relations.get(data) : undefined;
+  const dataBytes =
+    dataPath && !dataPath.external ? archive.read(dataPath.target) : undefined;
+  if (!dataBytes) return;
+  const id = /dataModelExt\b[^>]*\brelId="([^"]+)"/.exec(
+    new TextDecoder().decode(dataBytes)
+  )?.[1];
+  const target = id ? relations.get(id) : undefined;
+  if (!target || target.external) return;
+  const bytes = archive.read(target.target);
+  if (!bytes || bytes.length > MAX_DIAGRAM_BYTES) return;
+  const builder = elementBuilder();
+  let root: XmlElement | undefined;
+  parse(bytes, target.target, (parser) => {
+    parser.on('opentag', (node) => builder.start(node));
+    parser.on('text', (chunk) => builder.text(chunk));
+    parser.on('closetag', () => {
+      root = builder.end() ?? root;
+    });
+  });
+  return root;
+}
 
 /**
  * The images and charts of a sheet's drawing part, anchored to cells.
@@ -591,6 +553,13 @@ export function readSheetDrawings(options: {
   warnings: Set<string>;
   state: DrawingImports;
   locate: (x: number, y: number) => DrawingPoint | undefined;
+  /** A drawing's size in EMU, from its anchor. */
+  extent: (placement: {
+    from: DrawingPoint;
+    to?: DrawingPoint;
+    width?: number;
+    height?: number;
+  }) => { cx: number; cy: number };
 }): SheetDrawing[] {
   const { archive, warnings } = options;
   const drawingPath = [
@@ -608,11 +577,17 @@ export function readSheetDrawings(options: {
   let text: string | undefined;
   // Excel 2010 content has a fallback older readers use; read only that.
   let choiceDepth = 0;
+  // A graphic frame's size, read before it is known to hold SmartArt.
+  let frameExtent: { cx: number; cy: number } | undefined;
   const stack: string[] = [];
   const finish = (value: PendingAnchor) => {
     const content = value.content;
     if (!content || content.type === 'other') {
       unsupported = true;
+      return;
+    }
+    if (content.type === 'shape' && !content.element) {
+      skipped++;
       return;
     }
     let from = point(value.from);
@@ -646,14 +621,62 @@ export function readSheetDrawings(options: {
       skipped++;
       return;
     }
+    const name =
+      content.type === 'shape' ? shapeName(content.element) : content.name;
     const placement = {
       id: `drawing-${drawings.length + 1}`,
-      ...(content.name && { name: content.name.slice(0, 256) }),
+      ...(name && { name: name.slice(0, 256) }),
       from,
       ...(to
         ? { to }
         : { width: pixels(extent!.cx), height: pixels(extent!.cy) }),
     };
+    if (content.type === 'shape') {
+      const shape =
+        content.element && readShape(content.element, options.theme);
+      if (!shape || !content.element) {
+        skipped++;
+        return;
+      }
+      const source = shapeSource(content.element, options.theme);
+      // A line anchored with no height (or width) draws flat, however
+      // slightly Excel slanted it.
+      const size = options.extent(placement);
+      drawings.push({
+        ...placement,
+        type: 'shape',
+        shape: {
+          parts: shape.parts.map((part) => ({
+            ...part,
+            ...(size.cx === 0 && { x: 0, width: 0 }),
+            ...(size.cy === 0 && { y: 0, height: 0 }),
+          })),
+          ...(source && { source }),
+        },
+      });
+      return;
+    }
+    if (content.type === 'diagram') {
+      const drawing = diagramDrawing(archive, relations, content.data);
+      // The frame's size in EMU, else the anchor's.
+      const frame =
+        content.extent && content.extent.cx > 0 && content.extent.cy > 0
+          ? content.extent
+          : extent && extent.cx > 0 && extent.cy > 0
+            ? extent
+            : options.extent(placement);
+      const shape =
+        drawing &&
+        diagramShape(
+          drawing,
+          { width: frame.cx, height: frame.cy },
+          options.theme,
+          content.name ?? 'Diagram'
+        );
+      if (shape) drawings.push({ ...placement, type: 'shape', shape });
+      else unsupported = true;
+      return;
+    }
     const target = relations.get(
       (content.type === 'pic' ? content.embed : content.id) ?? ''
     );
@@ -686,13 +709,19 @@ export function readSheetDrawings(options: {
   parse(bytes, drawingPath, (parser) => {
     parser.on('opentag', (node) => {
       const value = attributes(node);
-      const parent = stack.at(-1);
+      // Newer content's fallback stands where the content would.
+      const parent = stack.findLast((local) => !WRAPPERS.has(local));
       stack.push(node.local);
       if (node.uri === COMPATIBILITY && node.local === 'Choice') {
         choiceDepth++;
         return;
       }
       if (choiceDepth) return;
+      // A shape is kept whole, to read and to export.
+      if (anchor?.content?.type === 'shape' && anchor.content.builder.open) {
+        anchor.content.builder.start(node);
+        return;
+      }
       if (
         node.uri === XDR &&
         ['twoCellAnchor', 'oneCellAnchor', 'absoluteAnchor'].includes(
@@ -701,6 +730,7 @@ export function readSheetDrawings(options: {
         !anchor
       ) {
         anchor = { kind: node.local, editAs: value.editAs };
+        frameExtent = undefined;
         return;
       }
       if (!anchor) return;
@@ -731,12 +761,17 @@ export function readSheetDrawings(options: {
           if (node.local === 'pic') anchor.content = { type: 'pic' };
           else if (node.local === 'graphicFrame')
             anchor.content = { type: 'chart' };
-          else if (['sp', 'grpSp', 'cxnSp', 'contentPart'].includes(node.local))
+          else if (['sp', 'grpSp', 'cxnSp'].includes(node.local)) {
+            const builder = elementBuilder();
+            builder.start(node);
+            anchor.content = { type: 'shape', builder };
+          } else if (node.local === 'contentPart')
             anchor.content = { type: 'other' };
         } else if (
           node.local === 'cNvPr' &&
           anchor.content &&
-          anchor.content.type !== 'other'
+          anchor.content.type !== 'other' &&
+          anchor.content.type !== 'shape'
         ) {
           anchor.content.name = value.name;
           if (anchor.content.type === 'pic' && value.descr)
@@ -755,8 +790,34 @@ export function readSheetDrawings(options: {
         anchor.content?.type === 'chart' &&
         value.uri !== CHART_NAMESPACE
       )
-        anchor.content = { type: 'other' };
+        anchor.content =
+          value.uri === DIAGRAM
+            ? { type: 'diagram', name: anchor.content.name }
+            : { type: 'other' };
       else if (
+        node.uri === DRAWING &&
+        node.local === 'ext' &&
+        parent === 'xfrm' &&
+        (anchor.content?.type === 'chart' || anchor.content?.type === 'diagram')
+      ) {
+        if (anchor.content.type === 'diagram')
+          anchor.content.extent = {
+            cx: Number(value.cx) || 0,
+            cy: Number(value.cy) || 0,
+          };
+        else
+          frameExtent = {
+            cx: Number(value.cx) || 0,
+            cy: Number(value.cy) || 0,
+          };
+      } else if (
+        node.uri === DIAGRAM &&
+        node.local === 'relIds' &&
+        anchor.content?.type === 'diagram'
+      ) {
+        anchor.content.data = value.dm;
+        anchor.content.extent ??= frameExtent;
+      } else if (
         node.uri === CHART_NAMESPACE &&
         node.local === 'chart' &&
         anchor.content?.type === 'chart'
@@ -765,6 +826,12 @@ export function readSheetDrawings(options: {
     });
     parser.on('text', (chunk) => {
       if (text !== undefined) text += chunk;
+      else if (
+        !choiceDepth &&
+        anchor?.content?.type === 'shape' &&
+        anchor.content.builder.open
+      )
+        anchor.content.builder.text(chunk);
     });
     parser.on('closetag', (node) => {
       stack.pop();
@@ -773,6 +840,11 @@ export function readSheetDrawings(options: {
         return;
       }
       if (choiceDepth || !anchor) return;
+      if (anchor.content?.type === 'shape' && anchor.content.builder.open) {
+        const element = anchor.content.builder.end();
+        if (element) anchor.content.element = element;
+        return;
+      }
       if (anchor.field && text !== undefined && anchor.marker) {
         anchor.marker[anchor.field] = Number(text.trim()) || 0;
         anchor.field = undefined;
@@ -789,7 +861,9 @@ export function readSheetDrawings(options: {
     });
   });
   if (unsupported)
-    warnings.add('Shapes, text boxes and SmartArt are not imported.');
+    warnings.add(
+      'Ink, and SmartArt without a saved drawing, are not imported.'
+    );
   if (skipped)
     warnings.add(
       'Some images and charts could not be placed and are not imported.'
@@ -1202,13 +1276,15 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   gif: 'gif',
   webp: 'webp',
   bmp: 'bmp',
+  'x-emf': 'emf',
+  'x-wmf': 'wmf',
 };
 
 /** An image's bytes and file extension from its data URL. */
 export function imageFile(
   url: string
 ): { bytes: Uint8Array; extension: string } | undefined {
-  const match = /^data:image\/([a-z]+);base64,(.*)$/.exec(url);
+  const match = /^data:image\/([a-z-]+);base64,(.*)$/.exec(url);
   const extension = match && IMAGE_EXTENSIONS[match[1]];
   if (!match || !extension) return;
   const binary = atob(match[2]);
@@ -1224,20 +1300,43 @@ const marker = (local: 'from' | 'to', point: DrawingPoint) =>
 /**
  * A sheet's drawing part and its relationships. `image` gives the archive
  * path of an image, written once per workbook; `chart` the path of a new
- * chart part; `size` a drawing's size in pixels, for picture extents.
+ * chart part; `size` a drawing's size in pixels, for picture extents; and
+ * `origin` a corner's distance in pixels from the sheet's top-left corner.
  */
 export function drawingPart(options: {
   drawings: SheetDrawing[];
   image: (key: string) => string | undefined;
   chart: (chart: SheetChart) => string;
-  size: (drawing: SheetDrawing) => { width: number; height: number };
+  size: (
+    drawing: SheetDrawing,
+    minimum?: number
+  ) => { width: number; height: number };
+  origin: (point: DrawingPoint) => { x: number; y: number };
 }): { xml: string; rels: string } | undefined {
   const relations: string[] = [];
   const anchors: string[] = [];
+  // Shape ids are unique within the part; a group numbers each member.
+  let nextId = 2;
+  const takeId = () => nextId++;
   options.drawings.forEach((drawing, index) => {
-    const id = index + 2;
     let content: string;
-    if (drawing.type === 'image') {
+    if (drawing.type === 'shape') {
+      const corner = options.origin(drawing.from);
+      // A straight line may have no height or no width.
+      const { width, height } = options.size(drawing, 0);
+      content = shapeXml(
+        drawing.shape,
+        {
+          x: corner.x * EMU_PER_PIXEL,
+          y: corner.y * EMU_PER_PIXEL,
+          width: width * EMU_PER_PIXEL,
+          height: height * EMU_PER_PIXEL,
+        },
+        takeId,
+        drawing.name ?? `Shape ${index + 1}`
+      );
+    } else if (drawing.type === 'image') {
+      const id = takeId();
       const path = options.image(drawing.image);
       if (!path) return;
       relations.push(
@@ -1246,6 +1345,7 @@ export function drawingPart(options: {
       const { width, height } = options.size(drawing);
       content = `<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="${xml(drawing.name ?? `Picture ${index + 1}`)}"${drawing.description ? ` descr="${xml(drawing.description)}"` : ''}/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${relations.length}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${Math.round(width * EMU_PER_PIXEL)}" cy="${Math.round(height * EMU_PER_PIXEL)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic>`;
     } else {
+      const id = takeId();
       const path = options.chart(drawing.chart);
       relations.push(
         `<Relationship Id="rId${relations.length + 1}" Type="${RELATIONSHIPS}/chart" Target="../${path.replace(/^xl\//, '')}"/>`

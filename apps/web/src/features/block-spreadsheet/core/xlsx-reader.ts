@@ -971,6 +971,9 @@ function readWorksheet(
   if (validations.length) metadata.validations = validations;
   const notes = readNotes(context, entry);
   if (notes) metadata.notes = notes;
+  const columnWidth = (column: number) =>
+    columnWidths[column] ?? DEFAULT_COLUMN_WIDTH;
+  const rowHeight = (row: number) => (rowHeights[row] ?? defaultHeight) / 0.75;
   const drawings = readSheetDrawings({
     archive: context.archive,
     sheetPath: entry.path,
@@ -978,16 +981,25 @@ function readWorksheet(
     warnings,
     state: context.drawings,
     locate: (x, y) => {
-      const width = (column: number) =>
-        columnWidths[column] ?? DEFAULT_COLUMN_WIDTH;
-      const height = (row: number) => (rowHeights[row] ?? defaultHeight) / 0.75;
       let column = 0;
-      while (x >= width(column) && column < SPREADSHEET_MAX_COLUMNS - 1)
-        x -= width(column++);
+      while (x >= columnWidth(column) && column < SPREADSHEET_MAX_COLUMNS - 1)
+        x -= columnWidth(column++);
       let row = 0;
-      while (y >= height(row) && row < SPREADSHEET_MAX_ROWS - 1)
-        y -= height(row++);
+      while (y >= rowHeight(row) && row < SPREADSHEET_MAX_ROWS - 1)
+        y -= rowHeight(row++);
       return { row, column, x: Math.round(x), y: Math.round(y) };
+    },
+    extent: ({ from, to, width = 0, height = 0 }) => {
+      if (!to) return { cx: width * 9525, cy: height * 9525 };
+      let horizontal = to.x - from.x;
+      for (let column = from.column; column < to.column; column++)
+        horizontal += columnWidth(column);
+      let vertical = to.y - from.y;
+      for (let row = from.row; row < to.row; row++) vertical += rowHeight(row);
+      return {
+        cx: Math.max(0, horizontal) * 9525,
+        cy: Math.max(0, vertical) * 9525,
+      };
     },
   });
   if (drawings.length) metadata.drawings = drawings;

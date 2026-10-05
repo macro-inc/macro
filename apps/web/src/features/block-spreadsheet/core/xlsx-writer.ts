@@ -732,7 +732,15 @@ export function writeXlsxWorkbook(
             files[path] = strToU8(chartPart(chart, readValues, pivotExists));
             return path;
           },
-          size: (value: SheetDrawing) => {
+          origin: (point) => {
+            let x = point.x;
+            for (let column = 0; column < point.column; column++)
+              x += width(column);
+            let y = point.y;
+            for (let row = 0; row < point.row; row++) y += height(row);
+            return { x, y };
+          },
+          size: (value: SheetDrawing, minimum = 1) => {
             if (!value.to)
               return { width: value.width ?? 0, height: value.height ?? 0 };
             let horizontal = value.to.x - value.from.x;
@@ -746,8 +754,8 @@ export function writeXlsxWorkbook(
             for (let row = value.from.row; row < value.to.row; row++)
               vertical += height(row);
             return {
-              width: Math.max(1, horizontal),
-              height: Math.max(1, vertical),
+              width: Math.max(minimum, horizontal),
+              height: Math.max(minimum, vertical),
             };
           },
         })
@@ -853,7 +861,7 @@ export function writeXlsxWorkbook(
     ]
       .map(
         (extension) =>
-          `<Default Extension="${extension}" ContentType="image/${extension}"/>`
+          `<Default Extension="${extension}" ContentType="image/${extension === 'emf' || extension === 'wmf' ? `x-${extension}` : extension}"/>`
       )
       .join('')}${Array.from(
       { length: drawingCount },

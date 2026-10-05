@@ -318,6 +318,21 @@ export function renameSheetReferences(
     ...metadata,
     ...(metadata.drawings && {
       drawings: metadata.drawings.map((drawing) => {
+        if (drawing.type === 'shape')
+          return {
+            ...drawing,
+            shape: {
+              ...drawing.shape,
+              parts: drawing.shape.parts.map((part) =>
+                part.text?.link
+                  ? {
+                      ...part,
+                      text: { ...part.text, link: rename(part.text.link) },
+                    }
+                  : part
+              ),
+            },
+          };
         if (drawing.type !== 'chart') return drawing;
         const { source } = drawing.chart;
         return {

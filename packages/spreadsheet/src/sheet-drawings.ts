@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import {
   SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
@@ -11,6 +12,10 @@ export const MAX_IMAGE_URL_LENGTH = 2_800_000;
 export const MAX_CHART_SOURCE_LENGTH = 400_000;
 /** Fixed values a chart reference holds, at most, written out. */
 export const MAX_CHART_LITERAL_LENGTH = 100_000;
+/** A shape kept for export, at most. */
+export const MAX_SHAPE_SOURCE_LENGTH = 400_000;
+/** The outlines of one shape drawing (a group's members), at most. */
+export const MAX_SHAPE_PARTS = 400;
 
 /**
  * A corner of a drawing: a cell, and a distance into it in pixels at 100%
@@ -101,6 +106,109 @@ export type SheetChart = {
   source?: string;
 };
 
+/** A run of a shape's text: its characters and how they look. */
+export type ShapeRun = {
+  /** Line breaks are `\n`. */
+  text: string;
+  bold?: true;
+  italic?: true;
+  underline?: true;
+  strike?: true;
+  /** In points. */
+  size?: number;
+  /** #RRGGBB; none for the theme's text color. */
+  color?: string;
+  font?: string;
+};
+
+export type ShapeParagraph = {
+  align?: 'left' | 'center' | 'right' | 'justify';
+  runs: ShapeRun[];
+  /** The size in points of an empty paragraph's line. */
+  size?: number;
+};
+
+export type ShapeText = {
+  paragraphs: ShapeParagraph[];
+  /** Where the text sits in the shape; the top by default. */
+  anchor?: 'top' | 'middle' | 'bottom';
+  /** Space around the text in pixels: left, top, right and bottom. */
+  insets?: [number, number, number, number];
+  /** The text stays on its lines rather than wrapping. */
+  noWrap?: true;
+  /** Text that does not fit is cut off at the shape's edges. */
+  clip?: true;
+  /** Text that runs down the shape, or up it. */
+  vertical?: 'down' | 'up';
+  /**
+   * A cell whose value the shape shows in place of its text, as Excel's
+   * `textlink`: `$B$2` on the shape's sheet, or `'Sheet 2'!$B$2`.
+   */
+  link?: string;
+};
+
+export const ARROW_ENDS = [
+  'triangle',
+  'arrow',
+  'stealth',
+  'oval',
+  'diamond',
+] as const;
+export const LINE_DASHES = [
+  'dash',
+  'dot',
+  'dashDot',
+  'longDash',
+  'longDashDot',
+] as const;
+
+export type ShapeLine = {
+  /** #RRGGBB; none for the theme's text color. */
+  color?: string;
+  /** In pixels at 100% zoom. */
+  width: number;
+  dash?: (typeof LINE_DASHES)[number];
+  /** Arrowheads where a line starts (head) and ends (tail). */
+  head?: (typeof ARROW_ENDS)[number];
+  tail?: (typeof ARROW_ENDS)[number];
+};
+
+/** One outline of a shape drawing: the shape, or a member of its group. */
+export type ShapePart = {
+  /** The part's box, as fractions of the drawing's width and height. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** An Excel preset outline such as `rect` or `rightArrow`. */
+  geometry?: string;
+  /** The preset's adjustments by guide name (`adj`, `adj1`), in Excel's units. */
+  adjust?: Record<string, number>;
+  /** A custom outline: SVG paths in a box from 0 to 1. */
+  paths?: { d: string; fill?: false; stroke?: false }[];
+  /** Degrees clockwise. */
+  rotation?: number;
+  flipH?: true;
+  flipV?: true;
+  /** #RRGGBB */
+  fill?: string;
+  /** The fill's opacity, from 0 to 1, when it is not opaque. */
+  opacity?: number;
+  line?: ShapeLine;
+  text?: ShapeText;
+};
+
+/** Shapes, text boxes, lines and groups of them, as Excel draws them. */
+export type SheetShape = {
+  parts: ShapePart[];
+  /**
+   * Excel's shape element (`xdr:sp`, `xdr:cxnSp` or `xdr:grpSp`), kept so
+   * export preserves its formatting. SmartArt is kept as a group of the
+   * shapes Excel last drew for it.
+   */
+  source?: string;
+};
+
 /** A cell's value as charts read it: its displayed text, and its number. */
 export type ChartValue = { text: string; number?: number };
 
@@ -182,9 +290,15 @@ export type SheetDrawing = DrawingBase &
         type: 'image';
         /** The key of the image in the workbook's images. */
         image: string;
+        /**
+         * A picture of an image browsers cannot show, such as an EMF or WMF
+         * metafile, for display; `image` is what export writes.
+         */
+        preview?: string;
         description?: string;
       }
     | { type: 'chart'; chart: SheetChart }
+    | { type: 'shape'; shape: SheetShape }
   );
 
 /** Where a drawing is anchored: a corner and a size, or two corners. */
@@ -194,9 +308,12 @@ export type DrawingPlacement = Pick<
 >;
 
 const IMAGE_URL =
-  /^data:image\/(?:png|jpeg|gif|webp|bmp);base64,[A-Za-z0-9+/]+=*$/;
+  /^data:image\/(?:png|jpeg|gif|webp|bmp|x-emf|x-wmf);base64,[A-Za-z0-9+/]+=*$/;
 
-/** A stored image: a base64 data URL of a format browsers display. */
+/**
+ * A stored image: a base64 data URL of a format browsers display, or of an
+ * EMF or WMF metafile, which drawings show through a preview.
+ */
 export function validImageUrl(value: unknown): value is string {
   return (
     typeof value === 'string' &&
@@ -336,14 +453,192 @@ function validChart(value: unknown): boolean {
   );
 }
 
+const fraction = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 100;
+const flag = (value: unknown) => value === undefined || value === true;
+const oneOf = (values: readonly string[], value: unknown) =>
+  value === undefined || values.includes(value as string);
+
+function validRun(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const run = value as Record<string, unknown>;
+  return (
+    Object.keys(run).every((key) =>
+      [
+        'text',
+        'bold',
+        'italic',
+        'underline',
+        'strike',
+        'size',
+        'color',
+        'font',
+      ].includes(key)
+    ) &&
+    typeof run.text === 'string' &&
+    run.text.length <= 32_767 &&
+    ['bold', 'italic', 'underline', 'strike'].every((key) => flag(run[key])) &&
+    (run.size === undefined ||
+      (typeof run.size === 'number' && run.size >= 1 && run.size <= 400)) &&
+    color(run.color) &&
+    text(run.font, 100)
+  );
+}
+
+function validText(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const body = value as Record<string, unknown>;
+  const paragraphs = body.paragraphs;
+  return (
+    Object.keys(body).every((key) =>
+      [
+        'paragraphs',
+        'anchor',
+        'insets',
+        'noWrap',
+        'clip',
+        'vertical',
+        'link',
+      ].includes(key)
+    ) &&
+    Array.isArray(paragraphs) &&
+    paragraphs.length <= 1_000 &&
+    paragraphs.every((paragraph) => {
+      if (!paragraph || typeof paragraph !== 'object') return false;
+      const { align, runs, size, ...rest } = paragraph as Record<
+        string,
+        unknown
+      >;
+      return (
+        !Object.keys(rest).length &&
+        oneOf(['left', 'center', 'right', 'justify'], align) &&
+        Array.isArray(runs) &&
+        runs.length <= 1_000 &&
+        runs.every(validRun) &&
+        (size === undefined ||
+          (typeof size === 'number' && size >= 1 && size <= 400))
+      );
+    }) &&
+    oneOf(['top', 'middle', 'bottom'], body.anchor) &&
+    (body.insets === undefined ||
+      (Array.isArray(body.insets) &&
+        body.insets.length === 4 &&
+        body.insets.every(pixels))) &&
+    flag(body.noWrap) &&
+    flag(body.clip) &&
+    oneOf(['down', 'up'], body.vertical) &&
+    text(body.link, 1_000)
+  );
+}
+
+function validLine(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const line = value as Record<string, unknown>;
+  return (
+    Object.keys(line).every((key) =>
+      ['color', 'width', 'dash', 'head', 'tail'].includes(key)
+    ) &&
+    color(line.color) &&
+    typeof line.width === 'number' &&
+    line.width >= 0 &&
+    line.width <= 200 &&
+    oneOf(LINE_DASHES, line.dash) &&
+    oneOf(ARROW_ENDS, line.head) &&
+    oneOf(ARROW_ENDS, line.tail)
+  );
+}
+
+function validPart(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const part = value as Record<string, unknown>;
+  return (
+    Object.keys(part).every((key) =>
+      [
+        'x',
+        'y',
+        'width',
+        'height',
+        'geometry',
+        'adjust',
+        'paths',
+        'rotation',
+        'flipH',
+        'flipV',
+        'fill',
+        'opacity',
+        'line',
+        'text',
+      ].includes(key)
+    ) &&
+    ['x', 'y', 'width', 'height'].every((key) => fraction(part[key])) &&
+    (part.geometry === undefined ||
+      (typeof part.geometry === 'string' &&
+        /^[A-Za-z0-9]{1,40}$/.test(part.geometry))) &&
+    (part.adjust === undefined ||
+      (!!part.adjust &&
+        typeof part.adjust === 'object' &&
+        !Array.isArray(part.adjust) &&
+        Object.entries(part.adjust).length <= 8 &&
+        Object.entries(part.adjust).every(
+          ([name, entry]) =>
+            /^[A-Za-z]{1,8}\d{0,2}$/.test(name) &&
+            typeof entry === 'number' &&
+            Number.isFinite(entry) &&
+            Math.abs(entry) <= 10_000_000
+        ))) &&
+    (part.paths === undefined ||
+      (Array.isArray(part.paths) &&
+        part.paths.length <= 32 &&
+        part.paths.every((path) => {
+          if (!path || typeof path !== 'object') return false;
+          const { d, fill, stroke, ...rest } = path as Record<string, unknown>;
+          return (
+            !Object.keys(rest).length &&
+            typeof d === 'string' &&
+            d.length <= 100_000 &&
+            /^[MLCQAZ0-9eE.,\s-]*$/.test(d) &&
+            (fill === undefined || fill === false) &&
+            (stroke === undefined || stroke === false)
+          );
+        }))) &&
+    (part.rotation === undefined ||
+      (typeof part.rotation === 'number' &&
+        Number.isFinite(part.rotation) &&
+        Math.abs(part.rotation) <= 360)) &&
+    flag(part.flipH) &&
+    flag(part.flipV) &&
+    color(part.fill) &&
+    (part.opacity === undefined ||
+      (typeof part.opacity === 'number' &&
+        part.opacity >= 0 &&
+        part.opacity <= 1)) &&
+    (part.line === undefined || validLine(part.line)) &&
+    (part.text === undefined || validText(part.text))
+  );
+}
+
+function validShape(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const shape = value as Record<string, unknown>;
+  return (
+    Object.keys(shape).every((key) => ['parts', 'source'].includes(key)) &&
+    Array.isArray(shape.parts) &&
+    shape.parts.length <= MAX_SHAPE_PARTS &&
+    shape.parts.every(validPart) &&
+    text(shape.source, MAX_SHAPE_SOURCE_LENGTH)
+  );
+}
+
 function validDrawing(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const drawing = value as Record<string, unknown>;
   const shared = ['id', 'name', 'from', 'to', 'width', 'height', 'type'];
   const allowed =
     drawing.type === 'image'
-      ? [...shared, 'image', 'description']
-      : [...shared, 'chart'];
+      ? [...shared, 'image', 'preview', 'description']
+      : drawing.type === 'shape'
+        ? [...shared, 'shape']
+        : [...shared, 'chart'];
   return (
     Object.keys(drawing).every((key) => allowed.includes(key)) &&
     typeof drawing.id === 'string' &&
@@ -356,9 +651,17 @@ function validDrawing(value: unknown): boolean {
       : validPoint(drawing.to) &&
         drawing.width === undefined &&
         drawing.height === undefined) &&
-    (drawing.type === 'image'
-      ? validImageKey(drawing.image) && text(drawing.description, 1_000)
-      : drawing.type === 'chart' && validChart(drawing.chart))
+    match(drawing.type)
+      .with(
+        'image',
+        () =>
+          validImageKey(drawing.image) &&
+          (drawing.preview === undefined || validImageKey(drawing.preview)) &&
+          text(drawing.description, 1_000)
+      )
+      .with('chart', () => validChart(drawing.chart))
+      .with('shape', () => validShape(drawing.shape))
+      .otherwise(() => false)
   );
 }
 

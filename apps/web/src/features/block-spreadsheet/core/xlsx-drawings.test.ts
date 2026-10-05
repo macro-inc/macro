@@ -42,6 +42,29 @@ function reader(workbook: WorkbookFileData, home: string): ChartReader {
   };
 }
 
+/** An EMF of a header and its end: a metafile that draws nothing. */
+function emfHeader() {
+  const bytes = new Uint8Array(108 + 20);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 1, true);
+  view.setUint32(4, 108, true);
+  view.setInt32(16, 99, true);
+  view.setInt32(20, 99, true);
+  view.setInt32(32, 2646, true);
+  view.setInt32(36, 2646, true);
+  view.setUint32(40, 0x464d4520, true);
+  view.setUint32(44, 0x10000, true);
+  view.setUint32(48, bytes.length, true);
+  view.setUint32(52, 2, true);
+  view.setInt32(72, 1920, true);
+  view.setInt32(76, 1080, true);
+  view.setInt32(80, 508, true);
+  view.setInt32(84, 286, true);
+  view.setUint32(108, 14, true);
+  view.setUint32(112, 20, true);
+  return bytes;
+}
+
 const drawingsOf = (workbook: WorkbookFileData, name: string) =>
   workbook.sheets.find((sheet) => sheet.name === name)?.metadata?.drawings ??
   [];
@@ -49,7 +72,7 @@ const drawingsOf = (workbook: WorkbookFileData, name: string) =>
 /** Drawings as a round trip should keep them: imported parts are rewritten. */
 const comparable = (drawings: SheetDrawing[]) =>
   drawings.map((drawing) =>
-    drawing.type === 'image'
+    drawing.type !== 'chart'
       ? drawing
       : {
           ...drawing,
@@ -317,16 +340,20 @@ describe('Excel drawings', () => {
           `<xdr:oneCellAnchor>${marker('from', 6, 2)}<xdr:ext cx="190500" cy="95250"/>${picture('rId2')}<xdr:clientData/></xdr:oneCellAnchor>` +
           `<xdr:absoluteAnchor><xdr:pos x="${200 * 9525}" y="${50 * 9525}"/><xdr:ext cx="${300 * 9525}" cy="${150 * 9525}"/><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="4" name="Plan"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id="rId3"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:absoluteAnchor>` +
           `<xdr:oneCellAnchor>${marker('from', 0, 20)}<xdr:ext cx="95250" cy="95250"/>${shape}<xdr:clientData/></xdr:oneCellAnchor>` +
-          `<xdr:oneCellAnchor>${marker('from', 0, 24)}<xdr:ext cx="95250" cy="95250"/>${picture('rId4')}<xdr:clientData/></xdr:oneCellAnchor>`
+          `<xdr:oneCellAnchor>${marker('from', 0, 24)}<xdr:ext cx="95250" cy="95250"/>${picture('rId4')}<xdr:clientData/></xdr:oneCellAnchor>` +
+          `<xdr:oneCellAnchor>${marker('from', 0, 28)}<xdr:ext cx="95250" cy="95250"/>${picture('rId5')}<xdr:clientData/></xdr:oneCellAnchor>`
       )
     );
     const relationship = (id: string, type: string, target: string) =>
       `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
     files['xl/drawings/_rels/drawing2.xml.rels'] = strToU8(
-      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationship('rId1', 'image', '../media/image1.png')}${relationship('rId2', 'image', '../media/copy.png')}${relationship('rId3', 'chart', '../charts/plan.xml')}${relationship('rId4', 'image', '../media/vector.emf')}</Relationships>`
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationship('rId1', 'image', '../media/image1.png')}${relationship('rId2', 'image', '../media/copy.png')}${relationship('rId3', 'chart', '../charts/plan.xml')}${relationship('rId4', 'image', '../media/vector.emf')}${relationship('rId5', 'image', '../media/scan.tiff')}</Relationships>`
     );
     files['xl/media/copy.png'] = files['xl/media/image1.png'];
-    files['xl/media/vector.emf'] = new Uint8Array([1, 0, 0, 0, 108, 0, 0, 0]);
+    files['xl/media/vector.emf'] = emfHeader();
+    files['xl/media/scan.tiff'] = new Uint8Array([
+      0x49, 0x49, 0x2a, 0, 8, 0, 0, 0,
+    ]);
     const series = (name: string, properties: string, column: string) =>
       `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:v>${name}</c:v></c:tx><c:spPr>${properties}</c:spPr><c:val><c:numRef><c:f>Sales!$${column}$2:$${column}$7</c:f></c:numRef></c:val></c:ser>`;
     files['xl/charts/plan.xml'] = strToU8(
@@ -335,17 +362,31 @@ describe('Excel drawings', () => {
     files['[Content_Types].xml'] = strToU8(
       strFromU8(files['[Content_Types].xml']).replace(
         '</Types>',
-        '<Default Extension="emf" ContentType="image/x-emf"/><Override PartName="/xl/charts/plan.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>'
+        '<Default Extension="emf" ContentType="image/x-emf"/><Default Extension="tiff" ContentType="image/tiff"/><Override PartName="/xl/charts/plan.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>'
       )
     );
     const imported = await decodeXlsx(zipSync(files));
     expect(imported.warnings).toEqual([
-      'Images in formats browsers cannot show, such as EMF and WMF, are not imported.',
-      'Shapes, text boxes and SmartArt are not imported.',
+      'Images in formats Macro cannot read, such as TIFF, are not imported.',
     ]);
-    expect(Object.keys(imported.images ?? {})).toHaveLength(1);
-    const [logo, copy, plan, ...rest] = drawingsOf(imported, 'Summary');
+    // The PNG, shared by two pictures, and the EMF, kept for export.
+    expect(
+      Object.values(imported.images ?? {}).map((url) => url.slice(0, 20))
+    ).toEqual(['data:image/png;base6', 'data:image/x-emf;bas']);
+    const [logo, copy, plan, note, vector, ...rest] = drawingsOf(
+      imported,
+      'Summary'
+    );
     expect(rest).toEqual([]);
+    // A shape without a frame fills its anchor.
+    expect(note).toMatchObject({
+      type: 'shape',
+      name: 'Note box',
+      shape: { parts: [{ x: 0, y: 0, width: 1, height: 1 }] },
+    });
+    // No canvas outside browsers: the metafile has no picture to show.
+    expect(vector).toMatchObject({ type: 'image', width: 10, height: 10 });
+    expect(vector.type === 'image' && vector.preview).toBeUndefined();
     // A picture that moves but does not size with its cells keeps its size.
     expect(logo).toEqual({
       id: 'drawing-1',

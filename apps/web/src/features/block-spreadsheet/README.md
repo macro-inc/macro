@@ -380,7 +380,29 @@ Import keeps what Excel calculates and shows:
   kept without its cached values (theme colors resolved), and export writes it
   back with its current ranges and fresh caches; charts without it, or too large
   to keep, are written from what Macro knows, with axes formatted like their
-  cells. Shapes, text boxes, SmartArt and EMF/WMF images are not imported.
+  cells.
+- Shapes, text boxes, lines and groups. `core/xlsx-shapes.ts` reads each
+  `xdr:sp`, `xdr:cxnSp` and `xdr:grpSp` into parts placed as fractions of the
+  drawing (a group's members in its own coordinates): a preset or custom
+  outline, fill, line with dashes and arrowheads, rotation and flips, and rich
+  text with its insets, anchoring and wrapping. Fills, lines and text colors
+  from the shape's style and the theme are resolved; the theme's text color
+  stays the app's ink, and black on a shape without fill follows the theme so
+  it stays readable in dark mode. `textlink` text shows its cell's value and
+  moves with rows, columns and sheet renames. `core/shape-geometry.ts` draws
+  Excel's common presets (rectangles, rounded and snipped corners, ellipses,
+  polygons, stars, arrows, callouts, flowchart symbols, connectors, brackets);
+  others draw as their box, or as a straight arrow. The element is kept for
+  export with theme colors resolved and links to other parts (hyperlinks,
+  picture fills) left out; export writes it at the drawing's current place
+  with fresh shape ids. SmartArt is read from the drawing Excel saved for it
+  and kept as a group of those shapes, so downloads look the same but are
+  no longer SmartArt in Excel.
+- EMF and WMF images are kept as they are for export and drawn for display:
+  `core/metafile.ts` plays their GDI records (shapes, paths, text, bitmaps and
+  clipping; EMF+ records are left to their GDI fallback) onto a canvas in the
+  import worker, and the PNG becomes the drawing's `preview`. Without a canvas
+  the drawing shows its name in a placeholder.
 - Pivot tables. `core/xlsx-pivots.ts` keeps each pivot table's definition and its
   cache definition without records, marked to refresh on load, in
   `metadata.pivotTables`; Macro shows the values Excel last saved, and Excel or
@@ -411,10 +433,12 @@ cell, `_xlfn` prefixes, dynamic-array metadata for formulas that need array
 evaluation, `@` as Excel stores it, and the same column default as Macro so that
 Excel → Macro → Excel round trips are stable.
 
-`core/xlsx-drawings.test.ts` and `core/xlsx-pivots.test.ts` cover drawings and
-pivot tables with `core/xlsx-fixtures/drawings.xlsx` and
-`core/xlsx-fixtures/chart-types.xlsx` (charts and an image written by openpyxl)
-and corpus workbooks. Exports were also checked with openpyxl and LibreOffice,
+`core/xlsx-drawings.test.ts`, `core/xlsx-shapes.test.ts`,
+`core/metafile.test.ts` and `core/xlsx-pivots.test.ts` cover drawings and pivot
+tables with `core/xlsx-fixtures/drawings.xlsx`,
+`core/xlsx-fixtures/chart-types.xlsx` (charts and an image written by
+openpyxl), `core/xlsx-fixtures/shapes.xlsx` (shapes, a linked text box, a
+group, SmartArt and an EMF, as Excel writes them) and corpus workbooks. Exports were also checked with openpyxl and LibreOffice,
 which draws the same charts (surface charts aside, which it cannot draw) and
 rebuilds pivot tables from edited data.
 
@@ -448,7 +472,7 @@ calculation and Excel workers. Its Playwright suite covers formula autocomplete
 and range picking, menu/dialog focus, sheet navigation, read-only transitions,
 Excel round trips, imported conditional formatting, data validation and notes,
 imported charts and images (following edits, Delete and undo, and download),
-radar, bubble, stock and contour charts,
+radar, bubble, stock and contour charts, shapes, SmartArt and EMF images,
 workbook import undo, and formatting without remounts or flashes.
 Its separate mobile suite uses Android Chrome and iPhone WebKit emulation for
 touch editing, formula suggestions, selection/reference handles, menus, sheets,

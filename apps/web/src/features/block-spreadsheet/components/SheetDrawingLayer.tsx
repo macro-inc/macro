@@ -2,11 +2,18 @@ import type {
   SheetChart,
   SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
+import ImageIcon from '@phosphor/image.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import type { ChartData } from '../core/chart-data';
 import { chartScene } from '../core/chart-scene';
 import { SpreadsheetChart } from './SpreadsheetChart';
+import { SpreadsheetShape, shapeText } from './SpreadsheetShape';
+
+/** A line is easier to press with this much room, in pixels. */
+const MIN_TARGET = 10;
+/** Images a browser shows itself. */
+const SHOWN_IMAGE = /^data:image\/(?:png|jpeg|gif|webp|bmp);/;
 
 export type DrawingRect = {
   left: number;
@@ -88,6 +95,10 @@ export function SheetDrawingLayer(props: {
   scale: number;
   image: (key: string) => string | undefined;
   chartData: (chart: SheetChart) => ChartData;
+  /** The text a cell shows, for shapes linked to it. */
+  cellText?: (reference: string) => string | undefined;
+  /** The sheet's font, which shapes' text uses by default. */
+  font?: string;
   selected?: string;
   readonly: boolean;
   onSelect: (id: string | undefined) => void;
@@ -118,9 +129,23 @@ export function SheetDrawingLayer(props: {
         const label = () => {
           const value = drawing();
           if (!value) return '';
-          return value.type === 'chart'
-            ? `Chart${value.chart.title ? `: ${value.chart.title}` : value.name ? `: ${value.name}` : ''}`
-            : (value.description ?? value.name ?? 'Image');
+          if (value.type === 'chart')
+            return `Chart${value.chart.title ? `: ${value.chart.title}` : value.name ? `: ${value.name}` : ''}`;
+          if (value.type === 'shape')
+            return (
+              shapeText(value.shape, props.cellText).slice(0, 200) ||
+              value.name ||
+              'Shape'
+            );
+          return value.description ?? value.name ?? 'Image';
+        };
+        // Lines may have no height or width; they are pressed in a margin.
+        const target = () => {
+          const box = rect();
+          if (!box || drawing()?.type !== 'shape') return;
+          const x = Math.max(0, (MIN_TARGET - box.width) / 2);
+          const y = Math.max(0, (MIN_TARGET - box.height) / 2);
+          return x || y ? { x, y } : undefined;
         };
         const nudge = (event: KeyboardEvent) => {
           const box = rect();
@@ -155,9 +180,7 @@ export function SheetDrawingLayer(props: {
               <div
                 role="figure"
                 aria-label={label()}
-                aria-roledescription={
-                  drawing()?.type === 'chart' ? 'chart' : 'image'
-                }
+                aria-roledescription={drawing()?.type ?? 'image'}
                 tabIndex={-1}
                 data-drawing={id}
                 class="absolute z-[3] outline-none"
@@ -166,10 +189,10 @@ export function SheetDrawingLayer(props: {
                   'touch-none': selected() && editable(),
                 }}
                 style={{
-                  left: `${box().left}px`,
-                  top: `${box().top}px`,
-                  width: `${box().width}px`,
-                  height: `${box().height}px`,
+                  left: `${box().left - (target()?.x ?? 0)}px`,
+                  top: `${box().top - (target()?.y ?? 0)}px`,
+                  width: `${box().width + 2 * (target()?.x ?? 0)}px`,
+                  height: `${box().height + 2 * (target()?.y ?? 0)}px`,
                 }}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return;
@@ -278,36 +301,68 @@ export function SheetDrawingLayer(props: {
                 }}
               >
                 <div
-                  class="size-full overflow-hidden"
+                  class="size-full"
                   classList={{
+                    'overflow-hidden': drawing()?.type !== 'shape',
                     'rounded-sm border border-edge-muted bg-surface':
                       drawing()?.type === 'chart',
                   }}
+                  style={
+                    target()
+                      ? {
+                          padding: `${target()?.y ?? 0}px ${target()?.x ?? 0}px`,
+                        }
+                      : undefined
+                  }
                 >
+                  <Switch>
+                    <Match
+                      when={(() => {
+                        const value = drawing();
+                        return value?.type === 'shape' && value.shape;
+                      })()}
+                    >
+                      {(shape) => (
+                        <SpreadsheetShape
+                          shape={shape()}
+                          width={box().width}
+                          height={box().height}
+                          scale={props.scale}
+                          font={props.font}
+                          linked={props.cellText}
+                        />
+                      )}
+                    </Match>
+                    <Match
+                      when={(() => {
+                        const value = drawing();
+                        if (value?.type !== 'image') return;
+                        // A metafile shows its preview, if it has one.
+                        const url = props.image(value.preview ?? value.image);
+                        return url && SHOWN_IMAGE.test(url) ? url : undefined;
+                      })()}
+                    >
+                      {(url) => (
+                        <img
+                          src={url()}
+                          alt=""
+                          draggable={false}
+                          class="pointer-events-none size-full select-none"
+                        />
+                      )}
+                    </Match>
+                    <Match when={drawing()?.type === 'image'}>
+                      <div class="flex size-full items-center justify-center gap-1.5 border border-dashed border-edge-muted bg-surface/80 p-1 text-xs text-ink-muted">
+                        <ImageIcon class="size-4 shrink-0" />
+                        <span class="truncate">{label()}</span>
+                      </div>
+                    </Match>
+                  </Switch>
                   <Show
                     when={(() => {
                       const value = drawing();
                       return value?.type === 'chart' && value.chart;
                     })()}
-                    fallback={
-                      <Show
-                        when={(() => {
-                          const value = drawing();
-                          return (
-                            value?.type === 'image' && props.image(value.image)
-                          );
-                        })()}
-                      >
-                        {(url) => (
-                          <img
-                            src={url()}
-                            alt=""
-                            draggable={false}
-                            class="pointer-events-none size-full select-none"
-                          />
-                        )}
-                      </Show>
-                    }
                   >
                     {(chart) => {
                       const scene = createMemo(() =>

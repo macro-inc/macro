@@ -238,6 +238,57 @@ describe('row and column structure', () => {
   });
 });
 
+it('moves the cells shapes show with them, and keeps the text of deleted ones', () => {
+  const sheets = workbook();
+  const linked = (link: string) => ({
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    text: { paragraphs: [{ runs: [{ text: '42' }] }], link },
+  });
+  sheets[0].metadata = {
+    drawings: [
+      {
+        id: 'total',
+        type: 'shape',
+        from: { row: 0, column: 3, x: 0, y: 0 },
+        width: 100,
+        height: 40,
+        shape: { parts: [linked('$B$2'), linked('Model!$A$3')] },
+      },
+    ],
+  };
+  const inserted = changeWorkbookAxis(sheets, {
+    sheetId: 'one',
+    axis: 'row',
+    index: 0,
+    count: 2,
+    kind: 'insert',
+  });
+  const links = (result: typeof sheets) =>
+    result[0].metadata?.drawings?.flatMap((drawing) =>
+      drawing.type === 'shape'
+        ? drawing.shape.parts.map((part) => part.text?.link)
+        : []
+    );
+  expect(links(inserted)).toEqual(['$B$4', 'Model!$A$3']);
+  // A shape whose cell is deleted keeps the text it showed.
+  const deleted = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'row',
+    index: 2,
+    count: 1,
+    kind: 'delete',
+  });
+  expect(links(deleted)).toEqual(['$B$2', undefined]);
+  expect(deleted[0].metadata?.drawings?.[0]).toMatchObject({
+    shape: {
+      parts: [{}, { text: { paragraphs: [{ runs: [{ text: '42' }] }] } }],
+    },
+  });
+});
+
 it('moves pivot tables with their cells and source, and drops ones without a source', () => {
   const sheets = workbook();
   const pivot = (location: string, source: string) => ({

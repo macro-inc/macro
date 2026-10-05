@@ -93,7 +93,12 @@ or an image file (PNG, JPEG, GIF, WebP or BMP up to 2 MB) at the active cell.
 Its **More charts** submenu holds Radar, Filled radar, Bubble, Stock and
 Contour; a stock chart needs three or four series (high, low, close, with open
 first for up-down bars), and a bubble chart reads x values from the first
-column, then values and sizes in pairs. Click a drawing to select it: drag it to move it, drag a handle to
+column, then values and sizes in pairs. Imported shapes, text boxes, lines,
+groups and SmartArt are drawn too, as `figure`s named after their text (or
+their name, such as "Straight Connector 2"); a shape linked to a cell shows the
+cell's value. They move, size and delete like images, and download as Excel
+wrote them (SmartArt as a group of its shapes). EMF and WMF pictures show a
+picture drawn of them and download as the original metafile. Click a drawing to select it: drag it to move it, drag a handle to
 size it, press Delete to remove it (undo restores it) or Escape to return to the
 cells. Double-click a chart, press Enter, or use its pencil button to open **Edit
 chart** (type, title, legend, the cells it charts, series in rows or columns).
@@ -238,15 +243,15 @@ CSV imports a file up to 20 MB into the selection, adding rows if needed within 
 are replaced, with undo available. Excel imports accept up to 50 MB, 300 sheets,
 2,000,000 filled cells, and 100,000 rows × 16,384 columns (A–XFD) per sheet. The footer
 shows the sheet's size, and **+ Add columns** appends 26 more. An import preview lists
-each sheet and warns about unsupported content (for example shapes, text boxes and
-rich text). Choose
+each sheet and warns about unsupported content (for example rich text, ink and sheet
+protection). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
 while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
-current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas, shapes, text boxes and rich text are not fully supported; review import notes before conversion.
+current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, shapes, text boxes, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas and rich text are not fully supported; review import notes before conversion.
 CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
 **Download as CSV** in the same menu exports only the active sheet's current
 calculated values. Clipboard menu actions use the browser clipboard; if access is

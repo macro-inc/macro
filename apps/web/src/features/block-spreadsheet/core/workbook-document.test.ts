@@ -140,6 +140,39 @@ describe('collaborative workbook', () => {
         },
       },
     ]);
+    // A text box showing a cell of the sheet.
+    const writeMetadata = (value: unknown) =>
+      doc.getMap('spreadsheetSheetMetadata').set(report, JSON.stringify(value));
+    writeMetadata({
+      ...readSpreadsheetWorkbook(doc).find((sheet) => sheet.id === report)
+        ?.metadata,
+      drawings: [
+        ...(readSpreadsheetWorkbook(doc).find((sheet) => sheet.id === report)
+          ?.metadata?.drawings ?? []),
+        {
+          id: 'total',
+          type: 'shape',
+          from: { row: 20, column: 0, x: 0, y: 0 },
+          width: 100,
+          height: 40,
+          shape: {
+            parts: [
+              {
+                x: 0,
+                y: 0,
+                width: 1,
+                height: 1,
+                text: {
+                  paragraphs: [{ runs: [{ text: '10', bold: true }] }],
+                  link: 'Data!$B$3',
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    doc.commit();
     renameSpreadsheetSheet(doc, data, 'Sales 2024');
     const metadata = () =>
       readSpreadsheetWorkbook(doc).find((sheet) => sheet.id === report)
@@ -158,6 +191,7 @@ describe('collaborative workbook', () => {
             ),
           },
         },
+        { shape: { parts: [{ text: { link: "'Sales 2024'!$B$3" } }] } },
       ],
       pivotTables: [{ source: "'Sales 2024'!$A$1:$B$3" }],
     });
@@ -165,24 +199,43 @@ describe('collaborative workbook', () => {
     // literal cells otherwise. The pivot table keeps its values as cells.
     const other = new LoroDoc();
     other.import(doc.export({ mode: 'snapshot' }));
+    // Calculated values of B2:B3.
     deleteSpreadsheetSheet(doc, data, (range) =>
-      range.top === 1 && range.left === 1
+      range.left === 1 && range.top >= 1
         ? [
             { text: '10', number: 10 },
             { text: '20', number: 20 },
-          ]
+          ].slice(range.top - 1, range.bottom)
         : undefined
     );
     expect(metadata()?.pivotTables).toBeUndefined();
     expect(metadata()?.drawings).toMatchObject([
       { chart: { references: ['{"Sales"}', '{"Jan","Feb"}', '{10,20}'] } },
+      // The text box keeps the value it showed, in its look.
+      {
+        shape: {
+          parts: [
+            { text: { paragraphs: [{ runs: [{ text: '20', bold: true }] }] } },
+          ],
+        },
+      },
     ]);
+    const kept = metadata()?.drawings?.[1];
+    expect(kept?.type === 'shape' && kept.shape.parts[0].text?.link).toBe(
+      undefined
+    );
     deleteSpreadsheetSheet(other, data);
     expect(
       readSpreadsheetWorkbook(other).find((sheet) => sheet.id === report)
         ?.metadata?.drawings
     ).toMatchObject([
       { chart: { references: ['{"Sales"}', '{"Jan","Feb"}', '{10,}'] } },
+      // A formula cell without calculated values shows nothing.
+      {
+        shape: {
+          parts: [{ text: { paragraphs: [{ runs: [{ text: '' }] }] } }],
+        },
+      },
     ]);
     doc.free();
     other.free();
