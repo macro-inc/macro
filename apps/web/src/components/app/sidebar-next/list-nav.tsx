@@ -16,7 +16,7 @@ import { createSignal, onCleanup, Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
 import { SidebarUnreadDot } from './unread-dot';
-import { hideSidebarItem } from './use-sidebar-prefs';
+import { useSidebarPrefs } from './use-sidebar-prefs';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
@@ -57,6 +57,7 @@ const activeContentKey = () => {
  * for that is deliberately absent until there is a data source to fill it.
  */
 export const ListNav = (props: ListNavProps) => {
+  const { hideSidebarItem } = useSidebarPrefs();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const location = useLocation();

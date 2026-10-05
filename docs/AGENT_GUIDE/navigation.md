@@ -301,7 +301,9 @@ Open **More → Customize sidebar** to show, hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and
 cannot be hidden. Verify that hovering within a destination row keeps the drag
-preview stable, dropping saves the order, and reopening retains it.
+preview stable, dropping saves the order, and reopening retains it. In short
+desktop windows, the app list scrolls while More and the footer remain reachable.
+Touch devices retain the flag-gated Reviews tab in Tasks.
 
 - Top: buttons `Create` and `Search`. Clicking `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`

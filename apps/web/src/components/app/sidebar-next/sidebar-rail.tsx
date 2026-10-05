@@ -14,6 +14,7 @@ import { visibleNavItems } from './nav-items';
 import { useSidebarUnread } from './queries/use-sidebar-unread';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
+import { SidebarPrefsProvider } from './use-sidebar-prefs';
 
 function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
   const hasActiveCall = useHasActiveChannelsCall();
@@ -30,7 +31,13 @@ function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
  * separately. There is no room for leader-key hints on the buttons, so each
  * button's tooltip carries its shortcut instead.
  */
-export const SidebarRail = () => {
+export const SidebarRail = () => (
+  <SidebarPrefsProvider>
+    <SidebarRailContent />
+  </SidebarPrefsProvider>
+);
+
+const SidebarRailContent = () => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
@@ -61,7 +68,7 @@ export const SidebarRail = () => {
       <SidebarRailCreateButton />
       <SearchRailButton />
 
-      <nav class="shrink-0 pt-4">
+      <nav class="min-h-0 overflow-y-auto pt-4">
         <ul class="flex flex-col items-center gap-1">
           <For each={visibleNavItems(gates())}>
             {(item) => (

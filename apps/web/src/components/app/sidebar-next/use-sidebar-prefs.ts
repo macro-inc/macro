@@ -1,4 +1,5 @@
-import { type Accessor, createSignal, onMount } from 'solid-js';
+import { createAssertedContextProvider } from '@core/context/createContext';
+import { createSignal, onMount } from 'solid-js';
 
 const STORAGE_KEY = 'macro:sidebar:prefs';
 const LEGACY_PINNED_KEY = 'macro:sidebar:pinned-items';
@@ -67,82 +68,78 @@ function savePrefs(prefs: SidebarPrefs): void {
   }
 }
 
-const [prefs, setPrefs] = createSignal<SidebarPrefs>(defaultPrefs());
-let initialized = false;
+export const [SidebarPrefsProvider, useSidebarPrefs] =
+  createAssertedContextProvider('SidebarPrefs', () => {
+    const [prefs, setPrefs] = createSignal<SidebarPrefs>(defaultPrefs());
+    onMount(() => setPrefs(loadPrefs()));
 
-/** Reactive sidebar visibility/order preferences. */
-export function useSidebarPrefs(): Accessor<SidebarPrefs> {
-  onMount(() => {
-    if (!initialized) {
-      setPrefs(loadPrefs());
-      initialized = true;
+    function updatePrefs(
+      mutator: (current: SidebarPrefs) => SidebarPrefs
+    ): void {
+      setPrefs((current) => {
+        const next = mutator(current);
+        savePrefs(next);
+        return next;
+      });
     }
+
+    /** Hide an item from the outer rail (Home is ignored). */
+    function hideSidebarItem(itemId: string): void {
+      if (itemId === 'home') return;
+      updatePrefs((current) => {
+        const hidden = new Set(current.hidden);
+        hidden.add(itemId);
+        return { ...current, hidden };
+      });
+    }
+
+    /** Show an item on the outer rail. */
+    function showSidebarItem(itemId: string): void {
+      updatePrefs((current) => {
+        const hidden = new Set(current.hidden);
+        hidden.delete(itemId);
+        return { ...current, hidden };
+      });
+    }
+
+    /** Toggle whether an item is visible on the outer rail. */
+    function setSidebarItemVisible(itemId: string, visible: boolean): void {
+      if (visible) showSidebarItem(itemId);
+      else hideSidebarItem(itemId);
+    }
+
+    /**
+     * Reorder items by moving the item at `fromIndex` to `toIndex`.
+     * Home stays pinned at index 0 when present.
+     */
+    function reorderSidebarItems(
+      fromIndex: number,
+      toIndex: number,
+      orderIds: readonly string[]
+    ): void {
+      if (fromIndex === toIndex) return;
+      if (fromIndex < 0 || toIndex < 0) return;
+      if (fromIndex >= orderIds.length || toIndex >= orderIds.length) return;
+
+      const nextOrder = [...orderIds];
+      const [removed] = nextOrder.splice(fromIndex, 1);
+      if (removed === 'home') return;
+      nextOrder.splice(toIndex, 0, removed);
+
+      // Keep Home first if it was in the list.
+      const homeIndex = nextOrder.indexOf('home');
+      if (homeIndex > 0) {
+        nextOrder.splice(homeIndex, 1);
+        nextOrder.unshift('home');
+      }
+
+      updatePrefs((current) => ({ ...current, order: nextOrder }));
+    }
+
+    return {
+      prefs,
+      hideSidebarItem,
+      setSidebarItemVisible,
+      reorderSidebarItems,
+    };
   });
-  return prefs;
-}
-
-function updatePrefs(mutator: (current: SidebarPrefs) => SidebarPrefs): void {
-  setPrefs((current) => {
-    const next = mutator(current);
-    savePrefs(next);
-    return next;
-  });
-}
-
-/** Hide an item from the outer rail (Home is ignored). */
-export function hideSidebarItem(itemId: string): void {
-  if (itemId === 'home') return;
-  updatePrefs((current) => {
-    const hidden = new Set(current.hidden);
-    hidden.add(itemId);
-    return { ...current, hidden };
-  });
-}
-
-/** Show an item on the outer rail. */
-export function showSidebarItem(itemId: string): void {
-  updatePrefs((current) => {
-    const hidden = new Set(current.hidden);
-    hidden.delete(itemId);
-    return { ...current, hidden };
-  });
-}
-
-/** Toggle whether an item is visible on the outer rail. */
-export function setSidebarItemVisible(itemId: string, visible: boolean): void {
-  if (visible) showSidebarItem(itemId);
-  else hideSidebarItem(itemId);
-}
-
-/**
- * Reorder items by moving the item at `fromIndex` to `toIndex`.
- * Home stays pinned at index 0 when present.
- */
-export function reorderSidebarItems(
-  fromIndex: number,
-  toIndex: number,
-  orderIds: readonly string[]
-): void {
-  if (fromIndex === toIndex) return;
-  if (fromIndex < 0 || toIndex < 0) return;
-  if (fromIndex >= orderIds.length || toIndex >= orderIds.length) return;
-
-  const nextOrder = [...orderIds];
-  const [removed] = nextOrder.splice(fromIndex, 1);
-  if (removed === 'home') return;
-  nextOrder.splice(toIndex, 0, removed);
-
-  // Keep Home first if it was in the list.
-  const homeIndex = nextOrder.indexOf('home');
-  if (homeIndex > 0) {
-    nextOrder.splice(homeIndex, 1);
-    nextOrder.unshift('home');
-  }
-
-  updatePrefs((current) => ({ ...current, order: nextOrder }));
-}
-
-/** Whether the item is currently hidden from the rail. */
-export function isSidebarItemHidden(itemId: string): boolean {
-  return prefs().hidden.has(itemId);
-}

@@ -4,12 +4,9 @@ import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import { Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  CustomizeSidebarModal,
-  setCustomizeSidebarOpen,
-} from './customize-sidebar-modal';
+import { CustomizeSidebarModal } from './customize-sidebar-modal';
 import {
   moreMenuItems,
   type NavItemGates,
@@ -41,6 +38,7 @@ function navigateToItem(
  * Lists hidden items for quick open, and opens the Customize sidebar modal.
  */
 export function MoreMenu(props: MoreMenuProps) {
+  const [customizeSidebarOpen, setCustomizeSidebarOpen] = createSignal(false);
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const hiddenItems = () => moreMenuItems(props.gates);
@@ -51,7 +49,7 @@ export function MoreMenu(props: MoreMenuProps) {
         <Dropdown.Trigger
           variant="ghost"
           size="icon-md"
-          class="size-10 cursor-default rounded-xl"
+          class="size-10 shrink-0 cursor-default rounded-xl"
           label="More"
           tooltip="More options"
           tooltipPlacement="right"
@@ -90,7 +88,11 @@ export function MoreMenu(props: MoreMenuProps) {
         </Dropdown.Content>
       </Dropdown>
 
-      <CustomizeSidebarModal gates={props.gates} />
+      <CustomizeSidebarModal
+        gates={props.gates}
+        open={customizeSidebarOpen()}
+        onOpenChange={setCustomizeSidebarOpen}
+      />
     </>
   );
 }

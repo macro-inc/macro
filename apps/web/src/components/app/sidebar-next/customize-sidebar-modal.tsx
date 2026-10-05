@@ -16,21 +16,14 @@ import {
   useSortableContext,
 } from '@thisbeyond/solid-dnd';
 import { Button, Checkbox, cn, Dialog, Panel, Tooltip } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   customizableNavItems,
   type NavItemGates,
   type SidebarNextNavItem,
 } from './nav-items';
-import {
-  reorderSidebarItems,
-  setSidebarItemVisible,
-} from './use-sidebar-prefs';
-
-const [customizeSidebarOpen, setCustomizeSidebarOpen] = createSignal(false);
-
-export { setCustomizeSidebarOpen };
+import { useSidebarPrefs } from './use-sidebar-prefs';
 
 function useNavReorderMode(): 'drag' | 'buttons' {
   const canDrag =
@@ -85,6 +78,7 @@ function CustomizeNavRow(props: {
   count: number;
   onMove: (direction: -1 | 1) => void;
 }) {
+  const { setSidebarItemVisible } = useSidebarPrefs();
   const isHome = () => props.item.id === 'home';
   const canMoveUp = () => !isHome() && props.index > 1;
   const canMoveDown = () => !isHome() && props.index < props.count - 1;
@@ -187,7 +181,12 @@ function CustomizeNavRow(props: {
  * Center modal for showing/hiding and reordering outer sidebar items.
  * Opened from the More menu's "Customize sidebar" action.
  */
-export function CustomizeSidebarModal(props: { gates: NavItemGates }) {
+export function CustomizeSidebarModal(props: {
+  gates: NavItemGates;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { reorderSidebarItems } = useSidebarPrefs();
   const items = () => customizableNavItems(props.gates);
   const orderIds = () => items().map((item) => item.id);
   const onDragEnd: DragEventHandler = ({ draggable, droppable }) => {
@@ -209,8 +208,8 @@ export function CustomizeSidebarModal(props: { gates: NavItemGates }) {
 
   return (
     <Dialog
-      open={customizeSidebarOpen()}
-      onOpenChange={setCustomizeSidebarOpen}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
       position="center"
       animate
       class="w-96 max-w-[calc(100vw-16px)]"

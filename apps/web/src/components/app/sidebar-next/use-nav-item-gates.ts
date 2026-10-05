@@ -21,7 +21,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const crm = useFeatureFlag(enableCrm);
   const reminders = useFeatureFlag(enableReminders);
   const reviews = useFeatureFlag(enableTasksReviews);
-  const prefs = useSidebarPrefs();
+  const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
     showCalendar: calendar(),

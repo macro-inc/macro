@@ -1,16 +1,14 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { DragDropProvider, DragDropSensors } from '@thisbeyond/solid-dnd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  CustomizeSidebarModal,
-  setCustomizeSidebarOpen,
-} from './customize-sidebar-modal';
-import { useSidebarPrefs } from './use-sidebar-prefs';
+import { CustomizeSidebarModal } from './customize-sidebar-modal';
+import { SidebarPrefsProvider, useSidebarPrefs } from './use-sidebar-prefs';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 
 beforeEach(() => {
+  localStorage.removeItem('macro:sidebar:prefs');
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal(
     'ResizeObserver',
@@ -33,40 +31,43 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  setCustomizeSidebarOpen(false);
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
+function Modal() {
+  const { prefs } = useSidebarPrefs();
+  return (
+    <CustomizeSidebarModal
+      open
+      onOpenChange={() => {}}
+      gates={{
+        showCalendar: true,
+        showCustomers: true,
+        showReminders: true,
+        showCalls: true,
+        showReviews: true,
+        get prefs() {
+          return prefs();
+        },
+      }}
+    />
+  );
+}
+
 describe('sidebar customization drag sorting', () => {
   it('keeps row targets stable and isolates sorting from the app drag provider', async () => {
     const appCollision = vi.fn(() => null);
     const appDragEnd = vi.fn();
-    function Modal() {
-      const prefs = useSidebarPrefs();
-      return (
-        <CustomizeSidebarModal
-          gates={{
-            showCalendar: true,
-            showCustomers: true,
-            showReminders: true,
-            showCalls: true,
-            showReviews: true,
-            get prefs() {
-              return prefs();
-            },
-          }}
-        />
-      );
-    }
     render(() => (
       <DragDropProvider collisionDetector={appCollision} onDragEnd={appDragEnd}>
         <DragDropSensors />
-        <Modal />
+        <SidebarPrefsProvider>
+          <Modal />
+        </SidebarPrefsProvider>
       </DragDropProvider>
     ));
-    setCustomizeSidebarOpen(true);
     const handle = await screen.findByRole('button', {
       name: 'Reorder Reminders',
     });
@@ -93,5 +94,42 @@ describe('sidebar customization drag sorting', () => {
     expect(screen.queryByRole('button', { name: 'Reorder Home' })).toBeNull();
     expect(appCollision).not.toHaveBeenCalled();
     expect(appDragEnd).not.toHaveBeenCalled();
+  });
+
+  it('reloads persisted preferences for each sidebar mount', async () => {
+    const mount = () =>
+      render(() => (
+        <SidebarPrefsProvider>
+          <Modal />
+        </SidebarPrefsProvider>
+      ));
+    mount();
+    const reminders = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Reminders',
+    });
+    expect(reminders.checked).toBe(true);
+    fireEvent.click(reminders);
+    expect(reminders.checked).toBe(false);
+    cleanup();
+
+    mount();
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('checkbox', {
+          name: 'Reminders',
+        })
+      ).checked
+    ).toBe(false);
+    cleanup();
+
+    localStorage.removeItem('macro:sidebar:prefs');
+    mount();
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('checkbox', {
+          name: 'Reminders',
+        })
+      ).checked
+    ).toBe(true);
   });
 });
