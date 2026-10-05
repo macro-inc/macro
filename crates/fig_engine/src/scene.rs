@@ -74,6 +74,10 @@ pub struct Scene {
     pub page: NodeIdx,
     pub nodes: Vec<SceneNode>,
     by_guid: HashMap<Guid, SceneIdx>,
+    /// See [`Scene::paint_times`]; computed on first use. Edits that change
+    /// the tree rebuild the scene, so the times stay valid across
+    /// [`Scene::refresh`].
+    paint_times: std::sync::OnceLock<Box<[(u32, u32)]>>,
 }
 
 /// Deepest instance nesting expanded (guards against cyclic components).
@@ -115,6 +119,7 @@ impl Scene {
             page,
             nodes: b.nodes,
             by_guid: b.by_guid,
+            paint_times: std::sync::OnceLock::new(),
         };
         variables::resolve(doc, &mut scene);
         scene.compute_world(doc);
@@ -138,6 +143,7 @@ impl Scene {
             page,
             nodes: b.nodes,
             by_guid: b.by_guid,
+            paint_times: std::sync::OnceLock::new(),
         };
         variables::resolve(doc, &mut scene);
         scene.compute_world(doc);
@@ -228,6 +234,35 @@ impl Scene {
         }
         chain.reverse();
         chain
+    }
+
+    /// When each node paints, as a walk of the tree in paint order meets it:
+    /// `(enter, exit)` per scene node, all distinct. A node's fills (and
+    /// generated layers) paint when it is entered, the strokes it draws over
+    /// its children when it is left, and everything it holds in between, so
+    /// one node painted before another has the smaller time. Renders of a
+    /// paint-order window ([`crate::render::Layers::Window`]) compare these.
+    pub fn paint_times(&self) -> &[(u32, u32)] {
+        self.paint_times.get_or_init(|| {
+            let mut times = vec![(0u32, 0u32); self.nodes.len()];
+            let mut clock = 0u32;
+            // (node, whether its subtree was walked)
+            let mut stack = vec![(self.root(), false)];
+            while let Some((i, walked)) = stack.pop() {
+                if walked {
+                    times[i as usize].1 = clock;
+                    clock += 1;
+                    continue;
+                }
+                times[i as usize].0 = clock;
+                clock += 1;
+                stack.push((i, true));
+                // Pushed in reverse so the first below is walked first.
+                let below: Vec<SceneIdx> = self.nodes[i as usize].below().collect();
+                stack.extend(below.into_iter().rev().map(|c| (c, false)));
+            }
+            times.into_boxed_slice()
+        })
     }
 
     fn compute_world(&mut self, doc: &Document) {

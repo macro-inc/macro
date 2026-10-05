@@ -2,7 +2,9 @@
  * The canvas: rendered tiles underneath, the canvas UI on top, and Figma's
  * pointer gestures (scroll to pan, ⌘/Ctrl+scroll or pinch to zoom, Space or
  * middle-drag to pan, click and marquee to select). When the file is
- * editable: drag to move (⌥ to copy, ⇧ to constrain), the selection's
+ * editable: drag to move (⌥ to copy, ⇧ to constrain; the moving layers are
+ * lifted off the page and shifted each frame when the engine allows, see
+ * `core/lift`), the selection's
  * handles to resize, the shape tools to draw, the pen to draw paths (click
  * for corners, drag for curves, click the first point to close), and,
  * while a layer's points are edited, drag its points and handles (⌥ breaks
@@ -11,7 +13,13 @@
 
 import { IS_MAC } from '@core/constant/isMac';
 import type { FigEngine } from '@core/fig-engine/client';
-import type { LayerRow, NodeInfo, Rect } from '@core/fig-engine/types';
+import type {
+  LayerRow,
+  LiftPlan,
+  NodeGeometry,
+  NodeInfo,
+  Rect,
+} from '@core/fig-engine/types';
 import {
   createEffect,
   createMemo,
@@ -29,6 +37,7 @@ import {
 import { PeerCursors } from '../components/peer-presence';
 import { type Point, screenToPage } from '../core/camera';
 import { type SnapLines, snapResize } from '../core/layout-grid';
+import { offsetRect } from '../core/lift';
 import { measure } from '../core/measure';
 import type { PeerOverlay } from '../core/presence';
 import { isAxisAligned, rotationFor } from '../core/rotation';
@@ -99,6 +108,23 @@ const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
 
 type Pressed = { row: LayerRow; wasSelected: boolean } | undefined;
 
+/** A move drag: offsets from where the layers started, then the drop. */
+interface Mover {
+  to(dx: number, dy: number): void;
+  end(): Promise<void>;
+}
+
+/** Layers lifted when pressed, before a drag starts (see `startMove`). */
+interface PreparedLift {
+  ids: string[];
+  plan: Promise<LiftPlan | undefined>;
+  /** The press ended without a drag. */
+  dropped: boolean;
+}
+
+const sameIds = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((id, i) => id === b[i]);
+
 type Drag =
   | { kind: 'pan'; last: Point }
   | {
@@ -109,7 +135,9 @@ type Drag =
       /** The pressed layer, once the hit test answers. */
       pressed: Promise<Pressed>;
       resolved?: Pressed;
-      mover?: ReturnType<FigEditor['startMove']>;
+      /** The pressed layers, lifted in case they are dragged. */
+      prepared?: PreparedLift;
+      mover?: Mover;
       /** The selection's bounds at the start, and what it snaps to. */
       snap?: { start: Rect; targets: Rect[]; lines?: SnapLines };
       marquee: boolean;
@@ -227,6 +255,12 @@ export function ViewerCanvas(props: {
   peers?: () => PeerOverlay[];
   /** The pointer in page coordinates (`null` when it leaves the canvas). */
   onPointer?: (page: Point | null) => void;
+  /**
+   * Lifted layers being dragged: their page-space offset from where they
+   * were (`undefined` once the drop's edit lands); the document moves them
+   * only at the drop.
+   */
+  onMove?: (offset: Point | undefined) => void;
   /** Layout grids and ruler guides. */
   aids?: LayoutAidsController;
   /** Dev Mode: hovering measures from the selection without ⌥. */
@@ -343,6 +377,33 @@ export function ViewerCanvas(props: {
   let marquee: Rect | undefined;
   let linePreview: [Point, Point] | undefined;
   let guides: Guide[] = [];
+  /**
+   * Lifted layers being moved: their offset (page units) and the
+   * selection's geometry when they were lifted. The selection box is drawn
+   * from it until the drop's edit lands (the document may move the layers
+   * at its own pace meanwhile, to share the drag).
+   */
+  let lifted:
+    | { offset: Point; geometry: NodeGeometry[]; bounds: Rect | undefined }
+    | undefined;
+
+  const shownGeometry = (): NodeGeometry[] => {
+    if (!lifted) return viewer.selectionGeometry();
+    const d = lifted.offset;
+    return lifted.geometry.map((g) => ({
+      ...g,
+      corners: g.corners.map((c) => ({
+        x: c.x + d.x,
+        y: c.y + d.y,
+      })) as NodeGeometry['corners'],
+      bounds: offsetRect(g.bounds, d),
+    }));
+  };
+
+  const shownBounds = (): Rect | undefined => {
+    if (!lifted) return viewer.selectionBounds();
+    return lifted.bounds && offsetRect(lifted.bounds, lifted.offset);
+  };
   /** Where the pointer is (page coordinates) while the pen draws. */
   let penCursor: Point | undefined;
 
@@ -361,7 +422,7 @@ export function ViewerCanvas(props: {
     return geometry.map((g) => g.bounds);
   };
   const measurements = () => {
-    const a = viewer.selectionBounds();
+    const a = shownBounds();
     const b = viewer.hoverBounds();
     if ((!props.altHeld() && !props.devMode?.()) || !a || !b) return [];
     if (viewer.selected().some((s) => s.id === viewer.hover()?.id)) return [];
@@ -404,8 +465,8 @@ export function ViewerCanvas(props: {
       dpr: dpr(),
       frames: viewer.layout()?.frames ?? [],
       selectedIds: selectionIds,
-      selection: editingPoints ? [] : viewer.selectionGeometry(),
-      selectionBounds: editingPoints ? undefined : viewer.selectionBounds(),
+      selection: editingPoints ? [] : shownGeometry(),
+      selectionBounds: editingPoints ? undefined : shownBounds(),
       componentSelection: false,
       hoverPath: hoverPath(),
       hoverComponent:
@@ -701,7 +762,131 @@ export function ViewerCanvas(props: {
     drag = press;
     void pressed.then((r) => {
       press.resolved = r;
+      // What a drag from here would move, lifted ahead of it.
+      if (r && editing() && !r.row.locked && !additive && props.editor) {
+        const ids = props.editor.editableIds();
+        if (ids.length > 0 && drag === press && !press.active)
+          press.prepared = prepareMove(ids);
+      }
     });
+  };
+
+  /**
+   * The last lifted drop's edit. A new lift waits for it, so its parts are
+   * rendered with the dropped layers where they landed.
+   */
+  let drop: Promise<unknown> = Promise.resolve();
+
+  const planLift = async (ids: string[]): Promise<LiftPlan | undefined> => {
+    const page = viewer.page();
+    await drop;
+    try {
+      return await props.engine.liftPlan(page, ids);
+    } catch {
+      return undefined;
+    }
+  };
+
+  /**
+   * Lifts pressed layers, hidden, so their parts render while the press is
+   * still deciding whether it is a drag.
+   */
+  const prepareMove = (ids: string[]): PreparedLift => {
+    const prepared: PreparedLift = { ids, plan: planLift(ids), dropped: false };
+    void (async () => {
+      const plan = await prepared.plan;
+      if (plan && !prepared.dropped) compositor.lift(plan, true);
+    })();
+    return prepared;
+  };
+
+  /** A press that did not drag: its prepared lift comes down. */
+  const dropPrepared = (prepared: PreparedLift | undefined) => {
+    if (!prepared) return;
+    prepared.dropped = true;
+    void (async () => {
+      const plan = await prepared.plan;
+      if (plan && compositor.isLifted(plan)) compositor.unlift();
+    })();
+  };
+
+  /**
+   * Moves layers. When the engine says it is exact, they are lifted: drawn
+   * apart from the page and shifted every frame without rendering, with one
+   * edit at the drop. Otherwise the editor moves them step by step.
+   */
+  const startMove = (ids: string[], prepared?: PreparedLift): Mover => {
+    const editor = props.editor;
+    if (!editor) return { to: () => {}, end: async () => {} };
+    let offset: Point = { x: 0, y: 0 };
+    let stepwise: ReturnType<FigEditor['startMove']> | undefined;
+    let follower: ReturnType<FigEditor['startLiftedMove']> | undefined;
+    const reuse = !!prepared && sameIds(prepared.ids, ids);
+    if (prepared && !reuse) dropPrepared(prepared);
+    const plan = reuse && prepared ? prepared.plan : planLift(ids);
+    // A prepared lift's plan resolves to its own handlers first (they were
+    // registered first), so it is up, hidden, by the time this runs.
+    const decided = (async () => {
+      const p = await plan;
+      const shown =
+        !!p &&
+        (compositor.isLifted(p) ? compositor.showLift() : compositor.lift(p));
+      if (shown) {
+        follower = editor.startLiftedMove(ids);
+        lifted = {
+          offset,
+          geometry: viewer.selectionGeometry(),
+          bounds: viewer.selectionBounds(),
+        };
+        follower.to(offset.x, offset.y);
+        compositor.moveLift(offset);
+        props.onMove?.(offset);
+        requestDraw();
+        return;
+      }
+      stepwise = editor.startMove(ids);
+      if (offset.x !== 0 || offset.y !== 0) stepwise.to(offset.x, offset.y);
+    })();
+    return {
+      to(dx, dy) {
+        offset = { x: dx, y: dy };
+        if (stepwise) stepwise.to(dx, dy);
+        else if (follower && lifted) {
+          lifted = { ...lifted, offset };
+          follower.to(dx, dy);
+          compositor.moveLift(offset);
+          props.onMove?.(offset);
+          requestDraw();
+        }
+      },
+      end() {
+        const done = (async () => {
+          await decided;
+          if (stepwise) return stepwise.end();
+          if (!follower) return;
+          compositor.freezeLift();
+          let moved: Point | null = null;
+          try {
+            moved = await follower.end();
+          } finally {
+            // Down once the page shows the move (at once if it did not
+            // apply); the selection box lands with the edit.
+            compositor.landLift(moved);
+            lifted = undefined;
+            props.onMove?.(undefined);
+            requestDraw();
+          }
+        })();
+        drop = (async () => {
+          try {
+            await done;
+          } catch {
+            // The editor reports what failed; the next lift goes ahead.
+          }
+        })();
+        return done;
+      },
+    };
   };
 
   /** Starts moving the selection (⌥: a copy of it). */
@@ -715,7 +900,7 @@ export function ViewerCanvas(props: {
     const ids = editor.editableIds();
     if (ids.length === 0) return;
     const start = viewer.selectionBounds();
-    press.mover = editor.startMove(ids);
+    press.mover = startMove(ids, press.prepared);
     movePress(press, press.current, false);
     if (start) {
       const targets = await snapTargets(ids).catch(() => []);
@@ -935,6 +1120,7 @@ export function ViewerCanvas(props: {
     } else if (ended.kind === 'rotate') {
       void ended.rotator.end();
     } else if (ended.kind === 'press') {
+      if (!ended.mover) dropPrepared(ended.prepared);
       if (ended.mover) {
         guides = [];
         requestDraw();

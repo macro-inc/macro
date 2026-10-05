@@ -31,6 +31,7 @@ import type {
   FileSummary,
   FontUse,
   LayerRow,
+  LiftPlan,
   NodeGeometry,
   NodeInfo,
   PageLayout,
@@ -61,6 +62,8 @@ export interface TileRequest {
   outline: boolean;
   /** Lower renders first. */
   priority: number;
+  /** Only some layers (`LayersSpec` JSON); all when absent. */
+  layers?: string;
 }
 
 /** What an edit changed (`EditResult` in the engine). */
@@ -356,6 +359,14 @@ export class FigEngine {
 
   search(page: number, query: string, limit = 200): Promise<SearchHit[]> {
     return this.query('search', page, query, limit);
+  }
+
+  /**
+   * How to draw layers apart from the rest of the page while they move
+   * (or why that would not be exact).
+   */
+  liftPlan(page: number, ids: string[]): Promise<LiftPlan> {
+    return this.query('liftPlan', page, JSON.stringify(ids));
   }
 
   /** The page's guides and its frames' layout grids and guides. */

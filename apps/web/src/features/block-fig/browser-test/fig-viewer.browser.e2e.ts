@@ -236,6 +236,84 @@ test('draws, moves, and saves shapes', async ({ page }) => {
     .toEqual([]);
 });
 
+test('moves layers lifted off the page, one edit at the drop', async ({
+  page,
+}) => {
+  await openNew(page);
+  const canvas = page.getByTestId('fig-canvas');
+  const fill = async (hex: string) => {
+    await page.getByTestId('fig-fill-0-hex').fill(hex);
+    await page.getByTestId('fig-fill-0-hex').press('Enter');
+  };
+  // A red layer, then a blue one above it.
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [100, 100], [200, 200]);
+  await fill('FF0000');
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [300, 100], [400, 200]);
+  await fill('0000FF');
+  // The tile canvas at a canvas point (CSS pixels; 100% shows page units).
+  const color = (x: number, y: number) =>
+    canvas
+      .locator('canvas')
+      .first()
+      .evaluate(
+        (node, [px, py]) => {
+          const c = node as HTMLCanvasElement;
+          const k = c.width / c.getBoundingClientRect().width;
+          const [r, g, b] = c
+            .getContext('2d')
+            ?.getImageData(Math.round(px * k), Math.round(py * k), 1, 1)
+            .data ?? [0, 0, 0];
+          if (r > 200 && g < 60 && b < 60) return 'red';
+          if (b > 200 && r < 60 && g < 60) return 'blue';
+          return 'other';
+        },
+        [x, y]
+      );
+  const redX = async () => {
+    const engine = await page.evaluateHandle(() => window.figFixture.engine());
+    return engine.evaluate(async (e) => {
+      if (!e) return undefined;
+      const rows = await e.layers(0);
+      const red = rows.find((r) => r.name === 'Rectangle 1');
+      const [g] = red ? await e.geometry(0, [red.id]) : [];
+      return g?.bounds.x;
+    });
+  };
+
+  // Drag the red layer halfway under the blue one, still holding it.
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('The canvas is not visible.');
+  await page.mouse.move(box.x + 150, box.y + 150);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 300, box.y + 150, { steps: 10 });
+  // The canvas shows it where it is now, under the blue layer, and nothing
+  // where it was …
+  await expect.poll(() => color(270, 150)).toBe('red');
+  await expect.poll(() => color(320, 150)).toBe('blue');
+  await expect.poll(() => color(120, 150)).toBe('other');
+  // … while the document has not moved it: nothing renders per step. The
+  // design panel shows where it will land.
+  expect(await redX()).toBe(100);
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('250');
+  await page.mouse.up();
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('250');
+  await expect.poll(redX).toBe(250);
+  await expect.poll(() => color(270, 150)).toBe('red');
+  await expect.poll(() => color(120, 150)).toBe('other');
+  // The move is one step.
+  await canvas.focus();
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('100');
+  await expect.poll(() => color(120, 150)).toBe('red');
+  await expect
+    .poll(() => page.evaluate(() => window.figFixture.errors()))
+    .toEqual([]);
+});
+
 test('undo and redo bring back the selection', async ({ page }) => {
   await openNew(page);
   const canvas = page.getByTestId('fig-canvas');

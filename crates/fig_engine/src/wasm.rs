@@ -16,9 +16,9 @@ use crate::edit::{History, Op};
 use crate::images::{ImageStore, encode_png};
 use crate::inspect;
 use crate::model::{Rect, Vec2};
-use crate::render::{self, RenderOptions, Viewport};
+use crate::render::{self, Layers, RenderOptions, Viewport};
 use crate::scene::{Scene, SceneIdx};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 fn js_err(e: impl std::fmt::Display) -> JsError {
@@ -66,6 +66,24 @@ struct NodeGeometry {
     /// Corners of the node's frame, clockwise from its top left.
     corners: [Vec2; 4],
     bounds: Rect,
+}
+
+/// Which layers a render draws (see [`render::Layers`]); everything when
+/// absent.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LayersSpec {
+    /// Only these layers (transparent, unclipped by their ancestors).
+    only: Option<Vec<String>>,
+    /// With `only`: where the first layer's origin is drawn (page
+    /// coordinates), wherever the document has it now.
+    anchor: Option<[f64; 2]>,
+    /// Everything but these layers (opaque, as the whole page).
+    skip: Option<Vec<String>>,
+    /// What paints after this layer (transparent)…
+    after: Option<String>,
+    /// …and before this one.
+    before: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -405,8 +423,13 @@ impl FigFile {
     }
 
     /// Renders `width × height` device pixels showing the page from
-    /// `(x, y)` at `scale` pixels per unit, on the page color. Premultiplied
-    /// RGBA.
+    /// `(x, y)` at `scale` pixels per unit, on the page color: RGBA, opaque.
+    ///
+    /// `layers` (`LayersSpec` JSON) draws only some layers: what paints in
+    /// a paint-order window, only some layers (the parts `liftPlan`
+    /// describes), or all but some. Only some layers, and a window that
+    /// does not start at the bottom of the page, are drawn on transparency,
+    /// as straight-alpha RGBA.
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,
@@ -417,11 +440,53 @@ impl FigFile {
         width: u32,
         height: u32,
         outline: bool,
+        layers: Option<String>,
     ) -> Result<Vec<u8>, JsError> {
         self.page_scene(page)?;
         let (_, scene) = self.scene.as_ref().expect("scene built above");
-        let background = Some(self.doc.page_background(scene.page));
-        let pixmap = render::render(
+        let spec: Option<LayersSpec> = layers
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(js_err)?;
+        let find = |id: &str| {
+            scene
+                .find(&self.doc, id)
+                .ok_or_else(|| js_err(crate::FigError::NoSuchNode(id.to_owned())))
+        };
+        let layers = match &spec {
+            None => Layers::All,
+            Some(LayersSpec {
+                only: Some(ids),
+                anchor,
+                ..
+            }) => {
+                let nodes: Vec<SceneIdx> =
+                    ids.iter().map(|id| find(id)).collect::<Result<_, _>>()?;
+                let shift = match (anchor, nodes.first()) {
+                    (Some([x, y]), Some(&first)) => {
+                        let world = scene.node(first).world;
+                        Vec2::new(x - world.m02, y - world.m12)
+                    }
+                    _ => Vec2::new(0.0, 0.0),
+                };
+                Layers::Only { nodes, shift }
+            }
+            Some(LayersSpec {
+                skip: Some(ids), ..
+            }) => Layers::Skip(ids.iter().map(|id| find(id)).collect::<Result<_, _>>()?),
+            Some(LayersSpec { after, before, .. }) => Layers::Window {
+                after: after.as_deref().map(find).transpose()?,
+                before: before.as_deref().map(find).transpose()?,
+            },
+        };
+        let opaque = match &layers {
+            Layers::All | Layers::Skip(_) => true,
+            Layers::Window { after, .. } => after.is_none(),
+            Layers::Only { .. } => false,
+        };
+        let background = opaque.then(|| self.doc.page_background(scene.page));
+        let pixmap = render::render_layers(
             &self.doc,
             scene,
             &mut self.images,
@@ -436,9 +501,25 @@ impl FigFile {
                 outline,
                 background,
             },
+            &layers,
         )
         .ok_or_else(|| js_err("render failed"))?;
-        Ok(pixmap.take())
+        let mut rgba = pixmap.take();
+        if !opaque {
+            render::straight_alpha(&mut rgba);
+        }
+        Ok(rgba)
+    }
+
+    /// How to move layers (`string[]` JSON of ids) by drawing them apart
+    /// from the rest of the page while they are dragged (`LiftPlan` JSON;
+    /// see `inspect::lift_plan`).
+    #[wasm_bindgen(js_name = liftPlan)]
+    pub fn lift_plan(&mut self, page: usize, ids: &str) -> Result<String, JsError> {
+        let ids: Vec<String> = serde_json::from_str(ids).map_err(js_err)?;
+        self.page_scene(page)?;
+        let (_, scene) = self.scene.as_ref().expect("scene built above");
+        to_json(&inspect::lift_plan(&self.doc, scene, &ids))
     }
 
     /// Children of a layer (the page when `parent` is absent) for the

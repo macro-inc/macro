@@ -46,6 +46,7 @@ const PAGE_QUERIES = new Set<QueryMethod>([
   'outline',
   'inRect',
   'layoutAids',
+  'liftPlan',
 ]);
 
 const pageOnly = (r: FigRequest) =>
@@ -141,10 +142,11 @@ async function serve(request: FigRequest) {
         request.scale,
         request.width,
         request.height,
-        request.outline
+        request.outline,
+        request.layers
       );
-      // Tiles are opaque (drawn on the page color), so premultiplied and
-      // straight alpha agree.
+      // Straight alpha, as ImageData holds it: tiles drawn on the page
+      // color are opaque, and the engine unpremultiplies the others.
       const image = new ImageData(
         new Uint8ClampedArray(
           pixels.buffer as ArrayBuffer,
@@ -253,6 +255,9 @@ async function serve(request: FigRequest) {
           break;
         case 'exportables':
           json = f.exportables(a as number, b as string);
+          break;
+        case 'liftPlan':
+          json = f.liftPlan(a as number, b as string);
           break;
       }
       post({ id: request.id, ok: true, kind: 'query', json });

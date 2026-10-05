@@ -99,6 +99,8 @@ pub(crate) fn render_tile(
         reach: 0.0,
         masks: Vec::new(),
         active_patterns,
+        window: None,
+        skip: Vec::new(),
     };
     // Neighboring copies contribute when spacing is negative. Rendering
     // them into one period makes the shader repeat seamlessly.

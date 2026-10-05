@@ -398,13 +398,15 @@ export function createFigEditor(options: FigEditorOptions) {
     viewer.select(wanted.filter((s) => alive.has(s.id)));
   };
 
-  const settle = async (result: EditResult) => {
+  /** After a step: undo state, saving, and (unless `quiet`) the view. */
+  const settle = async (result: EditResult, quiet = false) => {
     setCanUndo(result.canUndo);
     setCanRedo(result.canRedo);
     undoStep = result.undoStep;
     redoStep = result.redoStep;
-    if (result.dirty) options.onDirty(result.dirty);
     scheduleSave();
+    if (quiet) return;
+    if (result.dirty) options.onDirty(result.dirty);
     await viewer.afterEdit();
   };
 
@@ -457,8 +459,10 @@ export function createFigEditor(options: FigEditorOptions) {
   /**
    * Applies operations as one undo step, in order with other edits.
    * Resolves to the engine's result (undefined when not allowed or failed).
+   * `quiet` steps re-render and reload nothing (a lifted move's steps,
+   * which the canvas draws itself).
    */
-  const apply = (ops: Op[], coalesce?: string) => {
+  const apply = (ops: Op[], coalesce?: string, quiet = false) => {
     if (!enabled() || ops.length === 0) return Promise.resolve(undefined);
     const run = queue.then(async () => {
       try {
@@ -478,7 +482,7 @@ export function createFigEditor(options: FigEditorOptions) {
         }
         if (coalesce) pushSoon();
         else await pushNow();
-        await settle(result);
+        await settle(result, quiet);
         return result;
       } catch (e) {
         options.notifyError(e instanceof Error ? e.message : String(e));
@@ -978,6 +982,49 @@ export function createFigEditor(options: FigEditorOptions) {
     };
   };
 
+  /**
+   * A move the canvas draws itself while the layers are dragged (a lifted
+   * move). In a shared design the document follows at gesture pace,
+   * quietly, so other people see the layers move; the drop applies the
+   * rest, all one undo step. `end` resolves to how far the document moved
+   * them.
+   */
+  const startLiftedMove = (targets: string[]) => {
+    const key = `drag-${++dragKey}`;
+    let wanted = { x: 0, y: 0 };
+    let applied = { x: 0, y: 0 };
+    let moved = { x: 0, y: 0 };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const step = async (last: boolean) => {
+      const dx = wanted.x - applied.x;
+      const dy = wanted.y - applied.y;
+      applied = { ...wanted };
+      const ops: Op[] =
+        dx !== 0 || dy !== 0 ? [{ op: 'translate', ids: targets, dx, dy }] : [];
+      // Settle what was dragged into its auto layout slot.
+      if (last && (applied.x !== 0 || applied.y !== 0))
+        ops.push({ op: 'reflow', ids: targets });
+      const result = await apply(ops, key, !last);
+      if (result) moved = { x: moved.x + dx, y: moved.y + dy };
+    };
+    return {
+      to(dx: number, dy: number) {
+        wanted = { x: dx, y: dy };
+        if (!sharing || timer) return;
+        timer = setTimeout(() => {
+          timer = undefined;
+          void step(false);
+        }, GESTURE_PUSH_MS);
+      },
+      async end() {
+        clearTimeout(timer);
+        timer = undefined;
+        await step(true);
+        return moved;
+      },
+    };
+  };
+
   /** A resize drag on one layer: new page bounds → position and size. */
   /**
    * A resize drag on the selection: each layer scales with the selection's
@@ -1236,6 +1283,7 @@ export function createFigEditor(options: FigEditorOptions) {
     importLibrary,
     viewCenter,
     startMove,
+    startLiftedMove,
     startResize,
     startRotate,
     create,

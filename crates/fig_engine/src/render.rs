@@ -19,7 +19,7 @@ use crate::document::Document;
 use crate::geometry::{self, ParsedPath};
 use crate::images::ImageStore;
 use crate::model::{
-    Affine, Color, EffectKind, MaskType, NodeType, Props, Rect, StrokeAlign, WindingRule,
+    Affine, Color, EffectKind, MaskType, NodeType, Props, Rect, StrokeAlign, Vec2, WindingRule,
 };
 use crate::scene::{Scene, SceneIdx};
 use std::sync::Arc;
@@ -42,6 +42,36 @@ pub struct RenderOptions {
     pub outline: bool,
     /// Fill the region with this color first (the page canvas color).
     pub background: Option<Color>,
+}
+
+/// Which of a page's layers a render draws. The editor moves layers by
+/// drawing them apart from the rest (see `inspect::lift_plan`): what paints
+/// below them, the layers themselves, and what paints above them, each
+/// rendered once and composited as they move.
+#[derive(Clone, Debug, Default)]
+pub enum Layers {
+    /// Everything.
+    #[default]
+    All,
+    /// What paints after the node `after` and what it holds (from the start
+    /// of the page when `None`) and before the node `before` (to the end
+    /// when `None`), in [`Scene::paint_times`] order. A node draws its
+    /// fills before its children and the strokes it puts over them after,
+    /// so a window ending at a layer keeps its parent's fills and leaves out
+    /// the parent's strokes.
+    Window {
+        after: Option<SceneIdx>,
+        before: Option<SceneIdx>,
+    },
+    /// Only these nodes and what they hold, in this order, as if nothing
+    /// else were on the page: their ancestors' clips do not apply either
+    /// (whoever composites them clips them where they are drawn). They are
+    /// drawn `shift` page units from where they are: layers moved while
+    /// lifted still render where the lift started.
+    Only { nodes: Vec<SceneIdx>, shift: Vec2 },
+    /// Everything but these nodes and what they hold: the page while they
+    /// are lifted (whatever the document has done with them meanwhile).
+    Skip(Vec<SceneIdx>),
 }
 
 /// A pixmap whose pixel (0, 0) is device pixel `(ox, oy)`.
@@ -95,6 +125,12 @@ pub(crate) struct Painter<'a> {
     masks: Vec<Mask>,
     /// Sources currently being rendered, to stop cyclic patterns.
     active_patterns: Vec<crate::model::Guid>,
+    /// The paint-order window being drawn (exclusive [`Scene::paint_times`]
+    /// bounds), while drawing nodes that straddle its ends; `None` draws
+    /// everything (and inside the window, once a node lies wholly in it).
+    window: Option<(u32, u32)>,
+    /// Nodes not drawn, sorted ([`Layers::Skip`]).
+    skip: Vec<SceneIdx>,
 }
 
 /// Renders a viewport of a scene into a premultiplied RGBA pixmap.
@@ -105,7 +141,22 @@ pub fn render(
     vp: &Viewport,
     opts: RenderOptions,
 ) -> Option<Pixmap> {
-    let base = Affine::scale(vp.scale, vp.scale).mul(&Affine::translate(-vp.x, -vp.y));
+    render_layers(doc, scene, images, vp, opts, &Layers::All)
+}
+
+/// [`render`] drawing only some of the page's layers.
+pub fn render_layers(
+    doc: &Document,
+    scene: &Scene,
+    images: &mut ImageStore,
+    vp: &Viewport,
+    opts: RenderOptions,
+    layers: &Layers,
+) -> Option<Pixmap> {
+    let mut base = Affine::scale(vp.scale, vp.scale).mul(&Affine::translate(-vp.x, -vp.y));
+    if let Layers::Only { shift, .. } = layers {
+        base = base.mul(&Affine::translate(shift.x, shift.y));
+    }
     let region = Rect::new(0.0, 0.0, f64::from(vp.width), f64::from(vp.height));
     let mut painter = Painter {
         doc,
@@ -119,10 +170,23 @@ pub fn render(
         reach: 0.0,
         masks: Vec::new(),
         active_patterns: Vec::new(),
+        window: None,
+        skip: Vec::new(),
+    };
+    let only = match layers {
+        Layers::Only { nodes, .. } => Some(nodes.as_slice()),
+        _ => None,
     };
     // Effects sample beyond what they cover: render with a margin so blurs
     // and shadows from just outside the region are complete inside it.
-    let margin = painter.effect_margin(scene.root()).ceil().min(MAX_MARGIN) as i32;
+    let margin = match only {
+        Some(nodes) => nodes
+            .iter()
+            .map(|&n| painter.effect_margin(n))
+            .fold(0.0, f64::max),
+        None => painter.effect_margin(scene.root()),
+    };
+    let margin = margin.ceil().min(MAX_MARGIN) as i32;
     let (w, h) = (vp.width as i32 + 2 * margin, vp.height as i32 + 2 * margin);
     let mut surface = Surface::new(-margin, -margin, w as u32, h as u32)?;
     painter.region = surface.device_rect();
@@ -130,14 +194,53 @@ pub fn render(
     if let Some(bg) = opts.background {
         surface.pixmap.fill(bg.to_skia());
     }
-    let children = scene.node(scene.root()).children.clone();
-    painter.draw_children(&children, &mut surface, None);
+    match layers {
+        Layers::All => {
+            let children = scene.node(scene.root()).children.clone();
+            painter.draw_children(&children, &mut surface, None);
+        }
+        Layers::Window { after, before } => {
+            let times = scene.paint_times();
+            let lo = after.map_or(0, |a| times[a as usize].1);
+            let hi = before.map_or(u32::MAX, |b| times[b as usize].0);
+            if lo < hi {
+                painter.window = Some((lo, hi));
+                let children = scene.node(scene.root()).children.clone();
+                painter.draw_children(&children, &mut surface, None);
+            }
+        }
+        Layers::Only { nodes, .. } => {
+            for &n in nodes {
+                painter.draw_node(n, &mut surface, None);
+            }
+        }
+        Layers::Skip(nodes) => {
+            painter.skip = nodes.clone();
+            painter.skip.sort_unstable();
+            let children = scene.node(scene.root()).children.clone();
+            painter.draw_children(&children, &mut surface, None);
+        }
+    }
     if margin == 0 {
         return Some(surface.pixmap);
     }
     surface.pixmap.clone_rect(tiny_skia::IntRect::from_xywh(
         margin, margin, vp.width, vp.height,
     )?)
+}
+
+/// Premultiplied RGBA bytes (what renders produce) as straight alpha, in
+/// place: what a browser's `ImageData` holds.
+pub fn straight_alpha(rgba: &mut [u8]) {
+    for px in rgba.chunks_exact_mut(4) {
+        let a = u16::from(px[3]);
+        if a == 0 || a == 255 {
+            continue;
+        }
+        for c in &mut px[..3] {
+            *c = ((u16::from(*c) * 255 + a / 2) / a).min(255) as u8;
+        }
+    }
 }
 
 /// Renders one node by itself (its own bounds, transparent background) at
@@ -174,6 +277,8 @@ pub fn render_node(
         reach: 0.0,
         masks: Vec::new(),
         active_patterns: Vec::new(),
+        window: None,
+        skip: Vec::new(),
     };
     let mut surface = Surface::new(0, 0, vp.width, vp.height)?;
     if let Some(bg) = opts.background {
@@ -181,6 +286,41 @@ pub fn render_node(
     }
     painter.draw_node(node, &mut surface, None);
     Some(surface.pixmap)
+}
+
+/// The shapes a node's fills cover, in its own coordinates: its fill
+/// geometry, or for frames and rectangles without stored geometry, its
+/// (rounded) box. A frame that clips its content clips it to these.
+pub(crate) fn fill_shapes(doc: &Document, props: &Props) -> Vec<Shape> {
+    let mut shapes: Vec<Shape> = props
+        .fill_geometry()
+        .iter()
+        .filter_map(|g| {
+            doc.blobs
+                .path(g.blob)
+                .map(|p| Shape::Blob(p, fill_rule(g.winding)))
+        })
+        .collect();
+    if shapes.is_empty() {
+        let size = props.size();
+        let boxy = props.node_type().is_frame_like() || is_box(props.node_type());
+        if props.node_type() == NodeType::Ellipse
+            && let Some(rect) = tiny_skia::Rect::from_xywh(0.0, 0.0, size.x as f32, size.y as f32)
+            && let Some(p) = PathBuilder::from_oval(rect)
+        {
+            shapes.push(Shape::Owned(p, FillRule::Winding));
+        } else if boxy
+            && let Some(p) = geometry::rounded_rect(
+                size.x as f32,
+                size.y as f32,
+                props.radii(),
+                props.corner_smoothing.unwrap_or(0.0),
+            )
+        {
+            shapes.push(Shape::Owned(p, FillRule::Winding));
+        }
+    }
+    shapes
 }
 
 pub(crate) fn fill_rule(w: WindingRule) -> FillRule {
@@ -305,7 +445,10 @@ impl<'a> Painter<'a> {
                 while end < children.len() && !self.props(children[end]).is_mask() {
                     end += 1;
                 }
-                self.draw_masked(c, &children[k + 1..end], surface, clip);
+                // A window that misses the whole group draws none of it.
+                if !self.window_misses(c, children[end - 1]) {
+                    self.draw_masked(c, &children[k + 1..end], surface, clip);
+                }
                 k = end;
             } else {
                 self.draw_node(c, surface, clip);
@@ -351,7 +494,11 @@ impl<'a> Painter<'a> {
                 }
             }
             MaskType::Alpha | MaskType::Luminance => {
+                // The mask applies whole to what the window keeps of its
+                // content.
+                let window = self.window.take();
                 self.draw_node_content(mask_node, &mut mask_layer, None, true);
+                self.window = window;
             }
         }
         let mask = Mask::from_pixmap(
@@ -381,10 +528,46 @@ impl<'a> Painter<'a> {
         Surface::new(x0, y0, w, h)
     }
 
+    /// Whether the paint-order window being drawn misses every node from
+    /// `first` to `last` (siblings, in order) and what they hold.
+    fn window_misses(&self, first: SceneIdx, last: SceneIdx) -> bool {
+        let Some((lo, hi)) = self.window else {
+            return false;
+        };
+        let times = self.scene.paint_times();
+        times[last as usize].1 <= lo || times[first as usize].0 >= hi
+    }
+
+    /// Whether the window being drawn keeps what node `i` paints when it is
+    /// entered (fills, inner shadows, a container's strokes, a background
+    /// blur) and when it is left (strokes over its children).
+    fn window_phases(&self, i: SceneIdx) -> (bool, bool) {
+        let Some((lo, hi)) = self.window else {
+            return (true, true);
+        };
+        let (enter, exit) = self.scene.paint_times()[i as usize];
+        (enter > lo && enter < hi, exit > lo && exit < hi)
+    }
+
     pub(crate) fn draw_node(&mut self, i: SceneIdx, surface: &mut Surface, clip: Option<&Mask>) {
         let props = self.props(i);
-        if !props.visible() {
+        if !props.visible() || self.skip.binary_search(&i).is_ok() {
             return;
+        }
+        if let Some((lo, hi)) = self.window {
+            let (enter, exit) = self.scene.paint_times()[i as usize];
+            if exit <= lo || enter >= hi {
+                return;
+            }
+            if enter > lo && exit < hi {
+                // Wholly in the window: drawn as usual.
+                self.window = None;
+                self.draw_node(i, surface, clip);
+                self.window = Some((lo, hi));
+                return;
+            }
+            // Otherwise the node holds an end of the window: its children
+            // decide for themselves, and `window_phases` for its own paint.
         }
         let node = self.scene.node(i);
         let device = self.to_device(&node.bounds);
@@ -420,7 +603,7 @@ impl<'a> Painter<'a> {
             .iter()
             .any(|e| e.is_visible() && e.kind == EffectKind::BackgroundBlur && e.radius > 0.0);
 
-        if has_background_blur {
+        if has_background_blur && self.window_phases(i).0 {
             self.background_blur(i, surface, clip);
         }
 
@@ -557,16 +740,19 @@ impl<'a> Painter<'a> {
         let node_type = props.node_type();
         let ts = self.node_transform(i, surface);
         let size = props.size();
+        let (entered, left) = self.window_phases(i);
 
-        if node_type.is_text() {
-            self.draw_text(i, props, &ts, surface, clip, opacity);
-        } else if props.vector_styles.is_some() {
-            self.fill_regions(props, &ts, surface, clip, opacity);
-        } else if props.has_visible_fills() {
-            let shapes = self.fill_shapes(i);
-            for paint in props.fills().iter().filter(|p| p.is_visible()) {
-                for shape in &shapes {
-                    self.fill_shape(surface, shape, &ts, paint, size, opacity, clip);
+        if entered {
+            if node_type.is_text() {
+                self.draw_text(i, props, &ts, surface, clip, opacity);
+            } else if props.vector_styles.is_some() {
+                self.fill_regions(props, &ts, surface, clip, opacity);
+            } else if props.has_visible_fills() {
+                let shapes = self.fill_shapes(i);
+                for paint in props.fills().iter().filter(|p| p.is_visible()) {
+                    for shape in &shapes {
+                        self.fill_shape(surface, shape, &ts, paint, size, opacity, clip);
+                    }
                 }
             }
         }
@@ -577,14 +763,14 @@ impl<'a> Painter<'a> {
             .filter(|e| e.is_visible() && e.kind == EffectKind::InnerShadow)
             .cloned()
             .collect();
-        if !inner.is_empty() {
+        if !inner.is_empty() && entered {
             self.inner_shadows(i, &inner, surface, clip);
         }
 
         // A nonclipping container's border belongs below its contents: a tab can
         // cover a parent's border with its own underline or background.
         let container_stroke = node_type.is_frame_like() && !props.clips_content();
-        if container_stroke && props.has_visible_strokes() {
+        if container_stroke && props.has_visible_strokes() && entered {
             self.draw_strokes(i, props, &ts, surface, clip, opacity);
         }
 
@@ -616,46 +802,14 @@ impl<'a> Painter<'a> {
         }
 
         // Text draws its own strokes, clipped to its glyphs.
-        if props.has_visible_strokes() && !node_type.is_text() && !container_stroke {
+        if props.has_visible_strokes() && !node_type.is_text() && !container_stroke && left {
             self.draw_strokes(i, props, &ts, surface, clip, opacity);
         }
     }
 
-    /// The shapes a node's fills cover: its fill geometry, or for frames and
-    /// rectangles without stored geometry, its (rounded) box.
+    /// The shapes a node's fills cover (see [`fill_shapes`]).
     pub(crate) fn fill_shapes(&self, i: SceneIdx) -> Vec<Shape> {
-        let props = self.props(i);
-        let mut shapes: Vec<Shape> = props
-            .fill_geometry()
-            .iter()
-            .filter_map(|g| {
-                self.doc
-                    .blobs
-                    .path(g.blob)
-                    .map(|p| Shape::Blob(p, fill_rule(g.winding)))
-            })
-            .collect();
-        if shapes.is_empty() {
-            let size = props.size();
-            let boxy = props.node_type().is_frame_like() || is_box(props.node_type());
-            if props.node_type() == NodeType::Ellipse
-                && let Some(rect) =
-                    tiny_skia::Rect::from_xywh(0.0, 0.0, size.x as f32, size.y as f32)
-                && let Some(p) = PathBuilder::from_oval(rect)
-            {
-                shapes.push(Shape::Owned(p, FillRule::Winding));
-            } else if boxy
-                && let Some(p) = geometry::rounded_rect(
-                    size.x as f32,
-                    size.y as f32,
-                    props.radii(),
-                    props.corner_smoothing.unwrap_or(0.0),
-                )
-            {
-                shapes.push(Shape::Owned(p, FillRule::Winding));
-            }
-        }
-        shapes
+        fill_shapes(self.doc, self.props(i))
     }
 
     /// Every shape the node draws (fills, else strokes), for masks.
@@ -804,7 +958,9 @@ impl<'a> Painter<'a> {
             ..Default::default()
         };
         let node_type = props.node_type();
-        if node_type.is_text() {
+        // The hairline is the node's own paint, drawn before its children.
+        let entered = self.window_phases(i).0;
+        if entered && node_type.is_text() {
             if let Some(layout) = &props.text_layout {
                 for g in layout.glyphs.iter() {
                     let Some(path) = g.blob.and_then(|b| self.doc.blobs.path(b)) else {
@@ -816,7 +972,7 @@ impl<'a> Painter<'a> {
                         .fill_path(&path.path, &paint, FillRule::Winding, gts, clip);
                 }
             }
-        } else {
+        } else if entered {
             let mut shapes = self.fill_shapes(i);
             if shapes.is_empty() {
                 shapes = self.shapes(i);
