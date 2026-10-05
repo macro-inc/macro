@@ -663,16 +663,16 @@ impl RemindersRepo for PgRemindersRepo {
         let mut tx = self.pool.begin().await?;
 
         let result = sqlx::query!(
-            r#"DELETE FROM reminder WHERE id = $1 AND user_id = $2"#,
+            r#"DELETE FROM reminder WHERE id = $1 AND user_id = $2 RETURNING entity_id::text AS entity_id"#,
             id,
             user_id.as_ref(),
         )
-        .execute(tx.as_mut())
+        .fetch_optional(tx.as_mut())
         .await?;
 
-        let deleted = result.rows_affected() > 0;
+        let deleted = result.is_some();
 
-        if deleted {
+        if let Some(row) = result {
             // Retract the firing notification in the same transaction — see the
             // port contract. Only after confirming the reminder was the
             // caller's, so a miss cannot delete someone else's notification.
@@ -680,9 +680,12 @@ impl RemindersRepo for PgRemindersRepo {
             sqlx::query!(
                 r#"
                 DELETE FROM notification
-                WHERE event_item_type = 'reminder' AND event_item_id = $1
+                WHERE (event_item_type = 'reminder' AND event_item_id = $1)
+                   OR (event_item_type = 'email_thread' AND event_item_id = $2
+                       AND notification_event_type = 'reminder' AND metadata->>'reminderId' = $1)
                 "#,
                 id.to_string(),
+                row.entity_id,
             )
             .execute(tx.as_mut())
             .await?;
@@ -699,14 +702,8 @@ impl ReminderDispatchRepo for PgRemindersRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn due_firings(&self, now: DateTime<Utc>) -> Result<Vec<DueFiring>, Self::Err> {
-        // Driven by `reminder_due_v2_idx`: (next_run_at) WHERE enabled AND
-        // (cron IS NOT NULL OR completed_at IS NULL).
-        //
-        // Both schedule kinds. A recurring reminder stops being due the moment
-        // delivery rolls its `next_run_at` forward, which is why that advance
-        // shares a transaction with the sent occurrence — see
-        // `complete_occurrence_and_advance`. Were the two ever to come apart, the
-        // row would fall out of this query permanently rather than merely re-fan.
+        // Only the durable email workflow may dispatch reminders. Legacy
+        // standalone, attached, and recurring rows remain inert.
         //
         // Unbounded on purpose: a sweep publishes ids, so the cost of a large
         // one is a batch send per ten rows, and the ceiling is the queue's
@@ -727,10 +724,7 @@ impl ReminderDispatchRepo for PgRemindersRepo {
             SELECT r.id, r.next_run_at
             FROM reminder r
             WHERE r.enabled
-              -- Completion is per-firing, so it only retires a one-shot. A
-              -- recurring reminder its owner has ticked off keeps coming due:
-              -- they dealt with the last nudge, not with the standing
-              -- arrangement, and ending that is what deleting is for.
+              AND EXISTS (SELECT 1 FROM reminder_email_followup f WHERE f.reminder_id = r.id)
               AND (r.cron IS NOT NULL OR r.completed_at IS NULL)
               AND r.next_run_at <= $1
               AND NOT EXISTS (
@@ -936,9 +930,8 @@ impl ReminderDispatchRepo for PgRemindersRepo {
         reminder_id: Uuid,
         before: DateTime<Utc>,
     ) -> Result<(), Self::Err> {
-        // Reaches into `notification` for the same reason `delete_reminder`
-        // does: a reminder *is* its notification's `event_item`, so the two are
-        // one thing to a reader even though they belong to different domains.
+        // Retract legacy reminder targets and email targets. Both paths use
+        // the entity index; metadata identifies the snooze within its thread.
         // `user_notification` cascades from this row.
         //
         // Bounded by the firing rather than clearing the reminder outright, so
@@ -960,9 +953,13 @@ impl ReminderDispatchRepo for PgRemindersRepo {
             r#"
             SELECT id, metadata->>'scheduledFor' AS "scheduled_for?"
             FROM notification
-            WHERE event_item_type = 'reminder' AND event_item_id = $1
+            WHERE (event_item_type = 'reminder' AND event_item_id = $1)
+               OR (event_item_type = 'email_thread'
+                   AND event_item_id = (SELECT entity_id::text FROM reminder WHERE id = $2)
+                   AND notification_event_type = 'reminder' AND metadata->>'reminderId' = $1)
             "#,
             reminder_id.to_string(),
+            reminder_id,
         )
         .fetch_all(&self.pool)
         .await?;

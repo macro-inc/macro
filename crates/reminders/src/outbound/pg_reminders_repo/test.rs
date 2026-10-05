@@ -1271,15 +1271,7 @@ fn no_retry() -> DateTime<Utc> {
 
 async fn create_due(pool: &PgPool, user_id: &str, remind_at: DateTime<Utc>) -> Reminder {
     let repo = PgRemindersRepo::new(pool.clone());
-    let new = NewReminder {
-        description: "Follow up".to_string(),
-        entity: None,
-        schedule: once_at(remind_at),
-        next_run_at: remind_at,
-    };
-    repo.create_reminder(&user(user_id), &new)
-        .await
-        .expect("reminder should insert")
+    email_collection::snooze(&repo, user_id, Uuid::now_v7(), remind_at).await
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1300,7 +1292,7 @@ async fn due_firings_returns_only_firings_that_have_arrived(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn due_firings_include_recurring_reminders(pool: PgPool) {
+async fn due_firings_exclude_legacy_recurring_reminders(pool: PgPool) {
     // Both schedule kinds come back. A recurring reminder leaves the due set by
     // having its next_run_at advanced at delivery, not by being filtered here.
     insert_user(&pool, USER_A).await;
@@ -1316,8 +1308,8 @@ async fn due_firings_include_recurring_reminders(pool: PgPool) {
     let due = repo.due_firings(now).await.expect("query succeeds");
 
     let ids: Vec<_> = due.iter().map(|firing| firing.reminder_id).collect();
-    assert_eq!(due.len(), 2);
-    assert!(ids.contains(&recurring_reminder.id));
+    assert_eq!(due.len(), 1);
+    assert!(!ids.contains(&recurring_reminder.id));
     assert!(ids.contains(&one_shot.id));
 }
 
@@ -1343,42 +1335,6 @@ async fn due_firings_span_users(pool: PgPool) {
         owners.push(resolved.owner_id.as_ref().to_string());
     }
     assert_eq!(owners, vec![USER_B, USER_A], "soonest firing first");
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_completed_recurring_reminder_is_still_due(pool: PgPool) {
-    // Marking a recurring reminder done settles the firing in front of you, not
-    // the standing arrangement. Ending the series is what deleting is for, so
-    // completion must not quietly retire it.
-    insert_user(&pool, USER_A).await;
-    let repo = PgRemindersRepo::new(pool.clone());
-    let reminder = repo
-        .create_reminder(&user(USER_A), &new_reminder("standup", recurring()))
-        .await
-        .expect("insert");
-
-    repo.update_reminder(
-        &user(USER_A),
-        reminder.id,
-        &ReminderUpdate {
-            completed: Some(true),
-            ..Default::default()
-        },
-    )
-    .await
-    .expect("complete succeeds");
-
-    let due = repo
-        .due_firings(at(2026, 8, 1, 12))
-        .await
-        .expect("query succeeds");
-    assert_eq!(due.len(), 1);
-    assert_eq!(due[0].reminder_id, reminder.id);
-
-    // And it still resolves at delivery, or the sweep would fan out a firing
-    // that then evaporates.
-    let resolved = repo.find_due_reminder(due[0]).await.expect("read succeeds");
-    assert!(resolved.is_some());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1871,8 +1827,10 @@ async fn completing_a_recurring_firing_advances_it_to_the_next_one(pool: PgPool)
     assert!(before.is_empty());
 
     let after = repo.due_firings(next).await.expect("query succeeds");
-    assert_eq!(after.len(), 1);
-    assert_eq!(after[0].scheduled_for, next);
+    assert!(
+        after.is_empty(),
+        "legacy recurring reminders are no longer dispatched"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -2732,4 +2690,55 @@ async fn soup_list_has_no_reference_for_a_standalone_reminder(pool: PgPool) {
 
     assert_eq!(found.len(), 1);
     assert!(found[0].reference.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn email_notification_retraction_is_scoped_to_the_reminder_and_firing(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+    let reminder = create_due(&pool, USER_A, at(2026, 8, 1, 11)).await;
+    let other = create_due(&pool, USER_A, at(2026, 8, 1, 12)).await;
+    let current = at(2026, 8, 2, 13);
+    let older = at(2026, 8, 1, 13);
+    let thread_id = reminder.entity_id.as_ref().unwrap();
+    let old_id = Uuid::now_v7();
+    let current_id = Uuid::now_v7();
+    let other_id = Uuid::now_v7();
+    let mail_id = Uuid::now_v7();
+    for (id, event, owner, time) in [
+        (old_id, "reminder", reminder.id, older),
+        (current_id, "reminder", reminder.id, current),
+        (other_id, "reminder", other.id, older),
+        (mail_id, "new_email", reminder.id, older),
+    ] {
+        sqlx::query!(
+            "INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata) VALUES ($1, $2, $3, 'email_thread', 'reminders', $4)",
+            id, event, thread_id,
+            serde_json::json!({"reminderId": owner, "scheduledFor": time.to_rfc3339()}),
+        ).execute(&pool).await.unwrap();
+    }
+    insert_reminder_notification(&pool, reminder.id, Some(older)).await;
+    repo.retract_notifications(reminder.id, current)
+        .await
+        .unwrap();
+    let remaining: Vec<Uuid> = sqlx::query_scalar!("SELECT id FROM notification ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    let mut expected = vec![current_id, other_id, mail_id];
+    expected.sort();
+    assert_eq!(remaining, expected);
+
+    assert!(
+        repo.delete_reminder(&user(USER_A), reminder.id)
+            .await
+            .unwrap()
+    );
+    let remaining: Vec<Uuid> = sqlx::query_scalar!("SELECT id FROM notification ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    let mut expected = vec![other_id, mail_id];
+    expected.sort();
+    assert_eq!(remaining, expected);
 }

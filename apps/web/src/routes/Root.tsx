@@ -105,7 +105,6 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { useReminderAlerts } from '../features/reminders/reminder-alerts';
 import { AppRouterView } from './app-router-view';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
@@ -194,7 +193,6 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     onNotification
   );
   useNotificationUpdates(notificationSource);
-  useReminderAlerts(notificationSource);
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);

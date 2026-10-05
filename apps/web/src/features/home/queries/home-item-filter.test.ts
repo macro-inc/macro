@@ -60,10 +60,14 @@ describe('noise tab', () => {
   });
 });
 
-describe('reminders tab', () => {
-  it('accepts only reminders', () => {
-    expect(soupItemMatchesHomeTab(reminderItem, 'reminders')).toBe(true);
-    expect(soupItemMatchesHomeTab(taskItem, 'reminders')).toBe(false);
+describe('retired reminders tab', () => {
+  it('uses signal membership while rejecting generic reminder rows', () => {
+    expect(soupItemMatchesHomeTab(reminderItem, 'reminders')).toBe(false);
+    expect(soupItemMatchesHomeTab(taskItem, 'reminders')).toBe(true);
     expect(soupItemMatchesHomeTab(noiseEmail, 'reminders')).toBe(false);
   });
+});
+
+it('never restores legacy reminders into Home from cache', () => {
+  expect(soupItemMatchesHomeTab(reminderItem, 'signal')).toBe(false);
 });

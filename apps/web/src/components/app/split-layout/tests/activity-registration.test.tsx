@@ -115,7 +115,6 @@ vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
-vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
 vi.mock('@app/features/settings/Settings', () => ({
   SettingsPanelComponentWrapper: () => null,
 }));

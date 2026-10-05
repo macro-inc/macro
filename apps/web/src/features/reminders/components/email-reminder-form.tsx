@@ -1,271 +1,167 @@
-import { getDefaultTimezone } from '@core/util/cron';
-import { parseTime, useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { ActionDialogShell, Button, Input, SegmentedControl } from '@ui';
 import {
-  createSignal,
-  createUniqueId,
-  For,
-  type JSX,
-  onMount,
-  Show,
-} from 'solid-js';
-import {
-  EventDateField,
-  EventTimeInput,
-} from '../../calendar/components/composer/EventDateTimeInputs';
-import {
-  formatReminderInstant,
-  parseLocalReminderDateTime,
-  REMINDER_DEFAULT_TIME,
-  reminderQuickPresets,
-} from '../reminder-schedule';
+  Button,
+  CommandMenuEmptyState,
+  CommandMenuList,
+  CommandMenuSearchInput,
+  CommandMenuShell,
+  createCommandListController,
+  Dialog,
+  type ManagedDialogProps,
+  SegmentedControl,
+} from '@ui';
+import { createUniqueId, Show } from 'solid-js';
+import type {
+  EmailReminderCondition,
+  ReminderTimeOption,
+} from '../core/email-reminder';
+import { formatReminderInstant } from '../reminder-schedule';
 
-export type EmailReminderCondition = 'if_no_reply' | 'regardless';
-
-/** Time-first, single-occurrence email form. The host owns persistence. */
-export function EmailReminderForm(props: {
-  subject: string;
-  header?: JSX.Element;
-  autofocus?: boolean;
-  initialTime?: string;
-  initialCondition?: EmailReminderCondition;
-  pending: boolean;
-  error?: string;
-  onSave: (at: Date, condition: EmailReminderCondition) => void;
-  onRemove?: () => void;
-  onCancel: () => void;
-}) {
-  let whenInput: HTMLInputElement | undefined;
-  // The server status may load after the dialog's initial autofocus pass.
-  onMount(() => {
-    if (props.autofocus) queueMicrotask(() => whenInput?.focus());
-  });
-  const now = new Date();
-  const zone = getDefaultTimezone();
-  const presets = reminderQuickPresets(now);
-  const presetTime = (at: Date) =>
-    new Intl.DateTimeFormat(undefined, {
-      timeZone: zone,
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(at);
-  const presetDay = (at: Date) =>
-    new Intl.DateTimeFormat(undefined, {
-      timeZone: zone,
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    }).format(at);
-  const seed = props.initialTime
-    ? new Date(props.initialTime)
-    : presets[0].date;
-  const [instant, setInstant] = createSignal<Date | undefined>(seed);
-  const [query, setQuery] = createSignal('');
-  const [custom, setCustom] = createSignal(false);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const dateValue = (at: Date) =>
-    `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
-  const timeValue = (at: Date) =>
-    `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
-  const [date, setDate] = createSignal(dateValue(seed));
-  const [time, setTime] = createSignal(timeValue(seed));
-  const [condition, setCondition] = createSignal<EmailReminderCondition>(
-    props.initialCondition ?? 'if_no_reply'
-  );
+/** Email snooze command menu; selecting a time saves immediately. */
+export function EmailReminderForm(
+  props: ManagedDialogProps & {
+    subject: string;
+    initialTime?: string;
+    query: string;
+    onQueryChange: (value: string) => void;
+    condition: EmailReminderCondition;
+    onConditionChange: (value: EmailReminderCondition) => void;
+    times: readonly ReminderTimeOption[];
+    pending: boolean;
+    error?: string;
+    onSave: (at: Date, condition: EmailReminderCondition) => void;
+    onRemove?: () => void;
+  }
+) {
   const id = createUniqueId();
-  const options = useDateSearch({
-    query,
-    baseDate: now,
-    defaultTime: REMINDER_DEFAULT_TIME,
+  const select = (option: { date: Date }) => {
+    if (!props.pending && option.date.getTime() > Date.now())
+      props.onSave(option.date, props.condition);
+  };
+  const list = createCommandListController({
+    items: () => props.times,
+    onSelect: select,
   });
-  const parsed = () => {
-    const option = options()[0];
-    const wallTime = parseTime(query())?.time;
-    if (
-      !option ||
-      (wallTime &&
-        (option.date.getHours() !== wallTime.hours ||
-          option.date.getMinutes() !== wallTime.minutes))
-    )
-      return;
-    return option.date;
-  };
-  const selected = () =>
-    query().trim()
-      ? parsed()
-      : (instant() ?? parseLocalReminderDateTime(date(), time()));
-  const valid = () => {
-    const at = selected();
-    return at !== undefined && at.getTime() > Date.now();
-  };
-  const choose = (at: Date) => {
-    setInstant(at);
-    setDate(dateValue(at));
-    setTime(timeValue(at));
-    setQuery('');
-  };
   return (
-    <>
-      <ActionDialogShell.Body>
-        {props.header}
-        <p class="truncate text-sm text-ink-muted" title={props.subject}>
-          {props.subject}
-        </p>
-        <form
-          id={id}
-          class="flex min-w-0 flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const at = selected();
-            if (!props.pending && valid() && at) props.onSave(at, condition());
-          }}
-        >
-          <fieldset
+    <Dialog open={props.open} onOpenChange={props.onOpenChange} visibleScrim>
+      <CommandMenuShell>
+        <CommandMenuShell.Header>
+          <CommandMenuSearchInput
+            aria-label="Remind me when"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={`${id}-options`}
+            aria-activedescendant={
+              props.times.length ? `${id}-${list.selectedIndex()}` : undefined
+            }
+            placeholder="Choose a time, or type tomorrow 9am…"
+            value={props.query}
             disabled={props.pending}
-            class="flex min-w-0 flex-col gap-3"
+            onInput={(event) => {
+              props.onQueryChange(event.currentTarget.value);
+              list.setSelectedIndex(0);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                list.selectNext();
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                list.selectPrevious();
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                list.selectSelected();
+              }
+            }}
+          />
+        </CommandMenuShell.Header>
+        <CommandMenuShell.Toolbar class="flex-col items-start gap-2 px-4 py-3">
+          <Dialog.Title class="text-sm font-medium text-ink">
+            Remind me
+          </Dialog.Title>
+          <Dialog.Description class="max-w-full truncate text-xs text-ink-muted">
+            {props.subject}
+          </Dialog.Description>
+          <Show when={props.initialTime}>
+            {(time) => (
+              <p class="text-xs text-ink-muted">
+                Scheduled for {formatReminderInstant(new Date(time()))}
+              </p>
+            )}
+          </Show>
+          <SegmentedControl<EmailReminderCondition>
+            aria-label="Reminder condition"
+            value={props.condition}
+            onChange={props.onConditionChange}
+            options={[
+              {
+                value: 'if_no_reply',
+                label: 'If no reply',
+                disabled: props.pending,
+              },
+              {
+                value: 'regardless',
+                label: 'Regardless',
+                disabled: props.pending,
+              },
+            ]}
+          />
+        </CommandMenuShell.Toolbar>
+        <CommandMenuShell.Body class="flex flex-col">
+          <CommandMenuList
+            id={`${id}-options`}
+            items={props.times}
+            selectedIndex={list.selectedIndex()}
+            scrollSelectedIntoView={list.shouldScrollSelectedIntoView()}
+            itemId={(_, index) => `${id}-${index}`}
+            itemDisabled={() => props.pending}
+            onItemMouseMove={list.setSelectedIndexFromPointer}
+            onSelect={select}
+            class="min-h-0 max-h-80 mobile:[&_[role=option]]:h-auto mobile:[&_[role=option]]:min-h-12"
           >
-            <label
-              for={`${id}-when`}
-              class="text-xs font-medium text-ink-muted"
-            >
-              When
-            </label>
-            <Input
-              ref={whenInput}
-              id={`${id}-when`}
-              size="lg"
-              value={query()}
-              onInput={(event) => setQuery(event.currentTarget.value)}
-              placeholder="Try “tomorrow 9am” or “in 30m”"
-              autocomplete="off"
-              aria-invalid={!valid()}
-            />
-            <Show when={!query().trim()}>
-              <div class="grid min-w-0 grid-cols-1 gap-2 min-[480px]:grid-cols-2">
-                <For each={presets}>
-                  {(preset) => (
-                    <Button
-                      type="button"
-                      variant={
-                        selected()?.getTime() === preset.date.getTime()
-                          ? 'accent'
-                          : 'outline'
-                      }
-                      class="h-auto min-h-11 min-w-0 justify-between gap-x-3 px-3 py-2 text-left whitespace-normal min-[480px]:flex-col min-[480px]:items-start"
-                      onClick={() => choose(preset.date)}
-                    >
-                      <span class="text-xs">{preset.label}</span>
-                      <span class="text-right text-xxs text-ink-muted min-[480px]:text-left">
-                        {preset.id === 'next-week'
-                          ? `${presetDay(preset.date)} · ${presetTime(preset.date)}`
-                          : presetTime(preset.date)}
-                      </span>
-                    </Button>
-                  )}
-                </For>
+            {(option) => (
+              <div class="flex min-w-0 flex-1 items-center gap-2 mobile:flex-col mobile:items-start mobile:gap-0.5">
+                <span class="flex-1 font-medium">{option.label}</span>
+                <span class="text-xs font-normal text-ink-muted">
+                  {formatReminderInstant(option.date)}
+                </span>
               </div>
-            </Show>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setCustom(!custom())}
-            >
-              Choose date &amp; time
-            </Button>
-            <Show when={custom()}>
-              <div class="grid min-w-0 gap-2 min-[360px]:grid-cols-2">
-                <EventDateField
-                  label="Reminder date"
-                  value={date()}
-                  portalScope="local"
-                  onChange={(value) => {
-                    setQuery('');
-                    if (value !== date()) setInstant(undefined);
-                    setDate(value);
-                  }}
-                />
-                <EventTimeInput
-                  id={`${id}-time`}
-                  label="Time"
-                  value={time()}
-                  step={1}
-                  onChange={(option) => {
-                    setQuery('');
-                    setInstant(undefined);
-                    setTime(option.value);
-                  }}
-                  onClear={() => {
-                    setQuery('');
-                    setInstant(undefined);
-                    setTime('');
-                  }}
-                />
-              </div>
-            </Show>
-            <p class="text-xs text-ink-muted" role="status">
-              {valid()
-                ? formatReminderInstant(selected()!, zone)
-                : 'Choose a future time. Times skipped by a clock change are unavailable.'}
-            </p>
-            <SegmentedControl<EmailReminderCondition>
-              aria-label="Reminder condition"
-              class="self-start"
-              value={condition()}
-              onChange={setCondition}
-              options={[
-                {
-                  value: 'if_no_reply',
-                  label: 'If no reply',
-                  disabled: props.pending,
-                },
-                {
-                  value: 'regardless',
-                  label: 'Regardless',
-                  disabled: props.pending,
-                },
-              ]}
-            />
-          </fieldset>
+            )}
+          </CommandMenuList>
+          <Show when={!props.times.length}>
+            <CommandMenuEmptyState>
+              Enter a future time, like in 2 hours or tomorrow 9am.
+            </CommandMenuEmptyState>
+          </Show>
           <Show when={props.error}>
-            <p role="alert" class="text-xs text-failure-ink">
+            <p role="alert" class="px-4 pb-3 text-sm text-failure-ink">
               {props.error}
             </p>
           </Show>
-        </form>
-      </ActionDialogShell.Body>
-      <ActionDialogShell.Footer>
-        <Show when={props.onRemove}>
+        </CommandMenuShell.Body>
+        <CommandMenuShell.Footer>
+          <span role="status">
+            {props.pending ? 'Saving…' : '↑ ↓ to choose · Enter to snooze'}
+          </span>
+          <Show when={props.onRemove}>
+            <Button
+              variant="ghost"
+              disabled={props.pending}
+              onClick={() => props.onRemove?.()}
+            >
+              Remove reminder
+            </Button>
+          </Show>
           <Button
-            type="button"
             variant="ghost"
             disabled={props.pending}
-            onClick={() => props.onRemove?.()}
+            onClick={() => props.onOpenChange(false)}
           >
-            Remove
+            Cancel
           </Button>
-        </Show>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={props.pending}
-          onClick={props.onCancel}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          form={id}
-          variant="accent"
-          disabled={props.pending || !valid()}
-        >
-          {props.pending
-            ? 'Saving…'
-            : props.initialTime
-              ? 'Save changes'
-              : 'Remind me'}
-        </Button>
-      </ActionDialogShell.Footer>
-    </>
+        </CommandMenuShell.Footer>
+      </CommandMenuShell>
+    </Dialog>
   );
 }

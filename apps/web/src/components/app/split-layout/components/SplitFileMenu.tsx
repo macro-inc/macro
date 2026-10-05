@@ -5,9 +5,7 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeFavoriteAction,
-  makeMarkDoneAction,
   makeMuteAction,
-  markReminderTargetDone,
 } from '@app/features/next-soup/actions';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -25,7 +23,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import { enableProjects, enableReminders } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
-import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken } from '@core/hotkey/utils';
@@ -359,21 +356,12 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
-  const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
   });
-  const markDone = makeMarkDoneAction({
-    userId: () => userId(),
-    notificationSource: () => notificationSource,
-  });
-  // Same follow-up as the block's command menu and every soup list: the
-  // reminder brings the entity back, so it is marked done now. No soup list is
-  // behind this menu, so nothing advances.
   const createReminderAction = makeCreateReminderAction({
     onEmailSaved: props.onEmailReminderSaved,
-    onCreated: markReminderTargetDone(markDone),
   });
   const addTagAction = makeAddTagAction();
   const copyLinkAction = makeCopyLinkAction();

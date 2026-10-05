@@ -34,7 +34,6 @@ const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],
-  reminders: ['reminder'],
 };
 
 type CreateOption = {
@@ -73,7 +72,6 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   documents: 'New',
   folders: 'Folder',
   mail: 'Email',
-  reminders: 'Reminder',
   tasks: 'Task',
 };
 

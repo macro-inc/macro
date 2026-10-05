@@ -22,7 +22,6 @@ export type HomeTypeFilter =
   | 'agents'
   | 'projects'
   | 'github'
-  | 'reminders'
   | 'calendar';
 
 export type HomeReadFilter = 'unread' | 'read';

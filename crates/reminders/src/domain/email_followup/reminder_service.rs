@@ -112,10 +112,10 @@ impl<
     }
     async fn list_reminders_for_soup(
         &self,
-        user: &MacroUserIdStr<'_>,
-        query: SoupReminderQuery<'_>,
+        _user: &MacroUserIdStr<'_>,
+        _query: SoupReminderQuery<'_>,
     ) -> Result<Vec<ReminderForSoup>, ReminderError> {
-        self.generic.list_reminders_for_soup(user, query).await
+        Ok(Vec::new())
     }
     async fn update_reminder(
         &self,

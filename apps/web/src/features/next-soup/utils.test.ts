@@ -698,7 +698,6 @@ describe('resolveMarkEntitiesDoneVariables', () => {
     ).toEqual({
       emailIds: [],
       notificationIds: ['notification-1'],
-      reminderIds: [],
     });
   });
 });

@@ -102,7 +102,7 @@ async fn sends_with_no_sender_so_the_owner_is_not_filtered_out() {
     let ingress = CapturingIngress::default();
 
     NotificationReminderNotifier::new(ingress.clone())
-        .notify(&due(Some(EntityType::Document), Some("doc-1")))
+        .notify(&due(Some(EntityType::EmailThread), Some("thread-1")))
         .await
         .expect("notify succeeds");
 
@@ -119,35 +119,37 @@ async fn sends_with_no_sender_so_the_owner_is_not_filtered_out() {
 }
 
 #[tokio::test]
-async fn addresses_the_notification_at_the_reminder_not_its_referenced_entity() {
+async fn addresses_the_notification_at_the_email_thread() {
     let ingress = CapturingIngress::default();
 
     NotificationReminderNotifier::new(ingress.clone())
-        .notify(&due(Some(EntityType::Channel), Some("channel-1")))
+        .notify(&due(Some(EntityType::EmailThread), Some("thread-1")))
         .await
         .expect("notify succeeds");
 
     // The referenced channel is reachable through the reminder's
     // `referencedEntity` edge; the notification itself points at the reminder.
     let entity = &ingress.last()["req"]["notification_entity"];
-    assert_eq!(entity["entity_type"], "reminder");
-    assert_eq!(entity["entity_id"], reminder_id().to_string());
+    assert_eq!(entity["entity_type"], "email_thread");
+    assert_eq!(entity["entity_id"], "thread-1");
 }
 
 #[tokio::test]
-async fn a_standalone_reminder_still_points_at_itself() {
+async fn non_email_reminders_cannot_notify() {
     let ingress = CapturingIngress::default();
-
-    NotificationReminderNotifier::new(ingress.clone())
-        .notify(&due(None, None))
-        .await
-        .expect("notify succeeds");
-
-    // `event_item_id`/`event_item_type` are NOT NULL, and the reminder is always
-    // a valid entity — so no fallback is needed.
-    let entity = &ingress.last()["req"]["notification_entity"];
-    assert_eq!(entity["entity_type"], "reminder");
-    assert_eq!(entity["entity_id"], reminder_id().to_string());
+    for reminder in [
+        due(None, None),
+        due(Some(EntityType::Document), Some("doc-1")),
+        due(Some(EntityType::EmailThread), None),
+    ] {
+        assert!(
+            NotificationReminderNotifier::new(ingress.clone())
+                .notify(&reminder)
+                .await
+                .is_err()
+        );
+    }
+    assert!(ingress.sent.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -155,7 +157,7 @@ async fn carries_the_reminder_payload_under_the_reminder_tag() {
     let ingress = CapturingIngress::default();
 
     NotificationReminderNotifier::new(ingress.clone())
-        .notify(&due(Some(EntityType::Document), Some("doc-1")))
+        .notify(&due(Some(EntityType::EmailThread), Some("thread-1")))
         .await
         .expect("notify succeeds");
 
@@ -182,7 +184,7 @@ async fn requests_push_and_websocket_delivery() {
     let ingress = CapturingIngress::default();
 
     NotificationReminderNotifier::new(ingress.clone())
-        .notify(&due(Some(EntityType::Document), Some("doc-1")))
+        .notify(&due(Some(EntityType::EmailThread), Some("thread-1")))
         .await
         .expect("notify succeeds");
 
@@ -197,7 +199,7 @@ async fn requests_push_and_websocket_delivery() {
 #[tokio::test]
 async fn surfaces_a_rejected_send_as_an_error() {
     let result = NotificationReminderNotifier::new(CapturingIngress::failing())
-        .notify(&due(Some(EntityType::Document), Some("doc-1")))
+        .notify(&due(Some(EntityType::EmailThread), Some("thread-1")))
         .await;
 
     // The dispatcher relies on this to leave the firing uncompleted and

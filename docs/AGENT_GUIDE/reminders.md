@@ -1,170 +1,77 @@
-# Reminders
+# Email reminders
 
-Use the dedicated Reminders workspace to inspect reminder lists and open an
-existing reminder. The create and edit surfaces share the same scheduling
-controls; reminder creation is a real hosted-data mutation, so use request
-interception when checking failures and cancel any draft used only for visual
-inspection.
+Reminders snooze email conversations. They are available only inside Email;
+there is no global Reminders sidebar item, standalone reminder, task reminder,
+recurrence editor, or reminder AI tool. Old reminder routes redirect to
+**Email → Reminders**. Calendar event alarms remain separate.
 
-## One collection, independent completion and schedule
+## Snooze or change a conversation
 
-The Reminders workspace is one continuous list, without Active/Scheduled/Done
-tabs. Due reminders come first, then upcoming schedules, then completed history;
-ordering applies before pagination. An old saved tab opens the unified view.
-Completion is acknowledgment of an occurrence: a done recurring reminder can
-still have a future schedule. Its quiet completed check and clock appear together.
-Hover/focus reveals the native undo action; incomplete rows reveal Mark done.
-Touch keeps these actions visible. Neither control uses a filled status pill.
-Tab can focus completion and clock buttons; Enter activates that button, while
-Enter on the list row still opens its entity.
-Marking done keeps the row in the unfiltered collection. The explicit Completion
-filter can limit the collection to Done or Not done. These choices are exclusive;
-selecting the active choice again or using Clear all restores the full collection.
+On one selected email or an open conversation, press **H**, choose **Remind me**
+in its menu, or activate its bell. The shared command menu shows the subject
+and time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
+**Next week**. Type a future time such as `in 2 hours` or `tomorrow 9am` in
+**Remind me when**. Up/Down changes the selection; Enter or clicking a choice
+saves immediately. **Cancel** or Escape closes without saving. There is no
+separate title, note, or recurrence step.
 
-A persistent clock beside the row metadata shows a compact exact date/time,
-human-readable repeat rule, and relevant email condition on hover or keyboard
-focus. A short timezone appears only for a foreign zone or ambiguous local hour;
-raw cron and IANA zone names never appear in the summary. Custom schedules show
-the actual next occurrence when known, without guessing a cadence. Click or tap it to
-edit using the existing reminder form. It remains available when row-hover
-actions or notification metadata are visible and on narrow/touch layouts. Paused
-and due tooltips describe those states without claiming a future firing or
-successful delivery. Completed one-shot reminders have no scheduled clock.
+**If no reply** is the default. A new inbound reply cancels that reminder;
+outgoing mail, drafts, replayed messages, and historical backfill do not.
+**Regardless** survives a reply. Only one active reminder is allowed per user
+and conversation. Opening the menu again edits that reminder; **Remove reminder**
+returns the conversation to its inbox. Scheduling archives it and advances
+within the invoking email list only after the server confirms success.
 
-An email-follow-up mirror's completed control opens its owning email composer
-to schedule again; it must not call generic mark-not-done. Its completion toast
-does not offer generic Undo, because the server rejects that operation.
+Bare H still types inside reply, compose, search, and other editable fields.
+On tasks, H collapses the item or its parent group. On list group headers,
+H collapses the group.
 
-For verification, include a done recurring reminder, due and completed one-shots,
-a paused schedule, and a long recurrence. Verify hover/focus tooltips, editor
-dismissal focus, retained rows after completion, and narrow notification rows.
-Collection reads are paginated and refreshed in bulk, with no per-row polling.
+## Delivery and undo
 
-## Create or edit a reminder
+When due, an eligible conversation returns to the top of its inbox. Its reminder
+notification belongs to the original email row in Home; clicking the notification
+opens the conversation. An unseen reminder contributes to the row's unread dot
+without changing the mailbox read state. Mobile push titles read
+**Reminder: <email subject>**. No reply email is sent and no reminder toast appears.
+The dispatcher sweeps once a minute; delivery is not exact to the second.
+Deleted, trashed, or inaccessible conversations are not returned.
 
-**New reminder** opens **Remind me about…**, an entity picker with recent items.
-Search using **Search reminder items**, use Up/Down and Enter to select, or click
-an item. Selecting an email opens the conditional email follow-up flow below;
-selecting a task/document opens a time-first form with its title and icon.
-**Add a note** is optional; no duplicate title is required. **Change** returns to
-selection. **Write a reminder instead** opens the freeform form, where
-**Reminder description** is required. The **When** field accepts date language such as
-`tomorrow 9am`, `in 30 minutes`, weekdays, and explicit dates. The resolved
-date and time appear in the **Scheduled:** preview before saving. The
-preview includes a timezone only when it is needed to interpret that time.
-
-Quick choices are **In 30m**, **Later today** (only before 5 PM), **Tomorrow**,
-**Next week**, and **Custom**. Each choice names its resolved time. Custom reveals
-native **Custom reminder date** and **Custom reminder time** controls. These are
-normal buttons and fields: Tab reaches them, Enter submits a valid form, and the
-dialog restores focus to its opener on dismissal.
-
-A local time skipped by a daylight-saving clock change (for example 2:30 AM on
-a spring-forward day) is rejected inline. Choose a time before or after the gap;
-the form must never silently normalize it to a different displayed time.
-
-**Repeat** is a collapsed secondary section. It offers **Does not repeat**,
-**Daily**, **Weekdays**, **Weekly**, and **Monthly**, followed by weekday/day,
-time, and timezone controls where relevant. An existing cron expression the
-picker cannot represent is labeled **Custom schedule** and remains byte-for-byte
-unchanged unless a replacement repeat choice is selected.
-
-The primary action reads **Set reminder** for create and **Save** for edit.
-**Cancel** dismisses without saving. A description-only edit of an overdue
-reminder keeps its old schedule instead of trying to reschedule it in the past.
-
-## Open or manage an attached reminder
-
-Attached rows lead with their source icon and current title. A personal note,
-when different, appears as secondary text. Click or Enter opens the email, task,
-or other source directly, including in Home and when opening a new split/tab.
-Freeform reminders open their editor. Use **Edit reminder** in the row menu to
-change the schedule or note of an attached reminder. Completion and removal
-still act on the reminder itself, not on its source. Inaccessible sources show
-an unavailable label rather than a cached private title.
-
-## Verify save failure without changing dev data
-
-Intercept `POST **/dss/reminders` and hold or reject the response. While held,
-the primary action shows a spinner, every form control is frozen, and duplicate
-submits issue only one request. On rejection, the dialog stays open, the entered
-title and time remain, focus returns to the control used to submit, and an inline
-alert explains that the draft can be retried.
-The alert also warns that a timed-out request may already have succeeded; the
-create API has no idempotency key, so the UI does not claim retries are
-duplicate-safe.
-
-After a confirmed response, the dialog closes and the success toast includes the
-exact persisted time or recurrence. Only a confirmed create runs the invoking
-surface's follow-up action.
-
-## Email follow-ups (H)
-
-On one selected email or an open conversation, **H**, **Remind me** in the menu,
-and the bell control open the same time-first picker. The subject is already
-known; the first field is **When**, with no required title. Bare H remains text
-inside reply, compose, search and other editable fields. Escape cancels without
-moving the conversation. Saving uses one server operation to schedule and move
-it out of the inbox; successful creation advances within the invoking list.
-
-**If no reply** is the default. A genuinely new inbound message after scheduling
-cancels it; drafts, outgoing mail (including provider SENT aliases), known own
-inbox senders, replays and historical backfill do not. **Regardless** survives a
-reply. Existing H opens the pending follow-up for editing or **Remove**. Remove
-returns the conversation to its inbox; **Undo** cancels a newly scheduled
-follow-up and restores its original inbox visibility. A stale undo cannot
-remove a newer edit. Generic reminders attached to the same thread remain
-separate reminders.
-
-The bell is accented for pending and returned reminders and its accessible label
-includes the pending time. Server dispatch returns eligible conversations to
-the top of the corresponding inbox, including sent-only conversations, then
-uses the existing persistent reminder alert. Trash, deleted and inaccessible
-conversations are not returned. The server sweep runs once a minute; this is
-not exact-second delivery, and it does not promise a closed-browser OS alert.
-Pending operations and replies reconcile without an open browser.
-
-Email writes use `PUT /dss/reminders/email/{threadId}` with a retained operation
-ID. Unlike generic creation, retrying the same email request cannot duplicate
-it. For failure verification, intercept that endpoint and verify the time and
-condition remain, no client archive request is sent, and no navigation occurs
-before the server confirms the operation.
+Cmd/Ctrl+Z undoes a confirmed scheduling change. Undo of a new reminder restores
+the original inbox position; undo of an edit restores its previous time and
+condition. A stale undo cannot overwrite a newer edit.
 
 ## Email → Reminders
 
 With reminders enabled, **Reminders** appears beside **Scheduled** in Email's
-sidebar and mobile view selector. Scheduled still lists outgoing send-later
-messages. Email Reminders lists the original conversations with pending reminder
-work in the selected inboxes, ordered by nearest reminder occurrence. Multiple
-reminders on one conversation produce one email row; **+N** beside its clock
-indicates additional reminders. Opening the row opens its original conversation.
+sidebar and mobile selector. Scheduled contains outgoing send-later messages.
+Reminders contains original conversations with active snoozes, ordered by return
+time. Fired, cancelled, removed, and legacy generic reminders are excluded.
+Archived conversations remain here while snoozed. Each row has one clock; click,
+tap, or keyboard-activate it to reopen that conversation's reminder menu.
+Opening the row itself opens the email.
 
-Email archive status does not determine reminder membership. A snoozed email is
-already archived and remains here while its follow-up is pending; returned
-follow-ups remain until their reminder occurrence is dealt with. Cancelled or
-removed follow-ups disappear. Read, Done, Calendar, Tags and attachment filters
-apply to the original conversation before pagination. Text search is unavailable
-in this view; entering or leaving clears its saved text search. Back/forward and
-reload retain the Email tab and selected inbox scope.
+Inbox, Read, Done, Calendar, Tags, and attachment filters apply to the original
+conversation before pagination. Text search is unavailable in this view.
+Back/forward and reload retain the Email tab and inbox scope. Other Email and
+Soup views do not make reminder collection requests.
 
-Clocks in this dedicated tab use the private reminder metadata returned with
-its collection pages; native email hydration supplies the original row content.
-Other Email and Soup views do not add reminder clocks or batch summary requests.
-The email check still archives/unarchives the email independently of its clock. Click, tap or keyboard-activate the clock to open the
-existing reminder editor; Cancel returns focus to that clock when it still exists.
-Returned and in-progress workflow labels describe their current state rather than
-claiming a new future firing.
+A sparse page can have a **Load more** continuation; follow it. A final page
+stays loading until its email rows hydrate. Failed pagination preserves earlier
+rows and exposes **Couldn’t load more email. Try again**.
 
-For verification, use more than 100 reminders, a long prefix excluded by the
-selected inbox/filter, several reminders on one email, and caller/account isolation. A sparse page can still have a
-**Load more** continuation. Follow it rather than treating that page as the end.
-A final page stays loading until its original email rows hydrate. If that page
-fails, earlier rows remain with **Couldn’t load more email. Try again**; retry
-loads the failed page without skipping ahead. In Email, Tab from the grid moves
-through native row controls; Enter on a clock opens its editor without opening
-the email. An open editor keeps the reminder selected at activation even if a
-collection refresh chooses a different nearest reminder.
+## Verify safely
 
-Check create/edit/remove/undo, reply cancellation, and due return across the Email
-Reminders list without reloading the app. Confirm ordinary Email and Soup views
-issue no reminder collection or summary requests.
+For UI failure checks against hosted data, intercept
+`PUT **/dss/reminders/email/{threadId}`. Hold or reject the response and verify:
+
+- Saving disables controls and repeated input cannot issue duplicate writes.
+- A failure keeps the chosen time and condition, shows an inline retry message,
+  and does not navigate or send a separate client archive request.
+- Retrying an unchanged choice retains its operation ID, including after a
+  background read discovers a write whose response was lost.
+- A confirmed save closes the menu, advances the list, and adds keyboard undo.
+- Opening the menu from a row clock does not open or complete the email.
+
+Use local fixtures for real create/edit/remove/undo and due-delivery checks.
+Also verify reply cancellation, caller isolation, multiple concurrent set
+requests, filtered pagination, desktop keyboard interaction, and a narrow viewport.

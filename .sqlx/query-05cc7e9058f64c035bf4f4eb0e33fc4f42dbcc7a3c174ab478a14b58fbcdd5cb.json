@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM notification WHERE (event_item_id = $1 AND event_item_type = 'reminder')\n                   OR (event_item_type = 'email_thread' AND event_item_id = $2\n                       AND notification_event_type = 'reminder' AND metadata->>'reminderId' = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "05cc7e9058f64c035bf4f4eb0e33fc4f42dbcc7a3c174ab478a14b58fbcdd5cb"
+}

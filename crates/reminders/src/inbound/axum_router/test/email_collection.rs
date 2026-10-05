@@ -1,5 +1,6 @@
 //! Exercise scan/fill against real grouped reminder storage and explicit access decisions.
 use super::*;
+use crate::domain::models::ReminderSchedule;
 use crate::{
     domain::{
         email_collection::{EmailReminderQuery, EmailReminderViewer, service},
@@ -106,14 +107,45 @@ async fn setup(
         .collect();
     for (i, id) in ids.iter().enumerate() {
         let when = instant(2, 12) + chrono::Duration::seconds(i as i64);
-        repo.create_reminder(
-            &viewer().user_id,
-            &NewReminder {
-                description: format!("private {i}"),
-                entity: Some(EntityType::EmailThread.with_entity_string(id.to_string())),
-                schedule: ReminderSchedule::Once { remind_at: when },
-                next_run_at: when,
+        let reminder = repo
+            .create_reminder(
+                &viewer().user_id,
+                &NewReminder {
+                    description: format!("private {i}"),
+                    entity: Some(EntityType::EmailThread.with_entity_string(id.to_string())),
+                    schedule: ReminderSchedule::Once { remind_at: when },
+                    next_run_at: when,
+                },
+            )
+            .await
+            .unwrap();
+        use crate::domain::email_followup::{
+            EmailFollowup, EmailFollowupRepo, EmailReminderCondition, FollowupRecord, FollowupState,
+        };
+        repo.save_followup(
+            &FollowupRecord {
+                followup: EmailFollowup {
+                    reminder_id: reminder.id,
+                    thread_id: *id,
+                    link_id: Uuid::now_v7(),
+                    condition: EmailReminderCondition::IfNoReply,
+                    remind_at: when,
+                    revision: Uuid::now_v7(),
+                    state: FollowupState::Pending,
+                },
+                user_id: viewer().user_id,
+                baseline: email::domain::followup::ReplyBaseline {
+                    captured_at: instant(1, 12),
+                    message_ids: vec![],
+                },
+                original_inbox_visible: true,
+                original_returned_at: None,
+                restore_original: false,
+                restore_inbox_visible: true,
+                cancel_on_restore: false,
             },
+            None,
+            None,
         )
         .await
         .unwrap();

@@ -26,7 +26,6 @@ import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMc
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
-import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { MobileSettings } from '@app/features/settings/MobileSettings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
@@ -46,7 +45,6 @@ import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
 import {
   enableAiUsageBilling,
   enableDatabases,
-  enableReminders,
 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -237,12 +235,6 @@ function LayoutInner(props: RouteSectionProps) {
           <CreateChannelModal />
           <CreateCompanyModal />
           <CreateContactModal />
-          {/* Reactive, unlike the imperative isFeatureEnabled(enableReminders) gate on the
-              action: this decides whether the composer is mounted at all, so it
-              has to pick up a late PostHog answer. */}
-          <ShowFeatureFlag flag={enableReminders}>
-            <ReminderComposerModal />
-          </ShowFeatureFlag>
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>

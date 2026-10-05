@@ -65,7 +65,6 @@ type ToolParserMap = {
     call: types.CreateProject;
     response: types.CreateProjectResponse;
   };
-  CreateReminder: { call: types.CreateReminder; response: types.ToolReminder };
   CreateRoutine: { call: types.CreateRoutine; response: types.RoutineInfo };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
   DeleteBot: { call: types.DeleteBot; response: types.DeleteBotResponse };
@@ -84,10 +83,6 @@ type ToolParserMap = {
   DeleteInitiative: {
     call: types.DeleteInitiative;
     response: types.ProjectOperationComplete;
-  };
-  DeleteReminder: {
-    call: types.DeleteReminder;
-    response: types.DeleteReminderResponse;
   };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DescribeDatabase: {
@@ -180,10 +175,6 @@ type ToolParserMap = {
   ListNotifications: {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
-  };
-  ListReminders: {
-    call: types.ListReminders;
-    response: types.ListRemindersResponse;
   };
   ListRoutines: { call: types.ListRoutines; response: types.RoutineList };
   ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
@@ -335,7 +326,6 @@ type ToolParserMap = {
     call: types.UpdateInitiativeSharing;
     response: types.ProjectDetails;
   };
-  UpdateReminder: { call: types.UpdateReminder; response: types.ToolReminder };
   UpdateRoutine: { call: types.UpdateRoutine; response: types.RoutineInfo };
   UpdateThreadLabels: {
     call: types.UpdateThreadLabels;
@@ -404,10 +394,6 @@ const toolParserMap = {
     call: schemas.CreateProject,
     response: schemas.CreateProjectResponse,
   },
-  CreateReminder: {
-    call: schemas.CreateReminder,
-    response: schemas.ToolReminder,
-  },
   CreateRoutine: { call: schemas.CreateRoutine, response: schemas.RoutineInfo },
   CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
   DeleteBot: { call: schemas.DeleteBot, response: schemas.DeleteBotResponse },
@@ -426,10 +412,6 @@ const toolParserMap = {
   DeleteInitiative: {
     call: schemas.DeleteInitiative,
     response: schemas.ProjectOperationComplete,
-  },
-  DeleteReminder: {
-    call: schemas.DeleteReminder,
-    response: schemas.DeleteReminderResponse,
   },
   DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
   DescribeDatabase: {
@@ -534,10 +516,6 @@ const toolParserMap = {
   ListNotifications: {
     call: schemas.ListNotifications,
     response: schemas.ListNotificationsResponse,
-  },
-  ListReminders: {
-    call: schemas.ListReminders,
-    response: schemas.ListRemindersResponse,
   },
   ListRoutines: { call: schemas.ListRoutines, response: schemas.RoutineList },
   ListSkills: {
@@ -707,10 +685,6 @@ const toolParserMap = {
     call: schemas.UpdateInitiativeSharing,
     response: schemas.ProjectDetails,
   },
-  UpdateReminder: {
-    call: schemas.UpdateReminder,
-    response: schemas.ToolReminder,
-  },
   UpdateRoutine: { call: schemas.UpdateRoutine, response: schemas.RoutineInfo },
   UpdateThreadLabels: {
     call: schemas.UpdateThreadLabels,
@@ -790,7 +764,6 @@ type ToolDataMap = {
     call: types.CreateProject;
     response: types.CreateProjectResponse;
   };
-  CreateReminder: { call: types.CreateReminder; response: types.ToolReminder };
   CreateRoutine: { call: types.CreateRoutine; response: types.RoutineInfo };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
   DeleteBot: { call: types.DeleteBot; response: types.DeleteBotResponse };
@@ -809,10 +782,6 @@ type ToolDataMap = {
   DeleteInitiative: {
     call: types.DeleteInitiative;
     response: types.ProjectOperationComplete;
-  };
-  DeleteReminder: {
-    call: types.DeleteReminder;
-    response: types.DeleteReminderResponse;
   };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DescribeDatabase: {
@@ -905,10 +874,6 @@ type ToolDataMap = {
   ListNotifications: {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
-  };
-  ListReminders: {
-    call: types.ListReminders;
-    response: types.ListRemindersResponse;
   };
   ListRoutines: { call: types.ListRoutines; response: types.RoutineList };
   ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
@@ -1060,7 +1025,6 @@ type ToolDataMap = {
     call: types.UpdateInitiativeSharing;
     response: types.ProjectDetails;
   };
-  UpdateReminder: { call: types.UpdateReminder; response: types.ToolReminder };
   UpdateRoutine: { call: types.UpdateRoutine; response: types.RoutineInfo };
   UpdateThreadLabels: {
     call: types.UpdateThreadLabels;

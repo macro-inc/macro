@@ -63,7 +63,6 @@ use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
 use projects::inbound::toolset::ProjectToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
-use reminders::inbound::toolset::RemindersToolContext;
 use skills::inbound::toolset::SkillToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
@@ -1066,43 +1065,6 @@ pub type ToolNotificationService = notification::domain::service::NotificationRe
 /// Type alias for the notification tool context.
 pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
 
-/// Type alias for the reminders service implementation used by AI tools.
-pub type ToolRemindersService =
-    reminders::domain::email_followup::reminder_service::EmailRemindersService<
-        reminders::domain::service::RemindersServiceImpl<
-            reminders::outbound::pg_reminders_repo::PgRemindersRepo,
-        >,
-        reminders::outbound::pg_reminders_repo::PgRemindersRepo,
-        ToolUserEmailService,
-        reminders::domain::ports::SystemClock,
-    >;
-
-/// Type alias for the reminders tool context.
-pub type ToolRemindersToolContext =
-    RemindersToolContext<ToolRemindersService, ToolEntityAccessService>;
-
-/// Build the reminders tool context with the same email lifecycle as HTTP.
-///
-/// The reminder tools go through the same access receipts the HTTP API does,
-/// so this needs the entity access service as well as the repository.
-pub fn build_reminders_tool_context(
-    pool: sqlx::PgPool,
-    email_service: Arc<ToolUserEmailService>,
-    entity_access_service: Arc<ToolEntityAccessService>,
-) -> ToolRemindersToolContext {
-    let repo = reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool);
-    RemindersToolContext::new(
-        reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
-            reminders::domain::service::RemindersServiceImpl::new(repo.clone()),
-            reminders::domain::email_followup::service::EmailFollowupService::new(
-                repo,
-                (*email_service).clone(),
-            ),
-        ),
-        entity_access_service,
-    )
-}
-
 /// Table-changed fan-out for AI tool hosts, the databases crate's publisher.
 pub use databases::outbound::gateway_event_publisher::MaybeGatewayTableEventPublisher as ToolTableEventPublisher;
 
@@ -1598,7 +1560,6 @@ pub struct ToolServiceContext {
     pub call_tool_context: ToolCallToolContext,
     pub calendar_tool_context: ToolCalendarToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
-    pub reminders_tool_context: ToolRemindersToolContext,
     pub databases_tool_context: ToolDatabasesToolContext,
     pub databases_sql_tool_context: ToolDatabasesSqlToolContext,
     /// Import staging/tracking tools. `unwired` in hosts that can't build

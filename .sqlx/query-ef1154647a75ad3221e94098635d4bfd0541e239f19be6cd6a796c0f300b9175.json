@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.entity_id AS \"thread_id!\", r.next_run_at,\n                to_jsonb(r) AS \"reminder!\", f.payload AS followup\n            FROM reminder r\n            JOIN reminder_email_followup f ON f.reminder_id = r.id AND f.user_id = $1\n            WHERE r.user_id = $1 AND r.entity_type = 'email_thread' AND r.entity_id IS NOT NULL\n                AND ($2::uuid[] IS NULL OR r.entity_id = ANY($2))\n                AND f.state IN ('archiving', 'pending', 'returning')\n                AND ($3::timestamptz IS NULL OR (r.next_run_at, r.entity_id) > ($3, $4))\n            ORDER BY r.next_run_at, r.entity_id LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "reminder!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "followup",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "ef1154647a75ad3221e94098635d4bfd0541e239f19be6cd6a796c0f300b9175"
+}

@@ -129,12 +129,6 @@ const typeOptions: Record<HomeTypeFilter, HomeFacetOption> = {
     },
     predicate: isGithubPrEntity,
   },
-  reminders: {
-    id: 'reminders',
-    label: 'Reminders',
-    clause: { remf: clause.not(clause.eq('reminderId', NIL_UUID)) },
-    predicate: (entity) => entity.type === 'reminder',
-  },
   calendar: {
     id: 'calendar',
     label: 'Calendar',

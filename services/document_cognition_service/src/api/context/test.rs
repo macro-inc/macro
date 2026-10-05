@@ -479,11 +479,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             "test-internal-api-key".to_string(),
         ),
         notification_tool_context: notification_tool_context.clone(),
-        reminders_tool_context: ai_tools::build_reminders_tool_context(
-            pool.clone(),
-            user_email_service.clone(),
-            entity_access_service.clone(),
-        ),
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),

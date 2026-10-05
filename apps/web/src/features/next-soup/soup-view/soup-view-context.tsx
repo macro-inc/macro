@@ -67,9 +67,7 @@ import {
   unreadFilterFn,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
-import { queryReadyGate } from '@queries/gate';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
-import { useReminderCollectionQuery } from '@queries/reminders/collection';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,
@@ -961,28 +959,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     );
   };
 
-  const usesReminderCollection = () =>
-    activeListView() === 'reminders' && !search.isSearching();
-  const reminderCollection = useReminderCollectionQuery(() => ({
-    userId: userId(),
-    enabled: enabled() && usesReminderCollection(),
-    completed: queryFilters.state.include.reminderCompleted,
-  }));
-  const reminderCollectionData = () =>
-    queryReadyGate(reminderCollection) ? reminderCollection.data : undefined;
-  const reminderSource = {
-    data: reminderCollectionData,
-    error: () => reminderCollection.error,
-    hasData: () => reminderCollectionData() !== undefined,
-    isLoading: () => reminderCollection.isLoading,
-    isFetching: () => reminderCollection.isFetching,
-    isPlaceholderData: () => false,
-    isFetchingNextPage: () => reminderCollection.isFetchingNextPage,
-    isEnabled: () => enabled() && usesReminderCollection(),
-    hasNextPage: () => reminderCollection.hasNextPage,
-    fetchNextPage: () => reminderCollection.fetchNextPage(),
-  };
-
   // The Soup query facade owns GraphQL eligibility and REST fallback. Its urql
   // implementation keeps loaded pages subscribed to the normalized cache.
   const itemsQuery = useSoupAstItemsQuery(
@@ -1001,8 +977,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       // after a tab switch.
       const emailImportance = queryFilters.state.include.emailImportance;
       return {
-        enabled:
-          enabled() && !search.isSearching() && !usesReminderCollection(),
+        enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
@@ -1040,8 +1015,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     fetchNextPage: () => itemsQuery.fetchNextPage(),
   };
 
-  const itemsSource = () =>
-    usesReminderCollection() ? reminderSource : soupItemsSource;
+  const itemsSource = () => soupItemsSource;
 
   const items = createMemo<SoupEntity[]>(
     (prev) => {
@@ -1060,9 +1034,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           // navigation. Once the active query fails, those rows belong to
           // the previous query and must go so the load-error state can
           // render — only client-local rows remain valid.
-          return usesReminderCollection() || itemsSource().error()
-            ? extraEntities
-            : prev;
+          return itemsSource().error() ? extraEntities : prev;
         }
         if (data.groups) return prev;
 
@@ -1565,10 +1537,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
         // This covers both transports: urql pages sit outside the TanStack
         // invalidation above, and the REST refetch dedupes against it.
-        if (usesReminderCollection()) {
-          await reminderCollection.refetch({ throwOnError: true });
-          return;
-        }
         await itemsQuery.refresh();
       },
     },

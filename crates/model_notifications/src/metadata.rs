@@ -1553,7 +1553,8 @@ impl NotificationTitle for ReminderMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok("Reminder".to_string())
+        let subject: String = self.description.chars().take(128).collect();
+        Ok(format!("Reminder: {subject}"))
     }
 
     fn format_body(

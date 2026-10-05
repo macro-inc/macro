@@ -17,7 +17,6 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   enableCalendarUi,
   enableInboxNotifiedSort,
-  enableReminders,
   enableSnippets,
   enableSupportedSoupForeignEntities,
   isFeatureEnabled,
@@ -129,7 +128,7 @@ export function useHomeEntitiesQuery(
     calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
-    reminders: isFeatureEnabled(enableReminders),
+    reminders: false,
     snippets: isFeatureEnabled(enableSnippets),
   });
 

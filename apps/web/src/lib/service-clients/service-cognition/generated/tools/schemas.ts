@@ -2126,85 +2126,6 @@ export const CreateProjectResponse = z.object({
   projectName: z.string(),
 });
 
-export const CreateReminder = z.object({
-  description: z.string(),
-  remindAt: z.string().datetime({ offset: true }),
-  entityType: z
-    .union([
-      z.any().superRefine((x, ctx) => {
-        const schemas = [
-          z.literal('document'),
-          z.literal('ai_chat'),
-          z.literal('project'),
-          z.literal('email'),
-          z.literal('channel'),
-          z.literal('call'),
-          z.literal('calendar_event'),
-        ];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
-      z.null(),
-    ])
-    .optional(),
-  entityId: z.union([z.string().uuid(), z.null()]).optional(),
-});
-
-export const ToolReminder = z.object({
-  id: z.string().uuid(),
-  description: z.string(),
-  nextRunAt: z.string().datetime({ offset: true }),
-  overdue: z.boolean(),
-  recurrence: z.union([z.string(), z.null()]).optional(),
-  entityType: z
-    .union([
-      z.any().superRefine((x, ctx) => {
-        const schemas = [
-          z.literal('document'),
-          z.literal('ai_chat'),
-          z.literal('project'),
-          z.literal('email'),
-          z.literal('channel'),
-          z.literal('call'),
-          z.literal('calendar_event'),
-        ];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
-      z.null(),
-    ])
-    .optional(),
-  entityId: z.union([z.string(), z.null()]).optional(),
-  completed: z.boolean(),
-  enabled: z.boolean(),
-});
-
 export const CreateRoutine = z.object({
   configuration: z.object({
     name: z.string(),
@@ -2422,13 +2343,6 @@ export const DeleteImportEntityResponse = z.object({
 export const DeleteInitiative = z.object({ initiativeId: z.string().uuid() });
 
 export const ProjectOperationComplete = z.object({ success: z.boolean() });
-
-export const DeleteReminder = z.object({ reminderId: z.string().uuid() });
-
-export const DeleteReminderResponse = z.object({
-  reminderId: z.string().uuid(),
-  summary: z.string(),
-});
 
 export const DeleteTag = z.object({
   id: z.string().uuid(),
@@ -6360,93 +6274,6 @@ export const ListNotificationsResponse = z.object({
   hasMore: z.boolean(),
 });
 
-export const ListReminders = z.object({
-  reminderIds: z.union([z.array(z.string().uuid()), z.null()]).optional(),
-  entityType: z
-    .union([
-      z.any().superRefine((x, ctx) => {
-        const schemas = [
-          z.literal('document'),
-          z.literal('ai_chat'),
-          z.literal('project'),
-          z.literal('email'),
-          z.literal('channel'),
-          z.literal('call'),
-          z.literal('calendar_event'),
-        ];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
-      z.null(),
-    ])
-    .optional(),
-  entityId: z.union([z.string().uuid(), z.null()]).optional(),
-  completed: z.union([z.boolean(), z.null()]).optional(),
-  overdue: z.union([z.boolean(), z.null()]).optional(),
-  limit: z.union([z.number().int().gte(0), z.null()]).optional(),
-});
-
-export const ListRemindersResponse = z.object({
-  reminders: z.array(
-    z.object({
-      id: z.string().uuid(),
-      description: z.string(),
-      nextRunAt: z.string().datetime({ offset: true }),
-      overdue: z.boolean(),
-      recurrence: z.union([z.string(), z.null()]).optional(),
-      entityType: z
-        .union([
-          z.any().superRefine((x, ctx) => {
-            const schemas = [
-              z.literal('document'),
-              z.literal('ai_chat'),
-              z.literal('project'),
-              z.literal('email'),
-              z.literal('channel'),
-              z.literal('call'),
-              z.literal('calendar_event'),
-            ];
-            const errors = schemas.reduce<z.ZodError[]>(
-              (errors, schema) =>
-                ((result) =>
-                  result.error ? [...errors, result.error] : errors)(
-                  schema.safeParse(x)
-                ),
-              []
-            );
-            if (schemas.length - errors.length !== 1) {
-              ctx.addIssue({
-                path: ctx.path,
-                code: 'invalid_union',
-                unionErrors: errors,
-                message: 'Invalid input: Should pass single schema',
-              });
-            }
-          }),
-          z.null(),
-        ])
-        .optional(),
-      entityId: z.union([z.string(), z.null()]).optional(),
-      completed: z.boolean(),
-      enabled: z.boolean(),
-    })
-  ),
-  summary: z.string(),
-});
-
 export const ListRoutines = z.object({
   query: z.union([z.string(), z.null()]).optional(),
   enabled: z.union([z.boolean(), z.null()]).optional(),
@@ -9494,15 +9321,6 @@ export const UpdateInitiativeSharing = z.object({
       z.null(),
     ])
     .optional(),
-});
-
-export const UpdateReminder = z.object({
-  reminderId: z.string().uuid(),
-  description: z.union([z.string(), z.null()]).optional(),
-  remindAt: z
-    .union([z.string().datetime({ offset: true }), z.null()])
-    .optional(),
-  completed: z.union([z.boolean(), z.null()]).optional(),
 });
 
 export const UpdateRoutine = z.object({

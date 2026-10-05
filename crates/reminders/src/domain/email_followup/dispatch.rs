@@ -26,7 +26,7 @@ impl<
 {
     async fn sweep(&self) -> Result<SweepSummary, ReminderError> {
         // Due delivery checks its own email facts. Recovery of unrelated email
-        // workflows must not delay fan-out or suppress ordinary reminders.
+        // workflows must not delay delivery of another email reminder.
         let result = self.generic.sweep().await;
         if let Err(error) = self.email.reconcile().await {
             tracing::error!(error = ?error, "email follow-up reconciliation failed; will retry next sweep");
@@ -51,7 +51,7 @@ impl<
             .reminder_followup(&due.owner_id, due.reminder.id)
             .await?
         else {
-            return self.generic.deliver(firing).await;
+            return Ok(DeliveryOutcome::Gone);
         };
         let _guard = self
             .email

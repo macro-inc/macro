@@ -31,9 +31,6 @@ import type {
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'home-signal',
   'home-noise',
-  // Marking a pending reminder done cancels it before it fires — same as the
-  // standalone Reminders collection below.
-  'home-reminders',
   'mail-important',
   'mail-all',
   // These are original email rows; Done remains email archive, not reminder completion.
@@ -44,7 +41,6 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   // stay in place and flip to the done state exactly like mail "All".
   'mail-calendar',
   'mail-shared',
-  'reminders-all',
 ];
 
 export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
@@ -54,8 +50,7 @@ export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
 /** Already-done emails and reminders coexist with actionable rows in unified
  * collections, so mark-done skips them rather than acknowledging twice. */
 const isMarkDoneTarget = (e: EntityData) =>
-  !(e.type === 'email' && e.done === true) &&
-  !(e.type === 'reminder' && e.completedAt != null);
+  !(e.type === 'email' && e.done === true) && e.type !== 'reminder';
 
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
@@ -75,7 +70,6 @@ type MarkDoneVariables = {
   exactNotificationIds: { current: string[] };
   /** Entity-wide targets used only by the initial committed mark-done. */
   notificationEntities: NotificationEntityRef[];
-  reminderIds: string[];
   restoreFocus?: () => void;
   /** Suppress the "Marked as done" toast, e.g. for send-triggered mark done
    *  where it would replace the "Email sent" toast. */
@@ -126,7 +120,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         entityIds: variables.entities.map((entity) => entity.id),
         emailIds: variables.emailIds,
         notificationIds: variables.optimisticNotificationIds,
-        reminderIds: variables.reminderIds,
         scopeChannelThreads: variables.scopeChannelThreads,
       }),
     mutationFn: async (variables) => {
@@ -134,7 +127,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         emailIds: variables.emailIds,
         notificationIds: variables.exactNotificationIds.current,
         notificationEntities: variables.notificationEntities,
-        reminderIds: variables.reminderIds,
       });
       variables.exactNotificationIds.current = [
         ...new Set([
@@ -156,7 +148,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         await executeMarkEntitiesUndone({
           emailIds: variables.emailIds,
           notificationIds: variables.exactNotificationIds.current,
-          reminderIds: variables.reminderIds,
         });
         context?.settle(variables.exactNotificationIds.current);
       } catch (err) {
@@ -171,7 +162,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         await executeMarkEntitiesDone({
           emailIds: variables.emailIds,
           notificationIds: variables.exactNotificationIds.current,
-          reminderIds: variables.reminderIds,
         });
         context?.settle(variables.exactNotificationIds.current);
       } catch (err) {
@@ -182,20 +172,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     },
     undoLabel: 'Mark Done',
     onPushed: (handle, variables) => {
-      // Email follow-up mirrors deliberately reject completed:false. Reopening
-      // requires a new time through their owning composer, not generic Undo.
-      if (
-        variables.entities.some(
-          (entity) => entity.type === 'reminder' && entity.emailFollowup
-        )
-      ) {
-        handle.dispose();
-        if (!variables.silent)
-          toast.success(
-            'Marked as done. Use Remind me to schedule the email again.'
-          );
-        return;
-      }
       variables.onUndoHandle?.(handle);
       const firstEntityId = variables.entities[0]?.id;
       const count = variables.entities.length;
@@ -257,7 +233,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       entity.type === 'foreign' ||
       // Marked done by hand like everything else — opening a reminder does not
       // dismiss it. Signal gates on the not-done notification either way.
-      entity.type === 'reminder' ||
       // A calendar event row exists in Signal only through its not-done
       // reminder notification, so done resolves to those notification ids.
       entity.type === 'calendar_event'
@@ -277,35 +252,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     // in mail "All") doesn't re-archive the done ones or overcount the toast.
     const targets = entities.filter(isMarkDoneTarget);
     if (targets.length === 0) return;
-
-    // Only workflow mirrors lack generic undo. Keep reversible selections in
-    // their own transaction so a mixed selection retains its normal Undo.
-    const mirrors = targets.filter(
-      (entity) => entity.type === 'reminder' && entity.emailFollowup
-    );
-    if (mirrors.length > 0 && mirrors.length < targets.length) {
-      let failure: { reason: unknown } | undefined;
-      // Settle mirrors first so their non-undoable entry cannot overwrite the
-      // ordinary group's Undo toast or clear its Redo stack after completion.
-      // A failed group must not prevent the remaining writes from being tried.
-      for (const attempt of [
-        () => execute(mirrors, undefined, { silent: opts?.silent }),
-        () =>
-          execute(
-            targets.filter((entity) => !mirrors.includes(entity)),
-            restoreFocus,
-            opts
-          ),
-      ]) {
-        try {
-          await attempt();
-        } catch (reason) {
-          failure ??= { reason };
-        }
-      }
-      if (failure) throw failure.reason;
-      return;
-    }
 
     const source = notificationSource();
     const scopeChannelNotifications = scopeChannelNotificationsToEntity();
@@ -354,7 +300,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       scopeChannelThreads: scopeChannelNotifications,
       exactNotificationIds: { current: exactNotificationIds },
       notificationEntities,
-      reminderIds: resolved.reminderIds,
       restoreFocus,
       silent: opts?.silent,
       onUndoHandle: opts?.onUndoHandle,
