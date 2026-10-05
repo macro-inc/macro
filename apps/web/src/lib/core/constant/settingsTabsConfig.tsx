@@ -26,9 +26,11 @@ import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
+import { isPlatform } from '../util/platform';
 import {
   botManagement,
   DEV_MODE_ENV,
+  desktopApp,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_EMAIL,
   enableCalendarScheduling,
@@ -288,6 +290,7 @@ export const useSettingsTabAvailable = () => {
   const botManagementFlag = useFeatureFlag(botManagement);
   const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
   const crmFlag = useFeatureFlag(enableCrm);
+  const desktopAppFlag = useFeatureFlag(desktopApp);
   const notificationSettingsFlag = useFeatureFlag(enableNotificationSettings);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
@@ -325,6 +328,10 @@ export const useSettingsTabAvailable = () => {
       case 'Mobile App':
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
       case 'Desktop App':
+        return (
+          isPlatform('desktop') ||
+          (isPlatform('web') && desktopAppFlag().enabled)
+        );
       case 'Agent':
         return !isNativeMobilePlatform();
       // Configurable agents are still rolling out; keep both tabs behind the

@@ -2003,7 +2003,9 @@ Left nav (feature and platform gates still apply):
 **Desktop App** (`/app/settings/desktop-app`) shows a compact version and
 build-date card in the desktop app. The date is when the running app bundle was
 built, not when it was installed on the computer. In the browser it links to the
-latest desktop release on GitHub. This section is hidden in the native mobile app.
+latest desktop release on GitHub, and only appears when the `desktop-app` PostHog
+flag is enabled. Native desktop always shows this section regardless of the flag;
+native mobile never shows it.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens

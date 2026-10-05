@@ -378,6 +378,9 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = defineFlag({
   default: false,
 }).enabled;
 
+/** Desktop download settings rollout on web; native desktop always shows it. */
+export const desktopApp = defineFlag({ key: 'desktop-app' });
+
 export const ENABLE_APP_STORE_QR_CODE = defineFlag({
   env: 'ENABLE_APP_STORE_QR_CODE',
   default: true,
