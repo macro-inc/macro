@@ -81,6 +81,17 @@ connection noodles, undo, and saving), and comments (placing one on a
 frame, @mentions, replies, unread badges, resolving and reopening, and the
 pin following its frame).
 
+`?libraries` keeps two designs in memory, "Design system"
+(`design-system.fig`, or `&library=<file>`) and a blank "App", with the
+header switching between them (saves replace the stored design, as document
+storage does), each with the other as a possible team library
+(`memory-libraries.ts`, the `FigLibrarySource` contract the app fulfils
+with document storage); `window.figFixture.libraries` has `open(id)`,
+`current()`, and `reads(id)`. `fig-libraries.browser.e2e.ts` publishes the
+library, enables it in App, places a component (by click and by drag) and
+applies a style from it, changes and republishes the library, and updates
+App's copy, keeping the instance.
+
 `?collab` opens several people on one design side by side
 (`&people=alice,bob` by default), each with the real shared-design session
 (Loro document, WAL, awareness), engine, and viewer, connected through an

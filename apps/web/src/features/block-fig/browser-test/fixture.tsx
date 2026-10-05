@@ -12,7 +12,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { FigEngine } from '@core/fig-engine/client';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { FigOpening } from '../components/fig-opening';
 import { FigViewerProvider } from '../context/fig-viewer-context';
@@ -21,6 +21,10 @@ import { FigViewer } from '../views/fig-viewer';
 import { CollabFixture, type FixturePerson } from './collab-fixture';
 import { fixtureFontSource } from './font-source';
 import { createMemoryComments, FIXTURE_PEOPLE } from './memory-comments';
+import {
+  createMemoryLibraries,
+  type MemoryLibraries,
+} from './memory-libraries';
 
 declare const __FIG_CORPUS_URL__: string;
 
@@ -37,6 +41,13 @@ declare global {
       fontRequests: () => string[];
       /** With `?collab`: the people editing together. */
       collab?: { people: () => FixturePerson[] };
+      /** With `?libraries`: the designs in memory, and opening one. */
+      libraries?: {
+        open: (id: string) => Promise<void>;
+        current: () => string | undefined;
+        /** Times a design was read as a library. */
+        reads: (id: string) => number;
+      };
       /** The in-memory comments. */
       comments: {
         threads: () => unknown[];
@@ -66,7 +77,10 @@ function Fixture() {
   >([]);
   const [saves, setSaves] = createSignal<Uint8Array[]>([]);
   const [opening, setOpening] = createSignal<ArrayBuffer>();
-  const editable = params.has('edit') || params.has('new');
+  const editable =
+    params.has('edit') || params.has('new') || params.has('libraries');
+  const [memory, setMemory] = createSignal<MemoryLibraries>();
+  const [current, setCurrent] = createSignal<string>();
   const comments = createMemoryComments();
 
   const fonts = fixtureFontSource();
@@ -119,6 +133,39 @@ function Fixture() {
     setOpening(undefined);
   };
 
+  // Team libraries (`?libraries`): a library design and a design using it,
+  // in memory, opened one at a time.
+  const openDesign = async (id: string) => {
+    const m = memory();
+    const bytes = m?.bytes(id);
+    const doc = m?.documents().find((d) => d.id === id);
+    if (!bytes || !doc) return;
+    setCurrent(id);
+    await open(bytes, doc.name);
+  };
+  if (params.has('libraries')) {
+    window.figFixture.libraries = {
+      open: openDesign,
+      current,
+      reads: (id) => memory()?.reads(id) ?? 0,
+    };
+    const library = params.get('library') ?? 'design-system.fig';
+    void Promise.all([
+      fetch(`${__FIG_CORPUS_URL__}${library}`).then((r) => r.arrayBuffer()),
+      FigEngine.blank('App'),
+    ])
+      .then(([lib, app]) => {
+        setMemory(
+          createMemoryLibraries([
+            { id: 'design-system', name: 'Design system', bytes: lib },
+            { id: 'app', name: 'App', bytes: app.slice().buffer },
+          ])
+        );
+        return openDesign(params.get('open') ?? 'design-system');
+      })
+      .catch((e: unknown) => setError(String(e)));
+  }
+
   const file = params.get('file');
   if (params.has('new')) {
     void FigEngine.blank('Untitled')
@@ -138,6 +185,23 @@ function Fixture() {
     <div class="flex h-screen flex-col bg-page text-ink">
       <header class="flex h-10 shrink-0 items-center gap-3 border-edge-muted border-b px-3 text-sm">
         <strong>{name()}</strong>
+        <Show when={memory()}>
+          {(m) => (
+            <For each={m().documents()}>
+              {(d) => (
+                <button
+                  type="button"
+                  class="rounded border border-edge-muted px-2 text-ink-muted hover:text-ink"
+                  data-testid={`fig-fixture-open-${d.id}`}
+                  disabled={current() === d.id}
+                  onClick={() => void openDesign(d.id)}
+                >
+                  {d.name}
+                </button>
+              )}
+            </For>
+          )}
+        </Show>
         <label class="text-ink-muted">
           Open .fig{' '}
           <input
@@ -163,37 +227,44 @@ function Fixture() {
           {(bytes) => <FigOpening bytes={bytes} />}
         </Show>
         <Show when={engine()} keyed>
-          {(e) => (
-            <FigViewerProvider
-              context={{
-                engine: e,
-                fileName: name,
-                download: (blob, n) =>
-                  setDownloads((d) => [...d, { name: n, size: blob.size }]),
-                notifyError: (m) => setErrors((x) => [...x, m]),
-                notifyInfo: (m) => setNotices((x) => [...x, m]),
-                canEdit: () => editable,
-                fileKey: file ?? 'new',
-                comments: comments.store,
-                frameLink: (frame) => {
-                  const url = new URL(location.href);
-                  url.searchParams.set('present', frame);
-                  return url.toString();
-                },
-                presentAt: params.get('present') ?? undefined,
-                fonts,
-                save: async (bytes) => {
-                  if (params.has('reload'))
-                    await FigEngine.open(bytes.slice().buffer).then((e) =>
-                      e.close()
-                    );
-                  setSaves((x) => [...x, bytes]);
-                },
-              }}
-            >
-              <FigViewer />
-            </FigViewerProvider>
-          )}
+          {(e) => {
+            // The design this viewer shows (saves go to it after a switch).
+            const design = current();
+            const store = memory();
+            return (
+              <FigViewerProvider
+                context={{
+                  engine: e,
+                  fileName: name,
+                  download: (blob, n) =>
+                    setDownloads((d) => [...d, { name: n, size: blob.size }]),
+                  notifyError: (m) => setErrors((x) => [...x, m]),
+                  notifyInfo: (m) => setNotices((x) => [...x, m]),
+                  canEdit: () => editable,
+                  fileKey: design ?? file ?? 'new',
+                  comments: comments.store,
+                  frameLink: (frame) => {
+                    const url = new URL(location.href);
+                    url.searchParams.set('present', frame);
+                    return url.toString();
+                  },
+                  presentAt: params.get('present') ?? undefined,
+                  fonts,
+                  libraries: design && store ? store.source(design) : undefined,
+                  save: async (bytes) => {
+                    if (params.has('reload'))
+                      await FigEngine.open(bytes.slice().buffer).then((e) =>
+                        e.close()
+                      );
+                    if (design) store?.store(design, bytes);
+                    setSaves((x) => [...x, bytes]);
+                  },
+                }}
+              >
+                <FigViewer />
+              </FigViewerProvider>
+            );
+          }}
         </Show>
       </main>
     </div>
