@@ -170,20 +170,45 @@ async fn trial_does_not_require_or_stack_an_invite_discount() {
 }
 
 #[tokio::test]
-async fn missing_customer_and_unavailable_plan_never_create_checkout() {
+async fn missing_customer_never_creates_checkout() {
     let service = CheckoutService::new(FakeGateway {
         missing_customer: true,
         ..Default::default()
     });
-    assert!(matches!(
-        service.create(request(true)).await,
-        Err(CheckoutError::MissingCustomer)
-    ));
+    for plan in SeatPlan::PURCHASABLE {
+        for trial in [true, false] {
+            let mut input = request(trial);
+            input.plan = plan;
+            assert!(matches!(
+                service.create(input).await,
+                Err(CheckoutError::MissingCustomer)
+            ));
+        }
+    }
+    assert!(service.gateway.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn max_plan_can_create_a_paid_checkout() {
+    let service = CheckoutService::new(FakeGateway::default());
+    let mut input = request(false);
+    input.plan = SeatPlan::Max;
+    let checkout = service.create(input).await.unwrap();
+    assert_eq!(checkout.trial_days, None);
+    assert_eq!(
+        *service.gateway.created.lock().unwrap(),
+        vec![(CheckoutTerms::Paid, None)]
+    );
+}
+
+#[tokio::test]
+async fn max_trial_never_creates_checkout_or_falls_back_to_paid() {
+    let service = CheckoutService::new(FakeGateway::default());
     let mut input = request(true);
     input.plan = SeatPlan::Max;
     assert!(matches!(
         service.create(input).await,
-        Err(CheckoutError::PlanUnavailable)
+        Err(CheckoutError::TrialUnavailable)
     ));
     assert!(service.gateway.created.lock().unwrap().is_empty());
 }

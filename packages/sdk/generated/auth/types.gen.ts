@@ -60,6 +60,20 @@ export type CheckoutSessionMetadata = {
 };
 
 /**
+ * Hosted checkout with the billing terms the server actually granted.
+ */
+export type CheckoutSessionV2Response = {
+    /**
+     * Trial duration, absent for an immediately paid checkout.
+     */
+    trialDays?: number | null;
+    /**
+     * The opaque URL returned by Stripe.
+     */
+    url: string;
+};
+
+/**
  * Explicit remote environment for future Codex sessions.
  */
 export type CodexConfigRequest = {
@@ -191,6 +205,10 @@ export type CreateCheckoutSessionV2Request = {
      * Tracking metadata for conversion attribution
      */
     metadata?: CheckoutSessionMetadata;
+    /**
+     * Request the automatic, first-subscription 30-day Premium trial.
+     */
+    onboardingTrial?: boolean;
     plan?: null | SeatPlan;
     /**
      * The URL to redirect to on successful checkout
@@ -3610,7 +3628,7 @@ export type CreateCheckoutSessionV2Errors = {
 export type CreateCheckoutSessionV2Error = CreateCheckoutSessionV2Errors[keyof CreateCheckoutSessionV2Errors];
 
 export type CreateCheckoutSessionV2Responses = {
-    200: StripeSessionResponse;
+    200: CheckoutSessionV2Response;
 };
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];
