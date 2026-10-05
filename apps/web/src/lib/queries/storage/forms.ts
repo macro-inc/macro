@@ -163,16 +163,16 @@ export function createForm(
   });
 }
 
-/** Replace a form's layout; the answer is the detail as stored, seeded into the cache. */
+/** Save the shared draft and report whether it became the respondent version. */
 export function putFormLayout(
   formId: string,
   layout: FormLayout
-): ResultAsync<FormDetail, FormsError[]> {
+): ResultAsync<FormCollaboration, FormsError[]> {
   return storageServiceClient.forms
     .putLayout({ id: formId, layout })
-    .map((detail) => {
-      setFormDetail(detail);
-      return detail;
+    .map((result) => {
+      setFormDetail(result.detail);
+      return result;
     });
 }
 

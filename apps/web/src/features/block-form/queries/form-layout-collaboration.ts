@@ -20,6 +20,7 @@ import {
   FormFlushError,
 } from './form-collaboration';
 import { toFormLayout, toLayoutDocument } from './form-detail';
+import { publicationMessage } from './form-publication';
 
 /**
  * Opens the form's shared layout, seeding it from the published one the
@@ -85,7 +86,7 @@ export function createFormLayoutCollaboration(
     },
     publish: async () => {
       const published = await collaborate(formId);
-      return { publicationError: published.publicationError };
+      return { publicationError: publicationMessage(published) };
     },
     connect: () => {
       if (!token) throw new Error('This form’s editing session was refused.');

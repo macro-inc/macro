@@ -3,11 +3,13 @@
 use std::sync::Arc;
 
 use collab_surface::domain::models::{CollabSurfaceError, SurfaceUpdate};
-use collab_surface::domain::ports::OwnedSurfaceService;
+use collab_surface::domain::ports::{FormIds, OwnedSurfaceService};
 use model_entity::EntityType;
+use uuid::Uuid;
 
 use crate::domain::drafts::{FormDraftError, FormDraftStore};
 use crate::domain::models::FormId;
+use crate::domain::ports::FormsRepo;
 
 /// Adapter over parent-owned surfaces. It never constructs another domain's
 /// repository or imports its outbound implementation.
@@ -79,5 +81,30 @@ impl<Surfaces: OwnedSurfaceService> FormDraftStore for SurfaceFormDrafts<Surface
             .retire_surface(id.into_uuid())
             .await
             .map_err(failure)
+    }
+}
+
+/// The forms domain's ids, as collab surfaces ask for them, read through
+/// the forms repository port: a form's id is its surface's id, so the
+/// public surface API never takes one.
+pub struct RepositoryFormIds<Repository> {
+    repository: Arc<Repository>,
+}
+
+impl<Repository> RepositoryFormIds<Repository> {
+    /// Answer from the composition root's forms repository.
+    pub fn new(repository: Arc<Repository>) -> Self {
+        Self { repository }
+    }
+}
+
+impl<Repository: FormsRepo> FormIds for RepositoryFormIds<Repository> {
+    async fn is_form_id(&self, id: Uuid) -> Result<bool, rootcause::Report> {
+        Ok(self
+            .repository
+            .form(FormId::from_uuid(id))
+            .await
+            .map_err(|error| rootcause::Report::new(error).into_dynamic())?
+            .is_some())
     }
 }

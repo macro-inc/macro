@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyLayout,
   type CollaborativeLayout,
+  type CollaborativeSection,
   FORMAT_VERSION,
   LAYOUT_CONTAINERS,
   readLayout,
@@ -1114,5 +1115,169 @@ describe('readLayout', () => {
       DETAILS,
       CONTACT,
     ]);
+  });
+});
+
+describe('booking order', () => {
+  const BOOKING = '0199a000-0000-7000-8000-000000000004';
+  const SECOND_BOOKING = '0199a000-0000-7000-8000-000000000005';
+  const TRAVEL = '0199a000-0000-7000-8000-000000000006';
+  const contact: CollaborativeSection = {
+    kind: 'questions',
+    id: CONTACT,
+    title: 'Contact',
+    description: '',
+    questions: [
+      {
+        id: NAME,
+        column: NAME_COLUMN,
+        helpText: '',
+        required: false,
+        widget: null,
+      },
+    ],
+  };
+  const details: CollaborativeSection = {
+    kind: 'questions',
+    id: DETAILS,
+    title: 'Details',
+    description: '',
+    questions: [],
+  };
+  const travel: CollaborativeSection = {
+    kind: 'questions',
+    id: TRAVEL,
+    title: 'Travel',
+    description: '',
+    questions: [],
+  };
+  const introBooking: CollaborativeSection = {
+    kind: 'booking',
+    id: BOOKING,
+    title: 'Book a call',
+    description: '',
+    target: {
+      profileId: '0199a000-0000-7000-8000-000000000031',
+      eventTypeId: '0199a000-0000-7000-8000-000000000032',
+    },
+  };
+  const reviewBooking: CollaborativeSection = {
+    kind: 'booking',
+    id: SECOND_BOOKING,
+    title: 'Book a review',
+    description: '',
+    target: {
+      profileId: '0199a000-0000-7000-8000-000000000031',
+      eventTypeId: '0199a000-0000-7000-8000-000000000033',
+    },
+  };
+
+  /** `layout` edited into a copy of `snapshot` by the Loro peer `peer`. */
+  function editAs(
+    peer: bigint,
+    snapshot: Uint8Array,
+    layout: CollaborativeLayout
+  ): LoroDoc {
+    const document = LoroDoc.fromSnapshot(snapshot);
+    document.setPeerId(peer);
+    applyLayout(document, readLayout(document), layout);
+    document.commit();
+    return document;
+  }
+
+  function merged(first: LoroDoc, second: LoroDoc): LoroDoc {
+    const document = LoroDoc.fromSnapshot(first.export({ mode: 'snapshot' }));
+    document.import(second.export({ mode: 'snapshot' }));
+    return document;
+  }
+
+  it('reads a booking step stored before a section last', () => {
+    const document = LoroDoc.fromSnapshot(
+      seedLayout({ sections: [contact, details, introBooking] })
+    );
+    document.getMovableList(LAYOUT_CONTAINERS.sectionOrder).move(2, 0);
+    document.commit();
+
+    expect(readLayout(document)).toEqual({
+      sections: [contact, details, introBooking],
+    });
+  });
+
+  it('keeps a booking step last beside a section added at the end concurrently', () => {
+    const snapshot = seedLayout({ sections: [contact, details] });
+    const stored: unknown[][] = [];
+    for (const [bookingPeer, travelPeer] of [
+      [1n, 2n],
+      [2n, 1n],
+    ] as const) {
+      const booked = editAs(bookingPeer, snapshot, {
+        sections: [contact, details, introBooking],
+      });
+      const travelled = editAs(travelPeer, snapshot, {
+        sections: [contact, details, travel],
+      });
+
+      const bookedFirst = merged(booked, travelled);
+      const travelledFirst = merged(travelled, booked);
+      stored.push(
+        bookedFirst.getMovableList(LAYOUT_CONTAINERS.sectionOrder).toArray()
+      );
+      expect(readLayout(bookedFirst)).toEqual({
+        sections: [contact, details, travel, introBooking],
+      });
+      expect(readLayout(travelledFirst)).toEqual(readLayout(bookedFirst));
+    }
+    expect(stored).toContainEqual([CONTACT, DETAILS, BOOKING, TRAVEL]);
+  });
+
+  it('reads two concurrent booking steps last, and an edit or a delete repairs them', () => {
+    const snapshot = seedLayout({ sections: [contact, details] });
+    const document = merged(
+      editAs(1n, snapshot, { sections: [contact, details, introBooking] }),
+      editAs(2n, snapshot, { sections: [contact, details, reviewBooking] })
+    );
+
+    const both = readLayout(document);
+    expect(both.sections.slice(0, 2)).toEqual([contact, details]);
+    expect(both.sections.slice(2)).toHaveLength(2);
+    expect(both.sections.slice(2)).toEqual(
+      expect.arrayContaining([introBooking, reviewBooking])
+    );
+
+    const renamed = {
+      sections: both.sections.map((section) =>
+        section.id === CONTACT ? { ...section, title: 'Contact us' } : section
+      ),
+    };
+    applyLayout(document, both, renamed);
+    document.commit();
+    expect(readLayout(document)).toEqual(renamed);
+
+    applyLayout(document, renamed, {
+      sections: renamed.sections.filter(
+        (section) => section.id !== SECOND_BOOKING
+      ),
+    });
+    document.commit();
+    expect(readLayout(document)).toEqual({
+      sections: [{ ...contact, title: 'Contact us' }, details, introBooking],
+    });
+  });
+
+  it('moves a section where asked over a booking step stored mid-order', () => {
+    const document = LoroDoc.fromSnapshot(
+      seedLayout({ sections: [contact, details, introBooking] })
+    );
+    document.getMovableList(LAYOUT_CONTAINERS.sectionOrder).move(2, 1);
+    document.commit();
+
+    applyLayout(document, readLayout(document), {
+      sections: [details, contact, introBooking],
+    });
+    document.commit();
+
+    expect(readLayout(document)).toEqual({
+      sections: [details, contact, introBooking],
+    });
   });
 });

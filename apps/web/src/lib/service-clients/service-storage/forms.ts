@@ -151,7 +151,7 @@ export const formsClient = {
 
   /** Replace the sections and questions as one document. */
   putLayout({ id, layout }: { id: string; layout: FormLayout }) {
-    return formsFetch<FormDetail>(`/forms/${id}/layout`, {
+    return formsFetch<FormCollaboration>(`/forms/${id}/layout`, {
       method: 'PUT',
       ...json(layout),
     });

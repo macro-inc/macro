@@ -477,12 +477,31 @@ export function createFormCollaborationSession(
     }
   );
   let selection: FormSelection | undefined;
+  // Peers keep only a state stamped in a later millisecond than the one they
+  // hold, so a second change within a millisecond waits for the next one.
+  let sentAt = Number.NEGATIVE_INFINITY;
+  let sendTimer: ReturnType<typeof setTimeout> | undefined;
+  function sendSelection() {
+    if (sendTimer !== undefined) return;
+    if (Date.now() <= sentAt) {
+      sendTimer = setTimeout(() => {
+        sendTimer = undefined;
+        sendSelection();
+      }, 1);
+      return;
+    }
+    // A cleared selection is sent as one, so peers drop it now rather than
+    // when it expires.
+    awareness.updateLocalAwareness(selection ?? null);
+    // Read after the store stamped it: the clock may have ticked meanwhile.
+    sentAt = Date.now();
+  }
   const heartbeat = setInterval(() => {
     if (
       selection &&
       connection()?.source.status() === SyncSourceStatus.Connected
     )
-      awareness.updateLocalAwareness(selection);
+      sendSelection();
   }, HEARTBEAT_MS);
 
   // The engine starts before the transport exists when a cached copy opens
@@ -673,6 +692,7 @@ export function createFormCollaborationSession(
     disposed = true;
     window.removeEventListener('online', reconnectOnline);
     clearInterval(heartbeat);
+    clearTimeout(sendTimer);
     clearTimeout(publishTimer);
     unsubscribeDoc?.();
     unsubscribeManager();
@@ -753,9 +773,7 @@ export function createFormCollaborationSession(
       ),
     setSelection: (next) => {
       selection = next;
-      // A cleared selection is sent as one, so peers drop it now rather than
-      // when it expires.
-      awareness.updateLocalAwareness(next ?? null);
+      sendSelection();
     },
   };
 }

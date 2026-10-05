@@ -274,7 +274,7 @@ async fn a_widget_that_no_longer_fits_its_retyped_column_reads_as_the_kinds_defa
         )
         .await
         .unwrap();
-    assert_eq!(put.sections, detail.sections);
+    assert_eq!(put.detail.sections, detail.sections);
 }
 
 #[tokio::test]

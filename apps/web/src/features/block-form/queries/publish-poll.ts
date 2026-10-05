@@ -6,10 +6,11 @@
  */
 import { createDatabaseColumn } from '@block-database/queries/columns';
 import { createForm, putFormLayout, updateForm } from '@queries/storage/forms';
-import { err, errAsync, ResultAsync } from 'neverthrow';
+import { err, errAsync, ok, ResultAsync } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import type { FormWriteFailure } from '../context/form-context';
 import { columnWriteFailure } from './column-writes';
+import { publicationMessage } from './form-publication';
 import { writeFailureOf } from './form-sources';
 
 export type PollDraft = {
@@ -90,7 +91,12 @@ export function publishPoll(
                 ],
               },
             ],
-          }).mapErr(writeFailureOf)
+          })
+            .mapErr(writeFailureOf)
+            .andThen((saved) => {
+              const message = publicationMessage(saved);
+              return message ? err({ message }) : ok(saved.detail);
+            })
         )
         .andThen(() =>
           updateForm(formId, { tallyVisible: draft.showResults }).mapErr(

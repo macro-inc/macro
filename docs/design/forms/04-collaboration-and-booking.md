@@ -42,7 +42,9 @@ Awareness identifies the selected question or section.
 The forms service seeds the document from the existing layout once. Durable
 Loro state is the source of layout edits. The relational layout is a validated
 projection, replaced together with its revision under a compare-and-set check.
-Invalid drafts remain repairable in the builder; respondents use the last
+Drafts with validation problems remain repairable in the builder. Malformed
+or unsupported records can be repaired by an explicit SDK layout replacement
+in the same document history. Respondents use the last
 validated layout. Storage or sync failures are reported, never treated as a
 successful save. Reads and submissions refresh from durable state, so edits
 delivered before the last editor closes do not require a remaining browser to
@@ -51,7 +53,15 @@ publish them.
 `POST /forms/{id}/collaboration` requires Edit and returns the form detail plus
 any draft validation problem. Existing SDK layout replacements update the same
 Loro document with an expected revision; concurrent replacements can return
-Conflict. Purging a form retires its owned surface.
+Conflict before writing. The replacement response has the same `{ detail,
+publicationError }` shape as collaboration. A publication problem after a
+successful draft write is reported in that success response: `detail` remains
+the last respondent version. Callers can repair the draft or read collaboration
+to retry publication, without unknowingly repeating a saved write. An explicit
+replacement also repairs malformed draft records while preserving document
+history. Respondent reads request a shallow snapshot at the current revision,
+so old edit history does not inflate each request. Purging a form retires its
+owned surface.
 
 ## Names
 

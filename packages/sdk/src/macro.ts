@@ -42,6 +42,7 @@ export {
   type FormBookingStep,
   type FormBookingTarget,
   type FormEntityHandle,
+  type FormLayoutResult,
   type FormQuestionPlacement,
   type FormQuestionTally,
   FormReference,

@@ -6,7 +6,11 @@ import { z } from 'zod';
 import { queryClient } from '../client';
 import { invalidatePreview } from '../preview';
 import { invalidateDatabase } from './databases';
-import { parseMessageData, useDatabaseTableChanges } from './databases-sync';
+import {
+  parseMessageData,
+  useDatabaseMetadataChanges,
+  useDatabaseTableChanges,
+} from './databases-sync';
 import { formsKeys, myResponseKeyOf } from './keys';
 
 /** The forms service pings `form:<id>` after a layout, fact or response write. */
@@ -46,7 +50,8 @@ export function useFormChangedSync(formId: Accessor<string | undefined>) {
  */
 export function useFormDatabaseSync(
   databaseId: Accessor<string | undefined>,
-  isEditor: Accessor<boolean>
+  isEditor: Accessor<boolean>,
+  formId: Accessor<string | undefined>
 ) {
   useEntitySubscription(
     () => {
@@ -57,6 +62,12 @@ export function useFormDatabaseSync(
     },
     (entity) => void invalidateDatabase(entity.entity_id)
   );
+  useDatabaseMetadataChanges((change) => {
+    if (!isEditor() || change.databaseId !== databaseId()) return;
+    void invalidateDatabase(change.databaseId);
+    const id = formId();
+    if (id) void invalidatePreview(id);
+  });
 }
 
 /**

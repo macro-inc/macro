@@ -417,21 +417,22 @@ function BuilderCanvas(
   const bookingLinks = context.booking.createLinks(
     () => !props.detail.tableGone
   );
-  const bookingEvent = context.booking.createEvent(
-    () => booking()?.bookingTarget ?? undefined
-  );
-  const bookingLinkState = (): BookingLinkState => {
-    const read = bookingEvent.value();
-    if (read === undefined)
-      return bookingEvent.failure()
-        ? { kind: 'unavailable' }
-        : { kind: 'loading' };
-    if (read === null) return { kind: 'unavailable' };
-    return {
-      kind: 'ready',
-      title: read.event.title,
-      durationMinutes: read.event.durationMinutes,
-      host: read.profile.name,
+  /** What a booking card shows of its own `target`. */
+  const bookingLinkState = (
+    target: Accessor<FormBookingTarget | undefined>
+  ): Accessor<BookingLinkState> => {
+    const event = context.booking.createEvent(target);
+    return () => {
+      const read = event.value();
+      if (read === undefined)
+        return event.failure() ? { kind: 'unavailable' } : { kind: 'loading' };
+      if (read === null) return { kind: 'unavailable' };
+      return {
+        kind: 'ready',
+        title: read.event.title,
+        durationMinutes: read.event.durationMinutes,
+        host: read.profile.name,
+      };
     };
   };
 
@@ -723,41 +724,54 @@ function BuilderCanvas(
                             }
                           />
                         </Match>
-                        <Match when={current().kind === 'booking'}>
-                          <BookingCard
-                            sectionId={sectionId}
-                            title={current().title}
-                            description={current().description}
-                            link={bookingLinkState()}
-                            menu={
-                              <SectionMenu
-                                label={`${sectionName(layout(), sectionId)} actions`}
-                                canMoveUp={false}
-                                canMoveDown={false}
-                                deleteLabel="Remove booking step"
-                                onMoveUp={() => {}}
-                                onMoveDown={() => {}}
-                                onDelete={() =>
-                                  builder.removeSection(sectionId)
+                        <Match when={current().kind === 'booking' && current()}>
+                          {(booking) => {
+                            const link = bookingLinkState(
+                              () => booking().bookingTarget ?? undefined
+                            );
+                            return (
+                              <BookingCard
+                                sectionId={sectionId}
+                                title={current().title}
+                                description={current().description}
+                                link={link()}
+                                menu={
+                                  <SectionMenu
+                                    label={`${sectionName(layout(), sectionId)} actions`}
+                                    canMoveUp={false}
+                                    canMoveDown={false}
+                                    deleteLabel="Remove booking step"
+                                    onMoveUp={() => {}}
+                                    onMoveDown={() => {}}
+                                    onDelete={() =>
+                                      builder.removeSection(sectionId)
+                                    }
+                                  />
+                                }
+                                change={bookingMenu({
+                                  trigger: 'Change',
+                                  triggerLabel: 'Change booking link',
+                                  triggerClass: 'shrink-0',
+                                  triggerVariant: 'outline',
+                                  selected:
+                                    current().bookingTarget ?? undefined,
+                                  onChoose: (target) =>
+                                    builder.changeBookingTarget(
+                                      sectionId,
+                                      target
+                                    ),
+                                })}
+                                onTitle={(title) =>
+                                  builder.updateSection(sectionId, { title })
+                                }
+                                onDescription={(description) =>
+                                  builder.updateSection(sectionId, {
+                                    description,
+                                  })
                                 }
                               />
-                            }
-                            change={bookingMenu({
-                              trigger: 'Change',
-                              triggerLabel: 'Change booking link',
-                              triggerClass: 'shrink-0',
-                              triggerVariant: 'outline',
-                              selected: current().bookingTarget ?? undefined,
-                              onChoose: (target) =>
-                                builder.changeBookingTarget(sectionId, target),
-                            })}
-                            onTitle={(title) =>
-                              builder.updateSection(sectionId, { title })
-                            }
-                            onDescription={(description) =>
-                              builder.updateSection(sectionId, { description })
-                            }
-                          />
+                            );
+                          }}
                         </Match>
                         <Match when={current().kind === 'questions'}>
                           <SectionCard

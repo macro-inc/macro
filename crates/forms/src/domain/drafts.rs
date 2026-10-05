@@ -39,6 +39,15 @@ pub trait FormDraftRepository: Send + Sync + 'static {
     /// Mark an initialized draft as authoritative. Idempotent; false if gone.
     fn enable_draft(&self, id: FormId) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
+    /// One section or question id already owned by another form, if any.
+    /// SDK replacements check this before changing the durable document;
+    /// projection repeats the check under its transaction to cover races.
+    fn conflicting_layout_id(
+        &self,
+        id: FormId,
+        layout: &FormLayout,
+    ) -> impl Future<Output = Result<Option<uuid::Uuid>, Self::Error>> + Send;
+
     /// Replace layout and revision together, only if the prior revision and
     /// required audience still match. A failed check leaves both unchanged.
     fn project_layout(

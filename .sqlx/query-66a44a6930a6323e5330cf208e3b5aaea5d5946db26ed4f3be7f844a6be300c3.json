@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE form_sections SET booking_target = '{\"profileId\": \"not a uuid\"}' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "66a44a6930a6323e5330cf208e3b5aaea5d5946db26ed4f3be7f844a6be300c3"
+}

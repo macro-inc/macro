@@ -1,46 +1,43 @@
-/** Form link controls for every entry into Macro's shared share dialog. */
-import { toast } from '@core/component/Toast/Toast';
-import { getWebOrigin } from '@core/util/webOrigin';
+/** A form's controls in the share dialog's link area, supplied by its host. */
+
+import { useCopyLink } from '@core/util/useCopyLink';
+import Copy from '@phosphor/copy.svg';
+import { CopyButton } from '@ui';
 import { Show } from 'solid-js';
 import { AudiencePanel } from './components/share/audience-panel';
-import { respondLink } from './core/respond-link';
-import { createAudienceChange } from './primitives/create-audience-change';
-import {
-  createFormDetailSource,
-  updateFormMetadata,
-} from './queries/form-sources';
+import type { FormAudience, FormDetail } from './core/form-model';
 
-export default function FormLinkSharing(props: { formId: string }) {
-  const source = createFormDetailSource(() => props.formId);
-  const audience = createAudienceChange({
-    detail: source.detail,
-    updateMetadata: updateFormMetadata,
-    notify: {
-      success: (message) => toast.success(message),
-      failure: (message) => toast.failure(message),
-    },
-  });
+export function FormLinkSharing(props: {
+  detail: FormDetail;
+  respondLink: string;
+  /** Where editors open the form; respondents never see it. */
+  editorLink: string;
+  pending: boolean;
+  onAudienceChange: (audience: FormAudience) => void;
+  onCopyFailure: () => void;
+}) {
+  const copy = useCopyLink();
   return (
-    <Show
-      when={source.detail()}
-      fallback={
-        <p role="status" class="text-sm text-ink-muted">
-          {source.failure()
-            ? 'Form sharing couldn’t be loaded. Reopen sharing to try again.'
-            : 'Loading form sharing…'}
-        </p>
-      }
-    >
-      {(detail) => (
-        <AudiencePanel
-          audience={detail().form.audience}
-          canChange={detail().access === 'owner'}
-          respondLink={respondLink(`${getWebOrigin()}/app/`, props.formId)}
-          pending={audience.pending()}
-          onChange={(next) => void audience.change(next)}
-          onCopyFailure={() => toast.failure('Could not copy form link.')}
-        />
-      )}
-    </Show>
+    <div class="flex flex-col gap-3">
+      <AudiencePanel
+        audience={props.detail.form.audience}
+        canChange={props.detail.access === 'owner'}
+        respondLink={props.respondLink}
+        pending={props.pending}
+        onChange={props.onAudienceChange}
+        onCopyFailure={props.onCopyFailure}
+      />
+      <Show when={props.detail.access !== 'view'}>
+        <div class="flex justify-end border-t border-edge-muted pt-3">
+          <CopyButton
+            variant="outline"
+            onClick={() => copy(props.editorLink, { silent: true })}
+          >
+            <Copy class="size-4" />
+            Copy editor link
+          </CopyButton>
+        </div>
+      </Show>
+    </div>
   );
 }

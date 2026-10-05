@@ -2,6 +2,7 @@ import Spinner from '@phosphor/spinner.svg';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { DraftInput } from './draft-input';
+import { LiveTextInput } from './live-text-input';
 
 /**
  * One question in its section's card. Collapsed it previews how it is asked;
@@ -26,7 +27,7 @@ export function QuestionRow(props: {
   footer: JSX.Element;
   onSelect: () => void;
   onRename: (name: string) => void;
-  onHelpText: (helpText: string) => void;
+  onHelpText: (helpText: string) => boolean;
 }) {
   return (
     <div
@@ -112,13 +113,13 @@ export function QuestionRow(props: {
           </div>
         </div>
         <Show when={props.selected}>
-          <input
+          <LiveTextInput
             aria-label="Help text"
             placeholder="Help text (optional)"
             value={props.helpText}
             maxlength={2000}
             class="h-8 w-full rounded-md border border-transparent bg-transparent px-2.5 text-xs text-ink-muted outline-none placeholder:text-ink-placeholder hover:border-edge-muted focus:border-edge-focus focus:bg-input"
-            onInput={(event) => props.onHelpText(event.currentTarget.value)}
+            onEdit={props.onHelpText}
           />
         </Show>
         <div class={props.selected ? 'px-0.5' : 'pointer-events-none px-0.5'}>

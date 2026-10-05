@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FormDetail } from './formDetail';
+import type { FormPublicationProblem } from './formPublicationProblem';
 
 /**
  * A ready collaborative form and the result of publishing its latest draft.
@@ -14,5 +15,5 @@ export interface FormCollaboration {
   detail: FormDetail;
   /** Why the current draft cannot yet replace the respondent layout.
 Only editors can request this result. */
-  publicationError?: string;
+  publicationError?: FormPublicationProblem;
 }

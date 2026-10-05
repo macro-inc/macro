@@ -29,7 +29,8 @@ default. */
   description: string;
   /** The form. */
   id: string;
-  /** Its name, independent of its database's. */
+  /** Its display name. A standalone form follows the database it created;
+a form attached to an existing table has its own name. */
   name: string;
   /** Its owner. */
   ownerId: string;

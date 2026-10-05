@@ -234,6 +234,7 @@ describe('Forms', () => {
       if (request.method === 'PUT') {
         writes++;
         layout = await request.json();
+        return Response.json({ detail: registration });
       }
       return Response.json(registration);
     }) as typeof fetch;
@@ -243,7 +244,7 @@ describe('Forms', () => {
     const [question] = await form.questions();
     if (!section || !question) throw new Error('Missing fixture layout');
     const column = await question.column();
-    await form.replaceLayout([
+    const saved = await form.replaceLayout([
       {
         kind: 'questions',
         section,
@@ -251,6 +252,7 @@ describe('Forms', () => {
         questions: [{ question, column, required: true, widget: 'short' }],
       },
     ]);
+    expect(saved).toEqual({ form, publicationError: undefined });
     expect(layout).toEqual({
       sections: [
         {
@@ -276,6 +278,27 @@ describe('Forms', () => {
         { kind: 'questions', section, title: 'Invalid', questions: [] },
       ]),
     ).rejects.toThrow('does not belong');
+    expect(writes).toBe(1);
+  });
+
+  test('reports a saved draft that still needs publication without retrying the write', async () => {
+    let writes = 0;
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      if (request.method === 'PUT') {
+        writes++;
+        return Response.json({
+          detail: registration,
+          publicationError: { kind: 'pending' },
+        });
+      }
+      return Response.json(registration);
+    }) as typeof fetch;
+    const macro = new Macro({ token: 'user-token', hosts: { storage: host } });
+    const form = macro.forms.byId(formId);
+    const saved = await form.replaceLayout([]);
+    expect(saved.form).toBe(form);
+    expect(saved.publicationError).toEqual({ kind: 'pending' });
     expect(writes).toBe(1);
   });
 
@@ -462,29 +485,58 @@ describe('Forms', () => {
 test('an accepted form response exposes its unlocked booking step', async () => {
   globalThis.fetch = (async (input) => {
     const request = input instanceof Request ? input : new Request(input);
-    if (new URL(request.url).pathname.endsWith('/responses/mine')) return Response.json({
-      response: { id: responseId, form: formId, row: rowId, status: 'submitted', stoppedAtSection: null,
-        submittedAt: '2026-10-05T00:00:00Z', updatedAt: '2026-10-05T00:00:00Z' },
-      answers: [],
-      booking: { section: '0198a4cc-e138-7670-a308-a6b766603709', title: 'Book a conversation', description: 'Choose a time that works.',
-        target: { profileId: '0198a4cc-e138-7670-a308-a6b76660370a', eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b' } },
-    });
-    if (request.method === 'POST') return Response.json({
-      outcome: 'submitted', response: responseId, row: rowId,
-      booking: {
-        section: '0198a4cc-e138-7670-a308-a6b766603709',
-        title: 'Book a conversation', description: 'Choose a time that works.',
-        target: { profileId: '0198a4cc-e138-7670-a308-a6b76660370a', eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b' },
-      },
-    });
+    if (new URL(request.url).pathname.endsWith('/responses/mine'))
+      return Response.json({
+        response: {
+          id: responseId,
+          form: formId,
+          row: rowId,
+          status: 'submitted',
+          stoppedAtSection: null,
+          submittedAt: '2026-10-05T00:00:00Z',
+          updatedAt: '2026-10-05T00:00:00Z',
+        },
+        answers: [],
+        booking: {
+          section: '0198a4cc-e138-7670-a308-a6b766603709',
+          title: 'Book a conversation',
+          description: 'Choose a time that works.',
+          target: {
+            profileId: '0198a4cc-e138-7670-a308-a6b76660370a',
+            eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b',
+          },
+        },
+      });
+    if (request.method === 'POST')
+      return Response.json({
+        outcome: 'submitted',
+        response: responseId,
+        row: rowId,
+        booking: {
+          section: '0198a4cc-e138-7670-a308-a6b766603709',
+          title: 'Book a conversation',
+          description: 'Choose a time that works.',
+          target: {
+            profileId: '0198a4cc-e138-7670-a308-a6b76660370a',
+            eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b',
+          },
+        },
+      });
     return Response.json(registration);
   }) as typeof fetch;
   const macro = new Macro({ token: 'user-token', hosts: { storage: host } });
   const outcome = await macro.forms.byId(formId).submit([]);
   if (outcome.outcome !== 'submitted') throw new Error('Expected acceptance');
-  expect(outcome.booking?.section.id).toBe('0198a4cc-e138-7670-a308-a6b766603709');
-  expect(outcome.booking?.target).toEqual({ profileId: '0198a4cc-e138-7670-a308-a6b76660370a', eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b' });
+  expect(outcome.booking?.section.id).toBe(
+    '0198a4cc-e138-7670-a308-a6b766603709',
+  );
+  expect(outcome.booking?.target).toEqual({
+    profileId: '0198a4cc-e138-7670-a308-a6b76660370a',
+    eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b',
+  });
   expect((await outcome.response.booking())?.title).toBe('Book a conversation');
   await outcome.response.refresh();
-  expect((await outcome.response.booking())?.section.id).toBe('0198a4cc-e138-7670-a308-a6b766603709');
+  expect((await outcome.response.booking())?.section.id).toBe(
+    '0198a4cc-e138-7670-a308-a6b766603709',
+  );
 });

@@ -12,6 +12,7 @@ import {
   pruneBrokenRules,
   removeQuestion,
   removeSection,
+  sectionInsertIndex,
   swapQuestionColumn,
   updateQuestion,
   updateSection,
@@ -316,6 +317,33 @@ describe('broken gate rules', () => {
     expect(repaired.layout.sections[1].gateRules?.conditions).toEqual([]);
     expect(brokenGateColumns(offsite(), GATE)).toEqual([]);
   });
+
+  it('keeps edits open around a screener whose question went in the grid', () => {
+    const layout: FormLayout = {
+      sections: offsite().sections.map((section) =>
+        section.id === ABOUT
+          ? {
+              ...section,
+              questions: section.questions.filter(
+                (item) => item.id !== TEAM_QUESTION
+              ),
+            }
+          : section
+      ),
+    };
+    expect(
+      updateSection(layout, DETAILS, { title: 'Diet' })._unsafeUnwrap()
+        .sections[2]?.title
+    ).toBe('Diet');
+    expect(
+      order(
+        moveQuestion(layout, DIET_QUESTION, {
+          sectionId: ABOUT,
+          index: 1,
+        })._unsafeUnwrap()
+      )
+    ).toEqual(['About you: 1,3', 'Eligibility: ', 'Details: ']);
+  });
 });
 
 describe('pruning gate rules', () => {
@@ -593,6 +621,7 @@ describe('reads', () => {
 
 describe('booking step', () => {
   const BOOKING = '0192aaaa-0000-7000-8000-000000000009';
+  const SECOND_BOOKING = '0192aaaa-0000-7000-8000-000000000010';
   const INTRO_CALL = {
     profileId: '0192eeee-0000-7000-8000-000000000001',
     eventTypeId: '0192eeee-0000-7000-8000-000000000002',
@@ -710,6 +739,102 @@ describe('booking step', () => {
         ._unsafeUnwrap()
         .sections.map((section) => section.title)
     ).toEqual(['Details', 'About you', 'Eligibility', 'Book a call']);
+  });
+
+  /** withBooking() and the booking step a concurrent editor added, both read last. */
+  function withTwoBookings(): FormLayout {
+    return {
+      sections: [
+        ...withBooking().sections,
+        {
+          id: SECOND_BOOKING,
+          title: 'Book a review',
+          description: '',
+          kind: 'booking',
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: REVIEW_CALL,
+          questions: [],
+        },
+      ],
+    };
+  }
+
+  it('places a new section before the booking step, at the index it lands at', () => {
+    expect(sectionInsertIndex(withBooking(), 'questions', 4)).toBe(3);
+    expect(sectionInsertIndex(withBooking(), 'gate', 1)).toBe(1);
+    expect(sectionInsertIndex(withBooking(), 'booking', 0)).toBe(4);
+    expect(sectionInsertIndex(withTwoBookings(), 'questions', 5)).toBe(3);
+    expect(sectionInsertIndex(offsite(), 'questions', 9)).toBe(3);
+    expect(sectionInsertIndex(offsite(), 'questions', -2)).toBe(0);
+  });
+
+  it('keeps every edit open on a form two editors gave a booking step at once', () => {
+    const layout = withTwoBookings();
+    expect(
+      updateSection(layout, ABOUT, { title: 'About' })._unsafeUnwrap()
+        .sections[0]?.title
+    ).toBe('About');
+    expect(
+      order(
+        moveQuestion(layout, TEAM_QUESTION, {
+          sectionId: ABOUT,
+          index: 0,
+        })._unsafeUnwrap()
+      )
+    ).toEqual([
+      'About you: 2,1',
+      'Eligibility: ',
+      'Details: 3',
+      'Book a call: ',
+      'Book a review: ',
+    ]);
+    expect(
+      updateSection(layout, SECOND_BOOKING, {
+        description: 'Thirty minutes',
+      })._unsafeUnwrap().sections[4]?.description
+    ).toBe('Thirty minutes');
+    expect(
+      addSection(
+        layout,
+        {
+          id: 'travel',
+          title: 'Travel',
+          description: '',
+          kind: 'questions',
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: null,
+          questions: [],
+        },
+        5
+      )
+        ._unsafeUnwrap()
+        .sections.map((section) => section.title)
+    ).toEqual([
+      'About you',
+      'Eligibility',
+      'Details',
+      'Travel',
+      'Book a call',
+      'Book a review',
+    ]);
+    expect(
+      removeSection(layout, SECOND_BOOKING)
+        ._unsafeUnwrap()
+        .layout.sections.map((section) => section.title)
+    ).toEqual(['About you', 'Eligibility', 'Details', 'Book a call']);
+  });
+
+  it('still refuses an edit that adds a problem to a form already holding one', () => {
+    expect(
+      moveSection(withTwoBookings(), DETAILS, 4)._unsafeUnwrapErr()
+    ).toEqual({ kind: 'booking-must-be-last', sectionId: SECOND_BOOKING });
+    expect(moveSection(withTwoBookings(), GATE, 0)._unsafeUnwrapErr()).toEqual({
+      kind: 'gate-before-question',
+      gateSectionId: GATE,
+      columnId: TEAM_COLUMN,
+    });
   });
 
   it('takes no questions', () => {

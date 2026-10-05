@@ -6,6 +6,7 @@ import ShieldCheck from '@phosphor/shield-check.svg';
 import Trash from '@phosphor/trash.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import { LiveTextarea, LiveTextInput } from './live-text-input';
 
 /** The menu every section and gate has: move it, or delete it. */
 export function SectionMenu(props: {
@@ -77,8 +78,8 @@ export function SectionCard(props: {
   routing: JSX.Element;
   children: JSX.Element;
   empty: boolean;
-  onTitle: (title: string) => void;
-  onDescription: (description: string) => void;
+  onTitle: (title: string) => boolean;
+  onDescription: (description: string) => boolean;
 }) {
   return (
     <section
@@ -109,21 +110,21 @@ export function SectionCard(props: {
                 : `${props.questionCount} questions`}
             </span>
           </div>
-          <input
+          <LiveTextInput
             aria-label="Section title"
             placeholder="Untitled section"
             value={props.title}
             maxlength={200}
             class="h-8 w-full rounded-md border border-transparent bg-transparent px-1.5 text-base font-semibold text-ink outline-none placeholder:text-ink-placeholder hover:border-edge-muted focus:border-edge-focus focus:bg-input"
-            onInput={(event) => props.onTitle(event.currentTarget.value)}
+            onEdit={props.onTitle}
           />
-          <input
+          <LiveTextInput
             aria-label="Section description"
             placeholder="Description (optional)"
             value={props.description}
             maxlength={2000}
             class="h-7 w-full rounded-md border border-transparent bg-transparent px-1.5 text-xs text-ink-muted outline-none placeholder:text-ink-placeholder hover:border-edge-muted focus:border-edge-focus focus:bg-input"
-            onInput={(event) => props.onDescription(event.currentTarget.value)}
+            onEdit={props.onDescription}
           />
         </div>
         <div class="flex shrink-0 items-center gap-1 pt-0.5">
@@ -171,8 +172,8 @@ export function GateCard(props: {
   /** Rules testing questions no longer asked before the gate. */
   brokenRules: number;
   onRepair: () => void;
-  onTitle: (title: string) => void;
-  onMessage: (message: string) => void;
+  onTitle: (title: string) => boolean;
+  onMessage: (message: string) => boolean;
   onEditRules: () => void;
 }) {
   return (
@@ -193,13 +194,13 @@ export function GateCard(props: {
             <ShieldCheck class="size-3.5" aria-hidden="true" />
             <span>{props.eyebrow}</span>
           </div>
-          <input
+          <LiveTextInput
             aria-label="Screener title"
             placeholder="Untitled screener"
             value={props.title}
             maxlength={200}
             class="h-8 w-full rounded-md border border-transparent bg-transparent px-1.5 text-base font-semibold text-ink outline-none placeholder:text-ink-placeholder hover:border-edge-muted focus:border-edge-focus focus:bg-input"
-            onInput={(event) => props.onTitle(event.currentTarget.value)}
+            onEdit={props.onTitle}
           />
         </div>
         {props.menu}
@@ -263,12 +264,12 @@ export function GateCard(props: {
           <span class="text-xs font-medium text-ink-muted">
             Message when a rule fails
           </span>
-          <textarea
+          <LiveTextarea
             value={props.message}
             maxlength={2000}
             rows={2}
             class="w-full resize-y rounded-md border border-edge-muted bg-input px-2.5 py-1.5 text-sm text-ink outline-none focus:border-edge-focus"
-            onInput={(event) => props.onMessage(event.currentTarget.value)}
+            onEdit={props.onMessage}
           />
         </label>
         <p class="text-[11px] text-ink-muted">

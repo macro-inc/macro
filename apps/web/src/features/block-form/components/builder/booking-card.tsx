@@ -6,6 +6,7 @@ import { cn, Dropdown } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { FormBookingLink } from '../../context/form-context';
 import type { FormBookingTarget } from '../../core/form-model';
+import { LiveTextInput } from './live-text-input';
 
 const sameTarget = (
   left: FormBookingTarget | undefined,
@@ -62,8 +63,8 @@ export function BookingLinkMenu(props: {
           </Match>
           <Match when={props.links?.length === 0}>
             <p class="px-2 py-1.5 text-xs text-ink-muted">
-              You have no booking links yet. Create one in Calendar settings,
-              then come back to add it.
+              You have no booking links yet. Create one in Booking links, then
+              come back to add it.
             </p>
           </Match>
           <Match when={props.links}>
@@ -111,7 +112,7 @@ export function BookingLinkMenu(props: {
 export type BookingLinkState =
   | { kind: 'loading' }
   | { kind: 'ready'; title: string; durationMinutes: number; host: string }
-  /** Turned off or deleted in Calendar settings. */
+  /** Turned off or deleted in Booking links. */
   | { kind: 'unavailable' };
 
 /**
@@ -126,8 +127,8 @@ export function BookingCard(props: {
   /** Chooses another booking link. */
   change: JSX.Element;
   menu: JSX.Element;
-  onTitle: (title: string) => void;
-  onDescription: (description: string) => void;
+  onTitle: (title: string) => boolean;
+  onDescription: (description: string) => boolean;
 }) {
   return (
     <section
@@ -143,21 +144,21 @@ export function BookingCard(props: {
             <CalendarCheck class="size-3.5" aria-hidden="true" />
             <span>Booking · last step</span>
           </div>
-          <input
+          <LiveTextInput
             aria-label="Booking step title"
             placeholder="Book a time"
             value={props.title}
             maxlength={200}
             class="h-8 w-full rounded-md border border-transparent bg-transparent px-1.5 text-base font-semibold text-ink outline-none placeholder:text-ink-placeholder hover:border-edge-muted focus:border-edge-focus focus:bg-input"
-            onInput={(event) => props.onTitle(event.currentTarget.value)}
+            onEdit={props.onTitle}
           />
-          <input
+          <LiveTextInput
             aria-label="Booking step description"
             placeholder="Description (optional)"
             value={props.description}
             maxlength={2000}
             class="h-7 w-full rounded-md border border-transparent bg-transparent px-1.5 text-xs text-ink-muted outline-none placeholder:text-ink-placeholder hover:border-edge-muted focus:border-edge-focus focus:bg-input"
-            onInput={(event) => props.onDescription(event.currentTarget.value)}
+            onEdit={props.onDescription}
           />
         </div>
         {props.menu}

@@ -41,7 +41,7 @@ fn asking_for_a_file() -> FormLayout {
 }
 
 #[tokio::test]
-async fn a_file_question_put_while_the_form_goes_public_is_refused_and_the_layout_kept() {
+async fn a_file_question_saved_while_the_form_goes_public_reports_that_only_the_draft_changed() {
     let world = world();
     seed_rsvp(&world, Audience::Members);
     with_resume_column(&world);
@@ -49,17 +49,29 @@ async fn a_file_question_put_while_the_form_goes_public_is_refused_and_the_layou
     // members-only, before the put writes.
     world.lock().unwrap().audience_before_next_layout_write = Some(Audience::Public);
 
-    let refused = service(&world)
+    let saved = service(&world)
         .put_layout(
             form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit),
             asking_for_a_file(),
         )
-        .await;
+        .await
+        .expect("the write succeeded even though publication was refused");
 
-    assert!(matches!(refused, Err(FormError::FileUploadNeedsSignIn)));
+    assert_eq!(
+        saved.publication_error,
+        Some(models_forms::FormPublicationProblem::FileUploadNeedsSignIn)
+    );
+    assert_eq!(saved.detail.sections[0].id(), ABOUT_YOU);
+    assert_eq!(saved.detail.form.audience, Audience::Public);
     let world = world.lock().unwrap();
     assert_eq!(world.forms[0].form.audience, Audience::Public);
     assert_eq!(world.layouts.get(&RSVP_FORM), Some(&rsvp_layout()));
+    assert_eq!(
+        crate::domain::collaboration::read_layout(&world.drafts[&RSVP_FORM])
+            .unwrap()
+            .layout,
+        asking_for_a_file()
+    );
 }
 
 #[tokio::test]
@@ -111,6 +123,15 @@ async fn a_layout_reusing_another_forms_id_is_a_repeated_id_and_the_old_layout_s
     seed_rsvp(&world, Audience::Members);
     let other_form = FormId::from_uuid(Uuid::from_u128(0xf0f9));
     let taken = FormSectionId::from_uuid(Uuid::from_u128(0x5e99));
+    service(&world)
+        .collaborate_form(form_receipt::<EditAccessLevel>(
+            RSVP_FORM,
+            EDITOR,
+            AccessLevel::Edit,
+        ))
+        .await
+        .unwrap();
+    let draft_before = world.lock().unwrap().drafts[&RSVP_FORM].clone();
     world.lock().unwrap().layouts.insert(
         other_form,
         FormLayout {
@@ -143,6 +164,10 @@ async fn a_layout_reusing_another_forms_id_is_a_repeated_id_and_the_old_layout_s
     assert_eq!(id, *taken.as_uuid());
     let world = world.lock().unwrap();
     assert_eq!(world.layouts.get(&RSVP_FORM), Some(&rsvp_layout()));
+    assert_eq!(
+        world.drafts[&RSVP_FORM], draft_before,
+        "a refused replacement must not change the durable draft"
+    );
     assert_eq!(
         world.layouts.get(&other_form).unwrap().sections[0].id(),
         taken

@@ -8,7 +8,9 @@
  * `questions` maps decides what exists, and a question's `sectionId`
  * decides where it lives. An id an order repeats counts once, at its first
  * place; one it lacks comes last, by id. A question whose section is gone
- * is left out.
+ * is left out. Booking steps read last, whatever their stored place, so
+ * concurrent inserts cannot put a section after one; two concurrent booking
+ * steps both read, for an editor to remove one.
  */
 import { LoroDoc, LoroMap, LoroMovableList, LoroText } from 'loro-crdt';
 
@@ -48,6 +50,7 @@ export const SECTION_ID = 'sectionId';
 export const HELP_TEXT = 'helpText';
 
 const ID = 'id';
+const BOOKING_KIND = 'booking';
 const QUESTIONS_FIELD = 'questions';
 
 /** A question of the wire layout. */
@@ -139,7 +142,7 @@ export function readLayout(document: LoroDoc): CollaborativeLayout {
     new Set(sections.keys())
   );
   return {
-    sections: sectionIds.map((id) => {
+    sections: bookingLast(sectionIds, sections).map((id) => {
       const location = `${LAYOUT_CONTAINERS.sections}.${id}`;
       const map = childMap(sections, id, location);
       if (!map) throw malformed(location, 'a map');
@@ -163,6 +166,18 @@ export function readLayout(document: LoroDoc): CollaborativeLayout {
       };
     }),
   };
+}
+
+/** `ids` with the booking steps moved to the end, each keeping its order. */
+function bookingLast(ids: readonly string[], sections: LoroMap): string[] {
+  const booking = (id: string) => {
+    const map = sections.get(id);
+    return map instanceof LoroMap && map.get(KIND) === BOOKING_KIND;
+  };
+  return [
+    ...ids.filter((id) => !booking(id)),
+    ...ids.filter((id) => booking(id)),
+  ];
 }
 
 /**

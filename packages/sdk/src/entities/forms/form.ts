@@ -2,7 +2,6 @@ import { match, P } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import type {
   BookingTarget,
-  UnlockedBooking,
   CellValue,
   EntityKind,
   FilterGroup,
@@ -10,9 +9,11 @@ import type {
   FilterTest,
   FormDetail,
   FormLayout,
+  FormPublicationProblem,
   ResponseStatus,
   SharePermissionV2,
   SubmissionOutcome,
+  UnlockedBooking,
   UpdateForm,
   UpdateSharePermissionRequestV2,
   Widget,
@@ -107,15 +108,28 @@ export type FormSectionPlacement = {
   | { kind: 'booking'; target: BookingTarget }
 );
 
+/** A saved layout and any reason it is not yet visible to respondents. */
+export type FormLayoutResult = {
+  form: Form;
+  publicationError?: FormPublicationProblem;
+};
+
 /** The public Macro booking destination selected by a form editor. */
 export type FormBookingTarget = BookingTarget;
 
 /** A booking step released after the form accepts the caller's answers. */
-export type FormBookingStep = Omit<UnlockedBooking, 'section'> & { section: FormSection };
+export type FormBookingStep = Omit<UnlockedBooking, 'section'> & {
+  section: FormSection;
+};
 
 /** The result of submitting or editing a response. A stopped submission has no row. */
 export type FormSubmissionOutcome =
-  | { outcome: 'submitted'; response: FormResponse; row: DatabaseRow; booking?: FormBookingStep }
+  | {
+      outcome: 'submitted';
+      response: FormResponse;
+      row: DatabaseRow;
+      booking?: FormBookingStep;
+    }
   | { outcome: 'stopped'; section: FormSection; message: string };
 
 /** The caller's receipt and current answers, read without access to other responses. */
@@ -268,10 +282,14 @@ export class Form extends MacroEntity<FormDetail> {
   }
 
   /**
-   * Replace presentation atomically. Existing handles retain identity; omitted handles
-   * mint sections or questions. Column facts are changed through the database API.
+   * Save a replacement in the shared draft. Existing handles retain identity;
+   * omitted handles mint sections or questions. Column facts use the database API.
+   * A publicationError means the draft was saved but respondents still see the last
+   * valid version. Repair the reported problem or reload to retry publication.
    */
-  async replaceLayout(sections: FormSectionPlacement[]): Promise<this> {
+  async replaceLayout(
+    sections: FormSectionPlacement[],
+  ): Promise<FormLayoutResult> {
     const table = await this.table();
     const ownColumn = (column: DatabaseColumn): string => {
       if (
@@ -359,10 +377,10 @@ export class Form extends MacroEntity<FormDetail> {
           .exhaustive();
       }),
     };
-    await this.mutate((client) =>
+    const saved = await this.mutate((client) =>
       client.storage.putFormLayout({ path: { id: this.id }, body }),
     );
-    return this;
+    return { form: this, publicationError: saved.publicationError };
   }
 
   private wireAnswers(
@@ -407,8 +425,12 @@ export class Form extends MacroEntity<FormDetail> {
     });
   }
 
-  private unlockedBooking(booking: UnlockedBooking | undefined): FormBookingStep | undefined {
-    return booking ? { ...booking, section: FormSection.byId(this, booking.section) } : undefined;
+  private unlockedBooking(
+    booking: UnlockedBooking | undefined,
+  ): FormBookingStep | undefined {
+    return booking
+      ? { ...booking, section: FormSection.byId(this, booking.section) }
+      : undefined;
   }
 
   private async outcome(

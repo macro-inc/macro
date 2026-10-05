@@ -310,7 +310,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
         .await
         .unwrap();
     assert_eq!(
-        layout.sections,
+        layout.detail.sections,
         vec![
             FormSectionDetail::Questions {
                 id: ABOUT_YOU,

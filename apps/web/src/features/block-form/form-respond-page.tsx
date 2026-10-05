@@ -92,7 +92,7 @@ function FormRespondContent(props: { formId: string }) {
       navigate(`/database/${destination.databaseId}`),
     openChannel: (channelId) => navigate(`/channel/${channelId}`),
     openCalendarSettings: () =>
-      navigate(`/settings/${settingsTabToSlug('Calendar')}`),
+      navigate(`/settings/${settingsTabToSlug('Booking links')}`),
   });
   const source = context.createFormSource(() => props.formId);
   return (

@@ -73,7 +73,7 @@ async fn booking_must_follow_every_question_and_screener() {
 async fn put(
     world: &Shared,
     layout: FormLayout,
-) -> Result<crate::domain::models::FormDetail, FormError> {
+) -> Result<models_forms::FormCollaboration, FormError> {
     service(world)
         .put_layout(
             form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit),
@@ -188,9 +188,9 @@ async fn a_valid_layout_replaces_the_old_one_and_stamps_the_form() {
         question(2, TEAM, Some(Widget::Dropdown)),
     ]);
     let detail = put(&world, layout.clone()).await.unwrap();
-    assert_eq!(detail.access, FormAccess::Edit);
+    assert_eq!(detail.detail.access, FormAccess::Edit);
     assert_eq!(
-        detail.form.updated_at,
+        detail.detail.form.updated_at,
         Utc.with_ymd_and_hms(2026, 9, 5, 9, 0, 0).unwrap()
     );
     let world = world.lock().unwrap();
@@ -458,7 +458,7 @@ async fn a_layout_may_leave_every_question_off_and_have_no_sections() {
     let world = world();
     seed_rsvp(&world, Audience::Members);
     let detail = put(&world, FormLayout { sections: vec![] }).await.unwrap();
-    assert!(detail.sections.is_empty());
+    assert!(detail.detail.sections.is_empty());
 }
 
 #[tokio::test]

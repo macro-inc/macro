@@ -14,6 +14,7 @@ import { invalidateDatabase } from './databases';
 
 /** Gateway message type published by `crates/databases` on every write. */
 const TABLE_CHANGED_MESSAGE_TYPE = 'database_table_changed';
+const DATABASE_CHANGED_MESSAGE_TYPE = 'database_changed';
 /** Gateway message type relaying one viewer's awareness to the others. */
 const AWARENESS_MESSAGE_TYPE = 'database_awareness';
 
@@ -39,6 +40,8 @@ const tableChangedSchema: z.ZodType<TableChanged> = z.object({
   tableId: z.string(),
   version: z.number(),
 });
+
+const databaseChangedSchema = z.object({ databaseId: z.string() });
 
 const awarenessRelaySchema: z.ZodType<AwarenessRelay> = z.object({
   databaseId: z.string(),
@@ -82,14 +85,27 @@ export function useDatabaseTableChanges(
   });
 }
 
+/** Database metadata changed; the ping contains no private metadata. */
+export function useDatabaseMetadataChanges(
+  onChange: (change: { databaseId: string }) => void
+) {
+  createConnectionWebsocketEffect((message) => {
+    if (message.type !== DATABASE_CHANGED_MESSAGE_TYPE) return;
+    const change = parseMessageData(message, databaseChangedSchema);
+    if (change) onChange(change);
+  });
+}
+
 /** Re-read a database's schema whenever the gateway reports one of its tables changed. */
 export function useDatabaseTableChangedSync(
   databaseId: () => string | undefined
 ) {
-  useDatabaseTableChanges((change) => {
+  const refresh = (change: { databaseId: string }) => {
     if (change.databaseId === databaseId())
       void invalidateDatabase(change.databaseId);
-  });
+  };
+  useDatabaseTableChanges(refresh);
+  useDatabaseMetadataChanges(refresh);
 }
 
 /** Where this client is inside a database. */

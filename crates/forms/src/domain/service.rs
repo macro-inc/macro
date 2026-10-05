@@ -345,7 +345,7 @@ where
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         layout: FormLayout,
-    ) -> Result<FormDetail, FormError> {
+    ) -> Result<models_forms::FormCollaboration, FormError> {
         self.replace_layout(&receipt, layout).await
     }
 

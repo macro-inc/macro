@@ -167,10 +167,12 @@ where
     ))
 }
 
-/// Replace a form's layout as a whole, validated against its table.
+/// Save a validated replacement in the shared layout and report publication.
+/// A 200 response with `publicationError` means the draft is saved, while
+/// respondents still see `detail`. Retrying collaboration retries publication.
 #[utoipa::path(put, tag = "forms", operation_id = "put_form_layout", path = "/forms/{id}/layout",
     params(("id" = Uuid, Path, description = "Form id")), request_body = FormLayout,
-    responses((status = 200, body = FormDetail), (status = 400, body = FormErrorResponse),
+    responses((status = 200, body = FormCollaboration), (status = 400, body = FormErrorResponse),
         (status = 401, body = FormErrorResponse), (status = 403, body = FormErrorResponse), (status = 404, body = FormErrorResponse),
         (status = 409, body = FormErrorResponse), (status = 500, body = FormErrorResponse)))]
 #[tracing::instrument(err, skip_all)]
@@ -178,7 +180,7 @@ pub async fn put_form_layout_handler<Service, EntityAccess, Authorization>(
     access: FormReceipt<EditAccessLevel, EntityAccess, Authorization>,
     State(state): State<FormsRouterState<Service, EntityAccess, Authorization>>,
     Json(layout): Json<FormLayout>,
-) -> Result<Json<FormDetail>, FormsApiError>
+) -> Result<Json<FormCollaboration>, FormsApiError>
 where
     Service: FormsService,
     EntityAccess: EntityAccessService,

@@ -21,13 +21,13 @@ import {
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { openExternalUrl } from '@core/util/url';
+import { useCopyLink } from '@core/util/useCopyLink';
 import { getWebOrigin } from '@core/util/webOrigin';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import Eye from '@phosphor/eye.svg';
@@ -40,6 +40,7 @@ import { FormProvider } from './context/form-context';
 import { primaryAction } from './core/form-status';
 import { respondLink } from './core/respond-link';
 import { createAppFormContext } from './form-context-production';
+import { createFormShareInput } from './form-global-sharing';
 import { reservePreviewTab } from './form-preview-tab';
 import { createPreview } from './primitives/create-preview';
 import { FormCardView } from './views/form-card-view';
@@ -58,7 +59,7 @@ function FormBlockContent(props: {
     openRelated: (destination) =>
       replaceOrInsertSplit({ type: 'database', id: destination.databaseId }),
     openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
-    openCalendarSettings: () => settings.openSettingsInSplit('Calendar'),
+    openCalendarSettings: () => settings.openSettingsInSplit('Booking links'),
   });
   const source = context.createFormSource(() => formId);
   const summary = context.responses.createSummary(
@@ -74,19 +75,16 @@ function FormBlockContent(props: {
   // Shared links open on the web, even from the desktop app (whose own
   // router base is `/`), so the base is the web app's.
   const link = () => respondLink(`${getWebOrigin()}/app/`, formId);
-  const openShare = useShareModal(() => {
-    const detail = source.detail();
-    if (!detail) return;
-    return {
-      id: formId,
-      blockAlias: 'form',
-      itemType: 'form',
-      name: detail.form.name,
-      owner: detail.form.ownerId,
-      // The form's own access, as the service answered it: owners manage sharing.
-      userPermissions: getPermissions(detail.access),
-    };
+  // Sharing a form hands out its respond link; editors copy theirs apart.
+  const copyEntityLink = useCopyLink();
+  const copyRespondLink = () => void copyEntityLink(link());
+  const shareInput = createFormShareInput({
+    formId: () => formId,
+    detail: source.detail,
+    updateMetadata: context.updateMetadata,
+    notify: context.notify,
   });
+  const openShare = useShareModal(shareInput);
   const openRespond = () => openExternalUrl(link());
   // The preview reads the form, so it waits for every edit to reach it.
   const preview = createPreview({
@@ -161,7 +159,7 @@ function FormBlockContent(props: {
             </Button>
             {primary()}
           </Show>
-          <ShareTrigger onClick={openShare} />
+          <ShareTrigger onClick={openShare} copyLink={copyRespondLink} />
         </div>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
@@ -211,7 +209,7 @@ function FormCardContent() {
     openRelated: (destination) =>
       insertSplit({ type: 'database', id: destination.databaseId }),
     openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
-    openCalendarSettings: () => settings.openSettingsInSplit('Calendar'),
+    openCalendarSettings: () => settings.openSettingsInSplit('Booking links'),
   });
   const source = context.createFormSource(() => formId);
   const open = () => {

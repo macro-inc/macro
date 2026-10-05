@@ -863,6 +863,36 @@ describe('form collaboration session', () => {
     grace.dispose();
   });
 
+  it('shows each selection change to other editors, however quickly they follow', async () => {
+    const surface = new FakeSurface(contactForm);
+    const ada = open(surface, 'ada');
+    const grace = open(surface, 'grace');
+    await ready(ada);
+    await ready(grace);
+    const adaSelected = (sectionId: string, questionId: string | null) =>
+      until(grace.session.peers, (peers) =>
+        peers.some(
+          (peer) =>
+            peer.userId === 'ada' &&
+            peer.selection.sectionId === sectionId &&
+            peer.selection.questionId === questionId
+        )
+      );
+
+    // Each change follows the previous one's arrival within microseconds,
+    // so most land in the millisecond that already stamped ada's state.
+    for (let round = 0; round < 10; round++) {
+      ada.session.setSelection({ sectionId: CONTACT, questionId: NAME });
+      await adaSelected(CONTACT, NAME);
+      ada.session.setSelection({ sectionId: CONTACT, questionId: null });
+      await adaSelected(CONTACT, null);
+      ada.session.setSelection(undefined);
+      await until(grace.session.peers, (peers) => peers.length === 0);
+    }
+    ada.dispose();
+    grace.dispose();
+  });
+
   it('repeats an idle selection so it does not expire', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const surface = new FakeSurface(contactForm);

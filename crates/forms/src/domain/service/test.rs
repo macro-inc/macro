@@ -301,3 +301,4 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
     world.layouts.insert(RSVP_FORM, rsvp_layout());
     world.owner_grants.push((RSVP_FORM, OWNER.into()));
 }
+mod surface_retirement;

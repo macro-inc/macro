@@ -83,6 +83,13 @@ impl PgFormsRepo {
 
 impl FormDraftRepository for PgFormsRepo {
     type Error = PgFormsRepoError;
+    async fn conflicting_layout_id(
+        &self,
+        id: FormId,
+        layout: &FormLayout,
+    ) -> Result<Option<uuid::Uuid>, Self::Error> {
+        layout::id_of_another_form(&self.pool, id, layout).await
+    }
     async fn draft_state(&self, id: FormId) -> Result<Option<LayoutDraftState>, Self::Error> {
         Ok(sqlx::query!(
             "SELECT layout_draft_enabled, layout_revision FROM forms WHERE id = $1 AND trashed_at IS NULL",

@@ -346,9 +346,15 @@ impl FormsService for RecordingForms {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         _layout: FormLayout,
-    ) -> Result<FormDetail, FormError> {
+    ) -> Result<models_forms::FormCollaboration, FormError> {
         let detail = self.detail(FormAccess::Edit);
-        self.answer(handed("put_layout", &receipt), detail)
+        self.answer(
+            handed("put_layout", &receipt),
+            models_forms::FormCollaboration {
+                detail,
+                publication_error: None,
+            },
+        )
     }
 
     async fn submit_response(

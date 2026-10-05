@@ -17,6 +17,7 @@ import {
   vi,
 } from 'vitest';
 import {
+  type FormBookingEvent,
   type FormContext,
   FormProvider,
   type FormWriteFailure,
@@ -509,11 +510,15 @@ describe('BuilderView', () => {
       },
     };
 
-    function mountBooking(detail: FormDetail, bookingLinks = links) {
+    function mountBooking(
+      detail: FormDetail,
+      bookingLinks = links,
+      bookingEvents: Record<string, FormBookingEvent> = events
+    ) {
       const mock = createMockFormContext({
         detail,
         tableColumns: columns,
-        booking: { links: bookingLinks, events },
+        booking: { links: bookingLinks, events: bookingEvents },
       });
       render(() => (
         <FormProvider value={mock.context}>
@@ -561,6 +566,61 @@ describe('BuilderView', () => {
       const card = screen.getByRole('region', { name: 'Book a time' });
       expect(within(card).getByText('Intro call')).toBeTruthy();
       expect(within(card).getByText('30 min · Ada Lovelace')).toBeTruthy();
+    });
+
+    it('shows each of two concurrently added booking steps with its own link, for an editor to remove one', async () => {
+      const detail = rsvp();
+      detail.layout.sections.push(
+        {
+          id: 'intro',
+          title: 'Book an intro',
+          description: '',
+          kind: 'booking',
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: INTRO_CALL,
+          questions: [],
+        },
+        {
+          id: 'review',
+          title: 'Book a review',
+          description: '',
+          kind: 'booking',
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: REVIEW_CALL,
+          questions: [],
+        }
+      );
+      mountBooking(detail, links, {
+        ...events,
+        'review-call': {
+          profile: {
+            id: 'profile-1',
+            name: 'Ada Lovelace',
+            description: '',
+            eventTypes: [],
+          },
+          event: {
+            id: 'review-call',
+            title: 'Design review',
+            slug: 'review',
+            description: '',
+            durationMinutes: 60,
+            location: '',
+            googleMeet: true,
+            questions: [],
+            requiresConfirmation: false,
+            mode: 'individual' as const,
+          },
+        },
+      });
+      const intro = screen.getByRole('region', { name: 'Book an intro' });
+      const review = screen.getByRole('region', { name: 'Book a review' });
+      expect(within(intro).getByText('Intro call')).toBeTruthy();
+      expect(within(intro).getByText('30 min · Ada Lovelace')).toBeTruthy();
+      expect(within(review).getByText('Design review')).toBeTruthy();
+      expect(within(review).getByText('60 min · Ada Lovelace')).toBeTruthy();
     });
 
     it('explains how to make a booking link when the editor has none', async () => {

@@ -307,10 +307,16 @@ pub trait ColumnDefinitionStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionId>, Self::Error>> + Send;
 }
 
-/// Liveness: tell open clients a table changed.
+/// Liveness: tell open clients a database or table changed.
 pub trait TableEventPublisher: Send + Sync + 'static {
     /// The error type returned by the publisher.
     type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Announce changed database metadata so viewers re-read it as themselves.
+    fn database_changed(
+        &self,
+        database_id: DatabaseId,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Announce a table's new version.
     fn table_changed(

@@ -11,7 +11,10 @@ import {
   sectionDropAt,
   stepPlacement,
 } from '../core/drop-target';
-import type { QuestionPlacement } from '../core/form-layout';
+import {
+  type QuestionPlacement,
+  sectionInsertIndex,
+} from '../core/form-layout';
 import type { FormLayout } from '../core/form-model';
 import type { NewSectionKind } from './create-builder';
 
@@ -205,6 +208,22 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       sections.length === 0 && active.target.kind === 'new-section' && canvas
         ? { index: 0, lineY: canvas.top + 8 }
         : sectionDropAt(y, sections, active.target.id);
+    const layout = options.layout();
+    if (active.target.kind === 'new-section' && drop && layout) {
+      // Show and announce where it lands: before the booking step.
+      const index = sectionInsertIndex(layout, active.target.id, drop.index);
+      setSession(
+        sectionSession(
+          active.target,
+          'pointer',
+          index,
+          index === drop.index
+            ? drop.lineY
+            : lineForSectionIndex(sections, active.target.id, index)
+        )
+      );
+      return;
+    }
     setSession(
       sectionSession(active.target, 'pointer', drop?.index, drop?.lineY)
     );

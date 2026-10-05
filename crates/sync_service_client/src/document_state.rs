@@ -177,7 +177,9 @@ fn decode_bounded(
 }
 
 impl SyncServiceClient {
-    /// Read `document_id`'s full Loro state with a grant scoped to it.
+    /// Read `document_id`'s current Loro state with a grant scoped to it.
+    /// A shallow snapshot keeps the version and supports edits without fetching
+    /// every past change in a long-lived document.
     #[tracing::instrument(err, skip(self, token))]
     pub async fn document_state(
         &self,
@@ -186,7 +188,10 @@ impl SyncServiceClient {
     ) -> Result<DocumentState, DocumentStateError> {
         let response = self
             .client
-            .get(format!("{}/document/{document_id}/state", self.url))
+            .get(format!(
+                "{}/document/{document_id}/state?shallow=true",
+                self.url
+            ))
             .bearer_auth(token.as_str())
             .timeout(std::time::Duration::from_secs(15))
             .send()

@@ -370,19 +370,30 @@ where
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
         layout: FormLayout,
-    ) -> Result<FormDetail, FormError> {
+    ) -> Result<models_forms::FormCollaboration, FormError> {
         let form = self.live_form(receipt_form_id(receipt)?).await?;
         let table = self.live_table_of(&form).await?;
-        let layout = self.replace_draft(&form, &table, &layout).await?;
-        let now = self.now();
-        Ok(form_detail(
-            Form {
-                updated_at: now,
-                ..form
-            },
-            receipt_access(receipt),
-            layout,
-            Some(&table),
-        ))
+        let mut refreshed = self.replace_draft(&form, &table, &layout).await?;
+        // Publication can race another editor changing the audience or name.
+        // Return the current facts instead of overwriting the caller's cache
+        // with the pre-write read. The durable write has already succeeded,
+        // so a failed follow-up read is a pending publication, not a refusal.
+        let form = match self.live_form(form.id).await {
+            Ok(current) => current,
+            Err(error) => {
+                tracing::error!(form_id = %form.id, error = ?error, "saved form draft facts could not be refreshed");
+                refreshed.publication_error = Some(models_forms::FormPublicationProblem::Pending);
+                form
+            }
+        };
+        Ok(models_forms::FormCollaboration {
+            detail: form_detail(
+                form,
+                receipt_access(receipt),
+                refreshed.layout,
+                Some(&table),
+            ),
+            publication_error: refreshed.publication_error,
+        })
     }
 }

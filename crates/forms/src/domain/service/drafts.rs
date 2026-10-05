@@ -5,7 +5,7 @@ use databases::domain::models::TableDetail;
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_event_broker::MacroEventBroker;
-use models_forms::FormCollaboration;
+use models_forms::{FormCollaboration, FormPublicationProblem};
 
 use super::layout::{asks_for_a_file, form_detail, validate_layout};
 use super::{FormsServiceImpl, receipt_access, receipt_form_id, repository_error};
@@ -21,7 +21,7 @@ use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, Forms
 /// The layout respondents can use and any current draft validation failure.
 pub(super) struct RefreshedLayout {
     pub(super) layout: FormLayout,
-    pub(super) publication_error: Option<FormError>,
+    pub(super) publication_error: Option<FormPublicationProblem>,
 }
 
 pub(super) fn draft_error(error: FormDraftError) -> FormError {
@@ -33,6 +33,20 @@ pub(super) fn draft_error(error: FormDraftError) -> FormError {
 
 fn codec_error(error: collaboration::LayoutDraftError) -> FormError {
     FormError::Collaboration(rootcause::Report::new(error).into_dynamic())
+}
+
+fn publication_problem(error: FormError) -> FormPublicationProblem {
+    match error {
+        FormError::InvalidLayout(problem) => FormPublicationProblem::Layout { problem },
+        FormError::WidgetMismatch { question } => {
+            FormPublicationProblem::WidgetMismatch { question }
+        }
+        FormError::FileUploadNeedsSignIn => FormPublicationProblem::FileUploadNeedsSignIn,
+        unexpected => {
+            tracing::error!(error = ?unexpected, "unexpected form publication refusal");
+            FormPublicationProblem::Pending
+        }
+    }
 }
 
 impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
@@ -92,7 +106,7 @@ where
                 refreshed.layout,
                 Some(&table),
             ),
-            publication_error: refreshed.publication_error.map(|error| error.to_string()),
+            publication_error: refreshed.publication_error,
         })
     }
 
@@ -121,7 +135,19 @@ where
                 });
             };
             let snapshot = self.drafts.snapshot(form.id).await.map_err(draft_error)?;
-            let draft = collaboration::read_layout(&snapshot).map_err(codec_error)?;
+            let draft = match collaboration::read_layout(&snapshot) {
+                Ok(draft) => draft,
+                Err(_) => {
+                    return Ok(RefreshedLayout {
+                        layout: self
+                            .repository
+                            .layout(form.id)
+                            .await
+                            .map_err(repository_error)?,
+                        publication_error: Some(FormPublicationProblem::InvalidDraft),
+                    });
+                }
+            };
             if let Err(error) = validate_layout(&draft.layout, form, table) {
                 return Ok(RefreshedLayout {
                     layout: self
@@ -129,10 +155,13 @@ where
                         .layout(form.id)
                         .await
                         .map_err(repository_error)?,
-                    publication_error: Some(error),
+                    publication_error: Some(publication_problem(error)),
                 });
             }
-            if state.revision.as_ref() == Some(&draft.revision) {
+            if let Some(previous) = &state.revision
+                && collaboration::revision_matches(previous, &draft.revision)
+                    .map_err(codec_error)?
+            {
                 return Ok(RefreshedLayout {
                     layout: draft.layout,
                     publication_error: None,
@@ -186,7 +215,7 @@ where
                     .layout(form.id)
                     .await
                     .map_err(repository_error)?,
-                publication_error: Some(error),
+                publication_error: Some(publication_problem(error)),
             });
         }
         Err(FormError::Conflict)
@@ -199,8 +228,24 @@ where
         form: &Form,
         table: &TableDetail,
         layout: &FormLayout,
-    ) -> Result<FormLayout, FormError> {
+    ) -> Result<RefreshedLayout, FormError> {
         validate_layout(layout, form, table)?;
+        if let Some(id) = self
+            .repository
+            .conflicting_layout_id(form.id, layout)
+            .await
+            .map_err(repository_error)?
+        {
+            return Err(LayoutProblem::RepeatedId { id }.into());
+        }
+        // Keep a known published version to return if publication cannot finish
+        // after the durable write. A successful draft write is never reported as
+        // an ordinary refusal implying that nothing changed.
+        let published = self
+            .repository
+            .layout(form.id)
+            .await
+            .map_err(repository_error)?;
         self.ensure_draft(form).await?;
         let snapshot = self.drafts.snapshot(form.id).await.map_err(draft_error)?;
         let change = collaboration::replace_layout(&snapshot, layout).map_err(codec_error)?;
@@ -208,10 +253,15 @@ where
             .update(form.id, change.expected_revision, change.update)
             .await
             .map_err(draft_error)?;
-        let refreshed = self.refresh_layout(form, Some(table)).await?;
-        if let Some(error) = refreshed.publication_error {
-            return Err(error);
+        match self.refresh_layout(form, Some(table)).await {
+            Ok(refreshed) => Ok(refreshed),
+            Err(error) => {
+                tracing::error!(form_id = %form.id, error = ?error, "saved form draft could not be published");
+                Ok(RefreshedLayout {
+                    layout: published,
+                    publication_error: Some(FormPublicationProblem::Pending),
+                })
+            }
         }
-        Ok(refreshed.layout)
     }
 }

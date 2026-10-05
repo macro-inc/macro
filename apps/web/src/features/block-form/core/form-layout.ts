@@ -7,6 +7,7 @@ import type {
   FormSection,
   GateNode,
   GateRules,
+  SectionKind,
 } from './form-model';
 
 /** Where a question lands: its index among the section's other questions. */
@@ -92,30 +93,49 @@ function replaceSection(
 }
 
 /**
- * The layout, or why it does not hold: a booking step not last (a second one
- * is never last), or the first gate naming a column not asked before it.
+ * Everything wrong with a layout: each booking step not last (of two, the
+ * first is never last), then each column a gate names that is not asked
+ * before it.
  */
-function checkedLayout(layout: FormLayout): Result<FormLayout, LayoutRefusal> {
-  const misplaced = layout.sections.find(
-    (section, index) =>
+function layoutProblems(layout: FormLayout): LayoutRefusal[] {
+  const problems: LayoutRefusal[] = layout.sections.flatMap(
+    (section, index): LayoutRefusal[] =>
       section.kind === 'booking' && index !== layout.sections.length - 1
+        ? [{ kind: 'booking-must-be-last', sectionId: section.id }]
+        : []
   );
-  if (misplaced)
-    return err({ kind: 'booking-must-be-last', sectionId: misplaced.id });
   for (const section of layout.sections) {
     if (section.kind !== 'gate' || !section.gateRules) continue;
     const allowed = new Set(gateColumns(layout, section.id));
-    const outside = columnsNamed(section.gateRules).find(
-      (columnId) => !allowed.has(columnId)
-    );
-    if (outside)
-      return err({
-        kind: 'gate-before-question',
-        gateSectionId: section.id,
-        columnId: outside,
-      });
+    for (const columnId of columnsNamed(section.gateRules))
+      if (!allowed.has(columnId))
+        problems.push({
+          kind: 'gate-before-question',
+          gateSectionId: section.id,
+          columnId,
+        });
   }
-  return ok(layout);
+  return problems;
+}
+
+/**
+ * The edited layout, or the first problem the edit brings. Problems the
+ * layout already had (two booking steps added concurrently, a screener whose
+ * question went in the grid) do not block edits, so they stay repairable.
+ */
+function checkedEdit(
+  before: FormLayout,
+  after: FormLayout
+): Result<FormLayout, LayoutRefusal> {
+  const existing = new Set(layoutProblems(before).map(problemKey));
+  const introduced = layoutProblems(after).find(
+    (problem) => !existing.has(problemKey(problem))
+  );
+  return introduced ? err(introduced) : ok(after);
+}
+
+function problemKey(problem: LayoutRefusal) {
+  return JSON.stringify(problem);
 }
 
 /** Rules without the conditions naming `columns`, and how many went. */
@@ -190,7 +210,7 @@ export function moveQuestion(
         ? section
         : { ...section, questions: others };
     });
-    return checkedLayout({ sections });
+    return checkedEdit(layout, { sections });
   });
 }
 
@@ -243,24 +263,34 @@ export function swapQuestionColumn(
 }
 
 /**
- * A booking step goes last; anything else goes at `index` but before the
- * booking step, so adding never pushes the booking step off the end.
+ * Where a new section of `kind` asked for at `index` goes: a booking step
+ * last, anything else at `index` but before the booking step, so adding
+ * never pushes the booking step off the end.
  */
+export function sectionInsertIndex(
+  layout: FormLayout,
+  kind: SectionKind,
+  index: number
+): number {
+  if (kind === 'booking') return layout.sections.length;
+  const booking = bookingStep(layout);
+  return clamp(
+    index,
+    booking ? layout.sections.indexOf(booking) : layout.sections.length
+  );
+}
+
 export function addSection(
   layout: FormLayout,
   section: FormSection,
   index: number
 ): Result<FormLayout, LayoutRefusal> {
-  const booking = bookingStep(layout);
-  const at =
-    section.kind === 'booking'
-      ? layout.sections.length
-      : Math.min(
-          index,
-          booking ? layout.sections.indexOf(booking) : layout.sections.length
-        );
-  return checkedLayout({
-    sections: insertAt(layout.sections, at, section),
+  return checkedEdit(layout, {
+    sections: insertAt(
+      layout.sections,
+      sectionInsertIndex(layout, section.kind, index),
+      section
+    ),
   });
 }
 
@@ -277,7 +307,7 @@ export function moveSection(
   const section = layout.sections.find((item) => item.id === sectionId);
   if (!section) return err({ kind: 'unknown-section', sectionId });
   const others = layout.sections.filter((item) => item.id !== sectionId);
-  return checkedLayout({ sections: insertAt(others, index, section) });
+  return checkedEdit(layout, { sections: insertAt(others, index, section) });
 }
 
 export function removeSection(
@@ -301,7 +331,8 @@ export function updateSection(
 ): Result<FormLayout, LayoutRefusal> {
   if (!layout.sections.some((item) => item.id === sectionId))
     return err({ kind: 'unknown-section', sectionId });
-  return checkedLayout(
+  return checkedEdit(
+    layout,
     replaceSection(layout, sectionId, (section) => ({ ...section, ...patch }))
   );
 }

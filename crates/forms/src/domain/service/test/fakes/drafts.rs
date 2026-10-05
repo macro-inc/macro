@@ -46,7 +46,7 @@ impl FormDraftStore for FakeDrafts {
             .ok_or_else(|| FormDraftError::Unavailable(rootcause::report!("draft missing")))?;
         let document = LoroDoc::new();
         document.import(snapshot).unwrap();
-        if document.oplog_vv().encode() != expected_revision {
+        if document.oplog_vv() != loro::VersionVector::decode(&expected_revision).unwrap() {
             return Err(FormDraftError::Conflict);
         }
         document.import(&update).unwrap();
@@ -64,6 +64,22 @@ impl FormDraftStore for FakeDrafts {
 
 impl FormDraftRepository for FakeRepo {
     type Error = FakeError;
+    async fn conflicting_layout_id(
+        &self,
+        id: FormId,
+        layout: &FormLayout,
+    ) -> Result<Option<uuid::Uuid>, Self::Error> {
+        let world = self.0.lock().unwrap();
+        let others: Vec<_> = world
+            .layouts
+            .iter()
+            .filter(|(form, _)| **form != id)
+            .flat_map(|(_, layout)| layout_ids(layout))
+            .collect();
+        Ok(layout_ids(layout)
+            .into_iter()
+            .find(|id| others.contains(id)))
+    }
     async fn draft_state(&self, id: FormId) -> Result<Option<LayoutDraftState>, Self::Error> {
         let world = self.0.lock().unwrap();
         Ok(live(&world, id).map(|_| world.draft_states.get(&id).cloned().unwrap_or_default()))

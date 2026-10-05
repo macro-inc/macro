@@ -7,8 +7,11 @@ import { type RenameDatabaseClient, renameDatabase } from './rename-database';
 const cache = vi.hoisted(() => ({
   setQueryData: vi.fn(),
   invalidateQueries: vi.fn(async () => undefined),
+  getQueryData: vi.fn(() => undefined),
+  getQueriesData: vi.fn(() => []),
 }));
 vi.mock('@queries/client', () => ({ queryClient: cache }));
+vi.mock('@queries/preview', () => ({ invalidatePreview: vi.fn() }));
 beforeEach(() => vi.clearAllMocks());
 
 describe('rename database', () => {

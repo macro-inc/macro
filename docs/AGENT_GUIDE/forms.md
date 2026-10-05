@@ -79,7 +79,7 @@ A centered column of sections, each a card of question rows, with the rail
 - **Preview** opens a new tab with the respondent experience after pending
   edits are saved. Fill it, try the screeners, and return to the builder. Preview
   creates no response rows, file uploads or bookings.
-- **Booking** in the rail selects an existing booking link from Calendar
+- **Booking** in the rail selects an existing booking link from **Booking links**
   settings. It is always the last step. **Change** selects another link;
   **Remove booking step** leaves the link itself intact. A form's screeners
   control when its respondents see the link; the native link still works directly.
@@ -89,7 +89,7 @@ A centered column of sections, each a card of question rows, with the rail
 ### Responses
 
 The linked table's grid, embedded and live, with **Open database**, **Export
-CSV** and tiles: Responses, Stopped at a gate (per gate in its hint), Rows in
+CSV** and tiles: Responses, Stopped by a screener (per screener in its hint), Rows in
 the table, and (owners, when posted in channels) People in its channels (the
 owner excluded; a dash for public forms). Every row of the table shows,
 including rows added in the grid.

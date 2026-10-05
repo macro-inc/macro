@@ -338,7 +338,7 @@ async fn renaming_the_database_renames_its_form_wherever_the_form_is_read() {
         )
         .await
         .unwrap();
-    assert_eq!(put.form.name, "Renamed in the grid");
+    assert_eq!(put.detail.form.name, "Renamed in the grid");
 }
 
 #[tokio::test]

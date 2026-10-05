@@ -15,7 +15,7 @@ mod response;
 mod test;
 mod widget;
 
-pub use collaboration::FormCollaboration;
+pub use collaboration::{FormCollaboration, FormPublicationProblem};
 pub use detail::{FormDetail, FormQuestionDetail, FormSectionDetail, QuestionOption};
 pub use error::{FormErrorCode, FormErrorResponse, LayoutProblem};
 pub use form::{

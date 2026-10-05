@@ -57,6 +57,15 @@ pub trait DocumentIds: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
 }
 
+/// Outbound port onto the forms domain's ids. A form's surface takes the
+/// form's id, and a form exists before its surface (which it ensures on first
+/// open) and never comes back once purged. Implemented by the forms domain
+/// over its own repository; this crate never reads forms tables.
+pub trait FormIds: Send + Sync + 'static {
+    /// Whether `id` names a form, live or trashed.
+    fn is_form_id(&self, id: Uuid) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
+}
+
 /// Outbound port for a surface's sync-service session: boots it from markdown
 /// or a Loro snapshot, checks whether it exists, and reads and writes its Loro
 /// state under a signed grant.
@@ -135,6 +144,8 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     ///   written: a new surface only ever creates its own session.
     /// - the parent's domain owns its surfaces
     ///   ([`SurfaceOwnership::ParentDomain`]) → [`CollabSurfaceError::AccessDenied`].
+    /// - the id names a form, live or trashed → [`CollabSurfaceError::IdReserved`]:
+    ///   it is that form's surface id, whether or not the form has opened it.
     ///
     /// Concurrent ensures for the same id converge: the insert is
     /// conflict-tolerant and the initializer treats an already-initialized
@@ -159,6 +170,10 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
 
     /// The parent entity of a surface, for the inbound layer to mint a receipt
     /// against before any surface operation. `NotFound` for missing/deleted.
+    /// A form's surface outlives its form when the form row is deleted
+    /// without the forms domain (a database, table or owner purge cascades
+    /// to it) or when retiring it failed after a purge; such a surface is
+    /// retired here, the first time it is asked for, and reads as `NotFound`.
     fn get_parent(
         &self,
         id: Uuid,

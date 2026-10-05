@@ -6,6 +6,68 @@ use crate::domain::collaboration::{read_layout, replace_layout};
 use crate::domain::drafts::FormDraftStore;
 
 #[tokio::test]
+async fn an_undecodable_draft_keeps_the_published_form_available_and_can_be_replaced() {
+    let world = world();
+    seed_rsvp(&world, Audience::Public);
+    let forms = service(&world);
+    forms
+        .collaborate_form(form_receipt::<EditAccessLevel>(
+            RSVP_FORM,
+            EDITOR,
+            AccessLevel::Edit,
+        ))
+        .await
+        .unwrap();
+    let document = loro::LoroDoc::new();
+    document
+        .import(&world.lock().unwrap().drafts[&RSVP_FORM])
+        .unwrap();
+    let Some(loro::ValueOrContainer::Container(loro::Container::Map(question))) = document
+        .get_map(crate::domain::collaboration::QUESTIONS)
+        .get(&TEAM_QUESTION.to_string())
+    else {
+        panic!("the team question has a record");
+    };
+    question.insert("required", "yes").unwrap();
+    document.commit();
+    world.lock().unwrap().drafts.insert(
+        RSVP_FORM,
+        document.export(loro::ExportMode::Snapshot).unwrap(),
+    );
+
+    let detail = forms
+        .get_form(anonymous_receipt::<ViewAccessLevel>(RSVP_FORM))
+        .await
+        .expect("malformed editor content must not break the published form");
+    assert_eq!(detail.sections[0].id(), ABOUT_YOU);
+    let editor = forms
+        .collaborate_form(form_receipt::<EditAccessLevel>(
+            RSVP_FORM,
+            EDITOR,
+            AccessLevel::Edit,
+        ))
+        .await
+        .unwrap();
+    assert!(editor.publication_error.is_some());
+    assert_eq!(world.lock().unwrap().layouts[&RSVP_FORM], rsvp_layout());
+
+    forms
+        .put_layout(
+            form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit),
+            FormLayout { sections: vec![] },
+        )
+        .await
+        .expect("an explicit layout replacement repairs malformed editor content");
+    assert!(
+        read_layout(&world.lock().unwrap().drafts[&RSVP_FORM])
+            .unwrap()
+            .layout
+            .sections
+            .is_empty()
+    );
+}
+
+#[tokio::test]
 async fn the_builder_initializes_an_editor_only_durable_layout() {
     let world = world();
     seed_rsvp(&world, Audience::Public);

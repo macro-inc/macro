@@ -128,7 +128,7 @@ export function createFormDetailSource(
     return access === 'edit' || access === 'owner';
   };
   useFormChangedSync(formId);
-  useFormDatabaseSync(databaseId, isEditor);
+  useFormDatabaseSync(databaseId, isEditor, formId);
   useFormResponsesSync(formId, databaseId);
   // A form named after its database is renamed with it: read it again when
   // the database's name changes under an editor.

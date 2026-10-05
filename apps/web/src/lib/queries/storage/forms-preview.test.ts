@@ -1,6 +1,9 @@
-import { createRoot } from 'solid-js';
+import type { Form } from '@service-storage/generated/schemas/form';
 import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
+import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
+import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { renameDatabase } from '../../../features/block-database/queries/rename-database';
 import { renameForm } from '../../../features/block-form/queries/form-entity';
 import { queryClient } from '../client';
 import { previewKeys } from '../preview/keys';
@@ -133,4 +136,194 @@ it('refreshes only this form’s card preview when its shared facts change', () 
   expect(queryClient.getQueryState(current)?.isInvalidated).toBe(true);
   expect(queryClient.getQueryState(other)?.isInvalidated).toBe(false);
   dispose();
+});
+
+it('refreshes the linked database’s card after renaming a form, without guessing its name', async () => {
+  queryClient.setQueryData<FormDetail>(formsKeys.detail('workshop').queryKey, {
+    access: 'owner',
+    tableGone: false,
+    sections: [],
+    form: {
+      id: 'workshop',
+      name: 'Untitled form',
+      description: '',
+      ownerId: 'macro|owner@example.com',
+      databaseId: 'workshop-database',
+      tableId: 'responses',
+      submittedColumnId: null,
+      respondentColumnId: null,
+      audience: 'members',
+      tallyVisible: false,
+      status: 'open',
+      closesAt: null,
+      confirmationMessage: '',
+      createdAt: '2026-10-05T00:00:00Z',
+      updatedAt: '2026-10-05T00:00:00Z',
+    },
+  });
+  const linked = previewKeys.item('workshop-database').queryKey;
+  const unrelated = previewKeys.item('budget-database').queryKey;
+  queryClient.setQueryData<PreviewItem>(linked, {
+    id: 'workshop-database',
+    type: 'database',
+    loading: false,
+    access: 'access',
+    name: 'Untitled form',
+    rawName: 'Untitled form',
+    owner: 'macro|owner@example.com',
+  });
+  queryClient.setQueryData<PreviewItem>(unrelated, {
+    id: 'budget-database',
+    type: 'database',
+    loading: false,
+    access: 'access',
+    name: 'Budget',
+    rawName: 'Budget',
+    owner: 'macro|owner@example.com',
+  });
+
+  const result = await renameForm(
+    {
+      mutation: () => ({
+        toPromise: async () => ({
+          data: {
+            renameEntities: {
+              results: [{ __typename: 'GraphqlMutationSuccess' as const }],
+            },
+            trashEntities: { results: [] },
+          },
+        }),
+      }),
+    },
+    'workshop',
+    'Workshop ideas'
+  );
+
+  expect(result.isOk()).toBe(true);
+  expect(queryClient.getQueryState(linked)?.isInvalidated).toBe(true);
+  expect(queryClient.getQueryData(linked)).toMatchObject({
+    rawName: 'Untitled form',
+  });
+  expect(queryClient.getQueryState(unrelated)?.isInvalidated).toBe(false);
+});
+
+it('refreshes the cards of the forms over a renamed database, and only theirs', async () => {
+  queryClient.setQueryData<Form[]>(
+    formsKeys.forDatabase('workshop-database').queryKey,
+    [
+      {
+        id: 'workshop',
+        name: 'Workshop ideas',
+        description: '',
+        ownerId: 'macro|owner@example.com',
+        databaseId: 'workshop-database',
+        tableId: 'responses',
+        submittedColumnId: null,
+        respondentColumnId: null,
+        audience: 'members',
+        tallyVisible: false,
+        status: 'open',
+        closesAt: null,
+        confirmationMessage: '',
+        createdAt: '2026-10-05T00:00:00Z',
+        updatedAt: '2026-10-05T00:00:00Z',
+      },
+    ]
+  );
+  queryClient.setQueryData<ListedForm[]>(formsKeys.list.queryKey, [
+    {
+      access: 'owner',
+      form: {
+        id: 'feedback',
+        name: 'Session feedback',
+        description: '',
+        ownerId: 'macro|owner@example.com',
+        databaseId: 'workshop-database',
+        tableId: 'responses',
+        submittedColumnId: null,
+        respondentColumnId: null,
+        audience: 'members',
+        tallyVisible: false,
+        status: 'open',
+        closesAt: null,
+        confirmationMessage: '',
+        createdAt: '2026-10-05T00:00:00Z',
+        updatedAt: '2026-10-05T00:00:00Z',
+      },
+    },
+    {
+      access: 'owner',
+      form: {
+        id: 'offsite',
+        name: 'Offsite',
+        description: '',
+        ownerId: 'macro|owner@example.com',
+        databaseId: 'offsite-database',
+        tableId: 'responses',
+        submittedColumnId: null,
+        respondentColumnId: null,
+        audience: 'members',
+        tallyVisible: false,
+        status: 'open',
+        closesAt: null,
+        confirmationMessage: '',
+        createdAt: '2026-10-05T00:00:00Z',
+        updatedAt: '2026-10-05T00:00:00Z',
+      },
+    },
+  ]);
+  const workshop = previewKeys.item('workshop').queryKey;
+  const feedback = previewKeys.item('feedback').queryKey;
+  const offsite = previewKeys.item('offsite').queryKey;
+  queryClient.setQueryData<PreviewItem>(workshop, {
+    id: 'workshop',
+    type: 'form',
+    loading: false,
+    access: 'access',
+    name: 'Workshop ideas',
+    rawName: 'Workshop ideas',
+    owner: 'macro|owner@example.com',
+  });
+  queryClient.setQueryData<PreviewItem>(feedback, {
+    id: 'feedback',
+    type: 'form',
+    loading: false,
+    access: 'access',
+    name: 'Session feedback',
+    rawName: 'Session feedback',
+    owner: 'macro|owner@example.com',
+  });
+  queryClient.setQueryData<PreviewItem>(offsite, {
+    id: 'offsite',
+    type: 'form',
+    loading: false,
+    access: 'access',
+    name: 'Offsite',
+    rawName: 'Offsite',
+    owner: 'macro|owner@example.com',
+  });
+
+  const result = await renameDatabase(
+    {
+      mutation: () => ({
+        toPromise: async () => ({
+          data: {
+            renameEntities: {
+              results: [{ __typename: 'GraphqlMutationSuccess' as const }],
+            },
+          },
+        }),
+      }),
+    },
+    'workshop-database',
+    'Workshop 2026'
+  );
+
+  expect(result.isOk()).toBe(true);
+  expect(queryClient.getQueryState(workshop)?.isInvalidated).toBe(true);
+  expect(queryClient.getQueryState(feedback)?.isInvalidated).toBe(true);
+  expect(queryClient.getQueryData(feedback)).toMatchObject({
+    rawName: 'Session feedback',
+  });
+  expect(queryClient.getQueryState(offsite)?.isInvalidated).toBe(false);
 });

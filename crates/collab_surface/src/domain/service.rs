@@ -8,7 +8,7 @@ use std::sync::Arc;
 use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
 use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::access_level::AccessLevel;
 use uuid::Uuid;
 
@@ -17,7 +17,8 @@ use crate::domain::models::{
     SurfaceUpdate, surface_ownership,
 };
 use crate::domain::ports::{
-    CollabSurfaceRepo, CollabSurfaceService, DocumentIds, OwnedSurfaceService, SurfaceInitializer,
+    CollabSurfaceRepo, CollabSurfaceService, DocumentIds, FormIds, OwnedSurfaceService,
+    SurfaceInitializer,
 };
 use crate::domain::token::{
     access_level_for, encode_service_surface_token, encode_surface_token, surface_access_level,
@@ -40,18 +41,28 @@ fn caller_owned(parent: &Entity<'_>) -> bool {
     surface_ownership(parent.entity_type) == Some(SurfaceOwnership::Callers)
 }
 
-/// Production implementation of [`CollabSurfaceService`].
-pub struct CollabSurfaceServiceImpl<Repository, Initializer, Documents> {
+/// The form ids of a service that only serves [`OwnedSurfaceService`]. It
+/// implements no [`FormIds`], so such a service has no public API: the public
+/// API takes caller-chosen ids and must keep them off forms' ids.
+#[derive(Debug, Clone, Copy)]
+pub struct OwnedSurfacesOnly;
+
+/// Production implementation of [`CollabSurfaceService`] and
+/// [`OwnedSurfaceService`]. The public API needs `Forms` to implement
+/// [`FormIds`]; see [`CollabSurfaceServiceImpl::with_form_ids`].
+pub struct CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms = OwnedSurfacesOnly> {
     repo: Arc<Repository>,
     initializer: Arc<Initializer>,
     documents: Arc<Documents>,
+    forms: Arc<Forms>,
     jwt_secret: String,
 }
 
 impl<Repository, Initializer, Documents>
     CollabSurfaceServiceImpl<Repository, Initializer, Documents>
 {
-    /// Build the service from its ports and the sync-service JWT secret.
+    /// Build the owned-surface service from its ports and the sync-service
+    /// JWT secret.
     pub fn new(
         repo: Arc<Repository>,
         initializer: Arc<Initializer>,
@@ -62,7 +73,27 @@ impl<Repository, Initializer, Documents>
             repo,
             initializer,
             documents,
+            forms: Arc::new(OwnedSurfacesOnly),
             jwt_secret,
+        }
+    }
+}
+
+impl<Repository, Initializer, Documents, Forms>
+    CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
+{
+    /// The same service with the forms domain's ids, which serves the public
+    /// API too.
+    pub fn with_form_ids<FormDomain: FormIds>(
+        self,
+        forms: Arc<FormDomain>,
+    ) -> CollabSurfaceServiceImpl<Repository, Initializer, Documents, FormDomain> {
+        CollabSurfaceServiceImpl {
+            repo: self.repo,
+            initializer: self.initializer,
+            documents: self.documents,
+            forms,
+            jwt_secret: self.jwt_secret,
         }
     }
 }
@@ -115,12 +146,13 @@ fn verify_receipt_matches_parent(
     Ok(())
 }
 
-impl<Repository, Initializer, Documents> CollabSurfaceService
-    for CollabSurfaceServiceImpl<Repository, Initializer, Documents>
+impl<Repository, Initializer, Documents, Forms> CollabSurfaceService
+    for CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
 where
     Repository: CollabSurfaceRepo,
     Initializer: SurfaceInitializer,
     Documents: DocumentIds,
+    Forms: FormIds,
 {
     #[tracing::instrument(err, skip(self, user_id, parent_receipt, initial_markdown))]
     async fn ensure_surface(
@@ -133,6 +165,12 @@ where
         let parent = resolve_parent(user_id, &parent_receipt)?;
         if !caller_owned(&parent) {
             return Err(CollabSurfaceError::AccessDenied);
+        }
+        // A form ensures its surface lazily, under its own id, so the id is
+        // the form's before any surface holds it. Checked before the existing
+        // row too, so nothing bound to a form's id is handed to a caller.
+        if self.forms.is_form_id(id).await? {
+            return Err(CollabSurfaceError::IdReserved);
         }
         self.ensure_bound(parent, id, InitialContent::Markdown(&initial_markdown))
             .await
@@ -153,7 +191,13 @@ where
 
     #[tracing::instrument(err, skip(self))]
     async fn get_parent(&self, id: Uuid) -> Result<Entity<'static>, CollabSurfaceError> {
-        Ok(self.get_live(id).await?.parent)
+        let parent = self.get_live(id).await?.parent;
+        if parent.entity_type == EntityType::Form && !self.parent_form_exists(&parent).await? {
+            // Its form was deleted without the forms domain retiring it.
+            self.retire_surface(id).await?;
+            return Err(CollabSurfaceError::NotFound);
+        }
+        Ok(parent)
     }
 
     #[tracing::instrument(err, skip(self, user_id, parent_receipt))]
@@ -220,12 +264,13 @@ where
     }
 }
 
-impl<Repository, Initializer, Documents> OwnedSurfaceService
-    for CollabSurfaceServiceImpl<Repository, Initializer, Documents>
+impl<Repository, Initializer, Documents, Forms> OwnedSurfaceService
+    for CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
 where
     Repository: CollabSurfaceRepo,
     Initializer: SurfaceInitializer,
     Documents: DocumentIds,
+    Forms: Send + Sync + 'static,
 {
     #[tracing::instrument(err, skip(self, initial_markdown))]
     async fn ensure_owned_surface(
@@ -303,8 +348,8 @@ where
     }
 }
 
-impl<Repository, Initializer, Documents>
-    CollabSurfaceServiceImpl<Repository, Initializer, Documents>
+impl<Repository, Initializer, Documents, Forms>
+    CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
 where
     Repository: CollabSurfaceRepo,
     Initializer: SurfaceInitializer,
@@ -486,5 +531,20 @@ where
             state: SurfaceState::Ready,
             ..surface
         })
+    }
+}
+
+impl<Repository, Initializer, Documents, Forms>
+    CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
+where
+    Forms: FormIds,
+{
+    /// Whether a form parent still exists, trashed or not. A form never comes
+    /// back once its row is gone.
+    async fn parent_form_exists(&self, parent: &Entity<'_>) -> Result<bool, CollabSurfaceError> {
+        let Ok(form) = parent.entity_id.parse::<Uuid>() else {
+            return Ok(false);
+        };
+        Ok(self.forms.is_form_id(form).await?)
     }
 }

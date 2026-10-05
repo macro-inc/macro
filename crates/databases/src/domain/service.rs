@@ -549,6 +549,11 @@ where
             attribution: receipt_attribution(&receipt),
             name: name.clone(),
         }));
+        // The rename has committed; a missed liveness ping must not turn it
+        // into a failed write. Reconnecting clients also refresh their reads.
+        let _ = self.events.database_changed(database.id).await.inspect_err(|error| {
+            tracing::warn!(error = ?error, database_id = %database.id, "failed to publish database change");
+        });
         Ok(Database { name, ..database })
     }
 

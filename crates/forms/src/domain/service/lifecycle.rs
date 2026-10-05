@@ -205,14 +205,18 @@ where
         receipt: &EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), FormError> {
         let stored = self.stored_form(receipt_form_id(receipt)?).await?;
-        self.drafts
-            .retire(stored.form.id)
-            .await
-            .map_err(super::drafts::draft_error)?;
+        // The row goes first: a form whose delete failed stays restorable
+        // with its surface, and a retired surface never comes back.
         self.repository
             .delete_form(stored.form.id)
             .await
             .map_err(repository_error)?;
+        // The purge stands either way. Collab surfaces retire a form's
+        // surface whose form is gone the next time it is asked for, as they
+        // do when a database, table or owner purge cascades to the form.
+        if let Err(error) = self.drafts.retire(stored.form.id).await {
+            tracing::error!(form_id = %stored.form.id, error = ?error, "failed to retire a purged form's surface");
+        }
         self.announce(stored.form.id).await;
         self.emit(FormTopicEvent::Purged(FormPurgedMetadata {
             form_id: stored.form.id,

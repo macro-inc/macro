@@ -1,4 +1,3 @@
-import { respondLink } from '@app/features/block-form/core/respond-link';
 import { projectRouteId } from '@app/features/projects/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -32,7 +31,6 @@ import { useIsDocumentOwner } from '@core/signal/permissions';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
-import { getWebOrigin } from '@core/util/webOrigin';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import IconShared from '@icon/share.svg';
 import { Dialog } from '@kobalte/core/dialog';
@@ -97,12 +95,10 @@ import {
   createResource,
   createSignal,
   For,
-  lazy,
   Match,
   onCleanup,
   onMount,
   Show,
-  Suspense,
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -132,10 +128,6 @@ import {
   teamShareScopeOptionsForItem,
 } from './linkShare';
 
-const FormLinkSharing = lazy(
-  () => import('@app/features/block-form/form-link-sharing')
-);
-
 false && clickOutside;
 
 const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
@@ -149,7 +141,6 @@ const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
 type ShareBlockType = BlockName | BlockAlias | 'initiative';
 
 function shareUrl(type: ShareBlockType, id: string): string {
-  if (type === 'form') return respondLink(`${getWebOrigin()}/app/`, id);
   if (type !== 'initiative') return buildSimpleEntityUrl({ type, id });
   return buildSimpleEntityUrl({
     type: 'component',
@@ -794,15 +785,6 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 }
 
 export function ShareModal(props: ShareModalProps) {
-  const FormLinks = () => (
-    <Suspense
-      fallback={<p class="text-sm text-ink-muted">Loading form sharing…</p>}
-    >
-      <FormLinkSharing formId={props.id} />
-    </Suspense>
-  );
-  const customLinkSharing = () =>
-    props.linkSharing ?? (props.itemType === 'form' ? FormLinks : undefined);
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const currentTeamQuery = useCurrentTeamQuery();
@@ -1387,7 +1369,7 @@ export function ShareModal(props: ShareModalProps) {
           itemType={props.itemType}
           owner={props.owner}
           people={props.people}
-          linkSharing={customLinkSharing()}
+          linkSharing={props.linkSharing}
           hasDirectShares={props.hasDirectShares}
           userPermissions={userPermissions()}
           recipients={recipients()}
@@ -1607,7 +1589,7 @@ export function ShareModal(props: ShareModalProps) {
               {/* Card 3: Link sharing — plain border */}
               <Show
                 when={
-                  customLinkSharing() ||
+                  props.linkSharing ||
                   (userPermissions() === Permissions.OWNER &&
                     !isLinkSharingDisabledForItem(props.itemType))
                 }
@@ -1615,7 +1597,7 @@ export function ShareModal(props: ShareModalProps) {
                 <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Body>
                     <Show
-                      when={customLinkSharing()}
+                      when={props.linkSharing}
                       fallback={
                         <LinkSharingControls
                           editPermissionEnabled={editPermissionEnabled()}
@@ -1633,7 +1615,7 @@ export function ShareModal(props: ShareModalProps) {
                       }
                     >
                       <div class="p-4">
-                        <Dynamic component={customLinkSharing()} />
+                        <Dynamic component={props.linkSharing} />
                       </div>
                     </Show>
                   </Panel.Body>

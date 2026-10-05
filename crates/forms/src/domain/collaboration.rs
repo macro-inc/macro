@@ -1,6 +1,7 @@
 //! A form's layout as a Loro document, so several editors can change it at
 //! once and merge without losing each other's edits.
 
+mod repair;
 #[cfg(test)]
 mod test;
 
@@ -10,7 +11,7 @@ use loro::{
     Container, ExportMode, LoroDoc, LoroMap, LoroMovableList, LoroText, LoroValue, UpdateOptions,
     ValueOrContainer, VersionVector,
 };
-use models_forms::{FormLayout, FormQuestionId, FormSection, FormSectionId};
+use models_forms::{FormLayout, FormQuestionId, FormSection, FormSectionId, FormSectionKind};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 /// The schema format this module reads and writes.
@@ -179,16 +180,34 @@ pub fn read_layout(snapshot: &[u8]) -> Result<DecodedLayoutDraft, LayoutDraftErr
 }
 
 /// The update that turns the snapshot's layout into `layout`, touching only
-/// what differs.
+/// what differs. A document with records that cannot be read, or in another
+/// format, is repaired in the same history: the unreadable records are
+/// rewritten from `layout`, and the readable ones are diffed as usual.
 pub fn replace_layout(
     snapshot: &[u8],
     layout: &FormLayout,
 ) -> Result<LayoutDraftUpdate, LayoutDraftError> {
+    replace_in(load(snapshot)?, layout)
+}
+
+fn replace_in(
+    document: LoroDoc,
+    layout: &FormLayout,
+) -> Result<LayoutDraftUpdate, LayoutDraftError> {
     let next = section_records(layout)?;
-    let document = load(snapshot)?;
-    // Diffed as the layout models it, so fields it does not model are kept.
-    let previous = section_records(&layout_from_records(read_records(&document)?)?)?;
     let expected = document.oplog_vv();
+    let previous = match read_records(&document).and_then(layout_from_records) {
+        // Diffed as the layout models it, so fields it does not model are kept.
+        Ok(previous) => section_records(&previous)?,
+        Err(
+            LayoutDraftError::MissingFormat
+            | LayoutDraftError::UnsupportedFormat(_)
+            | LayoutDraftError::Malformed { .. }
+            | LayoutDraftError::InvalidJson { .. }
+            | LayoutDraftError::InvalidSection { .. },
+        ) => repair::clear_unreadable(&document)?,
+        Err(error) => return Err(error),
+    };
     apply_records(&document, &previous, &next)?;
     document.commit();
     let update = document
@@ -205,6 +224,11 @@ pub fn revision_includes(candidate: &[u8], prior: &[u8]) -> Result<bool, LayoutD
     let candidate = decode_revision(candidate)?;
     let prior = decode_revision(prior)?;
     Ok(candidate.includes_vv(&prior))
+}
+
+/// Revision equality is semantic: Loro's encoded map order is not canonical.
+pub fn revision_matches(left: &[u8], right: &[u8]) -> Result<bool, LayoutDraftError> {
+    Ok(decode_revision(left)? == decode_revision(right)?)
 }
 
 fn decode_revision(revision: &[u8]) -> Result<VersionVector, LayoutDraftError> {
@@ -331,7 +355,10 @@ fn layout_from_records(records: Vec<SectionRecord>) -> Result<FormLayout, Layout
 /// only: membership in the `sections` and `questions` maps decides what
 /// exists, and a question's `sectionId` decides where it lives. An id an
 /// order repeats counts once, at its first place; one it lacks comes last,
-/// by id. A question whose section is gone is left out.
+/// by id. A question whose section is gone is left out. Booking steps come
+/// last whatever their stored place, so concurrent inserts cannot put a
+/// section after one; two concurrent booking steps are both read, for an
+/// editor to remove one.
 fn read_records(document: &LoroDoc) -> Result<Vec<SectionRecord>, LayoutDraftError> {
     check_format(document)?;
     let sections = document.get_map(SECTIONS);
@@ -352,36 +379,56 @@ fn read_records(document: &LoroDoc) -> Result<Vec<SectionRecord>, LayoutDraftErr
             .insert(id, record);
     }
 
-    let section_keys: Vec<String> = sections.keys().map(|key| key.to_string()).collect();
+    let section_keys = keys(&sections);
     let section_ids = ordered_ids(
         &document.get_movable_list(SECTION_ORDER),
         SECTION_ORDER,
         "a section id",
         &section_keys,
     )?;
-    section_ids
+    let mut records = section_ids
         .into_iter()
         .map(|id| {
-            let location = format!("{SECTIONS}.{id}");
-            let Some(map) = child_map(&sections, &id, &location)? else {
-                return Err(malformed(location, "a map"));
-            };
-            let mut record = read_section(&map, id.clone(), &location)?;
-            let order_location = format!("{QUESTION_ORDERS}.{id}");
-            if let Some(order) = child_movable_list(&question_orders, &id, &order_location)? {
-                let mut members = questions_by_section.remove(&id).unwrap_or_default();
-                let member_ids: Vec<String> = members.keys().cloned().collect();
-                let order = ordered_ids(&order, &order_location, "a question id", &member_ids)?;
-                record.questions = Some(
-                    order
-                        .into_iter()
-                        .filter_map(|question_id| members.remove(&question_id))
-                        .collect(),
-                );
-            }
-            Ok(record)
+            let members = questions_by_section.remove(&id).unwrap_or_default();
+            read_section_with_questions(&sections, &question_orders, &id, members)
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    records.sort_by_key(is_booking);
+    Ok(records)
+}
+
+fn is_booking(record: &SectionRecord) -> bool {
+    record.kind == FormSectionKind::Booking.as_ref()
+}
+
+/// The section under `id` with its questions, from `members`, in order.
+fn read_section_with_questions(
+    sections: &LoroMap,
+    question_orders: &LoroMap,
+    id: &str,
+    mut members: HashMap<String, QuestionRecord>,
+) -> Result<SectionRecord, LayoutDraftError> {
+    let location = format!("{SECTIONS}.{id}");
+    let Some(map) = child_map(sections, id, &location)? else {
+        return Err(malformed(location, "a map"));
+    };
+    let mut record = read_section(&map, id.to_owned(), &location)?;
+    let order_location = format!("{QUESTION_ORDERS}.{id}");
+    if let Some(order) = child_movable_list(question_orders, id, &order_location)? {
+        let member_ids: Vec<String> = members.keys().cloned().collect();
+        let order = ordered_ids(&order, &order_location, "a question id", &member_ids)?;
+        record.questions = Some(
+            order
+                .into_iter()
+                .filter_map(|question_id| members.remove(&question_id))
+                .collect(),
+        );
+    }
+    Ok(record)
+}
+
+fn keys(map: &LoroMap) -> Vec<String> {
+    map.keys().map(|key| key.to_string()).collect()
 }
 
 fn check_format(document: &LoroDoc) -> Result<(), LayoutDraftError> {

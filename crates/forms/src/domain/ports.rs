@@ -269,12 +269,14 @@ pub trait FormsService: Send + Sync + 'static {
         update: UpdateForm,
     ) -> impl Future<Output = Result<Form, FormError>> + Send;
 
-    /// Replace a form's layout as a whole, validated against its table.
+    /// Save a whole layout in the shared document. A successful response includes
+    /// its publication result: a saved draft can need repair or a retry before
+    /// respondents see it. Refused requests have not changed the draft.
     fn put_layout(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         layout: FormLayout,
-    ) -> impl Future<Output = Result<FormDetail, FormError>> + Send;
+    ) -> impl Future<Output = Result<models_forms::FormCollaboration, FormError>> + Send;
 
     /// Respond: validate, run the gates, write the row, record the response.
     fn submit_response(

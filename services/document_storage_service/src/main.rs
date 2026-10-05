@@ -1413,12 +1413,21 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         ),
     );
-    let collab_surface_service = Arc::new(collab_surface::outbound::pg_collab_surface_service(
-        db.clone(),
-        lexical_client.as_ref().clone(),
-        sync_service_client.as_ref().clone(),
-        config.document_permission_jwt.as_ref().to_string(),
-    ));
+    // Forms' ids are their surfaces' ids, so the public surface API asks the
+    // forms domain which ids are taken.
+    let collab_surface_service = Arc::new(
+        collab_surface::outbound::pg_collab_surface_service(
+            db.clone(),
+            lexical_client.as_ref().clone(),
+            sync_service_client.as_ref().clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+        )
+        .with_form_ids(Arc::new(
+            forms::outbound::collaborative_layout::RepositoryFormIds::new(Arc::new(
+                forms::outbound::pg_forms_repo::PgFormsRepo::new(db.clone()),
+            )),
+        )),
+    );
 
     let initiative_service = Arc::new(
         InitiativeServiceImpl::new(

@@ -97,9 +97,9 @@ async fn state_reads_a_snapshot_with_the_signed_grant() {
     );
     let request = handle.join().unwrap();
     assert!(
-        request
-            .head
-            .starts_with("GET /document/0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90/state HTTP/1.1"),
+        request.head.starts_with(
+            "GET /document/0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90/state?shallow=true HTTP/1.1"
+        ),
         "{}",
         request.head
     );

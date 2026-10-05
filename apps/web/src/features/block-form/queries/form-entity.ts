@@ -1,8 +1,9 @@
 /** Renaming and trashing a form: the unified entity mutation router, as for databases. */
 import { queryClient } from '@queries/client';
-import { setPreviewName } from '@queries/preview';
+import { invalidatePreview, setPreviewName } from '@queries/preview';
 import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
+import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import {
   RenameFormDocument,
   type RenameFormMutation,
@@ -48,6 +49,16 @@ function outcomeOf(
   return ok(undefined);
 }
 
+function cachedDatabaseIdOf(formId: string): string | undefined {
+  return (
+    queryClient.getQueryData<FormDetail>(formsKeys.detail(formId).queryKey)
+      ?.form.databaseId ??
+    queryClient
+      .getQueryData<ListedForm[]>(formsKeys.list.queryKey)
+      ?.find((listed) => listed.form.id === formId)?.form.databaseId
+  );
+}
+
 export function renameForm(
   client: FormEntityClient,
   formId: string,
@@ -73,24 +84,24 @@ export function renameForm(
             form: { ...previous.form, name: displayName },
           }
       );
-      const detail = queryClient.getQueryData<FormDetail>(
-        formsKeys.detail(formId).queryKey
-      );
+      const databaseId = cachedDatabaseIdOf(formId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey }),
         queryClient.invalidateQueries({
-          queryKey: detail
-            ? databasesKeys.detail(detail.form.databaseId).queryKey
+          queryKey: databaseId
+            ? databasesKeys.detail(databaseId).queryKey
             : databasesKeys.detail._def,
         }),
         queryClient.invalidateQueries({
           queryKey: databasesKeys.list.queryKey,
         }),
         queryClient.invalidateQueries({
-          queryKey: detail
-            ? formsKeys.forDatabase(detail.form.databaseId).queryKey
+          queryKey: databaseId
+            ? formsKeys.forDatabase(databaseId).queryKey
             : formsKeys.forDatabase._def,
         }),
+        // A standalone form renames its database; the server says whether.
+        databaseId ? invalidatePreview(databaseId) : undefined,
       ]);
     }
     return outcome;

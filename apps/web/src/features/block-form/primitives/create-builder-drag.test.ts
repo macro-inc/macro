@@ -287,6 +287,92 @@ it('drags a new section from the sidebar into the form and creates it only on a 
   });
 });
 
+it('shows and announces a new section dropped below the booking step where it lands, before it', async () => {
+  const section = (
+    id: string,
+    kind: FormLayout['sections'][number]['kind']
+  ): FormLayout['sections'][number] => ({
+    id,
+    kind,
+    title: id,
+    description: '',
+    questions: [],
+    gateRules: null,
+    gateMessage: '',
+    bookingTarget: null,
+  });
+  const formLayout: FormLayout = {
+    sections: [
+      section('first', 'questions'),
+      section('second', 'questions'),
+      section('book', 'booking'),
+    ],
+  };
+  const viewport = document.createElement('div');
+  viewport.getBoundingClientRect = () => new DOMRect(0, 0, 650, 500);
+  const canvas = document.createElement('div');
+  canvas.getBoundingClientRect = () => new DOMRect(0, 0, 480, 450);
+  const handle = document.createElement('button');
+  document.body.append(viewport, canvas, handle);
+  const created: number[] = [];
+  const { drag, dispose } = createRoot((dispose) => ({
+    dispose,
+    drag: createBuilderDrag({
+      layout: () => formLayout,
+      viewport: () => viewport,
+      canvas: () => canvas,
+      measureQuestions: () => [],
+      measureSections: () => [
+        { id: 'first', box: { left: 0, right: 480, top: 20, bottom: 100 } },
+        { id: 'second', box: { left: 0, right: 480, top: 150, bottom: 250 } },
+        { id: 'book', box: { left: 0, right: 480, top: 300, bottom: 380 } },
+      ],
+      refusalForQuestion: () => undefined,
+      refusalForSection: () => undefined,
+      dropQuestion: () => {},
+      dropSection: () => {},
+      dropNewSection: (_, index) => {
+        created.push(index);
+        return 'created';
+      },
+      describe: () => 'new section',
+      describePlacement: () => '',
+      focusHandle: () => {},
+    }),
+  }));
+  const handlers = drag.handleProps(() => ({
+    kind: 'new-section',
+    id: 'questions',
+  }));
+  handle.addEventListener('pointerdown', handlers.onPointerDown);
+  handle.dispatchEvent(
+    new PointerEvent('pointerdown', {
+      pointerId: 1,
+      button: 0,
+      clientX: 550,
+      clientY: 40,
+    })
+  );
+  handle.dispatchEvent(
+    new PointerEvent('pointermove', {
+      pointerId: 1,
+      clientX: 450,
+      clientY: 360,
+    })
+  );
+
+  expect(drag.session()?.sectionIndex).toBe(2);
+  expect(drag.session()?.lineY).toBe(275);
+
+  handle.dispatchEvent(
+    new PointerEvent('pointerup', { pointerId: 1, clientX: 450, clientY: 360 })
+  );
+  await Promise.resolve();
+  expect(created).toEqual([2]);
+  expect(drag.announcement()).toBe('Added new section at position 3.');
+  dispose();
+});
+
 describe('createBuilderDrag keyboard', () => {
   it('picks up with Space, moves with ArrowDown, drops with Space, writes once and keeps focus on the handle', () => {
     createRoot((dispose) => {

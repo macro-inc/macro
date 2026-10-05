@@ -1,14 +1,50 @@
 import { Miniflare } from "miniflare";
 import { LoroDoc } from "loro-crdt";
-import { expect, test, describe, beforeEach } from "vitest";
+import { expect, test, describe, beforeEach, afterEach } from "vitest";
 import { createTestUser, getTokenForDocument, setupMiniflare } from "./utils";
 import { InitializeFromSnapshotRequest } from "../bebop/generated/schema";
 
+type User = Awaited<ReturnType<typeof createTestUser>>;
 let mf: Miniflare;
+let users: User[] = [];
 
 beforeEach(async () => {
   mf = await setupMiniflare();
 });
+
+afterEach(async () => {
+  for (const user of users)
+    if (user.getWebSocket().readyState === WebSocket.OPEN)
+      user.getWebSocket().close();
+  users = [];
+  await mf.dispose();
+});
+
+async function connect(documentId: string) {
+  const user = await createTestUser(mf, documentId);
+  users.push(user);
+  return user;
+}
+
+// Connections receive their initial sync only once the document exists.
+async function initializeEmptyDocument(documentId: string) {
+  const doc = new LoroDoc();
+  const snapshot = doc.export({ mode: "snapshot" });
+  doc.free();
+  const response = await mf.dispatchFetch(
+    `http://localhost:8787/document/${documentId}/initialize`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        Authorization:
+          "Bearer " + getTokenForDocument(documentId, "test-user", "owner"),
+      },
+      body: InitializeFromSnapshotRequest.encode({ snapshot }),
+    },
+  );
+  expect(response.status).toBe(200);
+}
 
 describe("document api tests", async () => {
   test("should properly initialize the document", async () => {
@@ -34,7 +70,7 @@ describe("document api tests", async () => {
         body: req,
       },
     );
-    let user = await createTestUser(mf, "test-doc");
+    let user = await connect("test-doc");
     expect(user.getState()).toBe("hello world 121");
   });
 
@@ -86,14 +122,15 @@ describe("document api tests", async () => {
 
     expect(response.status).toBe(409);
 
-    let user = await createTestUser(mf, "test-doc");
+    let user = await connect("test-doc");
 
     expect(user.getState()).toBe("hello world 121");
   });
 
   test("should fetch correct metadata about document", async () => {
-    const userA = await createTestUser(mf, "test-doc");
-    const userB = await createTestUser(mf, "test-doc");
+    await initializeEmptyDocument("test-doc");
+    const userA = await connect("test-doc");
+    const userB = await connect("test-doc");
 
     const peeridA = userA.doc.peerIdStr;
     const peeridB = userB.doc.peerIdStr;
@@ -127,7 +164,8 @@ describe("document api tests", async () => {
   });
 
   test("should increment document version id counter", async () => {
-    const userA = await createTestUser(mf, "test-doc");
+    await initializeEmptyDocument("test-doc");
+    const userA = await connect("test-doc");
     const token = getTokenForDocument("test-doc", "test-user", "owner");
     const version_id_og: number = (await (await mf.dispatchFetch(
       "http://localhost:8787/document/test-doc/metadata",
@@ -157,7 +195,8 @@ describe("document api tests", async () => {
   }, 6000);
 
   test("should copy document to new location", async () => {
-    const userA = await createTestUser(mf, "test-doc");
+    await initializeEmptyDocument("test-doc");
+    const userA = await connect("test-doc");
     userA.makeChange("hello world 123");
 
     // give document a change to save the snapshot
@@ -179,13 +218,14 @@ describe("document api tests", async () => {
 
     expect(response.status).toBe(200);
 
-    const userB = await createTestUser(mf, "test-doc-copy");
+    const userB = await connect("test-doc-copy");
 
     expect(userB.getState()).toBe("hello world 123");
   }, 10000);
 
   test("should copy document to new location with specific version", async () => {
-    const userA = await createTestUser(mf, "test-doc");
+    await initializeEmptyDocument("test-doc");
+    const userA = await connect("test-doc");
     userA.makeChange("v1");
 
     const frontier = userA.doc.vvToFrontiers(userA.doc.version())[0];
@@ -214,7 +254,7 @@ describe("document api tests", async () => {
 
     expect(response.status).toBe(200);
 
-    const userB = await createTestUser(mf, "test-doc-copy");
+    const userB = await connect("test-doc-copy");
 
     expect(userB.getState()).toBe("v1");
   }, 10000);

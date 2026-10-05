@@ -2,7 +2,7 @@
 
 Forms are Google-Forms-style questionnaires whose answers land as rows in a
 Macro Database. This folder is the design record for the first pass. Read the
-three RFCs in order; each one makes its decisions explicit and names the code
+RFCs in order; each one makes its decisions explicit and names the code
 it builds on.
 
 | RFC | Covers |
