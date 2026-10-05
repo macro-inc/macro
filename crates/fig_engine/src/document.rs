@@ -95,6 +95,9 @@ pub struct Document {
     pub next_guid: Guid,
     /// Glyph outlines laid out by edits: `(font, weight, glyph)` → blob.
     pub glyph_cache: HashMap<(usize, u32, u16), Option<u32>>,
+    /// Records of layers pasted from another file, in this file's schema,
+    /// which saving starts from (as a copy starts from its source's record).
+    pub foreign: HashMap<Guid, Arc<[u8]>>,
 }
 
 impl Document {
@@ -226,6 +229,7 @@ impl Document {
             original_blobs,
             next_guid,
             glyph_cache: HashMap::new(),
+            foreign: HashMap::new(),
         })
     }
 

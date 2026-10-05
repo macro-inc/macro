@@ -446,6 +446,14 @@ pub struct SymbolData {
     pub uniform_scale: Option<f32>,
 }
 
+/// A vector layer's editable geometry (`vectorData`): its network blob,
+/// whose coordinates the layer's size scales from `normalized_size`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct VectorData {
+    pub network_blob: Option<u32>,
+    pub normalized_size: Option<Vec2>,
+}
+
 /// Every property of a node change; `None` means "not set here".
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Props {
@@ -497,6 +505,7 @@ pub struct Props {
     pub layout_child: Option<LayoutChild>,
     pub export_settings: Option<Arc<[ExportSetting]>>,
     pub boolean_operation: Option<Arc<str>>,
+    pub vector_data: Option<Arc<VectorData>>,
     pub constraints: Option<(Arc<str>, Arc<str>)>,
     pub description: Option<Arc<str>>,
     pub is_state_group: Option<bool>,
@@ -549,7 +558,7 @@ impl Props {
             corner_smoothing, clip_disabled, background_color, internal_only, text_content,
             text_layout, text_style,
             symbol, derived, swapped_symbol, prop_assignments, prop_refs, prop_defs,
-            override_key, auto_layout, layout_child, export_settings, boolean_operation, constraints,
+            override_key, auto_layout, layout_child, export_settings, boolean_operation, vector_data, constraints,
             description, is_state_group, fill_style, stroke_style, effect_style,
             text_style_id, key, style_type, sort_position, soft_deleted, variant_specs,
             variant_orders, props_bubbled,

@@ -55,6 +55,7 @@ enum StackWrap NO_WRAP WRAP
 enum ConstraintType MIN CENTER MAX STRETCH SCALE FIXED_MIN FIXED_MAX
 enum TextDecoration NONE UNDERLINE STRIKETHROUGH
 enum TextCase ORIGINAL UPPER LOWER TITLE SMALL_CAPS SMALL_CAPS_FORCED
+enum BooleanOperation UNION INTERSECT SUBTRACT XOR
 struct GUID sessionID:uint localID:uint
 struct Color r:float g:float b:float a:float
 struct Vector x:float y:float
@@ -89,7 +90,8 @@ message ComponentPropRef defID:GUID zombieFallbackName:string componentPropNodeF
 message ComponentPropAssignment defID:GUID value:ComponentPropValue
 message VariantPropSpec propDefId:GUID value:string
 message StateGroupPropertyValueOrder property:string values:string[]
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID componentPropDefs:ComponentPropDef[] componentPropRefs:ComponentPropRef[] componentPropAssignments:ComponentPropAssignment[] variantPropSpecs:VariantPropSpec[] stateGroupPropertyValueOrders:StateGroupPropertyValueOrder[] isStateGroup:bool propsAreBubbled:bool description:string key:string styleType:StyleType sortPosition:string isSoftDeleted:bool styleIdForFill:StyleId styleIdForStrokeFill:StyleId styleIdForEffect:StyleId styleIdForText:StyleId
+message VectorData vectorNetworkBlob:uint normalizedSize:Vector
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID booleanOperation:BooleanOperation vectorData:VectorData componentPropDefs:ComponentPropDef[] componentPropRefs:ComponentPropRef[] componentPropAssignments:ComponentPropAssignment[] variantPropSpecs:VariantPropSpec[] stateGroupPropertyValueOrders:StateGroupPropertyValueOrder[] isStateGroup:bool propsAreBubbled:bool description:string key:string styleType:StyleType sortPosition:string isSoftDeleted:bool styleIdForFill:StyleId styleIdForStrokeFill:StyleId styleIdForEffect:StyleId styleIdForText:StyleId
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -679,6 +681,14 @@ impl<'s> Build<'s> {
         {
             self.prop_assignments(m, list);
         }
+        if edits & flags::BOOLEAN != 0
+            && let Some(op) = &p.boolean_operation
+        {
+            self.set_enum(m, "booleanOperation", op);
+        }
+        if edits & flags::VECTOR != 0 {
+            self.vector_data(m, p.vector_data.as_deref());
+        }
         if edits & flags::COMPONENT != 0 {
             self.component_fields(m, p, edits);
         }
@@ -920,6 +930,27 @@ impl<'s> Build<'s> {
         }
     }
 
+    /// Points `vectorData` at the network blob, keeping its other fields
+    /// (the style table the network's style ids refer to).
+    fn vector_data(&self, m: &mut Msg, data: Option<&crate::model::VectorData>) {
+        let Some(blob) = data.and_then(|d| d.network_blob) else {
+            m.remove(self.schema, "vectorData");
+            return;
+        };
+        let Some(def) = self.sub(m.def, "vectorData") else {
+            return;
+        };
+        let mut v = match m.get(self.schema, "vectorData") {
+            Some(Value::Msg(v)) => (**v).clone(),
+            _ => Msg::new(def),
+        };
+        v.set(self.schema, "vectorNetworkBlob", Value::Uint(blob));
+        if let Some(size) = data.and_then(|d| d.normalized_size) {
+            self.vector(&mut v, "normalizedSize", size);
+        }
+        m.set(self.schema, "vectorData", Value::Msg(Box::new(v)));
+    }
+
     fn auto_layout(&self, m: &mut Msg, al: Option<&crate::model::AutoLayout>) {
         let s = self.schema;
         let Some(al) = al else {
@@ -1078,11 +1109,47 @@ fn scan_guid(
     }
 }
 
+/// The record of a node an edit created: its source's record (a copy), or
+/// the record it was pasted with, patched with its edits; otherwise one
+/// written from its properties.
+fn created_record(
+    b: &Build,
+    decoder: &Decoder,
+    node_def: u32,
+    node: &Node,
+    doc: &Document,
+    source: Option<Msg>,
+) -> Msg {
+    let Some(guid) = node.props.guid else {
+        return b.create(node_def, node, doc);
+    };
+    let base = source.or_else(|| {
+        let bytes = doc.foreign.get(&guid)?;
+        decoder.decode(&mut Reader::new(bytes), node_def).ok()
+    });
+    match base {
+        Some(mut base) => {
+            b.guid_field(&mut base, "guid", guid);
+            base.remove(b.schema, "overrideKey");
+            b.patch(&mut base, node, doc, node.edits);
+            base
+        }
+        None => b.create(node_def, node, doc),
+    }
+}
+
 /// Writes the edited document as a `.fig` file. `original` is the file it
 /// was opened from. Records of unedited nodes are copied byte for byte;
 /// only edited ones are decoded and re-encoded.
 pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
-    let container = Container::open_without_images(original)?;
+    let mut container = Container::open_without_images(original)?;
+    let wants_shapes = doc
+        .nodes
+        .iter()
+        .any(|n| !n.removed && n.edits & (flags::BOOLEAN | flags::VECTOR) != 0);
+    if wants_shapes && let Some(extended) = with_shape_fields(&container.schema)? {
+        container.schema = extended;
+    }
     let schema = Schema::decode(&container.schema)?;
     let b = Build { schema: &schema };
     let message_def = b
@@ -1193,18 +1260,11 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
                 if node.edits & flags::CREATED == 0 || node.removed {
                     continue;
                 }
-                let Some(guid) = node.props.guid else {
+                if node.props.guid.is_none() {
                     continue;
-                };
-                let record = match node.source.and_then(|s| sources.get(&s).cloned().flatten()) {
-                    Some(mut base) => {
-                        b.guid_field(&mut base, "guid", guid);
-                        base.remove(&schema, "overrideKey");
-                        b.patch(&mut base, node, doc, node.edits);
-                        base
-                    }
-                    None => b.create(node_def, node, doc),
-                };
+                }
+                let source = node.source.and_then(|s| sources.get(&s).cloned().flatten());
+                let record = created_record(&b, &decoder, node_def, node, doc, source);
                 schema.encode(&record, &mut records);
                 written += 1;
             }
@@ -1239,6 +1299,112 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
     out.var_uint(0);
     let canvas = document_bytes(container.version, &container.schema, &out.bytes);
     Ok(package(doc, &canvas, container.meta.as_ref()))
+}
+
+/// The schema with the boolean and vector fields this engine writes, when
+/// it lacks them (files made in Macro before it wrote them). Existing types
+/// keep their indices and field ids, so the file's records read the same.
+fn with_shape_fields(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
+    use crate::kiwi::{Kind, Ty};
+    let schema = Schema::decode(bytes)?;
+    let Some(node) = schema.def_index("NodeChange") else {
+        return Ok(None);
+    };
+    let has = |name: &str| schema.def(node).index_of(name).is_some();
+    if has("booleanOperation") && has("vectorData") {
+        return Ok(None);
+    }
+    let count = schema.defs.len() as u32;
+    // New types: name, kind, and fields (name and type, or enum value).
+    type NewDef<'a> = (&'a str, Kind, Vec<(&'a str, i32)>);
+    let mut added: Vec<NewDef> = Vec::new();
+    let mut fields: Vec<(&str, i32)> = Vec::new();
+    if !has("booleanOperation") {
+        let def = match schema.def_index("BooleanOperation") {
+            Some(d) => d,
+            None => {
+                added.push((
+                    "BooleanOperation",
+                    Kind::Enum,
+                    vec![("UNION", 0), ("INTERSECT", 1), ("SUBTRACT", 2), ("XOR", 3)],
+                ));
+                count + added.len() as u32 - 1
+            }
+        };
+        fields.push(("booleanOperation", def as i32));
+    }
+    if !has("vectorData") {
+        let def = match schema.def_index("VectorData") {
+            Some(d) => d,
+            None => {
+                let mut f = vec![("vectorNetworkBlob", -4)];
+                if let Some(v) = schema.def_index("Vector") {
+                    f.push(("normalizedSize", v as i32));
+                }
+                added.push(("VectorData", Kind::Message, f));
+                count + added.len() as u32 - 1
+            }
+        };
+        fields.push(("vectorData", def as i32));
+    }
+    let ty = |t: Ty| match t {
+        Ty::Bool => -1,
+        Ty::Byte => -2,
+        Ty::Int => -3,
+        Ty::Uint => -4,
+        Ty::Float => -5,
+        Ty::String => -6,
+        Ty::Int64 => -7,
+        Ty::Uint64 => -8,
+        Ty::Def(i) => i as i32,
+    };
+    let kind = |k: Kind| match k {
+        Kind::Enum => 0,
+        Kind::Struct => 1,
+        Kind::Message => 2,
+    };
+    let mut w = Writer::default();
+    w.var_uint(count + added.len() as u32);
+    for (k, d) in schema.defs.iter().enumerate() {
+        w.string(&d.name);
+        w.byte(kind(d.kind));
+        let extra = if k as u32 == node { fields.len() } else { 0 };
+        w.var_uint((d.fields.len() + extra) as u32);
+        for f in &d.fields {
+            w.string(&f.name);
+            w.var_int(ty(f.ty));
+            w.byte(u8::from(f.array));
+            w.var_uint(f.id);
+        }
+        if extra > 0 {
+            let mut next = d.fields.iter().map(|f| f.id).max().unwrap_or(0);
+            for (name, t) in &fields {
+                next += 1;
+                w.string(name);
+                w.var_int(*t);
+                w.byte(0);
+                w.var_uint(next);
+            }
+        }
+    }
+    for (name, k, items) in &added {
+        w.string(name);
+        w.byte(kind(*k));
+        w.var_uint(items.len() as u32);
+        for (i, (field, t)) in items.iter().enumerate() {
+            w.string(field);
+            // Enum values are their own ids; message fields count from 1.
+            let (t, id) = if *k == Kind::Enum {
+                (0, *t as u32)
+            } else {
+                (*t, i as u32 + 1)
+            };
+            w.var_int(t);
+            w.byte(0);
+            w.var_uint(id);
+        }
+    }
+    Ok(Some(w.bytes))
 }
 
 /// `fig-kiwi` header and the deflated schema and message chunks.
@@ -1374,6 +1540,10 @@ pub fn blank(name: &str) -> Vec<u8> {
     let meta_bytes = serde_json::to_vec(&meta).unwrap_or_default();
     crate::zip::write_stored(&[("canvas.fig", &canvas), ("meta.json", &meta_bytes)])
 }
+
+mod clipboard;
+pub(crate) use clipboard::remap_blobs;
+pub use clipboard::{Copied, copy};
 
 #[cfg(test)]
 mod test;

@@ -979,7 +979,23 @@ Layout and test hooks:
   text tools (a click places a default size; new layers go into the frame
   under the pointer), double-click or Enter on a text layer to type into it
   (`fig-text-editor`; Escape ends, an emptied layer is removed), and drop or
-  paste image files to place image-filled layers. Layers inside instances
+  paste image files to place image-filled layers. The pen (P) draws a path:
+  click places a corner, drag pulls out a curve's handles, clicking the first
+  point closes the path, and Enter or Escape ends an open one; the result is
+  a Vector layer with a 1 px black stroke. Double-clicking a selected shape
+  or vector (or Enter) edits its points: drag points and handles (⌥ breaks
+  a handle's mirroring), Delete removes the selected point, and Escape or a
+  click elsewhere ends editing; rectangles, ellipses, and the like become
+  vectors when their points change. ⌘C also puts the selection on the system
+  clipboard as Figma does (HTML whose comments carry `(figmeta)` and the
+  layers as a `(figma)` `.fig` document, plus Macro's `(macroimages)`), so
+  layers paste into other designs and tabs, and layers copied in Figma paste
+  here (their images arrive as gray placeholders, since Figma's clipboard
+  does not carry them). Pasted instances whose component is not in the file
+  are detached. Paste places layers by Figma's rules: into a selected frame
+  (where they were if that is inside it, else centered), beside a selected
+  layer, or on the page where they were when that is in view and in the
+  middle of the view otherwise. Layers inside instances
   cannot be moved, resized, or deleted, but their name, fills, strokes,
   opacity, visibility, and text (typing included) are overridden on the
   instance, as in Figma; text bound to a component text property sets the
@@ -994,8 +1010,12 @@ Layout and test hooks:
   `flip-horizontal` (⇧H), `flip-vertical` (⇧V), `rename`, and `delete`
   (read-only viewers get copy, copy as PNG, and zoom to selection). On
   empty canvas: `paste-here` (pastes copied layers with their top left at
-  the click), `toggle-ui`, `toggle-rulers`, `toggle-pixel-grid`,
-  `toggle-outline`, the zoom actions, and `select-all`.
+  the click, into the frame there), `toggle-ui`, `toggle-rulers`, `toggle-pixel-grid`,
+  `toggle-outline`, the zoom actions, and `select-all`. `paste-replace`
+  puts the pasted layers in place of the selection, centered on it, in one
+  undo step. Both paste what is on the system clipboard (layers from any
+  file or tab, as ⌘V does) when the browser lets the page read it, and
+  otherwise the layers copied in this design.
 - **Design panel** (`fig-design-panel`, toggled with ⌥8): alignment buttons
   (`fig-align-<left|center|right|top|middle|bottom>`), name (`fig-name`),
   position, size, rotation, radius, opacity (`fig-field-<x|y|w|h|rotation|
@@ -1020,8 +1040,12 @@ Layout and test hooks:
   (`fig-constraint-h|v`; children follow them when their frame is resized,
   and groups scale theirs), effects (`fig-effects`: "+" adds a drop shadow;
   rows `fig-effect-<n>` pick the kind in `fig-effect-<n>-type` and take
-  offset, blur `fig-effect-<n>-blur`, spread, and color), and
-  export buttons (`fig-export-1x|2x|3x`). Read-only viewers see the same
+  offset, blur `fig-effect-<n>-blur`, spread, and color), boolean
+  operations (`fig-boolean-row`, shown for two or more layers or a boolean
+  layer: `fig-boolean-<union|subtract|intersect|exclude>`, pressed for the
+  boolean's current operation, which a click changes, and `fig-flatten`),
+  and export buttons (`fig-export-1x|2x|3x`, `fig-export-svg` to download
+  SVG, and `fig-copy-svg` for Copy as SVG). Read-only viewers see the same
   values as text. The Code tab shows CSS (`fig-css`). With nothing selected
   it shows the page name and canvas color (`fig-page-color` opens the
   picker). With several layers selected (`fig-mixed`) it shows what they
@@ -1042,8 +1066,10 @@ Layout and test hooks:
   (`fig-color-swatch`). Dragging previews live and is one undo step;
   Escape closes the picker.
 - **Toolbar** (`fig-toolbar`): Move (V), Frame (F), Rectangle (R), Ellipse
-  (O), Line (L), Arrow (⇧L; ⇧ while drawing snaps lines to 45°), Text (T),
-  Hand (H) as `fig-tool-<name>`, undo/redo (`fig-undo`,
+  (O), Line (L), Arrow (⇧L; ⇧ while drawing snaps lines to 45°), Pen (P),
+  Text (T), Hand (H) as `fig-tool-<name>`, the boolean menu
+  (`fig-boolean-menu`: `fig-menu-boolean-<union|subtract|intersect|exclude>`
+  and `fig-menu-flatten`), undo/redo (`fig-undo`,
   `fig-redo`), the save state (`fig-save-state`, `data-state` is `saved`,
   `unsaved`, `saving`, or `error`), the zoom menu (`fig-zoom-menu`), and the
   shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?).
@@ -1054,7 +1080,11 @@ Layout and test hooks:
   ⌘/Ctrl+⇧E export. Editing: ⌘Z/⇧⌘Z undo and redo, ⌘D duplicate, ⌘C/⌘X/⌘V,
   Delete, arrows nudge (⇧ by 10), ⌘G group, ⇧⌘G ungroup, ⌥⌘G frame
   selection, ⌘] / ⌘[ forward/backward, ⌥⌘] / ⌥⌘[ front/back, ⇧⌘H hide,
-  ⇧⌘L lock, ⇧H / ⇧V flip, ⌘R rename.
+  ⇧⌘L lock, ⇧H / ⇧V flip, ⌘R rename, ⌥⇧U union, ⌥⇧S subtract (the top layers from the
+  bottom one), ⌥⇧I intersect, ⌥⇧X exclude, and ⌘E flatten (booleans and
+  shapes into one vector layer). A boolean keeps its layers as children and
+  recomputes its shape when they change, and takes the bottom layer's fills
+  and strokes.
 
 The viewer has a browser fixture that needs no backend. From `apps/web`
 (build the engine first with `just ensure-fig-engine-wasm`):

@@ -8,7 +8,7 @@ use crate::model::{
     Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
     Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    VariantOrder, VariantSpec, Vec2,
+    VariantOrder, VariantSpec, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -465,6 +465,7 @@ impl<'a> Writer<'a> {
             layout_child,
             export_settings,
             boolean_operation,
+            vector_data,
             constraints,
             description,
             is_state_group,
@@ -590,6 +591,14 @@ impl<'a> Writer<'a> {
             });
         });
         self.opt_str(boolean_operation);
+        self.opt(vector_data, |w, v| {
+            let VectorData {
+                network_blob,
+                normalized_size,
+            } = **v;
+            w.opt(&network_blob, |w, b| w.blob(*b));
+            w.opt(&normalized_size, |w, s| w.vec2(s));
+        });
         self.opt(constraints, |w, (h, v)| {
             w.str(h);
             w.str(v);

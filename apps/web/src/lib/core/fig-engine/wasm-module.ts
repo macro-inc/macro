@@ -70,6 +70,28 @@ export interface WasmFigFile {
   collabChanges: () => string;
   /** Other people's `EntryChange[]` JSON; returns `EditResult` JSON. */
   applyCollab: (page: number, changes: string) => string;
+  /** An SVG document of one layer. */
+  exportSvg: (page: number, id: string) => string;
+  /** `VectorNetwork` JSON in page coordinates, if the layer has points. */
+  vectorNetwork: (page: number, id: string) => string | undefined;
+  /** Copies layers (`string[]` JSON). */
+  copy: (page: number, ids: string) => WasmClipboard;
+  /** Pastes copied layers; `PasteSpec` JSON in, `EditResult` JSON out. */
+  paste: (
+    page: number,
+    document: Uint8Array,
+    images: Uint8Array | null | undefined,
+    spec: string
+  ) => string;
+  free: () => void;
+}
+
+/** Copied layers. Mirrors `fig_engine::wasm::Clipboard`. */
+export interface WasmClipboard {
+  /** A `.fig` document holding the layers. */
+  readonly document: Uint8Array;
+  /** A ZIP of the images they use (empty when none). */
+  readonly images: Uint8Array;
   free: () => void;
 }
 
