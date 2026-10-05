@@ -1,6 +1,8 @@
 //! Developer CLI for the `.fig` engine: document summaries, page renders,
 //! and fidelity scores against the thumbnails Figma embeds in its files.
 
+mod collab;
+
 use clap::{Parser, Subcommand};
 use fig_engine::container::Container;
 use fig_engine::images::ImageStore;
@@ -49,6 +51,9 @@ enum Command {
     /// Time typical edits (a drag step, a fill change) and the scene update
     /// after each.
     BenchEdit { files: Vec<PathBuf> },
+    /// Edit each file as one person and check that a second person, both
+    /// saves, and someone joining from the saved file see the same design.
+    Collab { files: Vec<PathBuf> },
     /// Lay out every auto layout frame again and report the frames whose
     /// children the engine places differently from Figma.
     Relayout {
@@ -96,6 +101,11 @@ fn main() {
         Command::Relayout { verbose, files } => {
             for path in files {
                 relayout(&path, verbose);
+            }
+        }
+        Command::Collab { files } => {
+            for path in files {
+                collab::check(&path);
             }
         }
         Command::Compare { out, files } => {

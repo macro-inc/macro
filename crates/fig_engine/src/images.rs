@@ -132,6 +132,11 @@ impl ImageStore {
         decoded
     }
 
+    /// Forgets `hash` (an image that was missing may have arrived).
+    pub fn forget(&mut self, hash: &str) {
+        self.entries.remove(hash);
+    }
+
     fn evict(&mut self) {
         let mut total: usize = self
             .entries

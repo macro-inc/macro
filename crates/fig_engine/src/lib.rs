@@ -2,6 +2,7 @@
 //! hit testing, and inspection. The same code runs natively (tests, the
 //! `fig_render` CLI) and as WebAssembly in the web app's `.fig` viewer worker.
 
+pub mod collab;
 pub mod container;
 pub mod decode;
 pub mod document;

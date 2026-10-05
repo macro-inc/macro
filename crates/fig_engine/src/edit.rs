@@ -860,8 +860,12 @@ impl<'a> Txn<'a> {
     fn new_node(&mut self, props: Props) -> NodeIdx {
         let i = self.doc.nodes.len() as NodeIdx;
         let guid = props.guid.expect("new nodes have ids");
+        // Before its creation the node has only its id (undo keeps it).
         self.doc.nodes.push(Node {
-            props: Props::default(),
+            props: Props {
+                guid: Some(guid),
+                ..Props::default()
+            },
             parent: None,
             children: Vec::new(),
             edits: flags::CREATED,
