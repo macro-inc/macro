@@ -1,7 +1,7 @@
 use async_graphql::{Enum, ID, SimpleObject, Union};
 use rootcause::Report;
 use scheduled_action::domain::{
-    event_trigger::{ActionTrigger, EventName},
+    event_trigger::{ActionTrigger, EventName, RoutineTrigger},
     models::{ActionKind, AgentTask, ScheduledAction},
 };
 use serde_json::Value;
@@ -33,6 +33,7 @@ pub struct GraphqlScheduledAction {
 pub(crate) enum GraphqlScheduledActionTrigger {
     Cron(GraphqlScheduledActionCronTrigger),
     Events(GraphqlScheduledActionEventsTrigger),
+    Multiple(GraphqlScheduledActionMultipleTrigger),
 }
 
 /// A routine that runs on a cron schedule.
@@ -44,6 +45,15 @@ pub(crate) struct GraphqlScheduledActionCronTrigger {
     timezone: String,
     /// Next cron firing, as RFC 3339. Null when the routine is disabled.
     next_run_at: Option<String>,
+}
+
+/// Any of several schedules and optional Macro event filters.
+#[derive(SimpleObject)]
+pub(crate) struct GraphqlScheduledActionMultipleTrigger {
+    /// Each schedule retains its own timezone and next firing.
+    schedules: Vec<GraphqlScheduledActionCronTrigger>,
+    /// Events that can also trigger this routine.
+    events: Option<GraphqlScheduledActionEventsTrigger>,
 }
 
 /// A routine that runs when matching events are published.
@@ -89,6 +99,18 @@ pub(crate) enum GraphqlScheduledActionEventName {
     DocumentCreated,
     /// A document was updated.
     DocumentUpdated,
+    /// A document was deleted.
+    DocumentDeleted,
+    /// A task was created.
+    TaskCreated,
+    /// A task's status changed.
+    TaskStatusChanged,
+    /// A task's priority changed.
+    TaskPriorityChanged,
+    /// A task property changed.
+    TaskPropertyChanged,
+    /// A new email was received.
+    EmailMessageReceived,
     /// A channel was created.
     ChannelCreated,
     /// A channel message was posted.
@@ -106,6 +128,12 @@ impl From<EventName> for GraphqlScheduledActionEventName {
         match name {
             EventName::DocumentCreated => Self::DocumentCreated,
             EventName::DocumentUpdated => Self::DocumentUpdated,
+            EventName::DocumentDeleted => Self::DocumentDeleted,
+            EventName::TaskCreated => Self::TaskCreated,
+            EventName::TaskStatusChanged => Self::TaskStatusChanged,
+            EventName::TaskPriorityChanged => Self::TaskPriorityChanged,
+            EventName::TaskPropertyChanged => Self::TaskPropertyChanged,
+            EventName::EmailMessageReceived => Self::EmailMessageReceived,
             EventName::ChannelCreated => Self::ChannelCreated,
             EventName::ChannelMessagePosted => Self::ChannelMessagePosted,
             EventName::ChannelMentioned => Self::ChannelMentioned,
@@ -152,19 +180,34 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
                 next_run_at,
             })
         }
-        ActionTrigger::Events { filters } => {
-            GraphqlScheduledActionTrigger::Events(GraphqlScheduledActionEventsTrigger {
-                filters: filters
+        ActionTrigger::Multiple { triggers } => {
+            GraphqlScheduledActionTrigger::Multiple(GraphqlScheduledActionMultipleTrigger {
+                schedules: triggers
                     .as_slice()
                     .iter()
-                    .map(|filter| GraphqlScheduledActionEventFilter {
-                        events: filter.events().iter().copied().map(Into::into).collect(),
-                        entity_ids: filter
-                            .ids()
-                            .map(|ids| ids.iter().map(|id| ID(id.to_string())).collect()),
+                    .filter_map(|trigger| match trigger {
+                        RoutineTrigger::Cron { schedule, timezone } => {
+                            Some(GraphqlScheduledActionCronTrigger {
+                                schedule: schedule.as_str().to_owned(),
+                                timezone: timezone.to_string(),
+                                next_run_at: action
+                                    .enabled
+                                    .then(|| {
+                                        schedule
+                                            .next_run_after_now(*timezone)
+                                            .map(|at| at.to_rfc3339())
+                                    })
+                                    .flatten(),
+                            })
+                        }
+                        RoutineTrigger::Events { .. } => None,
                     })
                     .collect(),
+                events: action.trigger.event_filters().map(event_filters),
             })
+        }
+        ActionTrigger::Events { filters } => {
+            GraphqlScheduledActionTrigger::Events(event_filters(filters))
         }
     }
 }
@@ -183,5 +226,22 @@ fn agent_task(kind: &ActionKind, task: &Value) -> Option<GraphqlScheduledActionA
                 user_prompt: task.user_prompt,
             })
         }
+    }
+}
+
+fn event_filters(
+    filters: &scheduled_action::domain::event_trigger::EventFilters,
+) -> GraphqlScheduledActionEventsTrigger {
+    GraphqlScheduledActionEventsTrigger {
+        filters: filters
+            .as_slice()
+            .iter()
+            .map(|filter| GraphqlScheduledActionEventFilter {
+                events: filter.events().iter().copied().map(Into::into).collect(),
+                entity_ids: filter
+                    .ids()
+                    .map(|ids| ids.iter().map(|id| ID(id.to_string())).collect()),
+            })
+            .collect(),
     }
 }

@@ -79,7 +79,7 @@ describe('makeCreateReminderAction', () => {
     const { canExecute } = makeCreateReminderAction();
 
     expect(canExecute(entity('channel_message'))).toBe(false);
-    expect(canExecute(entity('automation'))).toBe(false);
+    expect(canExecute(entity('routine'))).toBe(false);
   });
 
   // Thread rows are offered the action even though `channel_message` is not a

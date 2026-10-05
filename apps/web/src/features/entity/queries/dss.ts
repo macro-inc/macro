@@ -1,4 +1,6 @@
 /** Document-storage mutations used by entity surfaces. */
+
+import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import {
   copyItem,
   deleteItem,
@@ -10,7 +12,6 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
-import { scheduledActionKeys } from '@queries/agent-schedule/keys';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
 import { queryClient } from '@queries/client';
@@ -50,9 +51,9 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
     void queryClient.invalidateQueries({ queryKey: reminderKeys._def });
     void queryClient.invalidateQueries({ queryKey: notificationKeys._def });
   }
-  if (entities.some((e) => e.type === 'automation')) {
+  if (entities.some((e) => e.type === 'routine')) {
     const deletedIds = new Set(
-      entities.filter((e) => e.type === 'automation').map((e) => e.id)
+      entities.filter((e) => e.type === 'routine').map((e) => e.id)
     );
     queryClient.setQueryData(
       scheduledActionKeys.list.queryKey,
@@ -66,6 +67,14 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
     void queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
     });
+    for (const scheduleId of deletedIds) {
+      queryClient.removeQueries({
+        queryKey: scheduledActionKeys.detail({ scheduleId }).queryKey,
+      });
+      queryClient.removeQueries({
+        queryKey: scheduledActionKeys.history({ scheduleId }).queryKey,
+      });
+    }
   }
 }
 
@@ -102,7 +111,7 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'document' ||
       type === 'project' ||
       type === 'call' ||
-      type === 'automation' ||
+      type === 'routine' ||
       type === 'reminder'
     );
   };
@@ -130,7 +139,7 @@ export function createBulkDeleteDssItemsMutation() {
             callServiceClient.deleteCallRecord(e.id)
           ).then(() => true);
         }
-        if (e.type === 'automation') {
+        if (e.type === 'routine') {
           return throwOnErr(() =>
             scheduledActionClient.deleteSchedule({ scheduleId: e.id })
           ).then(() => true);

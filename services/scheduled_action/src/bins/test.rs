@@ -87,18 +87,14 @@ async fn shutdown_interrupts_consumer_restart_backoff() {
 }
 
 #[tokio::test]
-async fn shutdown_drains_executions_before_final_publishes() {
+async fn shutdown_drains_executions() {
     let lifecycle = ServiceLifecycle::default();
     let stop = lifecycle.stop_executions.clone();
-    let publishes = lifecycle.publishes.clone();
     let finished = Arc::new(AtomicUsize::new(0));
-    let published = Arc::clone(&finished);
+    let completed = Arc::clone(&finished);
     lifecycle.executions.spawn(async move {
         stop.cancelled().await;
-        assert!(!publishes.is_closed());
-        publishes.spawn(async move {
-            published.fetch_add(1, Ordering::SeqCst);
-        });
+        completed.fetch_add(1, Ordering::SeqCst);
     });
     let stop_http = lifecycle.stop_http.clone();
     serve_until_shutdown(
@@ -114,7 +110,6 @@ async fn shutdown_drains_executions_before_final_publishes() {
     .unwrap();
     assert_eq!(finished.load(Ordering::SeqCst), 1);
     assert!(lifecycle.executions.is_empty());
-    assert!(lifecycle.publishes.is_empty());
 }
 
 #[tokio::test]

@@ -31,6 +31,30 @@ const person = encodeCellMention({
   displayName: 'Taylor',
 });
 describe('spreadsheet mention source', () => {
+  it.each(['routine', 'automation'])(
+    'renders a %s mention as a label and preserves its stored payload',
+    (blockName) => {
+      const value = encodeCellMention({
+        type: 'document',
+        documentId: 'routine-1',
+        documentName: 'Review tasks',
+        blockName,
+      });
+      expect(cellPlainText(value)).toBe('Review tasks');
+      expect(cellTextParts(value)).toEqual([
+        {
+          text: value,
+          mention: {
+            type: 'document',
+            documentId: 'routine-1',
+            documentName: 'Review tasks',
+            blockName,
+          },
+        },
+      ]);
+    }
+  );
+
   it('reuses docs tags with mixed text while treating all other Markdown literally', () => {
     expect(cellPlainText(`**Owner:** ${person} _review_`)).toBe(
       '**Owner:** @Taylor _review_'

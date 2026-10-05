@@ -1132,6 +1132,7 @@ impl<
             entity_access_receipt.entity().entity_id.clone(),
             DocumentDeletedMetadata {
                 document_id: entity_access_receipt.entity().entity_id.clone(),
+                sub_type: metadata.sub_type,
                 actor_user_id,
                 actor,
                 on_behalf_of,

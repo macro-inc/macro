@@ -28,6 +28,7 @@ import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit
 import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
 import { RemindersRouteView } from '@app/features/reminders/route-views';
 import { ReviewsRouteView } from '@app/features/reviews-view/route-views';
+import { RoutineCreator } from '@app/features/routines/routine-creator';
 import { SettingsRouteView } from '@app/features/settings/route-views';
 import { TasksRouteView } from '@app/features/tasks-view/route-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -227,6 +228,11 @@ registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent('reminders', () => <RemindersRouteView />);
 registerComponent(
+  'routines',
+  () => <AgentsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
   'agents',
   () => <AgentsRouteView />,
   () =>
@@ -314,6 +320,15 @@ registerComponent('email-compose', (params) => {
     />
   );
 });
+registerComponent('routine-compose', (params) => (
+  <RoutineCreator
+    onCreated={
+      typeof params.onCreated === 'function'
+        ? (params.onCreated as (id: string) => void)
+        : undefined
+    }
+  />
+));
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;

@@ -54,7 +54,7 @@ export const agentsTour = defineViewTour({
       target: APP_TOUR.createMenu,
       title: 'Put recurring work on a schedule',
       description:
-        'Use Create → Automation to give an agent instructions and a schedule—for example, a weekly summary or daily triage. Review the automation’s runs and pause it when you need to.',
+        'Use Create → Routine to give an agent instructions and a schedule—for example, a weekly summary or daily triage. Review the routine’s runs and pause it when you need to.',
     },
   ],
 });

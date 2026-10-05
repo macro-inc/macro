@@ -1,4 +1,6 @@
+import { useRoutineEntities } from '@app/features/routines/queries/entities';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
@@ -9,9 +11,9 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { createRenderEffect, lazy, Show } from 'solid-js';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { routineContent } from '../routines/routine-navigation';
 import { parseAgentsRoute } from './core/route';
 
 const SoupView = lazy(async () => ({
@@ -20,25 +22,64 @@ const SoupView = lazy(async () => ({
 const AgentsView = lazy(async () => ({
   default: (await import('./views/AgentsView')).AgentsView,
 }));
+const RoutinesPage = lazy(async () => ({
+  default: (await import('../routines/routines-page')).RoutinesPage,
+}));
 const McpConnections = lazy(async () => ({
   default: (await import('../settings/McpConnections')).McpConnections,
 }));
 
 function LegacyAgentsView() {
+  const layout = useSplitLayout();
+  const panel = useSplitPanelOrThrow();
   const user = useUserContext();
   const preset = getViewPreset('agents', undefined, {
     userId: user.userId(),
     isTeamAdmin: false,
   });
-  const entities = useAutomationEntities();
+  const entities = useRoutineEntities();
   return (
-    <SoupView
-      viewName="Agents"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-      additionalEntities={entities}
-    />
+    <div class="flex size-full flex-col touch:pt-(--mobile-content-inset-top)">
+      <div
+        class="flex gap-1 border-b border-edge-muted px-4 py-2"
+        role="group"
+        aria-label="Agent workspace"
+      >
+        <button
+          type="button"
+          aria-pressed={true}
+          class="rounded-md px-3 py-1.5 text-sm text-ink hover:bg-hover"
+        >
+          Agents
+        </button>
+        <button
+          type="button"
+          aria-pressed={false}
+          class="rounded-md px-3 py-1.5 text-sm text-ink hover:bg-hover"
+          onClick={() =>
+            layout.openWithSplit(routineContent(), {
+              handle: panel.handle,
+              activate: true,
+              search: {},
+            })
+          }
+        >
+          Routines
+        </button>
+      </div>
+      <div
+        class="min-h-0 flex-1 overflow-auto"
+        style={{ '--mobile-content-inset-top': '0px' }}
+      >
+        <SoupView
+          viewName="Agents"
+          initialFilters={preset?.filters}
+          initialClientFilters={preset?.clientFilters}
+          initialGroupBy={preset?.groupBy}
+          additionalEntities={entities}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -46,6 +87,7 @@ export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
   const route = () => {
     const content = panel.handle.content();
+    if (content.type === 'component' && content.id === 'routines') return;
     const requested =
       content.type === 'component' &&
       typeof content.params?.agentsRoute === 'string'
@@ -66,6 +108,7 @@ export const AgentsRouteView = withAuth(() => {
     const content = panel.handle.content();
     return (
       content.type === 'component' &&
+      content.id !== 'routines' &&
       content.params?.agentPage === 'connections'
     );
   };
@@ -77,7 +120,26 @@ export const AgentsRouteView = withAuth(() => {
           <Show
             when={connectionsRequested()}
             fallback={
-              <Show when={route()} fallback={<LegacyAgentsView />}>
+              <Show
+                when={route()}
+                fallback={
+                  <Show
+                    when={(() => {
+                      const content = panel.handle.content();
+                      return (
+                        content.type === 'component' &&
+                        (content.id === 'routines' ||
+                          content.params?.agentPage === 'routines')
+                      );
+                    })()}
+                    fallback={<LegacyAgentsView />}
+                  >
+                    <div class="size-full overflow-auto touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                      <RoutinesPage />
+                    </div>
+                  </Show>
+                }
+              >
                 {(current) => (
                   <RedirectSplit
                     to={{
