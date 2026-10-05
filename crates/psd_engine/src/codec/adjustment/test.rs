@@ -1,6 +1,6 @@
 use super::*;
 use crate::codec::corpus;
-use crate::model::{Gradient, LevelsChannel};
+use crate::model::{Gradient, GradientMethod, LevelsChannel};
 
 /// Writes 16-bit integers.
 fn shorts(values: &[i16]) -> Vec<u8> {
@@ -397,6 +397,33 @@ fn reads_photo_filter_version_three_and_noise_maps() {
         panic!("not a gradient map");
     };
     assert!(gradient.colors.len() >= 2);
+}
+
+#[test]
+fn gradient_maps_keep_their_interpolation_method() {
+    let decoded = |data: &[u8]| match decode(b"grdm", data).expect("decodes") {
+        Adjustment::GradientMap { gradient, .. } => gradient,
+        _ => panic!("not a gradient map"),
+    };
+    let classic = samples()[13].1.clone();
+    assert!(classic.starts_with(&[0, 1]), "version 1: no method");
+    assert_eq!(decoded(&classic).method, GradientMethod::Classic);
+
+    // A perceptual map is written as version 3 and reads back.
+    let mut gradient = decoded(&classic);
+    gradient.method = GradientMethod::Perceptual;
+    let perceptual = tone::encode_gradient_map(&gradient, true, false, Some(&classic));
+    assert_eq!(&perceptual[..2], &[0, 3]);
+    assert_eq!(&perceptual[4..8], b"Perc");
+    assert_eq!(decoded(&perceptual), gradient);
+
+    // A method the engine doesn't know reads as classic and stays.
+    let mut unknown = perceptual.clone();
+    unknown[4..8].copy_from_slice(b"Stps");
+    let read = decoded(&unknown);
+    assert_eq!(read.method, GradientMethod::Classic);
+    let again = tone::encode_gradient_map(&read, true, false, Some(&unknown));
+    assert_eq!(&again[4..8], b"Stps");
 }
 
 fn json_number(v: Option<&serde_json::Value>) -> Option<f64> {

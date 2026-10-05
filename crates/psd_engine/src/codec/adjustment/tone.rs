@@ -4,7 +4,7 @@
 use crate::binary::{Reader, Writer};
 use crate::codec::paint::{self, color};
 use crate::error::{PsdError, Result};
-use crate::model::{Adjustment, ColorStop, Gradient, LevelsChannel, OpacityStop};
+use crate::model::{Adjustment, ColorStop, Gradient, GradientMethod, LevelsChannel, OpacityStop};
 
 /// Levels records Photoshop writes before the extra ones.
 const LEVELS_RECORDS: usize = 29;
@@ -197,11 +197,13 @@ pub(super) fn decode_gradient_map(data: &[u8]) -> Result<Adjustment> {
     }
     let reverse = r.u8()? != 0;
     let dither = r.u8()? != 0;
-    if version == 3 {
-        r.sig()?;
-    }
+    let method = match version {
+        3 => method_of_sig(&r.sig()?),
+        _ => GradientMethod::Classic,
+    };
     let mut gradient = Gradient {
         name: r.unicode()?,
+        method,
         ..Gradient::default()
     };
     let count = usize::from(r.u16()?);
@@ -271,23 +273,39 @@ pub(super) fn decode_gradient_map(data: &[u8]) -> Result<Adjustment> {
     })
 }
 
+/// The interpolation method a `grdm` signature names (classic when the
+/// engine doesn't know it).
+fn method_of_sig(sig: &[u8]) -> GradientMethod {
+    std::str::from_utf8(sig)
+        .ok()
+        .and_then(paint::method_of)
+        .unwrap_or_default()
+}
+
 /// Writes `grdm` with the gradient's stops (its `reverse` and `dither`
-/// are the adjustment's), keeping the `original`'s version and
-/// interpolation method.
+/// are the adjustment's) and interpolation method: version 3 with the
+/// method when the `original` was or the method isn't classic, keeping
+/// the original's method when it reads as the gradient's (one the engine
+/// doesn't know reads as classic).
 pub(super) fn encode_gradient_map(
     gradient: &Gradient,
     dither: bool,
     reverse: bool,
     original: Option<&[u8]>,
 ) -> Vec<u8> {
-    let method = original
+    let stored = original
         .filter(|o| o.starts_with(&[0, 3]))
         .and_then(|o| o.get(4..8));
+    let method = match stored {
+        Some(sig) if method_of_sig(sig) == gradient.method => Some(sig.to_vec()),
+        None if gradient.method == GradientMethod::Classic => None,
+        _ => Some(paint::method_id(gradient.method).as_bytes().to_vec()),
+    };
     let mut w = Writer::new();
     w.u16(if method.is_some() { 3 } else { 1 });
     w.u8(u8::from(reverse));
     w.u8(u8::from(dither));
-    if let Some(method) = method {
+    if let Some(method) = &method {
         w.bytes(method);
     }
     w.unicode_nul(&gradient.name);

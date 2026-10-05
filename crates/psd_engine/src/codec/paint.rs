@@ -251,14 +251,30 @@ const GRADIENT_METHODS: [(GradientMethod, &str); 4] = [
 /// fill layers.
 const METHOD_KEYS: [&str; 2] = ["gs99", "gradientsInterpolationMethod"];
 
+/// The interpolation method an id names.
+pub(crate) fn method_of(id: &str) -> Option<GradientMethod> {
+    GRADIENT_METHODS
+        .iter()
+        .find(|(_, s)| *s == id)
+        .map(|(m, _)| *m)
+}
+
+/// An interpolation method's id.
+pub(crate) fn method_id(method: GradientMethod) -> &'static str {
+    GRADIENT_METHODS
+        .iter()
+        .find(|(m, _)| *m == method)
+        .map_or("Gcls", |(_, s)| s)
+}
+
 /// The interpolation method a descriptor names; classic when it names
 /// none (files from before Photoshop 2022) or one the engine doesn't know.
 pub(crate) fn gradient_method(d: &Descriptor) -> GradientMethod {
     METHOD_KEYS
         .iter()
         .find_map(|k| d.enumeration(k))
-        .and_then(|id| GRADIENT_METHODS.iter().find(|(_, s)| *s == id))
-        .map_or(GradientMethod::Classic, |(m, _)| *m)
+        .and_then(method_of)
+        .unwrap_or_default()
 }
 
 /// Sets the interpolation method unless the descriptor already reads as it
@@ -266,10 +282,7 @@ pub(crate) fn gradient_method(d: &Descriptor) -> GradientMethod {
 /// classic). A descriptor naming none gets one only for a method other
 /// than classic: `gs99` in an effect, the long key in a fill layer.
 pub(crate) fn put_gradient_method(d: &mut Descriptor, method: GradientMethod) {
-    let id = GRADIENT_METHODS
-        .iter()
-        .find(|(m, _)| *m == method)
-        .map_or("Gcls", |(_, s)| s);
+    let id = method_id(method);
     match METHOD_KEYS.iter().find(|k| d.has(k)) {
         Some(key) if d.enumeration(key).is_some() && gradient_method(d) == method => {}
         Some(key) => d.set(*key, enum_value(METHOD_TYPE, id)),
