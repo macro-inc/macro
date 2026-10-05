@@ -1,3 +1,4 @@
+import { createAnimationGroup } from '@app/lib/utils/create-animation-group';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   children,
@@ -70,22 +71,21 @@ export function CollapseTransition(props: CollapseTransitionProps) {
     element.getBoundingClientRect()[axis()];
   let measuredSize: number | undefined;
   let disposed = false;
-  let running:
-    | { target: HTMLElement; content: HTMLElement; finish: () => void }
-    | undefined;
+  const motion = createAnimationGroup();
+  let running: { target: HTMLElement; content: HTMLElement } | undefined;
 
   createResizeObserver(container, (_rect, element) => {
     if (!running) measuredSize = sizeOf(element);
   });
   onMount(() => {
-    props.captureController?.({ finish: () => running?.finish() });
+    props.captureController?.({ finish: motion.finish });
     const element = container();
     props.onPresenceChange?.(props.open);
     if (element) measuredSize = sizeOf(element);
   });
   onCleanup(() => {
     disposed = true;
-    running?.finish();
+    motion.finish();
   });
 
   function animate(element: Element, opening: boolean, done: () => void) {
@@ -109,7 +109,7 @@ export function CollapseTransition(props: CollapseTransitionProps) {
     const companions = untrack(() =>
       props.companions?.({ opening, from, interrupted: running !== undefined })
     );
-    running?.finish();
+    motion.finish();
     const to = opening ? (props.expandedSize ?? sizeOf(target)) : collapsedSize;
     const style = getComputedStyle(target);
     const {
@@ -147,42 +147,40 @@ export function CollapseTransition(props: CollapseTransitionProps) {
       easing: 'ease-out',
       fill: 'both',
     };
-    const size = target.animate(
+    running = { target, content: element };
+    motion.start(
       [
         {
-          ...sizing,
-          [axis()]: `${from}px`,
-          [paddingStart]: opening ? '0' : startPadding,
-          [paddingEnd]: opening ? '0' : endPadding,
+          target,
+          keyframes: [
+            {
+              ...sizing,
+              [axis()]: `${from}px`,
+              [paddingStart]: opening ? '0' : startPadding,
+              [paddingEnd]: opening ? '0' : endPadding,
+            },
+            {
+              ...sizing,
+              [axis()]: `${to}px`,
+              [paddingStart]: opening ? startPadding : '0',
+              [paddingEnd]: opening ? endPadding : '0',
+            },
+          ],
         },
         {
-          ...sizing,
-          [axis()]: `${to}px`,
-          [paddingStart]: opening ? startPadding : '0',
-          [paddingEnd]: opening ? endPadding : '0',
+          target: element,
+          keyframes: [{ opacity: fromOpacity }, { opacity: opening ? 1 : 0 }],
         },
+        ...(companions ?? []),
       ],
-      options
+      options,
+      () => {
+        running = undefined;
+        measuredSize = to;
+        props.onPresenceChange?.(opening || props.open);
+        done();
+      }
     );
-    const opacity = element.animate(
-      [{ opacity: fromOpacity }, { opacity: opening ? 1 : 0 }],
-      options
-    );
-    const companionAnimations = companions?.map(({ target, keyframes }) =>
-      target.animate(keyframes, options)
-    );
-    const finish = () => {
-      if (running?.finish !== finish) return;
-      running = undefined;
-      measuredSize = to;
-      props.onPresenceChange?.(opening || props.open);
-      done();
-      size.cancel();
-      opacity.cancel();
-      companionAnimations?.forEach((animation) => animation.cancel());
-    };
-    running = { target, content: element, finish };
-    size.onfinish = finish;
   }
 
   return (
