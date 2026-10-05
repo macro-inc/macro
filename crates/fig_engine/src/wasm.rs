@@ -120,13 +120,7 @@ impl FigFile {
         let Some((_, scene)) = &self.scene else {
             return Rect::EMPTY;
         };
-        let set: std::collections::HashSet<NodeIdx> = touched.iter().copied().collect();
-        scene
-            .nodes
-            .iter()
-            .skip(1)
-            .filter(|n| set.contains(&n.src))
-            .fold(Rect::EMPTY, |acc, n| acc.union(&n.bounds))
+        scene.bounds_of(&self.doc, touched)
     }
 
     fn after_edit(

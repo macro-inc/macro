@@ -334,6 +334,38 @@ impl Scene {
         }
         let mut dirty = std::collections::HashSet::new();
         for &i in &starts {
+            // A layer that only moved carries its subtree along: the
+            // descendants' transforms and bounds shift by the same amount.
+            let old = self.nodes[i as usize].world;
+            let local = self.props(doc, i).transform();
+            let new = match self.nodes[i as usize].parent {
+                Some(p) => self.nodes[p as usize].world.mul(&local),
+                None => local,
+            };
+            if new.is_finite()
+                && old.is_finite()
+                && (new.m00, new.m01, new.m10, new.m11) == (old.m00, old.m01, old.m10, old.m11)
+            {
+                let (dx, dy) = (new.m02 - old.m02, new.m12 - old.m12);
+                self.nodes[i as usize].world = new;
+                let mut stack: Vec<SceneIdx> = if dx == 0.0 && dy == 0.0 {
+                    Vec::new()
+                } else {
+                    self.nodes[i as usize].children.clone()
+                };
+                while let Some(n) = stack.pop() {
+                    let node = &mut self.nodes[n as usize];
+                    node.world.m02 += dx;
+                    node.world.m12 += dy;
+                    if !node.bounds.is_empty() {
+                        node.bounds = node.bounds.translate(dx, dy);
+                    }
+                    stack.extend(node.children.iter().copied());
+                }
+                self.nodes[i as usize].bounds = self.node_bounds(doc, i);
+                dirty.insert(i);
+                continue;
+            }
             // World transforms down the subtree.
             let mut stack = vec![i];
             let mut order = Vec::new();
@@ -370,6 +402,28 @@ impl Scene {
         }
         self.page_bounds();
         true
+    }
+
+    /// Page bounds of everything drawn from document `nodes`: their scene
+    /// nodes, and the copies instances make of component layers.
+    pub fn bounds_of(&self, doc: &Document, nodes: &[NodeIdx]) -> Rect {
+        if nodes.iter().any(|&n| self.inside_component(doc, n)) {
+            let set: std::collections::HashSet<NodeIdx> = nodes.iter().copied().collect();
+            return self
+                .nodes
+                .iter()
+                .skip(1)
+                .filter(|n| set.contains(&n.src))
+                .fold(Rect::EMPTY, |acc, n| acc.union(&n.bounds));
+        }
+        // Outside components each node is drawn once, found by its guid.
+        nodes
+            .iter()
+            .filter_map(|&n| self.by_guid.get(&doc.props(n).guid?))
+            .filter(|&&i| i != self.root())
+            .fold(Rect::EMPTY, |acc, &i| {
+                acc.union(&self.nodes[i as usize].bounds)
+            })
     }
 
     /// Whether a document node sits inside a main component (its edits show
