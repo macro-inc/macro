@@ -55,7 +55,9 @@ fn edits(doc: &Document) -> Option<(usize, String)> {
             .iter()
             .find(|f| !flows.contains(&f.id.as_str()) && !f.id.starts_with('I'))
         {
-            ops.push(serde_json::json!({"op": "setFlowStart", "id": screen.id, "name": "Checked flow"}));
+            ops.push(
+                serde_json::json!({"op": "setFlowStart", "id": screen.id, "name": "Checked flow"}),
+            );
         }
         return Some((page, serde_json::Value::Array(ops).to_string()));
     }

@@ -1268,9 +1268,13 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
         !n.removed
             && n.edits & flags::PROTOTYPE != 0
             && (n.props.flow_start.is_some()
-                || n.props.interactions.as_deref().is_some_and(|i| !i.is_empty()))
+                || n.props
+                    .interactions
+                    .as_deref()
+                    .is_some_and(|i| !i.is_empty()))
     });
-    if wants_prototype && let Some(extended) = prototype::with_prototype_fields(&container.schema)? {
+    if wants_prototype && let Some(extended) = prototype::with_prototype_fields(&container.schema)?
+    {
         container.schema = extended;
     }
     let schema = Schema::decode(&container.schema)?;

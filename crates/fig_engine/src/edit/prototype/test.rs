@@ -55,8 +55,14 @@ fn decodes_interactions_flows_overlays_and_legacy_connections() {
         hotspot("1:12").interactions[0].actions[0].navigation,
         "OVERLAY"
     );
-    assert_eq!(hotspot("1:21").interactions[0].actions[0].connection, "BACK");
-    assert_eq!(hotspot("1:31").interactions[0].actions[0].connection, "CLOSE");
+    assert_eq!(
+        hotspot("1:21").interactions[0].actions[0].connection,
+        "BACK"
+    );
+    assert_eq!(
+        hotspot("1:31").interactions[0].actions[0].connection,
+        "CLOSE"
+    );
     let site = &hotspot("1:41").interactions[0].actions[0];
     assert_eq!(site.connection, "URL");
     assert_eq!(site.url.as_deref(), Some("https://example.com/"));
@@ -206,8 +212,14 @@ fn saving_writes_interactions_figma_reads_and_keeps_unmodeled_fields() {
     let reopened = Document::open(&bytes).unwrap();
     let p = info(&reopened);
     let next = p.hotspots.iter().find(|h| h.id == "1:11").unwrap();
-    assert_eq!(next.interactions[0].actions[0].transition, "PUSH_FROM_RIGHT");
-    assert_eq!(next.interactions[0].actions[0].destination.as_deref(), Some("1:20"));
+    assert_eq!(
+        next.interactions[0].actions[0].transition,
+        "PUSH_FROM_RIGHT"
+    );
+    assert_eq!(
+        next.interactions[0].actions[0].destination.as_deref(),
+        Some("1:20")
+    );
     let restart = p.hotspots.iter().find(|h| h.id == "1:42").unwrap();
     assert_eq!(restart.interactions.len(), 1);
     assert_eq!(restart.interactions[0].actions[0].duration, 0.4);
@@ -226,7 +238,9 @@ fn saving_writes_interactions_figma_reads_and_keeps_unmodeled_fields() {
     assert_eq!(action.enum_name("navigationType"), Some("NAVIGATE"));
     assert!(action.msg("extraScrollOffset").is_some(), "kept");
     assert_eq!(
-        interaction.msg("event").and_then(|e| e.enum_name("interactionType")),
+        interaction
+            .msg("event")
+            .and_then(|e| e.enum_name("interactionType")),
         Some("ON_CLICK")
     );
     // The legacy connection gave way to the interaction.
@@ -253,8 +267,5 @@ fn saving_adds_prototype_fields_to_files_without_them() {
     assert_eq!(&*list[0].actions[0].transition, "DISSOLVE");
     assert_eq!(list[0].actions[0].destination, Guid::parse("1:2"));
     // Everything else reads as before.
-    assert_eq!(
-        props(&reopened, "1:3").fills,
-        props(&doc, "1:3").fills,
-    );
+    assert_eq!(props(&reopened, "1:3").fills, props(&doc, "1:3").fills,);
 }

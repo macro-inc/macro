@@ -665,7 +665,9 @@ impl<'a> Writer<'a> {
         self.opt(vector_styles, |w, list| {
             w.list(list, |w, run| w.style_run(run))
         });
-        self.opt(interactions, |w, list| w.list(list, |w, i| w.interaction(i)));
+        self.opt(interactions, |w, list| {
+            w.list(list, |w, i| w.interaction(i))
+        });
         self.opt(flow_start, |w, f| {
             let FlowStart {
                 name,

@@ -44,10 +44,7 @@ message PrototypeStartingPoint name:string description:string position:string
 pub fn interaction(local: u32, trigger: &'static str, actions: Vec<V>) -> V {
     V::Msg(vec![
         ("id", guid(local)),
-        (
-            "event",
-            V::Msg(vec![("interactionType", V::Enum(trigger))]),
-        ),
+        ("event", V::Msg(vec![("interactionType", V::Enum(trigger))])),
         ("actions", V::List(actions)),
         ("isDeleted", V::Bool(false)),
     ])
@@ -70,7 +67,15 @@ fn connection(kind: &'static str) -> V {
     V::Msg(vec![("connectionType", V::Enum(kind))])
 }
 
-fn frame(local: u32, position: &str, name: &str, at: (f32, f32), wh: (f32, f32), rgb: (f32, f32, f32), mut rest: Vec<(&'static str, V)>) -> V {
+fn frame(
+    local: u32,
+    position: &str,
+    name: &str,
+    at: (f32, f32),
+    wh: (f32, f32),
+    rgb: (f32, f32, f32),
+    mut rest: Vec<(&'static str, V)>,
+) -> V {
     let mut fields = vec![
         ("size", size(wh.0, wh.1)),
         ("transform", translate(at.0, at.1)),
@@ -80,7 +85,14 @@ fn frame(local: u32, position: &str, name: &str, at: (f32, f32), wh: (f32, f32),
     node(local, Some((1, position)), "FRAME", name, fields)
 }
 
-fn button(local: u32, parent: u32, position: &str, name: &str, at: (f32, f32), interactions: Vec<V>) -> V {
+fn button(
+    local: u32,
+    parent: u32,
+    position: &str,
+    name: &str,
+    at: (f32, f32),
+    interactions: Vec<V>,
+) -> V {
     let mut fields = vec![
         ("size", size(120.0, 40.0)),
         ("transform", translate(at.0, at.1)),

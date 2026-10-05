@@ -463,7 +463,10 @@ pub enum Op {
     },
     /// Makes a top-level frame a flow starting point named `name`, or
     /// (`null`) no longer one.
-    SetFlowStart { id: String, name: Option<String> },
+    SetFlowStart {
+        id: String,
+        name: Option<String>,
+    },
 }
 
 /// What an applied step changed.

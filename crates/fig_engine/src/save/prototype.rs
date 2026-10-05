@@ -95,9 +95,8 @@ impl Build<'_> {
 
     fn interaction(&self, def: u32, i: &Interaction, existing: &[Msg]) -> Msg {
         let s = self.schema;
-        let base = i
-            .id
-            .and_then(|id| existing.iter().find(|e| read_guid(s, e, "id") == Some(id)));
+        let base =
+            i.id.and_then(|id| existing.iter().find(|e| read_guid(s, e, "id") == Some(id)));
         let mut m = base.cloned().unwrap_or_else(|| Msg::new(def));
         if let Some(id) = i.id {
             self.guid_field(&mut m, "id", id);
@@ -318,11 +317,7 @@ pub(super) fn with_prototype_fields(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
         return Ok(None);
     };
     let node_fields: Vec<NewField> = [
-        (
-            "prototypeInteractions",
-            Named("PrototypeInteraction"),
-            true,
-        ),
+        ("prototypeInteractions", Named("PrototypeInteraction"), true),
         (
             "prototypeStartingPoint",
             Named("PrototypeStartingPoint"),
