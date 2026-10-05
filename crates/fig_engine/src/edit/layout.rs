@@ -298,11 +298,12 @@ impl Txn<'_> {
             Some("CENTER") => (pad_start + (free - gaps) / 2.0, spacing),
             Some("MAX") => (pad_start + free - gaps, spacing),
             // Figma stores its "auto" gap as SPACE_EVENLY; it spaces like CSS
-            // space-between, and centres a lone child.
+            // space-between, and centres a lone child (which SPACE_BETWEEN
+            // leaves at the start).
             Some("SPACE_BETWEEN" | "SPACE_EVENLY") if items.len() > 1 => {
                 (pad_start, free / (n - 1.0))
             }
-            Some("SPACE_BETWEEN" | "SPACE_EVENLY") => (pad_start + free / 2.0, 0.0),
+            Some("SPACE_EVENLY") => (pad_start + free / 2.0, 0.0),
             Some("SPACE_EVENLY_CSS") => (pad_start + free / (n + 1.0), free / (n + 1.0)),
             Some("SPACE_AROUND") => (pad_start + free / (2.0 * n), free / n),
             _ => (pad_start, spacing),
@@ -350,8 +351,11 @@ impl Txn<'_> {
     /// layout would fill or stretch it: a line (or a flat vector) has no
     /// thickness to scale, so Figma centres it in the space instead.
     fn is_thin(&self, i: NodeIdx, extent: f64) -> bool {
+        // Turned lines keep a trace of width from rounding in their
+        // rotation.
+        const THIN: f64 = 1e-3;
         let t = self.doc.props(i).node_type();
-        extent.abs() < EPS && !t.is_frame_like() && t != NodeType::Text
+        extent.abs() < THIN && !t.is_frame_like() && t != NodeType::Text
     }
 
     /// What a stack's content needs along one axis (`x` or not), padding

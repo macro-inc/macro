@@ -377,6 +377,14 @@ fn the_auto_gap_centres_a_lone_child() {
         r#"{"layoutMode":"HORIZONTAL","primaryAlign":"SPACE_EVENLY","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
     );
     assert_eq!(bounds(&doc, &kid).0, 80.0);
+    // Space between leaves it at the start.
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"primaryAlign":"SPACE_BETWEEN","paddingLeft":4}"#,
+    );
+    assert_eq!(bounds(&doc, &kid).0, 4.0);
 }
 
 #[test]
@@ -501,6 +509,39 @@ fn lines_keep_no_thickness_when_filling() {
     );
     set(&mut doc, &mut h, &rule, r#"{"sizingVertical":"FILL"}"#);
     assert_eq!(bounds(&doc, &rule), (0.0, 15.5, 200.0, 0.0));
+}
+
+#[test]
+fn turned_lines_fill_like_flat_ones() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let row = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":31,"height":100}"#,
+    );
+    let line = make(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"type":"LINE","x":0,"y":0,"width":100,"height":0}"#,
+    );
+    // Turned a quarter, with the rounding a file stores.
+    let tiny = -8.4e-8;
+    let l = idx(&doc, &line) as usize;
+    let t = doc.nodes[l].props.transform.as_mut().unwrap();
+    (t.m00, t.m01, t.m10, t.m11) = (tiny, -1.0, 1.0, tiny);
+    set(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"layoutMode":"HORIZONTAL","primaryAlign":"MAX","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    set(&mut doc, &mut h, &line, r#"{"sizingHorizontal":"FILL"}"#);
+    let p = doc.props(idx(&doc, &line));
+    assert_eq!(p.size(), Vec2::new(100.0, 0.0));
+    assert!((p.transform().m02 - 15.5).abs() < 1e-3);
 }
 
 #[test]
