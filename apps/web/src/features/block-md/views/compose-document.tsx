@@ -5,12 +5,13 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import XIcon from '@phosphor/x.svg';
 import { InlineTagsPill } from '@property/tags';
 import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { Button, EntityComposer, Scroll } from '@ui';
-import { createSignal, onMount, Suspense } from 'solid-js';
+import { createSignal, onMount, Show, Suspense } from 'solid-js';
 import type { ComposeTaskSuccess } from '../component/ComposeTask';
 import { ComposeTaskTitleEditor } from '../component/ComposeTask';
 import { createDocumentWithTags } from '../queries/create-document-with-tags';
@@ -28,7 +29,7 @@ export interface ComposeDocumentProps {
 /** Slash-command composer; the main Create → Document entry point stays direct. */
 export function ComposeDocument(props: ComposeDocumentProps) {
   const panel = useSplitPanelOrThrow();
-  const { popoverSplit } = useSplitLayout();
+  const { popoverSplit, openWithSplit } = useSplitLayout();
   const [title, setTitle] = createSignal(props.initialTitle ?? '');
   const [content, setContent] = createSignal(props.initialContent ?? '');
   const [container, setContainer] = createSignal<HTMLDivElement>();
@@ -38,16 +39,18 @@ export function ComposeDocument(props: ComposeDocumentProps) {
   const history = useUpsertToHistoryMutation();
   const portalScope = () => (panel.handle.isPopover() ? 'local' : 'block');
 
-  const submit = async () => {
-    const documentTitle = title().trim();
+  const submit = async (expand = false) => {
+    const documentTitle = title().trim() || (expand ? 'New Note' : '');
     if (isCreating() || !documentTitle) return;
     const documentContent = content().trim();
     const entries = tags.tagEntries();
     const definitions = tags.createDefinitions();
     setIsCreating(true);
+    let split: ReturnType<typeof openWithSplit>['split'];
 
     // Keep the original insertion callbacks when retrying a failed request.
     const reopen = () => {
+      split?.goBack();
       props.onCreateFailure?.();
       popoverSplit({
         type: 'component',
@@ -76,6 +79,12 @@ export function ComposeDocument(props: ComposeDocumentProps) {
               title: documentTitle,
               content: documentContent,
             });
+            if (expand) {
+              split = openWithSplit(
+                { type: 'component', id: 'loading' },
+                { referredFrom: 'launcher', preferNewSplit: true }
+              ).split;
+            }
           },
         }
       );
@@ -88,6 +97,11 @@ export function ComposeDocument(props: ComposeDocumentProps) {
       reopen();
       return;
     }
+    split?.replace({
+      next: { type: 'md', id: created.documentId },
+      mergeHistory: true,
+      referredFrom: 'launcher',
+    });
     await props.onSuccess?.({
       documentId: created.documentId,
       title: documentTitle,
@@ -144,7 +158,19 @@ export function ComposeDocument(props: ComposeDocumentProps) {
   return (
     <EntityComposer.Root tabIndex={-1} ref={setContainer}>
       <EntityComposer.Header>
-        <div class="flex-1" />
+        <div class="flex-1 flex items-center">
+          <Show when={panel.handle.isPopover()}>
+            <Button
+              onMouseDown={() => void submit(true)}
+              disabled={isCreating()}
+              tabIndex={-1}
+              tooltip="Continue editing in split"
+              size="icon-composer"
+            >
+              <ArrowsOutIcon />
+            </Button>
+          </Show>
+        </div>
         <Button
           onClick={() => panel.handle.close()}
           tabIndex={-1}
@@ -184,14 +210,11 @@ export function ComposeDocument(props: ComposeDocumentProps) {
             />
           </Scroll>
         </EntityComposer.Body>
-        <Suspense fallback={<div class="h-7" />}>
-          <EntityComposer.Properties>
-            <InlineTagsPill docTags={tags.composerTags} showPlaceholder />
-          </EntityComposer.Properties>
-        </Suspense>
       </EntityComposer.Main>
-      <EntityComposer.Footer>
-        <div class="flex-1" />
+      <EntityComposer.Footer class="items-center">
+        <Suspense fallback={<div class="h-7" />}>
+          <InlineTagsPill docTags={tags.composerTags} showPlaceholder />
+        </Suspense>
         <EntityComposer.Submit
           ref={(button) => {
             submitButton = button;

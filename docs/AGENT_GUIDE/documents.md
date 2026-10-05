@@ -32,12 +32,17 @@ they do not show a success toast.
 Type `/document` in a Markdown slash menu and choose **Document**. The popover
 has a **New document** title, a Markdown body, and a **Tags** pill. It starts
 without task property pills. Tags can also be applied with `#` in the title or
-body. Enter in the title moves into the body.
+body. Tags sit on the left of the bottom row beside **Create Document**.
+Enter in the title moves into the body. Opening mentions keeps the composer at
+the same height.
 
 Choose **Create Document** or press Cmd/Ctrl+Enter. The composer closes and the
 source editor shows a creation placeholder at the insertion point, then replaces
 it with the new document mention. If creation fails, the placeholder is removed
 and the composer reopens with the title, body, and tags for retry.
+**Continue editing in split** creates the document with the current draft and
+tags, opens it in an adjacent split, and inserts its mention in the source editor.
+An empty title uses **New Note** when expanding.
 **Create → Document** continues to open a document directly.
 
 ## Markdown outline
