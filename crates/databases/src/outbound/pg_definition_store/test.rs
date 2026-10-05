@@ -46,7 +46,7 @@ async fn insert_user(pool: &PgPool, id: &str) {
 async fn insert_database(pool: &PgPool) -> DatabaseId {
     insert_user(pool, USER).await;
     let id = macro_uuid::generate_uuid_v7();
-    sqlx::query!("INSERT INTO database (id) VALUES ($1)", id,)
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", id,)
         .execute(pool)
         .await
         .expect("database should insert");

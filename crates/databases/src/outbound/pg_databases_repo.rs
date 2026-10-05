@@ -80,7 +80,7 @@ pub(crate) fn stored_positions(positions: &[Position]) -> Vec<String> {
     positions.iter().map(Position::to_string).collect()
 }
 
-/// A `database_entity` row, read by `query_as!` and mapped onto [`Database`].
+/// A `database_entities` row, read by `query_as!` and mapped onto [`Database`].
 pub(crate) struct DatabaseRecord {
     pub(crate) id: Uuid,
     pub(crate) name: String,
@@ -147,13 +147,13 @@ pub(crate) async fn insert_owned_database(
     database: &Database,
 ) -> Result<(), PgDatabasesRepoError> {
     sqlx::query!(
-        "INSERT INTO database (id) VALUES ($1)",
+        "INSERT INTO databases (id) VALUES ($1)",
         database.id.into_uuid()
     )
     .execute(&mut **transaction)
     .await?;
     sqlx::query!(
-        "INSERT INTO database_entity (database_id, name, user_id, created_at) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO database_entities (database_id, name, user_id, created_at) VALUES ($1, $2, $3, $4)",
         database.id.into_uuid(),
         database.name,
         database.owner_id,
@@ -314,7 +314,7 @@ where
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<Option<DatabaseId>, Self::Error> {
         Ok(sqlx::query_scalar!(
-            r#"SELECT d.database_id FROM database_starter_seeds s JOIN database_entity d ON d.database_id = s.database_id
+            r#"SELECT d.database_id FROM database_starter_seeds s JOIN database_entities d ON d.database_id = s.database_id
                    WHERE s.user_id = $1 AND d.trashed_at IS NULL"#,
             user_id.as_ref(),
         )
@@ -332,7 +332,7 @@ where
     ) -> Result<Option<(Database, Vec<Table>)>, Self::Error> {
         let Some(database) = sqlx::query_as!(
             DatabaseRecord,
-            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at FROM database_entity WHERE database_id = $1"#,
+            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at FROM database_entities WHERE database_id = $1"#,
             id.into_uuid()
         )
         .fetch_optional(&self.pool)
@@ -361,7 +361,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn rename_database(&self, id: DatabaseId, name: &str) -> Result<bool, Self::Error> {
         let renamed = sqlx::query!(
-            r#"UPDATE database_entity SET name = $2, updated_at = now() WHERE database_id = $1"#,
+            r#"UPDATE database_entities SET name = $2, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
             name,
         )
@@ -377,7 +377,7 @@ where
         trashed_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, Self::Error> {
         let trashed = sqlx::query!(
-            r#"UPDATE database_entity SET trashed_at = $2, updated_at = now() WHERE database_id = $1"#,
+            r#"UPDATE database_entities SET trashed_at = $2, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
             trashed_at,
         )
@@ -389,7 +389,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn restore_database(&self, id: DatabaseId) -> Result<bool, Self::Error> {
         let restored = sqlx::query!(
-            r#"UPDATE database_entity SET trashed_at = NULL, updated_at = now() WHERE database_id = $1"#,
+            r#"UPDATE database_entities SET trashed_at = NULL, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
         )
         .execute(&self.pool)
@@ -402,7 +402,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn delete_database(&self, id: DatabaseId) -> Result<(), Self::Error> {
         sqlx::query!(
-            r#"DELETE FROM database_entity WHERE database_id = $1"#,
+            r#"DELETE FROM database_entities WHERE database_id = $1"#,
             id.into_uuid()
         )
         .execute(&self.pool)
@@ -441,7 +441,7 @@ where
                   JOIN database_rows r ON r.id::text = p.entity_id
                   WHERE r.table_id = $2 AND p.property_definition_id = $3
                     AND p.entity_type = 'DATABASE_ROW')
-              AND EXISTS (SELECT 1 FROM database_entity WHERE database_id = $5 AND trashed_at IS NULL)
+              AND EXISTS (SELECT 1 FROM database_entities WHERE database_id = $5 AND trashed_at IS NULL)
             RETURNING id"#,
             column.id.into_uuid(),
             table.id.into_uuid(),
@@ -495,7 +495,7 @@ where
             DatabaseRecord,
             r#"
             SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at
-            FROM database_entity
+            FROM database_entities
             WHERE database_id = ANY($1)
             ORDER BY created_at
             "#,

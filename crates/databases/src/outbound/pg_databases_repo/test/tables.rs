@@ -17,7 +17,7 @@ async fn table_ops_wait_for_a_concurrent_trash_and_then_find_the_database_gone(p
     let before = version(&pool, guests.table_id).await;
     let mut trash = pool.begin().await.unwrap();
     sqlx::query!(
-        "UPDATE database_entity SET trashed_at = now() WHERE database_id = $1",
+        "UPDATE database_entities SET trashed_at = now() WHERE database_id = $1",
         guests.database_id.into_uuid(),
     )
     .execute(&mut *trash)

@@ -44,7 +44,7 @@ pub(super) fn database_row_top_clause(sort: SimpleSortMethod, grouped: bool) -> 
         {sort_ts}::timestamptz as sort_ts {group_columns}
         FROM database_rows r
         JOIN database_tables row_table ON row_table.id = r.table_id
-        JOIN database_entity row_database ON row_database.database_id = row_table.database_id
+        JOIN database_entities row_database ON row_database.database_id = row_table.database_id
         WHERE row_database.trashed_at IS NULL AND {}"#,
         access_semi_join("row_database.database_id::text", "database")
     )

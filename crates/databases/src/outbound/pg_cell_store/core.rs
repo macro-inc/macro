@@ -19,7 +19,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn create_storage(&self) -> Result<DatabaseId, Self::Error> {
         let id = DatabaseId::new();
-        sqlx::query!("INSERT INTO database (id) VALUES ($1)", id.into_uuid())
+        sqlx::query!("INSERT INTO databases (id) VALUES ($1)", id.into_uuid())
             .execute(&self.pool)
             .await?;
         Ok(id)
@@ -30,7 +30,7 @@ where
         let mut transaction = self.pool.begin().await?;
         schema::lock_database(&mut transaction, id, true).await?;
         journal::purge(&mut *transaction, id).await?;
-        sqlx::query!("DELETE FROM database WHERE id = $1", id.into_uuid())
+        sqlx::query!("DELETE FROM databases WHERE id = $1", id.into_uuid())
             .execute(&mut *transaction)
             .await?;
         transaction.commit().await?;

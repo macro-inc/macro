@@ -17,7 +17,7 @@ pub(crate) async fn lock_live_database(
     database_id: DatabaseId,
 ) -> Result<bool, sqlx::Error> {
     let live = sqlx::query_scalar!(
-        "SELECT database_id FROM database_entity WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE",
+        "SELECT database_id FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE",
         database_id.into_uuid()
     )
     .fetch_optional(connection)

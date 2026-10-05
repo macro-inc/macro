@@ -548,7 +548,7 @@ async fn create_database_property_definition_preserves_type_and_isolates_ownersh
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let database_id = macro_uuid::generate_uuid_v7();
-    sqlx::query!("INSERT INTO database (id) VALUES ($1)", database_id)
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", database_id)
         .execute(&pool)
         .await?;
     let repo = PropertiesPgRepo::new(pool);
@@ -613,7 +613,7 @@ async fn a_database_binds_system_own_team_and_its_own_definitions_only(
     let database_id = Uuid::now_v7();
     let other_database_id = Uuid::now_v7();
     for id in [database_id, other_database_id] {
-        sqlx::query!("INSERT INTO database (id) VALUES ($1)", id,)
+        sqlx::query!("INSERT INTO databases (id) VALUES ($1)", id,)
             .execute(&pool)
             .await?;
     }
@@ -661,7 +661,7 @@ async fn definitions_by_id_include_database_owned_ones_with_their_options(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let database_id = Uuid::now_v7();
-    sqlx::query!("INSERT INTO database (id) VALUES ($1)", database_id,)
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", database_id,)
         .execute(&pool)
         .await?;
     let repo = PropertiesPgRepo::new(pool);

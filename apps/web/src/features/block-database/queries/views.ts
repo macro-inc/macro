@@ -1,3 +1,4 @@
+import type { CardMoved, ViewChange } from '../core/view-state';
 /** A table's typed views and a board's card places, written as ops and shown in the cached detail ahead of the answer. */
 
 import type { DatabaseOp } from '@core/database-sql/generated/types';
@@ -11,7 +12,6 @@ import { storageServiceClient } from '@service-storage/client';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { NewView } from '@service-storage/generated/schemas/newView';
-import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
 import type { ViewQuery } from '@service-storage/generated/schemas/viewQuery';
 import { useQuery } from '@tanstack/solid-query';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -153,12 +153,6 @@ export function showAsBoardWithStatusColumn(
     boardWithStatusColumn({ view, columns, status: mintStatusColumn() })
   );
 }
-
-export type ViewChange = {
-  name?: string;
-  query?: ViewQuery;
-  layout?: ViewLayout;
-};
 
 /** Change a view; a later change made before this one answers keeps its place. */
 export function updateDatabaseView(
@@ -308,9 +302,6 @@ export function refreshCardPositions(databaseId: string, viewId: string) {
     queryKey: databaseViewKeys.positions(databaseId, viewId).queryKey,
   });
 }
-
-/** The places a card move wrote and the table version it left. */
-export type CardMoved = { positions: CardPosition[]; tableVersion: number };
 
 /**
  * Move a board's card, which also sets its row's grouping cell. The places

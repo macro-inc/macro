@@ -29,7 +29,7 @@ impl<Properties: Send + Sync + 'static> DatabaseSharingRepo for PgDatabasesRepo<
     ) -> Result<bool, Self::Error> {
         let mut transaction = self.pool.begin().await?;
         let live = sqlx::query_scalar!(
-            "SELECT database_id FROM database_entity WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE",
+            "SELECT database_id FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE",
             database_id.into_uuid(),
         )
         .fetch_optional(&mut *transaction)

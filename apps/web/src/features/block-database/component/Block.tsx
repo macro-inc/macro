@@ -48,6 +48,7 @@ import { DatabaseToolbar } from '../components/database-toolbar';
 import type { NewView } from '../components/new-view-dialog';
 import { databaseChat } from '../core/chat-context';
 import type { DatabaseRelatedDestination } from '../core/database-relations';
+import type { ViewChange } from '../core/view-state';
 import { allRecordsView, boardLayout } from '../core/views';
 import { databaseOpMessage } from '../core/write-failure';
 import { createDatabaseSearch } from '../primitives/database-search';
@@ -63,7 +64,6 @@ import {
   reorderDatabaseViews,
   showAsBoardWithStatusColumn,
   updateDatabaseView,
-  type ViewChange,
 } from '../queries/views';
 import { DatabaseGrid } from './DatabaseGrid';
 import { DatabasePageShell } from './DatabasePageShell';

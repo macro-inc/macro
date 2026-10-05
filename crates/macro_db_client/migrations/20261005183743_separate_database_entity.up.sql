@@ -8,12 +8,15 @@ DELETE FROM database_starter_seeds;
 DELETE FROM databases;
 
 -- Database storage is reusable without a Macro entity.
-CREATE TABLE database (
-    id UUID PRIMARY KEY
-);
+ALTER TABLE databases
+    DROP COLUMN name,
+    DROP COLUMN owner_id,
+    DROP COLUMN created_at,
+    DROP COLUMN updated_at,
+    DROP COLUMN trashed_at;
 
-CREATE TABLE database_entity (
-    database_id UUID PRIMARY KEY REFERENCES database(id) ON DELETE RESTRICT,
+CREATE TABLE database_entities (
+    database_id UUID PRIMARY KEY REFERENCES databases(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
     user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -21,46 +24,27 @@ CREATE TABLE database_entity (
     trashed_at TIMESTAMPTZ
 );
 
-CREATE INDEX database_entity_user_id_idx ON database_entity(user_id);
-
--- Storage belongs to the core resource. Its existence requires no app owner.
-ALTER TABLE database_tables DROP CONSTRAINT database_tables_database_id_fkey;
-ALTER TABLE database_tables ADD CONSTRAINT database_tables_database_id_fkey
-    FOREIGN KEY (database_id) REFERENCES database(id) ON DELETE CASCADE;
-
-ALTER TABLE property_definitions DROP CONSTRAINT property_definitions_database_id_fkey;
-ALTER TABLE property_definitions ADD CONSTRAINT property_definitions_database_id_fkey
-    FOREIGN KEY (database_id) REFERENCES database(id) ON DELETE CASCADE;
-
-ALTER TABLE database_views DROP CONSTRAINT database_views_database_id_fkey;
-ALTER TABLE database_views ADD CONSTRAINT database_views_database_id_fkey
-    FOREIGN KEY (database_id) REFERENCES database(id) ON DELETE CASCADE;
-
-ALTER TABLE database_queries DROP CONSTRAINT database_queries_database_id_fkey;
-ALTER TABLE database_queries ADD CONSTRAINT database_queries_database_id_fkey
-    FOREIGN KEY (database_id) REFERENCES database(id) ON DELETE SET NULL;
+CREATE INDEX database_entities_user_id_idx ON database_entities(user_id);
 
 -- Starter provisioning is an app concern, so it points at the entity.
 ALTER TABLE database_starter_seeds DROP CONSTRAINT database_starter_seeds_database_id_fkey;
 ALTER TABLE database_starter_seeds ADD CONSTRAINT database_starter_seeds_database_id_fkey
-    FOREIGN KEY (database_id) REFERENCES database_entity(database_id) ON DELETE SET NULL;
-
-DROP TABLE databases;
+    FOREIGN KEY (database_id) REFERENCES database_entities(database_id) ON DELETE SET NULL;
 
 -- An app entity owns its resource, including when its owner is deleted.
 CREATE FUNCTION delete_database_entity_storage()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-    DELETE FROM database WHERE id = OLD.database_id;
+    DELETE FROM databases WHERE id = OLD.database_id;
     DELETE FROM database_changes WHERE database_id = OLD.database_id;
     DELETE FROM entity_access WHERE entity_type = 'database' AND entity_id = OLD.database_id;
     RETURN NULL;
 END;
 $$;
 
-CREATE TRIGGER database_entity_storage_cleanup
-    AFTER DELETE ON database_entity
+CREATE TRIGGER database_entities_storage_cleanup
+    AFTER DELETE ON database_entities
     FOR EACH ROW EXECUTE FUNCTION delete_database_entity_storage();
 
-COMMENT ON TABLE database IS 'Reusable database storage identity; no app ownership, display metadata, or trash state.';
-COMMENT ON TABLE database_entity IS 'Optional Macro entity for a database resource; its primary key is also the resource foreign key.';
+COMMENT ON TABLE databases IS 'Reusable database storage identity; no app ownership, display metadata, or trash state.';
+COMMENT ON TABLE database_entities IS 'Optional Macro entity for a database resource; its primary key is also the resource foreign key.';

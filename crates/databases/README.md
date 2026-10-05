@@ -7,18 +7,18 @@ rows of core storage alone do not acquire app access. There is one cell store.
 
 ## Storage and app entities
 
-`database` is the reusable storage identity. Tables, column definitions, views,
+Each `databases` row identifies reusable storage. Tables, column definitions, views,
 saved queries, rows and their cells belong to that resource. A resource has no
 app name, owner, or trash state and can exist without any Macro entity.
 
-`database_entity` is the optional app entity: `name`, `user_id` (the owner),
+An optional `database_entities` row holds the app metadata: `name`, `user_id` (the owner),
 `created_at`, `updated_at`, and `trashed_at`. Its `database_id` is both its primary
-key and a foreign key to `database.id`. The app uses that shared identity for
+key and a foreign key to `databases.id`. The app uses that shared identity for
 routes, grants, references and API responses. `Database` remains the app-facing
 Rust model. Soup discovery and database/row access require this entity; merely
 creating core storage does not make it a shareable Macro database.
 
-This is the first use of the singular `<kind>_entity` convention for databases.
+This is the first use of the plural `<kind>_entities` convention for databases.
 New app entities should follow it, keeping reusable technology separate from
 app ownership and lifecycle. Existing unrelated entities are not renamed.
 Collaboration surfaces are a similar reusable resource; this change does not
@@ -35,8 +35,8 @@ Both paths use the same transaction engine, table versions, cells and journal.
 An app entity's foreign key prevents deleting its storage through the core port.
 
 The migration is a destructive cutover: it discards existing database content,
-grants, saved queries, journal entries, and starter markers, then removes the
-plural `databases` table. Deploy it with the updated service; old binaries are
+grants, saved queries, journal entries, and starter markers, then removes app
+metadata from `databases`. Deploy it with the updated service; old binaries are
 not supported. Rollback also discards database content.
 
 Deleting an app entity (including through owner deletion) cleans up its owned

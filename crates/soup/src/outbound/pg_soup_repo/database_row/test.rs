@@ -290,7 +290,7 @@ async fn core_rows_stay_out_of_soup_even_with_a_stray_database_grant(pool: PgPoo
     let database = Uuid::now_v7();
     let table = Uuid::now_v7();
     let row = Uuid::now_v7();
-    sqlx::query!("INSERT INTO database (id) VALUES ($1)", database)
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", database)
         .execute(&pool)
         .await
         .unwrap();

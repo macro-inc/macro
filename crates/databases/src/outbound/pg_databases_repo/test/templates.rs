@@ -127,8 +127,8 @@ async fn a_template_that_fails_to_commit_leaves_no_database(pool: PgPool) {
         .await;
     assert!(failed.is_err());
     let left = sqlx::query_scalar!(
-        r#"SELECT (SELECT COUNT(*) FROM database)
-                + (SELECT COUNT(*) FROM database_entity)
+        r#"SELECT (SELECT COUNT(*) FROM databases)
+                + (SELECT COUNT(*) FROM database_entities)
                 + (SELECT COUNT(*) FROM database_tables)
                 + (SELECT COUNT(*) FROM property_definitions WHERE database_id IS NOT NULL)
                 + (SELECT COUNT(*) FROM entity_access WHERE entity_type = 'database') AS "count!""#

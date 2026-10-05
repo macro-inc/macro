@@ -25,7 +25,7 @@ pub async fn get_database_access(
         r#"
         SELECT access_level::text
         FROM entity_access
-        JOIN database_entity d ON d.database_id = entity_access.entity_id
+        JOIN database_entities d ON d.database_id = entity_access.entity_id
         WHERE entity_id = $1
         AND entity_type = 'database'
         AND source_id = ANY($2)
@@ -70,7 +70,7 @@ pub async fn list_database_access(
         r#"
         SELECT entity_id AS "entity_id!", access_level AS "access_level!: AccessLevel"
         FROM entity_access
-        JOIN database_entity d ON d.database_id = entity_access.entity_id
+        JOIN database_entities d ON d.database_id = entity_access.entity_id
         WHERE entity_type = 'database'
         AND source_id = ANY($1)
         "#,

@@ -42,7 +42,7 @@ pub(crate) async fn lock_database(
 ) -> Result<bool, sqlx::Error> {
     if exclusive {
         return Ok(sqlx::query_scalar!(
-            "SELECT id FROM database WHERE id = $1 FOR UPDATE",
+            "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
             database_id.into_uuid()
         )
         .fetch_optional(connection)
@@ -50,7 +50,7 @@ pub(crate) async fn lock_database(
         .is_some());
     }
     let live = sqlx::query_scalar!(
-        "SELECT id FROM database WHERE id = $1 FOR SHARE",
+        "SELECT id FROM databases WHERE id = $1 FOR SHARE",
         database_id.into_uuid()
     )
     .fetch_optional(connection)

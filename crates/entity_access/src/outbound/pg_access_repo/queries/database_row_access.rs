@@ -31,7 +31,7 @@ pub async fn get_database_row_access(
         SELECT ea.access_level::text
         FROM database_rows r
         JOIN database_tables t ON t.id = r.table_id
-        JOIN database_entity d ON d.database_id = t.database_id
+        JOIN database_entities d ON d.database_id = t.database_id
         JOIN entity_access ea ON ea.entity_id = d.database_id
         WHERE r.id = $1
         AND ea.entity_type = 'database'
@@ -62,7 +62,7 @@ pub async fn get_database_rows_access(
         SELECT r.id, ea.access_level AS "access_level!: AccessLevel"
         FROM database_rows r
         JOIN database_tables t ON t.id = r.table_id
-        JOIN database_entity d ON d.database_id = t.database_id
+        JOIN database_entities d ON d.database_id = t.database_id
         JOIN entity_access ea ON ea.entity_id = d.database_id
         WHERE r.id = ANY($1)
         AND ea.entity_type = 'database'
@@ -93,7 +93,7 @@ pub async fn get_database_row_database(
         SELECT t.database_id
         FROM database_rows r
         JOIN database_tables t ON t.id = r.table_id
-        JOIN database_entity d ON d.database_id = t.database_id
+        JOIN database_entities d ON d.database_id = t.database_id
         WHERE r.id = $1
         "#,
         row_id,

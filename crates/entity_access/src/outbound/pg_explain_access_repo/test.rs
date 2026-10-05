@@ -110,8 +110,8 @@ async fn database_row_explanation_is_its_database_grants(pool: PgPool) {
     let member = MacroUserIdStr::try_from_email("member@team.com").unwrap();
 
     sqlx::query!(
-        r#"WITH storage AS (INSERT INTO database (id) VALUES ($1) RETURNING id)
-           INSERT INTO database_entity (database_id, name, user_id) SELECT id, 'db', 'macro|owner@team.com' FROM storage"#,
+        r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'db', 'macro|owner@team.com' FROM storage"#,
         database_id,
     )
     .execute(&pool)

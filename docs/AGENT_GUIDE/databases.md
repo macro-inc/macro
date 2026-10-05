@@ -66,6 +66,10 @@ PostHog unless the variable was set when it was built. With the flag off:
 
 ## Properties and records
 
+An embedded records editor can allow cell edits while its host controls the
+schema. In that case, column creation and schema actions are absent; record
+editing still works. The standalone database app keeps its full column controls.
+
 Use **Add column** immediately after the table’s headers. It creates an **Unnamed**
 Text column (**Unnamed 2**, and so on if that name exists), selects its name in the
 header, and lets you type immediately. Enter saves; Escape keeps the default name.

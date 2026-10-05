@@ -14,8 +14,8 @@ async fn insert_row(pool: &PgPool) -> (Uuid, Uuid) {
     let table_id = Uuid::now_v7();
     let row_id = Uuid::now_v7();
     sqlx::query!(
-        r#"WITH storage AS (INSERT INTO database (id) VALUES ($1) RETURNING id)
-           INSERT INTO database_entity (database_id, name, user_id) SELECT id, 'db', $2 FROM storage"#,
+        r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'db', $2 FROM storage"#,
         database_id,
         OWNER,
     )

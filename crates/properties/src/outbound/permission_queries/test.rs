@@ -13,8 +13,8 @@ async fn insert_row(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uuid)> {
     let table_id = Uuid::now_v7();
     let row_id = Uuid::now_v7();
     sqlx::query!(
-        r#"WITH storage AS (INSERT INTO database (id) VALUES ($1) RETURNING id)
-           INSERT INTO database_entity (database_id, name, user_id) SELECT id, 'db', $2 FROM storage"#,
+        r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'db', $2 FROM storage"#,
         database_id,
         OWNER,
     )
@@ -60,7 +60,7 @@ async fn database_row_owner_and_trash_come_from_its_database(
     assert!(!deleted);
 
     sqlx::query!(
-        "UPDATE database_entity SET trashed_at = now() WHERE database_id = $1",
+        "UPDATE database_entities SET trashed_at = now() WHERE database_id = $1",
         database_id
     )
     .execute(&pool)

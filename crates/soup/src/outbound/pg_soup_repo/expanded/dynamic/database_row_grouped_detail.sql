@@ -33,5 +33,5 @@
         FROM GroupedItems gi
         INNER JOIN database_rows r ON r.id::text = gi.id
         INNER JOIN database_tables row_table ON row_table.id = r.table_id
-        INNER JOIN database_entity row_database ON row_database.database_id = row_table.database_id
+        INNER JOIN database_entities row_database ON row_database.database_id = row_table.database_id
         WHERE gi.item_type = 'database_row'

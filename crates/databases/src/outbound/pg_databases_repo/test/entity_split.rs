@@ -35,7 +35,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
     let database = store.create_storage().await.unwrap();
     assert!(repo.get_database(database).await.unwrap().is_none());
     let app_rows = sqlx::query_scalar!(
-        r#"SELECT (SELECT COUNT(*) FROM database_entity)
+        r#"SELECT (SELECT COUNT(*) FROM database_entities)
                  + (SELECT COUNT(*) FROM entity_access) AS "count!""#
     )
     .fetch_one(&pool)
@@ -170,7 +170,7 @@ async fn removing_an_owner_deletes_their_app_storage_but_leaves_unowned_storage(
             .unwrap()
             .is_none()
     );
-    let resources = sqlx::query_scalar!("SELECT id FROM database")
+    let resources = sqlx::query_scalar!("SELECT id FROM databases")
         .fetch_all(&pool)
         .await
         .unwrap();
@@ -197,8 +197,8 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
         .await
         .unwrap();
     let remaining = sqlx::query_scalar!(
-        r#"SELECT (SELECT COUNT(*) FROM database)
-                 + (SELECT COUNT(*) FROM database_entity)
+        r#"SELECT (SELECT COUNT(*) FROM databases)
+                 + (SELECT COUNT(*) FROM database_entities)
                  + (SELECT COUNT(*) FROM database_tables)
                  + (SELECT COUNT(*) FROM database_columns)
                  + (SELECT COUNT(*) FROM database_rows)
@@ -217,11 +217,6 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
     .await
     .unwrap();
     assert_eq!(remaining, 0);
-    let old_table = sqlx::query_scalar!("SELECT to_regclass('databases')::text")
-        .fetch_one(&mut *transaction)
-        .await
-        .unwrap();
-    assert!(old_table.is_none());
     let shared = sqlx::query_scalar!(
         "SELECT id FROM property_definitions WHERE id = $1",
         shared_definition

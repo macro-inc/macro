@@ -39,15 +39,15 @@ Apply any new migrations before testing.
 
 ### Entity tables and reusable storage
 
-New app entities use a singular `<kind>_entity` table for identity, display name,
+New app entities use a plural `<kind>_entities` table for identity, display name,
 ownership, lifecycle timestamps, and trash state. When an entity uses a reusable
 storage resource, its entity table references that resource with a foreign key;
 storage must be usable without creating the app entity or its access grants.
 
-This convention starts with `database_entity`; it is new for databases and is
+This convention starts with `database_entities`; it is new for databases and is
 the convention for new entities going forward. It does not require renaming
-existing entity tables. `database_entity.database_id` is both the entity's key
-and a reference to `database.id`. See the
+existing entity tables. `database_entities.database_id` is both the entity's key
+and a reference to `databases.id`. See the
 [database backend](../crates/databases/README.md) for the storage boundary and
 the explicitly destructive database cutover.
 
