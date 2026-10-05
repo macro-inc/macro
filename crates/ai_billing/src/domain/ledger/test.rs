@@ -442,6 +442,79 @@ fn billing_period_falls_back_to_the_calendar_month() {
 }
 
 #[test]
+fn billing_period_covering_needs_an_anchor_that_contains_now() {
+    let start = Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap();
+    let end = Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap();
+    let inside = Utc.with_ymd_and_hms(2026, 4, 18, 12, 0, 0).unwrap();
+
+    assert_eq!(
+        BillingPeriod::covering(Some((start, end)), inside),
+        Some(BillingPeriod { start, end })
+    );
+    assert_eq!(
+        BillingPeriod::covering(Some((start, end)), start),
+        Some(BillingPeriod { start, end }),
+        "the start is inclusive"
+    );
+    assert_eq!(BillingPeriod::covering(None, inside), None, "missing");
+    assert_eq!(
+        BillingPeriod::covering(Some((start, end)), end),
+        None,
+        "ended: the end is exclusive"
+    );
+    assert_eq!(
+        BillingPeriod::covering(
+            Some((start, end)),
+            Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap()
+        ),
+        None,
+        "future"
+    );
+    assert_eq!(
+        BillingPeriod::covering(Some((end, start)), inside),
+        None,
+        "inverted"
+    );
+}
+
+#[test]
+fn billing_period_adopted_starts_at_the_stored_end_and_contains_now() {
+    let subscription = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 2, 3, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 3, 3, 0, 0, 0).unwrap(),
+    };
+    let now = Utc.with_ymd_and_hms(2026, 2, 20, 12, 0, 0).unwrap();
+
+    assert_eq!(
+        subscription.adopted(None, now),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 2, 3, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 3, 3, 0, 0, 0).unwrap(),
+        }),
+        "no anchor"
+    );
+    assert_eq!(
+        subscription.adopted(
+            Some((
+                Utc.with_ymd_and_hms(2026, 1, 15, 0, 0, 0).unwrap(),
+                Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+            )),
+            now
+        ),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 3, 3, 0, 0, 0).unwrap(),
+        }),
+        "overlapping anchor"
+    );
+    assert_eq!(
+        subscription.adopted(None, Utc.with_ymd_and_hms(2026, 3, 10, 0, 0, 0).unwrap()),
+        None,
+        "ended before now"
+    );
+}
+
+#[test]
 fn plan_tier_from_roles_prefers_max() {
     use roles_and_permissions::domain::model::RoleId;
     use std::collections::HashSet;

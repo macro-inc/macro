@@ -9,7 +9,9 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubPullRequestRef,
+        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubMergeMethod,
+        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestRef,
+        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -102,6 +104,76 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
         }
 
         Ok(access_token)
+    }
+
+    /// The merge method for a request that named none: the first the
+    /// repository allows. When the settings cannot be read, a merge commit is
+    /// attempted and GitHub says so if the repository forbids it; the user
+    /// asked to merge, and a readable refusal beats a failed lookup.
+    async fn resolve_merge_method(
+        &self,
+        access_token: &GithubAccessToken,
+        request: &MergeGithubPullRequestRequest,
+    ) -> Result<GithubMergeMethod, GithubError> {
+        if let Some(method) = request.merge_method {
+            return Ok(method);
+        }
+
+        match self
+            .oauth
+            .get_repository_merge_settings(access_token.as_str(), &request.owner, &request.repo)
+            .await
+        {
+            Ok(settings) => {
+                settings
+                    .default_method()
+                    .ok_or_else(|| GithubError::PullRequestMergeRejected {
+                        rejection: GithubMergeRejection::NotMergeable,
+                        message: "This repository does not allow any merge method.".to_string(),
+                    })
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    owner=%request.owner,
+                    repo=%request.repo,
+                    "failed to read repository merge settings, attempting a merge commit"
+                );
+                Ok(GithubMergeMethod::Merge)
+            }
+        }
+    }
+
+    /// The pull request as GitHub reports it after a merge, written back to
+    /// its foreign entities so the app shows it merged before the webhook
+    /// arrives. Best-effort: the merge already happened.
+    async fn refresh_merged_pull_request(
+        &self,
+        access_token: &GithubAccessToken,
+        reference: GithubPullRequestRef,
+    ) -> Option<EnrichedGithubPullRequest> {
+        let details = self
+            .oauth
+            .get_pull_request_details(
+                access_token.as_str(),
+                &reference.owner,
+                &reference.repo,
+                reference.number,
+            )
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    error=?error,
+                    owner=%reference.owner,
+                    repo=%reference.repo,
+                    number=reference.number,
+                    "failed to refresh GitHub pull request after merge"
+                );
+            })
+            .ok()?;
+        let pull_request = EnrichedGithubPullRequest::from_details(reference, details);
+        self.refresh_stored_pull_request(&pull_request).await;
+        Some(pull_request)
     }
 
     async fn refresh_stored_pull_request(&self, pull_request: &EnrichedGithubPullRequest) {
@@ -203,6 +275,45 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         }
 
         Ok(enriched_pull_requests)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn merge_pull_request(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        request: MergeGithubPullRequestRequest,
+    ) -> Result<MergeGithubPullRequestResponse, GithubError> {
+        let access_token = self.validated_access_token(macro_user_id).await?;
+        let merge_method = self.resolve_merge_method(&access_token, &request).await?;
+
+        let outcome = self
+            .oauth
+            .merge_pull_request(
+                access_token.as_str(),
+                &request.owner,
+                &request.repo,
+                request.number,
+                merge_method,
+            )
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))?;
+
+        let merge = match outcome {
+            GithubMergeOutcome::Merged(merge) => merge,
+            GithubMergeOutcome::Rejected { rejection, message } => {
+                return Err(GithubError::PullRequestMergeRejected { rejection, message });
+            }
+        };
+
+        let pull_request = self
+            .refresh_merged_pull_request(&access_token, request.to_reference())
+            .await;
+
+        Ok(MergeGithubPullRequestResponse {
+            sha: merge.sha,
+            message: merge.message,
+            pull_request,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]

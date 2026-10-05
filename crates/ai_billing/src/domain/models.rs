@@ -178,6 +178,33 @@ impl BillingPeriod {
         Self::calendar_month(now)
     }
 
+    /// The stored anchor when it contains `now`.
+    pub fn covering(
+        anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
+        now: DateTime<Utc>,
+    ) -> Option<Self> {
+        let (start, end) = anchor?;
+        (start <= now && now < end).then_some(Self { start, end })
+    }
+
+    /// The part of this subscription window to store and meter after the
+    /// stored anchor.
+    ///
+    /// The start moves up to the anchor's end because the store refuses a start
+    /// that overlaps the stored window. `None` when that part does not contain
+    /// `now`, because it is then not a period to meter.
+    pub fn adopted(
+        self,
+        anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
+        now: DateTime<Utc>,
+    ) -> Option<Self> {
+        let start = match anchor {
+            Some((_, stored_end)) => self.start.max(stored_end),
+            None => self.start,
+        };
+        Self::covering(Some((start, self.end)), now)
+    }
+
     /// The period immediately before this one, assuming the same length in
     /// whole months (one month for calendar periods).
     pub fn previous(&self) -> Self {
@@ -382,6 +409,11 @@ impl Entitlement {
     pub fn is_payer(&self, user: &MacroUserIdStr<'_>) -> bool {
         self.payer.as_ref() == user.as_ref()
     }
+
+    /// Paid and finite: usage is metered against a subscription period.
+    pub fn is_metered(&self) -> bool {
+        self.tier.is_paid() && !self.unlimited
+    }
 }
 
 /// The payer's overage settings, Stripe period anchor, and open-seat generation.
@@ -393,7 +425,7 @@ pub struct BillingSettings {
     pub overage_limit_cents: i64,
     /// Set when an overage charge failed to collect.
     pub overage_suspended_at: Option<DateTime<Utc>>,
-    /// The subscription period last synced from Stripe.
+    /// The subscription period last observed from Stripe (webhook or read-through).
     pub period_anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
     /// Generation of the payer's open-seat roster. Zero when no account row exists.
     pub seat_generation: SeatGeneration,

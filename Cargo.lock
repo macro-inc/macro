@@ -1983,11 +1983,13 @@ name = "authentication_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "model",
  "reqwest 0.13.4",
  "serde",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 

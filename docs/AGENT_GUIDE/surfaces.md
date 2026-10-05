@@ -1430,7 +1430,13 @@ byline.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. PRs are not tasks and do not appear in the Tasks list.
+side panel below the top bar. An open PR also shows a **Merge** button in the
+top bar beside **Changes**. It opens a confirmation with the repository, PR number,
+and title, then merges on GitHub as the signed-in user through their linked account.
+GitHub's permissions and branch protections decide; a refusal appears as a toast
+with GitHub's reason, and a merge refreshes the PR status in place. Without a linked
+GitHub account the toast points to Settings. Merged and closed PRs have no Merge
+button. PRs are not tasks and do not appear in the Tasks list.
 Opening **Changes** slides a full-height pane in from the right beside the PR details,
 including beside the PR top bar rather than underneath it. The PR details shrink
 alongside the entry slide instead of eagerly jumping narrower. The Changes pane
