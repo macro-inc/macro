@@ -43,6 +43,8 @@ pub struct Parts<'a> {
     pub header: Option<&'a str>,
     /// Footnotes (`w:footnotes` children).
     pub footnotes: Option<&'a str>,
+    /// Endnotes (`w:endnotes` children).
+    pub endnotes: Option<&'a str>,
     /// Comments (`w:comments` children).
     pub comments: Option<&'a str>,
     /// Comment threads (`w15:commentsEx` children).
@@ -116,6 +118,15 @@ pub fn docx(body: &str, parts: &Parts<'_>) -> Vec<u8> {
             "rIdF",
             &format!("{ct}footnotes+xml"),
             format!("<w:footnotes {NS}>{s}</w:footnotes>"),
+        );
+    }
+    if let Some(s) = parts.endnotes {
+        add(
+            "endnotes.xml",
+            "endnotes",
+            "rIdE",
+            &format!("{ct}endnotes+xml"),
+            format!("<w:endnotes {NS}>{s}</w:endnotes>"),
         );
     }
     if let Some(s) = parts.comments {

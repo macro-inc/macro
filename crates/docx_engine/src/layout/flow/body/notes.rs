@@ -5,6 +5,7 @@ use super::super::super::{Item, StoryRef};
 use super::super::offset_items;
 use super::super::stack::{Stack, StackCtx, stack_story};
 use super::{Flow, MODERN_COMPAT};
+use std::sync::Arc;
 
 /// The story id of the footnote separator.
 const SEPARATOR: i64 = -1;
@@ -145,23 +146,14 @@ impl Flow<'_, '_> {
 
     pub(super) fn place_endnotes(&mut self) {
         let notes = self.env.doc.endnotes();
-        let mut ordered: Vec<(&String, i64)> = self
-            .env
-            .note_numbers
-            .iter()
-            .filter(|((endnote, _), _)| *endnote)
-            .map(|((_, id), n)| (n, *id))
-            .collect();
-        if ordered.is_empty() {
-            return;
-        }
-        ordered.sort_by_key(|(_, id)| *id);
-        let width = self.section().text_width();
-        let (col_left, _) = self.col_geom();
-        for (number, id) in ordered {
-            let Some(note) = notes.by_id.get(&id) else {
+        // In the order of their references, which is also their numbering.
+        let numbers = Arc::clone(&self.env.note_numbers);
+        for &id in &numbers.endnotes {
+            let (Some(note), Some(number)) = (notes.by_id.get(&id), numbers.get(&(true, id)))
+            else {
                 continue;
             };
+            let (_, width) = self.col_geom();
             let st = stack_story(
                 self.env,
                 &note.story,
@@ -183,6 +175,8 @@ impl Flow<'_, '_> {
             if y + st.height > self.avail_bottom() && placed_any {
                 self.next_column(false);
             }
+            // The column it goes in, after any move to the next one.
+            let (col_left, _) = self.col_geom();
             let y = self.cur.as_ref().map_or(0.0, |c| c.y);
             let mut items = st.items.clone();
             offset_items(&mut items, col_left, y);

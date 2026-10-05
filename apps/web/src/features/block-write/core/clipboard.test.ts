@@ -29,6 +29,24 @@ describe('clipboard', () => {
     expect(readClipboardHtml(html, 'doc-2').sameDocument).toBe(false);
   });
 
+  it('reads a native payload it did not write as ordinary HTML', () => {
+    const forged = btoa(
+      JSON.stringify({
+        v: 1,
+        doc: 'doc-1',
+        key: 'guessed',
+        paragraphs: [
+          { runs: [{ text: 'x', attrs: { 'r:w:b': '</w:rPr><w:evil/>' } }] },
+        ],
+      })
+    );
+    const html = `<div data-macro-docx="${forged}"><p><b>Shown</b></p></div>`;
+    expect(readClipboardHtml(html, 'doc-1')).toEqual({
+      paragraphs: [{ runs: [{ text: 'Shown', bold: true }] }],
+      sameDocument: false,
+    });
+  });
+
   it('reads Google Docs HTML', () => {
     const html =
       '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><p dir="ltr"><span style="font-weight:700;">Bold</span><span style="font-weight:400;font-style:italic;"> and italic</span></p><ul><li dir="ltr"><p dir="ltr"><span>One</span></p></li><li><p><span>Two</span></p><ol><li><p><span>Nested</span></p></li></ol></li></ul><h2 dir="ltr"><span>Title</span></h2><br><p><span style="text-decoration:underline;">Under</span></p></b>';

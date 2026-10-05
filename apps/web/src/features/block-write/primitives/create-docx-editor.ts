@@ -118,15 +118,20 @@ export function createDocxEditor(options: DocxEditorOptions) {
     });
   }
 
+  let stopMigrationWatch: (() => void) | undefined;
+
   /**
    * A viewer of a first-format document shows it as it is until an editor
    * migrates it, then reopens from the shared blocks and follows along.
    */
   function awaitMigration(doc: LoroDoc) {
+    if (disposed) return;
     const unsubscribe = doc.subscribe(() => {
       if (docxFormatVersion(doc) !== DOCX_FORMAT_VERSION) return;
       unsubscribe();
+      stopMigrationWatch = undefined;
       void (async () => {
+        if (disposed) return;
         const reopened = await engine.openCollabDocument(
           docKey,
           readCollabState(doc),
@@ -138,7 +143,9 @@ export function createDocxEditor(options: DocxEditorOptions) {
         renderer.invalidate();
       })().catch((error: unknown) => options.onError?.(error));
     });
-    onCleanup(unsubscribe);
+    // Runs after an await, outside the owner: the editor's own cleanup
+    // stops it.
+    stopMigrationWatch = unsubscribe;
   }
 
   function show(opened: { pages: PageInfo[]; state: EditResult }) {
@@ -257,6 +264,7 @@ export function createDocxEditor(options: DocxEditorOptions) {
 
   onCleanup(() => {
     disposed = true;
+    stopMigrationWatch?.();
     collab?.dispose();
     renderer.dispose();
     void engine.closeDocument(docKey).catch(() => {});

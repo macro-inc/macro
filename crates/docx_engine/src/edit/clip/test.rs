@@ -231,3 +231,61 @@ fn pasting_while_tracking_records_an_insertion() {
     );
     assert_eq!(texts(&s), vec!["Fee: $100"]);
 }
+
+#[test]
+fn pasted_native_markup_that_is_not_well_formed_is_left_out() {
+    let mut s = open_styled(&p("Target."));
+    caret_at(&mut s, 0, 0);
+    let attrs = |pairs: &[(&str, &str)]| {
+        Some(
+            pairs
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect::<BTreeMap<_, _>>(),
+        )
+    };
+    let runs = vec![
+        // Bold is kept; a run property that closes the run early is not.
+        ClipRun {
+            text: "kept ".into(),
+            attrs: attrs(&[
+                ("r:w:b", "<w:b/>"),
+                ("r:w:i", "</w:rPr></w:r><w:r><w:instrText>INCLUDETEXT"),
+                ("ra:w:rsidR\"/><w:x", "1"),
+                ("unknown", "<w:y/>"),
+            ]),
+            ..ClipRun::default()
+        },
+        // An object that is not one element drops the run.
+        ClipRun {
+            text: "\u{FFFC}".into(),
+            attrs: attrs(&[("obj", "<w:br/><w:br/>")]),
+            ..ClipRun::default()
+        },
+        // A wrapper that does not close itself is dropped.
+        ClipRun {
+            text: "wrapped".into(),
+            attrs: attrs(&[(
+                "wrap",
+                r#"[["<w:ins w:id=\"1\" w:author=\"x\">","</w:ins><w:p>"]]"#,
+            )]),
+            ..ClipRun::default()
+        },
+    ];
+    let paragraphs = vec![ClipParagraph {
+        runs,
+        props: Some("<w:pPr><w:jc w:val=\"center\"/>".into()),
+        ..ClipParagraph::default()
+    }];
+    paste(&mut s, paragraphs, false);
+    assert_eq!(texts(&s), vec!["kept wrappedTarget."]);
+    assert!(bold_at(&s, 0, 0));
+    let xml = s.document().document_xml();
+    assert!(!xml.contains("INCLUDETEXT"), "{xml}");
+    assert!(!xml.contains("w:x"), "{xml}");
+    assert!(!xml.contains("<w:y/>"), "{xml}");
+    assert!(!xml.contains("<w:ins"), "{xml}");
+    assert!(!xml.contains("<w:jc"), "{xml}");
+    // What is written parses.
+    crate::xml::XmlTree::parse(xml.as_bytes(), "document.xml").expect("well-formed");
+}

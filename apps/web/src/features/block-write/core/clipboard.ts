@@ -16,7 +16,42 @@ import type {
 
 const NATIVE = 'data-macro-docx';
 
-type Native = { v: 1; doc: string; paragraphs: ClipParagraph[] };
+/**
+ * A copy carries this browser's clipboard key, so a paste trusts only
+ * paragraphs this app copied: a web page can put the same attribute in its
+ * HTML, and its runs' raw markup must not reach the document. The key is
+ * shared by this origin's tabs (so copies between documents keep their
+ * formatting) and unreadable to other sites.
+ */
+type Native = {
+  v: 1;
+  doc: string;
+  key: string;
+  paragraphs: ClipParagraph[];
+};
+
+const KEY_STORAGE = 'macro-docx-clipboard-key';
+let sessionKey: string | undefined;
+
+function clipboardKey(): string {
+  if (sessionKey) return sessionKey;
+  try {
+    const stored = localStorage.getItem(KEY_STORAGE);
+    if (stored) return (sessionKey = stored);
+  } catch {
+    // Storage blocked: the key lasts as long as this page.
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  sessionKey = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(
+    ''
+  );
+  try {
+    localStorage.setItem(KEY_STORAGE, sessionKey);
+  } catch {
+    // As above.
+  }
+  return sessionKey;
+}
 
 function toBase64(text: string): string {
   const bytes = new TextEncoder().encode(text);
@@ -35,7 +70,12 @@ function fromBase64(data: string): string {
 
 /** The HTML a copy puts on the clipboard. */
 export function clipboardHtml(clip: Clip, documentId: string): string {
-  const native: Native = { v: 1, doc: documentId, paragraphs: clip.paragraphs };
+  const native: Native = {
+    v: 1,
+    doc: documentId,
+    key: clipboardKey(),
+    paragraphs: clip.paragraphs,
+  };
   const body = clip.html.replace(/^<meta[^>]*>/, '');
   return `<meta charset="utf-8"><div ${NATIVE}="${toBase64(JSON.stringify(native))}">${body}</div>`;
 }
@@ -318,7 +358,11 @@ export function readClipboardHtml(
   if (data) {
     try {
       const native = JSON.parse(fromBase64(data)) as Native;
-      if (native.v === 1 && Array.isArray(native.paragraphs))
+      if (
+        native.v === 1 &&
+        native.key === clipboardKey() &&
+        Array.isArray(native.paragraphs)
+      )
         return {
           paragraphs: native.paragraphs,
           sameDocument: native.doc === documentId,

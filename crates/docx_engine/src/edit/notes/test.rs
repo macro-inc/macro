@@ -188,3 +188,81 @@ fn pasting_a_note_reference_copies_the_note() {
     assert_eq!(texts(&other), vec!["GammaAlpha"]);
     assert!(references(&other).is_empty());
 }
+
+/// Lines of text on the pages as (page, x, y, text), in reading order.
+fn laid_out_lines(s: &mut Session) -> Vec<(usize, f32, f32, String)> {
+    use crate::layout::Item;
+    let layout = s.layout(fonts());
+    let mut out = Vec::new();
+    for (n, page) in layout.pages.iter().enumerate() {
+        for item in page.all_items() {
+            let Item::Line(p) = item else { continue };
+            let l = p.line();
+            let text: String = p.para.inline.clusters[l.start..l.end]
+                .iter()
+                .map(|c| c.ch)
+                .filter(|c| !c.is_control() && *c != '\u{FFFC}')
+                .collect();
+            out.push((n, p.x, p.y, text));
+        }
+    }
+    out
+}
+
+#[test]
+fn endnotes_are_listed_in_the_order_of_their_references() {
+    let mut s = open(&p("Alpha Beta"));
+    // The first endnote made goes at the end, the second before it, so
+    // the second gets the lower number and comes first in the list.
+    caret_at(&mut s, 0, 10);
+    run(&mut s, EditOp::InsertNote { endnote: true });
+    type_text(&mut s, "Made first.");
+    run(&mut s, EditOp::ExitStory);
+    caret_at(&mut s, 0, 5);
+    run(&mut s, EditOp::InsertNote { endnote: true });
+    type_text(&mut s, "Made second.");
+    run(&mut s, EditOp::ExitStory);
+    let lines = laid_out_lines(&mut s);
+    let at = |needle: &str| {
+        lines
+            .iter()
+            .position(|l| l.3.contains(needle))
+            .unwrap_or_else(|| panic!("{needle} not laid out: {lines:?}"))
+    };
+    assert!(at("Made second.") < at("Made first."), "{lines:?}");
+}
+
+#[test]
+fn endnotes_go_in_the_column_they_land_in() {
+    // Two columns; enough endnotes to fill the first and run into the second.
+    let mut refs = String::new();
+    let mut notes = String::new();
+    for i in 1..=60 {
+        refs.push_str(&format!(
+            r#"<w:r><w:t xml:space="preserve">Word {i} </w:t></w:r><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:endnoteReference w:id="{i}"/></w:r>"#
+        ));
+        notes.push_str(&format!(
+            r#"<w:endnote w:id="{i}"><w:p><w:r><w:endnoteRef/></w:r><w:r><w:t xml:space="preserve"> Endnote number {i} says a little.</w:t></w:r></w:p></w:endnote>"#
+        ));
+    }
+    let body = format!(
+        r#"<w:p>{refs}</w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/><w:cols w:num="2" w:space="720"/></w:sectPr>"#
+    );
+    let mut s = open_with(
+        &body,
+        &Parts {
+            endnotes: Some(&notes),
+            ..Parts::default()
+        },
+    );
+    let lines = laid_out_lines(&mut s);
+    let notes: Vec<_> = lines
+        .iter()
+        .filter(|l| l.3.contains("Endnote number"))
+        .collect();
+    assert_eq!(notes.len(), 60, "{lines:?}");
+    // The endnotes run from the first column on into the second.
+    let middle = 612.0 / 2.0;
+    assert!(notes.iter().any(|l| l.1 > middle), "{notes:?}");
+    assert!(notes.iter().any(|l| l.1 < middle), "{notes:?}");
+}

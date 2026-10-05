@@ -332,6 +332,20 @@ pub(crate) fn is_revision(w: &Wrapper) -> bool {
 
 /// An attribute of a start tag by local name, with entities decoded.
 pub(crate) fn attribute(tag: &str, local: &str) -> Option<String> {
+    let (start, end) = attribute_span(tag, local)?;
+    Some(unescape(&tag[start..end]))
+}
+
+/// The tag with the value of its attribute `local` replaced by `value` (a
+/// plain value, needing no escaping), or `None` when it has no such
+/// attribute.
+pub(crate) fn with_attribute(tag: &str, local: &str, value: &str) -> Option<String> {
+    let (start, end) = attribute_span(tag, local)?;
+    Some(format!("{}{value}{}", &tag[..start], &tag[end..]))
+}
+
+/// Where the (raw) value of attribute `local` sits in a start tag.
+fn attribute_span(tag: &str, local: &str) -> Option<(usize, usize)> {
     let bytes = tag.as_bytes();
     let mut search = 0;
     while let Some(i) = tag[search..].find(local) {
@@ -341,7 +355,8 @@ pub(crate) fn attribute(tag: &str, local: &str) -> Option<String> {
         if !matches!(before, Some(b' ' | b':' | b'\t' | b'\n' | b'\r')) {
             continue;
         }
-        let rest = tag[search..].trim_start();
+        let after = &tag[search..];
+        let rest = after.trim_start();
         let Some(rest) = rest.strip_prefix('=') else {
             continue;
         };
@@ -349,9 +364,9 @@ pub(crate) fn attribute(tag: &str, local: &str) -> Option<String> {
         let Some(quote) = rest.chars().next().filter(|c| *c == '"' || *c == '\'') else {
             continue;
         };
-        let value = &rest[1..];
-        let end = value.find(quote)?;
-        return Some(unescape(&value[..end]));
+        let start = tag.len() - rest.len() + 1;
+        let end = start + tag[start..].find(quote)?;
+        return Some((start, end));
     }
     None
 }

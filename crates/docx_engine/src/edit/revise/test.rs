@@ -373,3 +373,20 @@ fn list_changes_in_new_paragraphs_record_nothing() {
     let out = xml(&s);
     assert!(out.contains("numPr") && !out.contains("pPrChange"), "{out}");
 }
+
+#[test]
+fn replacing_an_attribute_leaves_others_with_the_same_value() {
+    let tag = r#"<w:footnoteReference w:customMarkFollows="1" w:id="1"/>"#;
+    assert_eq!(
+        super::with_attribute(tag, "id", "7").as_deref(),
+        Some(r#"<w:footnoteReference w:customMarkFollows="1" w:id="7"/>"#)
+    );
+    assert_eq!(super::attribute(tag, "id").as_deref(), Some("1"));
+    // A longer name ending in the same letters is not the attribute.
+    let para = r#"<w:p w14:paraId="1" w:id='2'>"#;
+    assert_eq!(
+        super::with_attribute(para, "id", "3").as_deref(),
+        Some(r#"<w:p w14:paraId="1" w:id='3'>"#)
+    );
+    assert_eq!(super::with_attribute("<w:b/>", "id", "3"), None);
+}

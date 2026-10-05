@@ -17,6 +17,12 @@ type PageState = {
   width?: number;
   /** Strips to redraw to reach the latest fingerprint. */
   bands: Band[];
+  /** Fingerprint of a render in flight; strips that arrive meanwhile go
+   * on top of it. */
+  drawing?: string;
+  /** Bumps whenever the drawn content is thrown away, so a render in
+   * flight does not mark a stale result as shown. */
+  stamp: number;
 };
 
 /**
@@ -38,7 +44,7 @@ export function createPageRenderer(options: {
   const state = (index: number): PageState => {
     let s = states.get(index);
     if (!s) {
-      s = { visible: false, bands: [] };
+      s = { visible: false, bands: [], stamp: 0 };
       states.set(index, s);
     }
     return s;
@@ -84,30 +90,45 @@ export function createPageRenderer(options: {
     if (!page || !canvas) return;
     const width = pixelWidth(page);
     const target = page.fingerprint;
-    if (!bands) {
-      const out: Rendered = await renderPage(options.docKey, index, width);
-      if (disposed || s.canvas !== canvas) return out.bitmap.close();
-      canvas.width = out.bitmap.width;
-      canvas.height = out.bitmap.height;
-      canvas.getContext('2d')?.drawImage(out.bitmap, 0, 0);
-      out.bitmap.close();
-      s.shown = target;
-      s.width = width;
-      s.bands = [];
-      return;
-    }
+    const stamp = s.stamp;
+    s.drawing = target;
     s.bands = [];
-    // One strip covering every changed band of the page.
-    const top = Math.min(...bands.map((b) => b.top));
-    const bottom = Math.max(...bands.map((b) => b.bottom));
-    const out = await renderBand(options.docKey, index, width, top, bottom);
-    if (disposed || s.canvas !== canvas) return out.bitmap.close();
-    const perPoint = width / page.width;
-    canvas
-      .getContext('2d')
-      ?.drawImage(out.bitmap, 0, Math.round(top * perPoint));
-    out.bitmap.close();
-    s.shown = target;
+    try {
+      if (!bands) {
+        const out: Rendered = await renderPage(options.docKey, index, width);
+        if (disposed || s.canvas !== canvas || s.stamp !== stamp)
+          return out.bitmap.close();
+        canvas.width = out.bitmap.width;
+        canvas.height = out.bitmap.height;
+        canvas.getContext('2d')?.drawImage(out.bitmap, 0, 0);
+        out.bitmap.close();
+        s.width = width;
+      } else {
+        // One strip covering every changed band of the page.
+        const top = Math.min(...bands.map((b) => b.top));
+        const bottom = Math.max(...bands.map((b) => b.bottom));
+        const out = await renderBand(options.docKey, index, width, top, bottom);
+        if (disposed || s.canvas !== canvas || s.stamp !== stamp)
+          return out.bitmap.close();
+        const perPoint = width / page.width;
+        canvas
+          .getContext('2d')
+          ?.drawImage(out.bitmap, 0, Math.round(top * perPoint));
+        out.bitmap.close();
+      }
+      // Strips that arrived meanwhile (in `s.bands`) take it the rest of
+      // the way.
+      s.shown = target;
+    } finally {
+      s.drawing = undefined;
+    }
+  }
+
+  /** Throws away what a page shows, so it is drawn afresh. */
+  function discard(s: PageState) {
+    s.shown = undefined;
+    s.bands = [];
+    s.stamp++;
   }
 
   async function pump() {
@@ -120,7 +141,7 @@ export function createPageRenderer(options: {
     } catch (error) {
       options.onError?.(error);
       const s = states.get(job.index);
-      if (s) s.shown = undefined;
+      if (s) discard(s);
     } finally {
       busy = false;
     }
@@ -142,25 +163,25 @@ export function createPageRenderer(options: {
       for (const [index, s] of states) {
         const page = next[index];
         if (!page) {
-          s.shown = undefined;
-          s.bands = [];
+          discard(s);
           continue;
         }
         const before = previous[index];
-        if (s.shown === undefined || page.fingerprint === s.shown) continue;
+        // What the canvas shows, or will once the render in flight lands.
+        const base = s.drawing ?? s.shown;
+        if (base === undefined || page.fingerprint === base) continue;
         const sameSize =
           before &&
           before.width === page.width &&
           before.height === page.height;
         const strips = bands.filter((b) => b.page === index);
-        if (sameSize && strips.length && s.shown === before?.fingerprint) {
+        if (sameSize && strips.length && base === before?.fingerprint) {
           s.bands.push(...strips);
         } else if (sameSize && strips.length && s.bands.length) {
           // Already behind by some strips: these go with them.
           s.bands.push(...strips);
         } else {
-          s.shown = undefined;
-          s.bands = [];
+          discard(s);
         }
       }
       void pump();
@@ -169,10 +190,7 @@ export function createPageRenderer(options: {
     attach(index: number, canvas: HTMLCanvasElement | undefined) {
       const s = state(index);
       s.canvas = canvas;
-      if (!canvas) {
-        s.shown = undefined;
-        s.bands = [];
-      }
+      if (!canvas) discard(s);
       void pump();
     },
     setVisible(index: number, visible: boolean) {
@@ -181,10 +199,7 @@ export function createPageRenderer(options: {
     },
     /** Redraws everything (after a zoom change). */
     invalidate() {
-      for (const s of states.values()) {
-        s.shown = undefined;
-        s.bands = [];
-      }
+      for (const s of states.values()) discard(s);
       void pump();
     },
     pixelWidth,

@@ -11,6 +11,7 @@ use super::{Pos, text};
 use crate::layout::format::{Formats, ParaFormat};
 use crate::model::block::BlockId;
 use crate::model::content::{Attrs, Wrapper, encode_wrappers, key, utf16_len};
+use crate::xml::SnippetContext;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -139,6 +140,52 @@ fn refers_to_relationship(xml: &str) -> bool {
         .any(|a| xml.contains(a))
 }
 
+/// Whether `xml` is exactly one well-formed element.
+fn one_element(ctx: &SnippetContext, xml: &str) -> bool {
+    ctx.parse_many(xml)
+        .is_ok_and(|(tree, kids)| kids.len() == 1 && tree.is_element(kids[0]))
+}
+
+/// Whether `name` can be written as an attribute name.
+fn attribute_name(name: &str) -> bool {
+    name.chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '-' | '_' | '.'))
+}
+
+/// Native run attributes as pasted, which may come from anywhere: only the
+/// kinds this editor writes, and only markup that is well-formed, so a
+/// paste can never break the document's XML. `None` when the run's object
+/// is not well-formed (the run is left out).
+fn well_formed(attrs: Attrs, ctx: &SnippetContext) -> Option<Attrs> {
+    if attrs.object().is_some_and(|xml| !one_element(ctx, xml)) {
+        return None;
+    }
+    let wrappers_ok = attrs
+        .wrappers()
+        .iter()
+        .all(|w| one_element(ctx, &format!("{}{}", w.open, w.close)));
+    let bad: Vec<&str> = attrs
+        .iter()
+        .filter(|(k, v)| match *k {
+            key::OBJ | key::INSTR => false,
+            key::WRAP => !wrappers_ok,
+            _ => {
+                if let Some(name) = k.strip_prefix(key::RUN_ATTR) {
+                    !attribute_name(name)
+                } else {
+                    !(k.starts_with(key::RUN_PROP) && one_element(ctx, v))
+                }
+            }
+        })
+        .map(|(k, _)| k)
+        .collect();
+    Some(attrs.without(|k| bad.contains(&k)))
+}
+
 /// A pasted run's attributes. Runs copied in this editor keep theirs, minus
 /// what only makes sense in the document they came from when pasted into
 /// another; other runs take the formatting at the caret plus their flags.
@@ -148,9 +195,11 @@ fn run_attrs(
     same_document: bool,
     w: &str,
     styles: &crate::model::styles::Styles,
+    ctx: &SnippetContext,
 ) -> Option<Attrs> {
     if let Some(native) = &run.attrs {
-        let mut attrs = Attrs::from_pairs(native.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let attrs = Attrs::from_pairs(native.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let mut attrs = well_formed(attrs, ctx)?;
         if attrs.marker().is_some() {
             return None;
         }
@@ -259,7 +308,12 @@ fn paragraph_props(
         return Ok(());
     };
     let current = b.props.clone();
-    let mut e = match &para.props {
+    // Properties that are not one well-formed `w:pPr` are not used.
+    let props = para
+        .props
+        .as_deref()
+        .filter(|p| one_element(&SnippetContext::new(&decls), p));
+    let mut e = match props {
         Some(props) => {
             let mut e = Element::open(props, "pPr", &w, &decls, PPR_ORDER);
             if !same_document {
@@ -279,7 +333,7 @@ fn paragraph_props(
         .get("sectPr")
         .map(str::to_owned);
     e.set("sectPr", sect);
-    if para.props.is_none()
+    if props.is_none()
         && let Some(level) = para.heading
         && let Some(style) = heading_style(&styles, level)
     {
@@ -328,6 +382,7 @@ pub(crate) fn paste(
 ) -> crate::Result<Pos> {
     let w = txn.doc.w_prefix().to_owned();
     let styles = Arc::clone(&txn.doc.parts().styles);
+    let snippets = SnippetContext::new(txn.doc.decls());
     let mut pos = Pos {
         upstream: false,
         ..at.clone()
@@ -349,7 +404,8 @@ pub(crate) fn paste(
             if run.text.is_empty() {
                 continue;
             }
-            let Some(mut attrs) = run_attrs(run, base, same_document, &w, &styles) else {
+            let Some(mut attrs) = run_attrs(run, base, same_document, &w, &styles, &snippets)
+            else {
                 continue;
             };
             // A note reference: the note comes along as a copy of its own
@@ -363,7 +419,10 @@ pub(crate) fn paste(
                 let Some(copy) = super::notes::duplicate(txn.doc, endnote, id)? else {
                     continue;
                 };
-                let renumbered = object.replacen(&format!("\"{id}\""), &format!("\"{copy}\""), 1);
+                let Some(renumbered) = revise::with_attribute(&object, "id", &copy.to_string())
+                else {
+                    continue;
+                };
                 attrs = attrs.with(key::OBJ, Some(&renumbered));
             }
             if let Some(r) = rev {

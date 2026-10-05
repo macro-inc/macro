@@ -17,8 +17,20 @@ use std::sync::{Arc, Mutex};
 /// properties.
 pub(in crate::layout) type Labels = FxMap<BlockId, (Label, RunProps)>;
 
-/// Displayed note numbers by (endnote, id).
-pub(in crate::layout) type NoteNumbers = HashMap<(bool, i64), String>;
+/// Displayed note numbers by (endnote, id), and the endnotes in the order
+/// of their references (the order the endnote section lists them in).
+#[derive(Debug, Default)]
+pub(in crate::layout) struct NoteNumbers {
+    numbers: HashMap<(bool, i64), String>,
+    pub endnotes: Vec<i64>,
+}
+
+impl std::ops::Deref for NoteNumbers {
+    type Target = HashMap<(bool, i64), String>;
+    fn deref(&self) -> &Self::Target {
+        &self.numbers
+    }
+}
 
 /// What numbering reads of one paragraph.
 #[derive(Debug)]
@@ -102,19 +114,22 @@ impl Sequence {
         let settings = &doc.parts().settings;
         let mut footnote = settings.footnotes.start;
         let mut endnote = settings.endnotes.start;
-        let mut numbers = NoteNumbers::new();
+        let mut numbers = NoteNumbers::default();
         for &(is_endnote, id) in &self.refs {
             if numbers.contains_key(&(is_endnote, id)) {
                 continue;
             }
             let (fmt, n) = if is_endnote {
                 endnote += 1;
+                numbers.endnotes.push(id);
                 (&settings.endnotes.fmt, endnote - 1)
             } else {
                 footnote += 1;
                 (&settings.footnotes.fmt, footnote - 1)
             };
-            numbers.insert((is_endnote, id), format_number(n, fmt));
+            numbers
+                .numbers
+                .insert((is_endnote, id), format_number(n, fmt));
         }
         numbers
     }
