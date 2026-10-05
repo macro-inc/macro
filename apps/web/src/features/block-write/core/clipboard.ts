@@ -37,7 +37,10 @@ function clipboardKey(): string {
   if (sessionKey) return sessionKey;
   try {
     const stored = localStorage.getItem(KEY_STORAGE);
-    if (stored) return (sessionKey = stored);
+    if (stored) {
+      sessionKey = stored;
+      return stored;
+    }
   } catch {
     // Storage blocked: the key lasts as long as this page.
   }
