@@ -6,13 +6,13 @@ import { isCursorBotId } from '@core/constant/cursorAgent';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
+import { useAgentSessionSubscription } from '@queries/agent-session/subscription';
+import { answerAgentSessionToolApproval } from '@queries/agent-session/tool-approvals';
 import type {
   FoldedMessage,
   TurnState,
 } from '@service-agent-fold/generated/types';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
-import { useEntitySubscription } from '@service-connection/client';
 import {
   type Accessor,
   createEffect,
@@ -116,13 +116,7 @@ export function AgentSessionProvider(
     issue: live.issue,
     onFailure: toast.failure,
   });
-  // Frames reach a viewer only while the gateway knows they are watching.
-  // The owner hears every frame regardless; anyone else would otherwise see
-  // nothing live here unless they also had the parent channel open.
-  useEntitySubscription(() => {
-    const id = sessionId();
-    return id ? { entity_type: 'agent_session', entity_id: id } : undefined;
-  });
+  useAgentSessionSubscription(sessionId);
   const toolApprovals = createToolApprovalController({
     sessionId,
     pending: () => live.metadata()?.pendingInteractions ?? [],
@@ -130,7 +124,7 @@ export function AgentSessionProvider(
     userId,
     canEdit: () => live.session()?.canEdit,
     onFailure: toast.failure,
-    answer: agentHarnessServiceClient.answerToolApproval,
+    answer: answerAgentSessionToolApproval,
   });
 
   // The transcript's "Reply to this" chip hands selected text to the
