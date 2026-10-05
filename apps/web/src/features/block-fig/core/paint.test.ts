@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addStop,
   colorAt,
+  copyPaint,
   editPaint,
   movePaint,
   moveStop,
@@ -98,5 +99,28 @@ describe('dashes', () => {
     expect(parseDashes('0')).toEqual([]);
     expect(parseDashes('a, 2')).toBeNull();
     expect(parseDashes('-1')).toBeNull();
+  });
+});
+
+describe('copying paints between fills and strokes', () => {
+  it('copies solids with their alpha, gradients with stops, and images', () => {
+    expect(copyPaint({ ...paint('FF0000'), alpha: 0.5, opacity: 0.8 })).toEqual(
+      { type: 'SOLID', color: 'FF000080', opacity: 0.8, visible: true }
+    );
+    expect(
+      copyPaint({ ...paint('000000'), type: 'GRADIENT_LINEAR', stops })
+    ).toEqual({
+      type: 'GRADIENT_LINEAR',
+      stops: [
+        { color: 'FF0000', position: 0 },
+        { color: '0000FF00', position: 1 },
+      ],
+      opacity: 1,
+      visible: true,
+    });
+    expect(
+      copyPaint({ ...paint('000000'), type: 'IMAGE', imageHash: 'abc' })
+    ).toEqual({ image: 'abc', opacity: 1, visible: true });
+    expect(copyPaint({ ...paint('000000'), type: 'VIDEO' })).toBeNull();
   });
 });

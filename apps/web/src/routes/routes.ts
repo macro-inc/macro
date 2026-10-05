@@ -137,13 +137,6 @@ export const onboardingRoute = defineRoute({
   externalSearch: '*',
 });
 
-/** The retired setup path; it forwards to onboarding with its query (?next deep links). */
-export const setupRoute = defineRoute({
-  id: 'setup',
-  path: 'setup',
-  externalSearch: '*',
-});
-
 /** A personal GTM invite link (`?token=`): welcome page, then signup. */
 export const inviteRoute = defineRoute({
   id: 'invite',

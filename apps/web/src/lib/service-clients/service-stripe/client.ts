@@ -35,8 +35,8 @@ function getGaClientId(): Promise<string | undefined> {
 
 export const stripeServiceClient = {
   /**
-   * Creates a checkout session via the v2 endpoint. Unlike v1, this does not
-   * accept a tier — the backend infers it from the new pricing model.
+   * Creates a checkout session via the v2 endpoint. The backend resolves the
+   * plan price and trial eligibility; trial requests require confirmed terms.
    * @returns The URL of the checkout session
    */
   createCheckoutSessionV2: async (
@@ -49,9 +49,18 @@ export const stripeServiceClient = {
       cancelUrl?: string;
       /** The plan to subscribe to; defaults to Premium. */
       plan?: PaidPlan;
+      /** Request the server-validated first-subscription trial. */
+      onboardingTrial?: boolean;
     } = {}
   ) => {
-    const { type = '', discount, successUrl, cancelUrl, plan } = args;
+    const {
+      type = '',
+      discount,
+      successUrl,
+      cancelUrl,
+      plan,
+      onboardingTrial,
+    } = args;
     const gaClientId = await getGaClientId();
     const { fbp, fbc } = getMetaIds();
 
@@ -68,6 +77,7 @@ export const stripeServiceClient = {
         fbc: fbc ?? null,
       },
       plan,
+      onboardingTrial,
     });
 
     if (!result.isOk()) {
@@ -76,7 +86,12 @@ export const stripeServiceClient = {
       );
     }
 
-    return result.value;
+    if (onboardingTrial && result.value.trialDays !== 30) {
+      throw new Error(
+        'Your free trial could not be confirmed. Please try again later.'
+      );
+    }
+    return result.value.url;
   },
   /**
    * Creates a portal session

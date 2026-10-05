@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH claimed AS (\n                INSERT INTO team_joined_macro_email (team_id, email)\n                SELECT t.id, c.email\n                FROM team t\n                CROSS JOIN UNNEST($2::text[], $3::text[]) AS c(email, user_id)\n                WHERE t.id = $1\n                  AND t.auto_join_domain IS NOT NULL\n                  AND split_part(c.email, '@', 2) = t.auto_join_domain\n                  AND NOT EXISTS (\n                      SELECT 1 FROM team_user tu\n                      WHERE tu.team_id = t.id AND tu.user_id = c.user_id\n                  )\n                  AND NOT EXISTS (\n                      SELECT 1 FROM team_invite ti\n                      WHERE ti.team_id = t.id AND ti.email = c.email\n                  )\n                ON CONFLICT (team_id, email) DO NOTHING\n                RETURNING email\n            )\n            SELECT claimed.email AS \"email!\", t.name AS \"team_name!\"\n            FROM claimed\n            JOIN team t ON t.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a8080ff3d4a2ec860380f02d239a7a671c0afe3c37aacc59ccc6408ee0f56080"
+}

@@ -1,6 +1,6 @@
 //! Plans, billing periods, settings, and the API-facing snapshot.
 
-use super::pricing::INCLUDED_ALLOWANCE_CENTS;
+use super::pricing::AiPricing;
 pub use ai_usage::NON_BILLABLE_AI_FEATURES;
 use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -98,11 +98,12 @@ impl PlanTier {
         }
     }
 
-    /// AI usage included per seat per period, in cents at provider cost
-    /// ([`INCLUDED_ALLOWANCE_CENTS`] for every paid plan, nothing for Free).
-    pub const fn included_ai_cents_per_seat(self) -> i64 {
+    /// AI usage included per seat per period, in cents at provider cost: the
+    /// configured allowance ([`AiPricing::included_allowance_cents`]) for every
+    /// paid plan, nothing for Free.
+    pub const fn included_ai_cents_per_seat(self, pricing: AiPricing) -> i64 {
         if self.is_paid() {
-            INCLUDED_ALLOWANCE_CENTS
+            pricing.included_allowance_cents()
         } else {
             0
         }
@@ -175,6 +176,33 @@ impl BillingPeriod {
             }
         }
         Self::calendar_month(now)
+    }
+
+    /// The stored anchor when it contains `now`.
+    pub fn covering(
+        anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
+        now: DateTime<Utc>,
+    ) -> Option<Self> {
+        let (start, end) = anchor?;
+        (start <= now && now < end).then_some(Self { start, end })
+    }
+
+    /// The part of this subscription window to store and meter after the
+    /// stored anchor.
+    ///
+    /// The start moves up to the anchor's end because the store refuses a start
+    /// that overlaps the stored window. `None` when that part does not contain
+    /// `now`, because it is then not a period to meter.
+    pub fn adopted(
+        self,
+        anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
+        now: DateTime<Utc>,
+    ) -> Option<Self> {
+        let start = match anchor {
+            Some((_, stored_end)) => self.start.max(stored_end),
+            None => self.start,
+        };
+        Self::covering(Some((start, self.end)), now)
     }
 
     /// The period immediately before this one, assuming the same length in
@@ -357,13 +385,13 @@ impl Entitlement {
     }
 
     /// Included AI for this user's seat, in cents at provider cost.
-    pub fn included_ai_cents(&self) -> i64 {
-        self.tier.included_ai_cents_per_seat()
+    pub fn included_ai_cents(&self, pricing: AiPricing) -> i64 {
+        self.tier.included_ai_cents_per_seat(pricing)
     }
 
     /// Each billed seat with its own included AI. Unused allowance never moves
     /// between seats; only credits and overage are shared by the payer.
-    pub fn seat_allowances(&self) -> Vec<SeatAllowance> {
+    pub fn seat_allowances(&self, pricing: AiPricing) -> Vec<SeatAllowance> {
         self.billed_users
             .iter()
             .enumerate()
@@ -371,7 +399,7 @@ impl Entitlement {
                 let tier = self.seat_tiers.get(index).copied().unwrap_or(self.tier);
                 SeatAllowance {
                     user: user.clone(),
-                    included_cents: tier.included_ai_cents_per_seat(),
+                    included_cents: tier.included_ai_cents_per_seat(pricing),
                 }
             })
             .collect()
@@ -380,6 +408,11 @@ impl Entitlement {
     /// Whether `user` is the payer (and may change billing settings).
     pub fn is_payer(&self, user: &MacroUserIdStr<'_>) -> bool {
         self.payer.as_ref() == user.as_ref()
+    }
+
+    /// Paid and finite: usage is metered against a subscription period.
+    pub fn is_metered(&self) -> bool {
+        self.tier.is_paid() && !self.unlimited
     }
 }
 
@@ -392,7 +425,7 @@ pub struct BillingSettings {
     pub overage_limit_cents: i64,
     /// Set when an overage charge failed to collect.
     pub overage_suspended_at: Option<DateTime<Utc>>,
-    /// The subscription period last synced from Stripe.
+    /// The subscription period last observed from Stripe (webhook or read-through).
     pub period_anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
     /// Generation of the payer's open-seat roster. Zero when no account row exists.
     pub seat_generation: SeatGeneration,

@@ -312,6 +312,11 @@ the shimmer.
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
   the owner must have access through the connected GitHub App.
+  Paired macrod agents also receive the repository choice. With native Herdr,
+  macrod finds an existing clone or clones it using local Git credentials, then
+  creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
+  and cannot be changed for local sessions. The native Claude/Codex TUI remains
+  interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
   a model selected from its submenu overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
@@ -347,6 +352,32 @@ the shimmer.
   code and click **Look up**. Review the request and click **Approve** to connect.
   The setup guide contains configuration and pairing screenshots in that order.
   Enter the code from your own terminal, not the example screenshot.
+  Run inside a herdr pane, macrod's Quickstart also offers **Claude Code in herdr**
+  and **Codex in herdr**: each session of an agent on that runtime opens a herdr
+  tab in the directory macrod started from, running the real Claude Code or Codex
+  TUI. The session page streams its tool calls and replies, and its permission
+  prompts appear as approvals. Other runtimes started inside herdr get a live
+  view tab per session that can prompt and interrupt it; approvals stay in Macro.
+  Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
+  Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
+  check their result and any confirmation in Herdr. For Claude, use `/fast on`
+  or `/fast off`, or bare `/fast` to open its native controls. Available speed
+  tiers depend on the native agent, model, and account. Claude also offers
+  `/effort` with an optional level, `auto`, or `status`. In Codex sessions,
+  `/effort` shows the current effort and available choices in Macro. Send
+  `/effort high` (or another supported level) to change it and wait for native
+  confirmation; `/effort default` restores the model's default. This preserves
+  the current model. `/model` still opens the picker in Herdr. Macro's model dropdown
+  changes the model of an idle native session after native confirmation and
+  displays the model identified by the session (Codex's live footer, or native
+  transcript metadata). Unexpected native dialogs must be completed in Herdr.
+  For Codex, open the current model's submenu to select **Reasoning effort**.
+  Choices come from the installed Codex catalog; the selected effort is confirmed
+  from the native session and shown beside the model. Local Herdr changes and
+  `/effort` also update this menu. The effort submenu appears once the native
+  session starts on the first prompt, before its first reply; a startup screen
+  that temporarily hides the footer is retried during the turn. The menu does not list
+  installed native skills or session-switching commands such as `/resume`.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.
   Runtime and short model lists use styled dropdown buttons: open the field and
@@ -363,7 +394,11 @@ the shimmer.
   use the same growing, initially single-line input with the model selector on
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
-  choose another. Stop, queued-message advancement, and quoting remain available.
+  choose another. An unsent message in that session — the text and attached
+  files that finished uploading — stays when you leave for a channel, another
+  session, or Home and come back, including after reload. Sending or clearing
+  the input removes only that session's draft. Stop, queued-message advancement,
+  and quoting remain available.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
   Unarchive is also available from the title dropdown.
@@ -525,9 +560,10 @@ must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
 quota, but Macro-funded tools and helpers still check independently.
 
-In dev, paid plans include a monthly AI allowance of $20 per seat, measured at
-provider cost; usage beyond it is billed at a small markup (both are constants in
-`crates/ai_billing/src/domain/pricing.rs`). When it is used up and no credits or usage billing cover the
+Paid plans include a monthly AI allowance per seat, measured at provider cost;
+usage beyond it is billed at a markup. Both numbers come from Doppler
+(`AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and `AI_USAGE_OVERAGE_MARKUP_PERCENT`; $20 and
+5% in dev), never from code. When the allowance is used up and no credits or usage billing cover the
 request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
 spending-limit / failed-charge variants). It shows the same meter and controls
@@ -812,7 +848,8 @@ When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
 to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
-merged / closed.
+merged / closed. Merging happens from the PR entity's top bar or from a channel
+Magic Chip's PR row, not from this header chip.
 
 Tool rows show the tool's own name without an MCP server or workspace prefix.
 Chat MCP rows retain their service icon.

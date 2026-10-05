@@ -33,6 +33,8 @@ files:
   - apps/web/src/features/email-compose/components/**
   - apps/web/src/features/changes/components/**
   - apps/web/src/features/block-write/components/**
+  - apps/web/src/features/onboarding/components/**
+  - apps/web/src/features/auth/components/**
 rule:
   any:
     - kind: string

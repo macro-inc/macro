@@ -23,7 +23,7 @@ import type {
 } from '@core/fig-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
 import type { FigSharing } from '../context/fig-viewer-context';
-import { type Alignment, alignOffset } from '../core/align';
+import { type Alignment, alignOffset, distributeOffsets } from '../core/align';
 import type { BooleanOperation } from '../core/boolean';
 import type { Point } from '../core/camera';
 import {
@@ -35,11 +35,11 @@ import {
 import type { DesignOp } from '../core/design-system';
 import type { HandoffOp } from '../core/handoff-ops';
 import type { LibraryOp } from '../core/libraries';
-import type { PaintType, StopSpec } from '../core/paint';
+import { copyPaint, type PaintType, type StopSpec } from '../core/paint';
 import type { InteractionSpec } from '../core/prototype';
 import { resizedOrigin } from '../core/rotation';
 import type { Measure } from '../core/type';
-import { type PenPoint, penNetwork } from '../core/vector';
+import { type PenPoint, pencilPoints, penNetwork } from '../core/vector';
 import type { FigViewer, Selected } from './create-fig-viewer';
 
 export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
@@ -675,6 +675,39 @@ export function createFigEditor(options: FigEditorOptions) {
     await apply(ops);
   };
 
+  /** Spaces three or more layers evenly (Figma's distribute spacing). */
+  const distribute = async (axis: 'horizontal' | 'vertical') => {
+    const boxes = viewer
+      .selectionGeometry()
+      .filter((g) => !g.id.startsWith('I'))
+      .map((g) => ({ id: g.id, bounds: g.bounds }));
+    const ops: Op[] = distributeOffsets(boxes, axis)
+      .filter((o) => Math.abs(o.dx) > 1e-6 || Math.abs(o.dy) > 1e-6)
+      .map((o) => ({
+        op: 'translate' as const,
+        ids: [o.id],
+        dx: Math.round(o.dx * 100) / 100,
+        dy: Math.round(o.dy * 100) / 100,
+      }));
+    if (ops.length > 0) await apply(ops);
+  };
+
+  /** Figma's ⇧X: a layer's fills become its strokes and the other way. */
+  const swapFillStroke = async (info: NodeInfo) => {
+    const copies = (paints: NodeInfo['fills']) =>
+      paints.map(copyPaint).filter((p): p is PaintSpec => p !== null);
+    const fills = copies(info.strokes);
+    const strokes = copies(info.fills);
+    if (fills.length === 0 && strokes.length === 0) return;
+    // A layer without a stroke weight shows none: give it Figma's 1.
+    const weight = strokes.length > 0 && !info.strokeWeight ? 1 : undefined;
+    await setProps({
+      fills,
+      strokes,
+      ...(weight ? { strokeWeight: weight } : {}),
+    });
+  };
+
   /**
    * ⌘C: the selected layers go on the system clipboard as Figma puts them
    * there (they paste into other files and tabs), and are remembered for
@@ -872,6 +905,26 @@ export function createFigEditor(options: FigEditorOptions) {
         op: 'createVector',
         parent,
         network: penNetwork(points, closed),
+      },
+    ]);
+    await selectCreated(result);
+    return result?.created[0];
+  };
+
+  /**
+   * Ends a pencil stroke (page points): a smoothed open path, made in the
+   * frame under where it started and selected. The pencil stays chosen.
+   */
+  const pencilFinish = async (stroke: Point[], tolerance: number) => {
+    if (!enabled() || stroke.length < 2) return undefined;
+    const points = pencilPoints(stroke, tolerance);
+    if (points.length < 2) return undefined;
+    const parent = await viewer.containerAt(points[0]);
+    const result = await apply([
+      {
+        op: 'createVector',
+        parent,
+        network: penNetwork(points, false),
       },
     ]);
     await selectCreated(result);
@@ -1195,6 +1248,7 @@ export function createFigEditor(options: FigEditorOptions) {
     penAdd,
     penHandle,
     penFinish,
+    pencilFinish,
     vectorEdit,
     editVector,
     endVectorEdit,
@@ -1218,6 +1272,8 @@ export function createFigEditor(options: FigEditorOptions) {
     ungroup,
     arrange,
     align,
+    distribute,
+    swapFillStroke,
     nudge,
     copy,
     paste,

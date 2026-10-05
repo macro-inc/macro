@@ -489,6 +489,14 @@ async fn main() -> anyhow::Result<()> {
     // collection (Stripe) lives in the authentication service, which the
     // recorder below asks to settle once a payer runs past their allowance
     // and ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
+    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
+        config
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        AuthServiceUrl::new()?.to_string(),
+    ));
+    let ai_pricing = config.ai_pricing();
     let ai_billing = Arc::new(
         ai_billing::domain::BillingServiceImpl::new(
             ai_billing::outbound::RolesTeamsEntitlementSource::new(
@@ -496,8 +504,9 @@ async fn main() -> anyhow::Result<()> {
                 teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
             ),
             ai_billing::outbound::PgUsageReader::new(db.clone()),
-            ai_billing::outbound::PgBillingRepo::new(db.clone()),
-            ai_billing::outbound::NoOpPaymentGateway,
+            ai_billing::outbound::PgBillingRepo::new(db.clone(), ai_pricing),
+            ai_billing::outbound::HttpPaymentGateway::new(auth_service_client.clone()),
+            ai_pricing,
         )
         .with_enforcement(config.enable_ai_usage_enforcement),
     );
@@ -506,10 +515,6 @@ async fn main() -> anyhow::Result<()> {
             ai_billing.clone(),
             config.enable_ai_usage_enforcement,
         ));
-    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
-        internal_api_key.clone(),
-        AuthServiceUrl::new()?.to_string(),
-    ));
     let recorder: Arc<dyn ai_usage::UsageRecorder> =
         Arc::new(ai_billing::outbound::SettlingUsageRecorder::new(
             Arc::new(

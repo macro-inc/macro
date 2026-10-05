@@ -200,7 +200,7 @@ fn the_harness_announced_by_initialize_names_the_agent() {
     let mut projector = projector(ContentPolicy::enabled());
     replay(
         &mut projector,
-        include_str!("../../../../../agent_fold/fixtures/real/real_single_turn.jsonl"),
+        include_str!("../../../../../folds/agent_fold/fixtures/real/real_single_turn.jsonl"),
     );
     let spans = finished(&exporter, &provider);
 
@@ -225,7 +225,7 @@ fn usage_is_recorded_per_turn_from_the_running_totals() {
     let mut projector = projector(ContentPolicy::enabled());
     replay(
         &mut projector,
-        include_str!("../../../../../agent_fold/fixtures/real/real_multi_turn.jsonl"),
+        include_str!("../../../../../folds/agent_fold/fixtures/real/real_multi_turn.jsonl"),
     );
     let spans = finished(&exporter, &provider);
 

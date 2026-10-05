@@ -423,7 +423,6 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
             &instance,
             mode,
             args.traces.enabled() && summary::port_open(4318),
-            args.enable_onboarding,
         )?
     };
 

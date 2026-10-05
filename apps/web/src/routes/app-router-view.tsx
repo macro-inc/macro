@@ -1,6 +1,7 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { ActivityRouteView } from '@app/features/activity/route-views';
 import { AgentsRouteView } from '@app/features/agents-view/route-views';
+import { MobileWebSignup } from '@app/features/auth/auth';
 import { CallDetailRouteView } from '@app/features/block-call/route-views';
 import { PrDetailRouteView } from '@app/features/block-pr/route-views';
 import { CalendarRouteView } from '@app/features/calendar-view/route-views';
@@ -32,7 +33,6 @@ import {
   RecentRouteView,
   SearchRouteView,
 } from '@app/features/next-soup/route-views';
-import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
 import {
   ReminderDetailRouteView,
   RemindersRouteView,
@@ -79,7 +79,6 @@ import {
   LoginPopupSuccess,
   OnboardingPage,
   PublicBookingRoutePage,
-  SetupPage,
   SignupPage,
   TaskSlugPage,
   WelcomePage,
@@ -143,7 +142,6 @@ import {
   routinesRoute,
   searchRoute,
   settingsRoute,
-  setupRoute,
   signupRoute,
   taskDetailRoute,
   taskSlugRoute,
@@ -219,7 +217,6 @@ export function AppRouterView() {
       <Route definition={welcomeRoute} component={WelcomePage} />
       <Route definition={mobileEmailSignupRoute} component={MobileWebSignup} />
       <Route definition={onboardingRoute} component={OnboardingPage} />
-      <Route definition={setupRoute} component={SetupPage} />
       <Route definition={inviteRoute} component={InviteWelcome} />
       <Route
         definition={internalInviteLinksRoute}

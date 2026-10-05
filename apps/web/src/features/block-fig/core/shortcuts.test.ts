@@ -238,3 +238,94 @@ describe('focused controls and text fields', () => {
     expect(controlOwnsKey('SELECT', k('z', true))).toBe(false);
   });
 });
+
+describe('Figma shortcuts added for parity', () => {
+  it('opens the actions menu with ⌘P and ⌘/ (never printing)', () => {
+    expect(shortcutAction(key('p', 'KeyP', { metaKey: true }), true)).toBe(
+      'open-actions'
+    );
+    expect(shortcutAction(key('p', 'KeyP', { ctrlKey: true }), false)).toBe(
+      'open-actions'
+    );
+    expect(shortcutAction(key('/', 'Slash', { metaKey: true }), true)).toBe(
+      'open-actions'
+    );
+  });
+
+  it('leaves ⌘K to the app’s command menu', () => {
+    expect(
+      shortcutAction(key('k', 'KeyK', { metaKey: true }), true)
+    ).toBeUndefined();
+    expect(
+      shortcutAction(key('k', 'KeyK', { metaKey: true, altKey: true }), true)
+    ).toBe('create-component');
+  });
+
+  it('shows and hides the UI with ⌘. as well as ⌘\\', () => {
+    expect(shortcutAction(key('.', 'Period', { metaKey: true }), true)).toBe(
+      'toggle-ui'
+    );
+    expect(
+      shortcutAction(key('\\', 'Backslash', { metaKey: true }), true)
+    ).toBe('toggle-ui');
+  });
+
+  it('picks the pencil with ⇧P and the pen with P', () => {
+    expect(shortcutAction(key('P', 'KeyP', { shiftKey: true }), true)).toBe(
+      'tool-pencil'
+    );
+    expect(shortcutAction(key('p', 'KeyP'), true)).toBe('tool-pen');
+  });
+
+  it('aligns with ⌥ letters, and ⌥ letters on macOS whatever they type', () => {
+    const alt = (k: string, code: string) =>
+      shortcutAction(key(k, code, { altKey: true }), true);
+    expect(alt('å', 'KeyA')).toBe('align-left');
+    expect(alt('˙', 'KeyH')).toBe('align-center');
+    expect(alt('∂', 'KeyD')).toBe('align-right');
+    expect(alt('∑', 'KeyW')).toBe('align-top');
+    expect(alt('√', 'KeyV')).toBe('align-middle');
+    expect(alt('ß', 'KeyS')).toBe('align-bottom');
+    expect(alt('¬', 'KeyL')).toBe('collapse-layers');
+    expect(alt('™', 'Digit2')).toBe('toggle-assets');
+  });
+
+  it('distributes with ⌃⌥H and ⌃⌥V', () => {
+    expect(
+      shortcutAction(key('h', 'KeyH', { ctrlKey: true, altKey: true }), true)
+    ).toBe('distribute-horizontal');
+    expect(
+      shortcutAction(key('v', 'KeyV', { ctrlKey: true, altKey: true }), false)
+    ).toBe('distribute-vertical');
+  });
+
+  it('excludes with ⌥⇧E (and ⌥⇧X)', () => {
+    const mods = { altKey: true, shiftKey: true };
+    expect(shortcutAction(key('E', 'KeyE', mods), true)).toBe(
+      'boolean-exclude'
+    );
+    expect(shortcutAction(key('X', 'KeyX', mods), true)).toBe(
+      'boolean-exclude'
+    );
+  });
+
+  it('sets opacity with digits, leaving ⇧digits to zoom', () => {
+    expect(shortcutAction(key('5', 'Digit5'), true)).toBe('opacity-5');
+    expect(shortcutAction(key('0', 'Digit0'), true)).toBe('opacity-0');
+    expect(shortcutAction(key('!', 'Digit1', { shiftKey: true }), true)).toBe(
+      'zoom-fit'
+    );
+  });
+
+  it('maps swap fill and stroke, place image, and paste to replace', () => {
+    expect(shortcutAction(key('X', 'KeyX', { shiftKey: true }), true)).toBe(
+      'swap-fill-stroke'
+    );
+    expect(
+      shortcutAction(key('k', 'KeyK', { metaKey: true, shiftKey: true }), true)
+    ).toBe('place-image');
+    expect(
+      shortcutAction(key('r', 'KeyR', { metaKey: true, shiftKey: true }), true)
+    ).toBe('paste-replace');
+  });
+});

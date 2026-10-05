@@ -73,10 +73,18 @@ async fn configured_composition_skips_billing_only_for_disabled_or_exempt_work()
         .unwrap();
     pool.close().await;
     let user = MacroUserIdStr::try_from("macro|quota@example.com".to_owned()).unwrap();
-    let disabled = pg_admission_service(pool.clone(), AiUsageEnforcement::Disabled);
+    let disabled = pg_admission_service(
+        pool.clone(),
+        AiUsageEnforcement::Disabled,
+        AiPricing::testing(),
+    );
     assert_eq!(disabled.admit(&user, AiFeature::Chat).await, Ok(()));
 
-    let enabled = pg_admission_service(pool.clone(), AiUsageEnforcement::Enabled);
+    let enabled = pg_admission_service(
+        pool.clone(),
+        AiUsageEnforcement::Enabled,
+        AiPricing::testing(),
+    );
     for feature in ai_usage::NON_BILLABLE_AI_FEATURES {
         assert_eq!(enabled.admit(&user, feature).await, Ok(()));
     }

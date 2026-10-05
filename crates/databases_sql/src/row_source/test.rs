@@ -413,6 +413,7 @@ async fn a_table_read_is_its_rows_and_nothing_else() {
             "cthf": {"l": {"ThreadId": Uuid::nil()}},
             "callf": {"l": {"CallId": Uuid::nil()}},
             "ccf": {"l": {"id": Uuid::nil()}},
+            "crmf": null,
             "fef": {"l": {"id": Uuid::nil()}},
             "ghprf": null,
             "remf": null,

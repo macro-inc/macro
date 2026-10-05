@@ -27,6 +27,12 @@ preference persists. `Load more projects` fetches the next page when available.
 The plus button beside `My projects` opens the project composer, even while the
 section is collapsed or loading. Its rows use the shared project query/cache and
 load inside a local Suspense boundary, leaving sidebar controls available.
+Once a current-query project page is cached, an offline/background refresh failure
+must not show **Could not load projects** beside those rows (or a cached empty
+result). Retrying a refresh must not reintroduce that warning merely because the
+refresh promise rejects; the cached project links remain available. Cache misses,
+server/permission errors, and failed **Load more projects** requests still show
+failure and retry controls. Verify both background refresh and manual retry.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.

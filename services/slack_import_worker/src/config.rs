@@ -19,6 +19,9 @@ pub struct Config {
     /// Pause new claims and outbox sends, not reconciliation or queues.
     #[macro_config_default(false)]
     pub slack_import_enabled: bool,
+    /// One-time colleague emails on import. Off by default: emails cannot be recalled.
+    #[macro_config_default(false)]
+    pub slack_import_join_email_enabled: bool,
     /// Initially one; fail startup above two rather than silently widening work.
     #[macro_config_default(1)]
     pub slack_import_concurrency: u8,

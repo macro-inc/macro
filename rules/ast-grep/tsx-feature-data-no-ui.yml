@@ -52,6 +52,9 @@ files:
   - apps/web/src/features/changes/primitives/**
   - apps/web/src/features/block-write/queries/**
   - apps/web/src/features/block-write/primitives/**
+  - apps/web/src/features/onboarding/primitives/**
+  - apps/web/src/features/auth/primitives/**
+  - apps/web/src/features/auth/queries/**
 rule:
   kind: string
   regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views|ui|component)(/|['"]))

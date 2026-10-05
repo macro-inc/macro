@@ -95,6 +95,7 @@ async fn main() -> Result<()> {
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
         config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
     );
     let sessions = Arc::new(AgentSessionClient::new(
         AgentHarnessServiceUrl::new()?.as_ref(),
