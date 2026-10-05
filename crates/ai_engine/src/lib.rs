@@ -29,6 +29,8 @@ pub mod pdf;
 pub mod render;
 pub mod save;
 pub mod shading;
+#[cfg(test)]
+mod testing;
 pub mod text;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
