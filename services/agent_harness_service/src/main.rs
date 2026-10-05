@@ -49,6 +49,7 @@ use agent_harness::domain::model::{
 };
 use agent_harness::domain::model_load::AgentModelsServiceImpl;
 use agent_harness::domain::ports::AgentRuntimeDirectory as _;
+use agent_harness::domain::ports::LateBoundHeldToolCallObserver;
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::domain::trigger_router::{
     RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
@@ -446,12 +447,16 @@ async fn run() -> anyhow::Result<()> {
     // for the owner. The rows and their NOTIFY wake a hold on whichever
     // replica serves it; each state lands in the session's log for its
     // viewers, and a call that starts waiting notifies the owner.
+    // The harness hears about each held call too, to tell the thread that
+    // prompted the turn; it is built later, so it binds late.
+    let held_tool_calls = Arc::new(LateBoundHeldToolCallObserver::new());
     let tool_approvals = Arc::new(ToolApprovalService::new(
         PgToolApprovalStore::new(pool.clone()),
         PgToolApprovalSignals::spawn(pool.clone()),
         SessionToolApprovalAnnouncer::new(
             sessions.clone(),
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
+            held_tool_calls.clone(),
         ),
     ));
     let egress = Arc::new(
@@ -1042,6 +1047,7 @@ async fn run() -> anyhow::Result<()> {
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue, and capture what the turn changed.
     turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
+    held_tool_calls.bind(harness.clone());
     let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
@@ -1459,11 +1465,13 @@ async fn run() -> anyhow::Result<()> {
                                     "agent_trigger.set_sandbox_size"
                                 }
                                 // Never trigger-borne: queue mutations arrive over
-                                // HTTP, and the turn signals are the harness's own.
+                                // HTTP, and the turn signals and held tool calls are
+                                // the harness's own.
                                 HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
                                 | HarnessCommand::SteerQueued { .. }
                                 | HarnessCommand::Turn(_)
+                                | HarnessCommand::ToolApproval(_)
                                 | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);

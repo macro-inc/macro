@@ -551,6 +551,11 @@ pub enum HarnessCommand {
         /// Why the actor stopped.
         reason: String,
     },
+    /// A tool call in the session's running turn started or stopped waiting
+    /// for the owner's approval. Sent by the approval service from whichever
+    /// replica held the call, and forwarded to the one managing the session,
+    /// since that is where the turn's reply is known.
+    ToolApproval(ToolApprovalChange),
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
@@ -703,11 +708,13 @@ pub struct AnnouncedMessage {
 /// thread would rather read that than a notice. The rest distinguish the
 /// silences a reader can act on differently - try again, or not.
 ///
-/// Two are not ends at all. A turn that asks the user something through an
+/// Three are not ends at all. A turn that asks the user something through an
 /// ACP elicitation is held open until someone answers it in the session
-/// view, and a thread showing a spinner has no way of knowing that; so the
-/// reply says so ([`Self::NeedsInput`]) and returns to pending once the
-/// question is cleared ([`Self::Resumed`]).
+/// view, and one whose tool call waits on the owner's approval is held until
+/// the owner answers; a thread showing a spinner has no way of knowing
+/// either. So the reply says so ([`Self::NeedsInput`],
+/// [`Self::AwaitingApproval`]) and returns to pending once nothing is
+/// waiting ([`Self::Resumed`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplyOutcome {
     /// The agent answered; its last message, whole.
@@ -724,8 +731,37 @@ pub enum ReplyOutcome {
         /// What the agent is asking, in prose.
         question: String,
     },
-    /// The question was answered or withdrawn and the turn is running again.
+    /// A tool call is held until the session's owner approves it.
+    AwaitingApproval(HeldToolCall),
+    /// The question was answered or withdrawn, or every held tool call was
+    /// settled, and the turn is running again.
     Resumed,
+}
+
+/// A tool call held for the session owner's approval, as far as the thread
+/// is told about it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HeldToolCall {
+    /// The approval row; what its settling names.
+    pub approval_id: String,
+    /// `macro`, or the connected app's slug.
+    pub server_slug: String,
+    /// What a person calls the server the tool is on.
+    pub server_name: String,
+    /// The tool called.
+    pub tool_name: String,
+}
+
+/// How a session's held tool calls changed.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ToolApprovalChange {
+    /// A call started waiting for the owner.
+    Held(HeldToolCall),
+    /// The call was approved, denied, cancelled, or expired.
+    Settled {
+        /// The approval that settled.
+        approval_id: String,
+    },
 }
 
 impl ReplyOutcome {

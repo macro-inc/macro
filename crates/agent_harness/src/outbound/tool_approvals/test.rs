@@ -101,6 +101,15 @@ impl AgentSessionNotifier for RecordingNotifier {
     }
 }
 
+#[derive(Clone, Default)]
+struct RecordingHeldCalls(Arc<Mutex<Vec<(AgentSessionId, ToolApprovalChange)>>>);
+
+impl HeldToolCallObserver for RecordingHeldCalls {
+    fn changed(&self, session: AgentSessionId, change: ToolApprovalChange) {
+        self.0.lock().unwrap().push((session, change));
+    }
+}
+
 fn approval(session: AgentSessionId, status: ToolApprovalStatus) -> ToolApproval {
     ToolApproval {
         id: ToolApprovalId::mint(),
@@ -127,7 +136,7 @@ fn notice_of(message: &ToServerMessage) -> ToolApprovalNotice {
 }
 
 #[tokio::test]
-async fn every_state_of_a_held_call_is_recorded_in_the_session_log() {
+async fn every_state_of_a_held_call_is_recorded_and_told_to_the_harness() {
     let session = AgentSessionId::new();
     let recorded: Arc<Mutex<Vec<ToolApprovalNotice>>> = Arc::default();
     let mut sessions = MockAgentSessionService::new();
@@ -146,7 +155,8 @@ async fn every_state_of_a_held_call_is_recorded_in_the_session_log() {
         .expect_get_session()
         .returning(move |_| Box::pin(async move { Err(AgentSessionError::Disconnected(session)) }));
     let notifier = RecordingNotifier::default();
-    let announcer = SessionToolApprovalAnnouncer::new(sessions, notifier.clone());
+    let held = RecordingHeldCalls::default();
+    let announcer = SessionToolApprovalAnnouncer::new(sessions, notifier.clone(), held.clone());
 
     let pending = approval(session, ToolApprovalStatus::Pending);
     announcer.requested(&pending, &pending.owner).await;
@@ -167,4 +177,24 @@ async fn every_state_of_a_held_call_is_recorded_in_the_session_log() {
     );
     assert_eq!(recorded[0].approval_id, pending.id.to_string());
     assert!(notifier.0.lock().unwrap().is_empty());
+    assert_eq!(
+        *held.0.lock().unwrap(),
+        [
+            (
+                session,
+                ToolApprovalChange::Held(HeldToolCall {
+                    approval_id: pending.id.to_string(),
+                    server_slug: "macro".to_owned(),
+                    server_name: "Macro".to_owned(),
+                    tool_name: "ListEmails".to_owned(),
+                })
+            ),
+            (
+                session,
+                ToolApprovalChange::Settled {
+                    approval_id: pending.id.to_string(),
+                }
+            ),
+        ]
+    );
 }

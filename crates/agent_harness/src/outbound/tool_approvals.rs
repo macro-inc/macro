@@ -2,8 +2,9 @@
 //!
 //! Each state of a held call becomes a frame in the session's log, which is
 //! what the session view renders and answers from; a call that starts
-//! waiting also notifies the owner, the only person who can approve it.
-//! Both are best-effort: the hold stands on its approval row either way.
+//! waiting also notifies the owner, the only person who can approve it, and
+//! every change reaches the harness, which tells the thread that prompted
+//! the turn. All best-effort: the hold stands on its approval row either way.
 //!
 //! Also here: releasing a session's held calls when its turn ends, stops, or
 //! the session is deleted, by listening to the same lifecycle facts the
@@ -20,26 +21,33 @@ use agent_session::domain::ports::AgentSessionLifecyclePublisher;
 use agent_session::domain::service::AgentSessionService;
 use macro_user_id::user_id::MacroUserIdStr;
 
+use crate::domain::model::{HeldToolCall, ToolApprovalChange};
 use crate::domain::notifications::plan_tool_approval;
-use crate::domain::ports::AgentSessionNotifier;
+use crate::domain::ports::{AgentSessionNotifier, HeldToolCallObserver};
 
 #[cfg(test)]
 mod test;
 
-/// [`ToolApprovalAnnouncer`] over the session's log and the notifier.
-pub struct SessionToolApprovalAnnouncer<Sessions, Notifier> {
+/// [`ToolApprovalAnnouncer`] over the session's log, the notifier, and the
+/// harness.
+pub struct SessionToolApprovalAnnouncer<Sessions, Notifier, HeldCalls> {
     sessions: Sessions,
     notifier: Notifier,
+    held_calls: HeldCalls,
 }
 
-impl<Sessions, Notifier> SessionToolApprovalAnnouncer<Sessions, Notifier> {
-    /// Announce through `sessions`' log and `notifier`.
-    pub fn new(sessions: Sessions, notifier: Notifier) -> Self {
-        Self { sessions, notifier }
+impl<Sessions, Notifier, HeldCalls> SessionToolApprovalAnnouncer<Sessions, Notifier, HeldCalls> {
+    /// Announce through `sessions`' log, `notifier`, and `held_calls`.
+    pub fn new(sessions: Sessions, notifier: Notifier, held_calls: HeldCalls) -> Self {
+        Self {
+            sessions,
+            notifier,
+            held_calls,
+        }
     }
 }
 
-impl<Sessions, Notifier> SessionToolApprovalAnnouncer<Sessions, Notifier>
+impl<Sessions, Notifier, HeldCalls> SessionToolApprovalAnnouncer<Sessions, Notifier, HeldCalls>
 where
     Sessions: AgentSessionService,
     Notifier: AgentSessionNotifier,
@@ -79,13 +87,24 @@ where
     }
 }
 
-impl<Sessions, Notifier> ToolApprovalAnnouncer for SessionToolApprovalAnnouncer<Sessions, Notifier>
+impl<Sessions, Notifier, HeldCalls> ToolApprovalAnnouncer
+    for SessionToolApprovalAnnouncer<Sessions, Notifier, HeldCalls>
 where
     Sessions: AgentSessionService,
     Notifier: AgentSessionNotifier,
+    HeldCalls: HeldToolCallObserver,
 {
     async fn requested(&self, approval: &ToolApproval, _owner: &MacroUserIdStr<'static>) {
         self.record(approval).await;
+        self.held_calls.changed(
+            approval.session,
+            ToolApprovalChange::Held(HeldToolCall {
+                approval_id: approval.id.to_string(),
+                server_slug: approval.server_slug.clone(),
+                server_name: approval.server_name.clone(),
+                tool_name: approval.tool_name.clone(),
+            }),
+        );
         if let Err(error) = self.notify_owner(approval).await {
             tracing::warn!(
                 error = ?error,
@@ -98,6 +117,12 @@ where
 
     async fn resolved(&self, approval: &ToolApproval) {
         self.record(approval).await;
+        self.held_calls.changed(
+            approval.session,
+            ToolApprovalChange::Settled {
+                approval_id: approval.id.to_string(),
+            },
+        );
     }
 }
 

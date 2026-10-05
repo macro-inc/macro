@@ -33,7 +33,7 @@ use dashmap::DashMap;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use super::model::AnnounceOrigin;
+use super::model::{AnnounceOrigin, HeldToolCall};
 
 #[cfg(test)]
 mod test;
@@ -94,6 +94,9 @@ pub struct InFlightTurn {
     /// turn hours old with nothing streaming is the shape of a wedged
     /// session, and without this it looks exactly like a long one.
     pub dispatched_at: DateTime<Utc>,
+    /// Tool calls this turn made that wait on the owner's approval, oldest
+    /// first. The reply names the oldest while any wait.
+    pub held_tool_calls: Vec<HeldToolCall>,
 }
 
 impl InFlightTurn {

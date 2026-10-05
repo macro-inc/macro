@@ -255,6 +255,50 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+> crate::domain::ports::HeldToolCallObserver
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    /// Through [`execute`](AgentHarnessService::execute), not `execute_here`:
+    /// the call may have been held on any replica, and only the one managing
+    /// the session knows the turn whose reply to change.
+    fn changed(&self, id: AgentSessionId, change: crate::domain::model::ToolApprovalChange) {
+        drop(self.execute(id, HarnessCommand::ToolApproval(change)));
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
 >
     AgentHarnessInner<
         Sessions,
