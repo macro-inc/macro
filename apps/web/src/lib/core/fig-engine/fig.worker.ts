@@ -159,6 +159,12 @@ async function serve(request: FigRequest) {
             g as number
           );
           break;
+        case 'exportSvg':
+          json = JSON.stringify(f.exportSvg(a as number, b as string));
+          break;
+        case 'vectorNetwork':
+          json = f.vectorNetwork(a as number, b as string) ?? 'null';
+          break;
       }
       post({ id: request.id, ok: true, kind: 'query', json });
       return;
@@ -199,6 +205,27 @@ async function serve(request: FigRequest) {
         new Uint8Array(request.bytes)
       );
       post({ id: request.id, ok: true, kind: 'query', json });
+      return;
+    }
+    case 'copy': {
+      const copied = openFile().copy(request.page, request.ids);
+      const document = copied.document.slice().buffer;
+      const images = copied.images.slice().buffer;
+      copied.free();
+      post({ id: request.id, ok: true, kind: 'copied', document, images }, [
+        document,
+        images,
+      ]);
+      return;
+    }
+    case 'paste': {
+      const json = openFile().paste(
+        request.page,
+        new Uint8Array(request.document),
+        request.images ? new Uint8Array(request.images) : null,
+        request.spec
+      );
+      post({ id: request.id, ok: true, kind: 'edit', json });
       return;
     }
     case 'blank': {

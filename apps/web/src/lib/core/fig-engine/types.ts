@@ -255,3 +255,54 @@ export interface ComponentInfo {
   width: number;
   height: number;
 }
+
+/**
+ * A vector network (`fig_engine::vector::Network`): vertices joined by
+ * segments, straight or cubic with tangents relative to their vertices, and
+ * regions of closed loops that are filled.
+ */
+export interface VectorNetwork {
+  vertices: VectorVertex[];
+  segments: VectorSegment[];
+  regions: VectorRegion[];
+}
+
+export interface VectorVertex {
+  x: number;
+  y: number;
+  /** A style table entry (a corner radius, say); 0 for none. */
+  style?: number;
+}
+
+export interface VectorSegment {
+  start: number;
+  end: number;
+  tangentStart: Vec2;
+  tangentEnd: Vec2;
+  style?: number;
+}
+
+export interface VectorRegion {
+  windingRule: 'NONZERO' | 'EVENODD';
+  /** Closed loops of segment indices. */
+  loops: number[][];
+  style?: number;
+}
+
+/** Where pasted layers go (`fig_engine::edit::PasteSpec`). */
+export interface PasteSpec {
+  /** The page or layer they go into. */
+  parent: string;
+  /** Their place among its children (bottom is 0); on top when absent. */
+  index?: number;
+  /** The page area in view. */
+  view?: Rect;
+}
+
+/** Copied layers, as the clipboard carries them. */
+export interface CopiedLayers {
+  /** A `.fig` document holding the layers (Figma's clipboard format). */
+  document: Uint8Array;
+  /** A ZIP of the images they use; empty when none. */
+  images: Uint8Array;
+}

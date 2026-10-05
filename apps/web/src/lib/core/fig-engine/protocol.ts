@@ -21,7 +21,9 @@ export type QueryMethod =
   | 'outline'
   | 'search'
   | 'components'
-  | 'inRect';
+  | 'inRect'
+  | 'exportSvg'
+  | 'vectorNetwork';
 
 export type FigRequest =
   | { id: number; kind: 'open'; bytes: ArrayBuffer }
@@ -60,7 +62,20 @@ export type FigRequest =
     }
   | { id: number; kind: 'save' }
   | { id: number; kind: 'blank'; name: string }
-  | { id: number; kind: 'addImage'; hash: string; bytes: ArrayBuffer };
+  | { id: number; kind: 'addImage'; hash: string; bytes: ArrayBuffer }
+  /** Copies layers (`string[]` JSON) as a clipboard payload. */
+  | { id: number; kind: 'copy'; page: number; ids: string }
+  | {
+      id: number;
+      kind: 'paste';
+      page: number;
+      /** A `.fig` document of copied layers. */
+      document: ArrayBuffer;
+      /** A ZIP of the images they use. */
+      images: ArrayBuffer | null;
+      /** `PasteSpec` JSON. */
+      spec: string;
+    };
 
 export type FigResponse =
   | { id: number; ok: true; kind: 'open'; summary: FileSummary }
@@ -76,5 +91,12 @@ export type FigResponse =
   | { id: number; ok: true; kind: 'png'; bytes: ArrayBuffer | null }
   | { id: number; ok: true; kind: 'edit'; json: string }
   | { id: number; ok: true; kind: 'saved'; bytes: ArrayBuffer }
+  | {
+      id: number;
+      ok: true;
+      kind: 'copied';
+      document: ArrayBuffer;
+      images: ArrayBuffer;
+    }
   | { id: number; ok: true; kind: 'cancelled' }
   | { id: number; ok: false; error: string; trapped: boolean };

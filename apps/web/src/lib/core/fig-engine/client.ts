@@ -11,13 +11,16 @@
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import type {
   ComponentInfo,
+  CopiedLayers,
   FileSummary,
   LayerRow,
   NodeGeometry,
   NodeInfo,
   PageLayout,
+  PasteSpec,
   Rect,
   SearchHit,
+  VectorNetwork,
 } from './types';
 
 type Ok = Extract<FigResponse, { ok: true }>;
@@ -337,19 +340,77 @@ export class FigEngine {
     return new Blob([r.bytes], { type: 'image/png' });
   }
 
+  /** One layer (and what it holds) as an SVG document. */
+  exportSvg(page: number, id: string): Promise<string> {
+    return this.query('exportSvg', page, id);
+  }
+
+  /** A layer's points in page coordinates; `null` for layers without. */
+  vectorNetwork(page: number, id: string): Promise<VectorNetwork | null> {
+    return this.query('vectorNetwork', page, id);
+  }
+
+  /** Copies layers as the clipboard carries them. */
+  async copy(page: number, ids: string[]): Promise<CopiedLayers> {
+    const r = await this.primary.request({
+      kind: 'copy',
+      page,
+      ids: JSON.stringify(ids),
+    });
+    if (r.kind !== 'copied') throw new Error('unexpected response');
+    return {
+      document: new Uint8Array(r.document),
+      images: new Uint8Array(r.images),
+    };
+  }
+
+  /** Pastes copied layers as one step, in every worker. */
+  paste(
+    page: number,
+    copied: CopiedLayers,
+    spec: PasteSpec
+  ): Promise<EditResult> {
+    // Each worker gets its own copy of the bytes (they are transferred).
+    return this.edit(() => {
+      const document = copied.document.slice().buffer;
+      const images =
+        copied.images.length > 0 ? copied.images.slice().buffer : null;
+      return {
+        body: {
+          kind: 'paste',
+          page,
+          document,
+          images,
+          spec: JSON.stringify(spec),
+        },
+        transfer: images ? [document, images] : [document],
+      };
+    });
+  }
+
   /**
    * Applies an edit step on every worker (each holds the document); the
    * primary's answer is returned. A helper that disagrees is dropped.
    */
   private async edit(
-    body: Extract<Body, { kind: 'edit' }>
+    make:
+      | Extract<Body, { kind: 'edit' }>
+      | (() => {
+          body: Extract<Body, { kind: 'paste' }>;
+          transfer: Transferable[];
+        })
   ): Promise<EditResult> {
+    const request = (w: EngineWorker) => {
+      if (typeof make !== 'function') return w.request(make);
+      const { body, transfer } = make();
+      return w.request(body, transfer);
+    };
     // Every worker holds the same document, so an edit the engine rejects
     // fails in all of them; a helper is dropped only when its result
     // differs from the primary's.
     const fanned = [...this.helpers, ...this.starting].map((h) => ({
       h,
-      done: h.request(body).then(
+      done: request(h).then(
         () => true,
         () => false
       ),
@@ -361,7 +422,7 @@ export class FigEngine {
     };
     let r: Ok;
     try {
-      r = await this.primary.request(body);
+      r = await request(this.primary);
     } catch (error) {
       for (const { h, done } of fanned) void done.then((ok) => ok && drop(h));
       throw error;
