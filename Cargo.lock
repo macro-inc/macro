@@ -902,6 +902,7 @@ dependencies = [
  "lazy_static",
  "lexical_client",
  "lexical_mention_extractor",
+ "macro_auth",
  "macro_aws_config",
  "macro_db_client",
  "macro_env",
@@ -936,6 +937,7 @@ dependencies = [
  "remote_env_var",
  "reqwest 0.13.4",
  "rootcause",
+ "routines",
  "schemars 1.2.1",
  "search_service_client",
  "secretsmanager_client",
@@ -6389,6 +6391,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "docx_engine"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "console_error_panic_hook",
+ "js-sys",
+ "pptx_engine",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "docx_unzip_handler"
 version = "0.1.0"
 dependencies = [
@@ -7595,6 +7612,15 @@ name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
+name = "font-types"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c92d9081c7ab3bd83ef1eecdfad090f3d966e3ce74106779664114cfe1a6274"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "foreign_entity"
@@ -14333,9 +14359,9 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "skrifa",
  "thiserror 2.0.18",
  "tiny-skia",
- "ttf-parser",
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
@@ -15221,6 +15247,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "read-fonts"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a5b7bed3d16ab428d8fa533640ab805ff50e7ad8a4d00649de1259e70023282"
+dependencies = [
+ "bytemuck",
+ "font-types",
+ "once_cell",
+ "yoke",
+]
+
+[[package]]
 name = "readonly"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15746,6 +15784,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "routines"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "macro_authorization",
+ "macro_user_id",
+ "reqwest 0.13.4",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "rowan"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16161,29 +16220,26 @@ name = "scheduled_action"
 version = "0.1.0"
 dependencies = [
  "activity",
- "agent",
  "agent_runtime_protocol",
  "agent_session",
  "ai_billing",
- "ai_tools",
- "ai_toolset",
  "ai_usage",
  "anyhow",
  "aws-sdk-secretsmanager",
- "aws-sdk-sqs",
  "axum",
  "bot_id",
  "bots",
  "channel_sender",
  "channels",
- "chat",
  "chrono",
  "chrono-tz",
  "connection_gateway_client",
  "cron",
  "database_env_vars",
+ "document_sub_type",
  "documents",
  "doppler-config",
+ "email",
  "entity_access",
  "entity_access_db_utils",
  "entity_registry",
@@ -16202,18 +16258,16 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_event_topics",
- "macro_queues",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
- "memory",
  "messages",
  "model",
  "model-entity",
- "model_notifications",
  "model_owner",
  "models_permissions",
- "notification",
+ "models_properties",
+ "properties",
  "rdkafka",
  "reqwest 0.13.4",
  "roles_and_permissions",
@@ -16223,6 +16277,7 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "sqlx",
+ "system_properties",
  "teams",
  "thiserror 2.0.18",
  "tokio",
@@ -17350,6 +17405,16 @@ dependencies = [
  "tracing",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "skrifa"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5213b4825bac3587046330052d61bfac7bd3bd0d203c758d7c2ef726fcea034"
+dependencies = [
+ "bytemuck",
+ "read-fonts",
 ]
 
 [[package]]
@@ -19404,12 +19469,6 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
-
-[[package]]
-name = "ttf-parser"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "tui-input"

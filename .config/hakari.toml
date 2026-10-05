@@ -102,6 +102,10 @@ workspace-members = [
     # module in the editor's worker) as well as in the AI tools, so it must
     # stay wasm-safe.
     "pptx_engine",
+    # docx_engine: the Word engine runs in the browser (a wasm32 module in the
+    # document editor's worker) on top of pptx_engine, so it must stay
+    # wasm-safe too.
+    "docx_engine",
     # soup-filter-projection is intentionally absent: its wasm-facing adapter
     # disables the native-only default `models` feature, so the crate itself
     # does not pull workspace-hack into wasm dependency traversal.

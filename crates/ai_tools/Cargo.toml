@@ -8,6 +8,8 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+routines = { path = "../routines" }
+macro_auth = { path = "../macro_auth" }
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }

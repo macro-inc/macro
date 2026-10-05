@@ -25,9 +25,10 @@ import StackIcon from '@phosphor/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Button } from '@ui';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
+import { ProjectContentSkeleton } from './components/project-skeletons';
 import { RenameProjectDialog } from './components/rename-project-dialog';
 import {
   type ProjectSource,
@@ -249,18 +250,16 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           </Show>
         }
         navigation={
-          <Show when={source.project()}>
-            <TabsInset
-              list={[
-                { value: 'overview', label: 'Overview' },
-                { value: 'tasks', label: 'Tasks' },
-              ]}
-              value={props.route.section}
-              onChange={(value) => section(value as ProjectSection)}
-              aria-label="Project sections"
-              class="shrink-0 whitespace-nowrap"
-            />
-          </Show>
+          <TabsInset
+            list={[
+              { value: 'overview', label: 'Overview' },
+              { value: 'tasks', label: 'Tasks' },
+            ]}
+            value={props.route.section}
+            onChange={(value) => section(value as ProjectSection)}
+            aria-label="Project sections"
+            class="shrink-0 whitespace-nowrap"
+          />
         }
       >
         <Show when={source.project()}>
@@ -275,73 +274,75 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         </Show>
       </EntityDetailTopBar>
       <div class="relative min-h-0 min-w-0 flex-1">
-        <Switch>
-          <Match when={source.loading() && !source.project()}>
-            <p role="status" class="p-6 text-ink-muted">
-              Loading project…
-            </p>
-          </Match>
-          <Match when={source.project()}>
-            {(project) => (
-              <ProjectWorkspace
-                project={project()}
-                source={source}
-                commands={commands}
-                section={props.route.section}
-                onOpenTask={(task, options) => {
-                  const event = options?.event;
-                  if (
-                    !isTouchDevice() &&
-                    !(
-                      event?.shiftKey ||
-                      event?.metaKey ||
-                      event?.ctrlKey ||
-                      event?.altKey
-                    )
-                  ) {
-                    navigate({
-                      route: projectTaskRoute,
-                      params: {
-                        projectId: props.route.id,
-                        section: props.route.section,
-                        taskId: task.id,
-                      },
-                    });
+        <Suspense
+          fallback={<ProjectContentSkeleton section={props.route.section} />}
+        >
+          <Switch>
+            <Match when={source.loading() && !source.project()}>
+              <ProjectContentSkeleton section={props.route.section} />
+            </Match>
+            <Match when={source.project()}>
+              {(project) => (
+                <ProjectWorkspace
+                  project={project()}
+                  source={source}
+                  commands={commands}
+                  section={props.route.section}
+                  onOpenTask={(task, options) => {
+                    const event = options?.event;
+                    if (
+                      !isTouchDevice() &&
+                      !(
+                        event?.shiftKey ||
+                        event?.metaKey ||
+                        event?.ctrlKey ||
+                        event?.altKey
+                      )
+                    ) {
+                      navigate({
+                        route: projectTaskRoute,
+                        params: {
+                          projectId: props.route.id,
+                          section: props.route.section,
+                          taskId: task.id,
+                        },
+                      });
+                      return true;
+                    }
+                    layout.openWithSplit(
+                      { type: 'md', id: task.id },
+                      { preferNewSplit: options?.event?.shiftKey }
+                    );
                     return true;
+                  }}
+                  onCreateTask={createTask}
+                  description={
+                    <ProjectDescription
+                      projectId={project().id}
+                      canEdit={canEditProject(project())}
+                    />
                   }
-                  layout.openWithSplit(
-                    { type: 'md', id: task.id },
-                    { preferNewSplit: options?.event?.shiftKey }
-                  );
-                  return true;
-                }}
-                onCreateTask={createTask}
-                description={
-                  <ProjectDescription
-                    projectId={project().id}
-                    canEdit={canEditProject(project())}
-                  />
-                }
-                discussion={
-                  <ProjectDiscussion
-                    projectId={project().id}
-                    canWrite={canDiscussProject(project())}
-                    targetId={props.route.discussionId}
-                  />
-                }
-              />
-            )}
-          </Match>
-          <Match when={true}>
-            <div role="alert" class="p-6">
-              <p>
-                Project unavailable. It may have been deleted, or you may no
-                longer have access.
-              </p>
-              <Button onClick={() => void source.refresh()}>Try again</Button>
-            </div>
-          </Match>
-        </Switch>
+                  discussion={
+                    <ProjectDiscussion
+                      projectId={project().id}
+                      canWrite={canDiscussProject(project())}
+                      targetId={props.route.discussionId}
+                    />
+                  }
+                />
+              )}
+            </Match>
+            <Match when={true}>
+              <div role="alert" class="p-6">
+                <p>
+                  Project unavailable. It may have been deleted, or you may no
+                  longer have access.
+                </p>
+                <Button onClick={() => void source.refresh()}>Try again</Button>
+              </div>
+            </Match>
+          </Switch>
+        </Suspense>
       </div>
     </>
   );

@@ -105,7 +105,13 @@ pub fn layout_of(pres: &mut Presentation, slide_part: &str) -> Option<String> {
     pres.pkg.canonical_name(&target).map(str::to_owned)
 }
 
-fn find_layout(pres: &mut Presentation, name: Option<&str>, after: Option<u32>) -> Result<String> {
+/// The layout part named `name` (preferring the master of slide `after`, or
+/// of the last slide), or the layout a new slide after `after` would get.
+pub(super) fn find_layout(
+    pres: &mut Presentation,
+    name: Option<&str>,
+    after: Option<u32>,
+) -> Result<String> {
     let all = layouts(pres)?;
     if all.is_empty() {
         return Err(Error::InvalidEdit(
@@ -166,51 +172,55 @@ fn has_text_body(kind: &str) -> bool {
     matches!(kind, "title" | "ctrTitle" | "subTitle" | "body" | "obj")
 }
 
+/// Markup of an empty slide placeholder for the layout placeholder `node`
+/// (`None` for footers, dates, slide numbers, and non-placeholders).
+pub(super) fn placeholder_xml(layout: &XmlDoc, node: NodeId, id: u32) -> Option<String> {
+    let ph = placeholder_of(layout, node)?;
+    if matches!(ph.kind.as_str(), "dt" | "ftr" | "sldNum" | "hdr") {
+        return None;
+    }
+    let ph_el = layout
+        .children(node)
+        .find(|&c| layout.local(c).starts_with("nv"))
+        .and_then(|nv| layout.child(nv, Ns::P, "nvPr"))
+        .and_then(|nv| layout.child(nv, Ns::P, "ph"))?;
+    let attrs: String = ["type", "orient", "sz", "idx"]
+        .iter()
+        .filter_map(|a| {
+            layout
+                .attr(ph_el, a)
+                .map(|v| format!(" {a}=\"{}\"", esc(v)))
+        })
+        .collect();
+    let name = c_nv_pr(layout, node)
+        .and_then(|c| layout.attr(c, "name"))
+        .unwrap_or("Placeholder");
+    let locks = if ph.kind == "pic" {
+        "<a:spLocks noGrp=\"1\" noChangeAspect=\"1\"/>"
+    } else {
+        "<a:spLocks noGrp=\"1\"/>"
+    };
+    let body = if has_text_body(&ph.kind) {
+        "<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang=\"en-US\" dirty=\"0\"/></a:p></p:txBody>"
+    } else {
+        ""
+    };
+    Some(format!(
+        "<p:sp><p:nvSpPr><p:cNvPr id=\"{id}\" name=\"{}\"/><p:cNvSpPr>{locks}</p:cNvSpPr><p:nvPr><p:ph{attrs}/></p:nvPr></p:nvSpPr><p:spPr/>{body}</p:sp>",
+        esc(name)
+    ))
+}
+
 /// Markup of a new slide carrying the layout's content placeholders.
 fn slide_from_layout(layout: &XmlDoc) -> String {
     let mut shapes = String::new();
     let mut id = 2;
     if let Some(tree) = sp_tree(layout) {
         for node in tree_children(layout, tree) {
-            let Some(ph) = placeholder_of(layout, node) else {
+            let Some(xml) = placeholder_xml(layout, node, id) else {
                 continue;
             };
-            if matches!(ph.kind.as_str(), "dt" | "ftr" | "sldNum" | "hdr") {
-                continue;
-            }
-            let Some(ph_el) = layout
-                .children(node)
-                .find(|&c| layout.local(c).starts_with("nv"))
-                .and_then(|nv| layout.child(nv, Ns::P, "nvPr"))
-                .and_then(|nv| layout.child(nv, Ns::P, "ph"))
-            else {
-                continue;
-            };
-            let attrs: String = ["type", "orient", "sz", "idx"]
-                .iter()
-                .filter_map(|a| {
-                    layout
-                        .attr(ph_el, a)
-                        .map(|v| format!(" {a}=\"{}\"", esc(v)))
-                })
-                .collect();
-            let name = c_nv_pr(layout, node)
-                .and_then(|c| layout.attr(c, "name"))
-                .unwrap_or("Placeholder");
-            let locks = if ph.kind == "pic" {
-                "<a:spLocks noGrp=\"1\" noChangeAspect=\"1\"/>"
-            } else {
-                "<a:spLocks noGrp=\"1\"/>"
-            };
-            let body = if has_text_body(&ph.kind) {
-                "<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang=\"en-US\" dirty=\"0\"/></a:p></p:txBody>"
-            } else {
-                ""
-            };
-            shapes.push_str(&format!(
-                "<p:sp><p:nvSpPr><p:cNvPr id=\"{id}\" name=\"{}\"/><p:cNvSpPr>{locks}</p:cNvSpPr><p:nvPr><p:ph{attrs}/></p:nvPr></p:nvSpPr><p:spPr/>{body}</p:sp>",
-                esc(name)
-            ));
+            shapes.push_str(&xml);
             id += 1;
         }
     }
@@ -240,6 +250,7 @@ pub fn add_slide(
         pres.slide_part(a)?;
     }
     let layout_part = find_layout(pres, layout, after)?;
+    let reference = after.or_else(|| pres.slides.last().map(|s| s.id));
     let layout_doc = pres.xml(&layout_part)?;
     let xml = slide_from_layout(&layout_doc);
     let part = pres.pkg.unique_part_name("/ppt/slides/slide", ".xml");
@@ -268,11 +279,16 @@ pub fn add_slide(
         let tx = super::shapes::ensure_tx_body(doc, node)?;
         text::set_text(doc, tx, value)?;
     }
+    super::header_footer::follow_masters(pres, id, reference)?;
     Ok(id)
 }
 
 /// Adds a slide part to the slide list after `after` (or at the end); returns its id.
-fn register_slide(pres: &mut Presentation, part: &str, after: Option<u32>) -> Result<u32> {
+pub(super) fn register_slide(
+    pres: &mut Presentation,
+    part: &str,
+    after: Option<u32>,
+) -> Result<u32> {
     let main = pres.main_part.clone();
     let rid = pres.rels_mut(&main)?.add_internal(rel_type::SLIDE, part);
     let random = pres.pkg.ids().cloned();
@@ -310,92 +326,9 @@ fn register_slide(pres: &mut Presentation, part: &str, after: Option<u32>) -> Re
         Some(p) => doc.insert_after(p, el),
         None => doc.append_child(list, el),
     }
-    sections_insert(doc, id, after);
+    super::sections::place(doc, id);
     pres.reload_structure()?;
     Ok(id as u32)
-}
-
-/// The `p14:sldIdLst` element of every section, in order.
-fn section_lists(doc: &XmlDoc) -> Vec<NodeId> {
-    let Some(ext) = doc.child(doc.root(), Ns::P, "extLst") else {
-        return Vec::new();
-    };
-    let Some(sections) = doc
-        .descendants(ext)
-        .into_iter()
-        .find(|&n| doc.local(n) == "sectionLst")
-    else {
-        return Vec::new();
-    };
-    doc.children(sections)
-        .filter(|&s| doc.local(s) == "section")
-        .filter_map(|s| doc.children(s).find(|&c| doc.local(c) == "sldIdLst"))
-        .collect()
-}
-
-fn sections_insert(doc: &mut XmlDoc, id: i64, after: Option<u32>) {
-    let lists = section_lists(doc);
-    let Some(&last) = lists.last() else { return };
-    let ns = doc.ns(last);
-    let el = doc.create_element(ns, "sldId");
-    doc.set_attr(el, "id", &id.to_string());
-    let previous = after.and_then(|a| {
-        lists.iter().find_map(|&l| {
-            doc.children(l)
-                .find(|&s| doc.attr_i64(s, "id") == Some(i64::from(a)))
-        })
-    });
-    match previous {
-        Some(p) => doc.insert_after(p, el),
-        None => doc.append_child(last, el),
-    }
-}
-
-fn sections_remove(doc: &mut XmlDoc, id: u32) {
-    for l in section_lists(doc) {
-        let doomed: Vec<NodeId> = doc
-            .children(l)
-            .filter(|&s| doc.attr_i64(s, "id") == Some(i64::from(id)))
-            .collect();
-        for d in doomed {
-            doc.detach(d);
-        }
-    }
-}
-
-/// Re-derives section membership after a move: the moved slide joins the
-/// section of the slide now before it, keeping every section contiguous.
-fn sections_after_move(doc: &mut XmlDoc, order: &[i64], moved: i64) {
-    let lists = section_lists(doc);
-    if lists.is_empty() {
-        return;
-    }
-    let mut member: HashMap<i64, usize> = HashMap::new();
-    for (i, &l) in lists.iter().enumerate() {
-        for s in doc.children(l) {
-            if let Some(id) = doc.attr_i64(s, "id") {
-                member.insert(id, i);
-            }
-        }
-    }
-    let pos = order.iter().position(|&x| x == moved).unwrap_or(0);
-    let section = if pos == 0 {
-        0
-    } else {
-        member.get(&order[pos - 1]).copied().unwrap_or(0)
-    };
-    member.insert(moved, section);
-    let ns = doc.ns(lists[0]);
-    for (i, &l) in lists.iter().enumerate() {
-        for c in doc.child_nodes(l).to_vec() {
-            doc.detach(c);
-        }
-        for &id in order.iter().filter(|id| member.get(id) == Some(&i)) {
-            let el = doc.create_element(ns, "sldId");
-            doc.set_attr(el, "id", &id.to_string());
-            doc.append_child(l, el);
-        }
-    }
 }
 
 /// Duplicates a slide (with its notes, charts, and diagrams) right after itself.
@@ -403,8 +336,14 @@ pub fn duplicate_slide(pres: &mut Presentation, id: u32) -> Result<u32> {
     let part = pres.slide_part(id)?;
     let mut renamed = HashMap::new();
     let new = copy_part_tree(pres, &part, &mut renamed)?;
-    // The creation id identifies the original slide for co-authoring.
-    let doc = pres.xml_mut(&new)?;
+    drop_creation_id(pres.xml_mut(&new)?);
+    register_slide(pres, &new, Some(id))
+}
+
+/// Removes a copied slide's creation id, which identifies the original
+/// slide for co-authoring, and the reference to the original's comments
+/// (which are not copied).
+pub(super) fn drop_creation_id(doc: &mut XmlDoc) {
     if let Some(ext_lst) = doc.child(doc.root(), Ns::P, "extLst") {
         let doomed: Vec<NodeId> = doc
             .children(ext_lst)
@@ -412,13 +351,13 @@ pub fn duplicate_slide(pres: &mut Presentation, id: u32) -> Result<u32> {
                 doc.descendants(e)
                     .iter()
                     .any(|&n| doc.local(n) == "creationId")
+                    || super::comments::is_comment_rel_ext(doc, e)
             })
             .collect();
         for d in doomed {
             doc.detach(d);
         }
     }
-    register_slide(pres, &new, Some(id))
 }
 
 /// Deletes a slide, its private parts, and links pointing at it.
@@ -443,7 +382,7 @@ pub fn delete_slide(pres: &mut Presentation, id: u32) -> Result<()> {
                 doc.detach(d);
             }
         }
-        sections_remove(doc, id);
+        super::sections::remove(doc, i64::from(id));
         if let Some(shows) = doc.child(root, Ns::P, "custShowLst") {
             let doomed: Vec<NodeId> = doc
                 .descendants(shows)
@@ -520,11 +459,7 @@ pub fn move_slide(pres: &mut Presentation, id: u32, to: usize) -> Result<()> {
             None => doc.append_child(list, node),
         },
     }
-    let order: Vec<i64> = doc
-        .children_named(list, Ns::P, "sldId")
-        .filter_map(|s| doc.attr_i64(s, "id"))
-        .collect();
-    sections_after_move(doc, &order, i64::from(id));
+    super::sections::place(doc, i64::from(id));
     pres.reload_structure()
 }
 
@@ -541,9 +476,10 @@ pub fn set_hidden(pres: &mut Presentation, id: u32, hidden: bool) -> Result<()> 
     Ok(())
 }
 
-/// Sets (or removes, inheriting the layout's) a slide background.
+/// Sets (or removes, inheriting the layout's) a slide background; a slide
+/// master's or layout's id sets its own background.
 pub fn set_background(pres: &mut Presentation, id: u32, fill: Option<&FillSpec>) -> Result<()> {
-    let part = pres.slide_part(id)?;
+    let part = pres.page_part(id)?;
     let doc = pres.xml_mut(&part)?;
     let c_sld = doc
         .child(doc.root(), Ns::P, "cSld")

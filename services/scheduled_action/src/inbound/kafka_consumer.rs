@@ -9,12 +9,14 @@ use std::time::Duration;
 
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
+use email::domain::events::EmailMacroEvent;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     EventBrokerError, EventConsumer, KafkaConsumerAdapter, MacroEvent as _,
     MacroEventCollection as _, MacroEventConsumerService, MessageWrapper,
 };
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
+use properties::domain::events::PropertyMacroEvent;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
 use rootcause::Report;
@@ -26,7 +28,9 @@ use crate::domain::event_trigger::{EventPayload, IncomingEvent, MessageFact};
 macro_event_broker::declare_topics!(
     DeclaredMacroEvent: DocumentMacroEvent,
     ChannelMacroEvent,
-    MessageMacroEvent
+    MessageMacroEvent,
+    PropertyMacroEvent,
+    EmailMacroEvent
 );
 
 struct ScheduledActionEventIngestionGroup;
@@ -83,6 +87,22 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
                 payload: EventPayload::Message(message_fact(&envelope.event)),
+            }
+        }
+        DeclaredMacroEvent::PropertyMacroEvent(event) => {
+            let envelope = event.event();
+            IncomingEvent {
+                event_id: envelope.event_id,
+                schema_version: envelope.schema_version,
+                payload: EventPayload::Property(envelope.event.clone()),
+            }
+        }
+        DeclaredMacroEvent::EmailMacroEvent(event) => {
+            let envelope = event.event();
+            IncomingEvent {
+                event_id: envelope.event_id,
+                schema_version: envelope.schema_version,
+                payload: EventPayload::Email(envelope.event.clone()),
             }
         }
     }

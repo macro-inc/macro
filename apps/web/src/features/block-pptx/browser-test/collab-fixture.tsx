@@ -172,6 +172,7 @@ export function CollabFixture(props: {
                           setErrors((list) => [...list, message]),
                         autosaveDelay: 0,
                         collaboration: session.collaboration,
+                        currentUser: () => ({ name: shortName(user) }),
                       }}
                     >
                       <PptxEditor />

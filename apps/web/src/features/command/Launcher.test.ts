@@ -22,7 +22,7 @@ vi.mock('@app/features/block-spreadsheet/queries/spreadsheet-access', () => ({
 }));
 vi.mock('@app/features/reminders/reminder-composer', () => ({}));
 vi.mock('@app/lib/analytics/posthog', () => ({}));
-vi.mock('@block-automation/component', () => ({}));
+vi.mock('@app/features/routines', () => ({}));
 vi.mock('@block-md/observability', () => ({}));
 vi.mock('@channel/CreateChannelModal', () => ({}));
 vi.mock('@components/app/split-layout/layout', () => ({}));

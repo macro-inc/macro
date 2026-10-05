@@ -20,7 +20,7 @@ export const BlockRegistry = [
   'email',
   'contact',
   'company',
-  'automation',
+  'routine',
   'pr',
   'agent',
   // A task project (`project` is a folder).

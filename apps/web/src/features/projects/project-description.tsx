@@ -1,7 +1,8 @@
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { CollabMarkdownEditor } from '@core/collab-surface/CollabMarkdownEditor';
 import { Button } from '@ui';
-import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { createMemo, createSignal, onCleanup, Show, Suspense } from 'solid-js';
+import { ProjectDescriptionSkeleton } from './components/project-skeletons';
 import { createProductionProjectDescriptionSession } from './queries/production-project-description';
 
 function DescriptionSession(props: {
@@ -22,6 +23,7 @@ function DescriptionSession(props: {
         label="Project description"
         namespace="project-description"
         class="min-h-24 mt-1.5 text-base"
+        loadingFallback={<ProjectDescriptionSkeleton />}
         placeholder={
           props.canEdit
             ? "Add a description. Press '/' for commands, '@' to mention…"
@@ -54,14 +56,16 @@ export function ProjectDescription(props: {
     }
   );
   return (
-    <Show when={identity()} keyed>
-      {(identity) => (
-        <DescriptionSession
-          projectId={identity.projectId}
-          canEdit={props.canEdit}
-          onRetry={() => setAttempt((attempt) => attempt + 1)}
-        />
-      )}
-    </Show>
+    <Suspense fallback={<ProjectDescriptionSkeleton />}>
+      <Show when={identity()} keyed>
+        {(identity) => (
+          <DescriptionSession
+            projectId={identity.projectId}
+            canEdit={props.canEdit}
+            onRetry={() => setAttempt((attempt) => attempt + 1)}
+          />
+        )}
+      </Show>
+    </Suspense>
   );
 }

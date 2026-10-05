@@ -427,12 +427,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-chat/20',
     prettyName: 'Skill',
   },
-  automation: {
+  routine: {
     icon: ClockClockwise,
     boldIcon: ClockClockwiseBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
-    prettyName: 'Automation',
+    prettyName: 'Routine',
   },
   crm_company: {
     icon: BuildingOffice,
@@ -469,6 +469,7 @@ export function isArchiveType(ext: string): boolean {
 }
 
 function validateEntity(entity: string): EntityWithValidIcon {
+  if (entity === 'automation') return 'routine';
   if (entity in ENTITY_ICON_CONFIGS) {
     return entity as EntityWithValidIcon;
   } else if (isBlockAlias(entity)) {
@@ -651,7 +652,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
         : 'reminder'
     )
     .with({ type: 'call' }, () => 'call')
-    .with({ type: 'automation' }, () => 'automation')
+    .with({ type: 'routine' }, () => 'routine')
     .with({ type: 'foreign' }, (e) => {
       if (e.foreignSource !== 'github_pull_request') return 'default';
       return match<unknown, EntityWithValidIcon>(e.metadata?.status)

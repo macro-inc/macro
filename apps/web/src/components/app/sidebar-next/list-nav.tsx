@@ -129,12 +129,11 @@ export const ListNav = (props: ListNavProps) => {
     const isSameContent =
       activeContent?.type === expected.type && activeContent.id === expected.id;
 
-    setPendingNav({
-      itemId: props.item.id,
-      activeContentKey: activeContentKey(),
-    });
-
     if (!isSameContent || event.shiftKey) {
+      setPendingNav({
+        itemId: props.item.id,
+        activeContentKey: activeContentKey(),
+      });
       const { shiftKey } = event;
       afterNextPaint(() => {
         navigateToSidebarView({
@@ -144,6 +143,13 @@ export const ListNav = (props: ListNavProps) => {
           openWithSplit: layout.openWithSplit,
           referredFrom: 'sidebar',
         });
+        // Navigation is synchronous, so the real state now holds. Drop the
+        // press: left in place, it would claim the highlight again whenever
+        // the active content returned to what it was at press time (e.g.
+        // Settings → Agents → Settings would light up Agents).
+        setPendingNav((pending) =>
+          pending?.itemId === props.item.id ? undefined : pending
+        );
         globalSplitManager()?.returnFocus();
       });
       return;

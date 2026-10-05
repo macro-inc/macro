@@ -327,6 +327,27 @@ impl XmlDoc {
         Ns(Ns::FIRST_DYNAMIC + (self.dynamic_ns.len() - 1) as u16)
     }
 
+    /// Declares `xmlns:prefix="uri"` on element `id`, so engine-created
+    /// elements in that namespace under it are written with `prefix` (as
+    /// Office writes namespaces it declares locally); returns the namespace.
+    pub(crate) fn declare_ns(&mut self, id: NodeId, prefix: &str, uri: &str) -> Ns {
+        let ns = self.intern_ns(uri);
+        if let Some(e) = self.element_mut(id) {
+            e.attrs.retain(|a| !(a.is_ns_decl() && &*a.local == prefix));
+            let at = e.attrs.iter().take_while(|a| a.is_ns_decl()).count();
+            e.attrs.insert(
+                at,
+                Attr {
+                    prefix: Prefix::Written(Some("xmlns".into())),
+                    local: prefix.into(),
+                    ns: Ns::NONE,
+                    value: uri.to_owned(),
+                },
+            );
+        }
+        ns
+    }
+
     // ---- mutation -------------------------------------------------------
 
     /// Creates a detached element `(ns, local)`; its prefix is chosen on output.

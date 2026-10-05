@@ -225,7 +225,9 @@ pub struct Group {
     pub opacity: f32,
     /// Clip path (scene coordinates).
     pub clip: Option<Path>,
-    /// Layer effects, applied in order.
+    /// Layer effects. Soft edges and inner shadows change the content;
+    /// outer shadows and glows are cast by it and drawn beneath it;
+    /// reflections mirror the result.
     pub effects: Vec<Effect>,
 }
 

@@ -5,7 +5,6 @@ import { createSyncServiceSource } from '@service-sync/source';
 import type { DocumentSyncAuthorization } from '@service-sync/source/authorization';
 import { buildSeedSnapshot } from '../core/docx-seed';
 import type { DocxConnection } from './docx-session';
-import { loadDocxodus } from './docxodus-runtime';
 
 const docxKeys = {
   original: (documentId: string) => ['docx', 'original', documentId] as const,
@@ -39,9 +38,8 @@ export async function initializeDocxSync(
   if (result.isErr()) throw new Error('Unable to initialize collaboration.');
 }
 
-export async function buildDocxSeed(original: Uint8Array): Promise<Uint8Array> {
-  const runtime = await loadDocxodus();
-  return buildSeedSnapshot(runtime.exports.DocxSessionBridge, original);
+export function buildDocxSeed(original: Uint8Array): Promise<Uint8Array> {
+  return buildSeedSnapshot(original);
 }
 
 export function connectDocxSync(

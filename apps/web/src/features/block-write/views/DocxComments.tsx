@@ -20,6 +20,7 @@ import type {
   LocatedThread,
 } from '../primitives/create-docx-comments';
 import { DocxMarginLayout } from './DocxMarginLayout';
+import type { PageGeometry } from './DocxPages';
 
 function toRoot(item: MessageListItem, anchorId: string): Root {
   return {
@@ -57,11 +58,10 @@ function draftRoot(markId: string, userId: string): Root {
 export function DocxCommentMargin(props: {
   documentId: string;
   comments: DocxComments;
-  /** The editor element; selection and clicks are read from it. */
-  editorRoot: HTMLElement | undefined;
-  /** Positioning parent: the margin scrolls with the document. */
-  margin: HTMLElement | undefined;
-  revision: Accessor<number>;
+  /** Page geometry of the pages column the margin sits beside. */
+  geometry: Accessor<PageGeometry>;
+  /** Top of the selected text, when there is a selection to comment on. */
+  selectionTop: Accessor<number | null>;
   canComment: Accessor<boolean>;
   isOwner: Accessor<boolean>;
   userId: Accessor<string | undefined>;
@@ -128,9 +128,8 @@ export function DocxCommentMargin(props: {
     <CommentsContext.Provider value={context}>
       <DocxMarginLayout
         comments={props.comments}
-        editorRoot={props.editorRoot}
-        margin={props.margin}
-        revision={props.revision}
+        geometry={props.geometry}
+        selectionTop={props.selectionTop}
         canComment={props.canComment}
         renderCard={(thread, isActive) => (
           <ThreadCard comment={rootFor(thread)} isActive={isActive()} />

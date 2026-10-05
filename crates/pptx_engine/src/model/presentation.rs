@@ -1,6 +1,7 @@
 //! The presentation document: package, parsed-part caches, and the slide list.
 
 use super::color::ColorMap;
+use super::field::FieldTime;
 use super::theme::Theme;
 use crate::error::{Error, Result};
 use crate::opc::{Package, Relationships, rel_type};
@@ -52,10 +53,13 @@ pub struct SlideContext {
     pub theme: Arc<Theme>,
     /// Effective color map.
     pub color_map: ColorMap,
-    /// 1-based slide number (for slide-number fields).
+    /// The number slide-number fields show (the deck's first slide number
+    /// plus the 0-based position).
     pub number: usize,
     /// Slide size in EMU.
     pub size: (i64, i64),
+    /// The time automatic date fields show (`None`: their cached text).
+    pub clock: Option<FieldTime>,
 }
 
 /// A presentation opened for rendering and editing.
@@ -69,6 +73,10 @@ pub struct Presentation {
     pub(crate) slides: Vec<SlideEntry>,
     /// Slide size in EMU.
     pub(crate) size: (i64, i64),
+    /// The number of the first slide (`p:presentation/@firstSlideNum`).
+    pub(crate) first_slide_number: u32,
+    /// The time automatic date fields show; `None` renders their cached text.
+    pub(crate) clock: Option<FieldTime>,
     /// Decoded pictures by part name (`None` = undecodable).
     pub(crate) images: HashMap<String, Option<Arc<crate::render::scene::Raster>>>,
     /// Parsed metafiles by part name (`None` = unparseable).
@@ -100,6 +108,8 @@ impl Presentation {
             themes: HashMap::new(),
             slides: Vec::new(),
             size: DEFAULT_SLIDE_SIZE,
+            first_slide_number: 1,
+            clock: None,
             images: HashMap::new(),
             metafiles: HashMap::new(),
             dirty_xml: BTreeSet::new(),
@@ -125,6 +135,10 @@ impl Presentation {
                 );
             }
         }
+        self.first_slide_number = doc
+            .attr_i64(root, "firstSlideNum")
+            .and_then(|n| u32::try_from(n).ok())
+            .unwrap_or(1);
         self.slides.clear();
         if let Some(list) = doc.child(root, Ns::P, "sldIdLst") {
             for s in doc.children_named(list, Ns::P, "sldId") {
@@ -167,6 +181,26 @@ impl Presentation {
     /// The slide list.
     pub fn slides(&self) -> &[SlideEntry] {
         &self.slides
+    }
+
+    /// The number the slide at `index` (0-based) shows in slide-number fields.
+    pub fn slide_number(&self, index: usize) -> usize {
+        self.first_slide_number as usize + index
+    }
+
+    /// Sets the time automatic date fields show when slides are rendered and
+    /// written; `None` (the default) renders the text cached in the file.
+    pub fn set_clock(&mut self, now: Option<FieldTime>) {
+        self.clock = now;
+    }
+
+    /// The time new automatic date fields are written with: the clock, or
+    /// (natively) the current UTC time.
+    pub(crate) fn field_time(&self) -> Option<FieldTime> {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.clock.or_else(|| Some(FieldTime::now_utc()));
+        #[cfg(target_arch = "wasm32")]
+        return self.clock;
     }
 
     /// Parsed XML of a part (cached).
@@ -276,7 +310,7 @@ impl Presentation {
             .cloned()
             .ok_or_else(|| Error::NotFound(format!("slide {index}")))?;
         let slide = self.part(&entry.part)?;
-        self.context_for(slide, index + 1)
+        self.context_for(slide, self.slide_number(index))
     }
 
     /// Builds an inheritance context for any slide-like part (slide, layout, master, notes).
@@ -313,6 +347,7 @@ impl Presentation {
             color_map,
             number,
             size: self.size,
+            clock: self.clock,
         })
     }
 
@@ -356,6 +391,11 @@ impl Presentation {
         let name = rels.source().to_owned();
         self.dirty_rels.insert(name.clone());
         self.rels.insert(name, Arc::new(rels));
+    }
+
+    /// Drops the parsed view of an edited theme part.
+    pub(crate) fn forget_theme(&mut self, part: &str) {
+        self.themes.remove(part);
     }
 
     /// Forgets every cached view of a removed part.

@@ -120,3 +120,17 @@ fn formula_operators() {
     assert_eq!(g.get("wd4"), 250.0);
     assert_eq!(g.get("ssd2"), 250.0);
 }
+
+#[test]
+fn preset_svg_draws_previews() {
+    let rect = super::preset_svg("rect", 10.0, 20.0).expect("rect is a preset");
+    assert_eq!(rect.len(), 1);
+    assert_eq!(rect[0].d, "M0.00 0.00L10.00 0.00L10.00 20.00L0.00 20.00Z");
+    assert!(rect[0].fill && rect[0].stroke);
+    assert!(super::preset_svg("noSuchShape", 10.0, 10.0).is_none());
+    // Every preset evaluates to drawable paths.
+    for name in super::presets::definitions().keys() {
+        let paths = super::preset_svg(name, 32.0, 24.0).expect(name);
+        assert!(paths.iter().any(|p| !p.d.is_empty()), "{name}");
+    }
+}

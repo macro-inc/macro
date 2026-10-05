@@ -7,13 +7,16 @@ import { AddProjectTasks } from './add-project-tasks';
 const mock = vi.hoisted(() => ({ assignTasks: vi.fn() }));
 vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/components/Button')),
-  ...(await import('@app/components/ui/components/Dialog')),
+  ...(await import('@app/components/ui/components/Dropdown')),
   ...(await import('@app/components/ui/components/Surface')),
   ...(await import('@app/components/ui/utils/classname')),
   Hotkey: () => null,
 }));
 vi.mock('@app/components/ui/components/Tooltip', () => ({
   Tooltip: (props: ParentProps) => props.children,
+}));
+vi.mock('@core/component/HoverCard', () => ({
+  useIsInsideHoverCard: () => false,
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('../context/projects-context', () => ({
@@ -61,12 +64,12 @@ const project: ProjectDetail = {
 it('adds selected tasks and closes only after the request settles', async () => {
   const result = Promise.withResolvers<{ taskId: string }[]>();
   mock.assignTasks.mockReturnValue(result.promise);
-  const close = vi.fn();
-  render(() => <AddProjectTasks project={project} onClose={close} />);
+  render(() => <AddProjectTasks project={project} />);
+  fireEvent.keyDown(
+    screen.getByRole('button', { name: 'Add existing tasks' }),
+    { key: 'Enter' }
+  );
   expect(screen.getByTestId('excluded').textContent).toBe('linked');
-  expect(
-    screen.getByText(/Tasks already in another project will move here/)
-  ).toBeTruthy();
   fireEvent.click(screen.getByText('Select tasks'));
   fireEvent.click(screen.getByRole('button', { name: 'Add 2 tasks' }));
   expect(mock.assignTasks).toHaveBeenCalledWith('project', ['one', 'two']);
@@ -74,9 +77,9 @@ it('adds selected tasks and closes only after the request settles', async () => 
     'disabled',
     true
   );
-  expect(close).not.toHaveBeenCalled();
+  expect(screen.getByRole('menu')).toBeTruthy();
   result.resolve([{ taskId: 'one' }, { taskId: 'two' }]);
-  await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
 });
 
 it('keeps only failed tasks selected for retry', async () => {
@@ -86,8 +89,11 @@ it('keeps only failed tasks selected for retry', async () => {
       { taskId: 'two', error: 'You need edit access to this task.' },
     ])
     .mockResolvedValueOnce([{ taskId: 'two' }]);
-  const close = vi.fn();
-  render(() => <AddProjectTasks project={project} onClose={close} />);
+  render(() => <AddProjectTasks project={project} />);
+  fireEvent.keyDown(
+    screen.getByRole('button', { name: 'Add existing tasks' }),
+    { key: 'Enter' }
+  );
   fireEvent.click(screen.getByText('Select tasks'));
   fireEvent.click(screen.getByRole('button', { name: 'Add 2 tasks' }));
   expect(await screen.findByRole('alert')).toHaveProperty(
@@ -95,16 +101,19 @@ it('keeps only failed tasks selected for retry', async () => {
     '1 task could not be added. You need edit access to this task.'
   );
   expect(screen.getByTestId('selection').textContent).toBe('two');
-  expect(close).not.toHaveBeenCalled();
+  expect(screen.getByRole('menu')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Add 1 task' }));
-  await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   expect(mock.assignTasks).toHaveBeenLastCalledWith('project', ['two']);
 });
 
 it('preserves the selection after a request failure and allows canceling', async () => {
   mock.assignTasks.mockRejectedValue(new Error('Offline'));
-  const close = vi.fn();
-  render(() => <AddProjectTasks project={project} onClose={close} />);
+  render(() => <AddProjectTasks project={project} />);
+  fireEvent.keyDown(
+    screen.getByRole('button', { name: 'Add existing tasks' }),
+    { key: 'Enter' }
+  );
   fireEvent.click(screen.getByText('Select tasks'));
   fireEvent.click(screen.getByRole('button', { name: 'Add 2 tasks' }));
   expect(await screen.findByRole('alert')).toHaveProperty(
@@ -113,5 +122,20 @@ it('preserves the selection after a request failure and allows canceling', async
   );
   expect(screen.getByTestId('selection').textContent).toBe('one,two');
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  expect(close).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
+it('opens an anchored task dropdown and dismisses without assigning', () => {
+  render(() => <AddProjectTasks project={project} />);
+  const trigger = screen.getByRole('button', { name: 'Add existing tasks' });
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  expect(screen.getByRole('menu')).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  fireEvent.click(screen.getByText('Select tasks'));
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(mock.assignTasks).not.toHaveBeenCalled();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  expect(screen.getByTestId('selection').textContent).toBe('');
 });

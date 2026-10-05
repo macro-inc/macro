@@ -51,6 +51,9 @@ pub struct CreatedItem {
     /// Shape id, for created shapes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shape: Option<u32>,
+    /// Section id, for created sections.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub section: Option<String>,
 }
 
 /// What an edit did.
@@ -61,9 +64,11 @@ pub struct PresentationEditOutcome {
     pub document_id: String,
     /// Slides and shapes the operations created, in order.
     pub created: Vec<CreatedItem>,
-    /// Whether slides were added, removed, or reordered.
+    /// Whether slides were added, removed, or reordered, or the slide size
+    /// or sections changed.
     pub structure_changed: bool,
-    /// The changed slides as they now read.
+    /// The changed slides as they now read (after a structure change, the
+    /// deck summary and sections too).
     pub changed_slides: String,
 }
 
@@ -139,6 +144,41 @@ impl PresentationService {
             .context("saving the presentation")?;
         Ok(outcome)
     }
+
+    /// Applies `ops` (possibly none) to a copy of the deck and returns the
+    /// copy's bytes; the original is left as it is. The outcome names
+    /// `document_id`, the document the caller stores the copy as.
+    pub async fn edited_copy(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        ops: &[EditOp],
+    ) -> anyhow::Result<(Vec<u8>, PresentationEditOutcome)> {
+        if ops.len() > MAX_OPERATIONS {
+            return Err(PresentationError::BatchSize.into());
+        }
+        let bytes = self
+            .files
+            .read(&receipt.entity().entity_id)
+            .await
+            .context("reading the presentation file")?;
+        if ops.is_empty() {
+            // A plain copy: keep the original bytes exactly.
+            open(bytes.clone())?;
+            return Ok((
+                bytes,
+                PresentationEditOutcome {
+                    document_id: String::new(),
+                    created: Vec::new(),
+                    structure_changed: false,
+                    changed_slides: String::new(),
+                },
+            ));
+        }
+        let ops = ops.to_vec();
+        tokio::task::spawn_blocking(move || apply(String::new(), bytes, &ops))
+            .await
+            .context("editing the presentation")?
+    }
 }
 
 fn open(bytes: Vec<u8>) -> anyhow::Result<Presentation> {
@@ -166,7 +206,9 @@ fn apply(
                 .map(|i| i + 1)
         })
         .collect();
-    let changed_slides = if numbers.is_empty() {
+    // A structure change (deleted slides, sections, slide size) shows in the
+    // deck summary even when no remaining slide changed.
+    let changed_slides = if numbers.is_empty() && !result.structure_changed {
         String::new()
     } else {
         describe(&mut pres, Some(&numbers))?
@@ -179,6 +221,7 @@ fn apply(
             .map(|c| CreatedItem {
                 slide: c.slide,
                 shape: c.shape,
+                section: c.section.clone(),
             })
             .collect(),
         structure_changed: result.structure_changed,

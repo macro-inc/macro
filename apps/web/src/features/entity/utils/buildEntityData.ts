@@ -1,7 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { match } from 'ts-pattern';
 import {
-  type AutomationEntity,
   type CallEntity,
   type ChannelEntity,
   type ChatEntity,
@@ -9,6 +8,7 @@ import {
   type EmailEntity,
   type EntityData,
   type ProjectEntity,
+  type RoutineEntity,
   routineStatus,
   type SkillEntity,
   type SnippetEntity,
@@ -157,11 +157,11 @@ export function buildEntityData(
           done: args.done ?? false,
         })
       )
-      .with('automation', (): AutomationEntity | undefined => {
+      .with('routine', (): RoutineEntity | undefined => {
         if (!args.cron) return undefined;
         return {
           ...base,
-          type: 'automation',
+          type: 'routine',
           cron: args.cron,
           status: routineStatus({
             enabled: args.enabled ?? false,

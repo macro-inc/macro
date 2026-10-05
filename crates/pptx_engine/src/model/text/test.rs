@@ -39,6 +39,57 @@ fn runs_breaks_fields_and_links() {
     assert_eq!(link.props.underline, Underline::Single);
 }
 
+/// The text of the first paragraph of a two-slide deck's second slide,
+/// with `first` as the deck's first slide number and `clock` set.
+fn fields_text(first: Option<u32>, clock: Option<crate::model::field::FieldTime>) -> String {
+    let xml = r#"<a:p><a:fld id="{1}" type="slidenum"><a:rPr lang="en-US"/><a:t>9</a:t></a:fld><a:r><a:rPr lang="en-US"/><a:t> | </a:t></a:r><a:fld id="{2}" type="datetime4"><a:rPr lang="en-US"/><a:t>March 1, 2019</a:t></a:fld></a:p>"#;
+    let sp = text_box(2, 0, 0, 2540000, 1270000, xml);
+    let mut bytes = deck(&[&sp, &sp]);
+    if let Some(first) = first {
+        let mut pkg = crate::opc::Package::open(bytes).unwrap();
+        let main = String::from_utf8(pkg.read("/ppt/presentation.xml").unwrap().into_owned())
+            .unwrap()
+            .replace(
+                "<p:presentation ",
+                &format!("<p:presentation firstSlideNum=\"{first}\" "),
+            );
+        pkg.write("/ppt/presentation.xml", main.into_bytes(), None);
+        bytes = pkg.save().unwrap();
+    }
+    let mut p = Presentation::open(bytes).unwrap();
+    p.set_clock(clock);
+    let ctx = p.slide_context(1).unwrap();
+    let tree = sp_tree(&ctx.slide.doc).unwrap();
+    let w = WalkCtx {
+        ctx: &ctx,
+        inherit: Inherit::Slide,
+    };
+    resolve_tree(&w, &ctx.slide, tree)[0]
+        .text
+        .as_ref()
+        .unwrap()
+        .paragraphs[0]
+        .text()
+}
+
+#[test]
+fn slide_numbers_and_dates_resolve_per_slide() {
+    // Without a clock, dates show their cached text.
+    assert_eq!(fields_text(None, None), "2 | March 1, 2019");
+    // Numbering starts at the deck's first slide number.
+    assert_eq!(fields_text(Some(0), None), "1 | March 1, 2019");
+    assert_eq!(fields_text(Some(10), None), "11 | March 1, 2019");
+    let now = crate::model::field::FieldTime {
+        year: 2026,
+        month: 10,
+        day: 4,
+        hour: 18,
+        minute: 30,
+        second: 0,
+    };
+    assert_eq!(fields_text(None, Some(now)), "2 | October 4, 2026");
+}
+
 #[test]
 fn body_properties_and_autofit() {
     let sp = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="t"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="12700" anchor="b" anchorCtr="1" vert="vert270" numCol="2" spcCol="91440"><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr><a:lstStyle/><a:p><a:endParaRPr lang="en-US" sz="1200"/></a:p></p:txBody></p:sp>"#;

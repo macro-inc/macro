@@ -143,6 +143,85 @@ pub fn add_image(pres: &mut Presentation, source_part: &str, bytes: &[u8]) -> Re
     Ok(AddedImage { rid, width, height })
 }
 
+/// The largest media file `video` and `audio` shapes take.
+pub const MAX_MEDIA_BYTES: usize = 50 * 1024 * 1024;
+
+/// The file extension and content type for a media MIME type.
+fn media_format(content_type: &str, audio: bool) -> Result<(&'static str, &'static str)> {
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let format = match mime.as_str() {
+        "video/mp4" => ("mp4", "video/mp4"),
+        "video/x-m4v" => ("m4v", "video/x-m4v"),
+        "video/quicktime" => ("mov", "video/quicktime"),
+        "video/webm" => ("webm", "video/webm"),
+        "video/x-ms-wmv" => ("wmv", "video/x-ms-wmv"),
+        "video/x-msvideo" | "video/avi" => ("avi", "video/x-msvideo"),
+        "audio/mpeg" | "audio/mp3" => ("mp3", "audio/mpeg"),
+        "audio/mp4" | "audio/x-m4a" | "audio/m4a" => ("m4a", "audio/mp4"),
+        "audio/wav" | "audio/x-wav" | "audio/wave" => ("wav", "audio/wav"),
+        "audio/ogg" => ("ogg", "audio/ogg"),
+        _ => {
+            return Err(Error::InvalidEdit(format!(
+                "unsupported media type `{content_type}`"
+            )));
+        }
+    };
+    if format.1.starts_with("audio/") != audio {
+        return Err(Error::InvalidEdit(format!(
+            "`{content_type}` is not {}",
+            if audio { "audio" } else { "video" }
+        )));
+    }
+    Ok(format)
+}
+
+/// Stores a video or audio file and relates it to `source_part` as
+/// PowerPoint does: returns the `a:videoFile`/`a:audioFile` link and the
+/// `p14:media` embed relationship ids.
+pub fn add_media(
+    pres: &mut Presentation,
+    source_part: &str,
+    bytes: Vec<u8>,
+    content_type: &str,
+    audio: bool,
+) -> Result<(String, String)> {
+    if bytes.is_empty() || bytes.len() > MAX_MEDIA_BYTES {
+        return Err(Error::InvalidEdit(format!(
+            "media files must be between 1 byte and {} MB",
+            MAX_MEDIA_BYTES / (1024 * 1024)
+        )));
+    }
+    let (ext, content_type) = media_format(content_type, audio)?;
+    let name = pres
+        .pkg
+        .unique_part_name("/ppt/media/media", &format!(".{ext}"));
+    pres.pkg.write(&name, bytes, None);
+    pres.pkg
+        .content_types_mut()
+        .ensure_default(ext, content_type);
+    if pres.pkg.content_type(&name) != Some(content_type) {
+        pres.pkg
+            .content_types_mut()
+            .set_override(&name, content_type);
+    }
+    let rels = pres.rels_mut(source_part)?;
+    let link = rels.add_internal(
+        if audio {
+            rel_type::AUDIO
+        } else {
+            rel_type::VIDEO
+        },
+        &name,
+    );
+    let embed = rels.add_internal(rel_type::MEDIA, &name);
+    Ok((link, embed))
+}
+
 /// A fresh part name in the same folder, numbered like the original
 /// (`/ppt/charts/chart3.xml` → `/ppt/charts/chart7.xml`).
 pub fn sibling_name(pres: &Presentation, part: &str) -> String {
@@ -194,7 +273,11 @@ pub fn copy_part_tree(
     }
     let new = sibling_name(pres, part);
     renamed.insert(part.to_owned(), new.clone());
-    let bytes = pres.pkg.read(part)?.into_owned();
+    // Edits earlier in the batch may not be written back to the package yet.
+    let bytes = match pres.xml.get(part).filter(|_| pres.dirty_xml.contains(part)) {
+        Some(doc) => doc.to_bytes(),
+        None => pres.pkg.read(part)?.into_owned(),
+    };
     let content_type = pres.pkg.content_type(part).map(str::to_owned);
     let ext = new.rsplit_once('.').map_or("", |(_, e)| e);
     let needs_override = content_type
@@ -310,6 +393,8 @@ pub fn collect_garbage(pres: &mut Presentation, before: &GcBaseline) -> Result<(
 fn prunable(rel_type: &str) -> bool {
     const PRUNABLE: &[&str] = &[
         "/image",
+        // PowerPoint 2010+ keeps a corrected picture's original in an HD Photo.
+        "/hdphoto",
         "/chart",
         "/hyperlink",
         "/oleObject",
@@ -326,12 +411,17 @@ fn prunable(rel_type: &str) -> bool {
     PRUNABLE.iter().any(|s| rel_type.ends_with(s))
 }
 
-/// Removes relationships of edited slides that no markup references any more.
+/// Removes relationships of edited slides, layouts, and masters that no
+/// markup references any more.
 pub fn prune_rels(pres: &mut Presentation) -> Result<()> {
     let edited: Vec<String> = pres.dirty_xml.iter().cloned().collect();
     for part in edited {
         let doc = pres.xml(&part)?;
-        if !doc.is(doc.root(), Ns::P, "sld") {
+        let root = doc.root();
+        if !["sld", "sldLayout", "sldMaster"]
+            .iter()
+            .any(|kind| doc.is(root, Ns::P, kind))
+        {
             continue;
         }
         let mut used: HashSet<String> = HashSet::new();
