@@ -1900,6 +1900,78 @@ export const removeQueuedAction = async (
 };
 
 /**
+ * @summary Run a queued action next. Moves it ahead of the rest of the queue and
+cancels the turn in flight, so this entry dispatches when that turn ends.
+ */
+export type steerQueuedActionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type steerQueuedActionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type steerQueuedActionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type steerQueuedActionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type steerQueuedActionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type steerQueuedActionResponseSuccess = steerQueuedActionResponse204 & {
+  headers: Headers;
+};
+export type steerQueuedActionResponseError = (
+  | steerQueuedActionResponse401
+  | steerQueuedActionResponse403
+  | steerQueuedActionResponse404
+  | steerQueuedActionResponse500
+) & {
+  headers: Headers;
+};
+
+export type steerQueuedActionResponse =
+  | steerQueuedActionResponseSuccess
+  | steerQueuedActionResponseError;
+
+export const getSteerQueuedActionUrl = (
+  sessionId: string,
+  actionId: string
+) => {
+  return `/agent-sessions/${sessionId}/queue/${actionId}/steer`;
+};
+
+export const steerQueuedAction = async (
+  sessionId: string,
+  actionId: string,
+  options?: RequestInit
+): Promise<steerQueuedActionResponse> => {
+  const res = await fetch(getSteerQueuedActionUrl(sessionId, actionId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: steerQueuedActionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as steerQueuedActionResponse;
+};
+
+/**
  * @summary Resize this session's sandbox and remember the size as the owner's default.
  */
 export type putAgentSessionSandboxSizeResponse200 = {

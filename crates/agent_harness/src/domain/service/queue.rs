@@ -724,11 +724,11 @@ where
         action_id: AgentActionId,
         actor: Option<MacroUserIdStr<'static>>,
     ) -> Result<CommandOutcome> {
+        self.revalidate_queue(session_id).await?;
         queue_result(self.queues.move_to_front(session_id, action_id), session_id)?;
         self.persist_or_rollback(session_id).await?;
-        self.revalidate_queue(session_id).await?;
-        if self.busy.turn(session_id).is_some() {
-            if let Err(error) = self
+        if self.busy.turn(session_id).is_some()
+            && let Err(error) = self
                 .deliver(
                     session_id,
                     DeliverAction {
@@ -739,14 +739,13 @@ where
                     },
                 )
                 .await
-            {
-                tracing::warn!(
-                    error = ?error,
-                    %session_id,
-                    %action_id,
-                    "failed to stop the running turn for a steered queue entry"
-                );
-            }
+        {
+            tracing::warn!(
+                error = ?error,
+                %session_id,
+                %action_id,
+                "failed to stop the running turn for a steered queue entry"
+            );
         }
         self.publish_queue(session_id).await;
         Ok(CommandOutcome::Completed)
