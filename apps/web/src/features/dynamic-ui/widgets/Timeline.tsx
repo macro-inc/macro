@@ -27,7 +27,6 @@ function toItemType(type: EntityRef['type']): ItemType | undefined {
       // items.
       'database',
       'database_row',
-      'form',
       () => undefined
     )
     .otherwise((itemType) => itemType);

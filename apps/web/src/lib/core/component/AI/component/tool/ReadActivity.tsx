@@ -31,6 +31,7 @@ function decodeToolEntityType(raw: string): ActivityEntityType {
     .with('channel', () => 'channel' as const)
     .with('user', () => 'user' as const)
     .with('database', () => 'database' as const)
+    .with('form', () => 'form' as const)
     .otherwise((value) => ({ kind: 'unsupported' as const, raw: value }));
 }
 

@@ -62,6 +62,10 @@ import {
   getDatabaseSharePermissions,
   updateDatabaseSharePermissions,
 } from '@queries/storage/databases';
+import {
+  getFormSharePermissions,
+  updateFormSharePermissions,
+} from '@queries/storage/forms';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
@@ -127,7 +131,11 @@ import {
 false && clickOutside;
 
 const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
-  itemType === 'email' || itemType === 'project' || itemType === 'database';
+  itemType === 'email' ||
+  itemType === 'project' ||
+  itemType === 'database' ||
+  // A form's public link is its audience, set on the form, not a share permission.
+  itemType === 'form';
 
 /** Blocks, plus native entities that are shared without one. */
 type ShareBlockType = BlockName | BlockAlias | 'initiative';
@@ -140,6 +148,13 @@ function shareUrl(type: ShareBlockType, id: string): string {
   });
 }
 
+/** The levels a recipient can hold on an item; forms have no comments. */
+export function shareLevelsFor(
+  itemType: ShareItemType
+): readonly AccessLevel[] | undefined {
+  return itemType === 'form' ? ['view', 'edit'] : undefined;
+}
+
 async function fetchSharePermissions(id: string, itemType: ShareItemType) {
   if (itemType === 'agent_session') {
     return fetchAgentSessionSharePermissions(id);
@@ -148,6 +163,7 @@ async function fetchSharePermissions(id: string, itemType: ShareItemType) {
     return fetchInitiativeSharePermissions(id);
   }
   if (itemType === 'database') return getDatabaseSharePermissions(id);
+  if (itemType === 'form') return getFormSharePermissions(id);
   if (itemType === 'chat') {
     return cognitionApiServiceClient.getChatPermissions({ id });
   }
@@ -271,6 +287,8 @@ interface ShareModalProps extends ManagedDialogProps {
   copyLink?: () => void;
   /** Rows for access the host grants outside channels, e.g. collaborators. */
   people?: Component;
+  /** A panel above the people list, e.g. a form's "Who can respond". */
+  audience?: Component;
   /** Whether `people` lists anyone, for the link-sharing status. */
   hasDirectShares?: boolean;
 }
@@ -495,6 +513,7 @@ interface MobileShareDrawerProps {
   itemType: ShareItemType;
   owner?: string;
   people?: Component;
+  audience?: Component;
   hasDirectShares?: boolean;
   userPermissions: Permissions;
   recipients: SharePermissionV2ChannelSharePermissions | undefined;
@@ -623,6 +642,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                 name={props.name}
                 hideAccessLevelSelector={props.itemType === 'email'}
                 initialAccessLevel={props.itemType === 'email' ? 'view' : null}
+                allowedAccessLevels={shareLevelsFor(props.itemType)}
               />
             </Show>
             <Show when={!props.canForward}>
@@ -635,6 +655,11 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             </Show>
           </div>
           <Show when={effectiveActiveTab() === 'people'}>
+            <Show when={props.audience}>
+              <div class="border-b border-edge-divider px-4 py-3">
+                <Dynamic component={props.audience} />
+              </div>
+            </Show>
             <div class="grid gap-3 text-ink text-sm select-none py-3 px-4">
               <Show when={props.owner}>
                 <div class="flex justify-between">
@@ -679,22 +704,28 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                           }
                           fallback={
                             props.channelNameMap.get(recipient.channel_id)
-                              ?.name || recipient.channel_id
+                              ?.name || 'Conversation'
                           }
                         >
                           <GroupChannelLabel
                             channelId={recipient.channel_id}
                             fallbackName={
                               props.channelNameMap.get(recipient.channel_id)
-                                ?.name || recipient.channel_id
+                                ?.name || 'Conversation'
                             }
                           />
                         </Show>
                       </div>
+                      <Show when={props.itemType === 'form'}>
+                        <span class="shrink-0 text-xs text-ink-muted">
+                          Can respond (channel)
+                        </span>
+                      </Show>
                     </div>
                     <div class="flex items-center">
                       <ShareOptions
                         editPermissionEnabled={props.editPermissionEnabled}
+                        allowedAccessLevels={shareLevelsFor(props.itemType)}
                         disabled={props.userPermissions !== Permissions.OWNER}
                         permissions={recipient.access_level}
                         setPermissions={(accessLevel) => {
@@ -900,6 +931,21 @@ export function ShareModal(props: ShareModalProps) {
           subtext: 'Please try again',
         });
       }
+    } else if (props.itemType === 'form') {
+      const result = await updateFormSharePermissions({
+        id: props.id,
+        channelSharePermissions: [{ operation: 'remove', channelId }],
+      });
+      if (result.isOk()) {
+        await refetch();
+        toast.success('Removed channel access', {
+          subtext: 'Its members can no longer respond',
+        });
+      } else {
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
+      }
     } else if (props.itemType === 'chat') {
       const result = await cognitionApiServiceClient.updateChatPermissions({
         chat_id: props.id,
@@ -996,6 +1042,13 @@ export function ShareModal(props: ShareModalProps) {
         });
       } else if (props.itemType === 'database') {
         result = await updateDatabaseSharePermissions({
+          id: props.id,
+          channelSharePermissions: [
+            { operation: 'replace', accessLevel, channelId },
+          ],
+        });
+      } else if (props.itemType === 'form') {
+        result = await updateFormSharePermissions({
           id: props.id,
           channelSharePermissions: [
             { operation: 'replace', accessLevel, channelId },
@@ -1310,6 +1363,7 @@ export function ShareModal(props: ShareModalProps) {
           itemType={props.itemType}
           owner={props.owner}
           people={props.people}
+          audience={props.audience}
           hasDirectShares={props.hasDirectShares}
           userPermissions={userPermissions()}
           recipients={recipients()}
@@ -1376,6 +1430,7 @@ export function ShareModal(props: ShareModalProps) {
                       initialAccessLevel={
                         props.itemType === 'email' ? 'view' : null
                       }
+                      allowedAccessLevels={shareLevelsFor(props.itemType)}
                     />
                   </Show>
                   <Show when={!canForward()}>
@@ -1426,6 +1481,11 @@ export function ShareModal(props: ShareModalProps) {
                               </div>
                             </div>
                           </Show>
+                          <Show when={props.audience}>
+                            <div class="border-b border-edge-divider pb-3">
+                              <Dynamic component={props.audience} />
+                            </div>
+                          </Show>
                           <Dynamic component={props.people} />
                           <For each={recipients() || []}>
                             {(recipient) => (
@@ -1470,7 +1530,7 @@ export function ShareModal(props: ShareModalProps) {
                                       fallback={
                                         channelNameMap().get(
                                           recipient.channel_id
-                                        )?.name || recipient.channel_id
+                                        )?.name || 'Conversation'
                                       }
                                     >
                                       <GroupChannelLabel
@@ -1478,15 +1538,23 @@ export function ShareModal(props: ShareModalProps) {
                                         fallbackName={
                                           channelNameMap().get(
                                             recipient.channel_id
-                                          )?.name || recipient.channel_id
+                                          )?.name || 'Conversation'
                                         }
                                       />
                                     </Show>
                                   </div>
+                                  <Show when={props.itemType === 'form'}>
+                                    <span class="shrink-0 text-xs text-ink-muted">
+                                      Can respond (channel)
+                                    </span>
+                                  </Show>
                                 </div>
                                 <div class="flex items-center">
                                   <ShareOptions
                                     editPermissionEnabled={editPermissionEnabled()}
+                                    allowedAccessLevels={shareLevelsFor(
+                                      props.itemType
+                                    )}
                                     disabled={
                                       userPermissions() !== Permissions.OWNER
                                     }

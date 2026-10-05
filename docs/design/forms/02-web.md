@@ -1,9 +1,11 @@
 # RFC 02: Forms in the web app
 
-Status: accepted for the first pass. Everything here is behind
-`enable-forms`, defined like `enableDatabases` in
-`lib/core/constant/featureFlags.ts` (`env: 'ENABLE_FORMS'`, on in local
-dev, PostHog otherwise). Nothing form-related loads eagerly when it is off.
+Status: accepted for the first pass. `enable-forms` gates authoring entry
+points: creation, the builder, `/poll`, `/form`, and database form controls.
+It is defined like `enableDatabases` in `lib/core/constant/featureFlags.ts`
+(`env: 'ENABLE_FORMS'`, on in local dev, PostHog otherwise). Responding,
+existing form cards and mentions, and warnings about deleting their backing
+tables or columns follow service access regardless of the flag.
 
 Paths are relative to `apps/web/src`.
 
@@ -240,7 +242,8 @@ The database's own share dialog explains derived access with the new
 - Column delete confirmation mentions "asked by <form>" when a form has the
   column as a question.
 - Drive, Quick Access, activity and search list forms the way they list
-  databases (same flag-gated code paths with a `form` entry).
+  databases (the discovery entry points use the same flag-gated code paths
+  with a `form` entry; direct access and responding remain available).
   Drive and Quick Access use `/forms/accessible`: a form viewer can discover
   their forms without gaining access to the linked databases. This listing
   includes granted forms, not every form with a public audience.

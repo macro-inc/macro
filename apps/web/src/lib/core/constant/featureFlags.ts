@@ -120,6 +120,19 @@ export const enableDatabases = defineFlag({
 });
 
 /**
+ * Macro Forms (`block-form`): questionnaires whose answers land as rows of a
+ * database table. On under local HMR, like databases; deployed environments
+ * follow PostHog. The flag gates authoring (create entries, builder, `/poll`,
+ * `/form`, database controls); responding, form cards and mentions follow the
+ * service's access whatever it says.
+ */
+export const enableForms = defineFlag({
+  key: 'enable-forms',
+  env: 'ENABLE_FORMS',
+  default: LOCAL_ONLY || undefined,
+});
+
+/**
  * Shows the SQL behind database answers and tool results. Off everywhere;
  * turn on locally with VITE_SHOW_DATABASE_SQL=true.
  */

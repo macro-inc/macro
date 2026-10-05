@@ -48,7 +48,10 @@ type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 interface MobileForwardToChannelLayoutProps
   extends Pick<
     ForwardToChannelProps,
-    'submitPermissionInfo' | 'hideAccessLevelSelector' | 'editPermissionEnabled'
+    | 'submitPermissionInfo'
+    | 'hideAccessLevelSelector'
+    | 'editPermissionEnabled'
+    | 'allowedAccessLevels'
   > {
   isAuthenticated: Accessor<boolean | undefined>;
   selectedOptions: Accessor<Recipient[]>;
@@ -138,6 +141,7 @@ function MobileForwardToChannelLayout(
           <span class="text-sm text-ink-muted pr-2">Access:</span>
           <ShareOptions
             editPermissionEnabled={props.editPermissionEnabled}
+            allowedAccessLevels={props.allowedAccessLevels}
             setPermissions={(accessLevel) =>
               props.setSubmitAccessLevel(accessLevel)
             }
@@ -193,6 +197,8 @@ interface ForwardToChannelProps {
   }) => void;
   hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
+  /** Levels the picker offers; all when absent. */
+  allowedAccessLevels?: readonly AccessLevel[];
   /** Attach an entity that has no block, instead of `blockId`/`blockName`. */
   entity?: NewAttachment;
   /**
@@ -527,6 +533,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             destinationOptions={destinationOptions}
             submitPermissionInfo={props.submitPermissionInfo}
             hideAccessLevelSelector={props.hideAccessLevelSelector}
+            allowedAccessLevels={props.allowedAccessLevels}
             submitAccessLevel={submitAccessLevel}
             setSubmitAccessLevel={setSubmitAccessLevel}
             mdScrollRef={mdScrollRef}

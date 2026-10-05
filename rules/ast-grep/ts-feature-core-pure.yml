@@ -38,6 +38,7 @@ files:
   - apps/web/src/features/block-write/core/**
   - apps/web/src/features/onboarding/core/**
   - apps/web/src/features/auth/core/**
+  - apps/web/src/features/block-form/core/**
 rule:
   kind: string
   regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views|ui|component|context)(/|['"]))

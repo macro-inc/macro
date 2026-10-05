@@ -52,6 +52,8 @@ export function TableNavigation(props: {
   onReorder?: (tableIds: string[]) => void;
   /** Delete a table the viewer confirmed; never offered for a database's only table. */
   onDelete?: (tableId: string) => void;
+  /** What else deleting a table removes, e.g. the forms writing to it. */
+  deleteConsequence?: (tableId: string) => string | undefined;
 }) {
   const [deleting, setDeleting] = createSignal<{ id: string; name: string }>();
   const [open, setOpen] = createSignal(false);
@@ -435,10 +437,20 @@ export function TableNavigation(props: {
           if (target && canDelete()) props.onDelete?.(target.id);
         }}
         body={
-          <p>
-            “{deleting()?.name}” will be deleted for everyone, with its columns,
-            records and views.
-          </p>
+          <>
+            <p>
+              “{deleting()?.name}” will be deleted for everyone, with its
+              columns, records and views.
+            </p>
+            <Show
+              when={(() => {
+                const target = deleting();
+                return target && props.deleteConsequence?.(target.id);
+              })()}
+            >
+              {(consequence) => <p class="mt-2">{consequence()}</p>}
+            </Show>
+          </>
         }
       />
       <Show when={open()}>

@@ -193,4 +193,66 @@ describe('new database view', () => {
       })
     );
   });
+
+  it('offers a Form beside table and board when given one, creating it under its own name without a view', async () => {
+    const submit = vi.fn(() => okAsync(undefined));
+    const createForm = vi.fn(async () => undefined);
+    const close = vi.fn();
+    render(() => (
+      <NewViewDialog
+        initialName="Table view"
+        columns={[priority]}
+        form={{ initialName: 'Guests form', onCreate: createForm }}
+        onSubmit={submit}
+        onClose={close}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /Form Collect/ }));
+    const input = screen.getByRole('textbox', {
+      name: 'Form name',
+    }) as HTMLInputElement;
+    expect(input.value).toBe('Guests form');
+    fireEvent.input(input, { target: { value: 'RSVP' } });
+    fireEvent.submit(input.closest('form')!);
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(createForm).toHaveBeenCalledExactlyOnceWith('RSVP');
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('keeps the dialog open and says why when the form is refused', async () => {
+    const close = vi.fn();
+    render(() => (
+      <NewViewDialog
+        initialName="Table view"
+        columns={[]}
+        form={{
+          initialName: 'Guests form',
+          onCreate: async () =>
+            'Only the database owner can make a form over this table.',
+        }}
+        onSubmit={vi.fn(() => okAsync(undefined))}
+        onClose={close}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /Form Collect/ }));
+    fireEvent.submit(
+      screen.getByRole('textbox', { name: 'Form name' }).closest('form')!
+    );
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Only the database owner can make a form over this table.'
+    );
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('offers no Form when not given one', () => {
+    render(() => (
+      <NewViewDialog
+        initialName="Table view"
+        columns={[]}
+        onSubmit={vi.fn(() => okAsync(undefined))}
+        onClose={vi.fn()}
+      />
+    ));
+    expect(screen.queryByRole('button', { name: /Form Collect/ })).toBeNull();
+  });
 });

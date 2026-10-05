@@ -148,6 +148,7 @@ function favoriteSoupEffects(
     initiative: 'GraphqlSoupInitiative',
     database: undefined,
     database_row: undefined,
+    // Forms are not favoritable; the service refuses them.
     form: undefined,
   } as const satisfies Record<FavoriteEntityType, string | undefined>;
   const typename = typenames[args.entityType];

@@ -147,6 +147,7 @@ export type ItemMention = {
     | 'call'
     | 'calendar_event'
     | 'database'
+    | 'form'
     | 'agent_session'
     | 'initiative'
     | 'foreign'
@@ -324,6 +325,7 @@ const getDocumentMentionItemType = (
     .with('document', () => 'document')
     .with('agent_session', () => 'agent_session')
     .with('database', () => 'database')
+    .with('form', () => 'form')
     .with('chat', () => 'chat')
     .with('channel', () => 'channel')
     .with('project', () => 'project')

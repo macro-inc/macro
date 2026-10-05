@@ -100,3 +100,7 @@ describe('decodeActivityEvent', () => {
     });
   });
 });
+
+it('decodes a form as its own entity type', () => {
+  expect(decodeActivityEvent(formRespondedEvent).entityType).toBe('form');
+});

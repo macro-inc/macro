@@ -48,7 +48,7 @@ const awarenessRelaySchema: z.ZodType<AwarenessRelay> = z.object({
 });
 
 /** A gateway payload read against its schema; one that does not fit is reported and dropped. */
-function parseMessageData<Data>(
+export function parseMessageData<Data>(
   message: { type: string; data: unknown },
   schema: z.ZodType<Data>
 ): Data | undefined {
