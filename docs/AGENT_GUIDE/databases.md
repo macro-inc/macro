@@ -378,7 +378,8 @@ a scalar answer, or compatible bar, line, area, scatter, and pie charts. A saved
 offers **Open view**, which opens that database/table and selects the created view.
 The same tools are exposed to agent sessions through the Macro MCP server.
 
-In a document or channel composer, `/database` → **Database** opens the question box with the AI prompt focused
+In a document, channel composer, or the task/document creation composer,
+`/database` → **Database** opens the question box with the AI prompt focused
 immediately. The empty input rotates through example questions; a selected database
 uses its actual table and column names. Typing hides these hints, and reduced-motion
 preferences keep them static. Use the searchable source picker below the question to

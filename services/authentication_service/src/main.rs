@@ -506,6 +506,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let stripe_client = Arc::new(stripe_client);
+    let ai_payment_gateway = ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone());
+    let ai_pricing = config.ai_pricing();
     let ai_billing_service = Arc::new(
         ai_billing::domain::BillingServiceImpl::new(
             ai_billing::outbound::RolesTeamsEntitlementSource::new(
@@ -513,8 +515,9 @@ async fn main() -> anyhow::Result<()> {
                 teams_repo_impl.clone(),
             ),
             ai_billing::outbound::PgUsageReader::new(db.clone()),
-            ai_billing::outbound::PgBillingRepo::new(db.clone()),
-            ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+            ai_billing::outbound::PgBillingRepo::new(db.clone(), ai_pricing),
+            ai_payment_gateway.clone(),
+            ai_pricing,
         )
         .with_enforcement(config.enable_ai_usage_enforcement)
         .with_billing(config.enable_ai_usage_billing),
@@ -609,6 +612,7 @@ async fn main() -> anyhow::Result<()> {
             analytics_client,
             stripe_prices,
             ai_billing_service,
+            ai_payment_gateway: Arc::new(ai_payment_gateway),
         },
         config.port,
     )

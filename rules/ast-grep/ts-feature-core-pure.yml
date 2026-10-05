@@ -32,7 +32,7 @@ files:
   - apps/web/src/features/email-message/core/**
   - apps/web/src/features/email-thread/core/**
   - apps/web/src/features/email-compose/core/**
-  - apps/web/src/features/agent-changes/core/**
+  - apps/web/src/features/changes/core/**
   - apps/web/src/features/block-write/core/**
 rule:
   kind: string

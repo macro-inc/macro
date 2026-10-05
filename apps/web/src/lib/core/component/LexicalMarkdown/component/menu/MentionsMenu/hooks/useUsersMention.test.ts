@@ -110,3 +110,36 @@ it('preserves explicitly empty participant lists', () => {
     dispose();
   });
 });
+
+it('offers @here to channel composers without a block context', () => {
+  createRoot((dispose) => {
+    const [searchTerm, setSearchTerm] = createSignal('');
+    const mention = useUsersMention({
+      searchTerm,
+      users: () => [sean],
+      isChannelBlock: true,
+    });
+    expect(mention.groups().map((item) => item.id)).toEqual(['here']);
+    expect(mention.usersAndGroups().map((item) => item.id)).toEqual([
+      'here',
+      sean.id,
+    ]);
+    setSearchTerm('he');
+    expect(mention.groups().map((item) => item.id)).toEqual(['here']);
+    setSearchTerm('sea');
+    expect(mention.groups()).toEqual([]);
+    dispose();
+  });
+});
+
+it('keeps @here out of composers that do not post to a channel', () => {
+  createRoot((dispose) => {
+    const mention = useUsersMention({
+      searchTerm: () => '',
+      users: () => [sean],
+    });
+    expect(mention.groups()).toEqual([]);
+    expect(mention.usersAndGroups().map((item) => item.id)).toEqual([sean.id]);
+    dispose();
+  });
+});

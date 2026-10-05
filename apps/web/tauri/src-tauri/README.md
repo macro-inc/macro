@@ -143,7 +143,7 @@ Browser sessions instead have `app.runtime=browser`.
 Quit an existing Macro instance first, then launch the built **app bundle**:
 
 ```sh
-open -a /absolute/path/to/macro.app --args --record-memory \
+open -a /absolute/path/to/Macro.app --args --record-memory \
   --otel-traces-url https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
 ```
 

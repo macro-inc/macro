@@ -1,5 +1,8 @@
 //! Asks the authentication service (which owns Stripe) to settle a payer.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::SettlementTrigger;
 use authentication_service_client::AuthServiceClient;
 use macro_user_id::user_id::MacroUserIdStr;

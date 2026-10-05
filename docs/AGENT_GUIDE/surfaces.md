@@ -1430,7 +1430,13 @@ byline.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. PRs are not tasks and do not appear in the Tasks list.
+side panel below the top bar. An open PR also shows a **Merge** button in the
+top bar beside **Changes**. It opens a confirmation with the repository, PR number,
+and title, then merges on GitHub as the signed-in user through their linked account.
+GitHub's permissions and branch protections decide; a refusal appears as a toast
+with GitHub's reason, and a merge refreshes the PR status in place. Without a linked
+GitHub account the toast points to Settings. Merged and closed PRs have no Merge
+button. PRs are not tasks and do not appear in the Tasks list.
 Opening **Changes** slides a full-height pane in from the right beside the PR details,
 including beside the PR top bar rather than underneath it. The PR details shrink
 alongside the entry slide instead of eagerly jumping narrower. The Changes pane
@@ -1472,6 +1478,8 @@ Narrow file trees start closed. **Show file tree** opens an animated drawer over
 diffs without resizing them, including on phones. File selection, Escape, the
 backdrop, or **Hide file tree** closes the drawer and restores focus to its opener.
 The drawer does not change the saved wide-tree visibility or preferred width.
+Closing releases the drawer's dialog handlers immediately while its inert visual
+frame finishes exiting, so rapid reopening does not restore focus to a stale opener.
 The file tree has its own draggable, keyboard-resizable divider and remembers its
 width locally. Tree visibility uses the sidebar's shared width transition while
 retaining directory state and diff owners. Reduced motion skips this transition.
@@ -1832,6 +1840,12 @@ use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
 
+## Onboarding bypass — `/app/onboarding`
+
+All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
+skips the rest of the flow and leaves onboarding. Accounts on other domains
+do not see it.
+
 ## Setup plan step — `/app/onboarding`
 
 The plan step shows two cards: Free and Premium. Premium starts Stripe Checkout.
@@ -1895,7 +1909,10 @@ Open **Settings → Email → Signatures**. Each owned inbox has a visible edito
 there is no expand/collapse control. Format the text, add links or images, and
 choose **Save signature**. **Clear signature** removes only the signature, while
 **Remove inbox** in Accounts uses the existing inbox removal confirmation.
-**Add to replies & forwards** saves that preference immediately. Unsaved drafts
+**Add to replies & forwards** saves that preference immediately. On desktop,
+**Import from Gmail** in each inbox's header fetches that account's Gmail
+signature and saves it right away, replacing any unsaved draft; a toast reports
+when Gmail has no signature. Unsaved drafts
 survive switching settings pages. On phones, signature editing remains desktop-only;
 the replies/forwards toggle and clear action are available.
 Email accounts can also be managed from **Integrations**. Its **Email settings**
@@ -2063,6 +2080,14 @@ Provider and custom-server More menus contain Disable, Reconnect, and Disconnect
 custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
 custom servers show Connect and Remove. Disconnect/Remove require confirmation.
 Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+Enabled custom servers are offered to the owner's agent sessions (Cursor, Claude,
+Codex, macrod, in-memory) alongside connected apps, through the same session
+egress path: the sandbox sees the server under its name and a URL key, never the
+server's address or token. A disabled server is not offered. If a server's
+connection has expired, its tool calls return a message telling the agent to
+have the owner use Reconnect under Custom MCP; there is no `Connect` chip for
+custom servers. Agents configured with a fixed app selection do not receive the
+owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
 Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
 featured or offered in the Connections catalog. Personal Gmail and GitHub account

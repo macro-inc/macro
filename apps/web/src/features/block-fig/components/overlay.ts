@@ -70,6 +70,8 @@ export interface VectorOverlay {
   pending?: boolean;
   /** A press would close the path on its first point. */
   closing?: boolean;
+  /** A pencil stroke being drawn: the path only, no points. */
+  stroke?: boolean;
 }
 
 const LABEL_TYPES = new Set(['FRAME', 'SYMBOL', 'SECTION', 'INSTANCE']);
@@ -346,6 +348,7 @@ function drawVector(ctx: CanvasRenderingContext2D, m: OverlayModel) {
     ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y);
   }
   ctx.stroke();
+  if (v.stroke) return;
   const dot = (p: { x: number; y: number }, r: number, fill: string) => {
     const q = screen(p);
     ctx.beginPath();

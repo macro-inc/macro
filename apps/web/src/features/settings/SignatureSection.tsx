@@ -2,7 +2,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { ThrownResultError } from '@core/util/result';
 import { useEmailSignature } from '@queries/email/link';
-import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
+import {
+  useImportGmailSignatureMutation,
+  useUpdateEmailSettingsMutation,
+} from '@queries/email/settings';
 import { SIGNATURE_IMAGES_UNRESOLVED_CODE } from '@service-email/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { createSignal } from 'solid-js';
@@ -63,6 +66,7 @@ export function SignatureSection(props: { link: EmailLink }) {
   const hasContent = () => persisted().length > 0 || (draft()?.length ?? 0) > 0;
 
   const updateSettings = useUpdateEmailSettingsMutation();
+  const importGmailSignature = useImportGmailSignatureMutation();
   // Imperative handle to the editor, so Save/Remove sync its content directly
   // (the reactive `value` path alone didn't reliably clear the box on Remove).
   let editorApi: { setContent: (html: string) => void } | undefined;
@@ -112,6 +116,34 @@ export function SignatureSection(props: { link: EmailLink }) {
     );
   };
 
+  // The backend fetches the Gmail signature and saves it, so on success the
+  // editor shows the persisted value and any unsaved draft is discarded.
+  const importFromGmail = () => {
+    setSaveError(null);
+    importGmailSignature.mutate(
+      { linkId: props.link.id },
+      {
+        onSuccess: (result) => {
+          if (result.success) {
+            setDraft(null);
+            editorApi?.setContent(result.settings.signature ?? '');
+            toast.success('Signature imported from Gmail');
+          } else if (result.reason === 'no_signature') {
+            toast.failure('No signature found in Gmail');
+          } else if (result.reason === 'unresolved_images') {
+            setSaveError(
+              "Couldn't import images from your Gmail signature. Add the text here and use the image button to add images."
+            );
+          } else {
+            toast.failure('Failed to import signature. Please try again.');
+          }
+        },
+        onError: () =>
+          toast.failure('Failed to import signature. Please try again.'),
+      }
+    );
+  };
+
   const setOnRepliesForwards = (checked: boolean) => {
     updateSettings.mutate(
       {
@@ -135,6 +167,8 @@ export function SignatureSection(props: { link: EmailLink }) {
       }}
       onSave={saveSignature}
       onClear={removeSignature}
+      onImport={importFromGmail}
+      importing={importGmailSignature.isPending}
       dirty={isDirty()}
       hasContent={hasContent()}
       pending={updateSettings.isPending}

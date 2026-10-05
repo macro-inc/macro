@@ -10,7 +10,7 @@
  */
 
 import { DiffCounts } from '@app/components/diff-view';
-import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
+import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
@@ -35,7 +35,7 @@ export function AgentSidePanelSections() {
   const { sessionId, session, bot, metadata, messages } = useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
-  const changes = useOptionalAgentChanges();
+  const changes = useOptionalChanges();
   const files = () => changes?.model.files() ?? [];
   const activity = createMemo(() => activityCounts(messages()));
   const totals = () => changes?.changeCounts();

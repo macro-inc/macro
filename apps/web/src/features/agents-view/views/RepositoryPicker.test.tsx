@@ -54,6 +54,18 @@ describe('RepositoryPicker', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps a runtime-enforced branch visible without opening the branch menu', () => {
+    const handlers = picker({ repoUrl: macro.url, branchLocked: true });
+    const branch = screen.getByRole('button', { name: 'Branch' });
+    expect(branch.textContent).toContain('main');
+    expect(branch.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(branch);
+    expect(
+      screen.queryByRole('combobox', { name: 'Search branches' })
+    ).toBeNull();
+    expect(handlers.onSelectBranch).not.toHaveBeenCalled();
+  });
+
   it('lists automatic first, then recents, then the rest, marking the selection', () => {
     picker({ repoUrl: infra.url, recentRepositories: [infra.url] });
     expect(

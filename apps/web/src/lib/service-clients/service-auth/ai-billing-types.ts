@@ -3,7 +3,9 @@
  * (`crates/ai_billing`). Replace with the orval-generated schemas on the next
  * client regeneration (`bun run gen-api auth-service`).
  *
- * Every money field is in cents at Macro's list rate.
+ * Allowance and usage fields (`included_cents`, `used_cents`,
+ * `remaining_cents`) are cents at provider cost. Credits, overage charges,
+ * caps, packs and `uncovered_cents` are customer cents.
  */
 
 export type AiPlanTier = 'free' | 'premium' | 'max';
@@ -44,6 +46,7 @@ export interface AiPlanCatalogEntry {
   tier: AiPlanTier;
   monthly_price_cents: number;
   included_ai_cents_per_seat: number;
+  purchasable: boolean;
 }
 
 export interface AiPlanCatalog {

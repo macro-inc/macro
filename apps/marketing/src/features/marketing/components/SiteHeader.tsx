@@ -1,4 +1,11 @@
-import { createSignal, For, type JSX, onCleanup, onMount } from 'solid-js';
+import {
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { FEATURE_PAGES, RESOURCE_PAGES } from '../core/navigation';
 import './site-navigation.css';
 
@@ -34,7 +41,7 @@ function NavigationGroup(props: {
 }
 
 /** Shared public navigation and app entry. */
-export function SiteHeader() {
+export function SiteHeader(props: { hideOpenApp?: boolean }) {
   let menu!: HTMLDivElement;
   let trigger!: HTMLButtonElement;
   const [open, setOpen] = createSignal(false);
@@ -169,33 +176,35 @@ export function SiteHeader() {
         >
           Talk to us
         </a>
-        <a
-          class="site-nav-start"
-          target="_self"
-          href={import.meta.env.DEV ? '/onboarding-preview.html' : '/app'}
-          onPointerEnter={moveGlow}
-          onPointerMove={moveGlow}
-          onPointerLeave={stopGlow}
-          onPointerCancel={stopGlow}
-          onFocus={centerGlow}
-        >
-          <span>Open app</span>
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 32 32"
-            fill="none"
-            aria-hidden="true"
+        <Show when={!props.hideOpenApp}>
+          <a
+            class="site-nav-start"
+            target="_self"
+            href={import.meta.env.DEV ? '/onboarding-preview.html' : '/app'}
+            onPointerEnter={moveGlow}
+            onPointerMove={moveGlow}
+            onPointerLeave={stopGlow}
+            onPointerCancel={stopGlow}
+            onFocus={centerGlow}
           >
-            <path
-              d="M5 16h22M17 6l10 10-10 10"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </a>
+            <span>Open app</span>
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 32 32"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M5 16h22M17 6l10 10-10 10"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </a>
+        </Show>
       </div>
     </header>
   );

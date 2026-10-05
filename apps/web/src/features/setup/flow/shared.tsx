@@ -21,6 +21,18 @@ export function emailDomain(address: string | undefined): string | undefined {
   return address.slice(at + 1).toLowerCase();
 }
 
+const MACRO_STAFF_DOMAIN = 'macro.com';
+
+/** Whether the address belongs to a Macro staff account (`@macro.com`). */
+export function isMacroStaffEmail(address: string | undefined): boolean {
+  return emailDomain(address) === MACRO_STAFF_DOMAIN;
+}
+
+/** Whether this account gets the staff Bypass button on the onboarding flow. */
+export function canBypassOnboarding(address: string | undefined): boolean {
+  return isMacroStaffEmail(address?.trim());
+}
+
 /** "macro.com" → "Macro": the domain root, capitalized. Whether a domain
  * deserves a team suggestion at all is judged server-side
  * (`OnboardingState.suggested_team_domain`) — no domain list lives here. */

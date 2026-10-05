@@ -24,7 +24,9 @@
 //! 3. one of two credential ports resolves the destination:
 //!    [`ports::McpCredentials`] finds the named app among *that owner's*
 //!    Pipedream connections and produces our project bearer plus the
-//!    `x-pd-*` headers that pin it to that owner and app, or
+//!    `x-pd-*` headers that pin it to that owner and app - or, for a server
+//!    the owner added by URL, finds it among *that owner's* custom servers
+//!    and produces a fresh bearer from the stored OAuth grant - or
 //!    [`ports::GithubTokens`] mints an installation token scoped to the
 //!    session's own repository
 //! 4. the service strips the sandbox's own credentials from the request and
@@ -40,6 +42,9 @@
 //! the owner's own rows, so it cannot ask to act as anyone its owner is not -
 //! which matters doubly here, because the Pipedream bearer alone could act as
 //! anyone, and the header saying *who* is stamped from the session's grant.
+//! For a custom server it names a digest of the server's URL, which likewise
+//! resolves only through the owner's own rows: the URL and the grant stay
+//! here, and the sandbox cannot point the proxy at a URL of its choosing.
 //! For git it names nothing at all: the repository comes from the session's
 //! grant, and the endpoint from a three-entry allowlist.
 

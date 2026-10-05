@@ -213,6 +213,7 @@ function FixtureSignature(props: { email: string }) {
   const [value, setValue] = createSignal(saved());
   const [replies, setReplies] = createSignal(true);
   const [status, setStatus] = createSignal('');
+  const [importing, setImporting] = createSignal(false);
   let api: { setContent: (html: string) => void } | undefined;
   return (
     <>
@@ -233,6 +234,18 @@ function FixtureSignature(props: { email: string }) {
           api?.setContent('');
           setStatus('Signature cleared');
         }}
+        onImport={() => {
+          setImporting(true);
+          setTimeout(() => {
+            const imported = `<p><strong>Alex Morgan</strong></p><p>Product Lead · <a href="https://example.com">example.com</a></p>`;
+            setValue(imported);
+            setSaved(imported);
+            api?.setContent(imported);
+            setImporting(false);
+            setStatus('Signature imported from Gmail');
+          }, 600);
+        }}
+        importing={importing()}
         dirty={saved() !== value()}
         hasContent={!!value()}
         pending={false}

@@ -67,6 +67,17 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+## Cached grouped lists
+
+With GraphQL caching enabled, previously loaded grouped task lists remain usable
+when their background refresh fails without an HTTP response. Load a Priority-grouped
+view online, navigate away, then reopen it offline. Repeat by holding its GroupSoup
+request: cached rows should appear before the response, and rejecting that request
+must not replace them with **Tasks couldn’t be loaded**. A cached empty result is
+also usable. An initial cache miss still shows failure; HTTP and GraphQL errors
+remain visible even with cached rows. Change filters while retaining prior rows:
+those older results must not hide a failure for the new, uncached query.
+
 ## Reviews view
 
 With `enable-tasks-reviews` enabled (on by default in development), a

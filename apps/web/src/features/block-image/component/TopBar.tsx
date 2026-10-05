@@ -1,3 +1,8 @@
+import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/features/chat/ChatWithAgentButton';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
@@ -60,7 +65,22 @@ export function TopBar() {
     { op: 'delete' },
   ];
 
+  const chatEntity = () => ({
+    type: 'document' as const,
+    id: blockId,
+    name: name() ?? '',
+    fileType: 'image',
+  });
+
   const tools: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () => openChatWithAgent(chatEntity()),
+      buttonComponent: () => (
+        <ChatWithAgentButton entity={chatEntity()} label="Ask Macro" />
+      ),
+    },
     {
       group: 'sharing',
       label: 'Share',

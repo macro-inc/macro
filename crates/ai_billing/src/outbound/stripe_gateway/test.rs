@@ -1,4 +1,5 @@
 use super::*;
+use chrono::TimeZone;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -757,6 +758,216 @@ async fn pay_overage_invoice_returns_when_the_invoice_is_already_paid() {
     }));
 }
 
+#[tokio::test]
+async fn subscription_period_selects_the_billable_subscription_in_scope() {
+    let personal = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+    };
+    let team = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 3, 18, 8, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 4, 18, 8, 0, 0).unwrap(),
+    };
+    let team_id = TEAM_ID.to_string();
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![
+                subscription_in_period(
+                    "sub_past_due",
+                    stripe::SubscriptionStatus::PastDue,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 1, 15, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+                    },
+                ),
+                subscription_in_period(
+                    "sub_personal",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    personal,
+                ),
+                subscription_in_period(
+                    "sub_team",
+                    stripe::SubscriptionStatus::Active,
+                    Some(&team_id),
+                    team,
+                ),
+            ],
+            false,
+        ),
+    )
+    .await;
+    let gateway = gateway(&server);
+
+    assert_eq!(
+        gateway
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+            .await
+            .unwrap(),
+        Some(personal)
+    );
+    assert_eq!(
+        gateway
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Team { team_id: TEAM_ID })
+            .await
+            .unwrap(),
+        Some(team)
+    );
+    assert_eq!(
+        gateway
+            .subscription_period(
+                CUSTOMER_ID,
+                SubscriptionScope::Team {
+                    team_id: Uuid::from_u128(8)
+                }
+            )
+            .await
+            .unwrap(),
+        None
+    );
+    let requests = server.received_requests().await.expect("recorded requests");
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.url.path() == "/v1/subscriptions"),
+        "{requests:?}"
+    );
+}
+
+#[tokio::test]
+async fn subscription_period_rejects_disagreeing_subscriptions() {
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![
+                subscription_in_period(
+                    "sub_monthly",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+                    },
+                ),
+                subscription_in_period(
+                    "sub_other",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 5, 1, 0, 0, 0).unwrap(),
+                    },
+                ),
+            ],
+            false,
+        ),
+    )
+    .await;
+
+    let error = gateway(&server)
+        .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+        .await
+        .expect_err("two personal subscriptions on different periods");
+    assert!(matches!(error, BillingError::Payment(_)), "{error:?}");
+}
+
+#[tokio::test]
+async fn subscription_period_reads_a_past_due_subscription_when_none_is_billable() {
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![subscription_in_period(
+                "sub_past_due",
+                stripe::SubscriptionStatus::PastDue,
+                None,
+                BillingPeriod {
+                    start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+                    end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+                },
+            )],
+            false,
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        gateway(&server)
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+            .await
+            .unwrap(),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn subscription_period_prefers_the_billable_subscription_to_an_unpaid_one() {
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![
+                subscription_in_period(
+                    "sub_unpaid",
+                    stripe::SubscriptionStatus::Unpaid,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 1, 15, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+                    },
+                ),
+                subscription_in_period(
+                    "sub_active",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+                    },
+                ),
+            ],
+            false,
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        gateway(&server)
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+            .await
+            .unwrap(),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn subscription_period_reports_provider_errors() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/subscriptions"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "error": { "type": "api_error", "message": "stripe is down" }
+        })))
+        .mount(&server)
+        .await;
+
+    let error = gateway(&server)
+        .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+        .await
+        .expect_err("stripe answered 500");
+    assert!(matches!(error, BillingError::Payment(_)), "{error:?}");
+}
+
 fn customer_with_stale_fallback() -> stripe::Customer {
     let stale: stripe::PaymentMethodId =
         STALE_PAYMENT_METHOD.parse().expect("stale payment method");
@@ -799,6 +1010,19 @@ fn subscription(
         },
         ..Default::default()
     }
+}
+
+fn subscription_in_period(
+    id: &str,
+    status: stripe::SubscriptionStatus,
+    team_id: Option<&str>,
+    period: BillingPeriod,
+) -> Value {
+    stripe_response(&stripe::Subscription {
+        current_period_start: period.start.timestamp(),
+        current_period_end: period.end.timestamp(),
+        ..subscription(id, status, None, team_id)
+    })
 }
 
 fn open_invoice(default_payment_method: Option<&str>, scope: Option<&str>) -> stripe::Invoice {
@@ -862,6 +1086,10 @@ async fn mount_customer(server: &MockServer) {
 
 async fn mount_customer_and_subscriptions(server: &MockServer, subscriptions: Value) {
     mount_customer(server).await;
+    mount_subscriptions(server, subscriptions).await;
+}
+
+async fn mount_subscriptions(server: &MockServer, subscriptions: Value) {
     Mock::given(method("GET"))
         .and(path("/v1/subscriptions"))
         .and(query_param("customer", CUSTOMER_ID))

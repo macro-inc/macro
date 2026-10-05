@@ -842,6 +842,105 @@
         }
       }
     },
+    "/github_pull_requests/merge": {
+      "post": {
+        "tags": ["github_pull_requests"],
+        "summary": "Merges a GitHub pull request as the authenticated user, with their own\nGitHub grant. GitHub applies the user's permissions and the repository's\nbranch protections; a refusal is returned with GitHub's message.",
+        "operationId": "merge_github_pull_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeGithubPullRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeGithubPullRequestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user cannot push to the repository",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No GitHub link, or the pull request is not visible to the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The pull request is not mergeable as it stands, or its head moved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/gtm-invite/links": {
       "get": {
         "tags": ["gtm_invite"],
@@ -5450,6 +5549,11 @@
           }
         }
       },
+      "GithubMergeMethod": {
+        "type": "string",
+        "description": "How GitHub combines a pull request's commits into its base branch.",
+        "enum": ["merge", "squash", "rebase"]
+      },
       "GithubPullRequestCheckRun": {
         "type": "object",
         "description": "A check run associated with a GitHub pull request.",
@@ -5939,6 +6043,64 @@
           }
         }
       },
+      "MergeGithubPullRequestRequest": {
+        "type": "object",
+        "description": "A request to merge one pull request on the user's behalf.",
+        "required": ["owner", "repo", "number"],
+        "properties": {
+          "mergeMethod": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubMergeMethod",
+                "description": "The merge method to use. Omitted means the first method the\nrepository allows, in the order merge, squash, rebase."
+              }
+            ]
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          }
+        }
+      },
+      "MergeGithubPullRequestResponse": {
+        "type": "object",
+        "description": "Response body for a merged pull request.",
+        "required": ["sha", "message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "GitHub's own summary of the merge."
+          },
+          "pullRequest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EnrichedGithubPullRequest",
+                "description": "The pull request as GitHub reports it after the merge, when the\nrefresh succeeded."
+              }
+            ]
+          },
+          "sha": {
+            "type": "string",
+            "description": "The merge commit's SHA."
+          }
+        }
+      },
       "PasswordRequest": {
         "type": "object",
         "required": ["email", "password"],
@@ -6145,18 +6307,23 @@
         "required": [
           "tier",
           "monthly_price_cents",
-          "included_ai_cents_per_seat"
+          "included_ai_cents_per_seat",
+          "purchasable"
         ],
         "properties": {
           "included_ai_cents_per_seat": {
             "type": "integer",
             "format": "int64",
-            "description": "Included AI per seat per period, list-rate cents."
+            "description": "Included AI per seat per period, in cents at provider cost."
           },
           "monthly_price_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Monthly list price per seat, cents."
+            "description": "Monthly subscription price per seat, cents."
+          },
+          "purchasable": {
+            "type": "boolean",
+            "description": "Whether a new purchase or plan move may pick this plan today."
           },
           "tier": {
             "$ref": "#/components/schemas/PlanTier",
@@ -6197,7 +6364,7 @@
             "items": {
               "$ref": "#/components/schemas/PlanCatalogEntry"
             },
-            "description": "Free and every purchasable paid plan, cheapest first."
+            "description": "Every plan, cheapest first. Clients read allowances from here rather\nthan hard-coding them; `purchasable` marks the plans a user can buy."
           }
         }
       },
@@ -6618,22 +6785,22 @@
           "credit_balance_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Shared prepaid credit balance."
+            "description": "Shared prepaid credit balance, in customer cents."
           },
           "credits_consumed_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Shared payer credits already applied to this period."
+            "description": "Shared payer credits already applied to this period, in customer cents."
           },
           "included_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Included AI for this user's seat this period, in list-rate cents."
+            "description": "Included AI for this user's seat this period, in cents at provider cost."
           },
           "overage_charged_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Shared overage charged so far this period."
+            "description": "Shared overage charged so far this period, in customer cents."
           },
           "overage_enabled": {
             "type": "boolean",
@@ -6642,7 +6809,7 @@
           "overage_limit_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Per-period overage cap."
+            "description": "Per-period overage cap, in customer cents."
           },
           "overage_suspended": {
             "type": "boolean",
@@ -6665,7 +6832,7 @@
           "remaining_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "This seat's remaining allowance plus shared credit/overage headroom; 0\nwhen blocked."
+            "description": "Cost cents of usage this seat may still consume: its remaining allowance\nplus whatever shared credit and overage headroom pays for at the markup.\n0 when blocked."
           },
           "seats": {
             "type": "integer",
@@ -6680,7 +6847,7 @@
           "uncovered_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Team-wide usage beyond per-seat allowances that is not yet covered by\nshared credits or charges (awaiting settlement)."
+            "description": "Team-wide usage beyond per-seat allowances, at the overage markup, that\nis not yet covered by shared credits or charges (awaiting settlement).\nCustomer cents."
           },
           "unlimited": {
             "type": "boolean",
@@ -6689,7 +6856,7 @@
           "used_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "AI used by this user this period, in list-rate cents."
+            "description": "AI used by this user this period, in cents at provider cost."
           }
         }
       },

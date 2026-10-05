@@ -89,6 +89,7 @@ export const authExcluded = [
   'listCursorModels',
   'listGtmInviteLinks',
   'logout',
+  'mergeGithubPullRequest',
   'oauth2Callback',
   'oauthRedirect',
   'passwordLogin',
@@ -159,6 +160,8 @@ export const cognitionExcluded = [
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'rejectToolCall',
+  // Channel discovery shares the app-only import workflow below.
+  'discoverHandler',
   'runImportHandler',
   'dismissRunHandler',
   'retryGatherHandler',

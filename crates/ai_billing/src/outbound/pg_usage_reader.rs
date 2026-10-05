@@ -1,9 +1,9 @@
-//! Reads prospectively counted AI usage from `ai_usage` at Macro's list rate.
+//! Reads prospectively counted AI usage from `ai_usage` at provider cost.
 
 #[cfg(test)]
 mod test;
 
-use crate::domain::{BillingError, BillingPeriod, Result, SeatUsage, UsageReader, list_rate_cents};
+use crate::domain::{BillingError, BillingPeriod, Result, SeatUsage, UsageReader, cost_cents};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
@@ -31,7 +31,7 @@ impl PgUsageReader {
 }
 
 impl UsageReader for PgUsageReader {
-    async fn list_rate_usage_cents_by_user(
+    async fn usage_cost_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
         period: BillingPeriod,
@@ -71,7 +71,7 @@ impl UsageReader for PgUsageReader {
                     .map_err(|error| BillingError::Storage(error.into()))?;
                 Ok(SeatUsage {
                     user,
-                    used_cents: list_rate_cents(row.usd),
+                    used_cents: cost_cents(row.usd),
                 })
             })
             .collect()

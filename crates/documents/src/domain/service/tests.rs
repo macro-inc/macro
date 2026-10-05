@@ -3312,3 +3312,28 @@ async fn an_email_import_cannot_choose_its_document_id() {
 
     assert!(matches!(err, DocumentError::BadRequest(_)));
 }
+
+#[tokio::test]
+async fn user_display_names_join_the_parts_a_user_set() {
+    for (first, last, expected) in [
+        (Some(" Jacob "), Some("Beckerman"), Some("Jacob Beckerman")),
+        (Some("Jacob"), None, Some("Jacob")),
+        (Some(" "), None, None),
+        (None, None, None),
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_user_name()
+            .withf(|user_id| user_id == "macro|user@user.com")
+            .return_once(move |_| {
+                Box::pin(std::future::ready(Ok((
+                    first.map(str::to_owned),
+                    last.map(str::to_owned),
+                ))))
+            });
+        let name = make_test_service(repo)
+            .internal_get_user_display_name("macro|user@user.com")
+            .await
+            .unwrap();
+        assert_eq!(name.as_deref(), expected);
+    }
+}

@@ -1289,6 +1289,7 @@ async fn run() -> anyhow::Result<()> {
         db.clone(),
         event_broker_tracker.clone(),
         config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
     )
     .await
     .context("failed to build Macro agent tool context")?;

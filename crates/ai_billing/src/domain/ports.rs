@@ -71,15 +71,15 @@ pub trait EntitlementSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>>> + Send;
 }
 
-/// Reads recorded, metered AI usage at Macro's list rate.
+/// Reads recorded, metered AI usage at provider cost.
 pub trait UsageReader: Send + Sync + 'static {
-    /// List-rate usage for each of `users` within `period`.
+    /// Usage in cost cents for each of `users` within `period`.
     ///
     /// Only rows with the persisted `count_usage = TRUE` decision consume a user's
     /// allowance, credits, or overage. Historical and uncounted rows remain available
     /// for cost tracking. The period is inclusive at the start and exclusive at the end;
     /// users with no counted rows are omitted, and an empty user list returns no rows.
-    fn list_rate_usage_cents_by_user(
+    fn usage_cost_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
         period: BillingPeriod,
@@ -91,7 +91,7 @@ pub trait UsageReader: Send + Sync + 'static {
 pub struct PendingCharge {
     /// The `ai_overage_charge` row.
     pub id: Uuid,
-    /// Amount to collect, list-rate cents.
+    /// Amount to collect, customer cents.
     pub amount_cents: i64,
     /// The Stripe invoice an earlier attempt opened for this charge, if any.
     /// A retry pays that invoice instead of opening a second one.
@@ -154,7 +154,7 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Current prepaid balance, list-rate cents.
+    /// Current prepaid balance, customer cents.
     fn credit_balance_cents(
         &self,
         payer: &MacroUserIdStr<'_>,
@@ -212,9 +212,12 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// Atomically settle a period: under the payer's row lock, re-read the
     /// ledger, run [`plan_settlement`](super::ledger::plan_settlement) with the
     /// stored overage settings, book credit consumption, and reserve a
-    /// pending overage charge. `chargeable_cents` is the sum of each seat's
-    /// usage beyond its own allowance. The overage policy is read inside the lock, with
-    /// `charge_threshold_cents` and `period_ended` taken from `policy`.
+    /// pending overage charge. `chargeable_customer_cents` is the period's
+    /// cumulative usage beyond each seat's own allowance, already converted to
+    /// customer cents at the overage markup
+    /// ([`extra_customer_cents`](super::pricing::extra_customer_cents)). The
+    /// overage policy is read inside the lock, with `charge_threshold_cents` and
+    /// `period_ended` taken from `policy`.
     ///
     /// A charge that was reserved earlier but never collected is handed back
     /// before anything new is reserved, so retries reuse its id (and so its
@@ -233,7 +236,7 @@ pub trait BillingRepo: Send + Sync + 'static {
         &self,
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
-        chargeable_cents: i64,
+        chargeable_customer_cents: i64,
         policy: SettlementPolicy,
     ) -> impl Future<Output = Result<SettlementOutcome>> + Send;
 
@@ -271,7 +274,7 @@ pub struct CreditCheckoutRequest {
     pub customer_id: String,
     /// The payer, stamped on the session so the webhook can book it.
     pub payer: MacroUserIdStr<'static>,
-    /// Pack size, list-rate cents.
+    /// Pack size, customer cents.
     pub amount_cents: i64,
     /// Where Stripe returns the user after paying.
     pub success_url: String,
@@ -287,7 +290,7 @@ pub struct OverageChargeRequest {
     /// The reserved charge; doubles as the idempotency key, so opening the
     /// same charge twice yields the same invoice.
     pub charge_id: Uuid,
-    /// Amount, list-rate cents.
+    /// Amount, customer cents.
     pub amount_cents: i64,
     /// Line description shown on the invoice.
     pub description: String,
@@ -334,6 +337,17 @@ pub trait PaymentGateway: Send + Sync + 'static {
         invoice_id: &str,
         scope: SubscriptionScope,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// The current period of the customer's subscription in `scope`. Active or
+    /// trialing subscriptions win over past-due or unpaid ones. `Ok(None)` when
+    /// no non-canceled subscription exists or the gateway cannot read
+    /// subscriptions. Chosen subscriptions that disagree on the period are a
+    /// [`BillingError::Payment`](super::BillingError::Payment).
+    fn subscription_period(
+        &self,
+        customer_id: &str,
+        scope: SubscriptionScope,
+    ) -> impl Future<Output = Result<Option<BillingPeriod>>> + Send;
 }
 
 /// Asks whoever owns Stripe to settle a payer. Fire-and-forget: services that
@@ -364,9 +378,9 @@ pub trait BillingService: Send + Sync + 'static {
     /// Admission is a read of the position at this instant; usage is
     /// metered after the completion, so requests that are in flight together
     /// can each be admitted against the same headroom. The overshoot is
-    /// bounded by one completion per concurrent request, is billed at list
-    /// rate like everything else, and can only exceed the payer's overage cap
-    /// by that much. Reserving capacity per request would need a second
+    /// bounded by one completion per concurrent request, is priced at the
+    /// same markup as everything else, and can only exceed the payer's overage
+    /// cap by that much. Reserving capacity per request would need a second
     /// ledger write on every completion; the gate deliberately does not.
     fn check_allowance(
         &self,

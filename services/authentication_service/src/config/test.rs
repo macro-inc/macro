@@ -30,7 +30,40 @@ fn config_values() -> serde_json::Value {
     ] {
         values[key] = serde_json::json!("test");
     }
+    values["AI_USAGE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(2_000);
+    values["AI_USAGE_OVERAGE_MARKUP_PERCENT"] = serde_json::json!(5);
     values
+}
+
+#[test]
+fn ai_pricing_is_mandatory_and_validated() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    let pricing = config.ai_pricing();
+    assert_eq!(pricing.included_allowance_cents(), 2_000);
+    assert_eq!(pricing.overage_markup_percent(), 5);
+
+    for key in [
+        "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_OVERAGE_MARKUP_PERCENT",
+    ] {
+        let mut values = config_values();
+        values.as_object_mut().unwrap().remove(key);
+        assert!(
+            serde_json::from_value::<Config>(values.clone()).is_err(),
+            "{key} must be mandatory"
+        );
+        values[key] = serde_json::json!("2000");
+        assert!(
+            serde_json::from_value::<Config>(values).is_err(),
+            "{key} must be an integer"
+        );
+    }
+    let mut values = config_values();
+    values["AI_USAGE_OVERAGE_MARKUP_PERCENT"] = serde_json::json!(100);
+    assert!(serde_json::from_value::<Config>(values).is_err());
+    let mut values = config_values();
+    values["AI_USAGE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(-1);
+    assert!(serde_json::from_value::<Config>(values).is_err());
 }
 
 #[test]

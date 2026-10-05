@@ -24,7 +24,7 @@ import type {
 
 /**
  * One thing that can happen to a client's view of a session log. Mirrors
- * `FoldInput` in `crates/agent_fold/src/domain/speculation.rs`.
+ * `FoldInput` in `crates/folds/agent_fold/src/domain/speculation.rs`.
  */
 export type FoldInput =
   /**

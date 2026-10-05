@@ -2,14 +2,17 @@
 //! Domain models for invitation email notifications.
 //!
 //! Contains the [`InviteToMacro`] referral notification, the [`InviteToTeamMetadata`] team
-//! invitation notification, the [`ChannelInviteMetadata`] channel invitation, and the
-//! [`ReferralCode`] newtype.
+//! invitation notification, the [`ChannelInviteMetadata`] channel invitation, the
+//! [`ColleagueJoinedMacro`] colleague join email, and the [`ReferralCode`] newtype.
 
 #[cfg(test)]
 mod test;
 
 mod call_invite;
 pub use call_invite::CallInvite;
+
+mod colleague_joined;
+pub use colleague_joined::ColleagueJoinedMacro;
 
 use askama::Template;
 use macro_env::Environment;

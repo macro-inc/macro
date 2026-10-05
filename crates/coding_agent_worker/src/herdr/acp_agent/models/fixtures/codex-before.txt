@@ -1,0 +1,3 @@
+│ model: gpt-6-astra /model to change │
+› Ask Codex to do anything
+  gpt-6-astra default · /repo

@@ -2,20 +2,25 @@
 //! its row lock and the service can run it for snapshots.
 //!
 //! For a payer and period, each seat first consumes only its own included
-//! allowance. The remaining usage is chargeable to the payer's shared credits
-//! and overage:
+//! allowance, both measured in cost cents. The remaining usage is chargeable to
+//! the payer's shared credits and overage at the markup, in customer cents:
 //!
 //! ```text
-//! chargeable = sum(max(0, seat_used - seat_included))
-//! covered    = credits_consumed + overage_charged
-//! uncovered  = max(0, chargeable - covered)
-//! headroom   = (covered - chargeable) + credit_balance + overage_room
+//! chargeable_cost = sum(max(0, seat_used_cost - seat_included_cost))
+//! chargeable      = extra_customer_cents(chargeable_cost)
+//! covered         = credits_consumed + overage_charged
+//! uncovered       = max(0, chargeable - covered)
+//! headroom        = (covered - chargeable) + credit_balance + overage_room
+//! remaining       = seat_remaining_cost + cost_cents_covered_by(headroom)
 //! ```
 //!
-//! Settlement moves `uncovered` into `credits_consumed` (from the balance) and
-//! then into `overage_charged` (when overage is on, within the cap, and the
-//! chunk is worth charging). Between settlements `uncovered` is simply usage
-//! that has not been booked yet; the gate accounts for it through `headroom`.
+//! The markup is applied to the period's cumulative chargeable cost, never to
+//! an increment, so settling in several chunks books exactly the same money as
+//! settling once. Settlement moves `uncovered` into `credits_consumed` (from
+//! the balance) and then into `overage_charged` (when overage is on, within the
+//! cap, and the chunk is worth charging). Between settlements `uncovered` is
+//! simply usage that has not been booked yet; the gate accounts for it through
+//! `headroom`.
 
 #[cfg(test)]
 mod test;
@@ -24,6 +29,7 @@ use super::models::{
     AllowanceDecision, BillingPeriod, BillingSettings, DenyReason, Entitlement,
     MIN_STRIPE_CHARGE_CENTS, PeriodLedger, PlanTier, UsageSnapshot,
 };
+use super::pricing::AiPricing;
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// The overage policy in force for one settlement.
@@ -42,20 +48,23 @@ pub struct SettlementPolicy {
 /// The ledger position a settlement plans against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SettlementState {
-    /// Sum of each seat's usage beyond its own allowance this period.
-    pub chargeable_cents: i64,
-    /// Credits already applied this period.
+    /// The period's cumulative usage beyond each seat's own allowance, already
+    /// converted to customer cents at the overage markup.
+    pub chargeable_customer_cents: i64,
+    /// Credits already applied this period, customer cents.
     pub credits_consumed_cents: i64,
-    /// Overage already charged this period (pending or paid).
+    /// Overage already charged this period (pending or paid), customer cents.
     pub overage_charged_cents: i64,
-    /// Current credit balance.
+    /// Current credit balance, customer cents.
     pub credit_balance_cents: i64,
 }
 
 impl SettlementState {
-    /// Chargeable usage not yet covered by credits or charges.
+    /// Chargeable money not yet covered by credits or charges.
     pub fn uncovered_cents(&self) -> i64 {
-        (self.chargeable_cents - (self.credits_consumed_cents + self.overage_charged_cents)).max(0)
+        (self.chargeable_customer_cents
+            - (self.credits_consumed_cents + self.overage_charged_cents))
+            .max(0)
     }
 }
 
@@ -95,7 +104,10 @@ pub fn plan_settlement(state: SettlementState, policy: SettlementPolicy) -> Sett
     }
 }
 
-/// Assemble the API-facing snapshot from the resolved inputs.
+/// Assemble the API-facing snapshot from the resolved inputs. `used_cost_cents`
+/// is this seat's usage at cost; `shared_chargeable_customer_cents` is the
+/// payer's cumulative usage beyond all seat allowances, already marked up at
+/// `pricing`.
 #[expect(
     clippy::too_many_arguments,
     reason = "snapshot assembly keeps its resolved billing inputs explicit"
@@ -105,14 +117,15 @@ pub fn build_snapshot(
     entitlement: &Entitlement,
     settings: &BillingSettings,
     period: BillingPeriod,
-    used_cents: i64,
-    shared_chargeable_cents: i64,
+    used_cost_cents: i64,
+    shared_chargeable_customer_cents: i64,
     ledger: PeriodLedger,
     credit_balance_cents: i64,
+    pricing: AiPricing,
 ) -> UsageSnapshot {
-    let included_cents = entitlement.included_ai_cents();
+    let included_cents = entitlement.included_ai_cents(pricing);
     let shared_covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
-    let uncovered_cents = (shared_chargeable_cents - shared_covered).max(0);
+    let uncovered_cents = (shared_chargeable_customer_cents - shared_covered).max(0);
     let overage_room = if settings.overage_active() {
         (settings.overage_limit_cents - ledger.overage_charged_cents).max(0)
     } else {
@@ -121,12 +134,12 @@ pub fn build_snapshot(
     let remaining_cents = if entitlement.unlimited {
         i64::MAX
     } else {
-        let seat_remaining = (included_cents - used_cents).max(0);
-        let shared_headroom = ((shared_covered - shared_chargeable_cents)
+        let seat_remaining = (included_cents - used_cost_cents).max(0);
+        let shared_headroom = ((shared_covered - shared_chargeable_customer_cents)
             + credit_balance_cents.max(0)
             + overage_room)
             .max(0);
-        seat_remaining.saturating_add(shared_headroom)
+        seat_remaining.saturating_add(pricing.cost_cents_covered_by(shared_headroom))
     };
 
     let mut snapshot = UsageSnapshot {
@@ -138,7 +151,7 @@ pub fn build_snapshot(
         period_start: period.start,
         period_end: period.end,
         included_cents,
-        used_cents,
+        used_cents: used_cost_cents,
         credits_consumed_cents: ledger.credits_consumed_cents,
         credit_balance_cents,
         overage_enabled: settings.overage_enabled,

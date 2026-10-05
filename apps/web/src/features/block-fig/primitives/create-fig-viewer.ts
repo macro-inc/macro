@@ -36,6 +36,7 @@ export type Tool =
   | 'line'
   | 'arrow'
   | 'pen'
+  | 'pencil'
   | 'text';
 
 export interface Selected {

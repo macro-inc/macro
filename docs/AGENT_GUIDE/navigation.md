@@ -649,9 +649,12 @@ time; equal timestamps have a stable entity-type and ID order. Searching retains
 relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
 the cache or reopening the menu with unchanged data does not reorder the results.
 
-Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
-must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. The menu shows no
+Pending or failed Quick Access history, recently-viewed, skills, and cached-channel
+lookups must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation
+stays mounted and usable while the optional source loads or fails. Also hold the
+skills discovery request (`/items/soup`, skill subtype) during startup: even a
+paused or disabled discovery query must not suspend navigation or Home. Releasing
+the request should populate skills without remounting the shell. The menu shows no
 loading text: while entity rows are still loading, an empty list stays blank and
 commands remain usable; a settled empty category shows **No results found**.
 Background history or channel refetches alone must not blank a settled empty

@@ -83,6 +83,8 @@ const HANDLE_SLOP = 6;
 /** How far beyond a corner (CSS px) a press rotates instead. */
 const ROTATE_REACH = 18;
 
+/** How far (CSS px) a smoothed pencil stroke may stray from the drawn one. */
+const PENCIL_TOLERANCE = 1.5;
 /** Distance (CSS px) from the first point within which the pen closes. */
 const PEN_CLOSE = 8;
 
@@ -139,6 +141,8 @@ type Drag =
     }
   /** The pen placed a point; dragging pulls out its handle. */
   | { kind: 'pen'; start: Point }
+  /** The pencil drawing a stroke (page points). */
+  | { kind: 'pencil'; points: Point[] }
   /** A ruler guide dragged out of a ruler, or moved. */
   | { kind: 'guide'; guide: GuideDrag }
   /** A point or handle of the layer being edited. */
@@ -372,6 +376,14 @@ export function ViewerCanvas(props: {
   const vectorOverlay = (): VectorOverlay | undefined => {
     const editor = props.editor;
     if (!editor) return undefined;
+    if (drag?.kind === 'pencil')
+      return {
+        network: penNetwork(
+          drag.points.map((p) => ({ ...p, handle: { x: 0, y: 0 } })),
+          false
+        ),
+        stroke: true,
+      };
     const points = editor.penPath();
     if (points && points.length > 0) {
       const z = viewer.camera().zoom;
@@ -458,12 +470,26 @@ export function ViewerCanvas(props: {
       const r = entry.contentRect;
       const ratio = window.devicePixelRatio || 1;
       setDpr(ratio);
-      for (const canvas of [tileCanvas, overlayCanvas]) {
-        canvas.width = Math.max(1, Math.round(r.width * ratio));
-        canvas.height = Math.max(1, Math.round(r.height * ratio));
-      }
+      const width = Math.max(1, Math.round(r.width * ratio));
+      const height = Math.max(1, Math.round(r.height * ratio));
       viewer.resize({ w: r.width, h: r.height });
-      requestDraw();
+      // Sizing a canvas clears it, so it is drawn again before this frame
+      // is painted: waiting for the next frame would show it blank (black)
+      // for a frame each time the split resizes, as when the app's sidebar
+      // opens or closes.
+      if (tileCanvas.width === width && tileCanvas.height === height) {
+        requestDraw();
+        return;
+      }
+      for (const canvas of [tileCanvas, overlayCanvas]) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      if (frame !== undefined) {
+        cancelAnimationFrame(frame);
+        frame = undefined;
+      }
+      draw();
     });
     observer.observe(host);
     onCleanup(() => observer.disconnect());
@@ -630,6 +656,11 @@ export function ViewerCanvas(props: {
       drag = { kind: 'pen', start: point };
       return;
     }
+    if (editing() && tool === 'pencil' && editor) {
+      drag = { kind: 'pencil', points: [pageAt(p)] };
+      requestDraw();
+      return;
+    }
     const edit = editor?.vectorEdit();
     if (editing() && edit && editor) {
       const hit = hitVector(
@@ -775,7 +806,8 @@ export function ViewerCanvas(props: {
               ? ROTATE_CURSOR
               : props.aids?.cursorAt(p)
         );
-        if (!isShapeTool(viewer.tool())) hoverAt(p);
+        if (!isShapeTool(viewer.tool()) && viewer.tool() !== 'pencil')
+          hoverAt(p);
       }
       return;
     }
@@ -799,6 +831,13 @@ export function ViewerCanvas(props: {
       props.editor?.penHandle(
         dragHandle(drag.start, pageAt(p), PEN_DRAG / viewer.camera().zoom)
       );
+      requestDraw();
+    } else if (drag.kind === 'pencil') {
+      const at = pageAt(p);
+      const last = drag.points[drag.points.length - 1];
+      // A point per screen pixel or so is plenty to smooth.
+      if (Math.hypot(at.x - last.x, at.y - last.y) * viewer.camera().zoom >= 1)
+        drag.points.push(at);
       requestDraw();
     } else if (drag.kind === 'vector') {
       const edit = props.editor?.vectorEdit();
@@ -928,6 +967,12 @@ export function ViewerCanvas(props: {
       void ended.mover.end();
     } else if (ended.kind === 'pen') {
       requestDraw();
+    } else if (ended.kind === 'pencil') {
+      requestDraw();
+      void props.editor?.pencilFinish(
+        ended.points,
+        PENCIL_TOLERANCE / viewer.camera().zoom
+      );
     } else if (ended.kind === 'guide') {
       void props.aids?.drop(ended.guide, local(e));
     } else if (ended.kind === 'resize') {
@@ -960,7 +1005,8 @@ export function ViewerCanvas(props: {
 
   const onDoubleClick = async (e: MouseEvent) => {
     const tool = viewer.tool();
-    if (panning() || isShapeTool(tool) || tool === 'pen') return;
+    if (panning() || isShapeTool(tool) || tool === 'pen' || tool === 'pencil')
+      return;
     if (props.editor?.vectorEdit()) return;
     const before = viewer.selected().map((s) => s.id);
     await viewer.clickAt(local(e), {
@@ -1027,6 +1073,7 @@ export function ViewerCanvas(props: {
     if (panning()) return 'grab';
     if (editing() && viewer.tool() === 'text') return 'text';
     if (editing() && viewer.tool() === 'pen') return 'crosshair';
+    if (editing() && viewer.tool() === 'pencil') return 'crosshair';
     if (editing() && isShapeTool(viewer.tool())) return 'crosshair';
     return cursorOverride() ?? 'default';
   };

@@ -1,4 +1,3 @@
-import { changesSearch } from '@app/features/agent-changes/changes-search';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
@@ -9,6 +8,7 @@ import {
   calendarPeriodPath,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { changesSearch } from '@app/features/changes/changes-search';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
 import {
   DRIVE_DOCUMENT_TYPES,

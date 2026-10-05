@@ -16,6 +16,7 @@ export interface PlanCatalogResponse {
   overage_limit_max_cents: number;
   /** Smallest allowed overage cap, cents. */
   overage_limit_min_cents: number;
-  /** Free and every purchasable paid plan, cheapest first. */
+  /** Every plan, cheapest first. Clients read allowances from here rather
+than hard-coding them; `purchasable` marks the plans a user can buy. */
   plans: PlanCatalogEntry[];
 }

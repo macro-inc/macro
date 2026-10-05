@@ -11,7 +11,7 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("bun.lock"),
     RepoGlob::new("apps/web/**"),
     RepoGlob::new("packages/**"),
-    RepoGlob::new("crates/agent_fold/**"),
+    RepoGlob::new("crates/folds/agent_fold/**"),
     RepoGlob::new("crates/agent_runtime_protocol/**"),
     RepoGlob::new("crates/client/cache-core/**"),
     RepoGlob::new("crates/client/cache-turso/**"),

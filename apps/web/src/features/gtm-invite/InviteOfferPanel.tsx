@@ -5,6 +5,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import Check from '@phosphor/check.svg';
+import { useIncludedAiCentsByTier } from '@queries/auth';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { Button } from '@ui';
 import { Index, onMount } from 'solid-js';
@@ -25,6 +26,7 @@ export function InviteOfferPanel(props: {
 }) {
   const analytics = useAnalytics();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const includedAi = useIncludedAiCentsByTier();
 
   onMount(() => {
     analytics.track('gtm_invite_offer_viewed', {
@@ -58,7 +60,7 @@ export function InviteOfferPanel(props: {
           </span>
         </div>
         <ul class="flex flex-col gap-2">
-          <Index each={planFeatures(aiUsageBilling().enabled)}>
+          <Index each={planFeatures(aiUsageBilling().enabled, includedAi())}>
             {(feature) => (
               <li class="flex items-center justify-between gap-2 text-xs">
                 <span class="flex items-center gap-1.5 text-ink-muted">
