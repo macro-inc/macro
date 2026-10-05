@@ -8,9 +8,9 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { networkInterfaces } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { networkInterfaces } from 'node:os';
 
 /*
  * Manual smoke server for the native OTA bundle updater.
@@ -18,8 +18,8 @@ import { fileURLToPath } from 'node:url';
  * Intended use:
  * 1. Build the embedded app baseline with a deterministic bundle build, e.g.
  *      BUNDLE_BUILD_NUMBER=100 MIN_NATIVE_BUILD=0 bun run build
- * 2. Start this server from apps/web (loopback only by default):
- *      just bundle-smoke-server older --port 3001
+ * 2. Start this server from apps/web:
+ *      just bundle-smoke-server older --host 0.0.0.0 --port 3001
  * 3. Build/run the native app with:
  *      MACRO_BUNDLE_UPDATE_BASE_URL=http://<MAC-LAN-IP>:3001
  *      BUNDLE_BUILD_NUMBER=100
@@ -33,7 +33,6 @@ import { fileURLToPath } from 'node:url';
  *      curl http://<MAC-LAN-IP>:3001/__scenario/revoke-101
  *      curl http://<MAC-LAN-IP>:3001/__scenario/incompatible-102
  *
- * See README-bundle-smoke.md for an isolated macOS test build and full checks.
  * This script creates fixture archives under .bundle-smoke/ from the current
  * dist output. Commit this script and the just recipe, but do not
  * commit generated .bundle-smoke artifacts or local IP/build-setting values.
@@ -63,19 +62,14 @@ const scenarios = new Set<Scenario>([
 ]);
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const distDir = join(appRoot, 'dist');
-const packageJsonPath = join(appRoot, 'package.json');
+const distDir = join(appRoot, 'packages', 'app', 'dist');
+const packageJsonPath = join(appRoot, 'packages', 'app', 'package.json');
 const workDir = join(appRoot, '.bundle-smoke');
-
-type ArtifactPaths = {
-  distDir: string;
-  workDir: string;
-  appVersion: string;
-};
+const artifactsDir = join(workDir, 'artifacts');
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  let host = '127.0.0.1';
+  let host = '0.0.0.0';
   let port = 3001;
   let scenario: Scenario = 'older';
   let prepareOnly = false;
@@ -108,8 +102,7 @@ function parseArgs() {
 }
 
 function parseScenario(value: string | undefined): Scenario {
-  if (value != null && scenarios.has(value as Scenario))
-    return value as Scenario;
+  if (value != null && scenarios.has(value as Scenario)) return value as Scenario;
   throw new Error(
     `Scenario must be one of: ${[...scenarios].join(', ')}. Got ${JSON.stringify(value)}`
   );
@@ -117,7 +110,7 @@ function parseScenario(value: string | undefined): Scenario {
 
 function printHelp() {
   console.log(`Usage:
-  bun scripts/smoke-bundle-updater-server.ts [scenario] [--host 127.0.0.1] [--port 3001]
+  bun scripts/smoke-bundle-updater-server.ts [scenario] [--host 0.0.0.0] [--port 3001]
 
 Scenarios:
   older             Advertise bundleBuild 90. A baseline 100 app should get 204.
@@ -141,7 +134,7 @@ function appVersion(): string {
   return JSON.parse(readFileSync(packageJsonPath, 'utf8')).version;
 }
 
-function assertDistExists(distDir: string) {
+function assertDistExists() {
   if (!existsSync(join(distDir, 'index.html'))) {
     throw new Error(
       `Missing ${join(distDir, 'index.html')}. Build the app first, for example:\n` +
@@ -150,12 +143,7 @@ function assertDistExists(distDir: string) {
   }
 }
 
-function writeManifest(
-  bundleDir: string,
-  build: number,
-  minNativeBuild: number,
-  appVersion: string
-) {
+function writeManifest(bundleDir: string, build: number, minNativeBuild: number) {
   writeFileSync(
     join(bundleDir, 'bundle-manifest.json'),
     `${JSON.stringify(
@@ -164,34 +152,11 @@ function writeManifest(
         bundleBuild: build,
         minNativeBuild,
         gitSha: 'smoke',
-        appVersion,
+        appVersion: appVersion(),
       },
       null,
       2
     )}\n`
-  );
-
-  // The frontend acknowledges a reload with this ID. Updating only the manifest
-  // leaves the worker waiting for an acknowledgement from the wrong generation.
-  const indexPath = join(bundleDir, 'index.html');
-  const indexHtml = readFileSync(indexPath, 'utf8');
-  const buildMeta =
-    /(<meta\s+name="macro-bundle-build"\s+content=")[^"]*("\s*\/?>)/;
-  if (!buildMeta.test(indexHtml)) {
-    throw new Error(`${indexPath} is missing the macro-bundle-build meta tag`);
-  }
-  if (!indexHtml.includes('</body>')) {
-    throw new Error(`${indexPath} is missing </body>`);
-  }
-  const marker = `<div id="macro-bundle-smoke" role="status" style="position:fixed;bottom:8px;right:8px;z-index:2147483647;padding:6px 10px;background:#fff;color:#000;border:1px solid #000;font:12px monospace;pointer-events:none">OTA smoke build ${build}</div>`;
-  writeFileSync(
-    indexPath,
-    indexHtml
-      .replace(
-        buildMeta,
-        (_match, prefix: string, suffix: string) => `${prefix}${build}${suffix}`
-      )
-      .replace('</body>', `${marker}</body>`)
   );
 }
 
@@ -210,18 +175,14 @@ function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-function buildArtifact(
-  paths: ArtifactPaths,
-  build: number,
-  minNativeBuild: number
-): BundleArtifact {
-  const bundleDir = join(paths.workDir, `bundle-${build}`);
+function buildArtifact(build: number, minNativeBuild: number): BundleArtifact {
+  const bundleDir = join(workDir, `bundle-${build}`);
   const fileName = `bundle-${build}.zip`;
-  const zipPath = join(paths.workDir, 'artifacts', fileName);
+  const zipPath = join(artifactsDir, fileName);
 
   rmSync(bundleDir, { recursive: true, force: true });
-  cpSync(paths.distDir, bundleDir, { recursive: true });
-  writeManifest(bundleDir, build, minNativeBuild, paths.appVersion);
+  cpSync(distDir, bundleDir, { recursive: true });
+  writeManifest(bundleDir, build, minNativeBuild);
   zipDir(bundleDir, zipPath);
 
   return {
@@ -233,9 +194,8 @@ function buildArtifact(
   };
 }
 
-export function prepareArtifacts(paths: ArtifactPaths) {
-  assertDistExists(paths.distDir);
-  const artifactsDir = join(paths.workDir, 'artifacts');
+function prepareArtifacts() {
+  assertDistExists();
   rmSync(artifactsDir, { recursive: true, force: true });
   mkdirSync(artifactsDir, { recursive: true });
   const artifacts = new Map<number, BundleArtifact>();
@@ -244,7 +204,7 @@ export function prepareArtifacts(paths: ArtifactPaths) {
     [101, 0],
     [102, 999999],
   ] as const) {
-    const artifact = buildArtifact(paths, build, minNativeBuild);
+    const artifact = buildArtifact(build, minNativeBuild);
     artifacts.set(build, artifact);
     console.log(
       `[bundle-smoke] prepared ${artifact.fileName} checksum=${artifact.checksum}`
@@ -306,12 +266,21 @@ function parseQueryBuildNumber(url: URL, name: string): number | null {
     : null;
 }
 
-export function createSmokeHandler(
-  artifacts: Map<number, BundleArtifact>,
-  initialScenario: Scenario
-) {
-  let scenario = initialScenario;
-  return (req: Request): Response => {
+const { host, port, scenario: initialScenario, prepareOnly, help } = parseArgs();
+if (help) {
+  printHelp();
+  process.exit(0);
+}
+
+const artifacts = prepareArtifacts();
+if (prepareOnly) process.exit(0);
+
+let scenario = initialScenario;
+
+const server = Bun.serve({
+  hostname: host,
+  port,
+  fetch(req) {
     const url = new URL(req.url);
 
     if (url.pathname === '/__scenario') {
@@ -326,11 +295,8 @@ export function createSmokeHandler(
 
     if (url.pathname.startsWith('/artifacts/')) {
       const fileName = url.pathname.split('/').at(-1);
-      const artifact = [...artifacts.values()].find(
-        (a) => a.fileName === fileName
-      );
+      const artifact = [...artifacts.values()].find((a) => a.fileName === fileName);
       if (!artifact) return notFound();
-      console.log(`[bundle-smoke] serving ${fileName} build=${artifact.build}`);
       return new Response(Bun.file(artifact.zipPath), {
         headers: { 'content-type': 'application/zip' },
       });
@@ -340,15 +306,10 @@ export function createSmokeHandler(
     if (!match) return notFound();
 
     const [, target, arch] = match;
-    const currentBundleBuild = parseQueryBuildNumber(
-      url,
-      'current_bundle_build'
-    );
+    const currentBundleBuild = parseQueryBuildNumber(url, 'current_bundle_build');
     const nativeBuild = parseQueryBuildNumber(url, 'native_build');
     if (currentBundleBuild == null || nativeBuild == null) {
-      return badRequest(
-        'current_bundle_build and native_build must be non-negative integers'
-      );
+      return badRequest('current_bundle_build and native_build must be non-negative integers');
     }
     console.log(
       `[bundle-smoke] ${target}/${arch} current=${currentBundleBuild} native=${nativeBuild} scenario=${scenario}`
@@ -375,33 +336,11 @@ export function createSmokeHandler(
       return nativeUpdateRequiredResponse(artifact);
     }
     return updateResponse(artifact, url.origin);
-  };
-}
+  },
+});
 
-if (import.meta.main) {
-  const { host, port, scenario, prepareOnly, help } = parseArgs();
-  if (help) {
-    printHelp();
-    process.exit(0);
-  }
-
-  const artifacts = prepareArtifacts({
-    distDir,
-    workDir,
-    appVersion: appVersion(),
-  });
-  if (prepareOnly) process.exit(0);
-  const server = Bun.serve({
-    hostname: host,
-    port,
-    fetch: createSmokeHandler(artifacts, scenario),
-  });
-
-  console.log(`[bundle-smoke] scenario=${scenario}`);
-  console.log(`[bundle-smoke] listening on ${server.hostname}:${server.port}`);
-  for (const url of host === '0.0.0.0'
-    ? localUrls(server.port)
-    : [`http://${host}:${server.port}`]) {
-    console.log(`[bundle-smoke] ${url}`);
-  }
+console.log(`[bundle-smoke] scenario=${scenario}`);
+console.log(`[bundle-smoke] listening on ${server.hostname}:${server.port}`);
+for (const url of localUrls(server.port)) {
+  console.log(`[bundle-smoke] ${url}`);
 }
