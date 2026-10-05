@@ -63,6 +63,53 @@ fn quarter_turns(t: &Affine) -> Option<bool> {
     }
 }
 
+/// The lengths of the children that fill the main axis (`None` for the
+/// others), sharing `free` by their grow factors. A child its size limits
+/// stop takes the limit, and the others share what is left, as in CSS
+/// flexbox; Figma keeps squeezed fill children at least a pixel.
+fn fill_lengths(items: &[Item], free: f64, h: bool) -> Vec<Option<f64>> {
+    let extra = |it: &Item| split(it.extra, h).0;
+    let mut frozen: Vec<Option<f64>> = vec![None; items.len()];
+    loop {
+        let taken: f64 = items
+            .iter()
+            .zip(&frozen)
+            .filter_map(|(it, f)| f.map(|l| l + extra(it)))
+            .sum();
+        let open = |k: usize| items[k].child.fills_primary() && frozen[k].is_none();
+        let grow: f64 = (0..items.len())
+            .filter(|&k| open(k))
+            .map(|k| f64::from(items[k].child.grow.unwrap_or(1.0)))
+            .sum();
+        let share = |k: usize| {
+            let it = &items[k];
+            (free - taken).max(0.0) * f64::from(it.child.grow.unwrap_or(1.0)) / grow - extra(it)
+        };
+        let limited: Vec<(usize, f64)> = (0..items.len())
+            .filter(|&k| open(k))
+            .filter_map(|k| {
+                let want = share(k);
+                let got = items[k].child.clamp(want, h);
+                ((got - want).abs() > EPS).then_some((k, got))
+            })
+            .collect();
+        if limited.is_empty() {
+            return (0..items.len())
+                .map(|k| {
+                    if !items[k].child.fills_primary() {
+                        None
+                    } else {
+                        Some(frozen[k].unwrap_or_else(|| share(k)).max(1.0))
+                    }
+                })
+                .collect();
+        }
+        for (k, got) in limited {
+            frozen[k] = Some(got);
+        }
+    }
+}
+
 /// The fixed gaps between `n` children: none with Figma's automatic gap,
 /// which spreads the free space instead of the stored spacing.
 fn fixed_gaps(al: &AutoLayout, n: usize) -> f64 {
@@ -305,14 +352,12 @@ impl Txn<'_> {
                     .map(main_of)
                     .sum();
                 let free = (main_size - pad_start - pad_end - gaps - fixed).max(0.0);
-                for item in items.iter_mut() {
-                    if !item.child.fills_primary() {
+                let lengths = fill_lengths(&items, free, h);
+                for (item, length) in items.iter_mut().zip(lengths) {
+                    let Some(length) = length else {
                         continue;
-                    }
+                    };
                     let extra = split(item.extra, h).0;
-                    let share = free * f64::from(item.child.grow.unwrap_or(1.0)) / grow;
-                    // Figma keeps squeezed fill children at least a pixel.
-                    let length = item.child.clamp(share - extra, h).max(1.0);
                     let i = item.i;
                     if self.keeps_size(i, main_of(item) - extra) {
                         item.slot = Some(length + extra);

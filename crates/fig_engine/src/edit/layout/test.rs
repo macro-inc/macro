@@ -666,6 +666,34 @@ fn stretched_stacks_count_when_hugging() {
 }
 
 #[test]
+fn fill_children_share_what_limited_ones_leave() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = stack(&mut doc, &mut h);
+    for (k, max) in [(1, 70.0), (2, 100.0)] {
+        let i = idx(&doc, &kids[k]) as usize;
+        doc.nodes[i].props.layout_child = Some(LayoutChild {
+            max_size: Some(Vec2::new(max, 0.0)),
+            ..LayoutChild::default()
+        });
+    }
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"itemSpacing":0,"paddingLeft":0,"paddingRight":0,"sizingHorizontal":"FIXED","width":534}"#,
+    );
+    for k in &kids {
+        set(&mut doc, &mut h, k, r#"{"sizingHorizontal":"FILL"}"#);
+    }
+    // A third each would be 178; the two capped ones leave the rest.
+    assert_eq!(bounds(&doc, &kids[0]).2, 364.0);
+    assert_eq!(bounds(&doc, &kids[1]), (364.0, 10.0, 70.0, 30.0));
+    assert_eq!(bounds(&doc, &kids[2]).0, 434.0);
+    assert_eq!(bounds(&doc, &kids[2]).2, 100.0);
+}
+
+#[test]
 fn rows_align_baselines() {
     let mut doc = Document::open(&blank("x")).unwrap();
     let mut h = History::default();
