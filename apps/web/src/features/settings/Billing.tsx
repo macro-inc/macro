@@ -236,7 +236,7 @@ export const Billing = () => {
                 when={canManageSubscription() && hasPaid() && isOwnerOrSolo()}
               >
                 <Button
-                  class="ml-auto rounded-full bg-active"
+                  class="ml-auto bg-active"
                   size="sm"
                   depth={2}
                   variant="outline"
@@ -297,7 +297,7 @@ export const Billing = () => {
                       <PlanPrice tier="premium" />
                     </div>
                     <Button
-                      class="ml-auto rounded-full py-1.5 px-3"
+                      class="ml-auto py-1.5 px-3"
                       depth={2}
                       variant="cta"
                       onClick={() => void handleCheckout('premium')}

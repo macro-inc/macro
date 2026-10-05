@@ -57,6 +57,9 @@ pub struct OpsAffectedEvent {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CacheChangedEvent {
+    /// Known query-write changes; missing metadata requests a conservative refresh.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_changed_buckets: Option<std::collections::BTreeSet<String>>,
     /// Effective-view revision installed by the logical mutation.
     pub revision: String,
     /// Present when the write cleared durable records and hydration must restart.
@@ -68,12 +71,19 @@ pub struct CacheChangedEvent {
 #[serde(rename_all = "camelCase")]
 struct MutationSettledEvent {
     transaction_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     replacement_transaction_id: Option<String>,
 }
+
+#[cfg(test)]
+mod test;
 
 struct InitializedCache {
     scope: String,
@@ -113,9 +123,23 @@ fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[
 }
 
 fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str, reset: bool) {
+    emit_cache_changed_with_search_changes(app, revision, reset, None);
+}
+
+fn emit_cache_changed_with_search_changes<R: Runtime>(
+    app: &AppHandle<R>,
+    revision: &str,
+    reset: bool,
+    search_changed_buckets: Option<&std::collections::BTreeSet<String>>,
+) {
     app.emit(
         CACHE_CHANGED_EVENT,
         CacheChangedEvent {
+            search_changed_buckets: if reset {
+                None
+            } else {
+                search_changed_buckets.cloned()
+            },
             revision: revision.to_owned(),
             reset: reset.then_some(true),
         },
@@ -127,16 +151,20 @@ fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str, reset: boo
 fn emit_mutation_settled<R: Runtime>(
     app: &AppHandle<R>,
     transaction_id: String,
+    mutation_uuid: Option<String>,
     status: &'static str,
     error: Option<String>,
+    error_code: Option<String>,
     replacement_transaction_id: Option<String>,
 ) {
     app.emit(
         MUTATION_SETTLED_EVENT,
         MutationSettledEvent {
             transaction_id,
+            mutation_uuid,
             status,
             error,
+            error_code,
             replacement_transaction_id,
         },
     )

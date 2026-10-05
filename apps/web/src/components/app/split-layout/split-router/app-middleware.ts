@@ -15,42 +15,37 @@ import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
 import {
+  replacePaneSearchParams,
   routeParams,
   type SerializedSearchParams,
   type SplitRouterMiddleware,
   type SplitRouterMiddlewareContext,
   type SplitRouterMiddlewareResult,
 } from '@app/lib/split-router';
-import { replaceSplitSearchParams } from '@app/lib/split-router/search';
+import { paneRootMatch } from '@app/routes/app-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import { match } from 'ts-pattern';
-import { appSplitRoutes } from './app-routes';
 import { decodeLegacyPair } from './legacy-route';
 
-type NewAppViewsState = {
-  enabled: boolean;
-  loading: boolean;
-};
-
 type AppMiddlewareState = {
-  newAppViews: () => NewAppViewsState;
   isTouchDevice: () => boolean;
 };
 
 /** Upgrade legacy component and block URLs when supported; on touch, keep
  * document details in their full-block routes instead of inline Drive views. */
 function redirectLegacyRoutes(
-  { to, redirect }: SplitRouterMiddlewareContext,
+  { routes, to, redirect }: SplitRouterMiddlewareContext,
   options: AppMiddlewareState
-): SplitRouterMiddlewareResult {
+): SplitRouterMiddlewareResult | undefined {
   const route = to.location.route;
+  const rootId = paneRootMatch(route)?.id;
 
   const isTouch = options.isTouchDevice();
 
-  if (route.matches[0].id === 'drive' && isTouch) {
+  if (rootId === 'drive' && isTouch) {
     const { documentType, documentId } = routeParams(route);
     if (typeof documentType === 'string' && typeof documentId === 'string') {
       return redirect(
@@ -59,19 +54,19 @@ function redirectLegacyRoutes(
     }
   }
 
-  if (route.matches[0].id === 'call-detail') {
+  if (rootId === 'call-detail') {
     const { callId } = routeParams(route);
     if (typeof callId === 'string') {
       return redirect(`/drive/call/${encodeURIComponent(callId)}`);
     }
   }
-  if (route.matches[0].id === 'pr-detail') {
+  if (rootId === 'pr-detail') {
     const { foreignEntityId } = routeParams(route);
     if (typeof foreignEntityId === 'string') {
       return redirect(`/reviews/pr/${encodeURIComponent(foreignEntityId)}`);
     }
   }
-  if (route.matches[0].id !== 'legacy-content') return;
+  if (rootId !== 'legacy-content') return;
 
   const { type, id } = routeParams(route);
 
@@ -87,16 +82,10 @@ function redirectLegacyRoutes(
       calendarPath(getPreferredCalendarPeriodView())
     )
     .with({ type: 'component' }, ({ id }) =>
-      appSplitRoutes.definitions.some((route) => route.id === `view-${id}`)
-        ? `/${id}`
-        : undefined
+      routes.byId.has(`view-${id}`) ? `/${id}` : undefined
     )
     .when(
-      () => {
-        if (isTouch) return true;
-        const flag = options.newAppViews();
-        return flag.loading || !flag.enabled;
-      },
+      () => isTouch,
       () => undefined
     )
     .with({ type: 'email' }, ({ id }) => `/mail/${encodeURIComponent(id)}`)
@@ -105,6 +94,12 @@ function redirectLegacyRoutes(
       ({ id }) => `/channels/${encodeURIComponent(id)}`
     )
     .with({ type: 'task' }, ({ id }) => `/tasks/${encodeURIComponent(id)}`)
+    // Like a task, a project opens in Tasks, under its Projects tab.
+    .with({ type: 'initiative' }, ({ id }) => {
+      const query = new URLSearchParams();
+      replacePaneSearchParams(query, [{ tasks: { tab: ['projects'] } }]);
+      return `/tasks/projects/${encodeURIComponent(id)}/overview?${query}`;
+    })
     .otherwise((content) => {
       const document = driveDocumentFromContent(content);
       return document
@@ -125,7 +120,7 @@ function migrateLegacySearch({
   cause,
   externalSearch,
   redirect,
-}: SplitRouterMiddlewareContext): SplitRouterMiddlewareResult {
+}: SplitRouterMiddlewareContext): SplitRouterMiddlewareResult | undefined {
   if (cause !== 'initial' && cause !== 'external') return;
 
   if (!externalSearch) return;
@@ -185,7 +180,10 @@ function migrateLegacySearch({
     }))
     .with('call-detail', 'drive-call', () => ({
       namespace: 'call-detail',
-      fields: [[CALL_URL_PARAMS.transcriptId, 'transcriptId']] as const,
+      fields: [
+        [CALL_URL_PARAMS.transcriptId, 'transcriptId'],
+        [CALL_URL_PARAMS.messageId, 'messageId'],
+      ] as const,
     }))
     .otherwise(() => undefined);
 
@@ -216,7 +214,7 @@ function migrateLegacySearch({
   const query = new URLSearchParams();
 
   // Middleware redirects describe one entry; the router assigns its pane index.
-  replaceSplitSearchParams(query, [{ location: { search } }]);
+  replacePaneSearchParams(query, [search]);
 
   return redirect(`${path}?${query}`);
 }

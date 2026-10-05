@@ -7,8 +7,10 @@
 import type { PropertyOwnerOneOfFiveScope } from './propertyOwnerOneOfFiveScope';
 
 /**
- * System-owned property (no user or team owner).
+ * Database-scoped property: the definition is a column of one Macro
+database and is invisible to the shared user/team property namespace.
  */
 export type PropertyOwnerOneOfFive = {
+  database_id: string;
   scope: PropertyOwnerOneOfFiveScope;
 };

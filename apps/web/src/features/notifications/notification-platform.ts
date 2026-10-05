@@ -1,7 +1,7 @@
 import { getFaviconUrl } from '@app/util/favicon';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
-import { themeReactive } from '../theme/signals/themeReactive';
+import { committedThemeAccent } from '../theme/signals/themeSignals';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import { isEntityDiscussionEvent } from './entity-discussion';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
@@ -34,11 +34,6 @@ export interface PlatformNotificationData {
 
 const USER_NAME_FALLBACK = 'Someone';
 const DOCUMENT_NAME_FALLBACK = 'Something';
-
-function getAccentColorForIcon(): string {
-  const { l, c, h } = themeReactive.a0;
-  return `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
-}
 
 /**
  * Who the notification reads as being from. Agent notifications have no user
@@ -74,6 +69,22 @@ export async function toPlatformNotificationData(
   resolveUserName: UserNameResolver,
   resolveDocumentName: DocumentNameResolver
 ): Promise<PlatformNotificationData | null> {
+  const accentColor = committedThemeAccent();
+  const icon = getFaviconUrl(accentColor);
+  const metadata = notification.notification_metadata;
+
+  // A reminder is self-authored and points at its own detail resource. Do not
+  // manufacture an actor/target sentence or resolve its id as a document.
+  if (metadata.tag === 'reminder') {
+    return {
+      title: 'Reminder',
+      options: {
+        body: markdownToPlainText(metadata.content.description),
+        icon,
+      },
+    };
+  }
+
   const actor =
     (await resolveActorName(notification, resolveUserName)) ??
     USER_NAME_FALLBACK;
@@ -89,9 +100,6 @@ export async function toPlatformNotificationData(
 
   const content = getNotificationContent(notification);
   const action = getNotificationAction(notification);
-
-  const accentColor = getAccentColorForIcon();
-  const icon = getFaviconUrl(accentColor);
 
   return {
     title: `${actor}${showTarget ? ` <${targetName}>` : ''}`,

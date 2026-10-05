@@ -1,7 +1,5 @@
 import {
   type EntityData,
-  getCompanyOwnerId,
-  getCompanyStageOptionId,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
   isGithubPrEntity,
@@ -13,7 +11,6 @@ import {
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-import { NO_ASSIGNEE, NO_STAGE } from './configs/base';
 
 function getPredicateNotifications(
   entity: EntityData,
@@ -107,8 +104,8 @@ export function agentFilter(entity: EntityData): boolean {
   return entity.type === 'chat' || entity.type === 'agent_session';
 }
 
-export function automationFilter(entity: EntityData): boolean {
-  return entity.type === 'automation';
+export function routineFilter(entity: EntityData): boolean {
+  return entity.type === 'routine';
 }
 
 export function projectFilter(entity: EntityData): boolean {
@@ -139,10 +136,6 @@ export function callsFilter(entity: EntityData): boolean {
 
 export function calendarEventFilter(entity: EntityData): boolean {
   return entity.type === 'calendar_event';
-}
-
-export function crmCompanyFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company';
 }
 
 export function remindersFilter(entity: EntityData): boolean {
@@ -202,57 +195,6 @@ export function searchSupportedFilter(entity: EntityData): boolean {
     entity.type !== 'crm_company' &&
     entity.type !== 'crm_contact'
   );
-}
-
-export function crmCompanyActiveFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company' && !entity.hidden;
-}
-
-export function crmCompanyHiddenFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company' && entity.hidden;
-}
-
-/**
- * Stage filter for companies, driven by the view's stage selection
- * (`ctx.stages`). `NO_STAGE` matches companies without a Stage set. Stage
- * resolution goes through `resolveStage` (the team's active deal-stage
- * set, from `ctx.resolveCompanyStage`) when supplied, so the filter
- * buckets companies exactly like the kanban — legacy system-stage values
- * included; otherwise it falls back to the raw system Stage value.
- */
-export function companyStageFilter(
-  stageIds: () => string[] | undefined,
-  resolveStage?: (entity: EntityData) => string | undefined
-) {
-  return (entity: EntityData): boolean => {
-    const stages = stageIds();
-    if (!stages?.length) return true;
-    if (entity.type !== 'crm_company') return false;
-    const stageId = resolveStage
-      ? resolveStage(entity)
-      : getCompanyStageOptionId(entity);
-    return stages.some((id) =>
-      id === NO_STAGE ? stageId === undefined : stageId === id
-    );
-  };
-}
-
-/**
- * Owner filter for companies, driven by the view's owner selection
- * (`ctx.owners`). `NO_OWNER` matches companies without an Owner set.
- */
-export function companyOwnedByUsersFilter(
-  ownerIds: () => string[] | undefined
-) {
-  return (entity: EntityData): boolean => {
-    const owners = ownerIds();
-    if (!owners?.length) return true;
-    if (entity.type !== 'crm_company') return false;
-    const ownerId = getCompanyOwnerId(entity);
-    return owners.some((id) =>
-      id === NO_ASSIGNEE ? ownerId === undefined : ownerId === id
-    );
-  };
 }
 
 export function filesAndFolderFilter(entity: EntityData): boolean {

@@ -1,17 +1,18 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { match } from 'ts-pattern';
-import type {
-  AutomationEntity,
-  CallEntity,
-  ChannelEntity,
-  ChatEntity,
-  DocumentEntity,
-  EmailEntity,
-  EntityData,
-  ProjectEntity,
-  SkillEntity,
-  SnippetEntity,
-  TaskEntity,
+import {
+  type CallEntity,
+  type ChannelEntity,
+  type ChatEntity,
+  type DocumentEntity,
+  type EmailEntity,
+  type EntityData,
+  type ProjectEntity,
+  type RoutineEntity,
+  routineStatus,
+  type SkillEntity,
+  type SnippetEntity,
+  type TaskEntity,
 } from '../types/entity';
 
 export type BuildEntityDataArgs = {
@@ -107,6 +108,7 @@ export function buildEntityData(
         'image',
         'canvas',
         'spreadsheet',
+        'pptx',
         'video',
         'unknown',
         'csv',
@@ -155,13 +157,16 @@ export function buildEntityData(
           done: args.done ?? false,
         })
       )
-      .with('automation', (): AutomationEntity | undefined => {
+      .with('routine', (): RoutineEntity | undefined => {
         if (!args.cron) return undefined;
         return {
           ...base,
-          type: 'automation',
+          type: 'routine',
           cron: args.cron,
-          enabled: args.enabled ?? false,
+          status: routineStatus({
+            enabled: args.enabled ?? false,
+            isRunning: false,
+          }),
         };
       })
       .with('call', (): CallEntity | undefined => {
@@ -180,8 +185,14 @@ export function buildEntityData(
       })
       // The singleton calendar block has no entity-shaped block id.
       .with('calendar', (): undefined => undefined)
-      // CRM companies/contacts aren't constructed from block args; soup is the source.
-      .with('company', 'contact', (): undefined => undefined)
+      // Databases use REST; CRM records and initiatives come from Soup.
+      .with(
+        'database',
+        'company',
+        'contact',
+        'initiative',
+        (): undefined => undefined
+      )
       // PRs are virtual blocks backed by GitHub, not Macro entities.
       .with('pr', (): undefined => undefined)
       .with('agent', (): EntityData | undefined =>

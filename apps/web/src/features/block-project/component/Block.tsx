@@ -10,6 +10,7 @@ import { SoupViewList } from '@app/features/next-soup/soup-view/soup-view';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { SidePanel } from '@components/app/side-panel';
+import { SplitPanelContext } from '@components/app/split-layout/context';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -25,6 +26,7 @@ import {
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { type Component, createSignal, Show } from 'solid-js';
+import { useProjectScopedPanel } from './project-scoped-panel';
 import { ProjectSidePanelSections } from './sidepanel/ProjectSidePanelSections';
 import { TopBar } from './TopBar';
 
@@ -101,7 +103,7 @@ const Block: Component = () => {
   return (
     <DocumentBlockContainer>
       <div
-        class="size-full bg-surface flex flex-col relative"
+        class="size-full flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
           onDragEnd: () => setIsDragging(false),
@@ -114,7 +116,7 @@ const Block: Component = () => {
         <Show when={isDragging() && !isSpecialProject}>
           <FileDropOverlay>Upload to this folder</FileDropOverlay>
         </Show>
-        <SidePanel.Layout defaultOpen={false}>
+        <SidePanel.Layout defaultOpen={false} floating>
           <Show when={!isSpecialProject}>
             <ProjectSidePanelSections />
           </Show>
@@ -134,11 +136,21 @@ const Block: Component = () => {
   );
 };
 
-const ProjectEntityList = (props: {
+type ProjectEntityListProps = {
   scopeId: string;
   projectId: string;
   soup: SoupState;
-}) => {
+};
+
+const ProjectEntityList = (props: ProjectEntityListProps) => {
+  return (
+    <SplitPanelContext.Provider value={useProjectScopedPanel(props.projectId)}>
+      <ProjectEntityListContent {...props} />
+    </SplitPanelContext.Provider>
+  );
+};
+
+const ProjectEntityListContent = (props: ProjectEntityListProps) => {
   return (
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider

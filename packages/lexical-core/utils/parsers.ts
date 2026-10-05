@@ -1,4 +1,5 @@
 import { isAgentContextData } from '../nodes/AgentContextNode';
+import { parseDatabaseQueryJson } from '../nodes/DatabaseQueryNode';
 
 export function parseUserMentions(text: string): string {
   return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_, json) => {
@@ -100,6 +101,21 @@ export function parseConnectApps(text: string): string {
       return '';
     }
   });
+}
+
+export function parseDatabaseQueries(text: string): string {
+  return text.replace(/<m-db-query>(.*?)<\/m-db-query>/g, (_, json) => {
+    const data = parseDatabaseQueryJson(json);
+    return data?.title || data?.prompt || 'Live database answer';
+  });
+}
+
+/** A Cursor `<system_notification …>` block reads as its summary line. */
+export function parseCursorSystemNotifications(text: string): string {
+  return text.replace(
+    /<system_notification\b[^>]*>(.*?)<\/system_notification>/gs,
+    (_, body: string) => body.trim()
+  );
 }
 
 export function parseTagMentions(text: string): string {
@@ -216,6 +232,7 @@ export function stripAgentContext(text: string): string {
  * - Group mentions: @groupAlias (e.g., @here)
  * - Links: text (fallback to url)
  * - Reply targets: displayText
+ * - Cursor system notifications: the summary between the tags
  */
 export function markdownToPlainText(markdown: string): string {
   const transforms: Array<(text: string) => string> = [
@@ -228,6 +245,8 @@ export function markdownToPlainText(markdown: string): string {
     parseAgentSessionMentions,
     parseTagMentions,
     parseConnectApps,
+    parseCursorSystemNotifications,
+    parseDatabaseQueries,
     parseSnapshots,
     parseDocumentCards,
     parseLinks,
@@ -243,6 +262,8 @@ export function markdownToPlainText(markdown: string): string {
  * format's `<m-*>` JSON tags. Each tag uses a small subset of these.
  */
 type MentionTagPayload = {
+  prompt?: string;
+  title?: string;
   documentId?: string;
   documentName?: string;
   blockName?: string;
@@ -423,6 +444,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-connect-app', (data) =>
     data.name ? `Connect ${data.name}` : ''
+  );
+  text = replaceJsonTag(
+    text,
+    'm-db-query',
+    (data) => data.title || data.prompt || 'Live database answer'
   );
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
   text = replaceJsonTag(

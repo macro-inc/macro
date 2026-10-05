@@ -58,6 +58,21 @@ pub struct AgentMentionedEvent {
     pub message: MessagePostedMetadata,
 }
 
+/// A session opened when a task is assigned to an agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentAssignedToTaskEvent {
+    /// The agent assigned to the task.
+    pub bot_id: BotId,
+    /// Task whose discussion receives the response.
+    pub parent: MessageParent,
+    /// The single bot-authored root to update with the session response.
+    pub discussion_id: Uuid,
+    /// User who assigned the task and owns the resulting session.
+    pub actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// Private startup prompt, never posted as a discussion message.
+    pub prompt: String,
+}
+
 /// A session somebody asked for from Macro itself - the composer - rather
 /// than by mentioning the bot. Nothing was posted anywhere, so there is no
 /// thread to announce into and no message to quote.
@@ -85,23 +100,25 @@ pub enum NewAgentSessionEvent {
     TopLevelMentioned(AgentBotMentionedEvent),
     /// Opened by a bot mention on a message parent other than a channel.
     Mentioned(AgentMentionedEvent),
+    /// Opened by assigning the agent to a task, with a discussion to answer in.
+    AssignedToTask(AgentAssignedToTaskEvent),
     /// Asked for from the composer, with no mention behind it. Consumers that
     /// only know mentions see no [`OpeningMention`] here and skip it.
     Requested(AgentSessionRequestedEvent),
 }
 
-/// The mention a new-session event carries, whichever parent it was on.
+/// The opening discussion message carried by a mention.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpeningMention {
-    /// The bot that was mentioned.
+    /// The bot that should answer.
     pub bot_id: BotId,
-    /// The mentioning message, with its parent.
+    /// The opening message, with its parent.
     pub message: MessagePostedMetadata,
 }
 
 impl NewAgentSessionEvent {
-    /// The mention this event carries; `None` for a shape this build does
-    /// not recognise, which a consumer skips rather than routes.
+    /// The user-authored message behind a mention. Assignments and composer
+    /// requests carry no user discussion message and return `None`.
     #[must_use]
     pub fn mention(&self) -> Option<OpeningMention> {
         match self {
@@ -113,7 +130,7 @@ impl NewAgentSessionEvent {
                 bot_id: mentioned.bot_id,
                 message: mentioned.message.clone(),
             }),
-            Self::Requested(_) => None,
+            Self::AssignedToTask(_) | Self::Requested(_) => None,
         }
     }
 
@@ -122,7 +139,7 @@ impl NewAgentSessionEvent {
     pub fn requested(&self) -> Option<&AgentSessionRequestedEvent> {
         match self {
             Self::Requested(requested) => Some(requested),
-            Self::TopLevelMentioned(_) | Self::Mentioned(_) => None,
+            Self::TopLevelMentioned(_) | Self::Mentioned(_) | Self::AssignedToTask(_) => None,
         }
     }
 }
@@ -231,6 +248,7 @@ impl AgentTriggerTopicEvent {
     #[must_use]
     pub fn bot_id(&self) -> Option<BotId> {
         match self {
+            Self::New(NewAgentSessionEvent::AssignedToTask(assigned)) => Some(assigned.bot_id),
             Self::New(event) => event
                 .mention()
                 .map(|mention| mention.bot_id)
@@ -335,6 +353,7 @@ impl AgentSessionMacroEvent {
                     })?,
             ),
             MessageParent::Document(_)
+            | MessageParent::Call(_)
             | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => None,
@@ -386,6 +405,7 @@ impl AgentSessionMacroEvent {
         let bot_id = match &event {
             NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id,
             NewAgentSessionEvent::Mentioned(mentioned) => mentioned.bot_id,
+            NewAgentSessionEvent::AssignedToTask(assigned) => assigned.bot_id,
             NewAgentSessionEvent::Requested(requested) => requested.bot_id,
         };
         Self::new(bot_id, AgentTriggerTopicEvent::New(event))

@@ -160,7 +160,7 @@ const PaywallComponent = (props: PaywallProps) => {
           <Button
             variant="ghost"
             depth={3}
-            class="rounded-full sm:w-auto px-3 py-1.5"
+            class="sm:w-auto px-3 py-1.5"
             onClick={props.cb}
           >
             Dismiss
@@ -170,7 +170,7 @@ const PaywallComponent = (props: PaywallProps) => {
             fallback={
               <Button
                 variant={hasPaid() ? 'outline' : 'cta'}
-                class="rounded-full sm:w-auto px-3 py-1.5"
+                class="sm:w-auto px-3 py-1.5"
                 onClick={handleContinue}
               >
                 {ctaLabel()}
@@ -184,7 +184,7 @@ const PaywallComponent = (props: PaywallProps) => {
               <span>
                 <Button
                   variant={hasPaid() ? 'outline' : 'cta'}
-                  class="rounded-full sm:w-auto px-3 py-1.5"
+                  class="sm:w-auto px-3 py-1.5"
                   disabled
                 >
                   {ctaLabel()}

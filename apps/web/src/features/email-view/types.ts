@@ -10,6 +10,7 @@ export type EmailTab =
   | 'favorites'
   | 'sent'
   | 'scheduled'
+  | 'reminders'
   | 'calendar'
   | 'drafts'
   | 'shared'

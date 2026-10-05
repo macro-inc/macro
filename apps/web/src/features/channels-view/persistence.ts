@@ -45,7 +45,7 @@ const channelsExpandedGroupsSchema = z.preprocess(
 
 const channelsEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
-  tab: z.enum(['browse', 'recents']).default('browse'),
+  tab: z.enum(['browse', 'recents', 'threads']).default('browse'),
   mobileTab: z
     .enum(['channels', 'direct_messages', 'recents'])
     .default('channels'),
@@ -55,6 +55,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
     direct_messages: true,
   }),
   collapsedLabels: z.array(z.string()).default([]),
+  threadsChannelId: z.string().optional(),
 });
 
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
@@ -69,6 +70,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
     direct_messages: true,
   },
   collapsedLabels: [],
+  threadsChannelId: undefined,
 } satisfies ChannelsEntryState;
 
 const channelsPreferencesSchema = z.object({
@@ -86,6 +88,9 @@ const channelsPreferencesSchema = z.object({
       direct_messages: z
         .enum(['viewed_at', 'updated_at', 'created_at'])
         .default(CHANNELS_DEFAULT_SORT_BY.direct_messages),
+      threads: z
+        .enum(['viewed_at', 'updated_at', 'created_at'])
+        .default(CHANNELS_DEFAULT_SORT_BY.threads),
     })
     .default(CHANNELS_DEFAULT_SORT_BY),
 });
@@ -105,6 +110,7 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
     mobileTab: state.mobileTab,
     expandedGroups: state.expandedGroups,
     collapsedLabels: state.collapsedLabels,
+    threadsChannelId: state.threadsChannelId,
   };
 }
 
@@ -121,6 +127,7 @@ function restoreChannelsEntryState(
     mobileTab: restored.mobileTab,
     expandedGroups: restored.expandedGroups,
     collapsedLabels: restored.collapsedLabels,
+    threadsChannelId: restored.threadsChannelId,
   };
 }
 

@@ -10,9 +10,19 @@ fn stack_frontend_uses_same_origin_with_an_instance_specific_server_target() {
         Instance::derive(Some("other-dev"), Some(20300)).unwrap(),
     ] {
         for mode in [Mode::Local, Mode::Dev] {
-            let env: std::collections::HashMap<_, _> =
-                dev_env(&instance, mode, true, false).into_iter().collect();
+            let env: std::collections::HashMap<_, _> = dev_env(&instance, mode, true, false)
+                .unwrap()
+                .into_iter()
+                .collect();
+            assert_eq!(
+                env["MACRO_LOCAL_HOSTNAME"],
+                super::super::tls::hostname().unwrap()
+            );
             assert_eq!(env["VITE_LOCAL_BACKEND_ORIGIN"], "same-origin");
+            assert_eq!(
+                env["NODE_EXTRA_CA_CERTS"],
+                proxy::ca_pem().display().to_string()
+            );
             assert_eq!(env["MACRO_LOCAL_BACKEND_PROXY"], proxy::url(&instance));
             assert_eq!(
                 env["MACRO_LOCAL_BACKEND_ROUTES"],
@@ -26,6 +36,7 @@ fn stack_frontend_uses_same_origin_with_an_instance_specific_server_target() {
             }
         }
         let env: std::collections::HashMap<_, _> = dev_env(&instance, Mode::Local, false, false)
+            .unwrap()
             .into_iter()
             .collect();
         assert_eq!(env["VITE_ENABLE_BROWSER_OTEL"], "false");

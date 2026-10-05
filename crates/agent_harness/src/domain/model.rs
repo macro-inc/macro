@@ -14,23 +14,8 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
-/// Where a mention happened.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct MentionOrigin {
-    /// Channel or document the mentioning message was posted in.
-    pub parent: messages::domain::models::MessageParent,
-    /// Thread the announcement replies into: the mention's thread root.
-    pub thread_id: Uuid,
-    /// The mentioning message itself.
-    pub message_id: Uuid,
-    /// Who asked. Owns the session and is credited for its messages.
-    pub sender: MacroUserIdStr<'static>,
-    /// The message text, verbatim; becomes the session's first prompt.
-    pub content: String,
-    /// Files attached to the message, as the prompt will refer to them.
-    #[serde(default)]
-    pub attachments: Vec<PromptAttachment>,
-}
+mod session_origin;
+pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
 
 /// How a channel message's attached files are named to an agent.
 ///
@@ -91,7 +76,7 @@ impl StaticFileLinks {
     }
 }
 
-/// Open a new session for a mention.
+/// Open a new session for a mention or task assignment.
 ///
 /// Only for managed sessions - the ones whose sandbox this deployment
 /// provisions. External sessions are opened through
@@ -100,12 +85,12 @@ impl StaticFileLinks {
 /// a plain create rather than a harness command.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenSession {
-    /// The bot that was mentioned.
+    /// The bot selected by the triggering event.
     pub bot_id: BotId,
     /// Runtime configuration resolved for this bot when the trigger arrived.
     pub runtime: AgentRuntimeConfig,
-    /// The mention itself.
-    pub origin: MentionOrigin,
+    /// The mention or assignment that requested the session.
+    pub origin: SessionOrigin,
 }
 
 /// How a bot's sessions get a runtime — the closed set of first-party
@@ -115,16 +100,12 @@ pub struct OpenSession {
 /// derive it from their persisted harness slug, which is also copied onto each
 /// session so resume and teardown keep routing correctly after a restart.
 ///
-/// A session's instructions are stored on its row whichever kind serves it,
-/// but only [`Self::InMemory`] and [`Self::ClaudeCloud`] read them today -
-/// the first builds its system prompt in this process, the second passes
-/// them to Claude at create. The rest need a transport, and
-/// ACP supplies none: `session/new` carries a working directory, MCP servers
-/// and `_meta`, and nothing else. [`Self::SandboxedCoder`] will get a
-/// per-session file listed alongside `SYSTEM.md` in `container/opencode.json`,
-/// [`Self::External`] `_meta` on `session/new` for macrod to translate, and
-/// [`Self::Cursor`] - whose API takes a prompt and nothing more - has to fold
-/// them into the prompt body's hidden agent-context node.
+/// A session's instructions are stored on its row whichever kind serves it.
+/// [`Self::InMemory`] builds its system prompt from them in this process and
+/// [`Self::ClaudeCloud`] passes them to Claude at create; every other kind
+/// talks ACP or a prompt-only API, neither of which has a system prompt, so
+/// they ride in the first prompt's hidden agent-context node instead. See
+/// [`Self::folds_instructions`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AgentKind {
     /// A sandbox this deployment provisions (Daytona, or local Docker when
@@ -203,6 +184,13 @@ impl AgentKind {
             Self::ClaudeCloud => Some("claude-cloud"),
             Self::SandboxedCoder | Self::InMemory | Self::External => None,
         }
+    }
+
+    /// Whether a session's instructions travel in its first prompt, for kinds
+    /// whose runtime has no system prompt to put them in.
+    #[must_use]
+    pub const fn folds_instructions(self) -> bool {
+        !matches!(self, Self::InMemory | Self::ClaudeCloud)
     }
 
     /// Whether a deployment provisions this kind's runtimes itself.
@@ -346,6 +334,9 @@ pub(crate) use agent_egress::domain::model::is_macro_staff;
 /// answer back into.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
+    /// Update the existing agent response instead of posting a reply.
+    #[serde(default)]
+    pub reuse_origin_message: bool,
     /// Channel or document the prompt was posted in.
     pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into.
@@ -412,6 +403,16 @@ pub enum ReplyTarget {
 /// with the id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommentAnchor {
+    /// A cell or rectangular range in a native spreadsheet.
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
+
     /// A comment mark in a markdown document.
     Mark {
         /// Lexical mark the thread is attached to.
@@ -602,12 +603,14 @@ pub struct AnnouncePrompt {
 /// Facts required to announce one prompt into its originating context.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
+    /// Update the existing agent response instead of posting a reply.
+    pub reuse_origin_message: bool,
     /// Agent session represented by the announcement.
     pub session_id: AgentSessionId,
     /// The bot the session runs for; the announcement posts as it.
     pub bot_id: BotId,
-    /// Whether the announcement is a coding agent's magic chip or a chat
-    /// agent's pending reply (see [`is_coding_agent`]).
+    /// Whether the bot is a coding agent (see [`is_coding_agent`]). Assignment
+    /// announcements always use a session link, regardless of the bot's kind.
     pub is_coding: bool,
     /// Channel or document containing the mention that opened the session.
     pub origin_parent: messages::domain::models::MessageParent,
@@ -621,6 +624,14 @@ pub struct SessionAnnouncement {
     pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,
+}
+
+impl SessionAnnouncement {
+    /// Assignments and coding agents link to the session; only a chat mention
+    /// starts a pending reply that will copy the answer into the discussion.
+    pub(crate) const fn shows_session_link(&self) -> bool {
+        self.is_coding || self.reuse_origin_message
+    }
 }
 
 /// Something the mentioner has to set up before their provider will open a

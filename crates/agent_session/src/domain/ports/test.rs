@@ -176,16 +176,18 @@ async fn channel_co_member_can_select_a_team_selected_channel_persona() {
 
 #[tokio::test]
 async fn an_owner_that_is_not_a_user_selects_no_persona() {
-    // Every persona rule is about a person - who owns it, whose team it
-    // belongs to, who shares a channel with it - so a bot owner matches none
-    // of them, even for a persona anyone could otherwise select.
     let result = persona_for_owner(
         &Directory::managed_private(),
         BotId::TEST_A,
         &Owner::Bot(BotId::TEST_A),
     )
     .await;
-    assert!(matches!(result, Err(ManagedPersonaError::Forbidden)));
+    assert!(matches!(
+        result,
+        Err(ManagedPersonaError::OwnerNotUser(
+            model_owner::OwnerType::Bot
+        ))
+    ));
 }
 
 /// The managed persona a selection resolved to, failing the test otherwise.

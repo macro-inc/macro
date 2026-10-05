@@ -34,8 +34,8 @@ fn routed_models_have_house_names() {
     );
     assert_eq!(display_name("google/gemini-3.8-flash"), "Gemini 3.8 Flash");
     assert_eq!(
-        display_name("anthropic/claude-sonnet-5"),
-        "anthropic/claude-sonnet-5"
+        display_name("anthropic/claude-sonnet-5-5"),
+        "anthropic/claude-sonnet-5-5"
     );
 }
 

@@ -19,6 +19,9 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Body for accepting/declining staged imports.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RunImportRequest {
@@ -84,6 +87,9 @@ where
 }
 
 fn error_response(e: ImportError) -> Response {
+    if let ImportError::Admission(error) = e {
+        return error.into_response();
+    }
     tracing::error!(error = ?e, "import request failed");
     StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
@@ -156,6 +162,8 @@ pub async fn run_import_handler<T: ImportService, Auth: MacroAuthorizationServic
     responses(
         (status = 204, description = "Retry accepted (idempotent)"),
         (status = 400, description = "Unknown import source"),
+        (status = 402, description = "AI allowance exhausted", body = ai_billing::inbound::admission::AiAdmissionErrorBody),
+        (status = 503, description = "AI usage validation unavailable; retry later", body = ai_billing::inbound::admission::AiAdmissionErrorBody),
         (status = 500, description = "Internal server error"),
     ),
     tag = "import"

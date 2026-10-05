@@ -141,21 +141,23 @@ async fn handle(
     }
     let cookie = cookie_value(request.headers()).ok_or(PreviewError::Denied)?;
     let lease = service.viewer(&id, &cookie, true).await?;
-    let permit = Arc::new(
-        lease
-            .requests
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| PreviewError::Limited)?,
-    );
+    // Queue for a stream slot instead of refusing with a text/plain body.
+    // Vite cold loads fan out thousands of modules; try_acquire turned that
+    // spike into NS_ERROR_CORRUPTED_CONTENT / "disallowed MIME type" in the
+    // browser whenever more than `requests` were in flight (see b7a5c2b23d).
+    let permit = Arc::new(tokio::select! {
+        permit = lease.requests.clone().acquire_owned() => {
+            permit.map_err(|_| PreviewError::Offline)?
+        }
+        _ = lease.cancel.cancelled() => return Err(PreviewError::Offline),
+    });
     let upgrade_permit = if upgrade {
-        Some(
-            lease
-                .upgrades
-                .clone()
-                .try_acquire_owned()
-                .map_err(|_| PreviewError::Limited)?,
-        )
+        Some(tokio::select! {
+            permit = lease.upgrades.clone().acquire_owned() => {
+                permit.map_err(|_| PreviewError::Offline)?
+            }
+            _ = lease.cancel.cancelled() => return Err(PreviewError::Offline),
+        })
     } else {
         None
     };

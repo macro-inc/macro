@@ -1,0 +1,1555 @@
+mod notification_state;
+
+use std::sync::Arc;
+
+use chrono::Utc;
+use filter_ast::Expr;
+use foreign_entity::{
+    domain::{
+        models::{CreateForeignEntity, ForeignEntity, SourceId},
+        ports::{ForeignEntityListQuery, ForeignEntityRepository},
+    },
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
+use item_filters::ast::{
+    LiteralTree,
+    foreign_entity::ForeignEntityLiteral,
+    github_pull_request::{
+        GithubPullRequestLiteral, GithubPullRequestReviewStatus, GithubPullRequestState,
+    },
+};
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
+use serde_json::json;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use super::super::PgGithubPullRequestRepo;
+use crate::domain::{
+    models::GithubPullRequestSortDirection, ports::GithubPullRequestListingRepository,
+};
+
+fn create_request_for_source(
+    foreign_entity_id: impl Into<String>,
+    foreign_entity_source: impl Into<String>,
+    stored_for_id: impl Into<String>,
+    stored_for_auth_entity: impl Into<String>,
+) -> CreateForeignEntity {
+    CreateForeignEntity {
+        foreign_entity_id: foreign_entity_id.into(),
+        foreign_entity_source: foreign_entity_source.into(),
+        metadata: json!({ "origin": "test" }),
+        stored_for_id: stored_for_id.into(),
+        stored_for_auth_entity: stored_for_auth_entity.into(),
+    }
+}
+
+async fn insert_foreign_entity_for_source(
+    repo: &PgForeignEntityRepo,
+    foreign_entity_id: &str,
+    foreign_entity_source: &str,
+    stored_for_id: &str,
+    stored_for_auth_entity: &str,
+) -> ForeignEntity {
+    repo.create_foreign_entity(
+        Uuid::now_v7(),
+        create_request_for_source(
+            foreign_entity_id,
+            foreign_entity_source,
+            stored_for_id,
+            stored_for_auth_entity,
+        ),
+    )
+    .await
+    .expect("foreign entity should be inserted")
+}
+
+fn list_query(sort_method: SimpleSortMethod) -> ForeignEntityListQuery {
+    Query::Sort(sort_method, None)
+}
+
+fn cursor_query(entity: &ForeignEntity, sort_method: SimpleSortMethod) -> ForeignEntityListQuery {
+    let last_val = match sort_method {
+        SimpleSortMethod::CreatedAt => entity.created_at,
+        SimpleSortMethod::ViewedAt
+        | SimpleSortMethod::UpdatedAt
+        | SimpleSortMethod::ViewedUpdated => entity.updated_at,
+    };
+
+    Query::Cursor(Cursor {
+        id: entity.id,
+        limit: 2,
+        val: CursorVal {
+            sort_type: sort_method,
+            last_val,
+        },
+        filter: None,
+    })
+}
+
+fn filter_query(filter: LiteralTree<ForeignEntityLiteral>) -> ForeignEntityListQuery {
+    Query::Sort(SimpleSortMethod::UpdatedAt, filter)
+}
+
+fn ids(entities: &[ForeignEntity]) -> Vec<Uuid> {
+    entities.iter().map(|entity| entity.id).collect()
+}
+
+async fn set_timestamps(
+    pool: &PgPool,
+    repo: &PgForeignEntityRepo,
+    entity: &ForeignEntity,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+) -> ForeignEntity {
+    sqlx::query!(
+        r#"
+        UPDATE foreign_entity
+        SET created_at = $2, updated_at = $3
+        WHERE id = $1
+        "#,
+        entity.id,
+        created_at,
+        updated_at,
+    )
+    .execute(pool)
+    .await
+    .expect("foreign entity timestamps should be updated");
+
+    repo.get_foreign_entity_by_id(entity.id)
+        .await
+        .expect("updated foreign entity lookup should succeed")
+        .expect("updated foreign entity should exist")
+}
+
+/// A pull request record, with a typed row listing `participant_github_user_ids` when given.
+async fn insert_pr_with_participants(
+    pool: &PgPool,
+    repo: &PgForeignEntityRepo,
+    foreign_entity_id: &str,
+    stored_for_id: &str,
+    participant_github_user_ids: Option<&[&str]>,
+) -> ForeignEntity {
+    let entity = repo
+        .create_foreign_entity(
+            Uuid::now_v7(),
+            CreateForeignEntity {
+                foreign_entity_id: foreign_entity_id.into(),
+                foreign_entity_source: "github_pull_request".into(),
+                metadata: json!({ "displayName": foreign_entity_id }),
+                stored_for_id: stored_for_id.into(),
+                stored_for_auth_entity: "user".into(),
+            },
+        )
+        .await
+        .expect("pull request foreign entity should be inserted");
+
+    if let Some(participants) = participant_github_user_ids {
+        sqlx::query(
+            r#"
+            INSERT INTO github_pull_request (github_key, number, owner, repo, participant_github_user_ids)
+            VALUES ($1, 1, 'macro', 'app', $2)
+            "#,
+        )
+        .bind(foreign_entity_id)
+        .bind(participants.iter().map(|id| (*id).to_owned()).collect::<Vec<_>>())
+        .execute(pool)
+        .await
+        .expect("pull request row should be inserted");
+    }
+
+    entity
+}
+
+async fn insert_github_link(pool: &PgPool, macro_id: &str, github_user_id: &str) {
+    let macro_user_id = Uuid::now_v7();
+    let email = format!("{macro_user_id}@example.com");
+
+    sqlx::query(
+        r#"
+        INSERT INTO public.macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(macro_user_id)
+    .bind(macro_id)
+    .bind(&email)
+    .bind(format!("cus_{macro_user_id}"))
+    .execute(pool)
+    .await
+    .expect("macro_user row should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO public."User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(macro_id)
+    .bind(&email)
+    .bind(macro_user_id)
+    .execute(pool)
+    .await
+    .expect("User row should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(macro_id)
+    .bind(Uuid::now_v7())
+    .bind(format!("gh-{github_user_id}"))
+    .bind(github_user_id)
+    .execute(pool)
+    .await
+    .expect("github_links row should be inserted");
+}
+
+fn includes_me_filter() -> LiteralTree<ForeignEntityLiteral> {
+    Some(Arc::new(Expr::val(ForeignEntityLiteral::IncludesMe)))
+}
+/// Insert a `foreign_entity`-scoped notification and the matching per-user row so the
+/// notification done/seen predicates have something to match against.
+async fn insert_foreign_entity_notification(
+    pool: &PgPool,
+    foreign_entity_id: Uuid,
+    user_id: &str,
+    done: bool,
+    seen: bool,
+) {
+    let notification_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender)
+        VALUES ($1, 'github_pr_status_changed', $2, 'foreign_entity', 'test')
+        "#,
+    )
+    .bind(notification_id)
+    .bind(foreign_entity_id.to_string())
+    .execute(pool)
+    .await
+    .expect("notification row should be inserted");
+
+    let seen_at: Option<chrono::NaiveDateTime> = seen.then(|| Utc::now().naive_utc());
+    sqlx::query!(
+        r#"
+        INSERT INTO user_notification (user_id, notification_id, state, seen_at)
+        VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state
+            WHEN $4::timestamp IS NOT NULL THEN 'seen'::notification_state
+            ELSE 'unseen'::notification_state END, $4)
+        "#,
+        user_id,
+        notification_id,
+        done,
+        seen_at,
+    )
+    .execute(pool)
+    .await
+    .expect("user_notification row should be inserted");
+}
+
+fn notification_states_filter(
+    states: &[item_filters::NotificationState],
+) -> LiteralTree<ForeignEntityLiteral> {
+    states
+        .iter()
+        .map(|state| Expr::val(ForeignEntityLiteral::NotificationState(*state)))
+        .reduce(Expr::or)
+        .map(Arc::new)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_returns_matching_user_and_team_sources(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let team_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let user_entity = insert_foreign_entity_for_source(
+        &repo,
+        "user-visible-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let team_entity = insert_foreign_entity_for_source(
+        &repo,
+        "team-visible-pr",
+        "github_pull_request",
+        &team_id.to_string(),
+        "team",
+    )
+    .await;
+    insert_foreign_entity_for_source(
+        &repo,
+        "unrelated-pr",
+        "github_pull_request",
+        "macro|other@example.com",
+        "user",
+    )
+    .await;
+
+    let entities = listing
+        .list_pull_requests(
+            None,
+            vec![
+                SourceId::user("macro|user@example.com"),
+                SourceId::team(team_id),
+            ],
+            10,
+            list_query(SimpleSortMethod::UpdatedAt),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("foreign entities should be listed for matching sources");
+
+    let mut actual_ids = ids(&entities);
+    actual_ids.sort_unstable();
+    let mut expected_ids = vec![user_entity.id, team_entity.id];
+    expected_ids.sort_unstable();
+
+    assert_eq!(actual_ids, expected_ids);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_empty_sources_returns_empty(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    insert_foreign_entity_for_source(
+        &repo,
+        "user-visible-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+
+    let entities = listing
+        .list_pull_requests(
+            None,
+            Vec::new(),
+            10,
+            list_query(SimpleSortMethod::UpdatedAt),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("empty source list should succeed");
+
+    assert!(entities.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_dedupes_duplicate_source_grants(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let team_id = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+    let older = insert_foreign_entity_for_source(
+        &repo,
+        "shared-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let newer = insert_foreign_entity_for_source(
+        &repo,
+        "shared-pr",
+        "github_pull_request",
+        &team_id.to_string(),
+        "team",
+    )
+    .await;
+
+    let now = Utc::now();
+    let older = set_timestamps(
+        &pool,
+        &repo,
+        &older,
+        now - chrono::Duration::minutes(2),
+        now - chrono::Duration::minutes(2),
+    )
+    .await;
+    let newer = set_timestamps(
+        &pool,
+        &repo,
+        &newer,
+        now - chrono::Duration::minutes(1),
+        now - chrono::Duration::minutes(1),
+    )
+    .await;
+
+    let entities = listing
+        .list_pull_requests(
+            None,
+            vec![
+                SourceId::user("macro|user@example.com"),
+                SourceId::team(team_id),
+            ],
+            10,
+            list_query(SimpleSortMethod::UpdatedAt),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("duplicate foreign entity grants should be listed once");
+
+    assert_eq!(entities, vec![newer]);
+    assert_ne!(entities[0].id, older.id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_paginates_by_created_at(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let first = insert_foreign_entity_for_source(
+        &repo,
+        "first-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let second = insert_foreign_entity_for_source(
+        &repo,
+        "second-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let third = insert_foreign_entity_for_source(
+        &repo,
+        "third-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let now = Utc::now();
+    let first = set_timestamps(
+        &pool,
+        &repo,
+        &first,
+        now - chrono::Duration::minutes(1),
+        now - chrono::Duration::minutes(30),
+    )
+    .await;
+    let second = set_timestamps(
+        &pool,
+        &repo,
+        &second,
+        now - chrono::Duration::minutes(2),
+        now - chrono::Duration::minutes(10),
+    )
+    .await;
+    let third = set_timestamps(
+        &pool,
+        &repo,
+        &third,
+        now - chrono::Duration::minutes(3),
+        now - chrono::Duration::minutes(20),
+    )
+    .await;
+
+    let first_page = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user("macro|user@example.com")],
+            2,
+            list_query(SimpleSortMethod::CreatedAt),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("first created_at page should be fetched");
+    let second_page = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user("macro|user@example.com")],
+            2,
+            cursor_query(&first_page[1], SimpleSortMethod::CreatedAt),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("second created_at page should be fetched");
+
+    assert_eq!(first_page, vec![first, second]);
+    assert_eq!(second_page, vec![third]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_paginates_ascending_from_the_oldest(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let user = "macro|user@example.com";
+    let now = Utc::now();
+    let mut entities = Vec::new();
+    for minutes_ago in [1, 2, 3] {
+        let entity = insert_foreign_entity_for_source(
+            &repo,
+            &format!("pr-{minutes_ago}"),
+            "github_pull_request",
+            user,
+            "user",
+        )
+        .await;
+        let created_at = now - chrono::Duration::minutes(minutes_ago);
+        entities.push(set_timestamps(&pool, &repo, &entity, created_at, created_at).await);
+    }
+    let [newest, middle, oldest] = <[ForeignEntity; 3]>::try_from(entities).unwrap();
+
+    let first_page = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user(user)],
+            2,
+            list_query(SimpleSortMethod::CreatedAt),
+            None,
+            GithubPullRequestSortDirection::Asc,
+        )
+        .await
+        .expect("first ascending page should be fetched");
+    let second_page = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user(user)],
+            2,
+            cursor_query(&first_page[1], SimpleSortMethod::CreatedAt),
+            None,
+            GithubPullRequestSortDirection::Asc,
+        )
+        .await
+        .expect("second ascending page should be fetched");
+
+    assert_eq!(first_page, vec![oldest, middle]);
+    assert_eq!(second_page, vec![newest]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_paginates_by_updated_at(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let first = insert_foreign_entity_for_source(
+        &repo,
+        "first-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let second = insert_foreign_entity_for_source(
+        &repo,
+        "second-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let third = insert_foreign_entity_for_source(
+        &repo,
+        "third-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let now = Utc::now();
+    let first = set_timestamps(
+        &pool,
+        &repo,
+        &first,
+        now - chrono::Duration::minutes(30),
+        now - chrono::Duration::minutes(1),
+    )
+    .await;
+    let second = set_timestamps(
+        &pool,
+        &repo,
+        &second,
+        now - chrono::Duration::minutes(10),
+        now - chrono::Duration::minutes(2),
+    )
+    .await;
+    let third = set_timestamps(
+        &pool,
+        &repo,
+        &third,
+        now - chrono::Duration::minutes(20),
+        now - chrono::Duration::minutes(3),
+    )
+    .await;
+
+    let first_page = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user("macro|user@example.com")],
+            2,
+            list_query(SimpleSortMethod::UpdatedAt),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("first updated_at page should be fetched");
+    let second_page = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user("macro|user@example.com")],
+            2,
+            cursor_query(&first_page[1], SimpleSortMethod::UpdatedAt),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("second updated_at page should be fetched");
+
+    assert_eq!(first_page, vec![first, second]);
+    assert_eq!(second_page, vec![third]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_applies_foreign_entity_filters(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let github = insert_foreign_entity_for_source(
+        &repo,
+        "github-pr",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    insert_foreign_entity_for_source(
+        &repo,
+        "linear-issue",
+        "linear_issue",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+
+    let source_filter = Some(Arc::new(Expr::val(
+        ForeignEntityLiteral::ForeignEntitySource("github_pull_request".to_string()),
+    )));
+    let source_matches = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user("macro|user@example.com")],
+            10,
+            filter_query(source_filter),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("foreign entity source filter should be applied");
+
+    let not_linear_filter = Some(Arc::new(Expr::is_not(Expr::val(
+        ForeignEntityLiteral::ForeignEntityId("linear-issue".to_string()),
+    ))));
+    let not_linear_matches = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user("macro|user@example.com")],
+            10,
+            filter_query(not_linear_filter),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("foreign entity negated filter should be applied");
+
+    assert_eq!(source_matches, vec![github.clone()]);
+    assert_eq!(not_linear_matches, vec![github]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_includes_me_matches_the_typed_participants(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+
+    let involved =
+        insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["7", "42"]))
+            .await;
+    insert_pr_with_participants(&pool, &repo, "other-pr", macro_id, Some(&["7"])).await;
+    insert_pr_with_participants(&pool, &repo, "legacy-pr", macro_id, None).await;
+
+    let entities = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("includes_me filter should be applied");
+
+    assert_eq!(entities, vec![involved]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_includes_me_matches_every_linked_github_identity(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+    sqlx::query!(
+        r#"
+        INSERT INTO github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        Uuid::now_v7(),
+        macro_id,
+        Uuid::now_v7(),
+        "gh-99",
+        "99",
+    )
+    .execute(&pool)
+    .await
+    .expect("second github link should be inserted");
+
+    let first =
+        insert_pr_with_participants(&pool, &repo, "first-pr", macro_id, Some(&["42"])).await;
+    let second =
+        insert_pr_with_participants(&pool, &repo, "second-pr", macro_id, Some(&["99"])).await;
+    insert_pr_with_participants(&pool, &repo, "unrelated-pr", macro_id, Some(&["7"])).await;
+    insert_pr_with_participants(&pool, &repo, "legacy-pr", macro_id, None).await;
+
+    let entities = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("includes_me should match both linked identities");
+
+    assert_eq!(ids(&entities).len(), 2);
+    assert!(ids(&entities).contains(&first.id));
+    assert!(ids(&entities).contains(&second.id));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_includes_me_without_github_link_returns_empty(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
+
+    let entities = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("includes_me without a github link should succeed");
+
+    assert!(entities.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_includes_me_without_requesting_user_returns_empty(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+    insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
+
+    let entities = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("includes_me without a requesting user should succeed");
+
+    assert!(entities.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_includes_me_composes_with_other_filters(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+
+    let involved =
+        insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
+    insert_pr_with_participants(&pool, &repo, "other-pr", macro_id, Some(&["7"])).await;
+    insert_foreign_entity_for_source(&repo, "linear-issue", "linear_issue", macro_id, "user").await;
+
+    let filter = Some(Arc::new(Expr::and(
+        Expr::val(ForeignEntityLiteral::ForeignEntitySource(
+            "github_pull_request".to_string(),
+        )),
+        Expr::val(ForeignEntityLiteral::IncludesMe),
+    )));
+    let entities = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(filter),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("includes_me composed with a source filter should be applied");
+
+    assert_eq!(entities, vec![involved]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_includes_me_composes_with_the_pull_request_filter(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+    let involved =
+        insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
+
+    let list = |draft: bool| {
+        listing.list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+            Some(Arc::new(Expr::val(GithubPullRequestLiteral::Draft(draft)))),
+            GithubPullRequestSortDirection::Desc,
+        )
+    };
+
+    assert_eq!(list(false).await.unwrap(), vec![involved]);
+    assert!(list(true).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_includes_me_under_not_fails_closed(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+    insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
+    insert_pr_with_participants(&pool, &repo, "other-pr", macro_id, Some(&["7"])).await;
+
+    let filter = Some(Arc::new(Expr::is_not(Expr::val(
+        ForeignEntityLiteral::IncludesMe,
+    ))));
+    let entities = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(filter),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("unsupported includes_me placement should fail closed");
+
+    assert!(entities.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_notification_done_filters_by_done_state(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let done =
+        insert_foreign_entity_for_source(&repo, "done-pr", "github_pull_request", macro_id, "user")
+            .await;
+    let not_done = insert_foreign_entity_for_source(
+        &repo,
+        "not-done-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+    // No notification at all: matches neither done=true nor done=false.
+    insert_foreign_entity_for_source(
+        &repo,
+        "no-notif-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+
+    insert_foreign_entity_notification(&pool, done.id, macro_id, true, false).await;
+    insert_foreign_entity_notification(&pool, not_done.id, macro_id, false, false).await;
+
+    let done_matches = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Done,
+            ])),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("done=true filter should be applied");
+
+    let not_done_matches = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Unseen,
+                item_filters::NotificationState::Seen,
+            ])),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("done=false filter should be applied");
+
+    assert_eq!(done_matches, vec![done]);
+    assert_eq!(not_done_matches, vec![not_done]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_notification_seen_filters_by_seen_state(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let seen =
+        insert_foreign_entity_for_source(&repo, "seen-pr", "github_pull_request", macro_id, "user")
+            .await;
+    let unseen = insert_foreign_entity_for_source(
+        &repo,
+        "unseen-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+
+    insert_foreign_entity_notification(&pool, seen.id, macro_id, false, true).await;
+    insert_foreign_entity_notification(&pool, unseen.id, macro_id, false, false).await;
+
+    let seen_matches = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Seen,
+                item_filters::NotificationState::Done,
+            ])),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("seen=true filter should be applied");
+
+    let unseen_matches = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Unseen,
+            ])),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("seen=false filter should be applied");
+
+    assert_eq!(seen_matches, vec![seen]);
+    assert_eq!(unseen_matches, vec![unseen]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_notification_done_composes_with_source(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let github = insert_foreign_entity_for_source(
+        &repo,
+        "github-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+    let linear =
+        insert_foreign_entity_for_source(&repo, "linear-issue", "linear_issue", macro_id, "user")
+            .await;
+
+    insert_foreign_entity_notification(&pool, github.id, macro_id, true, false).await;
+    insert_foreign_entity_notification(&pool, linear.id, macro_id, true, false).await;
+
+    let filter = Some(Arc::new(Expr::and(
+        Expr::val(ForeignEntityLiteral::ForeignEntitySource(
+            "github_pull_request".to_string(),
+        )),
+        Expr::val(ForeignEntityLiteral::NotificationState(
+            item_filters::NotificationState::Done,
+        )),
+    )));
+
+    let matches = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(filter),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("source AND notification done filter should be applied");
+
+    assert_eq!(matches, vec![github]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_notification_done_scopes_to_requesting_user(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    let other_id = "macro|other@example.com";
+
+    let entity = insert_foreign_entity_for_source(
+        &repo,
+        "shared-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+    // The done notification belongs to a different user.
+    insert_foreign_entity_notification(&pool, entity.id, other_id, true, false).await;
+
+    let matches = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Done,
+            ])),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("notification filter scoped to requesting user should be applied");
+
+    assert!(matches.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_notification_filter_without_requesting_user_returns_empty(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let entity =
+        insert_foreign_entity_for_source(&repo, "done-pr", "github_pull_request", macro_id, "user")
+            .await;
+    insert_foreign_entity_notification(&pool, entity.id, macro_id, true, false).await;
+
+    let matches = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Done,
+            ])),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("notification filter without a requesting user should succeed");
+
+    assert!(matches.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_notification_state_and_requires_each_witness(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let entity =
+        insert_foreign_entity_for_source(&repo, "done-pr", "github_pull_request", macro_id, "user")
+            .await;
+    insert_foreign_entity_notification(&pool, entity.id, macro_id, true, false).await;
+
+    // Sanity check: done=true alone matches the entity.
+    let one_sided = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Done,
+            ])),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("done=true filter should be applied");
+    assert_eq!(one_sided, vec![entity.clone()]);
+
+    // done=true AND done=false is contradictory and must match nothing rather than
+    // collapsing to a single-sided predicate.
+    let contradiction = Some(Arc::new(Expr::and(
+        Expr::val(ForeignEntityLiteral::NotificationState(
+            item_filters::NotificationState::Done,
+        )),
+        Expr::or(
+            filter_ast::Expr::val(ForeignEntityLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ForeignEntityLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ),
+    )));
+    let matches = listing
+        .list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(contradiction),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("contradictory notification filter should be applied");
+
+    assert!(matches.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_excludes_other_foreign_entity_sources(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    let pull_request = insert_foreign_entity_for_source(
+        &repo,
+        "github-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+    insert_foreign_entity_for_source(&repo, "linear-issue", "linear_issue", macro_id, "user").await;
+
+    let entities = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user(macro_id)],
+            10,
+            list_query(SimpleSortMethod::UpdatedAt),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("listing should succeed");
+
+    assert_eq!(entities, vec![pull_request]);
+}
+
+struct PullRequestRow<'a> {
+    github_key: &'a str,
+    repository_id: i64,
+    number: i64,
+    status: &'a str,
+    author: &'a str,
+    requested_reviewers: &'a [&'a str],
+    participants: &'a [&'a str],
+    github_updated_minutes_ago: i32,
+}
+
+async fn insert_pull_request_row(pool: &PgPool, row: PullRequestRow<'_>) {
+    sqlx::query(
+        r#"
+        INSERT INTO github_pull_request (
+            github_key, repository_id, number, owner, repo, status, author_github_user_id,
+            requested_reviewer_github_user_ids, participant_github_user_ids, github_updated_at
+        )
+        VALUES ($1, $2, $3, 'macro', 'app', $4, $5, $6, $7, NOW() - make_interval(mins => $8::int))
+        "#,
+    )
+    .bind(row.github_key)
+    .bind(row.repository_id)
+    .bind(row.number)
+    .bind(row.status)
+    .bind(row.author)
+    .bind(owned(row.requested_reviewers))
+    .bind(owned(row.participants))
+    .bind(row.github_updated_minutes_ago)
+    .execute(pool)
+    .await
+    .expect("pull request row should be inserted");
+}
+
+fn owned(ids: &[&str]) -> Vec<String> {
+    ids.iter().map(|id| (*id).to_owned()).collect()
+}
+
+async fn list_filtered(
+    listing: &PgGithubPullRequestRepo,
+    github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
+) -> Vec<ForeignEntity> {
+    listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user("macro|user@example.com")],
+            10,
+            list_query(SimpleSortMethod::UpdatedAt),
+            github_pull_request_filter,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .expect("listing should succeed")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_pull_request_filters_match_the_typed_columns(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let user = "macro|user@example.com";
+    let open_for_me = insert_foreign_entity_for_source(
+        &repo,
+        "macro/app/pull/1",
+        "github_pull_request",
+        user,
+        "user",
+    )
+    .await;
+    insert_pull_request_row(
+        &pool,
+        PullRequestRow {
+            github_key: "macro/app/pull/1",
+            repository_id: 99,
+            number: 1,
+            status: "open",
+            author: "7",
+            requested_reviewers: &["42"],
+            participants: &["7", "42"],
+            github_updated_minutes_ago: 1,
+        },
+    )
+    .await;
+    let merged = insert_foreign_entity_for_source(
+        &repo,
+        "macro/app/pull/2",
+        "github_pull_request",
+        user,
+        "user",
+    )
+    .await;
+    insert_pull_request_row(
+        &pool,
+        PullRequestRow {
+            github_key: "macro/app/pull/2",
+            repository_id: 99,
+            number: 2,
+            status: "merged",
+            author: "42",
+            requested_reviewers: &[],
+            participants: &["42"],
+            github_updated_minutes_ago: 2,
+        },
+    )
+    .await;
+    let without_row = insert_foreign_entity_for_source(
+        &repo,
+        "macro/app/pull/3",
+        "github_pull_request",
+        user,
+        "user",
+    )
+    .await;
+    let three_minutes_ago = Utc::now() - chrono::Duration::minutes(3);
+    let without_row = set_timestamps(
+        &pool,
+        &repo,
+        &without_row,
+        three_minutes_ago,
+        three_minutes_ago,
+    )
+    .await;
+    let filter = |expr| Some(Arc::new(expr));
+
+    assert_eq!(
+        ids(&list_filtered(
+            &listing,
+            filter(Expr::val(GithubPullRequestLiteral::ReviewRequested(
+                "42".to_owned()
+            )))
+        )
+        .await),
+        vec![open_for_me.id]
+    );
+    assert_eq!(
+        ids(&list_filtered(
+            &listing,
+            filter(Expr::val(GithubPullRequestLiteral::Status(
+                GithubPullRequestState::Merged
+            )))
+        )
+        .await),
+        vec![merged.id]
+    );
+    assert_eq!(
+        ids(&list_filtered(
+            &listing,
+            filter(Expr::and(
+                Expr::val(GithubPullRequestLiteral::RepositoryId(99)),
+                Expr::is_not(Expr::val(GithubPullRequestLiteral::Author("42".to_owned()))),
+            ))
+        )
+        .await),
+        vec![open_for_me.id]
+    );
+    assert_eq!(
+        ids(&list_filtered(
+            &listing,
+            filter(Expr::val(GithubPullRequestLiteral::Involves(
+                "42".to_owned()
+            )))
+        )
+        .await),
+        vec![open_for_me.id, merged.id]
+    );
+    assert_eq!(
+        ids(&list_filtered(&listing, None).await),
+        vec![open_for_me.id, merged.id, without_row.id]
+    );
+}
+
+async fn set_review_columns(
+    pool: &PgPool,
+    github_key: &str,
+    assignees: serde_json::Value,
+    labels: serde_json::Value,
+    reviews: serde_json::Value,
+    review_decision: Option<&str>,
+) {
+    sqlx::query(
+        r#"
+        UPDATE github_pull_request
+        SET assignees = $2, labels = $3, reviews = $4, review_decision = $5
+        WHERE github_key = $1
+        "#,
+    )
+    .bind(github_key)
+    .bind(assignees)
+    .bind(labels)
+    .bind(reviews)
+    .bind(review_decision)
+    .execute(pool)
+    .await
+    .expect("review columns should be updated");
+}
+
+async fn listed(listing: &PgGithubPullRequestRepo, literal: GithubPullRequestLiteral) -> Vec<Uuid> {
+    ids(&list_filtered(listing, Some(Arc::new(Expr::val(literal)))).await)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_pull_request_filters_match_assignees_labels_and_reviews(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let user = "macro|user@example.com";
+    let mut entities = Vec::new();
+    for number in [1, 2, 3] {
+        let github_key = format!("macro/app/pull/{number}");
+        entities.push(
+            insert_foreign_entity_for_source(
+                &repo,
+                &github_key,
+                "github_pull_request",
+                user,
+                "user",
+            )
+            .await,
+        );
+        insert_pull_request_row(
+            &pool,
+            PullRequestRow {
+                github_key: &github_key,
+                repository_id: 99,
+                number,
+                status: "open",
+                author: "7",
+                requested_reviewers: &[],
+                participants: &[],
+                github_updated_minutes_ago: number as i32,
+            },
+        )
+        .await;
+    }
+    let [approved, changes_requested, unreviewed] =
+        <[ForeignEntity; 3]>::try_from(entities).unwrap();
+    set_review_columns(
+        &pool,
+        "macro/app/pull/1",
+        json!([{ "githubUserId": "42", "login": "octocat" }]),
+        json!([{ "name": "bug", "color": "d73a4a" }]),
+        json!([{ "reviewerGithubUserId": "42", "state": "approved" }]),
+        Some("approved"),
+    )
+    .await;
+    set_review_columns(
+        &pool,
+        "macro/app/pull/2",
+        json!([]),
+        json!([{ "name": "bug" }, { "name": "docs" }]),
+        json!([
+            { "reviewerGithubUserId": "42", "state": "commented" },
+            { "reviewerGithubUserId": "8", "state": "changes_requested" }
+        ]),
+        Some("changes_requested"),
+    )
+    .await;
+    set_review_columns(
+        &pool,
+        "macro/app/pull/3",
+        json!([]),
+        json!([]),
+        json!([]),
+        Some("review_required"),
+    )
+    .await;
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::Assignee("42".to_owned())
+        )
+        .await,
+        vec![approved.id]
+    );
+    assert_eq!(
+        listed(&listing, GithubPullRequestLiteral::Label("bug".to_owned())).await,
+        vec![approved.id, changes_requested.id]
+    );
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::ReviewedBy("42".to_owned())
+        )
+        .await,
+        vec![approved.id, changes_requested.id]
+    );
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::ReviewStatus(GithubPullRequestReviewStatus::ChangesRequested)
+        )
+        .await,
+        vec![changes_requested.id]
+    );
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::ReviewStatus(GithubPullRequestReviewStatus::Required)
+        )
+        .await,
+        vec![unreviewed.id]
+    );
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::ReviewStatus(GithubPullRequestReviewStatus::None)
+        )
+        .await,
+        vec![unreviewed.id]
+    );
+    assert_eq!(
+        ids(&list_filtered(
+            &listing,
+            Some(Arc::new(Expr::is_not(Expr::val(
+                GithubPullRequestLiteral::ReviewedBy("42".to_owned())
+            ))))
+        )
+        .await),
+        vec![unreviewed.id]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_updated_sort_uses_githubs_updated_at_when_known(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let user = "macro|user@example.com";
+    let recently_synced = insert_foreign_entity_for_source(
+        &repo,
+        "macro/app/pull/1",
+        "github_pull_request",
+        user,
+        "user",
+    )
+    .await;
+    insert_pull_request_row(
+        &pool,
+        PullRequestRow {
+            github_key: "macro/app/pull/1",
+            repository_id: 99,
+            number: 1,
+            status: "open",
+            author: "7",
+            requested_reviewers: &[],
+            participants: &[],
+            github_updated_minutes_ago: 60,
+        },
+    )
+    .await;
+    let recently_updated = insert_foreign_entity_for_source(
+        &repo,
+        "macro/app/pull/2",
+        "github_pull_request",
+        user,
+        "user",
+    )
+    .await;
+    let thirty_minutes_ago = Utc::now() - chrono::Duration::minutes(30);
+    let recently_updated = set_timestamps(
+        &pool,
+        &repo,
+        &recently_updated,
+        thirty_minutes_ago,
+        thirty_minutes_ago,
+    )
+    .await;
+
+    let listed = list_filtered(&listing, None).await;
+
+    assert_eq!(ids(&listed), vec![recently_updated.id, recently_synced.id]);
+    assert!(
+        listed[1].updated_at < recently_synced.updated_at - chrono::Duration::minutes(59),
+        "the pull request reports GitHub's updated time"
+    );
+}

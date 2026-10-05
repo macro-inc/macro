@@ -1,6 +1,9 @@
 ---
 title: EditSpreadsheet
-description: "Apply one atomic batch to a native Macro spreadsheet: set cell values/formulas, format or clear ranges, fill with relative formulas, add rows, resize columns, or add/rename/duplicate/delete sheets. Requires expectedRevision from a fresh ReadSpreadsheet. If the workbook changed, nothing is written: reread and reconsider, never blindly retry. All operations validate before saving; at most 25 operations and 2000 affected cells. Sheet IDs are stable; an exact sheet name may address a sheet added earlier in the same batch. Existing directly referenced sheets cannot be renamed/deleted, and the last sheet cannot be deleted. Read affected ranges after editing to verify computed results. Formula errors are returned as warnings, not silently repaired."
+description: >-
+  Apply one atomic batch to a native Macro spreadsheet: set cell
+  values/formulas, format or clear ranges, fill with relative formulas, add
+  rows, resize columns, or add/rename/duplicate/delete sheets.
 ---
 
 # EditSpreadsheet

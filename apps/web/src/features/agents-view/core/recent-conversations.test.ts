@@ -5,7 +5,7 @@ import {
   type AgentConversationEntity,
   botUsage,
   conversationMode,
-  groupConversations,
+  partitionArchived,
   selectRecentAgentConversations,
 } from './recent-conversations';
 
@@ -20,6 +20,7 @@ function session(
     id,
     name: `Session ${id}`,
     ownerId: OWNER,
+    isArchived: false,
     botId: 'bot-chat',
     status: 'acp_ready',
     updatedAt: '2026-09-15T10:00:00Z',
@@ -109,17 +110,25 @@ describe('mixed conversation navigation', () => {
     ).toBe('code');
   });
 
-  it('keeps chat and coding sessions together in their original date order', () => {
+  it('splits archived sessions out of the active list', () => {
     const rows: AgentConversationEntity[] = [
       session('code', { botId: 'bot-coder' }),
       chat('chat'),
-      session('ended', { botId: 'bot-coder', status: 'disconnected' }),
+      session('ended', {
+        botId: 'bot-coder',
+        status: 'disconnected',
+        isArchived: true,
+      }),
       session('agent'),
     ];
-    expect(groupConversations(rows)).toEqual([
-      { id: 'recent', label: undefined, conversations: rows },
-    ]);
-    expect(groupConversations([])).toEqual([]);
+    expect(partitionArchived(rows)).toEqual({
+      conversations: [rows[0], rows[1], rows[3]],
+      archived: [rows[2]],
+    });
+    expect(partitionArchived([])).toEqual({
+      conversations: [],
+      archived: [],
+    });
   });
 });
 

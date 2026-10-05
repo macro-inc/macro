@@ -4,11 +4,6 @@
 //! All required env vars are declared here as typed fields. The
 //! `doppler_config` binary loads this `Config` from Doppler for both the dev
 //! and prod environments, surfacing any missing or mistyped values at CI time.
-//!
-//! The AI tool service context built by
-//! [`ai_tools::build_tool_service_context_from_env`] reads several env vars of
-//! its own; those are mirrored here so the Doppler validation binary covers
-//! them as well.
 
 use anyhow::Context;
 use database_env_vars::DatabaseUrl;
@@ -20,20 +15,6 @@ use macro_env_var::env_vars;
 mod test;
 
 env_vars! {
-    /// Auth key used by the document storage / search / lexical clients.
-    pub struct DocumentStorageServiceAuthKey;
-    /// Secrets Manager secret name for the sync service auth key.
-    pub struct SyncServiceAuthKey;
-    /// S3 bucket for document storage.
-    pub struct DocumentStorageBucket;
-    /// S3 bucket for docx document uploads.
-    pub struct DocxDocumentUploadBucket;
-    /// CloudFront distribution URL for document storage.
-    pub struct DocumentStorageServiceCloudfrontDistributionUrl;
-    /// CloudFront signer public key id for document storage.
-    pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
-    /// Secrets Manager secret name for the CloudFront signer private key.
-    pub struct DocumentStorageServiceCloudfrontSignerPrivateKeySecretName;
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
 }
@@ -42,6 +23,9 @@ env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
@@ -50,28 +34,26 @@ pub struct Config {
     pub port: usize,
     /// The connection URL for the Postgres database this application uses.
     pub database_url: DatabaseUrl,
-    pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
-    pub sync_service_auth_key: SyncServiceAuthKey,
-    pub document_storage_bucket: DocumentStorageBucket,
-    pub docx_document_upload_bucket: DocxDocumentUploadBucket,
-    pub document_storage_service_cloudfront_distribution_url:
-        DocumentStorageServiceCloudfrontDistributionUrl,
-    pub document_storage_service_cloudfront_signer_public_key_id:
-        DocumentStorageServiceCloudfrontSignerPublicKeyId,
-    pub document_storage_service_cloudfront_signer_private_key_secret_name:
-        DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
     pub kafka_brokers: KafkaBrokers,
     /// Enables event-trigger management, Kafka intake, and pending dispatch together.
     /// Register EVENT_ROUTINES_ENABLED as a raw boolean in Doppler before rollout.
     #[macro_config_default(false)]
     pub event_routines_enabled: bool,
+    /// Accept agent-target configuration only after all scheduler workers are upgraded.
+    /// Register ROUTINE_AGENTS_ENABLED as a raw boolean in Doppler before rollout.
+    #[macro_config_default(false)]
+    pub routine_agents_enabled: bool,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>()
-            .context("failed to load agent schedule service config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config = macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load agent schedule service config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
     }
 }

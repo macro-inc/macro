@@ -44,8 +44,11 @@ use uuid::Uuid;
 
 use super::*;
 
+mod database_activity;
+mod database_row;
 mod email_archive;
 mod initiative;
+mod scheduled_actions;
 mod soup_patches;
 
 const VALID_USER_ID: &str = "macro|user@example.com";
@@ -92,7 +95,6 @@ fn soup_initiative(id: Uuid) -> SoupItem<()> {
         id,
         name: "Launch project".to_string(),
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
-        description_document_id: Some(Uuid::from_u128(43)),
         created_at: Default::default(),
         updated_at: Default::default(),
         viewed_at: None,
@@ -371,6 +373,7 @@ impl EmailUserService for CountingEmailService {
             .expect("user catalog identities lock")
             .push(macro_id);
         Ok(vec![UserEmailLink {
+            draft_is_signal: true,
             id: Uuid::from_u128(502),
             macro_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
             email_address: EmailStr::try_from("inbox@example.com".to_owned()).unwrap(),
@@ -646,6 +649,7 @@ impl graphql_email::SoupEmailThreadMailProjectionEdgeReader for RecordingEmailCo
                                 has_calendar_attachment: false,
                                 has_thread_share: false,
                             },
+                            draft_state: None,
                             previews: EmailThreadMailPreviews {
                                 all: None,
                                 draft: None,
@@ -891,9 +895,25 @@ impl EntityAccessService for CountingEntityAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        // The viewer can see exactly one database and no other.
+        if entity_type == EntityType::Database {
+            if entity_id != database_activity::VIEWABLE_DATABASE_ID {
+                return Err(AccessError::Unauthorized);
+            }
+            return EntityAccessReceipt::try_new_authenticated_user(
+                MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+                entity_access::domain::models::Entity {
+                    entity_id: entity_id.to_owned(),
+                    entity_type,
+                },
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                },
+            );
+        }
         Err(AccessError::internal("test access failure"))
     }
 
@@ -2357,7 +2377,6 @@ async fn initiatives_are_returned_by_soup_with_shared_edges() {
                 __typename id entityType displayName
                 metadata { ownerId ownerType createdAt updatedAt }
                 properties { id }
-                ... on GraphqlSoupInitiative { descriptionDocumentId }
             }
         } }
     }"#,
@@ -2371,10 +2390,6 @@ async fn initiatives_are_returned_by_soup_with_shared_edges() {
     assert_eq!(item["entityType"], "INITIATIVE");
     assert_eq!(item["displayName"], "Launch project");
     assert_eq!(item["metadata"]["ownerId"], VALID_USER_ID);
-    assert_eq!(
-        item["descriptionDocumentId"],
-        Uuid::from_u128(43).to_string()
-    );
     assert!(item["properties"].is_array());
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
 }

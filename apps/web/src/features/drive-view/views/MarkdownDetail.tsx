@@ -6,7 +6,7 @@ import {
 import { ModalsProvider } from '@block-md/component/ModalsProvider';
 import { MarkdownSidePanelSections } from '@block-md/component/sidepanel/MarkdownSidePanelSections';
 import { createMarkdownDocumentState } from '@block-md/context/markdown-document-state';
-import { OldOverlay } from '@block-md/history/OldOverlay';
+import { createMarkdownRouteNavigation } from '@block-md/primitives/create-markdown-route-navigation';
 import {
   loadMarkdownDocument,
   type MarkdownDocumentData,
@@ -90,6 +90,7 @@ function MarkdownDetailContent(props: {
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
   const state = createMarkdownDocumentState();
+  createMarkdownRouteNavigation(() => props.documentId, state.params.navigate);
 
   // Mention chips and notifications aim an open document at a comment or node
   // through its block handle; without one the click only activates the view.
@@ -111,13 +112,12 @@ function MarkdownDetailContent(props: {
       fallbackName={props.fallbackName}
     >
       <ModalsProvider>
-        <OldOverlay />
         {props.children?.({
           data: props.data,
           documentMetadata: props.data.metadata,
           userAccessLevel: props.data.userAccessLevel,
         })}
-        <SidePanel.Layout headerToggle={false}>
+        <SidePanel.Layout headerToggle={false} floating>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
           </Show>

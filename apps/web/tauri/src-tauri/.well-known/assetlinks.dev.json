@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.macro.app.prod",
+      "sha256_cert_fingerprints": [
+        "1F:E1:30:45:EE:64:BD:02:DA:24:F7:E8:D5:08:8B:1A:B2:88:4E:DB:E3:CB:AE:00:A1:E1:F6:87:E3:0A:3E:06",
+        "89:D3:D8:C4:BB:61:96:DE:43:B3:C9:11:4B:FC:74:49:E1:A5:F3:3E:D2:B0:99:9A:E5:97:C5:DF:B8:F5:85:47"
+      ]
+    }
+  }
+]

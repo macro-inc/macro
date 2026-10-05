@@ -5,10 +5,12 @@ publish = false
 version = "0.1.0"
 
 [features]
+axum = ["dep:axum", "macro_authorization/axum"]
 default = []
 postgres = ["dep:sqlx", "model_owner/sqlx"]
 
 [dependencies]
+axum = { workspace = true, optional = true }
 bot_id = { path = "../../bot_id" }
 chrono = { workspace = true }
 macro_authorization = { path = "../../macro_authorization", default-features = false }

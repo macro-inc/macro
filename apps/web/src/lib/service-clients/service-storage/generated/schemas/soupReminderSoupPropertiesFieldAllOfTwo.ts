@@ -10,7 +10,7 @@ import type { SoupReminderSoupPropertiesFieldAllOfTwoCompletedAt } from './soupR
 import type { SoupReminderSoupPropertiesFieldAllOfTwoReferencedEntity } from './soupReminderSoupPropertiesFieldAllOfTwoReferencedEntity';
 
 export type SoupReminderSoupPropertiesFieldAllOfTwo = {
-  /** Set once a one-shot reminder has fired. */
+  /** When the owner acknowledged the occurrence; independent of future scheduling. */
   completedAt?: SoupReminderSoupPropertiesFieldAllOfTwoCompletedAt;
   /** When the reminder was created. */
   createdAt: string;

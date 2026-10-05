@@ -31,7 +31,6 @@ export const SearchRailButton = () => {
     split = navigateToSidebarView({
       viewId: 'search',
       shiftKey: newSplit,
-      activeSplit: split,
       openWithSplit: layout.openWithSplit,
       referredFrom: 'sidebar',
     });

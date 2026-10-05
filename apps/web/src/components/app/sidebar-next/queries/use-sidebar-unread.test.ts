@@ -223,6 +223,41 @@ describe('sidebar unread presence', () => {
     expect(unread('channels')).toBe(false);
   });
 
+  it('badges top-level mentions but not thread mentions or reactions', () => {
+    const { unread, setNotifications } = setup();
+    const mention = (threadId?: string): UnifiedNotification => ({
+      ...message,
+      notification_metadata: {
+        tag: 'channel_mention',
+        content: {
+          channelType: 'directMessage',
+          messageId: 'message',
+          messageContent: 'Hello',
+          threadId,
+        },
+      },
+    });
+    setNotifications([mention('parent')]);
+    expect(unread('channels')).toBe(false);
+    setNotifications([
+      {
+        ...message,
+        notification_metadata: {
+          tag: 'channel_message_reaction',
+          content: {
+            channelType: 'directMessage',
+            messageId: 'message',
+            emoji: '👍',
+            messageContent: 'Hello',
+          },
+        },
+      },
+    ]);
+    expect(unread('channels')).toBe(false);
+    setNotifications([mention()]);
+    expect(unread('channels')).toBe(true);
+  });
+
   it('uses unread channel messages, ignoring seen, completed, and other entities', () => {
     const { unread, setNotifications } = setup();
     setNotifications([message]);

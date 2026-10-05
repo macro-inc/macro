@@ -1,3 +1,4 @@
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
@@ -7,6 +8,7 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
+import { createSearchParams } from '@app/lib/split-router';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
@@ -83,8 +85,10 @@ import { useSearchParams } from '@solidjs/router';
 import { cn } from '@ui';
 import {
   createComputed,
+  createEffect,
   createSignal,
   Match,
+  on,
   onCleanup,
   Show,
   Suspense,
@@ -255,11 +259,16 @@ function NewTop(props: { channelId: string }) {
         />
       </SplitTitleFileMenu>
       <SplitHeaderRight>
-        <ChannelInviteButton
-          channelId={props.channelId}
-          channelName={channelName() ?? 'New Channel'}
-          channelType={channelType()}
-        />
+        {/* On mobile the split header is pointer-events-none; only islands
+            (glass pills) take taps. `empty:hidden` drops the pill when the
+            button is not offered (DMs, non-participants). */}
+        <HeaderIsland class="px-1">
+          <ChannelInviteButton
+            channelId={props.channelId}
+            channelName={channelName() ?? 'New Channel'}
+            channelType={channelType()}
+          />
+        </HeaderIsland>
       </SplitHeaderRight>
       {/* Desktop only: on mobile the action lives in the title drawer above. */}
       <Show when={!isMobile() && askMacroEntity()}>
@@ -312,8 +321,14 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
+  const [routeSearch] = createSearchParams(channelsSearch);
 
   const initialTargetMessageParams = (): ChannelTargetMessageParams => {
+    if (routeSearch.messageId)
+      return {
+        [URL_PARAMS.message]: routeSearch.messageId,
+        [URL_PARAMS.thread]: routeSearch.threadId || undefined,
+      };
     const hasPropsTarget =
       props[URL_PARAMS.message] !== undefined ||
       props[URL_PARAMS.thread] !== undefined;
@@ -351,6 +366,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   ] as ChannelEntryStateSnapshot | undefined;
 
   const hasInitialTargetRequest = () => {
+    if (routeSearch.messageId) return true;
     const hasPropsTarget =
       props[URL_PARAMS.message] !== undefined ||
       props[URL_PARAMS.thread] !== undefined;
@@ -388,11 +404,35 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const [targetRequest, setTargetRequest] = createSignal<
     ChannelTargetRequest | undefined
   >(toChannelTargetRequest(initialTargetMessageParams()));
+  let routeOwnsTarget = Boolean(routeSearch.messageId);
   let surfaceApi: ChannelSurfaceApi | undefined;
 
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(normalizeChannelTab(tab));
   };
+
+  createEffect(
+    on(
+      () => [routeSearch.messageId, routeSearch.threadId, routeSearch.seek],
+      () => {
+        if (!routeSearch.messageId) {
+          if (routeOwnsTarget) {
+            routeOwnsTarget = false;
+            setTargetRequest(undefined);
+          }
+          return;
+        }
+        routeOwnsTarget = true;
+        setActiveTab(DEFAULT_CHANNEL_TAB);
+        setTargetRequest({
+          kind: 'message',
+          messageId: routeSearch.messageId,
+          threadId: routeSearch.threadId || undefined,
+        });
+      },
+      { defer: true }
+    )
+  );
 
   const botManagement = useChannelBotManagement({
     channelId,
@@ -440,6 +480,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       // leaves it waiting for whenever the user returns to Messages.
       const target = toChannelTargetRequest(params);
       if (target) {
+        routeOwnsTarget = false;
         setActiveTab(DEFAULT_CHANNEL_TAB);
         setTargetRequest(target);
       }
@@ -455,6 +496,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       }
     },
     goToLatest: async () => {
+      routeOwnsTarget = false;
       setActiveTab(DEFAULT_CHANNEL_TAB);
       setTargetRequest({ kind: 'latest' });
     },

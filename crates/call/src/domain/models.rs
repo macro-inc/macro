@@ -53,6 +53,17 @@ pub struct ArchivedCall {
     pub participant_count: usize,
 }
 
+/// The people known to have been on, or invited to, an archived call.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallPeople {
+    /// Macro accounts that joined the call, plus the owner of its meeting link.
+    pub user_ids: Vec<MacroUserIdStr<'static>>,
+    /// Email addresses invited to the calendar event carrying the call's
+    /// meeting link. External guests join without an account, so this is the
+    /// only record of who they are.
+    pub invitee_emails: Vec<String>,
+}
+
 /// A participant in an active call.
 #[derive(Debug, Clone)]
 pub struct CallParticipant {

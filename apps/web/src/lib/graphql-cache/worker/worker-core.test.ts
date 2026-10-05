@@ -5,9 +5,65 @@ const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./wasm-module', () => ({ loadCacheWasm: loadCacheWasmMock }));
 
+import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it.each([
+    { errorCode: undefined, superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: false },
+    { errorCode: 'INTERNAL', superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: true },
+  ])(
+    'preserves rollback codes only for permanent settlement: %j',
+    async ({ errorCode, superseded }) => {
+      const rollbackOptimisticWrite = vi.fn().mockResolvedValue({
+        kind: superseded ? 'discarded-superseded' : 'rolled-back',
+        ...(superseded ? { replacementTransactionId: '2' } : {}),
+        mutationUuid: 'draft-handle',
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ rollbackOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'rollback-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        error: 'rejected',
+        errorCode,
+      });
+      expect(rollbackOptimisticWrite).toHaveBeenCalledWith('1', 'runner', '1');
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          mutationUuid: 'draft-handle',
+          ...(superseded
+            ? { status: 'superseded', replacementTransactionId: '2' }
+            : {
+                status: 'permanently-failed',
+                error: 'rejected',
+                ...(errorCode === undefined ? {} : { errorCode }),
+              }),
+        },
+      });
+    }
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -127,49 +183,83 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
-  it('reports a successful stale commit as superseded', async () => {
-    const commitOptimisticWrite = vi.fn().mockResolvedValue({
-      kind: 'committed-superseded',
-      replacementTransactionId: '2',
-      revision: INITIAL_CACHE_REVISION,
-      changed: [],
-      affectedOps: [],
-      reset: false,
-      revalidations: [],
-    });
-    loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
-    });
-    const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
-    const core = new CacheWorkerCore();
-    core.addPort(port);
-    await core.handleRequest(port, {
-      id: 1,
-      kind: 'init',
-      scope: 'scope-1',
-    });
-    messages.length = 0;
-
-    await core.handleRequest(port, {
-      id: 2,
-      kind: 'commit-optimistic-write',
-      transactionId: '1',
-      leaseOwner: 'runner',
-      leaseGeneration: '1',
-      query: 'mutation Update { update }',
-      data: { update: true },
-    });
-
-    expect(messages).toContainEqual({
-      kind: 'mutation-settled',
+  it.each([
+    {
+      outcome: {
+        kind: 'committed',
+        identityErrors: ['missing identity response object'],
+      },
+      settlement: { status: 'committed' },
+    },
+    {
+      outcome: {
+        kind: 'committed-superseded',
+        replacementTransactionId: '2',
+        identityErrors: ['missing identity response object'],
+      },
+      settlement: { status: 'superseded', replacementTransactionId: '2' },
+    },
+    {
+      outcome: { kind: 'failed', error: 'missing identity response id' },
       settlement: {
-        transactionId: '1',
-        status: 'superseded',
+        status: 'permanently-failed',
+        error: 'missing identity response id',
+      },
+    },
+    {
+      outcome: {
+        kind: 'failed',
+        error: 'missing identity response id',
         replacementTransactionId: '2',
       },
-    });
-  });
+      settlement: { status: 'superseded', replacementTransactionId: '2' },
+    },
+  ])(
+    'publishes commit settlement $settlement',
+    async ({ outcome, settlement }) => {
+      const commitOptimisticWrite = vi.fn().mockResolvedValue({
+        ...outcome,
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, {
+        id: 1,
+        kind: 'init',
+        scope: 'scope-1',
+      });
+      messages.length = 0;
+
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'commit-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      });
+
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          ...settlement,
+        },
+      });
+    }
+  );
 
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
@@ -279,6 +369,7 @@ describe('CacheWorkerCore', () => {
       settlement: {
         transactionId: '0',
         status: 'superseded',
+        mutationUuid: '00000000-0000-4000-8000-000000000007',
         replacementTransactionId: '1',
       },
     });
@@ -971,6 +1062,46 @@ describe('CacheWorkerCore', () => {
     });
   });
 
+  it.each([
+    { searchChangedBuckets: [], reset: false },
+    { searchChangedBuckets: ['note'], reset: false },
+    { searchChangedBuckets: [], reset: true },
+  ])(
+    'scopes ordinary writes but not resets: %j',
+    async ({ searchChangedBuckets, reset }) => {
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          writeQuery: vi.fn().mockResolvedValue({
+            revision: INITIAL_CACHE_REVISION,
+            revisionAdvanced: true,
+            changed: ['GraphqlUser:viewer'],
+            affectedOps: [],
+            reset,
+            searchChangedBuckets,
+          }),
+        }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'write',
+        query: '{ user { id } }',
+        data: { user: { id: 'viewer' } },
+      });
+      expect(messages).toContainEqual({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+        ...(reset ? { reset: true } : { searchChangedBuckets }),
+      });
+    }
+  );
+
   it('does not push cache changes for no-op writes', async () => {
     const writeResult = {
       revision: INITIAL_CACHE_REVISION,
@@ -1017,6 +1148,7 @@ describe('CacheWorkerCore', () => {
         reset: false,
         data: { cursor: 'next' },
         revisionAdvanced,
+        searchChangedBuckets: ['note'],
       });
       loadCacheWasmMock.mockResolvedValue({
         openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
@@ -1056,7 +1188,13 @@ describe('CacheWorkerCore', () => {
         )
       ).toEqual(
         revisionAdvanced
-          ? [{ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION }]
+          ? [
+              {
+                kind: 'cache-hydrated',
+                revision: INITIAL_CACHE_REVISION,
+                searchChangedBuckets: ['note'],
+              },
+            ]
           : []
       );
       expect(messages.at(-1)).toEqual({
@@ -1131,6 +1269,176 @@ describe('CacheWorkerCore', () => {
     await Promise.all([read, drain]);
     expect(order).toEqual(['read:start', 'read:done', 'response', 'close']);
   });
+
+  it.each([
+    [false, 'openCacheWithOutcome'],
+    [true, 'openCacheForRecoveryWithOutcome'],
+  ] as const)(
+    'asks for the storage grant from inside the WASM open (recovery: %s)',
+    async (recoveryOpen, openName) => {
+      const order: string[] = [];
+      const open = vi.fn(
+        async (
+          _scope: string,
+          _hotCapacity: number | undefined,
+          grant?: () => Promise<void>
+        ) => {
+          order.push('owner-lock');
+          await grant?.();
+          order.push('storage');
+          return { engine: {}, outcome: 'opened-existing' };
+        }
+      );
+      loadCacheWasmMock.mockResolvedValue({ [openName]: open });
+      const messages: unknown[] = [];
+      const core = new CacheWorkerCore({
+        recoveryOpen,
+        onOwnerLockAcquired: async () => {
+          order.push('grant');
+        },
+      });
+
+      await core.handleRequest(
+        { postMessage: (message: unknown) => messages.push(message) },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(order).toEqual(['owner-lock', 'grant', 'storage']);
+      expect(messages).toEqual([{ id: 1, ok: true, result: null }]);
+    }
+  );
+
+  it('refuses a WASM open that never asked for the storage grant', async () => {
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: vi.fn(async () => ({
+        engine: {},
+        outcome: 'opened-existing',
+      })),
+    });
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({
+      onOwnerLockAcquired: async () => undefined,
+    });
+
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(messages).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: 'cache WASM does not support the owner-lock grant',
+      },
+    ]);
+  });
+
+  const busyOwnerLock = () =>
+    Object.assign(new Error('owner lock is held by another context'), {
+      cacheOwnerLockUnavailable: true,
+    });
+
+  const initMessages = async (core: CacheWorkerCore): Promise<unknown[]> => {
+    const messages: unknown[] = [];
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    return messages;
+  };
+
+  it.each([
+    [false, 'openCacheWithOutcome'],
+    [true, 'openCacheForRecoveryWithOutcome'],
+  ] as const)(
+    'opens only a free owner lock, asking before each retry (recovery: %s)',
+    async (recoveryOpen, openName) => {
+      const open = vi
+        .fn()
+        .mockRejectedValueOnce(busyOwnerLock())
+        .mockRejectedValueOnce(busyOwnerLock())
+        .mockImplementation(
+          async (
+            _scope: string,
+            _hotCapacity: number | undefined,
+            grant?: () => Promise<void>
+          ) => {
+            await grant?.();
+            return { engine: {}, outcome: 'opened-existing' };
+          }
+        );
+      loadCacheWasmMock.mockResolvedValue({
+        [openName]: open,
+        cacheDatabaseIdentity,
+      });
+      const onOwnerLockBusy = vi.fn(async (_attempt: number) => undefined);
+      const core = new CacheWorkerCore({
+        recoveryOpen,
+        onOwnerLockAcquired: async () => undefined,
+        onOwnerLockBusy,
+      });
+
+      expect(await initMessages(core)).toEqual([
+        { id: 1, ok: true, result: null },
+      ]);
+      expect(onOwnerLockBusy.mock.calls).toEqual([[1], [2]]);
+      // Every attempt declines to queue behind another holder.
+      expect(open.mock.calls.map((call) => call[3])).toEqual([
+        true,
+        true,
+        true,
+      ]);
+    }
+  );
+
+  it('gives up on a busy owner lock when told to stop retrying', async () => {
+    const open = vi.fn().mockRejectedValue(busyOwnerLock());
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: open,
+      cacheDatabaseIdentity,
+    });
+    const core = new CacheWorkerCore({
+      onOwnerLockAcquired: async () => undefined,
+      onOwnerLockBusy: async () => {
+        throw new Error('owner lock stayed unavailable');
+      },
+    });
+
+    expect(await initMessages(core)).toEqual([
+      { id: 1, ok: false, error: 'owner lock stayed unavailable' },
+    ]);
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      'predates storage versions',
+      {},
+      'cache WASM predates storage-versioned databases; rebuild it',
+    ],
+    [
+      'names another version',
+      { cacheDatabaseIdentity: () => 'graphql-cache:scope-1:s0.v0.t0' },
+      'cache WASM storage version does not match this build',
+    ],
+  ])(
+    'refuses a WASM build that %s before opening anything',
+    async (_label, identity, error) => {
+      const open = vi.fn();
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: open,
+        ...identity,
+      });
+      const core = new CacheWorkerCore({
+        onOwnerLockAcquired: async () => undefined,
+        onOwnerLockBusy: async () => undefined,
+      });
+
+      expect(await initMessages(core)).toEqual([{ id: 1, ok: false, error }]);
+      expect(open).not.toHaveBeenCalled();
+    }
+  );
 
   it('uses atomic recovery-open instead of opening before a reset', async () => {
     const openCache = vi.fn();
@@ -1698,6 +2006,35 @@ describe('CacheWorkerCore', () => {
     expect(messages.slice(-2)).toEqual([
       { id: 2, ok: false, error: 'cache storage reset required' },
       { id: 3, ok: false, error: 'cache storage reset required' },
+    ]);
+  });
+
+  it('reports an open that gave up on busy database files', async () => {
+    const busyError = Object.assign(
+      new Error('OPFS sync handle open failed (NoModificationAllowedError)'),
+      { cacheStorageBusy: true as const }
+    );
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockRejectedValue(busyError),
+    });
+    const onStorageBusy = vi.fn();
+    const onStorageResetRequired = vi.fn();
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({ onStorageBusy, onStorageResetRequired });
+
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(onStorageBusy).toHaveBeenCalledOnce();
+    expect(onStorageResetRequired).not.toHaveBeenCalled();
+    expect(messages).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: 'OPFS sync handle open failed (NoModificationAllowedError)',
+      },
     ]);
   });
 });

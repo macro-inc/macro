@@ -28,6 +28,7 @@ const emailTabSchema = z
     'favorites',
     'sent',
     'scheduled',
+    'reminders',
     'calendar',
     'drafts',
     'shared',

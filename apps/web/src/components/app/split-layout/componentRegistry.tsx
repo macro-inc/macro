@@ -1,23 +1,23 @@
-import { ActivityRouteView } from '@app/features/activity/route';
+import { ActivityRouteView } from '@app/features/activity/route-views';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import { AgentsRouteView } from '@app/features/agents-view/route';
+import { AgentsRouteView } from '@app/features/agents-view/route-views';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { CalendarRouteView } from '@app/features/calendar-view/route';
-import { ChannelsRouteView } from '@app/features/channels-view/route';
-import { CompaniesRouteView } from '@app/features/companies/route';
-import { DriveRouteView } from '@app/features/drive-view/route';
+import { CalendarRouteView } from '@app/features/calendar-view/route-views';
+import { ChannelsRouteView } from '@app/features/channels-view/route-views';
+import { CompaniesRouteView } from '@app/features/crm/route-views';
+import { DriveRouteView } from '@app/features/drive-view/route-views';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
-import { MailRouteView } from '@app/features/email-view/route';
-import { GettingStartedRouteView } from '@app/features/getting-started/route';
-import { HomeRouteView } from '@app/features/home/route';
+import { MailRouteView } from '@app/features/email-view/route-views';
+import { GettingStartedRouteView } from '@app/features/getting-started/route-views';
+import { HomeRouteView } from '@app/features/home/route-views';
 import {
   CallsRouteView,
   FoldersRouteView,
   RecentRouteView,
   SearchRouteView,
-} from '@app/features/next-soup/route';
+} from '@app/features/next-soup/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import {
   CreateProjectView,
@@ -25,20 +25,23 @@ import {
   ProjectView,
 } from '@app/features/projects/project-view';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
-import { RemindersRouteView } from '@app/features/reminders/route';
-import { ReviewsRouteView } from '@app/features/reviews-view/route';
-import { SettingsRouteView } from '@app/features/settings/route';
-import { TasksRouteView } from '@app/features/tasks-view/route';
+import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
+import { RemindersRouteView } from '@app/features/reminders/route-views';
+import { ReviewsRouteView } from '@app/features/reviews-view/route-views';
+import { RoutineCreator } from '@app/features/routines/routine-creator';
+import { SettingsRouteView } from '@app/features/settings/route-views';
+import { TasksRouteView } from '@app/features/tasks-view/route-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
 import { ComposeTask } from '@block-md/component/ComposeTask';
+import NotFound from '@core/component/AccessErrorViews/NotFound';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
   enableChatV3Agents,
-  enableNewAppViews,
   enableProjects,
   isFeatureEnabled,
   LOCAL_ONLY,
@@ -66,6 +69,7 @@ type ComponentFactory = (params: ComponentParams) => JSXElement;
 export type ComponentMeta = {
   kind?: string;
   splitPanelLayout?: 'legacy' | 'composable';
+  ownsCollectionState?: boolean;
 };
 
 export type UnifiedListMeta = ComponentMeta & {
@@ -84,10 +88,8 @@ type ComponentRegistration = {
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-/** Shell for views that draw their own top bar. New app views are on by default,
- * so this is fixed when the mount is created instead of written after paint. */
+/** Shell for views that draw their own top bar. */
 function composableLayout(onTouch = false): ComponentMeta | undefined {
-  if (!isFeatureEnabled(enableNewAppViews)) return;
   if (isTouchDevice() && !onTouch) return;
   return { splitPanelLayout: 'composable' };
 }
@@ -113,13 +115,6 @@ type ResolvedComponent = {
   initialMeta?: ComponentMeta;
 };
 
-/**
- * A reminder view carries its reminder id in the id slot — `reminder-view~<id>`
- * — because component params are dropped on URL restore (see `contentUrlSegments`)
- * and split identity is keyed on the id, so each reminder needs a distinct one.
- */
-const REMINDER_VIEW_PREFIX = 'reminder-view~';
-
 export function resolveComponent(
   name: string,
   params?: ComponentParams
@@ -141,16 +136,6 @@ export function resolveComponent(
         return {
           element: () => base.factory({ ...(params ?? {}), agentsRoute: name }),
           initialMeta: resolveInitialMeta('agents', base.initialMeta),
-        };
-      }
-    }
-    if (name.startsWith(REMINDER_VIEW_PREFIX)) {
-      const base = REGISTRY.get('reminder-view');
-      if (base) {
-        const reminderId = name.slice(REMINDER_VIEW_PREFIX.length);
-        return {
-          element: () => base.factory({ ...(params ?? {}), reminderId }),
-          initialMeta: resolveInitialMeta('reminder-view', base.initialMeta),
         };
       }
     }
@@ -238,14 +223,20 @@ registerComponent(
   () => composableLayout(true)
 );
 registerComponent('getting-started', () => <GettingStartedRouteView />);
+registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent('reminders', () => <RemindersRouteView />);
 registerComponent(
+  'routines',
+  () => <AgentsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
   'agents',
   () => <AgentsRouteView />,
   () =>
-    isFeatureEnabled(enableChatV3Agents) && !isTouchDevice()
+    isFeatureEnabled(enableChatV3Agents)
       ? { splitPanelLayout: 'composable' }
       : undefined
 );
@@ -281,7 +272,10 @@ registerComponent('calls', () => <CallsRouteView />);
 registerComponent(
   'companies',
   () => <CompaniesRouteView />,
-  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+  () => ({
+    ownsCollectionState: true,
+    ...(isTouchDevice() ? {} : { splitPanelLayout: 'composable' as const }),
+  })
 );
 registerComponent('folders', () => <FoldersRouteView />);
 registerComponent('search', () => <SearchRouteView />);
@@ -326,6 +320,15 @@ registerComponent('email-compose', (params) => {
     />
   );
 });
+registerComponent('routine-compose', (params) => (
+  <RoutineCreator
+    onCreated={
+      typeof params.onCreated === 'function'
+        ? (params.onCreated as (id: string) => void)
+        : undefined
+    }
+  />
+));
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
@@ -358,15 +361,19 @@ registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');
   return <ComposeSkill {...params} />;
 });
-registerComponent('reminder-view', (params) => {
-  usePageViewTracking('reminder-view');
+registerComponent(REMINDER_DETAIL_COMPONENT_ID, (params) => {
+  usePageViewTracking('reminder');
   return <ReminderEditorSplit reminderId={params.reminderId as string} />;
 });
 registerComponent(
   'import-linear',
   lazy(() => import('@app/features/integrations/import-linear/ImportLinear'))
 );
-registerComponent('settings', () => <SettingsRouteView />);
+registerComponent(
+  'settings',
+  () => <SettingsRouteView />,
+  () => composableLayout()
+);
 
 if (LOCAL_ONLY) {
   registerComponent(

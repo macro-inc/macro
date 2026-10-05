@@ -1,20 +1,25 @@
-import {
-  projectDetailRoute,
-  tasksProjectsRoute,
-} from '@app/features/tasks-view/route';
-import { useNavigate, useSplitHistory } from '@app/lib/split-router';
+import { useNavigate, usePaneHistory } from '@app/lib/split-router';
+import { projectDetailRoute, tasksProjectsRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import { createEffect, onCleanup, onMount } from 'solid-js';
+import { toast } from '@core/component/Toast/Toast';
+import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import SplitIcon from '@phosphor/square-half.svg';
+import { createEffect, onMount } from 'solid-js';
+import type { ProjectDetail } from './core/project';
 import { type ProjectRoute, projectRouteId } from './core/route';
-import type { ProjectComposerDraft } from './primitives/create-project';
+import {
+  failedProjectDraft,
+  type ProjectComposerDraft,
+  type ProjectComposerSubmission,
+} from './primitives/create-project';
 import { Projects } from './projects';
 import { CreateProject } from './views/create-project';
 
 /** A split opened moments ago joins the router after it mounts; earlier navigation is dropped. */
 function useRedirectOnceRouted(redirect: () => void) {
-  const routed = useSplitHistory();
+  const routed = usePaneHistory();
   let redirected = false;
   createEffect(() => {
     if (redirected || !routed()) return;
@@ -57,32 +62,74 @@ export function ProjectView(props: { route: ProjectRoute }) {
   return null;
 }
 
+/**
+ * The composer is gone before the server answers, so the outcome touches
+ * none of its panel state. Like task creation, success offers to open the
+ * project through the layout's guarded open rather than navigating away
+ * from wherever the user has gone since.
+ */
+async function settleProjectSubmission(
+  { draft, result }: ProjectComposerSubmission,
+  layout: Pick<
+    ReturnType<typeof useSplitLayout>,
+    'openWithSplit' | 'popoverSplit'
+  >
+) {
+  let project: ProjectDetail;
+  try {
+    project = await result;
+  } catch (error) {
+    layout.popoverSplit({
+      type: 'component',
+      id: 'project-compose',
+      params: { initialDraft: failedProjectDraft(draft, error) },
+    });
+    return;
+  }
+  const open = (preferNewSplit: boolean) =>
+    layout.openWithSplit(
+      {
+        type: 'component',
+        id: projectRouteId({ id: project.id, section: 'overview' }),
+      },
+      { referredFrom: null, preferNewSplit }
+    );
+  toast.success('Project created', {
+    actions: [
+      { label: 'Open', icon: ArrowSquareOutIcon, onClick: () => open(false) },
+      {
+        label: 'Open (New Split)',
+        icon: SplitIcon,
+        onClick: () => open(true),
+      },
+    ],
+  });
+}
+
 export function CreateProjectView(props: {
   initialDraft?: ProjectComposerDraft;
 }) {
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
   onMount(() => panel.handle.setDisplayName('New project'));
+  // A full composer returns its split to Projects; a submitted one also
+  // leaves history, so Back does not reopen an empty composer.
+  const close = (mergeHistory?: boolean) => {
+    if (panel.handle.isPopover()) {
+      panel.handle.close();
+      return;
+    }
+    layout.replaceSplit({
+      content: { type: 'component', id: 'tasks-projects' },
+      mergeHistory,
+    });
+  };
   return (
     <Projects>
       <SplitPanel.Root class="bg-transparent">
         <SplitPanel.Body>
           <CreateProject
             initialDraft={props.initialDraft}
-            onFailure={(initialDraft) => {
-              // A native popover can close while a request is in flight.
-              // Restore its failed draft just like the task composer does.
-              if (disposed)
-                layout.popoverSplit({
-                  type: 'component',
-                  id: 'project-compose',
-                  params: { initialDraft },
-                });
-            }}
             onContinueInSplit={
               panel.handle.isPopover()
                 ? (initialDraft) => {
@@ -98,26 +145,10 @@ export function CreateProjectView(props: {
                   }
                 : undefined
             }
-            onClose={() => {
-              if (panel.handle.isPopover()) {
-                panel.handle.close();
-                return;
-              }
-              layout.replaceSplit({
-                content: { type: 'component', id: 'tasks-projects' },
-              });
-            }}
-            onCreated={(id) => {
-              const content = {
-                type: 'component' as const,
-                id: projectRouteId({ id, section: 'overview' }),
-              };
-              if (panel.handle.isPopover()) {
-                panel.handle.close();
-                layout.openWithSplit(content, { preferNewSplit: true });
-                return;
-              }
-              layout.replaceSplit({ content });
+            onClose={() => close()}
+            onSubmit={(submission) => {
+              close(true);
+              void settleProjectSubmission(submission, layout);
             }}
           />
         </SplitPanel.Body>

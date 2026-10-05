@@ -6,20 +6,23 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
-import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import { enableReminders } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -30,6 +33,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  mergeProps,
   on,
   onCleanup,
 } from 'solid-js';
@@ -54,7 +58,6 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
-import { emailSplitRoute, emailThreadRoute } from './route';
 import type {
   EmailTab,
   EmailThreadTarget,
@@ -121,10 +124,15 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const initial = props.initialState ?? {};
+  const reminders = useFeatureFlag(enableReminders);
+  const availableTab = (tab: EmailTab) =>
+    tab === 'reminders' && !reminders().enabled && !reminders().loading
+      ? DEFAULT_EMAIL_TAB
+      : tab;
 
-  const [state, setState] = makePersistedState(
+  const [persistedState, setState] = makePersistedState(
     createStore<EmailViewState>({
-      tab: initial.tab ?? DEFAULT_EMAIL_TAB,
+      tab: availableTab(initial.tab ?? DEFAULT_EMAIL_TAB),
       search: initial.search ?? '',
       inboxIds: normalizeInboxSelection(initial.inboxIds),
       facets: normalizeFacetSelection(initial.facets),
@@ -140,14 +148,25 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       restorePreferences: initial.collapsedSidebarSectionIds === undefined,
     })
   );
+  const searchText = useMobileSearchText(
+    () => persistedState.search,
+    panel.handle.isActive
+  );
+  const state = mergeProps(persistedState, {
+    get search() {
+      return searchText();
+    },
+  });
 
   createEffect(
     on(
-      () => tabSearch.tab,
+      () => availableTab(tabSearch.tab),
       (tab) => {
         if (state.tab === tab) return;
         setState(
           produce((draft) => {
+            if (draft.tab === 'reminders' || tab === 'reminders')
+              draft.search = '';
             draft.tab = tab;
             draft.facets = {};
           })
@@ -155,6 +174,16 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       }
     )
   );
+
+  createEffect(() => {
+    if (
+      state.tab === 'reminders' &&
+      !reminders().enabled &&
+      !reminders().loading
+    ) {
+      setState({ tab: DEFAULT_EMAIL_TAB, search: '', facets: {} });
+    }
+  });
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     useEmailDataSource(state, { tagSets, tagSetsReady })
@@ -297,13 +326,15 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   // A tab is a fresh slice of the mailbox: filters chosen for one tab (Done
   // on Signal, say) would silently narrow the next, so they reset with it.
-  const setTab = (tab: EmailTab) => {
+  const setTab = (requestedTab: EmailTab) => {
+    const tab = availableTab(requestedTab);
     if (state.tab === tab) {
       closeThread();
       return;
     }
     setState(
       produce((draft) => {
+        if (draft.tab === 'reminders' || tab === 'reminders') draft.search = '';
         draft.tab = tab;
         draft.facets = {};
       })
@@ -355,17 +386,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       'collapsedSidebarSectionIds',
       setSidebarSectionCollapsed(id, open)
     );
-
-  // The classic sidebar's nested account rows scope the mail list by split id
-  // (see `SidebarMailLink`); registering keeps them driving this view too, and
-  // flushes a selection queued while navigating here.
-  onCleanup(
-    registerInboxFilterSplit(panel.handle.id, {
-      inboxFilter: () => state.inboxIds,
-      setInboxFilter: setInboxIds,
-    })
-  );
-
   return {
     state,
     setState,

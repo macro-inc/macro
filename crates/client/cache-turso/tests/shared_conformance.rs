@@ -221,7 +221,7 @@ async fn search_projection_contract<S: Storage>(storage: &mut S) {
         .await
         .unwrap();
     let loaded = storage
-        .load_search_documents(SearchProfile::QuickAccessV1)
+        .load_search_documents(SearchProfile::QuickAccessV1, "document")
         .await
         .unwrap();
     assert!(
@@ -242,7 +242,7 @@ async fn search_projection_contract<S: Storage>(storage: &mut S) {
         .unwrap();
     assert!(
         storage
-            .load_search_documents(SearchProfile::QuickAccessV1)
+            .load_search_documents(SearchProfile::QuickAccessV1, "document")
             .await
             .unwrap()
             .iter()

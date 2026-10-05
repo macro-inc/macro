@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 'archive', 'archive@example.com', 'archive-customer'), ($2, 'foreign', 'foreign@example.com', 'foreign-customer')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cdb67d7c03e18b81c5c1cc9ddd26d81999d7deccc030620155029797e6c5082b"
+}

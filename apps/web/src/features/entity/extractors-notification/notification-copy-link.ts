@@ -1,5 +1,7 @@
 import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
+import { reminderDetailUrl } from '@app/features/reminders/reminder-navigation';
 import { toast } from '@core/component/Toast/Toast';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import {
   getChannelNotificationParams,
@@ -23,6 +25,14 @@ export async function copyNotificationLink(notification: UnifiedNotification) {
       title: metadata.content.title,
       occurrenceKey: metadata.content.occurrenceKey,
     });
+    return;
+  }
+  if (metadata.tag === 'reminder') {
+    if (!isFeatureEnabled(enableReminders)) return;
+    await navigator.clipboard.writeText(
+      reminderDetailUrl(notification.entity_id)
+    );
+    toast.success('Link copied to clipboard');
     return;
   }
 

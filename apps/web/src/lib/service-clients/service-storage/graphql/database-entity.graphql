@@ -1,0 +1,27 @@
+# Databases are not Soup entities: ask only for the outcome, not the Soup
+# effects whose hydration would fail.
+fragment DatabaseEntityMutationResultFields on GraphqlEntityMutationResult {
+  __typename
+  ... on GraphqlMutationError {
+    errorCode
+    message
+  }
+}
+
+mutation RenameDatabase($id: ID!, $displayName: String!) {
+  renameEntities(
+    inputs: [{ entity: { type: DATABASE, id: $id }, displayName: $displayName }]
+  ) {
+    results {
+      ...DatabaseEntityMutationResultFields
+    }
+  }
+}
+
+mutation TrashDatabase($id: ID!) {
+  trashEntities(entities: [{ type: DATABASE, id: $id }]) {
+    results {
+      ...DatabaseEntityMutationResultFields
+    }
+  }
+}

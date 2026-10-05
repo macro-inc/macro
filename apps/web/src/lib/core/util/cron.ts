@@ -2,7 +2,7 @@
  * Cron expressions as the Rust backend reads them.
  *
  * Shared by every feature that lets someone build a repeating schedule —
- * automations and reminders both — so the two cannot drift on what `0 0 9 * * 2`
+ * routines and reminders both — so the two cannot drift on what `0 0 9 * * 2`
  * means. The backend parses these with the `cron` crate, which sets two
  * conventions worth stating up front:
  *
@@ -244,6 +244,11 @@ function fallbackParts(time: string = DEFAULT_TIME): CronParts {
  */
 export function parseCron(cron: string): CronParts {
   return interpretCron(cron).parts;
+}
+
+/** Whether the shared recurrence controls can round-trip this expression. */
+export function isCronRepresentable(cron: string): boolean {
+  return interpretCron(cron).representable;
 }
 
 /**

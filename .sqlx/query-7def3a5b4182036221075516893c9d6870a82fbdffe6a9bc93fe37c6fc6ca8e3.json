@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT github_key, repository_id, number, owner, repo\n        FROM github_pull_request\n        WHERE lower(github_key) = lower($1)\n           OR (repository_id = $2 AND number = $3)\n        ORDER BY github_key\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "repository_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "number",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "repo",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7def3a5b4182036221075516893c9d6870a82fbdffe6a9bc93fe37c6fc6ca8e3"
+}

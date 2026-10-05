@@ -16,7 +16,10 @@ use serde_json::Value as Json;
 use std::collections::{BTreeSet, HashMap};
 use thiserror::Error;
 
+mod record_root;
 mod upsert;
+
+pub use record_root::RecordRoot;
 
 /// Maximum number of link recipes accepted for one mutation.
 pub const MAX_PATCHES: usize = 128;
@@ -145,7 +148,7 @@ impl LinkOperation {
     }
 }
 
-/// A query that should be fetched after a successful mutation settlement.
+/// A query to refresh after terminal mutation settlement, including rejection.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryRevalidation {
@@ -158,18 +161,21 @@ pub struct QueryRevalidation {
     pub variables_json: String,
 }
 
-/// One mutation-scoped update rooted at a generated GraphQL query.
+/// One mutation-scoped update rooted at a generated query or an explicit record.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptimisticLinkPatch {
-    /// GraphQL query document that gives the path its typed entrypoint.
+    /// Query document, or fragment document when `record_root` is present.
     pub query: String,
+    /// Explicit normalized record and fragment; absent for legacy query paths.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub record_root: Option<RecordRoot>,
     /// Selected operation when the document contains multiple operations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_name: Option<String>,
     /// Canonical JSON object containing the query variables.
     pub variables_json: String,
-    /// Response-key traversal beginning at the query root.
+    /// Response-key traversal beginning at the query root or selected record.
     pub path: Vec<LinkPathSegment>,
     /// Idempotent relation operation.
     pub operation: LinkOperation,
@@ -177,12 +183,22 @@ pub struct OptimisticLinkPatch {
 
 impl OptimisticLinkPatch {
     /// Query to refresh after this optimistic update commits.
-    pub fn revalidation(&self) -> QueryRevalidation {
-        QueryRevalidation {
+    pub fn revalidation(&self) -> Option<QueryRevalidation> {
+        // Fragments are not executable queries. Record-rooted callers supply
+        // explicit entity-targeted revalidations when recovery needs a fetch.
+        self.record_root.is_none().then(|| QueryRevalidation {
             query: self.query.clone(),
             operation_name: self.operation_name.clone(),
             variables_json: self.variables_json.clone(),
-        }
+        })
+    }
+
+    /// First normalized record needed to resolve this recipe, without discovery.
+    pub fn root_key(&self) -> EntityKey<'static> {
+        self.record_root
+            .as_ref()
+            .map(|root| root.entity_key.clone())
+            .unwrap_or_else(EntityKey::root)
     }
 }
 
@@ -361,6 +377,10 @@ fn validate_embedded_link_fields(
 fn validate_entrypoint(
     patch: &OptimisticLinkPatch,
 ) -> Result<serde_json::Map<String, Json>, LinkPatchError> {
+    if let Some(root) = &patch.record_root {
+        root.validate(patch)?;
+        return Ok(serde_json::Map::new());
+    }
     let document = Document::parse(&patch.query)
         .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
     let operation = document
@@ -741,6 +761,9 @@ fn resolve_target(
     patch: &OptimisticLinkPatch,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     let variables = validate_entrypoint(patch)?;
+    if let Some(root) = &patch.record_root {
+        return root.resolve(effective, patch);
+    }
     let document = Document::parse(&patch.query)
         .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
     let operation = document
@@ -1174,6 +1197,7 @@ mod tests {
 
     fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
         OptimisticLinkPatch {
+            record_root: None,
             query: QUERY.into(),
             operation_name: None,
             variables_json: "{}".into(),
@@ -1203,6 +1227,7 @@ mod tests {
 
     fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
         OptimisticLinkPatch {
+            record_root: None,
             query: QUERY.into(),
             operation_name: None,
             variables_json: "{}".into(),
@@ -1232,6 +1257,7 @@ mod tests {
 
     fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
         OptimisticLinkPatch {
+            record_root: None,
             query: QUERY.into(),
             operation_name: None,
             variables_json: "{}".into(),

@@ -150,7 +150,11 @@ async fn edits_and_reactions_only_publish_live_updates() {
     let MessageChange::Posted { message, .. } = event.change else {
         unreachable!()
     };
-    event.change = MessageChange::ReactionChanged { message };
+    event.change = MessageChange::ReactionChanged {
+        message,
+        emoji: "👍".to_string(),
+        added: true,
+    };
     DiscussionDelivery::new(Context, Access, log.clone(), log.clone())
         .publish(event)
         .await
@@ -283,4 +287,23 @@ async fn crm_records_without_an_owner_only_notify_mentions_and_participants() {
         *log.notices.lock().unwrap(),
         vec![("viewer".into(), CommentNotificationReason::Mention)]
     );
+}
+
+#[tokio::test]
+async fn call_chat_only_reaches_authorized_live_subscribers() {
+    let log = DeliveryLog::default();
+    let mut event = event();
+    event.parent = MessageParent::Call(Uuid::from_u128(9));
+    if let MessageChange::Posted { message, .. } = &mut event.change {
+        message.parent = event.parent.clone();
+    }
+    DiscussionDelivery::new(Context, Access, log.clone(), log.clone())
+        .publish(event)
+        .await
+        .unwrap();
+    assert_eq!(
+        *log.live.lock().unwrap(),
+        HashSet::from(["viewer".to_owned()])
+    );
+    assert!(log.notices.lock().unwrap().is_empty());
 }

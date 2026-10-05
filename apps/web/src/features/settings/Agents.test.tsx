@@ -100,6 +100,11 @@ const agentMocks = vi.hoisted(() => ({
   isTeamOwner: false,
 }));
 
+const avatarMocks = vi.hoisted(() => ({ upload: vi.fn() }));
+vi.mock('@queries/agents/avatar', () => ({
+  useUploadAgentAvatarMutation: () => ({ mutateAsync: avatarMocks.upload }),
+}));
+
 vi.mock('@queries/auth/cursor-api-key', () => ({
   useCursorApiKeyStatusQuery: () => cursorMocks.status,
 }));
@@ -285,6 +290,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  avatarMocks.upload.mockReset();
+  avatarMocks.upload.mockResolvedValue('https://static.example/avatar.png');
   updateSearchParams({ createAgent: undefined });
   setSearchParams.mockClear();
   cursorMocks.status.data = {
@@ -311,8 +318,8 @@ beforeEach(() => {
   );
   modelMocks.queries = {
     'in-memory:': successfulModels([
-      { id: Model.sonnet5, name: 'Claude Sonnet 4.5' },
-      { id: Model.opus5, name: 'Claude Opus 4.5' },
+      { id: Model.sonnet55, name: 'Claude Sonnet 4.5' },
+      { id: Model.opus55, name: 'Claude Opus 4.5' },
     ]),
   };
 });
@@ -525,7 +532,7 @@ describe('Agents', () => {
           expect.objectContaining({
             agentId: 'agent-1',
             harness: 'in-memory',
-            defaultModel: Model.sonnet5,
+            defaultModel: Model.sonnet55,
           })
         )
       );
@@ -573,7 +580,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'all',
         channel_ids: [],
       },
@@ -591,7 +598,7 @@ describe('Agents', () => {
         },
         instructions: 'Keep releases moving.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -639,7 +646,7 @@ describe('Agents', () => {
         },
         instructions: 'Review pull requests.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -666,7 +673,7 @@ describe('Agents', () => {
         },
         instructions: 'Help the other team.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -675,6 +682,111 @@ describe('Agents', () => {
     render(() => <Agents />);
 
     expect(screen.queryByText('Other Team Helper')).toBeNull();
+  });
+
+  it('uploads a team agent avatar before saving and retains it when reopened', async () => {
+    const originalAvatar = 'https://static.example/original.png';
+    const uploadedAvatar = 'https://static.example/avatar.png';
+    const existing = {
+      bot: {
+        id: 'agent-1',
+        kind: 'owned',
+        owner: { type: 'team', team_id: 'team-1' },
+        name: 'Grungus',
+        handle: 'grungus',
+        has_agent: true,
+        avatar_url: originalAvatar,
+      },
+      instructions: 'Help the team.',
+      harness: 'in-memory',
+      default_model: Model.sonnet55,
+      channel_scope: 'all',
+      channel_ids: [],
+    };
+    agentMocks.query.data = [existing];
+    let finishUpload!: (url: string) => void;
+    avatarMocks.upload.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          finishUpload = resolve;
+        })
+    );
+    agentMocks.update.mockImplementation(
+      async (params: { avatarUrl: string }) => {
+        existing.bot.avatar_url = params.avatarUrl;
+      }
+    );
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Grungus' }));
+    const form = screen.getByRole('region', { name: 'Edit agent' });
+    const file = new File(['avatar'], 'avatar.png', { type: 'image/png' });
+    fireEvent.change(form.querySelector('input[type="file"]')!, {
+      target: { files: [file] },
+    });
+    expect(avatarMocks.upload).toHaveBeenCalledWith(file);
+    expect(screen.getByRole('button', { name: 'Save changes' })).toHaveProperty(
+      'disabled',
+      true
+    );
+    expect(screen.getByRole('button', { name: 'Uploading…' })).toHaveProperty(
+      'disabled',
+      true
+    );
+    expect(
+      screen.getByRole('img', { name: 'Grungus avatar' }).getAttribute('src')
+    ).toBe(originalAvatar);
+
+    finishUpload(uploadedAvatar);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Save changes' })
+      ).toHaveProperty('disabled', false)
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() =>
+      expect(agentMocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ avatarUrl: uploadedAvatar, teamId: 'team-1' })
+      )
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit Grungus' })).toBeTruthy()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Grungus' }));
+    expect(
+      screen.getByRole('img', { name: 'Grungus avatar' }).getAttribute('src')
+    ).toBe(uploadedAvatar);
+  });
+
+  it('reports avatar upload failures and allows retrying without losing the form', async () => {
+    avatarMocks.upload.mockRejectedValueOnce(
+      new Error('Failed to upload file')
+    );
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+    fireEvent.input(screen.getByLabelText('Name'), {
+      target: { value: 'Grungus' },
+    });
+    const input = screen
+      .getByRole('region', { name: 'New agent' })
+      .querySelector('input[type="file"]')!;
+    const file = new File(['avatar'], 'avatar.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() =>
+      expect(agentMocks.toastFailure).toHaveBeenCalledWith(
+        'Failed to upload file'
+      )
+    );
+    expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Grungus');
+    expect(screen.getByRole('button', { name: 'Upload' })).toHaveProperty(
+      'disabled',
+      false
+    );
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('img', { name: 'Grungus avatar' }).getAttribute('src')
+      ).toBe('https://static.example/avatar.png')
+    );
   });
 
   it('edits and persists an existing agent through the agents API', async () => {
@@ -693,7 +805,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -732,7 +844,7 @@ describe('Agents', () => {
         avatarUrl: undefined,
         channelIds: ['channel-engineering'],
         channelScope: 'selected',
-        defaultModel: Model.sonnet5,
+        defaultModel: Model.sonnet55,
         description: 'Finds and fixes bugs.',
         handle: 'bug-fixer',
         harness: 'in-memory',
@@ -763,7 +875,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'all',
         channel_ids: [],
       },
@@ -808,7 +920,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'all',
         channel_ids: [],
       },
@@ -847,7 +959,7 @@ describe('Agents', () => {
         },
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
-        default_model: Model.sonnet5,
+        default_model: Model.sonnet55,
         channel_scope: 'selected',
         channel_ids: ['channel-engineering'],
       },
@@ -959,7 +1071,7 @@ describe('Agents', () => {
         isCoding: false,
         channelIds: [],
         channelScope: 'all',
-        defaultModel: Model.sonnet5,
+        defaultModel: Model.sonnet55,
         handle: 'bug-fixer',
         harness: 'in-memory',
         name: 'Bug fixer',
@@ -1434,7 +1546,7 @@ describe('Agents', () => {
     },
     instructions: '',
     harness: 'in-memory',
-    default_model: Model.sonnet5,
+    default_model: Model.sonnet55,
     channel_scope: 'all',
     channel_ids: [],
     mcp: {

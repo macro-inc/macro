@@ -4,7 +4,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type { EntityData } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { cn } from '@ui';
+import { Button } from '@ui';
 import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,
@@ -29,22 +29,17 @@ export const EntityModalActionFooter = (props: {
   isDisabled?: boolean;
 }) => {
   return (
-    <div class="flex justify-end mt-2 text-sm pt-2">
-      <button class="py-1 px-3 font-mono text-sm" onClick={props.onCancel}>
+    <div class="flex justify-end gap-2 mt-2 text-sm pt-2">
+      <Button variant="ghost" onClick={props.onCancel}>
         Cancel
-      </button>
-      <button
-        class={cn(
-          'uppercase py-1 px-3 font-mono text-sm',
-          props.isDisabled
-            ? 'bg-edge text-ink-placeholder cursor-not-allowed'
-            : 'bg-accent text-surface'
-        )}
+      </Button>
+      <Button
+        variant="strong"
         onClick={props.onConfirm}
         disabled={props.isDisabled}
       >
         {props.confirmText}
-      </button>
+      </Button>
     </div>
   );
 };

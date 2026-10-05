@@ -33,6 +33,7 @@ export type NativeStagedUploadFile = {
   mimeType: string;
   size: number;
   previewSrc?: string;
+  sha256?: string;
 };
 
 export type UploadFile = BrowserUploadFile | NativeStagedUploadFile;

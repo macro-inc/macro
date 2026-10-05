@@ -1,5 +1,6 @@
 use super::*;
 mod queue;
+mod recovery;
 mod search;
 mod user_cleanup;
 mod working_branch;
@@ -10,6 +11,9 @@ use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
+use entity_access_db_utils::AccessLevel;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
@@ -103,8 +107,15 @@ pub(super) fn new_session(
     }
 }
 
-pub(super) async fn create_session(
-    repo: &PgAgentSessionRepo,
+pub(super) fn test_repo(pool: &PgPool) -> PgAgentSessionRepo<PgBotsRepo> {
+    PgAgentSessionRepo::new(
+        pool.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+    )
+}
+
+pub(super) async fn create_session<B: entity_registry::BotFacts + 'static>(
+    repo: &PgAgentSessionRepo<B>,
     params: CreateAgentSessionParams,
 ) -> AgentSession {
     AgentSessionRepo::create(repo, params)
@@ -114,8 +125,8 @@ pub(super) async fn create_session(
 
 /// Drive a session's status the way production does: append a system event to
 /// the log and let [`AgentSessionLogRepo::create`] project it onto the session.
-async fn append_system_event(
-    repo: &PgAgentSessionRepo,
+async fn append_system_event<B: entity_registry::BotFacts + 'static>(
+    repo: &PgAgentSessionRepo<B>,
     agent_session_id: AgentSessionId,
     event: SystemEvent,
 ) {
@@ -209,6 +220,34 @@ async fn entity_row_count(pool: &PgPool, id: AgentSessionId) -> i64 {
     .expect("count the session's entity row")
 }
 
+async fn agent_session_row_count(pool: &PgPool, id: AgentSessionId) -> i64 {
+    sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "count!"
+        FROM agent_session
+        WHERE id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("count agent_session rows")
+}
+
+async fn entity_access_row_count(pool: &PgPool, id: AgentSessionId) -> i64 {
+    sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "count!"
+        FROM entity_access
+        WHERE entity_id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("count entity_access rows")
+}
+
 fn acp_notification() -> AcpMessage {
     AcpMessage(
         RawJsonRpcMessage::notification("test/notify".to_string(), serde_json::json!({}))
@@ -218,7 +257,7 @@ fn acp_notification() -> AcpMessage {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_refuses_an_owner_that_is_not_a_user(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let params = CreateAgentSessionParams {
         owner_id: Owner::Bot(bot_id),
@@ -226,9 +265,6 @@ async fn create_refuses_an_owner_that_is_not_a_user(pool: PgPool) {
     };
     let id = params.id;
 
-    // Refused by type before the row's user foreign key, user access row, or
-    // user history could say it less clearly - and before any of them is
-    // written.
     let error = AgentSessionRepo::create(&repo, params)
         .await
         .expect_err("a bot cannot own a session row");
@@ -241,8 +277,95 @@ async fn create_refuses_an_owner_that_is_not_a_user(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_registers_the_owner_through_the_registrar(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let params = new_session(bot_id, None, None);
+    let id = params.id;
+    create_session(&repo, params).await;
+
+    assert_eq!(entity_row_count(&pool, id).await, 1);
+    let (entity_type, owner_type, owner_id, _, _) = fetch_session_entity(&pool, id).await;
+    assert_eq!(
+        (entity_type, owner_type, owner_id),
+        (
+            "agent_session".to_string(),
+            "user".to_string(),
+            OWNER.to_string()
+        )
+    );
+
+    let grants = sqlx::query!(
+        r#"
+        SELECT source_type::text AS "source_type!", source_id, access_level::text AS "access_level!"
+        FROM entity_access
+        WHERE entity_id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read the session's grants");
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].source_type, "user");
+    assert_eq!(grants[0].source_id, OWNER);
+    assert_eq!(grants[0].access_level, "owner");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_rejects_an_unknown_user_owner(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let params = CreateAgentSessionParams {
+        owner_id: Owner::User(user_id("macro|missing@example.com")),
+        ..new_session(bot_id, None, None)
+    };
+    let id = params.id;
+
+    let error = AgentSessionRepo::create(&repo, params)
+        .await
+        .expect_err("an unknown user cannot own a session");
+
+    assert!(matches!(error, AgentSessionError::UnknownOwner));
+    assert_eq!(agent_session_row_count(&pool, id).await, 0);
+    assert_eq!(entity_row_count(&pool, id).await, 0);
+    assert_eq!(entity_access_row_count(&pool, id).await, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_refuses_a_caller_minted_id_held_by_another_entity(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let params = new_session(bot_id, None, None);
+    let id = params.id;
+
+    let mut transaction = pool.begin().await.expect("begin entity seed");
+    entity_registry_db_utils::insert_entity(
+        &mut transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            id.as_uuid(),
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            Owner::User(user_id(OWNER)),
+        ),
+    )
+    .await
+    .expect("register a document under the session id");
+    transaction.commit().await.expect("commit entity seed");
+
+    let error = AgentSessionRepo::create(&repo, params)
+        .await
+        .expect_err("a session cannot take an id another entity holds");
+
+    assert!(matches!(
+        error,
+        AgentSessionError::SessionIdTaken(taken) if taken == id
+    ));
+    assert_eq!(agent_session_row_count(&pool, id).await, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_and_get_round_trips(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let mut params = new_session(bot_id, None, None);
     params.repo_branch = Some(
@@ -286,7 +409,7 @@ async fn create_and_get_round_trips(pool: PgPool) {
 async fn instructions_round_trip_on_every_read_path(pool: PgPool) {
     const INSTRUCTIONS: &str = "Answer in one sentence.\nNever open a pull request.";
 
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let (_channel_id, thread_id, originating_message_id) =
         insert_originating_thread_fixture(&pool).await;
@@ -328,7 +451,7 @@ async fn instructions_round_trip_on_every_read_path(pool: PgPool) {
 /// included, and the default is the owner's connections.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn mcp_server_selection_round_trips_on_every_read_path(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let (_channel_id, thread_id, originating_message_id) =
         insert_originating_thread_fixture(&pool).await;
@@ -373,7 +496,7 @@ async fn mcp_server_selection_round_trips_on_every_read_path(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let id = create_session(&repo, new_session(bot_id, None, None))
         .await
@@ -399,7 +522,7 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_model_updates_only_the_model(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let id = create_session(&repo, new_session(bot_id, None, None))
         .await
@@ -446,7 +569,7 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_repo_url_replaces_and_clears_the_repository(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let id = create_session(&repo, new_session(bot_id, None, None))
         .await
@@ -494,7 +617,7 @@ async fn set_repo_url_replaces_and_clears_the_repository(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_name_updates_only_the_name(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let id = create_session(&repo, new_session(bot_id, None, None))
         .await
@@ -545,7 +668,7 @@ async fn set_name_updates_only_the_name(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_name_errors_for_missing_session(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool);
+    let repo = test_repo(&pool);
 
     assert!(
         repo.set_name(AgentSessionId::new(), "Missing Session")
@@ -556,7 +679,7 @@ async fn set_name_errors_for_missing_session(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn generated_name_only_replaces_the_default(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let id = create_session(&repo, new_session(bot_id, None, None))
         .await
@@ -615,7 +738,7 @@ async fn generated_name_only_replaces_the_default(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let owner = user_id(OWNER);
     let id = create_session(&repo, new_session(bot_id, None, None))
@@ -661,7 +784,7 @@ async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_missing_session_errors(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool);
+    let repo = test_repo(&pool);
     let missing = AgentSessionId::new();
 
     assert!(AgentSessionRepo::get(&repo, missing).await.is_err());
@@ -669,7 +792,7 @@ async fn get_missing_session_errors(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_removes_session(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let id = session.id;
@@ -683,7 +806,7 @@ async fn delete_removes_session(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session_id = create_session(&repo, new_session(bot_id, None, None))
         .await
@@ -749,7 +872,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_thread_matches_the_originating_thread_and_bot(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
     let (originating_channel, thread, originating_message) =
@@ -802,7 +925,7 @@ async fn find_for_thread_matches_the_originating_thread_and_bot(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
     let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
@@ -861,7 +984,7 @@ async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
 async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
     const OTHER_OWNER: &str = "macro|agent-session-other-owner@example.com";
 
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     insert_user(&pool, OTHER_OWNER).await;
 
@@ -899,7 +1022,7 @@ async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_thread_requires_thread_and_bot_for_originating_match(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
     create_session(
@@ -923,7 +1046,7 @@ async fn find_for_thread_requires_thread_and_bot_for_originating_match(pool: PgP
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn thread_and_bot_belong_to_only_one_session(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let (_, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
     create_session(
@@ -942,7 +1065,7 @@ async fn thread_and_bot_belong_to_only_one_session(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_sessions_audience_is_its_owner(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
 
@@ -965,7 +1088,7 @@ async fn a_sessions_audience_is_its_owner(pool: PgPool) {
 /// publisher's own early return is what turns that into no gateway call.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_unknown_session_has_no_audience(pool: PgPool) {
-    let audience = PgAgentSessionRepo::new(pool)
+    let audience = test_repo(&pool)
         .viewers(AgentSessionId::new())
         .await
         .expect("read the session audience");
@@ -978,7 +1101,7 @@ async fn an_unknown_session_has_no_audience(pool: PgPool) {
 /// transaction as the session, so a session can never exist unreachable.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_grants_the_owner_and_the_originating_channel(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let (origin_channel_id, thread_id, originating_message_id) =
         insert_originating_thread_fixture(&pool).await;
@@ -1009,7 +1132,8 @@ async fn create_grants_the_owner_and_the_originating_channel(pool: PgPool) {
         (
             origin_channel_id.to_string(),
             "channel".to_string(),
-            "edit".to_string(),
+            // `create_test_bot` is a private agent.
+            "view".to_string(),
         ),
     ];
     expected.sort();
@@ -1027,7 +1151,7 @@ async fn create_grants_the_owner_and_the_originating_channel(pool: PgPool) {
 /// from, so it is the owner's alone.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_without_a_mention_grants_only_the_owner(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
 
     let params = new_session(bot_id, None, None);
@@ -1056,7 +1180,7 @@ async fn create_without_a_mention_grants_only_the_owner(pool: PgPool) {
 /// touches later, so Soup's `viewed_at` is set from the moment it exists.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
 
     let params = new_session(bot_id, None, None);
@@ -1085,7 +1209,7 @@ async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
 /// bot, is listed immediately.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn inline_macro_sessions_start_hidden(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     create_test_bot(&pool).await;
     let (_channel_id, thread_id, originating_message_id) =
         insert_originating_thread_fixture(&pool).await;
@@ -1120,7 +1244,7 @@ async fn inline_macro_sessions_start_hidden(pool: PgPool) {
 /// answers what it is asked.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let (channel_id, thread_id, originating_message_id) =
         insert_originating_thread_fixture(&pool).await;
@@ -1229,7 +1353,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
 /// has to take its grants with it or they accumulate forever.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_removes_the_session_grants(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let (_, thread_id, originating_message_id) = insert_originating_thread_fixture(&pool).await;
 
@@ -1299,7 +1423,7 @@ fn cursor_external(agent: &str) -> ExternalSession {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn external_session_round_trips_and_upsert_replaces(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     insert_user(&pool, OWNER).await;
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
@@ -1357,7 +1481,7 @@ async fn external_session_round_trips_and_upsert_replaces(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn two_sessions_cannot_claim_the_same_external_agent(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     insert_user(&pool, OWNER).await;
     let bot_id = create_test_bot(&pool).await;
     let (_channel, thread, message) = insert_originating_thread_fixture(&pool).await;
@@ -1373,7 +1497,7 @@ async fn two_sessions_cannot_claim_the_same_external_agent(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_a_session_cascades_its_external_row(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     insert_user(&pool, OWNER).await;
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
@@ -1444,7 +1568,7 @@ fn cursor_checkpoint_log(id: AgentSessionId, run: &str) -> AgentSessionLog {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn claiming_is_reentrant_and_every_claim_bumps_the_fence(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let replica = ReplicaId::mint();
@@ -1458,7 +1582,7 @@ async fn claiming_is_reentrant_and_every_claim_bumps_the_fence(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_live_holder_blocks_a_second_replica(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let holder = ReplicaId::mint();
@@ -1473,7 +1597,7 @@ async fn a_live_holder_blocks_a_second_replica(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_stale_holder_is_superseded(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let crashed = ReplicaId::mint();
@@ -1493,7 +1617,7 @@ async fn a_stale_holder_is_superseded(pool: PgPool) {
 /// waiting out the heartbeat it is still sending.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_draining_holder_stops_managing_and_can_be_taken_over(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let leaving = ReplicaId::mint();
@@ -1540,7 +1664,7 @@ async fn a_draining_holder_stops_managing_and_can_be_taken_over(pool: PgPool) {
 /// a process on its way out is.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn draining_is_idempotent_and_needs_no_prior_heartbeat(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let replica = ReplicaId::mint();
@@ -1570,7 +1694,7 @@ async fn drained_at(pool: &PgPool, replica: ReplicaId) -> Option<chrono::DateTim
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn release_frees_the_lease_but_never_a_successors(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let crashed = ReplicaId::mint();
@@ -1595,7 +1719,7 @@ async fn release_frees_the_lease_but_never_a_successors(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_fenced_append_rejects_a_superseded_writer(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let zombie = ReplicaId::mint();
@@ -1632,7 +1756,7 @@ async fn a_fenced_append_rejects_a_superseded_writer(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn cursor_checkpoint_advances_atomically_under_the_session_fence(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     ExternalSessionRepo::upsert(&repo, session.id, cursor_external("bc-1"))
@@ -1675,7 +1799,7 @@ async fn cursor_checkpoint_advances_atomically_under_the_session_fence(pool: PgP
 /// Exercise the generic boundary contract without asking persistence to inspect ACP JSON.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn history_boundary_selects_initialization_and_keeps_raw_audit(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
@@ -1748,7 +1872,7 @@ async fn history_boundary_selects_initialization_and_keeps_raw_audit(pool: PgPoo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn history_boundary_rejects_foreign_rows_and_stale_claims_atomically(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let other = create_session(&repo, new_session(bot, None, None)).await;
@@ -1821,7 +1945,7 @@ async fn history_boundary_rejects_foreign_rows_and_stale_claims_atomically(pool:
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn history_boundary_update_failure_rolls_back_response(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
@@ -1862,7 +1986,7 @@ async fn history_boundary_update_failure_rolls_back_response(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn history_boundary_insert_failure_keeps_previous_selection(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
@@ -1913,7 +2037,7 @@ async fn history_boundary_insert_failure_keeps_previous_selection(pool: PgPool) 
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn history_boundary_readers_see_response_and_selection_together(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
@@ -1977,7 +2101,7 @@ async fn history_boundary_readers_see_response_and_selection_together(pool: PgPo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     // Equal timestamps force ordering and selection to use the UUID tie-break.
@@ -2069,7 +2193,7 @@ async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn participants_are_the_distinct_users_the_log_attributes(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session_id = create_session(&repo, new_session(bot_id, None, None))
         .await
@@ -2108,7 +2232,7 @@ async fn participants_are_the_distinct_users_the_log_attributes(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
     use crate::domain::pull_request::SessionPullRequestRepo;
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let url = "https://github.com/org/repo/pull/123";
@@ -2163,8 +2287,71 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pull_request_links_keep_the_pull_request_the_agent_opened(pool: PgPool) {
+    use crate::domain::pull_request::SessionPullRequestRepo;
+    use crate::domain::pull_request_links::{PullRequestLinkSource, SessionPullRequestLinkRepo};
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let owner = session.owner_user().unwrap();
+
+    repo.link_pull_request(session.id, "org/repo/pull/7", owner)
+        .await
+        .unwrap();
+    repo.record_pull_request(
+        session.id,
+        owner,
+        "https://github.com/org/repo/pull/7",
+        None,
+    )
+    .await
+    .unwrap();
+    repo.link_pull_request(session.id, "org/repo/pull/8", owner)
+        .await
+        .unwrap();
+
+    let links = repo.session_pull_requests(session.id).await.unwrap();
+    assert_eq!(
+        links
+            .iter()
+            .map(|link| (link.github_key.as_str(), link.source))
+            .collect::<Vec<_>>(),
+        vec![
+            ("org/repo/pull/7", PullRequestLinkSource::Agent),
+            ("org/repo/pull/8", PullRequestLinkSource::User),
+        ]
+    );
+    assert_eq!(links[0].linked_by, None);
+    assert_eq!(links[1].linked_by.as_deref(), Some(owner.as_ref()));
+
+    assert!(
+        !repo
+            .unlink_pull_request(session.id, "org/repo/pull/7")
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.unlink_pull_request(session.id, "ORG/repo/pull/8")
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        repo.sessions_for_pull_request("org/REPO/pull/7")
+            .await
+            .unwrap(),
+        vec![session.id]
+    );
+    assert!(
+        repo.sessions_for_pull_request("org/repo/pull/8")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rotating_a_session_credential_revokes_the_previous_one(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     repo.set_egress_token_hash(session.id, "first-token-hash")
@@ -2200,7 +2387,7 @@ async fn rotating_a_session_credential_revokes_the_previous_one(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPool) {
     use crate::domain::pull_request::SessionPullRequestRepo;
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let ClaimOutcome::Claimed(old) = repo.claim(session.id, ReplicaId::mint()).await.unwrap()
@@ -2291,6 +2478,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
     let parent = MessageParent::parse("document", &document_id).unwrap();
     let root = messages
         .create(CreateMessage {
+            canonical_root_id: None,
             parent: parent.clone(),
             actor: OWNER.to_owned().try_into().unwrap(),
             triggered_by: None,
@@ -2308,7 +2496,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
         })
         .await
         .unwrap();
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let session = create_session(&repo, new_session(bot, Some(root.id), Some(root.id))).await;
     assert_eq!(session.thread_parent, Some(parent.clone()));
     assert_eq!(
@@ -2455,7 +2643,7 @@ impl crate::domain::audience::SessionSubscriptions for DocumentSubscriptions {
 /// clock.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_batch_fenced_writes_in_order_under_the_given_ids(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
@@ -2534,7 +2722,7 @@ async fn create_batch_fenced_writes_in_order_under_the_given_ids(pool: PgPool) {
 /// touched.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_batch_fenced_refuses_stale_claims_and_foreign_frames(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let other = create_session(&repo, new_session(bot, None, None)).await;
@@ -2582,7 +2770,7 @@ async fn turn_projection_is_atomic_fenced_and_backfill_cannot_overwrite_live_sta
     use crate::domain::turn_state::SessionTurnProjectionRepo;
     use agent_fold::domain::model::TurnState;
 
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let replica = ReplicaId::mint();
@@ -2687,4 +2875,66 @@ fn log_json_drops_null_bytes_before_it_reaches_postgres() {
             serde_json::Value::String("plain".to_owned()),
         ])
     );
+}
+
+async fn channel_grant(pool: &PgPool, session: AgentSessionId, channel_id: Uuid) -> String {
+    sqlx::query_scalar!(
+        r#"SELECT access_level::text AS "access_level!" FROM entity_access WHERE entity_id = $1 AND entity_type = 'agent_session' AND source_id = $2"#,
+        session.as_uuid(),
+        channel_id.to_string(),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("originating channel grant")
+}
+
+/// A private agent's channel watches its session; a team agent's or a
+/// system bot's channel can also steer it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_originating_channel_steers_only_shared_agents_sessions(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let private_bot = create_test_bot(&pool).await;
+
+    let team_id = macro_uuid::generate_uuid_v7();
+    let team_owner = "macro|agent-session-team-owner@example.com";
+    insert_user(&pool, team_owner).await;
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Agents', $2)",
+        team_id,
+        team_owner,
+    )
+    .execute(&pool)
+    .await
+    .expect("create team");
+    let team_bot = PgBotsRepo::new(pool.clone())
+        .create_owned_bot(
+            BotOwner::Team { team_id },
+            user_id(team_owner),
+            CreateBotRequest {
+                team_id: Some(team_id),
+                name: "Team Agent".to_string(),
+                handle: format!("team-agent-{}", macro_uuid::generate_uuid_v7()),
+                description: None,
+                avatar_url: None,
+                has_agent: None,
+            },
+        )
+        .await
+        .expect("create team bot")
+        .id;
+
+    for (bot, expected) in [
+        (private_bot, "view"),
+        (team_bot, "edit"),
+        (bot_id::CURSOR_BOT_ID, "edit"),
+    ] {
+        let (channel_id, thread_id, message_id) = insert_originating_thread_fixture(&pool).await;
+        let session =
+            create_session(&repo, new_session(bot, Some(thread_id), Some(message_id))).await;
+        assert_eq!(
+            channel_grant(&pool, session.id, channel_id).await,
+            expected,
+            "bot {bot}"
+        );
+    }
 }

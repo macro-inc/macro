@@ -108,6 +108,7 @@ fn parent_key(kind: &str, id: &str) -> Option<RecordKey> {
         "PROJECT" => "GraphqlSoupProject",
         "CHAT" => "GraphqlSoupChat",
         "THREAD" => "GraphqlSoupEmailThread",
+        "DATABASE_ROW" => "GraphqlSoupDatabaseRow",
         _ => return None,
     };
     RecordKey::new(format!("{kind}:{id}")).ok()
@@ -119,6 +120,7 @@ fn is_parent(key: &EntityKey<'_>) -> bool {
         "GraphqlSoupChat:",
         "GraphqlSoupEmailThread:",
         "GraphqlSoupChannel:",
+        "GraphqlSoupDatabaseRow:",
     ]
     .iter()
     .any(|prefix| key.as_ref().starts_with(prefix))
@@ -274,6 +276,7 @@ async fn owners<S: PredicateIndexStorage>(
                 vocabulary::document_partition(),
                 vocabulary::project_partition(),
                 vocabulary::chat_partition(),
+                vocabulary::database_row_partition(),
             ],
             vocabulary::updated_at(),
         ),

@@ -31,7 +31,7 @@ function NewMeetingMenu(props: { onChannelCall: () => void }) {
         <Dropdown.Trigger
           variant="accent"
           size="sm"
-          class="gap-1.5 rounded-lg px-2"
+          class="gap-1.5 px-2"
           label="New call"
         >
           <VideoCameraIcon class="size-3.5" />

@@ -63,6 +63,8 @@ export const unsubscribeItemParams = zod.object({
     'agent_session',
     'scheduled_action',
     'initiative',
+    'database',
+    'database_row',
   ]),
   item_id: zod.string(),
 });
@@ -104,6 +106,8 @@ export const removeUnsubscribeItemParams = zod.object({
     'agent_session',
     'scheduled_action',
     'initiative',
+    'database',
+    'database_row',
   ]),
   item_id: zod.string(),
 });
@@ -210,6 +214,8 @@ export const listTypedNotificationsResponse = zod
                 'agent_session',
                 'scheduled_action',
                 'initiative',
+                'database',
+                'database_row',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1932,6 +1938,54 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       'The user was named in a prompt to an agent session.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            emoji: zod
+                              .string()
+                              .describe('The emoji added by the reactor.'),
+                            messageContent: zod
+                              .string()
+                              .describe('The reacted-to message content.'),
+                            messageId: zod
+                              .string()
+                              .describe('The reacted-to message id.'),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional reactor profile picture URL.'
+                              ),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The thread root id when the reacted-to message is a reply.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a reaction added to one of the recipient's channel messages."
+                        ),
+                      tag: zod.enum(['channel_message_reaction']),
+                    })
+                    .describe(
+                      "Someone reacted to one of the user's channel messages."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -2054,6 +2108,8 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'agent_session',
                 'scheduled_action',
                 'initiative',
+                'database',
+                'database_row',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -3776,6 +3832,54 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       'The user was named in a prompt to an agent session.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            emoji: zod
+                              .string()
+                              .describe('The emoji added by the reactor.'),
+                            messageContent: zod
+                              .string()
+                              .describe('The reacted-to message content.'),
+                            messageId: zod
+                              .string()
+                              .describe('The reacted-to message id.'),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional reactor profile picture URL.'
+                              ),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The thread root id when the reacted-to message is a reply.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a reaction added to one of the recipient's channel messages."
+                        ),
+                      tag: zod.enum(['channel_message_reaction']),
+                    })
+                    .describe(
+                      "Someone reacted to one of the user's channel messages."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -3892,6 +3996,8 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'agent_session',
                 'scheduled_action',
                 'initiative',
+                'database',
+                'database_row',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -5614,6 +5720,54 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       'The user was named in a prompt to an agent session.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            emoji: zod
+                              .string()
+                              .describe('The emoji added by the reactor.'),
+                            messageContent: zod
+                              .string()
+                              .describe('The reacted-to message content.'),
+                            messageId: zod
+                              .string()
+                              .describe('The reacted-to message id.'),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional reactor profile picture URL.'
+                              ),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The thread root id when the reacted-to message is a reply.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a reaction added to one of the recipient's channel messages."
+                        ),
+                      tag: zod.enum(['channel_message_reaction']),
+                    })
+                    .describe(
+                      "Someone reacted to one of the user's channel messages."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -5735,6 +5889,8 @@ export const getTypedNotificationByIdResponse = zod
         'agent_session',
         'scheduled_action',
         'initiative',
+        'database',
+        'database_row',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -7326,6 +7482,48 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['agent_session_mentioned']),
             })
             .describe('The user was named in a prompt to an agent session.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'private',
+                    'directMessage',
+                    'team',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    emoji: zod
+                      .string()
+                      .describe('The emoji added by the reactor.'),
+                    messageContent: zod
+                      .string()
+                      .describe('The reacted-to message content.'),
+                    messageId: zod
+                      .string()
+                      .describe('The reacted-to message id.'),
+                    senderProfilePictureUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Optional reactor profile picture URL.'),
+                    threadId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The thread root id when the reacted-to message is a reply.'
+                      ),
+                  })
+                )
+                .describe(
+                  "Metadata for a reaction added to one of the recipient's channel messages."
+                ),
+              tag: zod.enum(['channel_message_reaction']),
+            })
+            .describe("Someone reacted to one of the user's channel messages."),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'

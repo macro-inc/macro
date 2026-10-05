@@ -1,5 +1,10 @@
 import { listOwnedSlotName } from '@app/components/list/owned-slots';
+import {
+  makeCopyEntityIdAction,
+  makeCopyLinkAction,
+} from '@app/features/next-soup/actions';
 import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitPanelOrThrow,
@@ -9,27 +14,36 @@ import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import { queryClient } from '@queries/client';
-import {
-  getGraphqlSoupCacheHost,
-  getGraphqlSoupClient,
-} from '@service-storage/graphql-soup';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { initiativeClient } from '@service-storage/initiative';
 import { Button } from '@ui';
-import type { Accessor } from 'solid-js';
-import { ErrorBoundary, onCleanup, type ParentProps, Suspense } from 'solid-js';
+import {
+  createSignal,
+  ErrorBoundary,
+  onCleanup,
+  type ParentProps,
+  Show,
+  Suspense,
+} from 'solid-js';
 import {
   ProjectsProvider,
   useProjectsContext,
 } from './context/projects-context';
+import { projectRouteId } from './core/route';
 import {
   createProjectCollection,
   type ProjectListActivation,
 } from './primitives/project-collection';
 import { createProjectCollectionPersistence } from './project-collection-persistence';
+import { ProjectShareLauncher } from './project-share';
 import { projectKeys } from './queries/keys';
 import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
+import {
+  ProjectsSidebar,
+  type ProjectsSidebarProps,
+} from './views/projects-sidebar';
 
 function createProjectReadGate() {
   // Each source invokes this under its own owner, which can outlive this view.
@@ -52,7 +66,7 @@ function createProjectsContext() {
   );
   return createProjectSources(
     initiativeClient,
-    { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
+    { client: getGraphqlSoupClient },
     queryClient,
     userId,
     createProjectReadGate
@@ -100,6 +114,14 @@ export function ProjectsTab(props: {
   );
 }
 
+export function ProjectsSidebarSection(props: ProjectsSidebarProps) {
+  return (
+    <Projects>
+      <ProjectsSidebar {...props} />
+    </Projects>
+  );
+}
+
 function ProjectsCollectionHost(props: {
   onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
 }) {
@@ -130,16 +152,40 @@ function ProjectsCollectionHost(props: {
         onOpen: (id, metadata) => activation.current?.(id, metadata),
       })
   );
+  const copyLink = makeCopyLinkAction();
+  const copyId = makeCopyEntityIdAction();
+  const [sharing, setSharing] = createSignal<string>();
   return (
-    <ProjectsCollection
-      onOpen={open}
-      collection={collection}
-      onCreate={() =>
-        layout.popoverSplit({ type: 'component', id: 'project-compose' })
-      }
-      scopeId={panel.splitHotkeyScope}
-      isActive={panel.isPanelActive}
-    />
+    <>
+      <ProjectsCollection
+        onOpen={open}
+        collection={collection}
+        onCreate={() =>
+          layout.popoverSplit({ type: 'component', id: 'project-compose' })
+        }
+        scopeId={panel.splitHotkeyScope}
+        isActive={panel.isPanelActive}
+        canOpenInNewSplit={() =>
+          globalSplitManager()?.canAppendSplit() ?? false
+        }
+        onCopyLink={(id) =>
+          void copyLink.executeByBlock(
+            projectRouteId({ id, section: 'overview' }),
+            'component'
+          )
+        }
+        onCopyId={(id) => void copyId.executeById(id)}
+        onShare={(projectId) => setSharing(projectId)}
+      />
+      <Show when={sharing()} keyed>
+        {(projectId) => (
+          <ProjectShareLauncher
+            projectId={projectId}
+            onClose={() => setSharing(undefined)}
+          />
+        )}
+      </Show>
+    </>
   );
 }
 
@@ -152,8 +198,4 @@ export function ProjectAssignmentDialog(props: {
       <ProjectAssignment taskIds={props.taskIds} onClose={props.onClose} />
     </Projects>
   );
-}
-
-export function useTaskProjectReferences(ids: Accessor<readonly string[]>) {
-  return createProjectsContext().createReferencesSource(ids);
 }

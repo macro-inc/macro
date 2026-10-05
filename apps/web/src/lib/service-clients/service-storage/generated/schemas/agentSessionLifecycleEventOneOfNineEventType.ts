@@ -10,5 +10,5 @@ export type AgentSessionLifecycleEventOneOfNineEventType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AgentSessionLifecycleEventOneOfNineEventType = {
-  agent_sessionwaiting_for_input: 'agent_session.waiting_for_input',
+  agent_sessionsettled: 'agent_session.settled',
 } as const;

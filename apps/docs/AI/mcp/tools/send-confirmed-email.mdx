@@ -1,6 +1,7 @@
 ---
 title: SendConfirmedEmail
-description: "Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The email is always shown before it is sent, even when the user's request already spelled the whole thing out: in one turn write it into the thread - recipients, subject, body - ask whether to send it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific email, quoting that reply verbatim in userConfirmation. Being asked to send an email is a request to draft one, never approval to send it, so a userConfirmation quoting the request that asked you to write the email - rather than the reply approving the one you wrote - is wrong. Never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send."
+description: >-
+  Send an email immediately, with no review card or composer.
 ---
 
 # SendConfirmedEmail

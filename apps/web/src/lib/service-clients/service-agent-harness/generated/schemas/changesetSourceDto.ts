@@ -6,7 +6,7 @@
  */
 
 /**
- * The source of the captured diff, on the wire.
+ * The source of a changeset's diff, on the wire.
  */
 export type ChangesetSourceDto =
   (typeof ChangesetSourceDto)[keyof typeof ChangesetSourceDto];

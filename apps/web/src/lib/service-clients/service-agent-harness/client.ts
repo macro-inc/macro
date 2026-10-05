@@ -13,11 +13,15 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  DiscoverAgentCapabilitiesRequest,
+  DiscoverAgentCapabilitiesResponse,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
+  PullRequestSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
+  SessionPullRequestsResponse,
   SharePermissionV2,
   UpdateSharePermissionRequestV2,
 } from './generated/schemas';
@@ -56,6 +60,21 @@ export const agentHarnessServiceClient = {
   loadAgentModels(request: LoadAgentModelsRequest, signal?: AbortSignal) {
     return fetchWithToken<LoadAgentModelsResponse>(
       `${agentHarnessHost}/agent-models/load`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal,
+      }
+    );
+  },
+
+  discoverAgentCapabilities(
+    request: DiscoverAgentCapabilitiesRequest,
+    signal?: AbortSignal
+  ) {
+    return fetchWithToken<DiscoverAgentCapabilitiesResponse>(
+      `${agentHarnessHost}/agent-capabilities/discover`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -144,6 +163,18 @@ export const agentHarnessServiceClient = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
+  setArchived(sessionId: string, isArchived: boolean) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived }),
+        errorResponseHandler: sessionError,
       }
     ).then((result) => result.map(() => undefined));
   },
@@ -255,6 +286,47 @@ export const agentHarnessServiceClient = {
     return fetchWithToken<AgentSessionChangesResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/changes/refresh`,
       { method: 'POST' }
+    );
+  },
+
+  /** The pull requests linked to a session: its agent's and any a person linked. */
+  listPullRequests(sessionId: string) {
+    return fetchWithToken<SessionPullRequestsResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests`,
+      { method: 'GET' }
+    );
+  },
+
+  /** Link the pull request at `url` to a session the caller can edit. */
+  linkPullRequest(sessionId: string, url: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+        errorResponseHandler: sessionError,
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
+  /** Unlink a pull request a person linked; the agent's own stays linked. */
+  unlinkPullRequest(sessionId: string, url: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests?${new URLSearchParams({ url })}`,
+      { method: 'DELETE', errorResponseHandler: sessionError }
+    ).then((result) => result.map(() => undefined));
+  },
+
+  /** The sessions linked to the pull request at `url` that the caller can view. */
+  sessionsForPullRequest(url: string) {
+    return fetchWithToken<PullRequestSessionsResponse>(
+      `${agentHarnessHost}/agent-sessions/by-pull-request`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      }
     );
   },
 

@@ -1,39 +1,37 @@
 #![recursion_limit = "256"]
 use std::{future::Future, sync::Arc, time::Duration};
 
-use ai_tools::{AiHost, build_tool_service_context_from_env, tools_for};
 use anyhow::{Context, Result};
 use axum::Router;
-use chat::outbound::postgres::PgChatRepo;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_service_urls::ConnectionGatewayUrl;
-use memory::domain::service::MemoryServiceImpl;
-use memory::outbound::pg_memory_repo::PgMemoryRepo;
-use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl};
 use scheduled_action::config::Config;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, dispatch::EventDispatchService,
 };
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
+use scheduled_action::domain::target_runner::TargetRunner;
+use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::inbound::axum_router::{
     ScheduledActionRouterState, health, scheduled_action_router,
 };
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::event_access::EventAccessAdapter;
-use scheduled_action::outbound::inprocess_executor::{
-    InProcessExecutor, agent_task::AgentTaskRunner,
-};
+use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
@@ -49,7 +47,7 @@ use utoipa_swagger_ui::SwaggerUi;
 mod test;
 
 // ECS stopTimeout is ten seconds. One shared budget includes HTTP, all
-// dispatch/execution bookkeeping, and final broker publishes, leaving two seconds.
+// dispatch/execution bookkeeping, leaving two seconds.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(8);
 const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
 // Keep event agent work well below the shared pool's ten connections, leaving
@@ -74,17 +72,6 @@ async fn main() -> Result<()> {
         .context("failed to connect to macrodb")?;
 
     let lifecycle = ServiceLifecycle::default();
-    let tool_context = build_tool_service_context_from_env(db.clone(), lifecycle.publishes.clone())
-        .await
-        .context("failed to build tool service context")?;
-
-    let aws_config = macro_aws_config::get_macro_aws_config().await;
-    let notification_ingress = Arc::new(SqsNotificationIngress {
-        queue: SqsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::NotificationIngressQueue::new().to_string(),
-        ),
-    });
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
@@ -97,31 +84,31 @@ async fn main() -> Result<()> {
         &conn_gateway_client,
     )));
 
-    let repo = Arc::new(PgScheduledActionRepo::new(db.clone()));
+    let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar.clone()));
 
     let event_repo = Arc::new(PgEventRunRepo::new(db.clone()));
-    let event_access = Arc::new(EventAccessAdapter::new(EntityAccessServiceImpl::new(
-        PgAccessRepository::new(db.clone()),
+    let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
     )));
-    let memory = MemoryServiceImpl::new(
-        PgMemoryRepo::new(db.clone()),
-        tool_context.clone(),
-        tools_for(AiHost::Chat),
+    let event_access = Arc::new(EventAccessAdapter::new(access.as_ref().clone()));
+    let ai_admission = ai_billing::composition::pg_admission_service(
+        db.clone(),
+        config.enable_ai_usage_enforcement,
     );
-    let runner = Arc::new(AgentTaskRunner::new(
-        Arc::clone(&tool_context.chat_tool_context.service),
-        PgChatRepo::new(db.clone()),
-        memory,
-        tool_context,
-        notification_ingress,
-    ));
+    let sessions = Arc::new(AgentSessionClient::new(
+        AgentHarnessServiceUrl::new()?.as_ref(),
+        &config.internal_api_key,
+    )?);
+    let runner = Arc::new(TargetRunner::new(Arc::clone(&sessions)));
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
         runner,
         live_updates,
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
-    );
+    )
+    .with_admission(ai_admission);
     let service_executor = Arc::new(dispatcher_executor.clone());
 
     let jwt_args = JwtValidationArgs::new_with_secret_manager(environment, &secretsmanager_client)
@@ -186,14 +173,24 @@ async fn main() -> Result<()> {
     );
 
     let service = Arc::new(
-        ScheduledActionServiceImpl::new(Arc::clone(&repo), service_executor, dispatcher_tx)
-            .with_event_management_enabled(config.event_routines_enabled),
+        ScheduledActionServiceImpl::new(
+            Arc::clone(&repo),
+            service_executor,
+            dispatcher_tx,
+            access.clone(),
+        )
+        .with_event_management_enabled(config.event_routines_enabled)
+        .with_target_validation(TargetValidation::new(
+            sessions,
+            config.routine_agents_enabled,
+        )),
     );
     let state = ScheduledActionRouterState {
         service,
+        access_service: access,
         authorization_state,
     };
-    let authed_routes = scheduled_action_router::<_, _, ()>(state);
+    let authed_routes = scheduled_action_router::<_, _, _, ()>(state);
 
     let router = Router::new()
         .merge(mount_at_root_and_prefix(
@@ -206,6 +203,7 @@ async fn main() -> Result<()> {
 
     tracing::info!(
         event_routines_enabled = config.event_routines_enabled,
+        routine_agents_enabled = config.routine_agents_enabled,
         "scheduled_action service listening on {addr}"
     );
 
@@ -234,7 +232,6 @@ struct ServiceLifecycle {
     consumers: TaskTracker,
     workers: TaskTracker,
     executions: TaskTracker,
-    publishes: TaskTracker,
 }
 
 impl ServiceLifecycle {
@@ -253,8 +250,6 @@ impl ServiceLifecycle {
         // before considering the execution tracker permanently empty.
         tokio::join!(self.consumers.wait(), self.workers.wait());
         self.executions.wait().await;
-        self.publishes.close();
-        self.publishes.wait().await;
     }
 }
 
@@ -328,7 +323,6 @@ async fn serve_until_shutdown(
             consumers = lifecycle.consumers.len(),
             workers = lifecycle.workers.len(),
             executions = lifecycle.executions.len(),
-            publishes = lifecycle.publishes.len(),
             "shutdown deadline reached; unresolved started event runs remain non-retryable"
         );
         // The process exits next. Never turn uncertain started work back into

@@ -7,6 +7,7 @@ import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
 import { setGraphqlEmailThreadArchived } from '@service-storage/graphql-email-archive-state';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import { invalidateEmailReminderCollection } from '../reminders/email-collection';
 import {
   getActiveGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
@@ -33,11 +34,15 @@ export async function archiveEmailThread(
       getActiveGraphqlSoupRevalidations()
     );
     if (disposition === 'committed') {
-      await refreshActiveGraphqlSoupQueries();
+      await refreshActiveGraphqlSoupQueries({
+        target: { kind: 'email-archive', threadId: id },
+      });
+      void invalidateEmailReminderCollection();
     }
     return disposition;
   }
   await throwOnErr(() => emailClient.flagArchived(...args));
+  void invalidateEmailReminderCollection();
   return 'committed';
 }
 export const unscheduleEmailMessage = (

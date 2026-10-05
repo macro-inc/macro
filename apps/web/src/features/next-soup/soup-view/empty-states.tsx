@@ -6,13 +6,10 @@ import {
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
-import EmptyStateAutomationsGraphic from '@design/empty-state-automations.svg';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
-import EmptyStateCompaniesGraphic from '@design/empty-state-companies.svg';
 import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import EmptyStateFolderGraphic from '@design/empty-state-folder.svg';
@@ -20,9 +17,9 @@ import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateInboxZeroGraphic from '@design/empty-state-inbox-zero.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
+import EmptyStateRoutinesGraphic from '@design/empty-state-routines.svg';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
@@ -96,6 +93,7 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
 };
 
 export function EmptyState(props: {
+  content?: JSXElement;
   listView?: ListView;
   search?: boolean;
   hasRefinementsFromBase?: boolean;
@@ -105,19 +103,7 @@ export function EmptyState(props: {
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
   const soup = useSoupView();
-  const teamQuery = useCurrentTeamQuery();
   const isCreatableEnabled = useCreatableEnabled();
-  const isTeamAdmin = useIsTeamAdmin();
-  const { openSettings } = useSettingsState();
-
-  // CRM is disabled by default per team; the companies list has a dedicated
-  // empty state that points admins to the toggle in Settings › CRM. A user
-  // with no team at all (data resolves to null) is pointed to team settings
-  // instead, since CRM can only be enabled on a team. Branches wait for the
-  // query to resolve so enabled teams don't flash the disabled copy.
-  const teamResolved = () => teamQuery.data !== undefined;
-  const crmEnabled = () => teamQuery.data?.team.crm_enabled ?? false;
-  const hasNoTeam = () => teamQuery.data === null;
 
   const onConnectEmail = () => {
     void startAddInbox();
@@ -154,6 +140,8 @@ export function EmptyState(props: {
           )}
         </EmptyStatePanel>
       </Match>
+
+      <Match when={props.content}>{props.content}</Match>
 
       {/* The Reminders tab is not an email surface, so it sits above the
           connect-email gate — its empty copy is the same with or without a
@@ -278,16 +266,16 @@ export function EmptyState(props: {
       </Match>
 
       <Match
-        when={props.listView === 'agents' && soup.activeTab() === 'automations'}
+        when={props.listView === 'agents' && soup.activeTab() === 'routines'}
       >
         <EmptyStatePanel
-          graphic={EmptyStateAutomationsGraphic}
-          title="No automations to show"
-          description="Automations run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
+          graphic={EmptyStateRoutinesGraphic}
+          title="No routines to show"
+          description="Routines run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
           primaryAction={{
-            label: 'New automation',
+            label: 'New routine',
             icon: PlusIcon,
-            onClick: () => runCreateAction('automation'),
+            onClick: () => runCreateAction('routine'),
           }}
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />
@@ -321,65 +309,6 @@ export function EmptyState(props: {
           }}
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />
-      </Match>
-
-      <Match when={props.listView === 'companies'}>
-        <Switch>
-          {/* Render nothing until the team query resolves — showing a wrong
-              panel for a moment is worse than a brief blank. */}
-          <Match when={!teamResolved()}>{null}</Match>
-          <Match when={hasNoTeam()}>
-            <EmptyStatePanel
-              centered
-              graphic={EmptyStateCompaniesGraphic}
-              title="Join a team to enable CRM"
-              description="Create or join a team in Settings > Team."
-              primaryAction={{
-                label: 'Open team settings',
-                onClick: () => openSettings('Team'),
-              }}
-            />
-          </Match>
-          <Match when={!crmEnabled()}>
-            <EmptyStatePanel
-              centered
-              graphic={EmptyStateCompaniesGraphic}
-              title="CRM is disabled"
-              description={
-                isTeamAdmin()
-                  ? 'Enable CRM in Settings > CRM to start tracking your customers.'
-                  : 'Team owners and admins can enable CRM in Settings > CRM.'
-              }
-              primaryAction={
-                isTeamAdmin()
-                  ? {
-                      label: 'Open CRM settings',
-                      onClick: () => openSettings('CRM'),
-                    }
-                  : undefined
-              }
-            />
-          </Match>
-          <Match when={true}>
-            <EmptyStatePanel
-              graphic={EmptyStateCompaniesGraphic}
-              title={
-                !soup.activeTab() || soup.activeTab() === 'active'
-                  ? 'No customers yet'
-                  : soup.activeTab()?.startsWith('list:')
-                    ? 'No companies in this list'
-                    : 'No companies in this view'
-              }
-              description={
-                !soup.activeTab() || soup.activeTab() === 'active'
-                  ? 'Customers your team emails will appear here.'
-                  : soup.activeTab()?.startsWith('list:')
-                    ? 'Use Edit list to add companies to this collection.'
-                    : 'Companies that match this view will appear here.'
-              }
-            />
-          </Match>
-        </Switch>
       </Match>
 
       <Match

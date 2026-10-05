@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 /**
  * The Changes pane: a title row with the pane's own controls, a toolbar for
  * the diffs, the capture notices, and the file tree beside the diff stack
@@ -104,29 +105,33 @@ function ChangesBody() {
     <DiffView.Root
       files={model.files()}
       patch={model.patch() ?? ''}
-      diffStyle={diffStyle()}
+      diffStyle={isTouchDevice() ? 'unified' : diffStyle()}
       collapse={collapse}
       active={review.active()}
     >
       <Panel.Toolbar class="gap-1">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          label={layout.treeOpen() ? 'Hide file tree' : 'Show file tree'}
-          aria-expanded={layout.treeOpen()}
-          onClick={layout.toggleTree}
-        >
-          <SidebarIcon />
-        </Button>
+        <Show when={!isTouchDevice()}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            label={layout.treeOpen() ? 'Hide file tree' : 'Show file tree'}
+            aria-expanded={layout.treeOpen()}
+            onClick={layout.toggleTree}
+          >
+            <SidebarIcon />
+          </Button>
+        </Show>
         <span class="truncate px-1 text-xs text-ink-subtle">
           {describeFileCount(model.files().length)}
         </span>
         <span class="flex-1" />
-        <DiffView.StyleToggle
-          value={diffStyle()}
-          onChange={setDiffStyle}
-          class="max-md:hidden"
-        />
+        <Show when={!isTouchDevice()}>
+          <DiffView.StyleToggle
+            value={diffStyle()}
+            onChange={setDiffStyle}
+            class="max-md:hidden"
+          />
+        </Show>
         <DiffView.CollapseAll />
         <Button
           variant="ghost"
@@ -147,7 +152,10 @@ function ChangesBody() {
           />
         </Show>
         <div class="flex min-h-0 flex-1">
-          <CollapseTransition open={layout.treeOpen()} axis="width">
+          <CollapseTransition
+            open={!isTouchDevice() && layout.treeOpen()}
+            axis="width"
+          >
             <div class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-edge-muted p-2 max-md:w-48">
               <FileTree.Root
                 aria-label="Changed files"
@@ -316,6 +324,7 @@ export function ChangesPane() {
     <Panel class="rounded-none" role="region" aria-label="Changes">
       <Panel.Header class="gap-1.5">
         <ChangesHeader
+          mobile={isTouchDevice()}
           spotlit={layout.layout() === 'full'}
           range={range()}
           pullRequestUrl={context.host.pullRequestUrl()}

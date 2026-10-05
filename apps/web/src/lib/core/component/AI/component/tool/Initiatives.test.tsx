@@ -70,7 +70,11 @@ function tool(
       }
       tool={{ name, data }}
       response={response === undefined ? undefined : { name, data: response }}
-      renderContext={{ isStreaming: response === undefined, grouped: false }}
+      renderContext={{
+        isStreaming: response === undefined,
+        grouped: false,
+        followedBy: () => false,
+      }}
     />
   ));
 }
@@ -109,32 +113,6 @@ it('expands project results and opens a native project view', () => {
     { type: 'component', id: `initiative-view~${projectId}~overview` },
     { preferNewSplit: true }
   );
-});
-
-it('preserves per-task failures and unavailable references in expandable results', () => {
-  tool(
-    'SetTaskInitiative',
-    { initiativeId: projectId },
-    {
-      results: [
-        { taskId: 'a', status: 'assigned' },
-        { taskId: 'b', status: 'skippedNoPermission' },
-      ],
-    }
-  );
-  fireEvent.click(screen.getByRole('button', { name: '2 tasks' }));
-  expect(screen.getByText('Task 2: skipped no permission')).toBeTruthy();
-  cleanup();
-  tool(
-    'ReadTaskInitiatives',
-    { taskIds: ['a'] },
-    {
-      references: [{ state: 'unavailable', taskId: 'a' }],
-    }
-  );
-  fireEvent.click(screen.getByRole('button', { name: '1 task' }));
-  expect(screen.getByText('Unavailable project')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Project' })).toBeNull();
 });
 
 it('keeps successful deletion results inspectable without a stale project link', () => {

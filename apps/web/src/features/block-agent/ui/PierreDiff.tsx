@@ -14,7 +14,7 @@
  *   bounds diff calculation and DOM work, which still run on the main thread.
  * - Theme: pierre's built-in `pierre-light`/`pierre-dark` pair (its
  *   default). Macro flags dark mode via `html[data-theme-light="false"]`
- *   (see features/theme/signals/themeReactive.ts), so we watch that
+ *   (see features/theme/utils/themeUtils.ts), so we watch that
  *   attribute and drive `setThemeType('light' | 'dark')` explicitly
  *   instead of pierre's OS-preference "system" mode.
  */

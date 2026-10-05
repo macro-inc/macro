@@ -9,10 +9,12 @@ use activity::Ingest;
 use call::domain::events::CallMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use chat::domain::events::ChatMacroEvent;
+use databases::domain::events::DatabaseMacroEvent;
 use documents_hex::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
 use initiative::domain::events::InitiativeMacroEvent;
 use macro_event_broker::MacroEvent as _;
+use messages::outbound::broker::MessageMacroEvent;
 use projects_hex::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
 
@@ -24,12 +26,14 @@ mod source {
         ActivitySourceEvent:
             DocumentMacroEvent,
             ChannelMacroEvent,
+            MessageMacroEvent,
             ChatMacroEvent,
             ProjectMacroEvent,
             EmailMacroEvent,
             PropertyMacroEvent,
             CallMacroEvent,
             InitiativeMacroEvent,
+            DatabaseMacroEvent,
     );
 }
 pub(crate) use source::ActivitySourceEvent;
@@ -59,12 +63,17 @@ pub(crate) async fn ingest(
             .await
         }
         ActivitySourceEvent::ChannelMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::MessageMacroEvent(e) => {
+            let envelope = e.event();
+            channels::domain::activity::ingest_message_event(envelope.event_id, &envelope.event)
+        }
         ActivitySourceEvent::ChatMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::ProjectMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::EmailMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::PropertyMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::CallMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::InitiativeMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::DatabaseMacroEvent(e) => arm(e.event()),
     }
 }
 

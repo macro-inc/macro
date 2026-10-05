@@ -10,6 +10,7 @@ import {
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { homeCalendarRoute } from '@app/routes/routes';
 import { previewCalendarTarget } from '@components/app/previewTarget';
 import {
   enableCalendarUi,
@@ -18,7 +19,6 @@ import {
 import deepEqual from 'fast-deep-equal';
 import { createSignal } from 'solid-js';
 import { homeCalendarNavigation } from './home-preview-navigation';
-import { homeCalendarRoute } from './route';
 
 type WithTab = (
   search: Record<string, SerializedSearchParams | undefined>

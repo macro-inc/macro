@@ -10,13 +10,11 @@ import type {
   GroupHeaderProps,
   SoupRow,
 } from '@app/features/next-soup/create-soup-state';
-import { buildDocumentTypeQuery } from '@app/features/next-soup/filters/configs/document-type-query';
 import type { Query } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/date-group-header';
-import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
   EmptyState,
   shouldShowLoadError,
@@ -41,10 +39,6 @@ import {
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { useIsHomeView } from '@app/features/next-soup/soup-view/use-is-home-view';
-import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
-import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
-import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
-import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
@@ -62,11 +56,6 @@ import {
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
-import { useDealStages } from '@companies/crm/deal-stages';
-import { CrmStageIcon } from '@companies/crm/StageIcon';
-import type { CrmViewConfig } from '@companies/crm/saved-views';
-import { useCrmUnavailable } from '@companies/crm/team-crm-config';
-import { CrmWorkspace } from '@companies/views/CrmWorkspace';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
@@ -111,6 +100,7 @@ import Spinner from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   batch,
@@ -122,7 +112,6 @@ import {
   Match,
   on,
   onCleanup,
-  onMount,
   Show,
   Suspense,
   Switch,
@@ -130,39 +119,16 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import { makeMarkNotDoneAction } from '../actions/make-mark-not-done-action';
+import { SOUP_TOUR } from '../tour';
 import { SearchAskAiButton } from './search-ask-ai-button';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
 export const DefaultGroupHeader = (
-  props: GroupHeaderProps & { highlighted?: boolean }
+  props: GroupHeaderProps & { highlighted?: boolean; icon?: JSX.Element }
 ) => {
-  const panel = useSplitPanelOrThrow();
-  const dealStages = useDealStages();
-
-  // The Customers view groups by option ids from the team's deal-stage set
-  // (or other custom select options) that the static PropertyValueIcon
-  // table doesn't know — render those through CrmStageIcon instead.
-  const isCompaniesView = () => {
-    const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'companies';
-  };
-
-  // Index into the active stage set so header dots match kanban columns.
-  const stageIndex = (optionId: string): number | undefined => {
-    const index = dealStages
-      .stages()
-      .findIndex((stage) => stage.id === optionId);
-    return index === -1 ? undefined : index;
-  };
-
-  const stageOptionId = () => {
-    if (!isCompaniesView()) return undefined;
-    const value = props.group.value ?? props.group.key;
-    return typeof value === 'string' && value ? value : undefined;
-  };
-
   return (
     <SoupSectionHeader
       onClick={() => props.group.toggle()}
@@ -178,15 +144,7 @@ export const DefaultGroupHeader = (
         </div>
       </Layer>
 
-      <Show when={stageOptionId()}>
-        {(value) => (
-          <CrmStageIcon
-            optionId={value()}
-            index={stageIndex(value())}
-            class="size-3.5"
-          />
-        )}
-      </Show>
+      {props.icon}
       <span class="truncate">{props.group.label}</span>
       <span
         class={cn(
@@ -217,10 +175,9 @@ const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
 type SoupRowComponent =
   | typeof ListEntity
   | typeof InboxListEntity
-  | typeof TaskListEntity
-  | typeof CompanyListEntity;
+  | typeof TaskListEntity;
 
-type SoupRowEntry = {
+export type SoupRowEntry = {
   component: SoupRowComponent;
   /**
    * The --soup-row-* geometry the component renders with (ListEntity.css).
@@ -268,16 +225,13 @@ interface SoupViewProps {
   initialClientSort?: string[];
   /**
    * Client-side entities to merge into the soup results. Useful for entity
-   * types (e.g. automation) that don't come back from the soup API.
+   * types (e.g. routine) that don't come back from the soup API.
    * Visibility is controlled by the active client filter set — use a tab
    * preset whose `clientFilters` include a predicate that matches them.
    */
   additionalEntities?: Accessor<EntityData[]>;
-  /**
-   * Shared CRM view opened via a `?crmView=` link (Customers view only).
-   * When set, its pieces win over persisted/preset state during init.
-   */
-  initialCrmView?: CrmViewConfig;
+  /** The view's tour, e.g. `<ViewTour tour={callsTour} />`. */
+  tour?: JSX.Element;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -311,20 +265,6 @@ export const SoupView = (props: SoupViewProps) => {
     `macro:pref:soup:${contentId}:sort`,
     { default: [] }
   );
-  // Shared CRM view opened via a `?crmView=` link — only honored on the
-  // Customers view; its pieces win over persisted/preset values in init.
-  const initialCrmView =
-    contentId === 'companies' ? props.initialCrmView : undefined;
-
-  // A default saved view only applies to a fresh Customers entry: restored
-  // (back/forward) entries keep what the user was looking at, and share
-  // links carry their own state.
-  const applyDefaultCrmView =
-    contentId === 'companies' &&
-    initialCrmView === undefined &&
-    persistedFilters === undefined &&
-    persistedPredicates === undefined;
-
   // We handle the restore of the persistence here instead of within the context
   // because the context is no longer recreated for each soup view because we
   // moved it within the `SplitPanel`.
@@ -340,25 +280,14 @@ export const SoupView = (props: SoupViewProps) => {
     init = true;
     batch(() => {
       soupView.initialize({
-        initialQuery: initialCrmView
-          ? (initialCrmView.filters as Query | undefined)
-          : (persistedFilters ?? props.initialFilters),
-        initialClientFilters: initialCrmView
-          ? (initialCrmView.clientFilters ?? {})
-          : (persistedPredicates ?? props.initialClientFilters),
-        initialSearchText: initialCrmView
-          ? (initialCrmView.searchText ?? '')
-          : (persistedSearchText ?? props.initialSearchText),
-        preferInitialFilters: initialCrmView !== undefined,
+        initialQuery: persistedFilters ?? props.initialFilters,
+        initialClientFilters: persistedPredicates ?? props.initialClientFilters,
+        initialSearchText: persistedSearchText ?? props.initialSearchText,
         disableLocalSearch: props.disableLocalSearch,
         additionalEntities: props.additionalEntities,
       });
 
-      // `groupBy: null` in a shared view records an explicit "no grouping",
-      // which the grouping store expresses as `undefined`.
-      const initialGroupBy = initialCrmView
-        ? (initialCrmView.groupBy ?? undefined)
-        : (persistedGroupBy ?? props.initialGroupBy);
+      const initialGroupBy = persistedGroupBy ?? props.initialGroupBy;
 
       // The inbox exposes no sort control on either desktop (the toolbar
       // hides SoupViewContextSort) or mobile, so its order is fixed: update
@@ -366,10 +295,7 @@ export const SoupView = (props: SoupViewProps) => {
       // notified order they serve (see `clientSort`). Ignore any sort
       // persisted back when the control was reachable: honoring it would pin
       // the list to an order the user can no longer change.
-      let initialSortIds =
-        contentId === 'home'
-          ? ['updated_at']
-          : (initialCrmView?.sort ?? sortPref());
+      let initialSortIds = contentId === 'home' ? ['updated_at'] : sortPref();
       if (initialSortIds.length === 0) {
         initialSortIds = props.initialClientSort ?? ['updated_at'];
       }
@@ -377,12 +303,12 @@ export const SoupView = (props: SoupViewProps) => {
       const persistedViewActiveTab = isListViewID(contentId)
         ? soupView.getPersistedActiveTab(contentId)
         : undefined;
-      let initialActiveTab =
-        initialCrmView?.activeTab ??
-        persistedActiveTab ??
-        persistedViewActiveTab;
+      let initialActiveTab = persistedActiveTab ?? persistedViewActiveTab;
 
-      if (initialActiveTab === undefined && isListViewID(contentId)) {
+      if (
+        (initialActiveTab === undefined || contentId === 'reminders') &&
+        isListViewID(contentId)
+      ) {
         initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
       }
 
@@ -394,55 +320,7 @@ export const SoupView = (props: SoupViewProps) => {
       );
 
       soupView.setActiveTab(initialActiveTab);
-
-      if (initialCrmView) {
-        // Stage/owner sub-filters ride separate signals plus a client
-        // predicate that must be active iff the selection is non-empty
-        // (same rule as handleStageChange/handleOwnerChange in
-        // unified-filter-dropdown).
-        const stages = initialCrmView.stageFilter ?? [];
-        soupView.setStageFilter(stages);
-        if (stages.length > 0 !== soup.predicates.isActive('company-stage')) {
-          soup.predicates.toggle({ and: ['company-stage'] });
-        }
-        const owners = initialCrmView.ownerFilter ?? [];
-        soupView.setOwnerFilter(owners);
-        if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
-          soup.predicates.toggle({ and: ['company-owner'] });
-        }
-        soupView.setViewMode(
-          initialCrmView.viewMode ?? (isTouchDevice() ? 'list' : 'board')
-        );
-      }
     });
-  });
-
-  onMount(() => {
-    if (contentId !== 'documents') return;
-
-    const markdownQuery = buildDocumentTypeQuery(['doc-markdown']);
-    if (!markdownQuery) return;
-
-    const dispose = registerDocumentsFilterSplit(panel.handle.id, {
-      toggleMarkdownFilter: () => {
-        if (soup.predicates.isActive('doc-markdown')) {
-          soupView.queryFilters.remove(markdownQuery);
-          soup.predicates.set(({ andIds, orIds }) => ({
-            and: andIds,
-            or: orIds.filter((id) => id !== 'doc-markdown'),
-          }));
-          return;
-        }
-
-        soupView.queryFilters.add(markdownQuery);
-        soup.predicates.set(({ andIds, orIds }) => ({
-          and: andIds,
-          or: [...new Set([...orIds, 'doc-markdown'])],
-        }));
-      },
-    });
-
-    onCleanup(dispose);
   });
 
   createEffect(() => {
@@ -481,16 +359,6 @@ export const SoupView = (props: SoupViewProps) => {
     return view ? LIST_VIEW_DOCS_URL[view] : undefined;
   });
 
-  const isBoardMode = createMemo(
-    () => activeListView() === 'companies' && soupView.viewMode() === 'board'
-  );
-
-  // When CRM is unavailable (no team / disabled) the board renders the
-  // empty state instead of columns, so board-only chrome tweaks (like
-  // hiding the AI bar) shouldn't apply.
-  const crmUnavailable = useCrmUnavailable();
-  const isBoardRendered = createMemo(() => isBoardMode() && !crmUnavailable());
-
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
 
@@ -507,15 +375,12 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
-  const content = (
-    onOpenEntity?: (entity: EntityData) => boolean,
-    mobileHeaderLeading?: JSX.Element
-  ) => (
+  const content = () => (
     <div
       class="size-full flex flex-col @container"
       data-list-view={activeListView()}
     >
-      <Show when={!isComponentListView('companies') || isTouchDevice()}>
+      <Show when={true}>
         <div class="flex flex-col w-full">
           <SplitHeaderLeft>
             <div
@@ -532,7 +397,7 @@ export const SoupView = (props: SoupViewProps) => {
                 the view title (the bottom accessory region now belongs to the
                 global views row). */}
               <Show when={isTouchDevice()}>
-                <MobileSoupViewTabs leading={mobileHeaderLeading} />
+                <MobileSoupViewTabs />
               </Show>
               <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
                 <div class="flex items-center gap-1">
@@ -542,7 +407,7 @@ export const SoupView = (props: SoupViewProps) => {
                       <Button
                         size="icon-md"
                         variant="ghost"
-                        class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
+                        class="p-0.5 text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
                         label="View documentation"
                         onClick={() => openExternalUrl(url())}
                       >
@@ -643,7 +508,7 @@ export const SoupView = (props: SoupViewProps) => {
                             <Button
                               size="icon-md"
                               variant="outline"
-                              class="p-1 size-7 rounded-lg ml-2"
+                              class="p-1 size-7 ml-2"
                               onClick={() => setNarrowSearchExpanded(true)}
                               depth={2}
                             >
@@ -670,6 +535,7 @@ export const SoupView = (props: SoupViewProps) => {
         </div>
         <SoupFiltersBar variant={props.filterBarVariant} />
       </Show>
+      {props.tour}
       <Show when={soupView.source.cachedMail?.()}>
         <p role="status" class="px-4 py-1 text-xs text-ink-muted">
           Showing cached mail. Only synchronized messages are available.
@@ -677,27 +543,15 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <Show
-            when={!isBoardMode()}
-            fallback={
-              <MaybeSoupEntityActionDrawerManager>
-                <CompanyKanban onOpenEntity={onOpenEntity} />
-              </MaybeSoupEntityActionDrawerManager>
-            }
-          >
-            <SoupViewList onOpenEntity={onOpenEntity} />
-          </Show>
+          <SoupViewList />
         </Suspense>
       </div>
       <Suspense>
-        {/* The board hides the AI bar: it floats over
-            content that is already constrained in both layouts. */}
         <Show
           when={
             !isTouchDevice() &&
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isHomeView() &&
-            !isBoardRendered() &&
             !isComponentListView('search')
           }
         >
@@ -710,24 +564,17 @@ export const SoupView = (props: SoupViewProps) => {
       </Suspense>
     </div>
   );
-  return (
-    <>
-      <Show when={applyDefaultCrmView}>
-        <CrmDefaultViewLoader />
-      </Show>
-      <Show when={isComponentListView('companies')} fallback={content()}>
-        <CrmWorkspace>
-          {(options) =>
-            content(options.onOpenEntity, options.mobileHeaderLeading)
-          }
-        </CrmWorkspace>
-      </Show>
-    </>
-  );
+  return content();
 };
 
 interface SoupViewListProps {
+  rowEntry?: SoupRowEntry;
+  listHeader?: JSX.Element;
+  groupHeader?: import('solid-js').Component<
+    GroupHeaderProps & { highlighted?: boolean }
+  >;
   emptyState?: () => JSX.Element;
+  emptyContent?: JSX.Element;
   timestamp?: (entity: EntityData) => DateValue | null | undefined;
   navigationKey?: string;
   /** Composed folder browsers keep ordinary folder activation in their pane. */
@@ -750,6 +597,9 @@ interface SoupViewListProps {
 export const SoupViewList = (props: SoupViewListProps) => (
   <SoupRowMetadataProvider>
     <SoupViewListContent
+      rowEntry={props.rowEntry}
+      listHeader={props.listHeader}
+      groupHeader={props.groupHeader}
       customScrollbarHidden={props.customScrollbarHidden}
       scopeId={props.scopeId}
       onOpenProject={props.onOpenProject}
@@ -759,6 +609,7 @@ export const SoupViewList = (props: SoupViewListProps) => (
       timestamp={props.timestamp}
       navigationKey={props.navigationKey}
       emptyState={props.emptyState}
+      emptyContent={props.emptyContent}
     />
   </SoupRowMetadataProvider>
 );
@@ -924,18 +775,17 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   const rowsByView: Partial<Record<ListView, SoupRowEntry>> = {
     home: { component: InboxListEntity, family: 'card' },
     tasks: { component: TaskListEntity, family: 'row' },
-    companies: { component: CompanyListEntity, family: 'row' },
   };
   const defaultRow: SoupRowEntry = { component: ListEntity, family: 'row' };
   const rowEntry = (): SoupRowEntry => {
     const view = currentView();
-    return (view && rowsByView[view]) ?? defaultRow;
+    return props.rowEntry ?? (view && rowsByView[view]) ?? defaultRow;
   };
 
   const groupHeaderComponent = () => {
     if (currentView() === 'tasks') return TaskGroupHeader;
     if (soup.grouping.activeGroupId() === 'date') return DateGroupHeader;
-    return DefaultGroupHeader;
+    return props.groupHeader ?? DefaultGroupHeader;
   };
 
   useSoupViewHotkeys({
@@ -958,6 +808,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const markDoneAction = makeMarkDoneAction({
     userId,
+    notificationSource: () => notificationSource,
+  });
+  const markNotDoneAction = makeMarkNotDoneAction({
     notificationSource: () => notificationSource,
   });
 
@@ -1256,6 +1109,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   };
 
   const featuredCount = createMemo(() => featuredIds().length);
+  const listTarget = tourTarget(SOUP_TOUR.list);
 
   return (
     <MaybeSoupEntityActionDrawerManager>
@@ -1263,6 +1117,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         class="size-full"
         ref={(el) => {
           setSoupViewRef(el);
+          listTarget(el);
           attachHotkeys(el);
         }}
         tabIndex={-1}
@@ -1333,6 +1188,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                       when={!searchText() && props.emptyState}
                       fallback={
                         <EmptyState
+                          content={props.emptyContent}
                           listView={currentView()}
                           search={!!searchText()}
                           hasRefinementsFromBase={hasActiveRefinements()}
@@ -1353,11 +1209,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     <Show when={currentView() === 'tasks' && !isTouchDevice()}>
                       <ResponsiveTaskListHeader class="shrink-0" />
                     </Show>
-                    <Show
-                      when={currentView() === 'companies' && !isTouchDevice()}
-                    >
-                      <ResponsiveCompanyListHeader class="shrink-0" />
-                    </Show>
+                    {props.listHeader}
                     <SwipableRowProvider
                       container={localEntityListRef}
                       canSwipeLeft={(entityId) => {
@@ -1533,6 +1385,24 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         source.deferRowInteractions?.() === true
                                       }
                                       entity={row.original}
+                                      onToggleReminderDone={
+                                        row.original.type === 'reminder'
+                                          ? async () => {
+                                              if (
+                                                row.original.type !== 'reminder'
+                                              )
+                                                return;
+                                              if (row.original.completedAt)
+                                                await markNotDoneAction.execute(
+                                                  [row.original]
+                                                );
+                                              else
+                                                await markDoneAction.execute([
+                                                  row.original,
+                                                ]);
+                                            }
+                                          : undefined
+                                      }
                                       timestamp={timestamp()}
                                       highlighted={row.isFocused()}
                                       onMouseMove={() => {

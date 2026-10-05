@@ -6,6 +6,7 @@ import {
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
+import { EmailRowSchedule } from '@app/features/reminders/views/email-row-schedule';
 import {
   createSoupEntityActions,
   MaybeSoupEntityActionDrawerManager,
@@ -30,6 +31,7 @@ import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
   createMemo,
@@ -57,6 +59,7 @@ import {
 } from '../persistence';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
+import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
@@ -100,7 +103,7 @@ export function EmailList(props: EmailListProps) {
     metadata,
   }: ListActivation<EmailDataSourceItem, EmailListActivationMetadata>) {
     if (item.kind === 'load-more') {
-      if (!item.isLoading) void source.loadMore();
+      if (!item.isLoading) void source.loadMore().catch(() => {});
 
       return;
     }
@@ -234,7 +237,8 @@ export function EmailList(props: EmailListProps) {
     navigation: {
       onNavigate: (event) => {
         if (event.kind !== 'move' || event.direction !== 1) return;
-        if (source.isLoadingMore() || !source.hasMore()) return;
+        if (source.isLoadingMore() || source.error() || !source.hasMore())
+          return;
 
         const distanceFromEnd = event.result
           ? list.items.count() - event.result.index - 1
@@ -242,10 +246,15 @@ export function EmailList(props: EmailListProps) {
 
         if (distanceFromEnd > 3) return;
 
-        void source.loadMore();
+        void source.loadMore().catch(() => {});
       },
     },
     activation: {
+      shouldHandleKeyEvent: (event) =>
+        !(
+          event?.target instanceof Element &&
+          event.target.closest('button[data-reminder-action]')
+        ),
       createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
       alternateDescription: 'Open in new split',
     },
@@ -345,10 +354,13 @@ export function EmailList(props: EmailListProps) {
     restoredScroll = true;
   }
 
+  const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
+
   function showsEmptyViewport() {
     return (
       forceEmptyState() ||
-      (!source.isLoading() && (Boolean(source.error()) || rows().length === 0))
+      (!source.isLoading() &&
+        ((Boolean(source.error()) && !hasEmailRows()) || rows().length === 0))
     );
   }
 
@@ -404,20 +416,22 @@ export function EmailList(props: EmailListProps) {
     const handle = virtualizer();
     if (!handle) return;
 
-    if (!source.hasMore()) return;
+    if (!source.hasMore() || source.error()) return;
 
     const distance =
       handle.scrollSize - handle.scrollOffset - handle.viewportSize;
     if (distance < 300 && !source.isLoadingMore()) {
-      void source.loadMore();
+      void source.loadMore().catch(() => {});
     }
   }
 
+  const listTarget = tourTarget(EMAIL_TOUR.list);
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
+          listTarget(element);
           props.ref?.(element);
         }}
         role="grid"
@@ -467,7 +481,9 @@ export function EmailList(props: EmailListProps) {
                 </div>
               </Match>
 
-              <Match when={!forceEmptyState() && source.error()}>
+              <Match
+                when={!forceEmptyState() && source.error() && !hasEmailRows()}
+              >
                 <div
                   ref={setEmptyViewport}
                   class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto text-sm text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
@@ -476,7 +492,6 @@ export function EmailList(props: EmailListProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    class="rounded-lg"
                     onClick={() => void source.refresh()}
                   >
                     Try again
@@ -562,6 +577,19 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      scheduleStatus={
+                                        <Show
+                                          when={source.reminderForThread?.(
+                                            entityRow().entity.id
+                                          )}
+                                        >
+                                          {(reminder) => (
+                                            <EmailRowSchedule
+                                              reminder={reminder()}
+                                            />
+                                          )}
+                                        </Show>
+                                      }
                                       leadingAction={
                                         <Show when={!isTouchDevice()}>
                                           <EmailStarAction
@@ -696,7 +724,7 @@ export function EmailList(props: EmailListProps) {
                                     </Show>
                                     {loadMore().isLoading
                                       ? 'Loading...'
-                                      : 'Load More'}
+                                      : (loadMore().label ?? 'Load More')}
                                   </Button>
                                 </div>
                               </div>

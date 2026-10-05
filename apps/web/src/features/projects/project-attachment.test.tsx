@@ -45,7 +45,6 @@ it('opens an authorized attachment using native project identity and split prefe
     data: {
       id: 'initiative-1',
       name: 'Launch',
-      description_document_id: 'never-open-this',
     },
   };
   render(() => <ProjectAttachment id="initiative-1" />);

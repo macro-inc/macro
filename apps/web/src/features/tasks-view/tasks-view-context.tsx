@@ -6,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableProjects } from '@app/lib/core/constant/featureFlags';
@@ -15,6 +16,11 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import {
+  taskDetailRoute,
+  tasksProjectsRoute,
+  tasksSplitRoute,
+} from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,
@@ -49,7 +55,6 @@ import {
   type UseTasksDataSourceOptions,
   useTasksDataSource,
 } from './queries/use-tasks-query';
-import { taskDetailRoute, tasksProjectsRoute, tasksSplitRoute } from './route';
 import { tasksTabSearch, tasksTabSearchCodec } from './tasks-tab-search';
 import type {
   TaskDetailTarget,
@@ -166,8 +171,15 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const [persistedState, setState] = props.scopeKey
     ? withSplitPanelOwner(ownedSlot('view-state'), createState)
     : createState();
+  const searchText = useMobileSearchText(
+    () => persistedState.search,
+    () => !props.scopeKey && panel.handle.isActive()
+  );
   // A pending or disabled rollout must not overwrite the saved Projects tab.
   const state = mergeProps(persistedState, {
+    get search() {
+      return searchText();
+    },
     get tab(): TasksTab {
       return persistedState.tab === 'projects' && !projectsEnabled()
         ? 'my-tasks'

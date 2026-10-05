@@ -1,0 +1,119 @@
+/* Customers board: crm/views/company-board columns and cards. */
+.sample-company-titlebar { display: flex; align-items: center; gap: 12px; height: 48px; flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--color-edge-muted); }
+.sample-company-titlebar h1 { display: flex; align-items: center; min-width: 0; height: 28px; padding: 0 4px; font-size: 14px; font-weight: 600; letter-spacing: -0.03em; }
+.sample-company-search { padding: 12px 16px 0; }
+.sample-company-board .sample-company-column { gap: 8px; padding: 0 8px 8px; }
+.sample-company-board .sample-company-column h3 { padding: 10px 4px; }
+.sample-company-board .sample-company-card { margin: 0; gap: 6px; padding: 10px; background: var(--color-surface); }
+.sample-company-board .sample-company-card:hover { background: var(--color-hover); }
+.sample-company-owner { width: 20px; height: 20px; margin-left: auto; flex-shrink: 0; border-radius: 50%; object-fit: cover; }
+/* The List layout: company-grid-layout's Customer, Stage, Owner, Revenue and Last Interaction. */
+.sample-company-rows { padding: 4px 0 24px; }
+.sample-company-row { display: grid; grid-template-columns: 1rem minmax(0, 100%) 8rem 8rem 7rem 7rem; align-items: center; gap: 8px; width: calc(100% - 8px); min-height: 40px; margin: 0 4px; padding: 0 8px; border-radius: 12px; text-align: left; font-size: 14px; color: var(--color-ink); }
+button.sample-company-row:hover { background: var(--color-list-hover, var(--color-hover)); }
+.sample-company-row[data-header] { min-height: 40px; font-size: 12px; font-weight: 500; color: var(--color-ink-extra-muted); }
+.sample-company-row[data-header] > span:last-child, .sample-company-row-time { text-align: right; }
+.sample-company-row-indicator { display: grid; place-items: center; }
+.sample-company-row-content { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 500; }
+.sample-company-row-domain { flex-shrink: 2; font-size: 12px; font-weight: 400; color: var(--color-ink-extra-muted); }
+.sample-company-row-value { display: flex; align-items: center; gap: 6px; min-width: 0; padding-left: 8px; font-size: 12px; }
+.sample-company-row-time { font-size: 12px; font-weight: 300; color: var(--color-ink-extra-muted); }
+.sample-company-row[data-unread=true] { animation: sample-company-row-in 400ms ease-out both; }
+@keyframes sample-company-row-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .sample-company-row[data-unread=true] { animation: none; } }
+@container sample-main (max-width: 840px) {
+  .sample-company-row { grid-template-columns: 1rem minmax(0, 100%) 6.5rem 5.5rem 5rem; }
+  .sample-company-row > :nth-child(5) { display: none; }
+}
+
+/* Company record: crm/views/record-detail top bar and company-detail sections. */
+.sample-company-record { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.sample-company-topbar { display: flex; align-items: center; gap: 12px; height: 48px; flex-shrink: 0; min-width: 0; padding: 0 16px; border-bottom: 1px solid var(--color-edge-muted); }
+.sample-company-crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; flex-shrink: 1; font-size: 14px; }
+.sample-crumb { display: flex; align-items: center; gap: 6px; height: 28px; min-width: 0; padding: 0 4px; font-weight: 600; letter-spacing: -0.03em; color: var(--color-ink); }
+.sample-crumb-root { flex-shrink: 0; color: var(--color-ink-muted); }
+.sample-crumb-root:hover { color: var(--color-ink); }
+.sample-company-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.sample-record-tab { display: flex; align-items: center; gap: 6px; }
+.sample-record-tab > svg { display: none; }
+.sample-company-body { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.sample-company-scroll { padding: 48px 24px 0; }
+.sample-company-overview { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 768px; min-width: 0; margin: 0 auto; }
+.sample-company-overview h1 .sample-inline-input[aria-label="Company name"] { font-size: 24px; line-height: 32px; font-weight: 600; }
+.sample-company-overview [aria-label="Company details"] [data-slot=badge] { gap: 4px; font-weight: 400; }
+
+/* EntityConversation: roots and inline replies on the channel message rows. */
+.sample-company-discussion { margin-top: 12px; padding-bottom: 48px; }
+.sample-company-discussion > button { color: var(--color-ink-muted); margin-bottom: 8px; }
+.sample-company-discussion > button:hover { color: var(--color-ink); }
+.sample-company-discussion .sample-channel-thread { margin-bottom: 12px; }
+.sample-company-discussion .sample-message-row { padding: 10px 8px 0; margin-bottom: 0; gap: 8px; }
+.sample-company-discussion .sample-message-row p { font-size: 15px; line-height: 24px; margin-top: 2px; margin-bottom: 2px; }
+.sample-company-discussion .sample-thread-replies .sample-message-row { margin-left: 0; border: 0; border-radius: 6px; padding-left: 8px; margin-top: 8px; }
+
+/* SidePanel floating: a card over the record, sections split by rules. */
+.sample-company-panel { position: absolute; top: 12px; right: 12px; z-index: 5; display: flex; flex-direction: column; width: min(320px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow-y: auto; border: 1px solid color-mix(in oklch, var(--color-content-0) 10%, transparent); border-radius: 12px; background: var(--color-surface); box-shadow: 0 20px 40px #0007; scrollbar-width: none; }
+.sample-company-panel-section { border-bottom: 1px solid var(--color-edge-muted); }
+.sample-company-panel-section:last-child { border-bottom: 0; }
+.sample-company-panel-section > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 8px; list-style: none; font-size: 12px; color: var(--color-ink-muted); cursor: pointer; }
+.sample-company-panel-section > summary::-webkit-details-marker { display: none; }
+.sample-company-panel-section > summary:hover { text-decoration: underline; }
+.sample-company-panel-section > summary > svg { transition: transform 90ms; }
+.sample-company-panel-section[open] > summary > svg { transform: rotate(90deg); }
+.sample-company-revenue { padding-left: 8px; }
+.sample-company-revenue::placeholder { color: var(--color-ink-extra-muted); }
+.sample-company-toggle { display: inline-flex; align-items: center; gap: 8px; width: fit-content; height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--color-ink-muted) 8%, transparent); background: color-mix(in srgb, var(--color-ink-muted) 2.5%, transparent); color: var(--color-ink); font-size: 12px; }
+.sample-company-checkbox { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--color-edge); }
+.sample-company-checkbox[data-checked=true] { border-color: var(--color-accent); background: var(--color-accent); }
+
+/* RecordSection tabs and their unified-list rows. */
+.sample-record-section { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.sample-record-section-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; padding: 12px 16px; }
+.sample-record-search { width: 224px; }
+.sample-record-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 8ch; align-items: center; gap: 8px; width: calc(100% - 8px); min-height: 40px; margin: 0 4px; padding: 2px 8px 2px 8px; border-radius: 12px; text-align: left; font-size: 14px; color: var(--color-ink); }
+button.sample-record-row:hover, div.sample-record-row:hover { background: var(--color-list-hover, var(--color-hover)); }
+.sample-record-row-indicator { display: grid; place-items: center; }
+.sample-record-row-content { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sample-record-row-title { flex-shrink: 0; max-width: 45%; }
+.sample-record-row-detail { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; color: color-mix(in srgb, var(--color-ink) 50%, transparent); }
+.sample-record-row-detail > .text-ink { flex-shrink: 0; }
+.sample-record-row-time { text-align: right; font-size: 12px; color: var(--color-ink-extra-muted); }
+.sample-record-people { display: inline-flex; flex-shrink: 0; }
+.sample-record-people > * { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--color-panel); object-fit: cover; }
+.sample-record-people > * + * { margin-left: -6px; }
+.sample-record-people > span { display: grid; place-items: center; background: var(--color-surface-2); color: var(--color-ink-muted); font-size: 8px; font-weight: 600; }
+.sample-record-task { display: grid; grid-template-columns: 16px minmax(0, 1fr) 96px 96px; align-items: center; gap: 8px; min-height: 44px; padding: 2px 16px; border-radius: 12px; font-size: 14px; }
+.sample-record-task:hover { background: var(--color-list-hover, var(--color-hover)); }
+.sample-record-task-priority, .sample-record-task-owner { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--color-ink-muted); }
+
+/* A details panel that is open keeps the record readable beside it. */
+@container sample-main (min-width: 641px) {
+  .sample-company-record[data-panel-open=true] .sample-company-scroll { padding-right: 344px; }
+}
+
+/* The app's compact record bar: icon tabs, and the panel as a bottom sheet. */
+@container sample-main (max-width: 640px) {
+  .sample-company-topbar { gap: 6px; padding: 0 8px; }
+  .sample-company-crumbs { display: none; }
+  .sample-record-tab > svg { display: block; }
+  .sample-record-tab > span { display: none; }
+  .sample-company-copy > span { display: none; }
+  .sample-company-copy { width: 28px; padding: 0; justify-content: center; }
+  .sample-company-scroll { padding: 24px 16px 0; }
+  .sample-company-overview { gap: 16px; }
+  .sample-company-overview h1 .sample-inline-input[aria-label="Company name"] { font-size: 21px; line-height: 28px; }
+  .sample-company-panel { top: auto; bottom: 0; right: 0; left: 0; width: 100%; max-height: 60%; border-radius: 16px 16px 0 0; border-bottom: 0; }
+  .sample-company-record[data-panel-open=true] .sample-company-scroll { padding-bottom: 260px; }
+  .sample-record-section-header { padding: 12px; }
+  .sample-record-search { width: 100%; }
+  .sample-record-row { grid-template-columns: 8px minmax(0, 1fr) 7ch; gap: 6px; padding: 6px 4px; font-size: 13px; }
+  .sample-record-row-content { flex-wrap: wrap; row-gap: 2px; }
+  .sample-record-row-title { max-width: calc(100% - 24px); }
+  .sample-record-row-detail { flex-basis: 100%; padding-left: 24px; font-size: 12px; }
+  .sample-record-row-snippet { display: none; }
+  .sample-record-task { grid-template-columns: 16px minmax(0, 1fr) 24px; padding-inline: 8px; }
+  .sample-record-task-priority > span, .sample-record-task-owner { display: none; }
+  .sample-company-row { grid-template-columns: 8px minmax(0, 100%) 6.5rem; gap: 6px; padding-inline: 4px; }
+  .sample-company-row[data-header] > span { white-space: nowrap; }
+  .sample-company-row > :nth-child(3), .sample-company-row > :nth-child(4), .sample-company-row-domain { display: none; }
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ANALYZE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "217acdbed6242ff0c4b45c2d2d20fabf7819587af3f045b0bbcd500b6f9c5107"
+}

@@ -1,18 +1,18 @@
-import { useParams, useNavigate as useSplitNavigate } from '@app/split-router';
+import { SearchBar, ViewShell, ViewSidebar } from '@app/components/view-shell';
+import {
+  useParams,
+  useNavigate as useSplitNavigate,
+} from '@app/lib/split-router';
 import { PillTabs } from '@components/app/mobile/PillTabs';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { SplitPanel } from '@components/app/split-panel';
 import { useLogout } from '@core/auth/logout';
-import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {
-  isSoloSettings,
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
 import {
+  type SettingsTabGroup,
   settingsSlugToTab,
   settingsTabToSlug,
   useSettingsTabs,
@@ -22,31 +22,20 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
-import ArrowsIn from '@phosphor/arrows-in.svg';
-import ArrowsOut from '@phosphor/arrows-out.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
-import { Button, cn, Layer, SideNav } from '@ui';
+import { pressHandlers } from '@ui';
 import {
+  createMemo,
   createRenderEffect,
   createSignal,
   For,
-  onCleanup,
   onMount,
   Show,
   untrack,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { SettingsTabContent } from './SettingsTabContent';
-
-/** Where the settings panel is mounted, which determines its header chrome. */
-export type SettingsVariant = 'split' | 'fullscreen';
-
-// Panel-width breakpoints (the panel can be a full-screen page or a resizable
-// split, so we measure the panel itself rather than the viewport). Below
-// `COMPACT` the sidebar collapses into a horizontal tab bar; between `COMPACT`
-// and `NARROW` the gutter around the content card tightens.
-const COMPACT_WIDTH = 660;
-const NARROW_WIDTH = 820;
+import { filterSettingsTabGroups } from './settingsSearch';
 
 export function SettingsPanelComponentWrapper() {
   const params = useParams<{ tab?: string }>();
@@ -67,7 +56,7 @@ export function SettingsPanelComponentWrapper() {
 
   return (
     <Show when={!isMobile()} fallback={<MobileSettingsDeepLink />}>
-      <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />
+      <SettingsPanel />
     </Show>
   );
 }
@@ -87,35 +76,36 @@ function MobileSettingsDeepLink() {
 
 type SettingsPanelProps = {
   hide?: boolean;
-  /** Defaults to 'split' so the split-layout mount keeps its existing chrome. */
-  variant?: SettingsVariant;
 };
 
 export function SettingsPanel(props: SettingsPanelProps) {
-  const {
-    closeSettings,
-    moveSettingsToSplit,
-    moveSettingsToSolo,
-    activeTabId,
-    selectTab,
-  } = useSettingsState();
+  const { closeSettings, activeTabId, selectTab } = useSettingsState();
   const splitNavigate = useSplitNavigate();
-  const { groups, flatTabs } = useSettingsTabs();
+  const { searchGroups, flatTabs } = useSettingsTabs();
   const logout = useLogout();
 
-  const variant = () => props.variant ?? 'split';
   const activeNavigationTab = () =>
     activeTabId() === 'Harness' ? 'Agents' : activeTabId();
 
-  // Responsive state, driven by the panel's own width (see breakpoints above).
-  const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
-  const compact = () => !isTouchDevice() && panelWidth() < COMPACT_WIDTH;
-  const narrow = () => !isTouchDevice() && panelWidth() < NARROW_WIDTH;
+  const [searchQuery, setSearchQuery] = createSignal('');
+
+  const filteredGroups = createMemo(() =>
+    filterSettingsTabGroups(searchGroups(), searchQuery())
+  );
+
+  // Runtimes is a search-only row. While it is on screen, highlight that row
+  // for the Harness tab; otherwise the standing Agents row stands in for it.
+  const showsHarnessResult = () =>
+    filteredGroups().some((group) =>
+      group.items.some((item) => item.tab === 'Harness')
+    );
+  const isItemActive = (tab: SettingsTab) =>
+    activeTabId() === tab ||
+    (tab === 'Agents' && activeTabId() === 'Harness' && !showsHarnessResult());
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
   let settingsContainerRef: HTMLDivElement | undefined;
-  let resizeObserver: ResizeObserver | undefined;
 
   onMount(() => {
     if (!settingsContainerRef) return;
@@ -125,14 +115,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     // only after the user clicks into it (the scope only activates on
     // `focusin`).
     settingsContainerRef.focus();
-    resizeObserver = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width;
-      if (width) setPanelWidth(width);
-    });
-    resizeObserver.observe(settingsContainerRef);
   });
-
-  onCleanup(() => resizeObserver?.disconnect());
 
   function handleEscapeKey() {
     closeSettings();
@@ -225,30 +208,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
     }
   };
 
-  // Tab list for the compact segmented control / dropdown.
+  // Tab list for the touch pill strip.
   const tabItems = () =>
     flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }));
 
-  // "Back to app" — the close affordance for solo settings. Laid out like a nav row.
-  const backToApp = () => (
-    <button
-      type="button"
-      onClick={() => closeSettings()}
-      class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-ink-extra-muted cursor-default hover:bg-ink/4 hover:text-ink-muted"
-    >
-      <CaretLeftIcon class="size-4 shrink-0" />
-      <span class="whitespace-nowrap">Back to app</span>
-    </button>
-  );
-
-  const moveToSplitButton = () => (
-    <Button
-      class="p-1 rounded-md"
-      label="Move to split"
-      onClick={() => moveSettingsToSplit()}
-    >
-      <ArrowsIn class="size-4" />
-    </Button>
+  const content = () => (
+    <Show when={activeTabId()}>
+      {(tab) => <SettingsTabContent tab={tab()} />}
+    </Show>
   );
 
   return (
@@ -259,17 +226,17 @@ export function SettingsPanel(props: SettingsPanelProps) {
       data-settings-panel
       ref={settingsContainerRef}
     >
-      <Show when={variant() === 'split'}>
-        <SplitHeaderLeft>
-          <Show
-            when={!isTouchDevice()}
-            fallback={
-              // On mobile the header strip hosts the tab pills (the bottom
-              // accessory region belongs to the global views row). Full-bleed
-              // breakout: span the header container (100cqw), opting out of
-              // the row's flex sizing, with -ml cancelling the row gutter so
-              // the pills scroll device edge to device edge — see
-              // MOBILE_TAB_STRIP_CLASS in soup-view-tabs.tsx.
+      <Show
+        when={!isTouchDevice()}
+        fallback={
+          <>
+            <SplitHeaderLeft>
+              {/* On touch the header strip hosts the tab pills (the bottom
+                  accessory region belongs to the global views row).
+                  Full-bleed breakout: span the header container (100cqw),
+                  opting out of the row's flex sizing, with -ml cancelling the
+                  row gutter so the pills scroll device edge to device edge —
+                  see MOBILE_TAB_STRIP_CLASS in soup-view-tabs.tsx. */}
               <PillTabs
                 scrollable
                 class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
@@ -278,135 +245,126 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 value={activeNavigationTab()}
                 onChange={handleTabChange}
               />
-            }
-          >
-            <HeaderIsland>
-              <div class="h-full flex gap-3 items-center">
-                <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-                  Settings
-                </h1>
-              </div>
-            </HeaderIsland>
-            {/* When the sidebar collapses, tab selection moves into the split's
-                top bar as a dropdown of the current tab. (Rendered directly
-                rather than via CollapsibleHeaderItem so the wide segmented
-                control never flashes before measuring.) */}
-            <Show when={compact()}>
-              <div class="mx-2 shrink-0">
-                <TabsInsetDropdown
-                  list={tabItems()}
-                  value={activeNavigationTab()}
-                  onChange={handleTabChange}
-                />
-              </div>
-            </Show>
-          </Show>
-        </SplitHeaderLeft>
-        {/* Collapse the other splits so settings becomes the sole one (desktop only). */}
-        <Show when={!isMobile()}>
-          <SplitHeaderRight>
-            <Button
-              class="p-1 rounded-lg"
-              label="Open fullscreen"
-              onClick={() => moveSettingsToSolo()}
+            </SplitHeaderLeft>
+            {/* Full-frame on touch: the tab pages own the chrome insets
+                inside their scrollers (see SettingsPage in primitives.tsx), so
+                content scrolls under the floating header/dock like every other
+                block instead of being boxed between them. */}
+            <div class="relative min-h-0 flex-1 overflow-hidden">
+              {content()}
+            </div>
+          </>
+        }
+      >
+        <SplitPanel.Root>
+          <SplitPanel.Body>
+            <ViewShell.Root
+              asidePreferenceKey="settings"
+              resizable
+              aside={{ preserveDuringResize: false }}
+              main={{ preferredWidth: 720 }}
             >
-              <ArrowsOut class="size-4" />
-            </Button>
-          </SplitHeaderRight>
-        </Show>
+              <ViewShell.Aside>
+                <SettingsSidebar
+                  groups={filteredGroups()}
+                  searchQuery={searchQuery()}
+                  onSearchQueryChange={setSearchQuery}
+                  isItemActive={isItemActive}
+                  onSelect={selectRoutedTab}
+                  onLogout={() => logout()}
+                />
+              </ViewShell.Aside>
+              <ViewShell.Main>
+                <ViewShell.TopBar />
+                <div class="relative min-h-0 flex-1 overflow-hidden">
+                  {content()}
+                </div>
+              </ViewShell.Main>
+            </ViewShell.Root>
+          </SplitPanel.Body>
+        </SplitPanel.Root>
       </Show>
+    </div>
+  );
+}
 
-      <div class="flex grow min-h-1 overflow-hidden">
-        {/* Inline sidebar — hidden once the panel gets too narrow. */}
-        <Show when={!isTouchDevice() && !compact()}>
-          <SideNav
-            class={cn(
-              'w-[clamp(208px,20%,248px)] gap-3',
-              narrow() ? 'pr-1' : 'pr-2'
-            )}
-          >
-            {/* The full-screen page has no surrounding chrome, so the sidebar
-                carries the "back" and "move to split" affordances itself. */}
-            <Show when={variant() === 'fullscreen'}>
-              <div class="flex items-center justify-between gap-1">
-                {backToApp()}
-                {moveToSplitButton()}
-              </div>
-            </Show>
-            <For each={groups()}>
-              {(group) => (
-                <SideNav.Group label={group.label}>
+/**
+ * Settings' inner navigation, laid out like every other view's sidebar: a
+ * title bar, a search field, the grouped section pills, and Log out pinned to
+ * the bottom.
+ */
+function SettingsSidebar(props: {
+  groups: SettingsTabGroup[];
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  isItemActive: (tab: SettingsTab) => boolean;
+  onSelect: (tab: SettingsTab) => void;
+  onLogout: () => void;
+}) {
+  return (
+    <ViewSidebar.Root aria-label="Settings navigation">
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>Settings</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
+
+      <ViewSidebar.Primary>
+        <SearchBar
+          label="Search settings"
+          placeholder="Search"
+          autocomplete="off"
+          value={props.searchQuery}
+          onValueChange={props.onSearchQueryChange}
+          class="h-9"
+        />
+      </ViewSidebar.Primary>
+
+      <ViewSidebar.Content class="gap-4">
+        <Show
+          when={props.groups.length > 0}
+          fallback={
+            <div class="py-4 text-center text-sm text-ink-muted">
+              No settings found
+            </div>
+          }
+        >
+          <For each={props.groups}>
+            {(group) => (
+              <section class="flex min-w-0 flex-col gap-0.5">
+                <h2 class="flex h-7 min-w-0 items-center px-(--sidebar-item-inset) text-sm font-medium text-ink-extra-muted">
+                  <span class="truncate">{group.label}</span>
+                </h2>
+                <ViewSidebar.Nav aria-label={group.label}>
                   <For each={group.items}>
                     {(item) => (
-                      <SideNav.Item
-                        icon={item.icon}
-                        active={activeNavigationTab() === item.tab}
-                        onSelect={() => handleTabChange(item.tab)}
-                        class="text-xs py-1.5"
+                      <ViewSidebar.Item
+                        active={props.isItemActive(item.tab)}
+                        {...pressHandlers(() => props.onSelect(item.tab))}
                       >
-                        {item.label}
-                      </SideNav.Item>
+                        <ViewSidebar.Icon>
+                          <Dynamic component={item.icon} class="size-4" />
+                        </ViewSidebar.Icon>
+                        <span class="truncate">{item.label}</span>
+                      </ViewSidebar.Item>
                     )}
                   </For>
-                </SideNav.Group>
-              )}
-            </For>
-            <div class="mt-auto border-t border-edge-muted pt-2">
-              <button
-                type="button"
-                onClick={() => logout()}
-                class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-ink-extra-muted cursor-default hover:bg-ink/3 hover:text-ink"
-              >
-                <SignOutIcon class="size-4 shrink-0" />
-                <span class="whitespace-nowrap">Log out</span>
-              </button>
-            </div>
-          </SideNav>
+                </ViewSidebar.Nav>
+              </section>
+            )}
+          </For>
         </Show>
+      </ViewSidebar.Content>
 
-        {/* Content sits in its own subtly-raised, rounded card. The gutter
-            around it tightens as the panel narrows, and goes uniform once the
-            sidebar collapses. Full-bleed on mobile. */}
-        <div
-          class="flex-1 min-w-0 overflow-hidden touch:p-0"
-          classList={{
-            'py-2 pr-2 pl-0': !compact() && !narrow(),
-            'py-1 pr-1 pl-0': !compact() && narrow(),
-            'p-1': compact(),
-          }}
-        >
-          <Layer depth={1}>
-            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu touch:rounded-none touch:border-0 touch:bg-transparent">
-              {/* Compact full-screen chrome: no split header to host the tabs,
-                  so the sidebar collapses into a top bar here — back / tab
-                  dropdown / move-to-split. (Split mode puts the tabs in its
-                  header.) */}
-              <Show when={variant() === 'fullscreen' && compact()}>
-                <div class="flex shrink-0 items-center gap-2 h-13 px-2 border-b border-ink/[0.05]">
-                  {backToApp()}
-                  <TabsInsetDropdown
-                    list={tabItems()}
-                    value={activeNavigationTab()}
-                    onChange={handleTabChange}
-                  />
-                  <div class="flex-1" />
-                  {moveToSplitButton()}
-                </div>
-              </Show>
-
-              {/* Full-frame on mobile: the tab pages own the chrome insets
-                  inside their scrollers (see SettingsPage in primitives.tsx),
-                  so content scrolls under the floating header/dock like every
-                  other block instead of being boxed between them. */}
-              <div class="relative min-h-0 flex-1 overflow-hidden">
-                <Show when={activeTabId()}>
-                  {(tab) => <SettingsTabContent tab={tab()} />}
-                </Show>
-              </div>
-            </div>
-          </Layer>
-        </div>
-      </div>
-    </div>
+      <ViewSidebar.Footer class="py-(--sidebar-gutter)">
+        <ViewSidebar.Item {...pressHandlers(() => props.onLogout())}>
+          <ViewSidebar.Icon>
+            <SignOutIcon class="size-4" />
+          </ViewSidebar.Icon>
+          <span class="truncate">Log out</span>
+        </ViewSidebar.Item>
+      </ViewSidebar.Footer>
+    </ViewSidebar.Root>
   );
 }

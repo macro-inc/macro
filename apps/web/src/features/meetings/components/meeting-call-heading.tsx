@@ -102,6 +102,7 @@ export function MeetingCallHeading(props: {
               {saving() ? 'Saving…' : 'Save'}
             </Button>
             <Button
+              variant="ghost"
               type="button"
               disabled={saving()}
               onClick={() => setEditing(false)}

@@ -1,3 +1,6 @@
+#[path = "support/http.rs"]
+mod http;
+
 use anyhow::{Context, ensure};
 use local_e2e_test_support::{LocalE2eConfig, LocalE2eServices};
 use reqwest::{Client, StatusCode};
@@ -245,7 +248,7 @@ impl ScopedBotFixture {
         Ok(Self {
             pool,
             services,
-            http: Client::new(),
+            http: http::http_client()?,
             macro_user_uuid,
             acting_user_id,
             fusion_user_id,

@@ -21,6 +21,8 @@ function mount(options: {
   enabled?: boolean;
   initialData?: string;
   queryFn?: () => Promise<string>;
+  /** Read through a narrow feature contract instead of the TanStack result. */
+  contract?: boolean;
 }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -36,9 +38,19 @@ function mount(options: {
       initialData: options.initialData,
     }));
     const result = query;
+    const contract: {
+      readonly isPending: boolean;
+      readonly data: string | undefined;
+    } = result;
     return (
       <div data-testid="content">
-        {queryReadyGate(result) ? result.data : 'pending'}
+        {options.contract
+          ? queryReadyGate(contract)
+            ? contract.data
+            : 'pending'
+          : queryReadyGate(result)
+            ? result.data
+            : 'pending'}
       </div>
     );
   }
@@ -100,6 +112,14 @@ describe('queryReadyGate', () => {
     });
     await waitFor(() => expect(h.query().isError).toBe(true));
     expectContent('pending');
+  });
+
+  it('gates a narrow query contract the same way', async () => {
+    const response = Promise.withResolvers<string>();
+    mount({ contract: true, queryFn: () => response.promise });
+    expectContent('pending');
+    response.resolve('loaded');
+    await waitFor(() => expectContent('loaded'));
   });
 
   it('recognizes falsy cached values as available', () => {

@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   captured: {} as Record<string, unknown>,
   captors: new Map<string, () => unknown>(),
   projectsEnabled: (() => true) as () => boolean,
+  touch: false,
+  dockOpen: (): boolean => false,
+  dockText: (): string => '',
 }));
 vi.mock('@app/lib/split-router', () => ({
   useNavigate: () => vi.fn(),
@@ -33,12 +36,12 @@ vi.mock('./tasks-tab-search', () => ({
   tasksTabSearch: {},
   tasksTabSearchCodec: { serialize: () => ({}) },
 }));
-vi.mock('./route', () => ({
+vi.mock('@app/routes/routes', () => ({
   taskDetailRoute: {},
   tasksProjectsRoute: {},
   tasksSplitRoute: {},
+  reviewsSplitRoute: {},
 }));
-vi.mock('@app/features/reviews-view/route', () => ({ reviewsSplitRoute: {} }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: mocks.projectsEnabled() }),
 }));
@@ -58,6 +61,7 @@ vi.mock('@ui', () => ({
 vi.mock('@components/app/split-layout/layoutUtils', () => {
   const panel = {
     handle: {
+      isActive: () => true,
       currentEntryState: () => mocks.captured,
       registerEntryStateCaptor: (key: string, getter: () => unknown) => {
         mocks.captors.set(key, getter);
@@ -82,7 +86,15 @@ vi.mock('@components/app/createPreviewSelectionGuard', () => ({
   createPreviewSelectionGuard: () =>
     Object.assign(() => true, { canSelect: () => true }),
 }));
-vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.touch,
+}));
+vi.mock('@app/features/command/mobile/mobileSearchState', () => ({
+  SearchState: {
+    isOpen: () => mocks.dockOpen(),
+    query: () => mocks.dockText(),
+  },
+}));
 vi.mock('@app/components/view-shell', () => ({
   setSidebarSectionCollapsed: () => [],
   createCollapsedSidebarSectionsStorage: () => ({
@@ -119,6 +131,9 @@ vi.mock('./queries/use-tasks-query', () => ({
 let disposeSlots: () => void;
 beforeEach(() => {
   mocks.routeTab = 'my-tasks';
+  mocks.touch = false;
+  mocks.dockOpen = () => false;
+  mocks.dockText = () => '';
   mocks.captured = {};
   mocks.captors.clear();
   mocks.projectsEnabled = () => true;
@@ -274,3 +289,45 @@ it('hides project tabs and columns while disabled without overwriting a restored
   expect(current.state.tab).toBe('my-tasks');
   expect(mocks.captors.get('tasks.view')!()).toMatchObject({ tab: 'my-tasks' });
 });
+
+it.each([undefined, 'initiative:one:tasks'])(
+  'isolates dock search from saved and embedded task search (scope %s)',
+  (scopeKey) => {
+    mocks.touch = true;
+    const [open, setOpen] = createSignal(true);
+    mocks.dockOpen = open;
+    mocks.dockText = () => 'dock query';
+    let current!: TasksViewContext;
+    const sourceFactory = (): TasksDataSource => ({
+      items: () => [],
+      isLoading: () => false,
+      isFetching: () => false,
+      error: () => undefined,
+      hasMore: () => false,
+      isLoadingMore: () => false,
+      loadMore: async () => {},
+      loadMoreGroup: async () => {},
+      refresh: async () => {},
+    });
+    const Probe = () => {
+      current = useTasksView();
+      return null;
+    };
+    render(() => (
+      <TasksViewProvider
+        scopeKey={scopeKey}
+        initialState={{ search: 'saved query' }}
+        sourceFactory={sourceFactory}
+      >
+        <Probe />
+      </TasksViewProvider>
+    ));
+    expect(current.state.search).toBe(scopeKey ? 'saved query' : 'dock query');
+    current.setState('search', 'updated saved query');
+    expect(current.state.search).toBe(
+      scopeKey ? 'updated saved query' : 'dock query'
+    );
+    setOpen(false);
+    expect(current.state.search).toBe('updated saved query');
+  }
+);

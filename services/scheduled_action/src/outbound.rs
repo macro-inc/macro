@@ -1,3 +1,4 @@
+pub mod agent_session_client;
 pub mod conn_gateway_live_updates;
 pub mod event_access;
 pub mod inprocess_executor;

@@ -1,10 +1,10 @@
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import UserPlusIcon from '@phosphor/user-plus.svg';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useAddParticipantsMutation } from '@queries/channel/participants';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { ChannelInviteModal } from './views/channel-invite-modal';
 
@@ -24,16 +24,12 @@ export function ChannelInviteButton(props: {
 
   return (
     <Show when={canInvite()}>
-      <Button
-        variant="outline"
-        size="sm"
-        label="Invite people"
+      <HeaderActionButton
+        label="Invite"
+        icon={<UserPlusIcon />}
         tooltip="Invite people"
         onClick={() => setOpen(true)}
-      >
-        <UserPlusIcon />
-        <span class="hidden sm:inline">Invite</span>
-      </Button>
+      />
       <Suspense>
         <Show when={open()}>
           <ChannelInviteDialog

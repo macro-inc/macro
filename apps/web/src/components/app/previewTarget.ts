@@ -6,7 +6,6 @@ import {
   getChannelEntityTarget,
   getDocumentCommentTarget,
   type ReminderPreviewSelection,
-  reminderSplitTarget,
 } from '@app/features/next-soup/utils';
 import { getChannelParams } from '@block-channel/utils/link';
 import type {
@@ -32,11 +31,12 @@ type IdOnlyPreviewSelection = {
   id: string;
   type:
     | 'agent_session'
-    | 'automation'
+    | 'routine'
     | 'call'
     | 'chat'
     | 'crm_company'
     | 'crm_contact'
+    | 'database'
     | 'email'
     | 'project';
 };
@@ -56,11 +56,13 @@ export type PreviewPanelSelection =
   | IdOnlyPreviewSelection
   | DocumentPreviewSelection
   | ForeignPreviewSelection
-  | ChannelPreviewSelection
-  | ReminderPreviewSelection;
+  | ChannelPreviewSelection;
 
-/** What a list row may ask to preview: a block inline, or the Calendar view. */
-export type PreviewSelection = PreviewPanelSelection | CalendarPreviewSelection;
+/** What a list row may ask to preview: a block or a feature-owned detail view. */
+export type PreviewSelection =
+  | PreviewPanelSelection
+  | CalendarPreviewSelection
+  | ReminderPreviewSelection;
 
 /** The block a selection opens, plus the params that load or locate its content. */
 export type PreviewBlockTarget = {
@@ -125,14 +127,6 @@ export function previewBlockTarget(
       blockId: contact.id,
       aliasContext: undefined,
     }))
-    .with({ type: 'reminder' }, (reminder) => {
-      const reminderTarget = reminderSplitTarget(reminder);
-      return {
-        blockType: fileTypeToResolvedBlockName(reminderTarget?.type),
-        blockId: reminderTarget?.id ?? reminder.id,
-        aliasContext: aliasContextFor(reminderTarget?.type),
-      };
-    })
     .otherwise((fallbackEntity) => ({
       blockType: fileTypeToResolvedBlockName(fallbackEntity.type),
       blockId: fallbackEntity.id,

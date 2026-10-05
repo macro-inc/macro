@@ -23,7 +23,7 @@ pub use mutation::{
     SaveEmailDraftInput, SaveEmailDraftPayload, UpdateEmailThreadLabelInput,
 };
 pub use objects::{
-    GraphqlMailPreviewMessage, GraphqlSoupEmailMessage,
+    GraphqlMailDraftState, GraphqlMailPreviewMessage, GraphqlSoupEmailMessage,
     email_message_selection_requires_full_payload, load_email_messages,
     load_email_thread_mail_projection, load_email_thread_metadata, load_latest_email_message,
 };

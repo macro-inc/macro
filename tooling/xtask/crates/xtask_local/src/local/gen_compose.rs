@@ -26,6 +26,9 @@ use super::instance::{Instance, Port};
 use super::inventory::services_for_mode;
 use super::{Mode, repo_root};
 
+#[cfg(test)]
+mod test;
+
 /// The one Rust service with a second listener: the agent egress proxy inside
 /// `agent_harness_service`, on the container port `EGRESS_PORT` defaults to.
 const EGRESS_SERVICE: &str = "agent_harness_service";
@@ -60,6 +63,11 @@ pub fn caddyfile_path(instance: &Instance) -> PathBuf {
     instance.artifact_dir().join("proxy/Caddyfile")
 }
 
+/// Checked-in development CA and localhost fixtures.
+pub fn tls_certs_dir() -> PathBuf {
+    repo_root().join("infra/local/certs")
+}
+
 /// Build the override (typed model), apply the merge tags, and write it.
 /// `static_frontend` mounts the staged app bundle into the proxy (headless
 /// stacks serve the frontend from Caddy instead of a dev server).
@@ -70,6 +78,7 @@ pub fn generate(
     static_frontend: bool,
     gmail_forwarder: bool,
 ) -> Result<PathBuf> {
+    super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
 
@@ -287,10 +296,16 @@ fn add_proxy_service(
     previews: bool,
 ) {
     let proxy_port = instance.port(Port::Proxy);
-    let mut volumes = vec![dct::Volumes::Simple(format!(
-        "{}:/etc/caddy/Caddyfile:ro",
-        caddyfile_path(instance).display()
-    ))];
+    let mut volumes = vec![
+        dct::Volumes::Simple(format!(
+            "{}:/etc/caddy/Caddyfile:ro",
+            caddyfile_path(instance).display()
+        )),
+        dct::Volumes::Simple(format!(
+            "{}:/etc/caddy/certs:ro",
+            super::tls::certs_dir(instance).display()
+        )),
+    ];
     if static_frontend {
         volumes.push(dct::Volumes::Simple(format!(
             "{}:/srv/frontend:ro",
@@ -309,7 +324,11 @@ fn add_proxy_service(
         "proxy".to_string(),
         Some(dct::Service {
             image: Some(CADDY_IMAGE.to_string()),
-            environment: kv(&[("PROXY_PORT", &proxy_port.to_string())]),
+            environment: kv(&[
+                ("PROXY_PORT", &proxy_port.to_string()),
+                ("VITE_PORT", &instance.port(Port::Frontend).to_string()),
+            ]),
+            extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],
             ports: dct::Ports::Short(ports),
             volumes,
             networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
@@ -326,7 +345,8 @@ fn add_local_infra(
     instance: &Instance,
     static_frontend: bool,
 ) {
-    // FusionAuth: repoint at the generated kickstart (volumes replaced via tag).
+    // This per-instance directory belongs only to FusionAuth. Private SELinux
+    // relabeling keeps the kickstart readable without sharing its container label.
     let mut fusionauth = dct::Service {
         environment: kv(&[(
             "FUSIONAUTH_APP_KICKSTART_FILE",
@@ -335,7 +355,7 @@ fn add_local_infra(
         volumes: vec![
             dct::Volumes::Simple("fusionauth_config:/usr/local/fusionauth/config".to_string()),
             dct::Volumes::Simple(format!(
-                "{}:/usr/local/fusionauth/kickstart:ro",
+                "{}:/usr/local/fusionauth/kickstart:ro,Z",
                 kickstart_dir(instance).display()
             )),
         ],

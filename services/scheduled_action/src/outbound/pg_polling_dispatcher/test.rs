@@ -62,15 +62,18 @@ impl ScheduledActionRepo for FakeRepository {
         Ok(action)
     }
 
-    async fn get_actions(&self, _user_id: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
+    async fn get_owned_actions(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<ScheduledAction>> {
         Ok(Vec::new())
     }
 
-    async fn get_action(
-        &self,
-        _id: &Uuid,
-        _user_id: MacroUserIdStr<'static>,
-    ) -> Result<Option<ScheduledAction>> {
+    async fn get_actions_by_ids(&self, _ids: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_action(&self, _id: &Uuid) -> Result<Option<ScheduledAction>> {
         Ok(None)
     }
 
@@ -86,15 +89,16 @@ impl ScheduledActionRepo for FakeRepository {
         Ok(action)
     }
 
-    async fn delete_action(
-        &self,
-        _id: &Uuid,
-        _macro_user_id: MacroUserIdStr<'static>,
-    ) -> Result<()> {
+    async fn delete_action(&self, _id: &Uuid) -> Result<()> {
         Ok(())
     }
 
-    async fn claim_action(&self, _id: &Uuid) -> Result<crate::domain::event_runs::ClaimToken> {
+    async fn claim_action(
+        &self,
+        _id: &Uuid,
+        _revision: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<crate::domain::event_runs::ClaimToken> {
         Ok(crate::domain::event_runs::ClaimToken::generate())
     }
 
@@ -133,6 +137,7 @@ impl ScheduledActionExecutor for RecordingExecutor {
         Ok(InProgressExecution {
             action_id: action.id.expect("test action should have an id"),
             chat_id: None,
+            resource: None,
         })
     }
 }
@@ -160,6 +165,7 @@ impl ScheduledActionExecutor for GatedExecutor {
         Ok(InProgressExecution {
             action_id: action.id.expect("test action should have an id"),
             chat_id: None,
+            resource: None,
         })
     }
 }
@@ -279,7 +285,7 @@ async fn cancellation_allows_started_execution_to_finish_without_starting_anothe
 }
 
 #[tokio::test]
-async fn only_enabled_due_cron_candidates_reach_executor() {
+async fn only_enabled_due_schedules_including_mixed_triggers_reach_executor() {
     let mut event = due_action();
     event.trigger = serde_json::from_value(json!({
         "type": "events", "filters": [{"events": ["document.created"]}]
@@ -291,7 +297,12 @@ async fn only_enabled_due_cron_candidates_reach_executor() {
     disabled.enabled = false;
     let mut missing_next_run = due_action();
     missing_next_run.next_run_at = None;
-    let due = due_action();
+    let mut due = due_action();
+    due.trigger = serde_json::from_value(json!({"type":"multiple", "triggers":[
+        {"type":"cron", "schedule":"* * * * * *", "timezone":"UTC"},
+        {"type":"events", "filters":[{"events":["document.created"]}]}
+    ]}))
+    .unwrap();
     let due_id = due.id.unwrap();
     let mut future = due_action();
     future.next_run_at = Some(Utc::now() + ChronoDuration::hours(1));

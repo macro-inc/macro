@@ -1,7 +1,9 @@
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
+import { paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type {
+  OpenSplitResult,
   ReferredFrom,
   SplitContent,
   SplitHandle,
@@ -51,9 +53,7 @@ export function calendarViewContent(
     id: CALENDAR_VIEW_ID,
     ...(params ? { params: { ...params } } : {}),
     entryMetadata: {
-      route: {
-        matches: [{ id: CALENDAR_ROUTE_ID, params: { period } }],
-      },
+      route: paneRoute({ id: CALENDAR_ROUTE_ID, params: { period } }),
       ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
     },
   };
@@ -68,10 +68,24 @@ export function openCalendarView(
     openInNewSplit?: boolean;
     mergeHistory?: boolean;
     referredFrom?: ReferredFrom;
+    onApplied?: VoidFunction;
   } = {}
 ): void {
   const manager = options.manager ?? globalSplitManager();
   if (!manager) return;
+
+  let onApplied = options.onApplied;
+  const reportApplied = () => {
+    const callback = onApplied;
+    onApplied = undefined;
+    callback?.();
+  };
+  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
+    if (!result) return;
+    if (result.status === 'opened' || result.status === 'reused') {
+      reportApplied();
+    }
+  };
 
   const content = calendarViewContent(target);
   const existing = manager.getSplitByContent('component', CALENDAR_VIEW_ID);
@@ -82,14 +96,17 @@ export function openCalendarView(
       referredFrom: options.referredFrom,
     });
     existing.activate();
+    reportApplied();
     return;
   }
 
-  manager.openWithSplit(content, {
+  const result = manager.openWithSplit(content, {
     activate: true,
     referredFrom: options.referredFrom ?? null,
     preferNewSplit: options.openInNewSplit,
     handle: options.handle,
     mergeHistory: options.mergeHistory,
+    ...(options.onApplied ? { onApplied: reportApplied } : {}),
   });
+  reportImmediateResult(result);
 }

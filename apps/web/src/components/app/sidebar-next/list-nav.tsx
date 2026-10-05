@@ -129,22 +129,27 @@ export const ListNav = (props: ListNavProps) => {
     const isSameContent =
       activeContent?.type === expected.type && activeContent.id === expected.id;
 
-    setPendingNav({
-      itemId: props.item.id,
-      activeContentKey: activeContentKey(),
-    });
-
     if (!isSameContent || event.shiftKey) {
+      setPendingNav({
+        itemId: props.item.id,
+        activeContentKey: activeContentKey(),
+      });
       const { shiftKey } = event;
       afterNextPaint(() => {
         navigateToSidebarView({
           viewId: props.item.id,
           params: props.item.params,
           shiftKey,
-          activeSplit: globalSplitManager()?.activeSplit(),
           openWithSplit: layout.openWithSplit,
           referredFrom: 'sidebar',
         });
+        // Navigation is synchronous, so the real state now holds. Drop the
+        // press: left in place, it would claim the highlight again whenever
+        // the active content returned to what it was at press time (e.g.
+        // Settings → Agents → Settings would light up Agents).
+        setPendingNav((pending) =>
+          pending?.itemId === props.item.id ? undefined : pending
+        );
         globalSplitManager()?.returnFocus();
       });
       return;
@@ -197,8 +202,7 @@ export const ListNav = (props: ListNavProps) => {
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         // An attribute rather than a class-only state, so the styling can be
-        // retargeted from CSS and the `data-active` selectors the old sidebar's
-        // tests use keep working.
+        // retargeted from CSS and tests can select the active item.
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
         data-unread={props.unread ? '' : undefined}

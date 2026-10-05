@@ -12,7 +12,8 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
   const { userId } = options;
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'email') return false;
+    if (entity.type === 'agent_session' && entity.isArchived) return false;
+    if (entity.type === 'email' || entity.type === 'database') return false;
     if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
       return false;
     }

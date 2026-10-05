@@ -1,8 +1,11 @@
 use crate::api::context::ApiContext;
 use agent::PredefinedModel;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chat::domain::models::PatchChatRepoArgs;
 use chat::domain::ports::ChatRepo;
 use chat::outbound::postgres::PgChatRepo;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use std::sync::Arc;
@@ -55,6 +58,15 @@ async fn rename_initial_chat(
     stream_id: String,
     initial_question: String,
 ) -> anyhow::Result<()> {
+    if let Err(error) = ctx
+        .ai_admission
+        .admit(&user_id, ai_usage::AiFeature::ChatRename)
+        .await
+    {
+        tracing::warn!(code = error.code(), "skipping automatic chat rename");
+        return Ok(());
+    }
+
     let name = generate_chat_name(
         &initial_question,
         user_id.clone(),
@@ -67,19 +79,22 @@ async fn rename_initial_chat(
     }
     let user_id_string = user_id.as_ref().to_string();
 
-    PgChatRepo::new(ctx.db.clone())
-        .patch(
-            user_id,
-            &chat_id,
-            PatchChatRepoArgs {
-                name: Some(name.clone()),
-                project_id: None,
-                share_permission: None,
-                team_share: None,
-            },
-        )
-        .await
-        .map_err(anyhow::Error::from)?;
+    PgChatRepo::new(
+        ctx.db.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(ctx.db.clone()))),
+    )
+    .patch(
+        user_id,
+        &chat_id,
+        PatchChatRepoArgs {
+            name: Some(name.clone()),
+            project_id: None,
+            share_permission: None,
+            team_share: None,
+        },
+    )
+    .await
+    .map_err(anyhow::Error::from)?;
 
     ctx.connection_gateway_client
         .batch_send_to_entities(
@@ -134,20 +149,4 @@ fn clean_chat_name(raw: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::clean_chat_name;
-
-    #[test]
-    fn clean_chat_name_trims_quotes_and_collapses_whitespace() {
-        assert_eq!(
-            clean_chat_name("  \"Plan   Q3\nHiring\"  "),
-            "Plan Q3 Hiring"
-        );
-    }
-
-    #[test]
-    fn clean_chat_name_limits_length() {
-        let raw = "a".repeat(120);
-        assert_eq!(clean_chat_name(&raw).len(), 100);
-    }
-}
+mod test;

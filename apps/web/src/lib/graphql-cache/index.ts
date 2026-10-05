@@ -36,6 +36,7 @@ export {
   removeEmbeddedLink,
   type Selection,
   select,
+  selectRecord,
   update,
   upsertByField,
   upsertEmbeddedLink,

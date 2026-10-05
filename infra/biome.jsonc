@@ -17,7 +17,9 @@
       "**/*.jsx",
       "**/openapi.json",
       // FusionAuth consumes these as external script templates; keep their source formatting stable.
-      "!stacks/fusionauth-instance/**/populate_jwt.js"
+      "!stacks/fusionauth-instance/**/populate_jwt.js",
+      // Uploaded verbatim as CloudFront Function code; reformatting it is a live function update.
+      "!stacks/website/wwwRedirect/handler.js"
     ]
   },
   "formatter": {

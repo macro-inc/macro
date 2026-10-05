@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session AS session\n            SET manager_replica_id = NULL,\n                manager_fence = manager_fence + 1,\n                status = $4, status_event_name = $5, turn_state = $6,\n                modified_at = now()\n            WHERE session.id = $1\n              AND session.manager_replica_id = $2 AND session.manager_fence = $3\n              AND EXISTS (\n                SELECT 1 FROM harness_replica AS replica\n                WHERE replica.id = session.manager_replica_id\n                  AND replica.last_heartbeat_at <= now() - make_interval(secs => $7)\n              )\n            RETURNING session.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "371919c2f02efd5c97e1e6984b71befa1b08b98324811df8690ab8cfb93b4db8"
+}

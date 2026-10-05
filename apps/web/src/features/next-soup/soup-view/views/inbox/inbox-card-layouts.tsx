@@ -44,6 +44,7 @@ import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-s
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
+import SmileyIcon from '@phosphor-icons/core/regular/smiley.svg?component-solid';
 import AgentIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
@@ -247,6 +248,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     )
     .with('document_mention', () => () => (
       <FilesIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('channel_message_reaction', () => () => (
+      <SmileyIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('channel_message_reply', () => () => (
       <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
@@ -782,6 +786,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
       .with(
         P.union(
           { tag: 'channel_mention' },
+          { tag: 'channel_message_reaction' },
           { tag: 'channel_message_reply' },
           { tag: 'channel_message_send' }
         ),

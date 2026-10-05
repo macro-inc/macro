@@ -27,6 +27,7 @@ const scheduledRows = vi.hoisted(() => ({
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
+  ...(await import('@app/features/soup/collection/row-store')),
   ...(await import('@app/features/soup/search/create-search-state')),
 }));
 // Exercise query transitions without loading UI barrels or the local-search provider.
@@ -114,6 +115,7 @@ function mount(search = '') {
         setRetainedEntities(rows);
       });
     const [loading, setLoading] = createSignal(false);
+    const [paused, setPaused] = createSignal(false);
     const [placeholder, setPlaceholder] = createSignal(false);
     const [fetching, setFetching] = createSignal(false);
     const [tagSetsReady, setTagSetsReady] = createSignal(true);
@@ -181,8 +183,13 @@ function mount(search = '') {
     );
     const query: SoupAstItemsQuery = {
       get data() {
-        if (loading()) throw new Error('Read pending query data');
+        if (loading() || paused()) throw new Error('Read pending query data');
+        if (state.tab === 'scheduled' || state.tab === 'reminders')
+          throw new Error('Read disabled native email query');
         return { entities: entities(), groups: undefined };
+      },
+      get isPending() {
+        return loading() || paused();
       },
       get isLoading() {
         return loading();
@@ -221,6 +228,9 @@ function mount(search = '') {
           if (retentionLoading()) throw new Error('Read pending retained mail');
           return { entities: retainedEntities(), groups: undefined };
         },
+        get isPending() {
+          return retentionLoading();
+        },
         get isLoading() {
           return retentionLoading();
         },
@@ -240,6 +250,7 @@ function mount(search = '') {
       setRetainedEntities,
       setRetentionLoading,
       setLoading,
+      setPaused,
       setPlaceholder,
       setFetching,
       setTagSetsReady,
@@ -331,6 +342,30 @@ describe('Email list query transitions', () => {
 
     setState('tab', 'noise');
     expect(ids(source)).toEqual(['noise']);
+  });
+
+  it('does not read disabled native data on the Reminders tab', () => {
+    const { source, setState } = mount();
+    expect(() => setState('tab', 'reminders')).not.toThrow();
+    expect(ids(source)).toEqual([]);
+    expect(vi.mocked(useSoupAstItemsQuery).mock.calls[0][1]?.().enabled).toBe(
+      false
+    );
+    setState('tab', 'noise');
+    expect(ids(source)).toEqual(['noise']);
+  });
+
+  it('does not suspend on pending native data while its fetch is paused', () => {
+    const { source, setPaused, setEntities, query } = mount();
+    expect(() => setPaused(true)).not.toThrow();
+    expect(query.isLoading).toBe(false);
+    expect(source.isLoading()).toBe(true);
+    expect(ids(source)).toEqual([]);
+    batch(() => {
+      setEntities([email('resumed')]);
+      setPaused(false);
+    });
+    expect(ids(source)).toEqual(['resumed']);
   });
 
   it('does not show Noise rows under other tabs while their cache reads are pending', () => {
@@ -642,3 +677,16 @@ describe('Email list query transitions', () => {
     expect(source.hasMore()).toBe(false);
   });
 });
+
+vi.mock('./use-reminder-email-source', () => ({
+  useReminderEmailSource: () => ({
+    items: () => [],
+    isLoading: () => false,
+    isFetching: () => false,
+    error: () => undefined,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+    refresh: async () => {},
+  }),
+}));

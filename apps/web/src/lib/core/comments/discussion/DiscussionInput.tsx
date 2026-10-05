@@ -221,6 +221,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
   };
 
   props.onReady?.({
+    snapshot: createSnapshot,
     clear: () => {
       // On iOS, blur before clearing so dictation finalizes and discards its buffer
       const root = markdownEditor.lexical.getRootElement();

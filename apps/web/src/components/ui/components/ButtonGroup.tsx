@@ -45,10 +45,8 @@ export const buttonGroupVariants = createVariants(
       accent: '',
       success: '',
       ghost: '',
-      plain: 'border-0 bg-transparent',
       strong: '',
       cta: '',
-      navigation: 'border-transparent bg-transparent',
     },
     // Explicit cross-axis size so the frame matches a standalone Button of the
     // same size (border-box absorbs the 1px frame); radius tracks size too.
@@ -90,10 +88,8 @@ export const buttonGroupDividerVariants = createVariants(
       accent: 'bg-edge-divider',
       success: 'bg-edge-divider',
       ghost: 'bg-edge-divider',
-      plain: 'bg-edge-divider',
       strong: 'bg-edge-divider',
       cta: 'bg-edge-divider',
-      navigation: 'bg-edge-divider',
     },
   },
   {

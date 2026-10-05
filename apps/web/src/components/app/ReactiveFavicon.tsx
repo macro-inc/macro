@@ -1,6 +1,6 @@
 import { updateFavicon } from '@app/util/favicon';
 import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
-import { useReactiveColorString } from '@theme/signals/themeReactive';
+import { committedThemeAccent } from '@theme/signals/themeSignals';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { useGlobalNotificationSource } from './GlobalAppState';
@@ -29,9 +29,6 @@ export function ReactiveFavicon() {
   const [isAppFocused, setIsAppFocused] = createSignal(!document.hidden);
 
   const globalNotifications = useGlobalNotificationSource();
-
-  const accentColor = useReactiveColorString('a0');
-  const badgeColor = useReactiveColorString('a0');
 
   const postBadgeMessage = (hasBadge: boolean) => {
     badgeBus.publish({ hasBadge, sentAt: Date.now() });
@@ -70,7 +67,11 @@ export function ReactiveFavicon() {
   });
 
   createEffect(() => {
-    updateFavicon(accentColor(), badgeColor(), showNotificationBadge());
+    updateFavicon(
+      committedThemeAccent(),
+      committedThemeAccent(),
+      showNotificationBadge()
+    );
   });
 
   return null;

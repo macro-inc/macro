@@ -28,16 +28,66 @@ fn incoming(name: &str, mut metadata: Value) -> IncomingEvent {
     if name == "document.updated" {
         metadata["file_type"] = Value::Null;
     }
-    let value = json!({"event_type": name, "metadata": metadata});
     let payload = if name.starts_with("document.") {
+        let value = json!({"event_type": name, "metadata": metadata});
         EventPayload::Document(serde_json::from_value(value).unwrap())
+    } else if let Some(message_name) = message_event_name(name) {
+        EventPayload::Message(message_fact(message_name, metadata))
     } else {
+        let value = json!({"event_type": name, "metadata": metadata});
         EventPayload::Channel(serde_json::from_value(value).unwrap())
     };
     IncomingEvent {
         event_id: Uuid::parse_str(EVENT_ID).unwrap(),
         schema_version: 1,
         payload,
+    }
+}
+
+/// Channel message triggers arrive on `macro.messages` under these names.
+fn message_event_name(trigger: &str) -> Option<&'static str> {
+    match trigger {
+        "channel.message_posted" => Some("message.posted"),
+        "channel.mentioned" => Some("message.mentioned"),
+        "channel.message_patched" => Some("message.patched"),
+        "channel.message_attachment_created" => Some("message.attachment_created"),
+        _ => None,
+    }
+}
+
+fn message_fact(name: &str, mut metadata: Value) -> MessageFact {
+    if metadata.get("parent").is_none() {
+        metadata["parent"] = json!({"type": "channel", "id": metadata["channel_id"]});
+    }
+    metadata["root_id"] = metadata["message_id"].clone();
+    let value = json!({"event_type": name, "metadata": metadata});
+    match serde_json::from_value(value).unwrap() {
+        messages::outbound::broker::MessageTopicEvent::Posted(data) => MessageFact::Posted(data),
+        messages::outbound::broker::MessageTopicEvent::Mentioned(data) => {
+            MessageFact::Mentioned(data)
+        }
+        messages::outbound::broker::MessageTopicEvent::Patched(data) => MessageFact::Patched(data),
+        messages::outbound::broker::MessageTopicEvent::AttachmentCreated(data) => {
+            MessageFact::AttachmentCreated(data)
+        }
+        _ => MessageFact::Other,
+    }
+}
+
+#[test]
+fn message_facts_on_other_parents_never_trigger() {
+    for name in [
+        "channel.message_posted",
+        "channel.mentioned",
+        "channel.message_patched",
+        "channel.message_attachment_created",
+    ] {
+        let mut data = metadata();
+        data["parent"] = json!({"type": "document", "id": "document-1"});
+        assert_eq!(
+            incoming(name, data).normalize(),
+            Err(EventRejection::UnsupportedEvent)
+        );
     }
 }
 
@@ -154,7 +204,6 @@ fn update_prefers_explicit_actor_and_requires_a_fallback_when_absent() {
 #[test]
 fn every_non_allowlisted_variant_is_rejected() {
     for name in [
-        "document.deleted",
         "document.content_uploaded",
         "document.sync_content_updated",
         "document.purged",
@@ -162,8 +211,6 @@ fn every_non_allowlisted_variant_is_rejected() {
         "document.interaction",
         "channel.updated",
         "channel.deleted",
-        "channel.message_deleted",
-        "channel.message_attachment_removed",
         "channel.participant_added",
         "channel.participant_removed",
     ] {
@@ -172,6 +219,14 @@ fn every_non_allowlisted_variant_is_rejected() {
             Err(EventRejection::UnsupportedEvent)
         );
         assert!(serde_json::from_value::<EventName>(json!(name)).is_err());
+    }
+    for name in ["message.deleted", "message.attachment_removed"] {
+        let event = IncomingEvent {
+            event_id: Uuid::parse_str(EVENT_ID).unwrap(),
+            schema_version: 1,
+            payload: EventPayload::Message(message_fact(name, metadata())),
+        };
+        assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
     }
     assert!(serde_json::from_value::<EventName>(json!("document.future_event")).is_err());
     assert!(serde_json::from_value::<EventName>(json!("document.*")).is_err());
@@ -323,4 +378,226 @@ fn tagged_trigger_round_trips_and_rejects_conflicting_fields() {
         assert_eq!(serde_json::to_value(trigger).unwrap(), value);
     }
     assert!(serde_json::from_value::<ActionTrigger>(json!({"type": "events", "filters": [{"events": ["document.created"]}], "schedule": "0 0 9 * * *"})).is_err());
+}
+
+#[test]
+fn multiple_triggers_preserve_event_filters_and_choose_the_next_schedule() {
+    let trigger: ActionTrigger = serde_json::from_value(serde_json::json!({
+        "type": "multiple",
+        "triggers": [
+            {"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"},
+            {"type":"cron", "schedule":"0 0 17 * * *", "timezone":"UTC"},
+            {"type":"events", "filters":[{"events":["channel.message_posted"]}]}
+        ]
+    }))
+    .unwrap();
+    let after = chrono::DateTime::parse_from_rfc3339("2040-01-01T10:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    assert_eq!(
+        trigger.next_run_after(after).unwrap().to_rfc3339(),
+        "2040-01-01T17:00:00+00:00"
+    );
+    assert_eq!(
+        trigger.event_filters().unwrap().as_slice()[0].events(),
+        &[EventName::ChannelMessagePosted]
+    );
+    assert!(trigger.has_schedule());
+}
+
+#[test]
+fn event_groups_must_be_combined_and_external_webhooks_are_rejected() {
+    let events = serde_json::json!({"type":"events", "filters":[{"events":["document.created"]}]});
+    assert!(
+        serde_json::from_value::<ActionTrigger>(
+            serde_json::json!({"type":"multiple", "triggers":[events.clone(),events]})
+        )
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<ActionTrigger>(serde_json::json!({"type":"webhook"})).is_err()
+    );
+}
+
+fn property_event(name: &str, metadata: Value) -> IncomingEvent {
+    IncomingEvent {
+        event_id: Uuid::parse_str(EVENT_ID).unwrap(),
+        schema_version: 1,
+        payload: EventPayload::Property(
+            serde_json::from_value(json!({
+                "event_type": name, "metadata": metadata
+            }))
+            .unwrap(),
+        ),
+    }
+}
+
+fn property_metadata() -> Value {
+    json!({
+        "entity_property_id": OTHER_ID, "entity_id": ENTITY_ID,
+        "entity_type": "TASK", "property_definition_id": SystemPropertyKey::STATUS_UUID,
+        "actor": HUMAN, "actor_user_id": HUMAN,
+        "value": {"type": "SelectOption", "value": [OTHER_ID]},
+        "previous_value": null, "updated_at": "2024-01-01T00:00:00Z"
+    })
+}
+
+#[test]
+fn document_lifecycle_distinguishes_tasks() {
+    let mut data = metadata();
+    assert_eq!(
+        incoming("document.created", data.clone())
+            .normalize()
+            .unwrap()
+            .event_name(),
+        EventName::DocumentCreated
+    );
+    assert_eq!(
+        incoming("document.deleted", data.clone())
+            .normalize()
+            .unwrap()
+            .event_name(),
+        EventName::DocumentDeleted
+    );
+    data["sub_type"] = json!("task");
+    assert_eq!(
+        incoming("document.created", data.clone())
+            .normalize()
+            .unwrap()
+            .event_name(),
+        EventName::TaskCreated
+    );
+    assert_eq!(
+        incoming("document.deleted", data.clone()).normalize(),
+        Err(EventRejection::UnsupportedEvent)
+    );
+    data["actor"] = json!(BOT);
+    assert_eq!(
+        incoming("document.created", data).normalize(),
+        Err(EventRejection::UnsafeAttribution)
+    );
+}
+
+#[test]
+fn task_changes_match_specific_and_any_property_selectors() {
+    for (property, name) in [
+        (SystemPropertyKey::STATUS_UUID, EventName::TaskStatusChanged),
+        (
+            SystemPropertyKey::PRIORITY_UUID,
+            EventName::TaskPriorityChanged,
+        ),
+        (
+            SystemPropertyKey::DUE_DATE_UUID,
+            EventName::TaskPropertyChanged,
+        ),
+    ] {
+        let mut data = property_metadata();
+        data["property_definition_id"] = json!(property);
+        for source in ["entity_property.updated", "entity_property.deleted"] {
+            let event = property_event(source, data.clone()).normalize().unwrap();
+            assert_eq!(event.event_name(), name);
+            let any = EventFilter::new(vec![EventName::TaskPropertyChanged], None).unwrap();
+            assert!(any.accepts(event.event_name(), event.entity_id()));
+            let other_task =
+                EventFilter::new(vec![name], Some(vec![Uuid::parse_str(OTHER_ID).unwrap()]))
+                    .unwrap();
+            assert!(!other_task.accepts(name, event.entity_id()));
+            let stored = serde_json::to_value(&event).unwrap();
+            assert_eq!(stored.as_object().unwrap().len(), 4);
+            assert_eq!(
+                serde_json::from_value::<EventReference>(stored).unwrap(),
+                event
+            );
+        }
+    }
+    let event = property_event("entity_properties.cleared", property_metadata())
+        .normalize()
+        .unwrap();
+    assert_eq!(event.event_name(), EventName::TaskPropertyChanged);
+}
+
+#[test]
+fn property_changes_ignore_other_entities_noops_and_bot_writes() {
+    let original = property_metadata();
+    for kind in ["DOCUMENT", "PROJECT", "INITIATIVE", "THREAD"] {
+        let mut data = original.clone();
+        data["entity_type"] = json!(kind);
+        assert_eq!(
+            property_event("entity_property.updated", data).normalize(),
+            Err(EventRejection::UnsupportedEvent)
+        );
+    }
+    let mut data = original.clone();
+    data["previous_value"] = data["value"].clone();
+    assert_eq!(
+        property_event("entity_property.updated", data).normalize(),
+        Err(EventRejection::UnsupportedEvent)
+    );
+    for field in ["actor", "on_behalf_of"] {
+        let mut data = original.clone();
+        data[field] = json!(if field == "actor" { BOT } else { HUMAN });
+        assert_eq!(
+            property_event("entity_property.updated", data).normalize(),
+            Err(EventRejection::UnsafeAttribution)
+        );
+    }
+}
+
+#[test]
+fn mention_trigger_is_only_for_the_mentioned_user() {
+    let owner = MacroUserIdStr::parse_from_str(HUMAN).unwrap();
+    let other = MacroUserIdStr::parse_from_str("macro|other@example.com").unwrap();
+    let event = incoming("channel.mentioned", metadata());
+    assert!(event.is_for_owner(&owner));
+    assert!(!event.is_for_owner(&other));
+    let mut data = metadata();
+    data["mentioned"]["entity_type"] = json!("document");
+    assert_eq!(
+        incoming("channel.mentioned", data).normalize(),
+        Err(EventRejection::UnsupportedEvent)
+    );
+}
+
+#[test]
+fn email_receipts_keep_only_ids_and_exclude_spam_and_backfills() {
+    use email::domain::events::ThreadBackfilledMetadata;
+    let owner = MacroUserIdStr::parse_from_str(HUMAN).unwrap();
+    let mut event = IncomingEvent {
+        event_id: Uuid::parse_str(EVENT_ID).unwrap(),
+        schema_version: 1,
+        payload: EventPayload::Email(
+            serde_json::from_value(json!({
+                "event_type":"email.message_received", "metadata": {
+                    "link_id": OTHER_ID, "owner": HUMAN, "message_id": OTHER_ID,
+                    "provider_message_id": "provider-msg", "thread_id": ENTITY_ID,
+                    "provider_thread_id": "provider-thread", "is_new_thread": false,
+                    "subject": "private subject", "from_email": "private@example.com",
+                    "to_emails": [], "attachment_count": 0, "is_spam_or_trash": false
+                }
+            }))
+            .unwrap(),
+        ),
+    };
+    let normalized = event.normalize().unwrap();
+    assert_eq!(normalized.event_name(), EventName::EmailMessageReceived);
+    assert_eq!(normalized.entity_type(), EventEntityType::EmailThread);
+    let stored = serde_json::to_string(&normalized).unwrap();
+    assert!(!stored.contains("private"));
+    assert!(!stored.contains("provider"));
+    assert!(event.is_for_owner(&owner));
+    assert!(
+        !event.is_for_owner(&MacroUserIdStr::parse_from_str("macro|other@example.com").unwrap())
+    );
+    if let EventPayload::Email(EmailTopicEvent::MessageReceived(ref mut data)) = event.payload {
+        data.is_spam_or_trash = true;
+    }
+    assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
+    event.payload = EventPayload::Email(EmailTopicEvent::ThreadBackfilled(
+        ThreadBackfilledMetadata {
+            link_id: Uuid::parse_str(OTHER_ID).unwrap(),
+            owner,
+            thread_id: Uuid::parse_str(ENTITY_ID).unwrap(),
+        },
+    ));
+    assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
 }

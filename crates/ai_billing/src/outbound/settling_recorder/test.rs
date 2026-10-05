@@ -4,27 +4,32 @@ use crate::domain::{
     UsageSnapshot, ledger::build_snapshot,
 };
 use ai_usage::domain::{Result as UsageResult, UsageError};
-use ai_usage::{AiFeature, CompletionUsage, ModelPricing, UsageApiParams, UsageContext};
+use ai_usage::{
+    AiFeature, AiUsageEnforcement, CompletionUsage, ModelPricing, SYSTEM_USER_ID, UsageApiParams,
+    UsageContext,
+};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::sync::Notify;
 
 #[derive(Clone, Default)]
 struct FakeUsageRepo {
     attempts: Arc<AtomicUsize>,
     recorded: Arc<Notify>,
+    counted: Arc<AtomicBool>,
     fail_first: bool,
 }
 
 impl UsageRepo for FakeUsageRepo {
-    async fn insert_usage(&self, _usage: &CompletionUsage) -> UsageResult<()> {
+    async fn insert_usage(&self, _usage: &CompletionUsage, count_usage: bool) -> UsageResult<()> {
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
         if self.fail_first && attempt == 0 {
             return Err(UsageError::Other(anyhow::anyhow!(
                 "transient write failure"
             )));
         }
+        self.counted.store(count_usage, Ordering::SeqCst);
         self.recorded.notify_one();
         Ok(())
     }
@@ -94,6 +99,7 @@ impl BillingService for FakeBilling {
         _payer: &MacroUserIdStr<'_>,
         _start: DateTime<Utc>,
         _end: DateTime<Utc>,
+        _verified: Option<crate::domain::period::SubscriptionPeriod>,
     ) -> Result<()> {
         unreachable!()
     }
@@ -113,12 +119,33 @@ impl SettlementTrigger for FakeTrigger {
 }
 
 async fn record(
-    environment: Environment,
+    settlement: AiUsageBilling,
     user: MacroUserIdStr<'static>,
     tier: PlanTier,
     unlimited: bool,
     chargeable_cents: i64,
     fail_first: bool,
+) -> (usize, usize, usize) {
+    record_with_policy(
+        settlement,
+        user,
+        tier,
+        unlimited,
+        chargeable_cents,
+        fail_first,
+        (AiUsageEnforcement::Enabled, AiFeature::Chat),
+    )
+    .await
+}
+
+async fn record_with_policy(
+    settlement: AiUsageBilling,
+    user: MacroUserIdStr<'static>,
+    tier: PlanTier,
+    unlimited: bool,
+    chargeable_cents: i64,
+    fail_first: bool,
+    (enforcement, feature): (AiUsageEnforcement, AiFeature),
 ) -> (usize, usize, usize) {
     let repo = FakeUsageRepo {
         fail_first,
@@ -141,21 +168,19 @@ async fn record(
     });
     let trigger = FakeTrigger::default();
     let recorder = SettlingUsageRecorder::new(
-        Arc::new(UsageServiceImpl::new(repo.clone())),
+        Arc::new(UsageServiceImpl::new(repo.clone()).with_enforcement(enforcement)),
         billing.clone(),
         trigger.clone(),
-        environment,
+        settlement,
     );
-    recorder.record(UsageContext::new(AiFeature::Chat, user).into_event(
-        "test-model".into(),
-        10,
-        10,
-    ));
+    let should_count = enforcement.should_count(&user, feature);
+    recorder.record(UsageContext::new(feature, user).into_event("test-model".into(), 10, 10));
     tokio::time::timeout(Duration::from_secs(2), repo.recorded.notified())
         .await
-        .expect("usage must be recorded in every environment, including after a retry");
+        .expect("usage must be recorded under either settlement policy, including after a retry");
     // All fake billing/trigger calls are immediately ready; let the recording task finish.
     tokio::task::yield_now().await;
+    assert_eq!(repo.counted.load(Ordering::SeqCst), should_count);
     (
         repo.attempts.load(Ordering::SeqCst),
         billing.snapshots.load(Ordering::SeqCst),
@@ -168,15 +193,11 @@ fn user() -> MacroUserIdStr<'static> {
 }
 
 #[tokio::test]
-async fn records_everywhere_but_only_requests_settlement_in_dev() {
-    for (environment, expected) in [
-        (Environment::Develop, 1),
-        (Environment::Production, 0),
-        (Environment::Local, 0),
-    ] {
+async fn records_everywhere_but_only_requests_settlement_when_enabled() {
+    for (settlement, expected) in [(AiUsageBilling::Enabled, 1), (AiUsageBilling::Disabled, 0)] {
         for fail_first in [false, true] {
             let (attempts, snapshots, requests) = record(
-                environment,
+                settlement,
                 user(),
                 PlanTier::Premium,
                 false,
@@ -192,10 +213,37 @@ async fn records_everywhere_but_only_requests_settlement_in_dev() {
 }
 
 #[tokio::test]
+async fn uncounted_usage_never_reads_billing_or_requests_settlement() {
+    for policy in [
+        (AiUsageEnforcement::Disabled, AiFeature::Chat),
+        (AiUsageEnforcement::Enabled, AiFeature::Memory),
+        (AiUsageEnforcement::Enabled, AiFeature::AiProjection),
+        (AiUsageEnforcement::Enabled, AiFeature::CallSummary),
+        (AiUsageEnforcement::Enabled, AiFeature::Dictation),
+    ] {
+        for fail_first in [false, true] {
+            assert_eq!(
+                record_with_policy(
+                    AiUsageBilling::Enabled,
+                    user(),
+                    PlanTier::Premium,
+                    false,
+                    1_000,
+                    fail_first,
+                    policy
+                )
+                .await,
+                (if fail_first { 2 } else { 1 }, 0, 0)
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn system_usage_never_requests_settlement() {
     assert_eq!(
         record(
-            Environment::Develop,
+            AiUsageBilling::Enabled,
             SYSTEM_USER_ID.clone(),
             PlanTier::Premium,
             false,
@@ -208,7 +256,7 @@ async fn system_usage_never_requests_settlement() {
 }
 
 #[tokio::test]
-async fn dev_does_not_settle_free_unlimited_or_covered_usage() {
+async fn enabled_settlement_skips_free_unlimited_or_covered_usage() {
     for (tier, unlimited, chargeable) in [
         (PlanTier::Free, false, 1_000),
         (PlanTier::Premium, true, 1_000),
@@ -216,7 +264,7 @@ async fn dev_does_not_settle_free_unlimited_or_covered_usage() {
     ] {
         assert_eq!(
             record(
-                Environment::Develop,
+                AiUsageBilling::Enabled,
                 user(),
                 tier,
                 unlimited,

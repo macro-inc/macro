@@ -28,6 +28,7 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
     async fn compose(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         parent: Option<&messages::domain::models::MessageParent>,
         context: Option<&ConversationContext>,
     ) -> Result<String> {
@@ -40,7 +41,7 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
         });
 
         self.lexical
-            .compose_agent_context(prompt_markdown, parent, context.as_ref())
+            .compose_agent_context(prompt_markdown, instructions, parent, context.as_ref())
             .await
             .map_err(|error| HarnessError::PromptComposition(rootcause::report!(error).into()))
     }
@@ -48,6 +49,15 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
 
 fn anchor(anchor: &CommentAnchor) -> AgentContextAnchor<'_> {
     match anchor {
+        CommentAnchor::Spreadsheet {
+            sheet_id,
+            sheet_name,
+            range,
+        } => AgentContextAnchor::Spreadsheet {
+            sheet_id,
+            sheet_name,
+            range,
+        },
         CommentAnchor::Mark {
             mark_id,
             marked_text,

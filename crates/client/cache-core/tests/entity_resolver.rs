@@ -330,7 +330,7 @@ fn absent_incomplete_and_malformed_runtime_values_are_misses() {
 }
 
 #[test]
-fn resolver_overrides_stored_links_and_null() {
+fn resolver_overrides_stored_links_but_preserves_observed_null() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         seed_thread(&mut engine, json!("thread-1"), "Resolved").await;
@@ -394,9 +394,9 @@ fn resolver_overrides_stored_links_and_null() {
             .await
             .unwrap()
         else {
-            panic!("expected resolver to override null")
+            panic!("expected a cached null")
         };
-        assert_eq!(data["viewer"]["thread"]["id"], json!("thread-1"));
+        assert_eq!(data["viewer"]["thread"], Json::Null);
     });
 }
 

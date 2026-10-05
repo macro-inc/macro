@@ -7,6 +7,7 @@ import { createMemo, createSignal, Show } from 'solid-js';
 import { splitMessageContent } from './agent-session-link';
 import { useMessage, useSearchHighlightTermsLookup } from './context';
 import { createSearchHighlightOverlay } from './highlightOverlay';
+import { MentionedImages } from './MentionedImages';
 
 type ContentProps = {
   class?: string;
@@ -42,6 +43,7 @@ export function Content(props: ContentProps) {
           target="internal"
           rootRef={setMarkdownRoot}
         />
+        <MentionedImages content={content()} />
       </div>
     </Show>
   );

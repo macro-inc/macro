@@ -39,6 +39,28 @@ pub trait RemindersRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
+    /// Coalesce private eligible email reminders before keyset pagination.
+    /// `thread_ids` optionally restricts candidates; None discovers the collection.
+    fn email_candidates(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        thread_ids: Option<&[Uuid]>,
+        cursor: Option<super::email_collection::EmailReminderCursor>,
+        as_of: DateTime<Utc>,
+        limit: u32,
+    ) -> impl Future<
+        Output = Result<Vec<super::email_collection::EmailReminderCandidate>, Self::Err>,
+    > + Send;
+
+    /// Read private native rows in actionable-first order, with filters and cursor applied before the limit.
+    fn list_collection(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        query: &super::collection::CollectionQuery,
+        as_of: DateTime<Utc>,
+        limit: i64,
+    ) -> impl Future<Output = Result<super::collection::CollectionBatch, Self::Err>> + Send;
+
     /// Insert a reminder for the user.
     fn create_reminder(
         &self,
@@ -297,6 +319,56 @@ pub trait ReminderDispatch: Send + Sync + 'static {
 
 /// Inbound service port: the reminders API used by drivers (HTTP).
 pub trait RemindersService: Send + Sync + 'static {
+    /// Original email identities with current private reminder work.
+    fn list_email_reminders(
+        &self,
+        _viewer: super::email_collection::EmailReminderViewer,
+        _query: super::email_collection::EmailReminderQuery,
+    ) -> impl Future<Output = Result<super::email_collection::EmailReminderPage, ReminderError>> + Send
+    {
+        async {
+            Err(ReminderError::BadRequest(
+                "Email reminders are unavailable".into(),
+            ))
+        }
+    }
+
+    /// Paginate the caller's private Reminders collection with native source metadata.
+    fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: super::collection::CollectionQuery,
+    ) -> impl Future<Output = Result<super::collection::ReminderCollectionPage, ReminderError>> + Send;
+    /// Read the email workflow when this service has email capabilities wired.
+    fn get_email_followup(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _thread: Uuid,
+    ) -> impl Future<Output = Result<Option<super::email_followup::EmailFollowup>, ReminderError>> + Send
+    {
+        async {
+            Err(ReminderError::BadRequest(
+                "Email reminders are unavailable".into(),
+            ))
+        }
+    }
+
+    /// Execute an idempotent email workflow command. Generic/AI-only services
+    /// deliberately do not gain inbox mutation capabilities by default.
+    fn execute_email_followup(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _thread: Uuid,
+        _command: super::email_followup::EmailFollowupCommand,
+    ) -> impl Future<Output = Result<super::email_followup::EmailFollowup, ReminderError>> + Send
+    {
+        async {
+            Err(ReminderError::BadRequest(
+                "Email reminders are unavailable".into(),
+            ))
+        }
+    }
+
     /// Create a reminder for the user.
     ///
     /// `entity_receipt` must be present whenever `request` names an entity, and

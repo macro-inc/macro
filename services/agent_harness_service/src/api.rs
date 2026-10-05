@@ -70,6 +70,9 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     repositories: AgentRepositoriesRouterState<Auth>,
     claude_auth: Router,
     sharing: Router,
+    routine_sessions: Router,
+    capabilities: Router,
+    pull_requests: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
@@ -95,8 +98,17 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             repositories,
             claude_auth: Router::new(),
             sharing: Router::new(),
+            routine_sessions: Router::new(),
+            capabilities: Router::new(),
+            pull_requests: Router::new(),
             changes,
         }
+    }
+
+    /// Attach model-specific harness capability discovery routes.
+    pub fn with_capabilities(mut self, router: Router) -> Self {
+        self.capabilities = router;
+        self
     }
 
     /// Attach the optional owner-authenticated Claude demo connection routes.
@@ -105,9 +117,21 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach internal-only routine routes with their independent domain service.
+    pub fn with_routine_sessions(mut self, router: Router) -> Self {
+        self.routine_sessions = router;
+        self
+    }
+
     /// Attach session-sharing routes with their independent domain service.
     pub fn with_sharing(mut self, router: Router) -> Self {
         self.sharing = router;
+        self
+    }
+
+    /// Attach the routes associating pull requests with sessions.
+    pub fn with_pull_requests(mut self, router: Router) -> Self {
+        self.pull_requests = router;
         self
     }
 }
@@ -201,6 +225,7 @@ where
         .merge(agent_session_control_router(states.control))
         .merge(agent_session_create_router(states.create))
         .merge(states.sharing)
+        .merge(states.pull_requests)
         .merge(agent_changes_router(states.changes));
     Router::new()
         .nest("/agent-sessions", agent_sessions)
@@ -208,6 +233,8 @@ where
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.claude_auth)
+        .merge(states.routine_sessions)
+        .merge(states.capabilities)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

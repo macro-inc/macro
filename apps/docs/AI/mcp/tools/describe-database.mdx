@@ -1,0 +1,17 @@
+---
+title: DescribeDatabase
+description: >-
+  Read a database's tables, versions and columns before writing SQL: IDs, exact
+  SQL names, types, select labels, and relation targets.
+---
+
+# DescribeDatabase
+
+Read a database's tables, versions and columns before writing SQL: IDs, exact SQL names, types, select labels, and relation targets. Pass includeEditingMetadata only when editing views or changing column types to include saved views and conversion targets. Get databaseId from ListDatabases.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `databaseId` | string | Yes | Id of the database to describe, as returned by ListDatabases. |
+| `includeEditingMetadata` | boolean | No | Include saved views and per-column type conversion targets. Omit for queries. |

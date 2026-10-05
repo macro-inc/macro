@@ -1,3 +1,4 @@
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   PdfDocument,
   PdfDocumentContent,
@@ -8,6 +9,7 @@ import {
 } from '@block-pdf/component/PdfSplitToolbar';
 import { Tabs } from '@block-pdf/component/Tabs';
 import { usePdfDocument } from '@block-pdf/context/pdf-document-context';
+import { createPdfRouteTarget } from '@block-pdf/primitives/create-pdf-route-target';
 import {
   type LocationSearchParams,
   URL_PARAMS,
@@ -19,6 +21,7 @@ import {
   downloadPdfDocument,
   printPdfDocument,
 } from '@block-pdf/util/pdf-file-actions';
+import { SidePanel } from '@components/app/side-panel';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -132,6 +135,7 @@ export function PdfDetailDocument(props: {
   children?: (context: PdfDetailContext) => JSX.Element;
 }) {
   const [searchParams] = useSearchParams();
+  const target = createPdfRouteTarget(() => props.documentId);
   const permissions = () => getPermissions(props.data.userAccessLevel);
 
   return (
@@ -140,6 +144,17 @@ export function PdfDetailDocument(props: {
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
     >
+      <SidePanel.HeaderActions>
+        <AskMacroButton
+          entity={{
+            type: 'document',
+            id: props.documentId,
+            name:
+              props.data.documentMetadata.documentName ?? 'Unknown Filename',
+            fileType: 'pdf',
+          }}
+        />
+      </SidePanel.HeaderActions>
       <PdfDocument
         documentId={props.documentId}
         documentVersionId={props.data.documentMetadata.documentVersionId}
@@ -156,6 +171,7 @@ export function PdfDetailDocument(props: {
           isOwner: props.data.userAccessLevel === 'owner',
         }}
         locationParams={getLocationParams(searchParams)}
+        navigationTarget={target()}
       >
         <PdfDetailContent data={props.data} children={props.children} />
       </PdfDocument>

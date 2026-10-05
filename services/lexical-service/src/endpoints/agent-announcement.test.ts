@@ -45,8 +45,24 @@ describe('agent announcements', () => {
     if (!match?.[1]) throw new Error(`no reply target in ${markdown}`);
     return readReplyTargetData(JSON.parse(match[1]));
   };
-  it('announces under the parent the reply lives in', async () => {
-    const parent = { type: 'document' as const, id: 'doc' };
+  it('announces an assignment as a chip without a user reply target', async () => {
+    const response = await request({ chip });
+    expect(response.status).toBe(200);
+    const { markdown } = await response.json<{ markdown: string }>();
+    expect(markdown).toBe(
+      `<m-magic-chip>${JSON.stringify(chip)}</m-magic-chip>`
+    );
+    expect(markdown).not.toContain('m-reply-target');
+  });
+  it.each([
+    'channel',
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ])('announces under the %s parent the reply lives in', async (type) => {
+    const parent = { type, id: 'parent-1' };
     const response = await request({
       replyTarget: { parent, ...replyTarget },
       chip,

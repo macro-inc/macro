@@ -37,6 +37,14 @@ export class AgentSessionNamespace {
     return AgentSession.repositoryBranches(this.client, repoUrl);
   }
 
+  /**
+   * The sessions linked to the GitHub pull request at `url` that the caller
+   * can view.
+   */
+  forPullRequest(url: string): Promise<AgentSession[]> {
+    return AgentSession.forPullRequest(this.client, url);
+  }
+
   /** The caller's default sandbox size for new `@coder` sessions. */
   defaultSandboxSize(): Promise<SandboxSize> {
     return AgentSession.defaultSandboxSize(this.client);

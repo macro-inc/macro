@@ -33,6 +33,10 @@ const channel = (
 const { canExecute } = makeRenameAction({ userId: () => ME });
 
 describe('makeRenameAction.canExecute', () => {
+  it('leaves database renaming to the native database block', () => {
+    expect(canExecute(entity('database', { grant: 'owner' }))).toBe(false);
+  });
+
   it('allows the owner of a private channel to rename it', () => {
     expect(canExecute(channel({ channelType: 'private', ownerId: ME }))).toBe(
       true
@@ -83,6 +87,15 @@ describe('makeRenameAction.canExecute', () => {
 
   it('refuses a document owned by someone else', () => {
     expect(canExecute(entity('document', { ownerId: OTHER }))).toBe(false);
+  });
+
+  it('allows active agent sessions but refuses archived ones', () => {
+    expect(canExecute(entity('agent_session', { isArchived: false }))).toBe(
+      true
+    );
+    expect(canExecute(entity('agent_session', { isArchived: true }))).toBe(
+      false
+    );
   });
 
   it('refuses channel messages, threads, email, and foreign rows', () => {

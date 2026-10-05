@@ -50,6 +50,7 @@ const report = (event: CacheEngineRuntimeEvent): void => {
       event.request.kind === 'read' &&
       event.request.query.includes('CacheAdmissionBarrier'),
     reason: event.kind === 'fatal' ? event.reason : undefined,
+    attempt: event.kind === 'owner-lock-busy' ? event.attempt : undefined,
     fatalCode: event.kind === 'fatal' ? event.fatalCode : undefined,
     performanceMemoryAvailable:
       event.kind === 'ready' && workerPerformance.memory !== undefined,

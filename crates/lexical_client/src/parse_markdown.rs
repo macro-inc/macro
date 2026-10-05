@@ -130,6 +130,20 @@ struct MentionsResponse {
     mentions: Vec<ExtractedMention>,
 }
 
+/// A static image to serialize through Lexical's image node and markdown transformer.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageMarkdownRequest<'a> {
+    /// Static file capability identifier.
+    pub static_file_id: &'a str,
+    /// Permanent image URL.
+    pub url: &'a str,
+    /// Intrinsic pixel width.
+    pub width: u32,
+    /// Intrinsic pixel height.
+    pub height: u32,
+}
+
 /// The Magic Chip embedded in an agent-session announcement, in the shape the
 /// lexical service `/agent-announcement` endpoint validates.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -171,7 +185,8 @@ pub struct AgentAnnouncementReplyTarget {
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentAnnouncementRequest<'a> {
-    reply_target: &'a AgentAnnouncementReplyTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_target: Option<&'a AgentAnnouncementReplyTarget>,
     chip: &'a AgentAnnouncementChip,
 }
 
@@ -326,6 +341,16 @@ pub struct AgentContext<'a> {
     rename_all_fields = "camelCase"
 )]
 pub enum AgentContextAnchor<'a> {
+    /// A cell or rectangular range in a native spreadsheet.
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: &'a str,
+        /// Sheet name when the discussion was created.
+        sheet_name: &'a str,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: &'a str,
+    },
+
     /// A comment mark in a markdown document.
     Markdown {
         /// Lexical mark the comment is attached to.
@@ -359,6 +384,8 @@ pub enum AgentContextAnchor<'a> {
 #[serde(rename_all = "camelCase")]
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    instructions: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<&'a MessageParent>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
@@ -603,13 +630,29 @@ impl LexicalClient {
         Ok(data.mentions)
     }
 
+    /// Compose dimension-preserving channel markup from a real Lexical image node.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn compose_image_markdown(&self, image: &ImageMarkdownRequest<'_>) -> Result<String> {
+        let response = check_response(
+            self.client
+                .post(format!("{}/image-markdown", self.url))
+                .json(image)
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
     /// Composes the channel message announcing an agent session — a structured
     /// reply target above the session's Magic Chip — via the lexical service,
     /// so the markdown is built from real Lexical nodes.
     #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
-        reply_target: &AgentAnnouncementReplyTarget,
+        reply_target: Option<&AgentAnnouncementReplyTarget>,
         chip: &AgentAnnouncementChip,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
@@ -673,6 +716,7 @@ impl LexicalClient {
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         parent: Option<&MessageParent>,
         context: Option<&AgentContext<'_>>,
     ) -> Result<String> {
@@ -682,6 +726,7 @@ impl LexicalClient {
                 .post(&url)
                 .json(&AgentContextRequest {
                     prompt_markdown,
+                    instructions,
                     parent,
                     context,
                 })

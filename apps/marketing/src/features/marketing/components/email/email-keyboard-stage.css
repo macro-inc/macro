@@ -1,0 +1,44 @@
+#keyboard-speed .homepage-feature-heading { max-width: 920px; margin-inline: auto; padding-inline: 24px; text-align: left; }
+#keyboard-speed .homepage-feature-title { justify-content: flex-start; }
+#keyboard-speed .homepage-section-break { display: block; }
+#keyboard-speed .homepage-section-break > span { display: none; }
+#keyboard-speed .homepage-section-break p { max-width: 348px; margin-inline: 0; white-space: pre-line; text-wrap: wrap; }
+
+.email-keyboard-stage { position: relative; isolation: isolate; padding: 28px 24px 0; }
+.email-keyboard-stage::before { content: ''; position: absolute; inset: -40px -40px 48px; z-index: -2; pointer-events: none; background: radial-gradient(ellipse at 60% 40%, #a6adbb0a, transparent 65%); mask-image: linear-gradient(transparent, #000 20%, #000 65%, transparent); }
+.email-keyboard-stage::after { content: ''; position: absolute; inset: -10px 0 48px; z-index: -1; pointer-events: none; background: radial-gradient(#cfd8e32a .6px, transparent .9px) 0 0 / 8px 8px; mask-image: radial-gradient(ellipse at center, #000, transparent 70%); opacity: .16; }
+.email-keyboard-stage .mail-app { min-height: 490px; border: 0; border-radius: 12px; background: linear-gradient(145deg, #17181b, #101112 60%); box-shadow: var(--glass-shadow); mask-image: linear-gradient(#000 80%, transparent); -webkit-mask-image: linear-gradient(#000 80%, transparent); }
+.email-keyboard-stage .mail-app::before { content: none; }
+.email-keyboard-stage .mail-app-rail { display: none; }
+.email-keyboard-stage .email-feature-toolbar { height: 62px; padding-inline: 24px; border-bottom: 1px solid #ffffff0b; }
+.email-keyboard-stage .email-keyboard-content { min-height: 428px; }
+.email-keyboard-stage .mail-thread-body { padding: 28px 32px 72px; }
+.email-keyboard-stage .mail-rows { padding: 18px 8px 70px; }
+.email-keyboard-stage .mail-row { min-height: 60px; border: 0; border-radius: 12px; transition: background 160ms ease, box-shadow 160ms ease; }
+.email-keyboard-stage .mail-row[aria-current='true'] { background: linear-gradient(120deg, #ffffff10, #ffffff04); box-shadow: inset 2px 0 #a8bcae, inset 0 1px #ffffff08; }
+.email-keyboard-stage .email-shortcut-dock { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px; padding: 8px 0 16px; border: 0; background: transparent; color: #a3a3a3; }
+.email-keyboard-stage .email-shortcut-dock > button { flex-direction: row; gap: 8px; padding: 6px; font: 400 12px/1.5 'Inter Variable', Inter, sans-serif; color: #a3a3a3; transition: color 160ms ease; }
+.email-keyboard-stage .email-shortcut-dock > button:hover,
+.email-keyboard-stage .email-shortcut-dock > button[data-active='true'] { background: transparent; color: #f0f0f0; }
+.email-keyboard-stage .email-shortcut-dock kbd { min-width: 36px; height: 36px; border: 0; border-radius: 8px; background: linear-gradient(#242528, #191a1c); box-shadow: inset 0 1px #ffffff24, inset 0 0 0 1px #ffffff09, 0 3px 0 #080809; color: #b9bbc0; transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease; }
+.email-keyboard-stage .email-shortcut-dock > button[data-active='true'] kbd { background: #d8e0da; color: #151916; box-shadow: inset 0 1px #ffffff66, 0 1px 0 #080809; }
+.email-keyboard-demo > .mail-demo-controls { padding-top: 0; }
+
+@media (max-width: 699px) {
+  #keyboard-speed .homepage-section-break p { max-width: 100%; white-space: normal; text-wrap: pretty; }
+  #keyboard-speed .homepage-feature-heading { padding-inline: 0; }
+  .email-keyboard-stage { padding: 12px 0 0; }
+  .email-keyboard-stage::before { inset-inline: 0; }
+  .email-keyboard-stage .mail-app { min-height: 600px; }
+  .email-keyboard-stage .email-keyboard-content { min-height: 538px; }
+  .email-keyboard-stage .mail-row { min-height: 112px; }
+  .email-keyboard-stage .mail-thread-body { padding: 24px 14px 72px; }
+  .email-keyboard-stage .email-feature-toolbar { padding-inline: 16px; }
+  .email-keyboard-stage .email-shortcut-dock { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px 2px; }
+  .email-keyboard-stage .email-shortcut-dock > button { flex-direction: column; font-size: 10px; padding-inline: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .email-keyboard-stage .mail-row,
+  .email-keyboard-stage .email-shortcut-dock > button,
+  .email-keyboard-stage .email-shortcut-dock kbd { transition: none; }
+}

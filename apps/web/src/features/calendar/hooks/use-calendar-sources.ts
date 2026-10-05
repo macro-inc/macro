@@ -7,7 +7,9 @@ import { DEFAULT_CALENDAR_SOURCE } from '../types';
 export function useCalendarSources() {
   const calendarsQuery = useVisibleCalendarsQuery();
   const sources = createMemo<CalendarSource[]>(() => {
-    const calendars = calendarsQuery.data;
+    const calendars = calendarsQuery.isSuccess
+      ? calendarsQuery.data
+      : undefined;
     if (!calendars || calendars.length === 0) {
       return [DEFAULT_CALENDAR_SOURCE];
     }

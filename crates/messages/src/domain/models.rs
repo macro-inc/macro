@@ -51,6 +51,8 @@ pub enum MessageParent {
     CrmCompany(Uuid),
     /// A CRM contact.
     CrmContact(Uuid),
+    /// A video call and its persistent chat thread.
+    Call(Uuid),
 }
 
 impl MessageParent {
@@ -68,6 +70,7 @@ impl MessageParent {
             "crm_contact" => Ok(Self::CrmContact(
                 entity_id.parse().map_err(|_| InvalidParent)?,
             )),
+            "call" => Ok(Self::Call(entity_id.parse().map_err(|_| InvalidParent)?)),
             _ => Err(InvalidParent),
         }
     }
@@ -80,6 +83,7 @@ impl MessageParent {
             Self::Initiative(_) => "initiative",
             Self::CrmCompany(_) => "crm_company",
             Self::CrmContact(_) => "crm_contact",
+            Self::Call(_) => "call",
         }
     }
 
@@ -87,6 +91,7 @@ impl MessageParent {
     pub fn entity_id(&self) -> String {
         match self {
             Self::Channel(id)
+            | Self::Call(id)
             | Self::Initiative(id)
             | Self::CrmCompany(id)
             | Self::CrmContact(id) => id.to_string(),
@@ -96,7 +101,7 @@ impl MessageParent {
 
     /// Whether messages are presented as comments on an entity.
     pub fn is_discussion(&self) -> bool {
-        !matches!(self, Self::Channel(_))
+        !matches!(self, Self::Channel(_) | Self::Call(_))
     }
 
     /// Entity type whose permissions govern messages on this parent.
@@ -108,11 +113,12 @@ impl MessageParent {
             Self::Initiative(_) => entity_access::domain::models::EntityType::Initiative,
             Self::CrmCompany(_) => entity_access::domain::models::EntityType::CrmCompany,
             Self::CrmContact(_) => entity_access::domain::models::EntityType::CrmContact,
+            Self::Call(_) => entity_access::domain::models::EntityType::Call,
         }
     }
 }
 
-/// A thread's location within its document. Geometry remains annotation-owned.
+/// A thread's location within its document. PDF geometry remains annotation-owned.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -145,6 +151,16 @@ pub enum ThreadAnchor {
     PdfPlaceable {
         /// Placeable annotation UUID.
         anchor_id: Uuid,
+    },
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
     },
 }
 
@@ -184,6 +200,16 @@ pub enum NewThreadAnchor {
         /// Height as a fraction of the page height.
         height_pct: f64,
     },
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
 }
 
 /// Longest marked-text snapshot kept with a discussion. A comment marks a
@@ -211,6 +237,15 @@ impl NewThreadAnchor {
     /// Thread-owned reference after annotation geometry has been persisted.
     pub fn reference(&self) -> ThreadAnchor {
         match self {
+            Self::Spreadsheet {
+                sheet_id,
+                sheet_name,
+                range,
+            } => ThreadAnchor::Spreadsheet {
+                sheet_id: sheet_id.clone(),
+                sheet_name: sheet_name.clone(),
+                range: range.clone(),
+            },
             Self::Markdown {
                 mark_id,
                 marked_text,

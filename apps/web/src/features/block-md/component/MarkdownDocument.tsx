@@ -37,6 +37,7 @@ import {
   type MarkdownDocumentState,
 } from '../context/markdown-document-state';
 import { HistoryProvider } from '../history/HistoryContext';
+import { HistoryWorkspace } from '../history/HistoryWorkspace';
 import { resumeDocumentSpan, stampLoroSnapshotState } from '../observability';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
@@ -217,7 +218,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
           tabIndex={-1}
         >
           <HistoryProvider documentId={() => props.documentId}>
-            {props.children}
+            <HistoryWorkspace>{props.children}</HistoryWorkspace>
           </HistoryProvider>
         </div>
       </MarkdownNameProvider>

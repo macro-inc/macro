@@ -6,8 +6,9 @@
  */
 
 import { SAMPLE_PATCH } from '@app/components/diff-view/debug/fixtures';
+import { QueuedPrompts } from '@app/features/block-agent/ui';
 import { Button } from '@ui';
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
 import { createPaneViewState } from '../pane-view-state';
 import { createAgentChanges } from '../primitives/create-agent-changes';
@@ -19,6 +20,22 @@ import {
   ReviewNotesDock,
 } from '../views/SessionChangesControls';
 import { gallerySummary } from './gallery-fixture';
+
+const GALLERY_QUEUE = Array.from({ length: 12 }, (_, index) => ({
+  actionId: `gallery-queued-${index + 1}`,
+  kind: 'prompt',
+  prompt:
+    index === 0
+      ? [
+          'Add regression coverage for queued messages and review readiness.',
+          ...Array.from(
+            { length: 12 },
+            (_, step) =>
+              `Scenario ${step + 1}: queue a follow-up while the agent is working. Verify that the next prompt stays reachable and editing a queued message preserves its attachments.`
+          ),
+        ].join('\n\n')
+      : `Queued follow-up #${index + 1}: tighten the unread rail query.`,
+}));
 
 export default function AgentChangesGallery() {
   const context = createMockAgentChangesContext({
@@ -54,6 +71,8 @@ export default function AgentChangesGallery() {
     );
   }
   const [transcript, setTranscript] = createSignal<string[]>([]);
+  const [queued, setQueued] = createSignal(false);
+  const [queueItems, setQueueItems] = createSignal(GALLERY_QUEUE);
   // The mock host records prompts; surface them like a transcript would.
   const originalSend = context.host.agent.send;
   context.host.agent.send = (markdown) => {
@@ -76,18 +95,32 @@ export default function AgentChangesGallery() {
               Gallery session. Prompts sent from the Changes pane appear below;
               use the button below to simulate linking a pull request.
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              class="self-start"
-              onClick={() =>
-                context.setPullRequestUrl(
-                  'https://github.com/macro-inc/macro/pull/1482'
-                )
-              }
-            >
-              Simulate the agent linking PR #1482
-            </Button>
+            <div class="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                class="self-start"
+                onClick={() =>
+                  context.setPullRequestUrl(
+                    'https://github.com/macro-inc/macro/pull/1482'
+                  )
+                }
+              >
+                Simulate the agent linking PR #1482
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                class="self-start"
+                aria-pressed={queued()}
+                onClick={() => {
+                  setQueueItems(GALLERY_QUEUE);
+                  setQueued((value) => !value);
+                }}
+              >
+                {queued() ? 'Hide queued messages' : 'Show a long queue'}
+              </Button>
+            </div>
             <For each={transcript()}>
               {(line) => (
                 <pre class="rounded-lg bg-surface-1 p-3 font-mono text-xs whitespace-pre-wrap text-ink-muted">
@@ -99,6 +132,25 @@ export default function AgentChangesGallery() {
           <div class="mx-auto flex w-full max-w-4xl shrink-0 flex-col gap-2 px-4 pb-4">
             <ChangesHandoff />
             <ReviewNotesDock />
+            <Show when={queued()}>
+              <QueuedPrompts
+                items={queueItems()}
+                onEdit={(id, prompt) =>
+                  setQueueItems((items) =>
+                    items.map((item) =>
+                      item.actionId === id ? { ...item, prompt } : item
+                    )
+                  )
+                }
+                onRemove={(id) => {
+                  const remaining = queueItems().filter(
+                    (item) => item.actionId !== id
+                  );
+                  setQueueItems(remaining);
+                  if (remaining.length === 0) setQueued(false);
+                }}
+              />
+            </Show>
             <div class="rounded-2xl border border-edge px-4 py-3 text-sm text-ink-placeholder">
               Message the agent, @mention anything
             </div>

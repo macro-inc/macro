@@ -413,6 +413,16 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -1139,8 +1149,28 @@
           "400": {
             "description": "Unknown import source"
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error"
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
           }
         }
       }
@@ -2020,6 +2050,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "AI usage validation unavailable — retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageError"
+                }
+              }
+            }
           }
         }
       }
@@ -2103,10 +2143,37 @@
             "description": "Unauthorized"
           },
           "402": {
-            "description": "Payment required"
+            "description": "Payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No access to the requested model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable — retry later",
             "content": {
               "application/json": {
                 "schema": {
@@ -2141,6 +2208,21 @@
           }
         }
       },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
       "AiFeature": {
         "type": "string",
         "description": "Everything we use AI for. The wire / DB form of each variant is its\n`snake_case` name.",
@@ -2157,7 +2239,8 @@
           "import",
           "agent_session",
           "agent_repository_choice",
-          "dictation"
+          "dictation",
+          "image_generation"
         ]
       },
       "AssistantMessagePart": {
@@ -2569,7 +2652,7 @@
         "properties": {
           "code": {
             "type": ["string", "null"],
-            "description": "Stable machine-readable code for payment-required errors."
+            "description": "Stable machine-readable code for admission errors (402 or 503)."
           },
           "error": {
             "type": "string"
@@ -2908,6 +2991,47 @@
           }
         }
       },
+      "DatabaseChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Databases, tables, columns or saved views.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["schema"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["count", "kind"],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["rows"]
+              }
+            }
+          }
+        ],
+        "description": "What a successful tool call committed to the user's databases."
+      },
       "DocumentCognitionServiceApiVersion": {
         "type": "string",
         "enum": ["v1", "v2"]
@@ -3003,7 +3127,9 @@
           "skill",
           "agent_session",
           "scheduled_action",
-          "initiative"
+          "initiative",
+          "database",
+          "database_row"
         ]
       },
       "ErrorBody": {
@@ -3739,7 +3865,7 @@
       "Initiator": {
         "type": "string",
         "description": "Where an import entity was first staged from. Provenance only — never a\nvisibility filter.",
-        "enum": ["onboarding", "chat"]
+        "enum": ["onboarding", "chat", "archive"]
       },
       "JwtPayload": {
         "type": "object",
@@ -4588,12 +4714,42 @@
         "properties": {
           "code": {
             "type": ["string", "null"],
-            "description": "Stable machine-readable code for payment-required errors."
+            "description": "Stable machine-readable code for admission errors (402 or 503)."
           },
           "error": {
             "type": "string"
           }
         }
+      },
+      "StructuredCompletionOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The answer, shaped by the request's `output_schema`.",
+            "required": ["result", "status"],
+            "properties": {
+              "result": {},
+              "status": {
+                "type": "string",
+                "enum": ["completed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The model failed after committing database changes, so there is no\nanswer but `tool_activity` says what was saved.",
+            "required": ["reason", "status"],
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["interrupted"]
+              }
+            }
+          }
+        ]
       },
       "StructuredCompletionRequest": {
         "type": "object",
@@ -4618,15 +4774,64 @@
       },
       "StructuredCompletionResponse": {
         "type": "object",
-        "required": ["result"],
+        "required": ["outcome", "toolActivity"],
         "properties": {
-          "result": {}
+          "outcome": {
+            "$ref": "#/components/schemas/StructuredCompletionOutcome"
+          },
+          "toolActivity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StructuredToolActivity"
+            },
+            "description": "Actual completed tools, independent of the model's claims."
+          }
+        }
+      },
+      "StructuredToolActivity": {
+        "type": "object",
+        "description": "One tool call the agent finished, and what it did.",
+        "required": ["name", "outcome"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ToolOutcome"
+          }
         }
       },
       "TargetType": {
         "type": "string",
         "description": "The kind of entity a projection is materialized for.",
         "enum": ["user", "team"]
+      },
+      "ToolOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["changes", "status"],
+            "properties": {
+              "changes": {
+                "$ref": "#/components/schemas/DatabaseChange"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["succeeded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ]
       },
       "ToolSet": {
         "oneOf": [
@@ -4647,6 +4852,26 @@
               "type": {
                 "type": "string",
                 "enum": ["none"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["databases"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["databases_read_only"]
               }
             }
           }

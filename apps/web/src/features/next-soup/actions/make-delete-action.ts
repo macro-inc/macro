@@ -5,6 +5,7 @@ import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layou
 import { toast } from '@core/component/Toast/Toast';
 import {
   createBulkDeleteDssItemsMutation,
+  type EmailEntity,
   type EntityData,
   isEmailEntity,
 } from '@entity';
@@ -12,6 +13,59 @@ import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-cl
 import type { SoupRow } from '../create-soup-state';
 import { restoreSoupFocus, trashEmails } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
+
+/**
+ * Move email threads to Trash and drop them from split history.
+ *
+ * Emails never reach the confirmation modal: `createBulkDeleteDssItemsMutation`
+ * cannot delete them at all, and the TRASH label is reversible, so the Undo
+ * toast is the safety net the modal gives everything else.
+ */
+function trashEmailThreads(emails: EmailEntity[]) {
+  const handle = trashEmails(
+    emails.map((email) => ({ id: email.id, linkId: email.linkId }))
+  );
+
+  const splitManager = globalSplitManager();
+  if (splitManager) {
+    const entityIdSet = new Set(emails.map(({ id }) => id));
+    globalRemoveFromSplitHistory(splitManager, (entry) =>
+      entityIdSet.has(entry.id)
+    );
+  }
+
+  return handle;
+}
+
+function reportTrashedEmails(
+  handle: ReturnType<typeof trashEmails>,
+  count: number
+) {
+  const toastId = toast.success(
+    count > 1 ? `Moved ${count} items to Trash` : 'Moved to Trash',
+    {
+      actions: [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Restored from Trash'),
+              () => toast.failure('Failed to restore from Trash')
+            );
+          },
+        },
+      ],
+      duration: 10_000,
+    }
+  );
+
+  // Surface background API failures
+  handle.done.catch(() => {
+    toast.failure('Failed to move to Trash');
+  });
+}
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
@@ -95,7 +149,11 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
   };
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+    if (
+      entity.type === 'database' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread'
+    ) {
       return false;
     }
     if (entity.type === 'email') {
@@ -115,8 +173,17 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
   const execute = async (entities: EntityData[]) => {
     const reminders = entities.filter((e) => e.type === 'reminder');
-    const rest = entities.filter((e) => e.type !== 'reminder');
+    const emails = entities.filter(isEmailEntity);
+    const rest = entities.filter(
+      (e) => e.type !== 'reminder' && e.type !== 'email'
+    );
     void deleteRemindersNow(reminders);
+
+    if (emails.length > 0) {
+      reportTrashedEmails(trashEmailThreads(emails), emails.length);
+      options.onDeleted?.(emails);
+    }
+
     if (rest.length === 0) return;
 
     const cleanup = createDeletionCleanup();
@@ -218,17 +285,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     };
 
     const trashEmailEntities = () => {
-      const handle = trashEmails(
-        emailEntities.map((e) => ({ id: e.id, linkId: e.linkId }))
-      );
-
-      const splitManager = globalSplitManager();
-      if (splitManager) {
-        const entityIdSet = new Set(emailEntities.map(({ id }) => id));
-        globalRemoveFromSplitHistory(splitManager, (entry) =>
-          entityIdSet.has(entry.id)
-        );
-      }
+      const handle = trashEmailThreads(emailEntities);
 
       soup.selection.clear();
       const next = nextSurvivingRow(emailEntities.map((entity) => entity.id));
@@ -236,32 +293,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
         soup.focus.set(next?.id);
       }
 
-      const toastId = toast.success(
-        emailEntities.length > 1
-          ? `Moved ${emailEntities.length} items to Trash`
-          : 'Moved to Trash',
-        {
-          actions: [
-            {
-              label: 'Undo',
-              icon: ArrowCounterClockwise,
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                handle.undo().then(
-                  () => toast.success('Restored from Trash'),
-                  () => toast.failure('Failed to restore from Trash')
-                );
-              },
-            },
-          ],
-          duration: 10_000,
-        }
-      );
-
-      // Surface background API failures
-      handle.done.catch(() => {
-        toast.failure('Failed to move to Trash');
-      });
+      reportTrashedEmails(handle, emailEntities.length);
 
       restoreSoupFocus(next?.id);
     };

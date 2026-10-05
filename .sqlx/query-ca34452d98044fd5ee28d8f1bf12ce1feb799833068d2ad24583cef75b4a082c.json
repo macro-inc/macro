@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO initiative (\n            id,\n            name,\n            owner_user_id,\n            share_permission_id\n        )\n        VALUES ($1, $2, $3, $4)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca34452d98044fd5ee28d8f1bf12ce1feb799833068d2ad24583cef75b4a082c"
+}

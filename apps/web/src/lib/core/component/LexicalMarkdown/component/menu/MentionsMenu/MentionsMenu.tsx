@@ -5,7 +5,11 @@ import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
-import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
+import {
+  type EntityBucket,
+  type EntityItem,
+  useQuickAccess,
+} from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
@@ -14,6 +18,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import type { HistoryItem as Item } from '@queries/history/history';
+import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
 import { Surface } from '@ui';
@@ -55,10 +60,20 @@ import { useMentionsMenuController } from './MentionsMenuController';
 import { createItemHandler } from './utils/mentionHandlers';
 import { sortMobileMentions } from './utils/mobileSort';
 
-const MAX_ITEMS = 8;
+const TARGET_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
 // Height consumed by Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
+const DEFAULT_DOCUMENT_BUCKETS: EntityBucket[] = [
+  'note',
+  'task',
+  'snippet',
+  'document',
+  'project',
+  'chat',
+  'database',
+  'initiative',
+];
 
 type MentionsMenuProps = {
   menu: MenuOperations;
@@ -79,6 +94,10 @@ type MentionsMenuProps = {
   showOpenTabs?: boolean;
   /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
   sources?: MentionBucketId[];
+  /** Restrict the document bucket at the query source (e.g. task-only reference fields). */
+  documentBuckets?: EntityBucket[];
+  /** Scalar person fields cannot store group mentions. Defaults to true. */
+  includeGroups?: boolean;
 } & (
   | { editor: LexicalEditor; onPick?: never }
   | { editor?: never; anchor: HTMLElement; onPick: (item: MentionItem) => void }
@@ -131,7 +150,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const customDocs = props.entities
     ? useEntityMentionFromList({
         items: props.entities,
-        buckets: ['note', 'task', 'snippet', 'document', 'project', 'chat'],
+        buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
         searchTerm,
       })
     : undefined;
@@ -156,7 +175,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const docsMention =
     customDocs ??
     useEntityMention({
-      buckets: ['note', 'task', 'snippet', 'document', 'project', 'chat'],
+      buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
       searchTerm: activeSearchTerm,
     });
   const docs = docsMention.entities;
@@ -255,16 +274,22 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
+  const mentionUsers = () =>
+    (usersAndGroups() ?? []).filter(
+      (item) => props.includeGroups !== false || item.kind !== 'group'
+    );
+  const sourceEnabled = (source: MentionBucketId) =>
+    !props.sources || props.sources.includes(source);
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
-    const users = usersAndGroups() ?? [];
+    const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
       ...users,
-      ...(docs() ?? []),
-      ...(channels() ?? []),
-      ...agentSessions(),
-      ...(companies() ?? []),
-      ...(emails() ?? []),
-      ...(dates() ?? []),
+      ...(sourceEnabled('documents') ? (docs() ?? []) : []),
+      ...(sourceEnabled('channels') ? (channels() ?? []) : []),
+      ...(sourceEnabled('agentSessions') ? agentSessions() : []),
+      ...(sourceEnabled('companies') ? (companies() ?? []) : []),
+      ...(sourceEnabled('emails') ? (emails() ?? []) : []),
+      ...(sourceEnabled('dates') ? (dates() ?? []) : []),
     ];
     return sortMobileMentions(combined, searchTerm(), users);
   });
@@ -277,29 +302,33 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           label: 'All',
           getData: mobileAllItems,
           getFullCount: () =>
-            (usersAndGroups()?.length ?? 0) +
-            docsMention.totalCount() +
-            agentSessions().length +
-            channelsMention.totalCount() +
-            (companyMention?.totalCount() ?? 0) +
-            totalEmailCount() +
-            (dates()?.length ?? 0),
+            (sourceEnabled('users') ? mentionUsers().length : 0) +
+            (sourceEnabled('documents') ? docsMention.totalCount() : 0) +
+            (sourceEnabled('agentSessions') ? agentSessions().length : 0) +
+            (sourceEnabled('channels') ? channelsMention.totalCount() : 0) +
+            (sourceEnabled('companies')
+              ? (companyMention?.totalCount() ?? 0)
+              : 0) +
+            (sourceEnabled('emails') ? totalEmailCount() : 0) +
+            (sourceEnabled('dates') ? (dates()?.length ?? 0) : 0),
           hasMore: () =>
-            docsMention.hasMore() ||
-            channelsMention.hasMore() ||
-            (companyMention?.hasMore() ?? false) ||
-            hasMoreEmails(),
+            (sourceEnabled('documents') && docsMention.hasMore()) ||
+            (sourceEnabled('channels') && channelsMention.hasMore()) ||
+            (sourceEnabled('companies') &&
+              (companyMention?.hasMore() ?? false)) ||
+            (sourceEnabled('emails') && hasMoreEmails()),
           isLoadingMore: () =>
-            docsMention.isLoadingMore() ||
-            channelsMention.isLoadingMore() ||
-            (companyMention?.isLoadingMore() ?? false) ||
-            isLoadingMoreEmails(),
+            (sourceEnabled('documents') && docsMention.isLoadingMore()) ||
+            (sourceEnabled('channels') && channelsMention.isLoadingMore()) ||
+            (sourceEnabled('companies') &&
+              (companyMention?.isLoadingMore() ?? false)) ||
+            (sourceEnabled('emails') && isLoadingMoreEmails()),
           loadMore: async () => {
             await Promise.all([
-              docsMention.loadMore(),
-              channelsMention.loadMore(),
-              companyMention?.loadMore(),
-              loadMoreEmails(),
+              sourceEnabled('documents') && docsMention.loadMore(),
+              sourceEnabled('channels') && channelsMention.loadMore(),
+              sourceEnabled('companies') && companyMention?.loadMore(),
+              sourceEnabled('emails') && loadMoreEmails(),
             ]);
           },
         },
@@ -309,9 +338,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const buckets: BucketConfig[] = [
       {
         id: 'users',
-        label: groups().length > 0 ? 'People & Groups' : 'People',
-        getData: () => usersAndGroups() ?? [],
-        getFullCount: () => usersAndGroups()?.length ?? 0,
+        label:
+          props.includeGroups !== false && groups().length > 0
+            ? 'People & Groups'
+            : 'People',
+        getData: mentionUsers,
+        getFullCount: () => mentionUsers().length,
       },
       {
         id: 'documents',
@@ -382,7 +414,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const controller = useMentionsMenuController(bucketConfigs, {
     ignoredIds: () => (blockId ? [blockId] : []),
-    maxItems: MAX_ITEMS,
+    targetItems: TARGET_ITEMS,
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
@@ -634,29 +666,33 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   }
                 >
                   <div>
-                    <For each={visibleBuckets()}>
+                    <Key
+                      each={visibleBuckets()}
+                      by={(bucket) => bucket.config.id}
+                    >
                       {(bucket, idx) => (
                         <>
                           <Show when={idx() > 0}>
                             <div class="w-full mt-4 border-b border-edge-muted mb-2" />
                           </Show>
                           <ItemBin
-                            label={bucket.config.label}
-                            binType={bucket.config.id}
-                            totalCount={bucket.config.getFullCount()}
-                            showingCount={bucket.bucketItems.length}
+                            label={bucket().config.label}
+                            binType={bucket().config.id}
+                            totalCount={bucket().config.getFullCount()}
+                            showingCount={bucket().bucketItems.length}
                             onViewAll={handleViewAll}
                             isSelected={
-                              controller.selectedCategory() === bucket.config.id
+                              controller.selectedCategory() ===
+                              bucket().config.id
                             }
                           >
-                            <For each={bucket.bucketItems}>
+                            <Key each={bucket().bucketItems} by="id">
                               {(item, i) => (
                                 <MentionsMenuItem
-                                  item={item}
-                                  index={bucket.startIndex + i()}
+                                  item={item()}
+                                  index={bucket().startIndex + i()}
                                   selected={
-                                    bucket.startIndex + i() ===
+                                    bucket().startIndex + i() ===
                                     controller.selectedIndex()
                                   }
                                   itemAction={itemAction}
@@ -664,11 +700,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                   setOpen={setMenuOpen}
                                 />
                               )}
-                            </For>
+                            </Key>
                           </ItemBin>
                         </>
                       )}
-                    </For>
+                    </Key>
                   </div>
                 </Show>
               }

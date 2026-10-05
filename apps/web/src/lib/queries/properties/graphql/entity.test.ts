@@ -1,8 +1,10 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { MutationSettlement } from '@graphql-cache/protocol';
 import type { Property } from '@property/types';
+import { registerGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { GroupSoupDocument } from '@service-storage/graphql/generated/graphql';
 import {
   type Client,
   createClient,
@@ -12,7 +14,15 @@ import {
 } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { validate as validateUuid } from 'uuid';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { filter, makeSubject, mergeMap, pipe } from 'wonka';
 
 const graphqlClientState = vi.hoisted(() => ({
@@ -461,6 +471,119 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
     expect(save.isPending).toBe(false);
   });
 
+  it('prepares a bulk grouped edit once per active page without cache inspection', async () => {
+    makeSettlementHost();
+    const input = {
+      initial: {
+        groupBy: {
+          field: 'PROPERTY' as const,
+          propertyDefinitionId: 'priority',
+        },
+      },
+    };
+    onTestFinished(
+      registerGraphqlSoupRevalidations(() => [
+        { document: GroupSoupDocument, variables: { input } },
+        { document: GroupSoupDocument, variables: { input } },
+      ])
+    );
+    const readQuery = vi.fn(async () => ({
+      kind: 'hit' as const,
+      data: {
+        user: {
+          groupSoup: {
+            bins: [
+              {
+                key: 'low',
+                totalCount: 2,
+                nextCursor: null,
+                items: ['task-1', 'task-2'].map((id) => ({
+                  __typename: 'GraphqlSoupDocument',
+                  id,
+                })),
+              },
+            ],
+          },
+        },
+      },
+    }));
+    const inspect = vi.fn(async () => {
+      throw new Error('query inspection variant count 129 exceeds limit 128');
+    });
+    graphqlClientState.host = {
+      ...graphqlClientState.host,
+      readQuery,
+      inspectQuery: inspect,
+      inspectQueryVariants: inspect,
+    } as unknown as CacheHost;
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        _variables: unknown,
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: async () => {
+          (context.normalizedCacheOptimisticEnqueued as () => void)();
+          return {
+            operation: { kind: 'mutation', context },
+            data: { setEntityProperty: { id: 'assignment' } },
+            stale: false,
+            hasNext: false,
+          };
+        },
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    const save = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return createGraphqlBulkSaveEntityPropertiesMutation();
+    });
+    await save.mutateAsync({
+      properties: ['task-1', 'task-2'].map((entityId) => ({
+        entityId,
+        entityType: 'TASK',
+        property: {
+          propertyId: `assignment-${entityId}`,
+          propertyDefinitionId: 'priority',
+          displayName: 'Priority',
+          valueType: 'SELECT_STRING',
+          value: ['low'],
+          isMultiSelect: false,
+        } as Property,
+        apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
+      })),
+    });
+    expect(inspect).not.toHaveBeenCalled();
+    expect(readQuery).toHaveBeenCalledOnce();
+    expect(mutation).toHaveBeenCalledTimes(2);
+    for (const [index, call] of mutation.mock.calls.entries()) {
+      expect(call[2]).toMatchObject({
+        normalizedCacheOptimistic: {
+          linkPatches: [
+            {
+              operation: {
+                kind: 'removeEmbeddedLink',
+                entityKey: `GraphqlSoupDocument:task-${index + 1}`,
+              },
+            },
+            {
+              operation: {
+                kind: 'upsertEmbeddedLink',
+                entityKey: `GraphqlSoupDocument:task-${index + 1}`,
+              },
+            },
+          ],
+          revalidations: [
+            {
+              operationName: 'GroupSoupMembership',
+              variablesJson: JSON.stringify({ input }),
+            },
+          ],
+        },
+      });
+    }
+  });
+
   it.each(['committed', 'permanently-failed'] as const)(
     'waits for later queued saves and reports their %s settlement',
     async (status) => {
@@ -563,16 +686,13 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
     }
   );
 
-  it('links a task-grid placeholder when saving unset priority', async () => {
+  it('links an unset task property even when global Soup inspection exceeds its budget', async () => {
     makeSettlementHost();
     graphqlClientState.host = {
       ...graphqlClientState.host,
-      inspectQuery: vi.fn(async () => [
-        {
-          variables: { input: { initial: { limit: 20 } } },
-          value: { items: [{ id: 'task-1' }] },
-        },
-      ]),
+      inspectQuery: vi.fn(async () => {
+        throw new Error('query inspection variant count 129 exceeds limit 128');
+      }),
       inspectQueryVariants: vi.fn(async () => []),
     } as unknown as CacheHost;
     const mutation = vi.fn(
@@ -626,8 +746,21 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
                 },
               }),
             },
+            revalidations: [
+              expect.objectContaining({
+                operationName: 'EntityProperties',
+                variablesJson: JSON.stringify({
+                  input: buildEntityPropertiesInput('TASK', 'task-1'),
+                }),
+              }),
+            ],
             linkPatches: [
               expect.objectContaining({
+                recordRoot: {
+                  fragmentName: 'PropertyAssignmentParent',
+                  entityKey: 'GraphqlSoupDocument:task-1',
+                },
+                path: [{ field: 'properties' }],
                 operation: {
                   kind: 'upsertByField',
                   entityKey:
@@ -640,6 +773,7 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
           }),
         })
       );
+      expect(graphqlClientState.host.inspectQuery).not.toHaveBeenCalled();
     } finally {
       graphqlClientState.host = undefined;
     }
@@ -848,6 +982,7 @@ describe('createGraphqlEntityPropertiesQuery', () => {
         is_multi_select: false,
         is_system: false,
         is_metadata: false,
+        specific_entity_type: null,
         owner: { scope: 'system' },
         created_at: '',
         updated_at: '',
