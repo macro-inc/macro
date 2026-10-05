@@ -1,18 +1,24 @@
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AgentChangesProvider,
   ChangesHandoff,
   ChangesToggle,
 } from './agent-changes';
+import { useAgentChanges } from './context/agent-changes-controller';
 import {
   createMockAgentChangesContext,
   mockChangeset,
 } from './tests/mock-context';
 
 const [session, setSession] = createSignal<AgentSessionResponse>();
+const [stats, setStats] = createSignal<{
+  title?: string;
+  counts?: { additions: number; deletions: number };
+}>();
+beforeEach(() => setStats(undefined));
 /** Every session id the changes source was asked to read, in order. */
 const sourceSessionIds: Array<string | undefined> = [];
 
@@ -42,7 +48,7 @@ vi.mock('./queries/session-changes', () => ({
 }));
 
 vi.mock('./queries/pull-request-stats', () => ({
-  createPullRequestStatsSource: () => () => undefined,
+  createPullRequestStatsSource: () => stats,
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -57,7 +63,44 @@ function sessionWith(fields: {
   return fields as unknown as AgentSessionResponse;
 }
 
+function ChangesHostMetadata() {
+  const { context, changeCounts } = useAgentChanges();
+  return (
+    <>
+      <span aria-label="PR title">{context.host.pullRequestTitle?.()}</span>
+      <span aria-label="PR additions">{changeCounts()?.additions}</span>
+    </>
+  );
+}
 describe('AgentChangesProvider', () => {
+  it('shares the existing PR query title and counts through host capabilities', () => {
+    setSession(
+      sessionWith({
+        harness: 'cursor',
+        pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
+      })
+    );
+    setStats({
+      title: 'Linked PR title',
+      counts: { additions: 8, deletions: 2 },
+    });
+    render(() => (
+      <AgentChangesProvider>
+        <ChangesHostMetadata />
+      </AgentChangesProvider>
+    ));
+    expect(screen.getByLabelText('PR title').textContent).toBe(
+      'Linked PR title'
+    );
+    expect(screen.getByLabelText('PR additions').textContent).toBe('8');
+    setStats({ title: 'Updated PR title' });
+    expect(screen.getByLabelText('PR title').textContent).toBe(
+      'Updated PR title'
+    );
+    expect(screen.getByLabelText('PR additions').textContent).toBe('');
+    setStats(undefined);
+    expect(screen.getByLabelText('PR title').textContent).toBe('');
+  });
   it('hides the Changes controls until the coding session links a pull request', () => {
     setSession(sessionWith({ harness: 'cursor', pullRequestUrl: null }));
     sourceSessionIds.length = 0;

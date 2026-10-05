@@ -22,10 +22,14 @@ beforeEach(() => vi.clearAllMocks());
 describe('GitHub PR statistics', () => {
   it('requests the linked PR and returns GitHub totals unchanged', async () => {
     enrich.mockResolvedValue(
-      ok({ pullRequests: [{ ...reference, additions: 728, deletions: 193 }] })
+      ok({
+        pullRequests: [
+          { ...reference, name: 'PR title', additions: 728, deletions: 193 },
+        ],
+      })
     );
     expect(await pullRequestStatsQueryOptions(reference.url).queryFn()).toEqual(
-      { additions: 728, deletions: 193 }
+      { title: 'PR title', counts: { additions: 728, deletions: 193 } }
     );
     expect(enrich).toHaveBeenCalledWith({ pullRequests: [reference] });
   });
@@ -35,15 +39,15 @@ describe('GitHub PR statistics', () => {
       ok({ pullRequests: [{ ...reference, additions: 0, deletions: 0 }] })
     );
     expect(await pullRequestStatsQueryOptions(reference.url).queryFn()).toEqual(
-      { additions: 0, deletions: 0 }
+      { title: undefined, counts: { additions: 0, deletions: 0 } }
     );
   });
 
   it('treats missing enrichment as unavailable rather than zero', async () => {
     enrich.mockResolvedValue(ok({ pullRequests: [reference] }));
-    expect(
-      await pullRequestStatsQueryOptions(reference.url).queryFn()
-    ).toBeNull();
+    expect(await pullRequestStatsQueryOptions(reference.url).queryFn()).toEqual(
+      { title: undefined, counts: undefined }
+    );
   });
 
   it('does not substitute another PR or partial counts', async () => {
@@ -65,11 +69,23 @@ describe('GitHub PR statistics', () => {
     enrich.mockResolvedValue(
       ok({ pullRequests: [{ ...reference, additions: 8, deletions: null }] })
     );
-    expect(
-      await pullRequestStatsQueryOptions(reference.url).queryFn()
-    ).toBeNull();
+    expect(await pullRequestStatsQueryOptions(reference.url).queryFn()).toEqual(
+      { title: undefined, counts: undefined }
+    );
   });
 
+  it('preserves the PR title when GitHub totals are unavailable', async () => {
+    enrich.mockResolvedValue(
+      ok({ pullRequests: [{ ...reference, name: 'PR title' }] })
+    );
+    expect(await pullRequestStatsQueryOptions(reference.url).queryFn()).toEqual(
+      {
+        title: 'PR title',
+        counts: undefined,
+      }
+    );
+    expect(enrich).toHaveBeenCalledTimes(1);
+  });
   it('does not request statistics without a PR', async () => {
     for (const url of [undefined, 'not a PR']) {
       const query = pullRequestStatsQueryOptions(url);

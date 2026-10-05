@@ -36,9 +36,15 @@ export function pullRequestStatsQueryOptions(
         })
       );
       const pr = response.pullRequests.find((pr) => pr.githubKey === githubKey);
-      // Enrichment can return a bare reference when GitHub is unavailable.
-      if (pr?.additions == null || pr.deletions == null) return null;
-      return { additions: pr.additions, deletions: pr.deletions };
+      if (!pr) return null;
+      // A title can be known even when GitHub totals are unavailable.
+      return {
+        title: pr.name ?? undefined,
+        counts:
+          pr.additions != null && pr.deletions != null
+            ? { additions: pr.additions, deletions: pr.deletions }
+            : undefined,
+      };
     },
     staleTime: 30_000,
     refetchInterval: 30_000,

@@ -17,6 +17,9 @@ export const DEFAULT_CHANGES_SHARE = 58;
 export const MIN_CHANGES_SHARE = 22;
 export const MAX_CHANGES_SHARE = 74;
 
+/** Minimum room for the conversation and Changes pane side by side. */
+export const CHANGES_NARROW_WIDTH = 720;
+
 export function isChangesVisible(layout: PaneLayout): boolean {
   return layout !== 'closed';
 }

@@ -1,5 +1,5 @@
 /**
- * The pieces the session pane itself shows: the header toggle, the
+ * The pieces the session pane itself shows: the header opener, the
  * "changes ready" hand-off card, and the queued-notes chip by the composer.
  * Each renders nothing until a host has mounted the controller, and nothing
  * at all while the host reports it can never have changes (a chat-only
@@ -15,18 +15,11 @@ import { useOptionalAgentChanges } from '../context/agent-changes-controller';
 export function ChangesToggle() {
   const controller = useOptionalAgentChanges();
   if (!controller) return null;
-  const { available, layout, model, context } = controller;
-  const counts = controller.changeCounts;
+  const { available, layout } = controller;
   return (
     <Show when={available()}>
       <ChangesToggleButton
         open={layout.changesVisible()}
-        additions={counts()?.additions ?? 0}
-        deletions={counts()?.deletions ?? 0}
-        capturing={
-          !context.host.pullRequestChangeCounts &&
-          model.state().kind === 'capturing'
-        }
         onToggle={layout.toggle}
       />
     </Show>
