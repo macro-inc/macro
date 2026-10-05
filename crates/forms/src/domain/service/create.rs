@@ -7,9 +7,10 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_event_broker::MacroEventBroker;
-use models_databases::{ColumnChange, ColumnKind, DatabaseOp, EntityKind, NewColumn, TableChange};
+use models_databases::{ColumnChange, ColumnKind, DatabaseOp, NewColumn, TableChange};
 
 use super::layout::{form_detail, question_columns};
+use super::managed::{respondent_kind, submitted_kind};
 use super::{
     FormsServiceImpl, database_error, internal_receipt, receipt_database_id, repository_error,
     validated_name,
@@ -29,17 +30,6 @@ const RESPONSES_TABLE: &str = "Responses";
 const SUBMITTED_COLUMN: &str = "Submitted";
 /// The person column each signed-in submission names its respondent in.
 const RESPONDENT_COLUMN: &str = "Respondent";
-
-fn submitted_kind() -> ColumnKind {
-    ColumnKind::Date
-}
-
-fn respondent_kind() -> ColumnKind {
-    ColumnKind::Entity {
-        target: EntityKind::User,
-        multi: false,
-    }
-}
 
 /// A column the form writes itself: one the table already has, reused, or
 /// one to create.

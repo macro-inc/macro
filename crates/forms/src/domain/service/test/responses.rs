@@ -516,3 +516,55 @@ async fn respondents_read_the_tally_only_when_the_owner_shows_it() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn rewriting_a_lost_row_skips_managed_columns_retyped_in_the_grid() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    let (response, _) = submitted(respond(&forms, VIEWER, answers(EMPLOYEE, None)).await);
+    {
+        let mut world = world.lock().unwrap();
+        let table = &mut world.database_mut(RSVP_DATABASE).tables[0];
+        table.rows.clear();
+        for column in &mut table.columns {
+            if column.id == SUBMITTED {
+                column.kind = ColumnKind::Number;
+            }
+            if column.id == RESPONDENT {
+                column.kind = ColumnKind::Entity {
+                    target: EntityKind::User,
+                    multi: true,
+                };
+            }
+        }
+        world.ledger[0].response.row = None;
+    }
+    let edited = forms
+        .edit_my_response(
+            form_receipt::<ViewAccessLevel>(RSVP_FORM, VIEWER, AccessLevel::View),
+            Submission {
+                answers: answers(EMPLOYEE, None),
+            },
+        )
+        .await
+        .unwrap();
+    let SubmissionOutcome::Submitted {
+        response: edited_response,
+        row,
+    } = edited
+    else {
+        panic!("saved, not {edited:?}");
+    };
+    assert_eq!(edited_response, response);
+    let world = world.lock().unwrap();
+    let cells = &world
+        .database(RSVP_DATABASE)
+        .table(RSVP_TABLE)
+        .unwrap()
+        .rows[0]
+        .1;
+    assert!(!cells.contains_key(&SUBMITTED));
+    assert!(!cells.contains_key(&RESPONDENT));
+    assert_eq!(world.ledger[0].response.row, Some(row));
+}

@@ -5,6 +5,7 @@ mod answers;
 mod create;
 mod layout;
 mod lifecycle;
+mod managed;
 mod responses;
 mod sharing;
 mod submit;

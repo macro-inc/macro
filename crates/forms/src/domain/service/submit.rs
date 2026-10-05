@@ -17,6 +17,7 @@ use models_databases::{
 
 use super::answers::{AnsweredQuestion, Evaluation, evaluate};
 use super::layout::{gates_fit_table, question_columns};
+use super::managed::{respondent_kind, submitted_kind, writable};
 use super::{
     FormsServiceImpl, database_error, internal_receipt, owner_of, receipt_form_id,
     receipt_respondent, repository_error,
@@ -37,9 +38,6 @@ fn insert_cells(
     respondent: &Respondent,
     submitted_at: DateTime<Utc>,
 ) -> Vec<CellWrite> {
-    let present = |column: Option<ColumnId>| {
-        column.filter(|column| table.columns.iter().any(|held| held.column.id == *column))
-    };
     let mut cells: Vec<CellWrite> = answered
         .iter()
         .filter_map(|question| {
@@ -49,15 +47,16 @@ fn insert_cells(
             })
         })
         .collect();
-    if let Some(column) = present(form.submitted_column_id) {
+    if let Some(column) = writable(table, form.submitted_column_id, submitted_kind()) {
         cells.push(CellWrite {
             column,
             value: CellValue::Date(submitted_at),
         });
     }
-    if let (Some(column), Respondent::Member(user)) =
-        (present(form.respondent_column_id), respondent)
-    {
+    if let (Some(column), Respondent::Member(user)) = (
+        writable(table, form.respondent_column_id, respondent_kind()),
+        respondent,
+    ) {
         cells.push(CellWrite {
             column,
             value: CellValue::Entities(vec![EntityRef {

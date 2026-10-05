@@ -686,3 +686,41 @@ async fn a_ledger_failure_after_the_row_is_written_surfaces_and_keeps_the_row() 
     assert!(world.ledger.is_empty());
     assert!(world.events.is_empty());
 }
+
+#[tokio::test]
+async fn managed_columns_retyped_in_the_grid_are_no_longer_written() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    for column in &mut world.lock().unwrap().database_mut(RSVP_DATABASE).tables[0].columns {
+        if column.id == SUBMITTED || column.id == RESPONDENT {
+            column.kind = ColumnKind::Text;
+        }
+    }
+    let outcome = submit_as(&service(&world), VIEWER, employee_answers())
+        .await
+        .unwrap();
+    let SubmissionOutcome::Submitted { row, .. } = outcome else {
+        panic!("saved, not {outcome:?}");
+    };
+    let world = world.lock().unwrap();
+    assert_eq!(
+        world
+            .database(RSVP_DATABASE)
+            .table(RSVP_TABLE)
+            .unwrap()
+            .rows,
+        vec![(
+            row,
+            BTreeMap::from([
+                (TEAM, CellValue::Options(vec![OptionRef::Id(EMPLOYEE)])),
+                (
+                    START_DATE,
+                    CellValue::Date(Utc.with_ymd_and_hms(2026, 8, 17, 0, 0, 0).unwrap())
+                ),
+            ])
+        )]
+    );
+    // The ledger still names the respondent and the row.
+    assert_eq!(world.ledger[0].respondent.as_deref(), Some(VIEWER));
+    assert_eq!(world.ledger[0].response.row, Some(row));
+}
