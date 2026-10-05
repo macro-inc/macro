@@ -1,6 +1,8 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
 import type { AppEvents } from '@app/lib/analytics/app-events';
+import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { CheckoutTerms } from '../core/checkout';
 import type { EmailAccount } from '../core/email-accounts';
 
 /** Data availability as a source reports it; primitives decide presentation. */
@@ -62,6 +64,9 @@ export type TeamDirectorySource = {
   retry(): void;
 };
 
+/** The promotion an invite link granted this account. */
+export type InviteOffer = GtmInviteOffer;
+
 export type CompletionResult = { t: 'completed' } | { t: 'failed' };
 
 type OnboardingEventName =
@@ -86,8 +91,13 @@ export type OnboardingContext = {
   /** Starts Google consent for another inbox; on web the page navigates away. */
   connectInbox(): Promise<void>;
   createToolCatalog(): ToolCatalogSource;
-  /** Slugs of connected tools; undefined until known. */
-  createConnectedTools(): Accessor<ReadonlySet<string> | undefined>;
+  /**
+   * Slugs of connected tools; undefined until known. `poll` keeps re-checking
+   * while the user may be connecting one.
+   */
+  createConnectedTools(options: {
+    poll: boolean;
+  }): Accessor<ReadonlySet<string> | undefined>;
   /** Resolves when the hosted connect flow closes; reports its own failures. */
   connectTool(tool: Tool): Promise<void>;
   createTeamDirectory(): TeamDirectorySource;
@@ -95,8 +105,10 @@ export type OnboardingContext = {
   createTeam(input: { name: string; invites: string[] }): Promise<void>;
   /** Rejects on failure; the capability reports its own errors. */
   joinTeam(inviteId: string): Promise<void>;
+  /** The invite promotion the account holds; null when it has none. */
+  createInviteOffer(): Accessor<Loadable<InviteOffer | null>>;
   /** The hosted checkout URL; rejects with a message fit to show. */
-  startCheckout(tier: PaidPlanTier): Promise<string>;
+  startCheckout(tier: PaidPlanTier, terms: CheckoutTerms): Promise<string>;
   /**
    * Marks onboarding and the tutorial done and confirms the server agrees.
    * `skipped` records that the user left without going through the steps.

@@ -4,6 +4,7 @@ import type {
   CompletionResult,
   OnboardingContext,
 } from '../context/onboarding-context';
+import type { CheckoutTerms } from '../core/checkout';
 import {
   afterOnboardingTarget,
   bypassTarget,
@@ -91,11 +92,14 @@ export function createFlowFinish(
    * Hand the page to Stripe WITHOUT completing the flow: both checkout legs
    * return to the plan step, which finishes only once payment is confirmed.
    */
-  const startPremiumCheckout = async (tier: PaidPlanTier) => {
+  const startPremiumCheckout = async (
+    tier: PaidPlanTier,
+    terms: CheckoutTerms = 'trial'
+  ) => {
     if (finishing()) return;
     setFinishing(true);
     try {
-      const url = await context.startCheckout(tier);
+      const url = await context.startCheckout(tier, terms);
       // Leave `finishing` set: the page is navigating away, and re-enabling
       // the buttons mid-unload invites a double checkout.
       options.onRedirect(url);

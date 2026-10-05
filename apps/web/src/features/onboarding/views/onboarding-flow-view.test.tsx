@@ -11,6 +11,7 @@ import {
   FAKE_VIEWER_ID,
   type FakeOnboardingWorld,
 } from '../tests/fake-onboarding-context';
+import { renderInviteOfferStub } from '../tests/invite-offer-stub';
 import {
   renderWithFakeOnboarding,
   stubOnboardingBrowser,
@@ -47,6 +48,7 @@ function setup(
         onNavigate={navigate}
         onRedirect={redirect}
         onSignedOut={signedOut}
+        renderInviteOffer={renderInviteOfferStub}
       />
     ),
     options.world

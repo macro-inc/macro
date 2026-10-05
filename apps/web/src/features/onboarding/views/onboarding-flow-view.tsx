@@ -20,7 +20,7 @@ import {
 import { createFlowFinish } from '../primitives/flow-finish';
 import { createOnboardingFlow } from '../primitives/onboarding-flow';
 import { EmailStep } from './email-step';
-import { PlanStep } from './plan-step';
+import { type InviteOfferSlot, PlanStep } from './plan-step';
 import { StoryStageView } from './story-stage-view';
 import { TeamStep } from './team-step';
 import { ToolsStep } from './tools-step';
@@ -46,10 +46,13 @@ export function OnboardingFlowView(props: {
   /** Leaves the app for hosted checkout. */
   onRedirect: (url: string) => void;
   onSignedOut: () => void;
+  /** Shown instead of the trial to an account holding an invite promotion. */
+  renderInviteOffer: InviteOfferSlot;
 }) {
   const context = useOnboardingContext();
   const emailAccounts = context.createEmailAccounts();
-  const connectedTools = context.createConnectedTools();
+  // Read once for the completion rollup; only the tools step polls.
+  const connectedTools = context.createConnectedTools({ poll: false });
   const record = context.createOnboardingRecord();
 
   const finish = createFlowFinish(context, {
@@ -182,7 +185,11 @@ export function OnboardingFlowView(props: {
             <PlanStep
               checkoutReturn={props.checkoutReturn}
               finishing={finish.finishing()}
-              onStartCheckout={(tier) => void finish.startPremiumCheckout(tier)}
+              onStartCheckout={(tier, terms) =>
+                void finish.startPremiumCheckout(tier, terms)
+              }
+              onContinueFree={() => void finish.finishFree()}
+              renderInviteOffer={props.renderInviteOffer}
               onPremiumPaid={finish.finishPremium}
             />
           </Match>

@@ -5,6 +5,13 @@ export type CheckoutReturn =
   | { t: 'success'; tier: PaidPlanTier }
   | { t: 'cancelled' };
 
+/**
+ * What the checkout grants: the automatic first-subscription trial, or the
+ * promotion an invite link redeemed (which the server applies, and which a
+ * trial would replace).
+ */
+export type CheckoutTerms = 'trial' | 'invite-offer';
+
 export type OnboardingCheckoutRequest = {
   successUrl: string;
   cancelUrl: string;
@@ -20,13 +27,14 @@ export type OnboardingCheckoutRequest = {
  */
 export function onboardingCheckoutRequest(
   onboardingUrl: string,
-  tier: PaidPlanTier
+  tier: PaidPlanTier,
+  terms: CheckoutTerms
 ): OnboardingCheckoutRequest {
   return {
     successUrl: `${onboardingUrl}?subscriptionSuccess=true&type=${tier}`,
     cancelUrl: `${onboardingUrl}?subscriptionCancel=true`,
     plan: tier,
-    onboardingTrial: tier === 'premium',
+    onboardingTrial: terms === 'trial' && tier === 'premium',
   };
 }
 

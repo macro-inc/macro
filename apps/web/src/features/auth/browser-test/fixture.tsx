@@ -5,6 +5,7 @@ import { unwrap } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { OnboardingProvider } from '../../onboarding/context/onboarding-context';
 import { createFakeOnboarding } from '../../onboarding/tests/fake-onboarding-context';
+import { renderInviteOfferStub } from '../../onboarding/tests/invite-offer-stub';
 import { OnboardingFlowView } from '../../onboarding/views/onboarding-flow-view';
 import { SignupJourneyView } from '../../onboarding/views/signup-journey-view';
 import { AuthProvider, type AuthUser } from '../context/auth-context';
@@ -109,6 +110,7 @@ function SignedIn(props: { user: AuthUser }) {
           onNavigate={land}
           onRedirect={(url) => location.assign(url)}
           onSignedOut={() => land('/login')}
+          renderInviteOffer={renderInviteOfferStub}
         />
       </OnboardingProvider>
     </Show>

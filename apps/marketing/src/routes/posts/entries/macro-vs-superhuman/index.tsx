@@ -45,7 +45,7 @@ const comparisonRows: ComparisonRow[] = [
   {
     feature: 'No-cost access',
     macro:
-      'Full workspace access for personal use, with limits on storage and AI',
+      'Free Guest access to a workspace, with limits on storage and AI',
     them: "Covers Grammarly, Docs, and Go — Mail isn't included until Business",
   },
   {

@@ -10,6 +10,7 @@ import {
   defaultFakeWorld,
   type FakeOnboardingWorld,
 } from '../tests/fake-onboarding-context';
+import { renderInviteOfferStub } from '../tests/invite-offer-stub';
 import { OnboardingFlowView } from '../views/onboarding-flow-view';
 import { SignupJourneyView } from '../views/signup-journey-view';
 import { FIXTURE_KEYS, type FixtureLanding } from './fixture-keys';
@@ -114,6 +115,7 @@ function Fixture() {
             onNavigate={(target) => land({ t: 'app', target })}
             onRedirect={(url) => location.assign(url)}
             onSignedOut={() => land({ t: 'signed-out' })}
+            renderInviteOffer={renderInviteOfferStub}
           />
         </Match>
       </Switch>

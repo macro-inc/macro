@@ -2,6 +2,7 @@ import type { PaidPlanTier } from '@app/features/paywall/plans';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
+  InviteOffer,
   Loadable,
   OnboardingContext,
   OnboardingRecord,
@@ -30,6 +31,7 @@ export type FakeOnboardingWorld = {
   catalog: Tool[];
   connectedTools: string[];
   githubStars: number | undefined;
+  inviteOffer: InviteOffer | null;
   /** License refreshes left before the Stripe webhook lands; undefined when none is pending. */
   webhookPollsRemaining: number | undefined;
   /** How many refreshes a checkout's webhook takes to land. */
@@ -73,6 +75,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     ),
     connectedTools: [],
     githubStars: 12_345,
+    inviteOffer: null,
     webhookPollsRemaining: undefined,
     webhookDelayPolls: 1,
     accent: undefined,
@@ -205,8 +208,9 @@ export function createFakeOnboarding(
         if (invite) draft.teams = [{ name: `${invite.invitedBy}'s team` }];
       });
     },
-    startCheckout: async (tier) => {
-      call(`startCheckout:${tier}`);
+    createInviteOffer: () => () => ({ t: 'ready', value: world.inviteOffer }),
+    startCheckout: async (tier, terms) => {
+      call(`startCheckout:${tier}:${terms}`);
       fail('checkout');
       update((draft) => {
         draft.webhookPollsRemaining = draft.webhookDelayPolls;

@@ -159,6 +159,33 @@ test('an ineligible trial explains itself instead of charging', async ({
   await expect(page).not.toHaveURL(/subscription/);
 });
 
+test('an invite’s free months replace the trial and keep its promotion', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow', {
+    inviteOffer: {
+      firstName: 'Ada',
+      freeMonths: 3,
+      linkId: 'link-1',
+      promoCode: 'ADA3',
+      redeemedAt: '2026-10-01T00:00:00Z',
+    },
+  });
+  await page.evaluate(() => {
+    sessionStorage.setItem(
+      'onboarding-flow-step',
+      JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
+    );
+  });
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Start 30 day trial' })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Claim your free months' }).click();
+  await expectLanded(page, 'Entered Macro at /getting-started');
+  expect((await fakeWorld(page)).viewer?.licensed).toBe(true);
+});
+
 test('an existing team member just confirms and moves on', async ({ page }) => {
   await openFixture(page, '/?view=flow', { teams: [{ name: 'Acme' }] });
   await page.evaluate(() => {

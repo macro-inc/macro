@@ -36,7 +36,7 @@ const comparisonRows: ComparisonRow[] = [
   },
   {
     feature: 'No-cost access',
-    macro: 'Full workspace for personal use, with storage and AI limits',
+    macro: 'Free Guest access to a workspace, with storage and AI limits',
     them: 'Free with storage capped at 60MB and limited AI',
   },
   {

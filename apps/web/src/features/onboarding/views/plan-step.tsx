@@ -1,25 +1,48 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
-import { Show } from 'solid-js';
+import { type Accessor, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ContinueButton } from '../components/controls';
-import { useOnboardingContext } from '../context/onboarding-context';
-import type { CheckoutReturn } from '../core/checkout';
+import {
+  type InviteOffer,
+  useOnboardingContext,
+} from '../context/onboarding-context';
+import type { CheckoutReturn, CheckoutTerms } from '../core/checkout';
 import { createPlanConfirmation } from '../primitives/plan-confirmation';
+
+/** The host's panel for an invite promotion, shown in place of the trial offer. */
+export type InviteOfferSlot = (
+  offer: InviteOffer,
+  actions: {
+    finishing: Accessor<boolean>;
+    onClaim: () => void;
+    onContinueFree: () => void;
+  }
+) => JSX.Element;
 
 /** Stripe owns payment details. Verify the webhook-updated license before leaving setup. */
 export function PlanStep(props: {
   checkoutReturn: CheckoutReturn | undefined;
   finishing: boolean;
-  onStartCheckout: (tier: PaidPlanTier) => void;
+  onStartCheckout: (tier: PaidPlanTier, terms: CheckoutTerms) => void;
   onPremiumPaid: (tier: PaidPlanTier) => Promise<void>;
+  onContinueFree: () => void;
+  renderInviteOffer: InviteOfferSlot;
 }) {
   const context = useOnboardingContext();
   const plan = createPlanConfirmation(context, {
     checkoutReturn: props.checkoutReturn,
     onConfirmed: props.onPremiumPaid,
   });
+  const offer = context.createInviteOffer();
+  // An invite's free months beat the trial, which would replace them.
+  const inviteOffer = () => {
+    const state = offer();
+    return plan.state().t === 'offer' && state.t === 'ready'
+      ? state.value
+      : null;
+  };
 
-  return (
+  const trialOffer = () => (
     <section class="mx-auto flex w-full max-w-lg flex-col py-2 sm:py-4">
       <header class="text-center">
         <h1
@@ -30,7 +53,7 @@ export function PlanStep(props: {
         </h1>
         <p class="mx-auto mt-6 max-w-[400px] text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
           Every feature, every AI model and 1 TB of storage. Your first 30 days
-          on us then $40/user month.
+          are on us, then $40/user/month.
         </p>
       </header>
       <Show
@@ -55,10 +78,15 @@ export function PlanStep(props: {
                   ? 'Continue to workspace'
                   : 'Start 30 day trial'
             )}
-          disabled={plan.state().t === 'confirming' || props.finishing}
+          // Until the invite lookup settles, starting a trial could skip it.
+          disabled={
+            plan.state().t === 'confirming' ||
+            props.finishing ||
+            (plan.state().t === 'offer' && offer().t === 'loading')
+          }
           onClick={() =>
             plan.state().t === 'offer'
-              ? props.onStartCheckout('premium')
+              ? props.onStartCheckout('premium', 'trial')
               : void plan.confirm()
           }
         />
@@ -70,5 +98,17 @@ export function PlanStep(props: {
         </p>
       </Show>
     </section>
+  );
+
+  return (
+    <Show when={inviteOffer()} keyed fallback={trialOffer()}>
+      {(invite) =>
+        props.renderInviteOffer(invite, {
+          finishing: () => props.finishing,
+          onClaim: () => props.onStartCheckout('premium', 'invite-offer'),
+          onContinueFree: props.onContinueFree,
+        })
+      }
+    </Show>
   );
 }

@@ -1,3 +1,4 @@
+import { InviteOfferPanel } from '@app/features/gtm-invite/InviteOfferPanel';
 import { useImportQuery } from '@queries/import';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
@@ -30,6 +31,14 @@ export function Onboarding() {
           window.location.href = url;
         }}
         onSignedOut={() => navigate('/login', { replace: true })}
+        renderInviteOffer={(offer, actions) => (
+          <InviteOfferPanel
+            offer={offer}
+            finishing={actions.finishing()}
+            onStartCheckout={actions.onClaim}
+            onContinueFree={actions.onContinueFree}
+          />
+        )}
       />
     </OnboardingProvider>
   );

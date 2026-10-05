@@ -2,6 +2,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CheckoutReturn } from '../core/checkout';
 import type { FakeOnboardingWorld } from '../tests/fake-onboarding-context';
+import { renderInviteOfferStub } from '../tests/invite-offer-stub';
 import { renderWithFakeOnboarding } from '../tests/render';
 import { PlanStep } from './plan-step';
 
@@ -13,6 +14,7 @@ function setup(
 ) {
   const checkout = vi.fn();
   const finish = vi.fn().mockResolvedValue(undefined);
+  const guest = vi.fn();
   const { fake } = renderWithFakeOnboarding(
     () => (
       <PlanStep
@@ -20,11 +22,13 @@ function setup(
         finishing={false}
         onStartCheckout={checkout}
         onPremiumPaid={finish}
+        onContinueFree={guest}
+        renderInviteOffer={renderInviteOfferStub}
       />
     ),
     world
   );
-  return { checkout, finish, fake };
+  return { checkout, finish, guest, fake };
 }
 
 describe('live trial checkout', () => {
@@ -32,7 +36,7 @@ describe('live trial checkout', () => {
     const { checkout, finish } = setup(undefined);
     expect(screen.queryByRole('textbox')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Start 30 day trial' }));
-    expect(checkout).toHaveBeenCalledWith('premium');
+    expect(checkout).toHaveBeenCalledWith('premium', 'trial');
     expect(finish).not.toHaveBeenCalled();
   });
 
@@ -91,5 +95,28 @@ describe('live trial checkout', () => {
     });
     await waitFor(() => expect(finish).toHaveBeenCalledWith('premium'));
     expect(checkout).not.toHaveBeenCalled();
+  });
+
+  it('offers an invite’s free months instead of the trial, with paid terms', () => {
+    const { checkout, guest } = setup(undefined, {
+      inviteOffer: {
+        firstName: 'Ada',
+        freeMonths: 3,
+        linkId: 'link-1',
+        promoCode: 'ADA3',
+        redeemedAt: '2026-10-01T00:00:00Z',
+      },
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Start 30 day trial' })
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Claim your free months' })
+    );
+    expect(checkout).toHaveBeenCalledWith('premium', 'invite-offer');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue as Guest instead' })
+    );
+    expect(guest).toHaveBeenCalledOnce();
   });
 });

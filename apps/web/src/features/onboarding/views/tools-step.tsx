@@ -8,7 +8,7 @@ import { type Tool, useOnboardingContext } from '../context/onboarding-context';
 export function ToolsStep(props: { onContinue: () => void }) {
   const context = useOnboardingContext();
   const catalog = context.createToolCatalog();
-  const connected = context.createConnectedTools();
+  const connected = context.createConnectedTools({ poll: true });
   const [busy, setBusy] = createSignal<string>();
 
   const connect = async (tool: Tool) => {

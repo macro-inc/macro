@@ -5,7 +5,7 @@ const ONBOARDING = 'https://macro.com/app/onboarding';
 
 describe('onboardingCheckoutRequest', () => {
   it('returns both checkout legs to the onboarding flow with the plan', () => {
-    expect(onboardingCheckoutRequest(ONBOARDING, 'premium')).toEqual({
+    expect(onboardingCheckoutRequest(ONBOARDING, 'premium', 'trial')).toEqual({
       successUrl: `${ONBOARDING}?subscriptionSuccess=true&type=premium`,
       cancelUrl: `${ONBOARDING}?subscriptionCancel=true`,
       plan: 'premium',
@@ -14,12 +14,21 @@ describe('onboardingCheckoutRequest', () => {
   });
 
   it('requests the trial only for Premium', () => {
-    const request = onboardingCheckoutRequest(ONBOARDING, 'max');
+    const request = onboardingCheckoutRequest(ONBOARDING, 'max', 'trial');
     expect(request.plan).toBe('max');
     expect(request.onboardingTrial).toBe(false);
     expect(request.successUrl).toBe(
       `${ONBOARDING}?subscriptionSuccess=true&type=max`
     );
+  });
+});
+
+describe('invite offers', () => {
+  it('check out with paid terms so the server applies the invite promotion', () => {
+    expect(
+      onboardingCheckoutRequest(ONBOARDING, 'premium', 'invite-offer')
+        .onboardingTrial
+    ).toBe(false);
   });
 });
 
@@ -41,7 +50,7 @@ describe('parseCheckoutReturn', () => {
   });
 
   it('round-trips the legs the request builds', () => {
-    const request = onboardingCheckoutRequest(ONBOARDING, 'max');
+    const request = onboardingCheckoutRequest(ONBOARDING, 'max', 'trial');
     const leg = (url: string) =>
       Object.fromEntries(new URL(url).searchParams.entries());
     expect(parseCheckoutReturn(leg(request.successUrl))).toEqual({

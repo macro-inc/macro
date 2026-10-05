@@ -16,6 +16,7 @@ import { queryClient } from '@queries/client';
 import { useContactsQuery } from '@queries/contacts/contacts';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { useGithubStarsQuery } from '@queries/github-stars';
+import { useGtmInviteOfferQuery } from '@queries/gtm-invite/links';
 import {
   useCompleteOnboardingMutation,
   useOnboardingQuery,
@@ -157,9 +158,9 @@ export function createAppOnboardingContext(): OnboardingContext {
         retry: () => void catalog.query.refetch(),
       };
     },
-    createConnectedTools: () => {
+    createConnectedTools: ({ poll }) => {
       const connected = usePipedreamConnectedSlugs({
-        refetchInterval: CONNECTED_TOOLS_POLL_MS,
+        refetchInterval: poll ? CONNECTED_TOOLS_POLL_MS : undefined,
       });
       return () => (connected.ready() ? connected.slugs() : undefined);
     },
@@ -200,11 +201,16 @@ export function createAppOnboardingContext(): OnboardingContext {
       await joinTeam.mutateAsync({ teamInviteId: inviteId });
     },
 
-    startCheckout: (tier) =>
+    createInviteOffer: () => {
+      const query = useGtmInviteOfferQuery({ enabled: needsOnboarding });
+      return () => loadable(query, (offer) => offer ?? null);
+    },
+    startCheckout: (tier, terms) =>
       checkout.mutateAsync(
         onboardingCheckoutRequest(
           `${window.location.origin}${ROUTER_BASE_CONCAT}onboarding`,
-          tier
+          tier,
+          terms
         )
       ),
     completeOnboarding: async ({ skipped }) => {
