@@ -163,7 +163,8 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   fig: new Set([]),
   ai: new Set([]),
   database: new Set([]),
-  form: new Set([]),
+  // A form card fills in place inside messages and documents (RFC 03 §1).
+  form: new Set(['md', 'channel']),
   chat: new Set([]),
   pdf: new Set(['md']),
   write: new Set([]),

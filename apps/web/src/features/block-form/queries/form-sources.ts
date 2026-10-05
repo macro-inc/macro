@@ -10,6 +10,7 @@ import {
   useFormInvitedCount,
   useMyResponseQuery,
   useResponseSummaryQuery,
+  useTallyQuery,
 } from '@queries/storage/forms';
 import {
   useFormChangedSync,
@@ -31,6 +32,7 @@ import type {
   FormTableSource,
   FormWriteFailure,
   MyResponseSource,
+  QuestionTally,
   ReadSource,
   SubmitOutcome,
 } from '../context/form-context';
@@ -270,6 +272,38 @@ export function createSummarySource(
             })),
             rows: query.data.rows,
           }
+        : undefined,
+    failure: () => (query.isError ? loadFailureOf(query.error) : undefined),
+  };
+}
+
+export function createTallySource(
+  formId: Accessor<string>,
+  enabled: Accessor<boolean>
+): ReadSource<QuestionTally[]> {
+  const query = useTallyQuery(() => formId() || undefined, enabled);
+  return {
+    value: () =>
+      query.isSuccess
+        ? query.data.questions.map((question) => ({
+            questionId: question.question,
+            responses: question.responses,
+            buckets: question.buckets.map((bucket) =>
+              match(bucket.value)
+                .returnType<QuestionTally['buckets'][number]>()
+                .with({ kind: 'option' }, ({ option }) => ({
+                  kind: 'option',
+                  optionId: option,
+                  count: bucket.count,
+                }))
+                .with({ kind: 'checkbox' }, ({ checked }) => ({
+                  kind: 'checkbox',
+                  checked,
+                  count: bucket.count,
+                }))
+                .exhaustive()
+            ),
+          }))
         : undefined,
     failure: () => (query.isError ? loadFailureOf(query.error) : undefined),
   };

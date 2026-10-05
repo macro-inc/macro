@@ -142,6 +142,15 @@ export type MyResponseSource = {
   refetch: () => Promise<void>;
 };
 
+export type QuestionTally = {
+  questionId: string;
+  responses: number;
+  buckets: (
+    | { kind: 'option'; optionId: string; count: number }
+    | { kind: 'checkbox'; checked: boolean; count: number }
+  )[];
+};
+
 export type ReadSource<Value> = {
   value: Accessor<Value | undefined>;
   failure: Accessor<FormLoadFailure | undefined>;
@@ -231,6 +240,10 @@ export type FormContext = {
       formId: Accessor<string>,
       enabled: Accessor<boolean>
     ) => ReadSource<ResponseCounts>;
+    createTally: (
+      formId: Accessor<string>,
+      enabled: Accessor<boolean>
+    ) => ReadSource<QuestionTally[]>;
     /** People in the channels a form was posted to, its owner excluded. */
     createInvited: (
       formId: Accessor<string>,

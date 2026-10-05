@@ -317,8 +317,10 @@ function $deleteSelectedMentions(sourceDocumentId?: string) {
 
 const getDocumentMentionItemType = (
   node: DocumentMentionNode
-): ItemMention['itemType'] => {
-  const blockName = node.__blockName;
+): ItemMention['itemType'] => blockItemType(node.__blockName);
+
+/** The item a document mention or card of `blockName` references. */
+const blockItemType = (blockName: string): ItemMention['itemType'] => {
   const itemType = blockNameToItemType(verifyBlockName(blockName));
   return match<ItemType, ItemMention['itemType']>(itemType)
     .with('email', () => 'thread')
@@ -401,6 +403,34 @@ function registerMentionsPlugin(
   }
 
   return mergeRegister(
+    // A form's card references the form exactly as its mention did;
+    // converting one to the other removes one reference and creates the other.
+    editor.registerMutationListener(
+      DocumentCardNode,
+      (mutatedNodes, { prevEditorState }) => {
+        for (const [nodeKey, mutation] of mutatedNodes) {
+          if (mutation === 'updated') continue;
+          const node = nodeByKey(
+            mutation === 'destroyed'
+              ? prevEditorState
+              : editor.getEditorState(),
+            nodeKey
+          );
+          // Only a form's card is a reference here (RFC 03); other cards'
+          // sharing stays as it was.
+          if (!(node instanceof DocumentCardNode)) continue;
+          if (node.getBlockName() !== 'form') continue;
+          const card = {
+            itemType: blockItemType(node.getBlockName()),
+            itemId: node.getDocumentId(),
+            documentName: node.getDocumentName(),
+          };
+          if (mutation === 'created') onCreateMention?.(card);
+          else
+            onRemoveMention?.({ itemType: card.itemType, itemId: card.itemId });
+        }
+      }
+    ),
     editor.registerCommand(
       INSERT_DOCUMENT_MENTION_COMMAND,
       (payload) => {

@@ -60,6 +60,7 @@ import {
   TaskPropertiesPreviewProvider,
 } from '../../../TaskPropertiesPreview';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { useMarkdownHost } from '../../context/MarkdownHostContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
@@ -93,7 +94,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const selection = () => wrapper?.selection;
   const portalMount = isInBlock() ? blockElementSignal.get : () => undefined;
 
-  const currentBlockName = useMaybeBlockName();
+  // Outside the legacy block system the markdown's host names the parent.
+  const currentBlockName = useMaybeBlockName() ?? useMarkdownHost();
 
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
@@ -133,6 +135,9 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   };
 
   const [dropdownOpen, setDropdownOpen] = createSignal(false);
+  // Without an editor (a sent message) the card can't change the message;
+  // it collapses here instead, for this viewer only.
+  const [collapsed, setCollapsed] = createSignal(false);
   const [, setContainerRef] = createSignal<HTMLDivElement>();
 
   const resizePreview = (height: string) => {
@@ -192,6 +197,9 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   // Cached previews outlive individual Lexical decorator instances, so attach
   // them to the editor lifecycle rather than the decorator lifecycle.
   const previewOwner = wrapper?.owner ?? getOwner();
+  const cardOwner = getOwner();
+  let disposeStaticPreview: (() => void) | undefined;
+  onCleanup(() => disposeStaticPreview?.());
 
   const registerPreviewElement = (
     nodeId: string,
@@ -223,13 +231,6 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
     if (!msgId && !shouldCreateBlockPreview) return;
 
-    const nodeId = editor()?.read(() => {
-      const node = $getNodeByKey(props.key);
-      if (!node) return;
-      return $getId(node);
-    });
-    if (!nodeId) return;
-
     let getElement: () => JSX.Element;
 
     if (shouldCreateBlockPreview) {
@@ -259,6 +260,25 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         </div>
       );
     }
+
+    const currentEditor = editor();
+    if (!currentEditor) {
+      // A static render (a sent message) has no editor to cache previews
+      // on: the card owns its preview and disposes it with itself.
+      const element = createRoot((dispose) => {
+        disposeStaticPreview = dispose;
+        return createMemo(getElement);
+      }, cardOwner);
+      setHasLoadedPreview(true);
+      setPreviewComponent(() => element);
+      return;
+    }
+    const nodeId = currentEditor.read(() => {
+      const node = $getNodeByKey(props.key);
+      if (!node) return;
+      return $getId(node);
+    });
+    if (!nodeId) return;
 
     const noDispose = registerPreviewElement(nodeId, getElement);
 
@@ -321,6 +341,10 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       });
     }
   });
+
+  // A form fits its content (a poll is a few rows); other previews keep a
+  // resizable box.
+  const resizable = () => isPreviewable() && props.blockName !== 'form';
 
   const [_, previewBoxHeight] = stringifyPreviewBox(
     props.previewBox || DEFAULT_PREVIEW_BOX
@@ -433,23 +457,39 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               </Dropdown.Trigger>
               <Dropdown.Content mount={portalMount()}>
                 <Dropdown.Group>
-                  <Dropdown.Item onSelect={convertToMention}>
-                    <Minimize class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">
-                      Convert to Inline Mention
-                    </span>
-                  </Dropdown.Item>
+                  <Show
+                    when={editor()}
+                    fallback={
+                      <Dropdown.Item
+                        onSelect={() => setCollapsed(!collapsed())}
+                      >
+                        <Minimize class="size-4 shrink-0" />
+                        <span class="flex-1 truncate">
+                          {collapsed() ? 'Expand' : 'Collapse'}
+                        </span>
+                      </Dropdown.Item>
+                    }
+                  >
+                    <Dropdown.Item onSelect={convertToMention}>
+                      <Minimize class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">
+                        Convert to Inline Mention
+                      </span>
+                    </Dropdown.Item>
+                  </Show>
                   <Dropdown.Item onSelect={handleCopy}>
                     <Clipboard class="size-4 shrink-0" />
                     <span class="flex-1 truncate">Copy Link</span>
                   </Dropdown.Item>
                 </Dropdown.Group>
-                <Dropdown.Group>
-                  <Dropdown.Item onSelect={deleteCard}>
-                    <TrashSimple class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">Delete</span>
-                  </Dropdown.Item>
-                </Dropdown.Group>
+                <Show when={editor()}>
+                  <Dropdown.Group>
+                    <Dropdown.Item onSelect={deleteCard}>
+                      <TrashSimple class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Delete</span>
+                    </Dropdown.Item>
+                  </Dropdown.Group>
+                </Show>
               </Dropdown.Content>
             </Dropdown>
           </Item.Actions>
@@ -472,10 +512,10 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         isSelectedAsNode() &&
           !channelMessageId() &&
           'border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] ring-2 ring-edge-muted',
-        isPreviewable() && 'resize-y shrink-0 min-h-80'
+        resizable() && 'resize-y shrink-0 min-h-80'
       )}
       style={{
-        height: isPreviewable() ? previewBoxHeight : 'auto',
+        height: resizable() ? previewBoxHeight : 'auto',
       }}
       onClick={(e) => {
         if (channelMessageId()) return;
@@ -522,11 +562,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                   </Suspense>
                 </Card.Body>
               </Show>
-              <Show when={previewComponent()}>
+              <Show when={!collapsed() && previewComponent()}>
                 <Card.Body
                   class={cn(
                     'mx-3 mt-2 mb-3 p-0',
-                    isPreviewable() && 'flex min-h-0 flex-1'
+                    resizable() && 'flex min-h-0 flex-1'
                   )}
                   data-document-card-controls
                 >
@@ -535,13 +575,13 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                     offset={1}
                     class={cn(
                       'w-full overflow-hidden rounded-lg',
-                      isPreviewable() && 'min-h-0 flex-1'
+                      resizable() && 'min-h-0 flex-1'
                     )}
                   >
                     <div
                       class={cn(
                         'relative min-w-0',
-                        isPreviewable() && 'min-h-0 flex-1 overflow-y-auto'
+                        resizable() && 'min-h-0 flex-1 overflow-y-auto'
                       )}
                     >
                       <Dynamic component={previewComponent()} {...props} />

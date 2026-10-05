@@ -112,6 +112,7 @@ export function createMockFormContext(options: {
         }),
         failure: () => undefined,
       }),
+      createTally: () => ({ value: () => [], failure: () => undefined }),
       createInvited: () => ({ value: () => null, failure: () => undefined }),
       exportCsv: () => okAsync(undefined),
     },

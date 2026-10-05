@@ -18,13 +18,14 @@ import {
   returnSplitToRecentListView,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { useBlockId } from '@core/block';
+import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
 import { getWebOrigin } from '@core/util/webOrigin';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
@@ -38,6 +39,7 @@ import { primaryAction } from './core/form-status';
 import { respondLink } from './core/respond-link';
 import { createAppFormContext } from './form-context-production';
 import { createAudienceChange } from './primitives/create-audience-change';
+import { FormCardView } from './views/form-card-view';
 import { FormPageView } from './views/form-page-view';
 import { RespondView } from './views/respond-view';
 
@@ -200,22 +202,76 @@ function FormBlockContent(props: {
   );
 }
 
+/** Nested in a message or document: the card body, no page chrome. */
+function FormCardContent() {
+  const formId = useBlockId();
+  const { insertSplit } = useSplitLayout();
+  const context = createAppFormContext({
+    openRelated: (destination) =>
+      insertSplit({ type: 'database', id: destination.databaseId }),
+    openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
+  });
+  const source = context.createFormSource(() => formId);
+  const open = () => {
+    const detail = source.detail();
+    insertSplit(
+      detail?.access === 'view'
+        ? { type: 'form', id: formId, params: { view: 'respond' } }
+        : { type: 'form', id: formId }
+    );
+  };
+  return (
+    <FormProvider value={context}>
+      <Show
+        when={source.detail()}
+        fallback={
+          <Show
+            when={source.failure()}
+            fallback={<div class="h-24 animate-pulse rounded-lg bg-hover" />}
+          >
+            <p class="p-3 text-sm text-ink-muted">This form isn’t available.</p>
+          </Show>
+        }
+      >
+        {(detail) => (
+          <FormCardView
+            detail={detail()}
+            refetch={source.refetch}
+            narrow={isMobile()}
+            onOpen={open}
+            onOpenResponses={() =>
+              insertSplit({
+                type: 'form',
+                id: formId,
+                params: { view: 'responses' },
+              })
+            }
+          />
+        )}
+      </Show>
+    </FormProvider>
+  );
+}
+
 export default function FormBlock(props: { view?: unknown }) {
   const flag = useFeatureFlag(enableForms);
+  const nested = useIsNestedBlock();
   // The flag gates authoring only: with it off, a form opens on its respond
   // view, and the service decides who may answer.
   return (
-    <DocumentBlockContainer>
-      <FormBlockContent
-        respondOnly={
-          props.view === 'respond' || (!flag().enabled && !flag().loading)
-        }
-        initialTab={
-          props.view === 'responses' || props.view === 'share'
-            ? props.view
-            : undefined
-        }
-      />
-    </DocumentBlockContainer>
+    <Show when={!nested} fallback={<FormCardContent />}>
+      <DocumentBlockContainer>
+        <FormBlockContent
+          respondOnly={
+            props.view === 'respond' || (!flag().enabled && !flag().loading)
+          }
+          initialTab={
+            props.view === 'responses' || props.view === 'share'
+              ? props.view
+              : undefined
+          }
+        />
+      </DocumentBlockContainer>
+    </Show>
   );
 }

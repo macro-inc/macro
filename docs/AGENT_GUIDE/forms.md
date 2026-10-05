@@ -5,9 +5,10 @@ Every question is a column of that table; the form stores only presentation
 (sections, order, help text, required, gates). Authoring is behind the
 `enable-forms` flag (`VITE_ENABLE_FORMS=true|false`; on under `bun run dev`
 and HMR, PostHog otherwise). With it off, `/app/form/<uuid>` opens on the
-respond view (no builder), and no Create entry or database form control
-exists. Responding (the respond route) does not depend on the flag: the
-service decides who may respond.
+respond view (no builder), and no Create entry, mention bucket, `/poll`,
+`/form` or database form control exists. Responding (the respond route, form
+cards and mentions in messages) does not depend on the flag: the service
+decides who may respond.
 
 ## Creating
 
@@ -20,6 +21,13 @@ service decides who may respond.
   column. When forms exist that control reads **N forms**: a menu of them
   plus **New form from this table**. Creating over an existing table needs
   database Owner: editors and viewers see the existing forms only.
+- In a channel composer, `/form` creates a form and opens the builder beside
+  the channel; its card joins the draft once the builder saves a question.
+  `/poll` opens the poll dialog (question, at least two options, **Multiple
+  answers**, **Show results to respondents**); **Post poll** puts the poll's
+  card in the message and sends it. Closing the dialog while it posts sends
+  nothing and trashes the poll. With results hidden, respondents answer
+  without counts and editors review votes in the Responses tab.
 
 ## The form page
 
@@ -82,7 +90,9 @@ which also shows the audience panel). Anyone with the link: visitors who aren't 
 people signed in to Macro respond as themselves. Roles: View can respond; Edit can change
 questions and also edits the linked database (its response rows and columns)
 through derived access; Owner can also change the audience, close and trash.
-Roles offered on a form are View and Edit. A database's own share dialog lists the forms over it: their editors
+Posting a form in a channel grants that channel View, which means it can
+respond; its row in the share dialog reads "Can respond (channel)", and roles
+offered on a form are View and Edit. A database's own share dialog lists the forms over it: their editors
 can also edit the database, and each form's chip opens its sharing. Owners also get **Move to trash** at the bottom; the database and its
 rows stay.
 
@@ -109,6 +119,14 @@ confirmation with a receipt; signed-in respondents (either audience) get
 **Edit my response** while it is open and land on their receipt when they
 return. A closed form says "This form is closed"; a returning respondent
 sees their saved answers with that reason.
+
+In a message or document, a form card fills in place; a poll card shows one
+bar per option, your vote marked, and "N votes · one vote each". Click an
+option to vote; click another to change it. **Responses** opens the Responses
+tab for editors; respondents get **Results**, the counts as a table in the
+card. In a draft, the card menu's **Convert to Inline Mention** minimizes it;
+in a sent message, **Collapse / Expand** hides the body for you only. Arrow
+keys move between poll options; Space or Enter votes.
 
 ## Reading responses as an agent
 
