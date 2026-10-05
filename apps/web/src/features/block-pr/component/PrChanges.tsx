@@ -2,17 +2,13 @@
  * The Changes pane on a pull request page: a read-only viewer over the pull
  * request's changes at its current base and head. Review state is kept under
  * `pr:<foreign-entity-id>`, apart from any agent session on the same pull
- * request. Hosts place `AgentChangesSplit` and `ChangesToggle` inside.
+ * request. Hosts place `ChangesSplit` and `ChangesToggle` inside.
  */
 
-import { copyText } from '@app/features/agent-changes/agent-changes';
-import type { ChangesHost } from '@app/features/agent-changes/context/agent-changes-context';
-import { AgentChangesControllerProvider } from '@app/features/agent-changes/context/agent-changes-controller';
-import { createPaneViewState } from '@app/features/agent-changes/pane-view-state';
-import { createAgentChanges } from '@app/features/agent-changes/primitives/create-agent-changes';
-import { toast } from '@core/component/Toast/Toast';
-import { openExternalUrl } from '@core/util/url';
-import { createSignal, type ParentProps } from 'solid-js';
+import { createBrowserChangesActions } from '@app/features/changes/browser-host';
+import { ChangesProvider } from '@app/features/changes/changes';
+import type { ChangesHost } from '@app/features/changes/context/changes-context';
+import type { ParentProps } from 'solid-js';
 import { createPrChangesSource } from '../data/pr-changes';
 
 export function PrChangesProvider(
@@ -31,23 +27,11 @@ export function PrChangesProvider(
     pullRequestTitle: () => props.pullRequestTitle,
     // Missing GitHub totals never fall back to captured estimates.
     pullRequestChangeCounts: () => props.pullRequestChangeCounts,
-    openExternal: openExternalUrl,
-    copyText,
-    notify: (message, tone) => {
-      if (tone === 'success') toast.success(message);
-      else toast.failure(message);
-    },
+    ...createBrowserChangesActions(),
   };
-  const view = createPaneViewState();
-  const [dismissed, setDismissed] = createSignal<string>();
-  const controller = createAgentChanges({
-    context: { source, host },
-    view,
-    dismissed: [dismissed, (id) => setDismissed(id)],
-  });
   return (
-    <AgentChangesControllerProvider value={controller}>
+    <ChangesProvider context={{ source, host }}>
       {props.children}
-    </AgentChangesControllerProvider>
+    </ChangesProvider>
   );
 }

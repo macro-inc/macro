@@ -478,7 +478,7 @@ if (LOCAL_ONLY) {
 
   registerComponent(
     'agent-changes-ui',
-    lazy(() => import('@app/features/agent-changes/debug/Gallery'))
+    lazy(() => import('@app/features/changes/debug/Gallery'))
   );
 
   registerComponent(

@@ -1451,6 +1451,8 @@ Narrow file trees start closed. **Show file tree** opens an animated drawer over
 diffs without resizing them, including on phones. File selection, Escape, the
 backdrop, or **Hide file tree** closes the drawer and restores focus to its opener.
 The drawer does not change the saved wide-tree visibility or preferred width.
+Closing releases the drawer's dialog handlers immediately while its inert visual
+frame finishes exiting, so rapid reopening does not restore focus to a stale opener.
 The file tree has its own draggable, keyboard-resizable divider and remembers its
 width locally. Tree visibility uses the sidebar's shared width transition while
 retaining directory state and diff owners. Reduced motion skips this transition.

@@ -7,7 +7,7 @@ import { Button } from '@ui';
  * combined model-and-effort change waits for runtime confirmation.
  */
 
-import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
+import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import {
   createInputAttachmentTracker,
   type InputAttachmentData,
@@ -70,7 +70,7 @@ export function AgentComposer(props: {
     registerQuoteInsert,
     initialInput,
   } = useAgentSession();
-  const changes = useOptionalAgentChanges();
+  const changes = useOptionalChanges();
   const readOnly = () => session()?.canEdit === false;
 
   // The fold speculates the action the moment it is issued, so success is

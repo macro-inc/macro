@@ -1,9 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
-import {
-  AgentChangesSplit,
-  ChangesToggle,
-} from '@app/features/agent-changes/agent-changes';
-import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
+import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
+import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanel } from '@components/app/split-panel';
@@ -221,7 +218,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
         pullRequestTitle={detail.data()?.pullRequest.name ?? undefined}
         pullRequestChangeCounts={detail.changeCounts()}
       >
-        <AgentChangesSplit>
+        <ChangesSplit>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
             <ViewShell.TopBar class="touch:flex">
               <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
@@ -241,7 +238,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
               onRetry={() => void detail.query.refetch()}
             />
           </div>
-        </AgentChangesSplit>
+        </ChangesSplit>
       </PrChangesProvider>
     </SidePanel.Root>
   );
@@ -262,7 +259,7 @@ function PrMetadata(props: {
   prRef: PrRef;
   pullRequest?: GithubPullRequestWithDetails;
 }) {
-  const changes = useOptionalAgentChanges();
+  const changes = useOptionalChanges();
   return (
     <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
       <Show when={props.pullRequest?.status}>

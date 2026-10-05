@@ -24,8 +24,8 @@ const mocks = vi.hoisted(() => ({
   queued: undefined as QueuedPromptsProps | undefined,
 }));
 
-vi.mock('@app/features/agent-changes/context/agent-changes-controller', () => ({
-  useOptionalAgentChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
+vi.mock('@app/features/changes/context/changes-controller', () => ({
+  useOptionalChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
 }));
 vi.mock('@channel/Input', () => ({
   createInputAttachmentTracker: () => ({

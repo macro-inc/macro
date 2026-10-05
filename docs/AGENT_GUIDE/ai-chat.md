@@ -970,6 +970,8 @@ resizing them. File selection, Escape, the backdrop, or **Hide file tree** dismi
 the drawer and restores focus to its opener. Drawer visibility never changes the
 saved wide-tree preference or width. Phones keep unified diffs and omit layout
 controls, with **Back to conversation** closing Changes.
+Closing the drawer releases its dialog handlers immediately; the exiting tree
+frame stays inert, so the animation does not intercept Escape or steal focus.
 Returning from full width restores the previous split ratio without replaying
 the opening slide or losing the conversation draft, diff state, or scroll position.
 Drag the divider beside the file tree to resize it, or focus that divider and use
@@ -1003,10 +1005,10 @@ that file in the Changes pane. Notes never go to GitHub. Collapsed files and
 unsent notes persist per session in localStorage; a new capture expands all
 files.
 
-The session header's **Changes** pill and sidebar totals display the linked
-PR's `additions` and `deletions` returned by the GitHub API, without summing
-transcript edits. The sidebar lists files from the captured PR diff. Counts
-refresh when a capture changes and every 30 seconds while the session is open.
+The Changes pane header and sidebar totals display the linked PR's `additions`
+and `deletions` returned by the GitHub API, without summing transcript edits.
+The header toggle itself has no totals. The sidebar lists files from the captured PR diff.
+Counts refresh when a capture changes and every 30 seconds while the session is open.
 Zero-valued counts and unavailable GitHub statistics are hidden; a missing PR
 or failed GitHub request never falls back to estimated transcript totals.
 
