@@ -666,6 +666,44 @@ fn stretched_stacks_count_when_hugging() {
 }
 
 #[test]
+fn rows_align_baselines() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let row = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":200,"height":100}"#,
+    );
+    let icon = make(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":20,"height":20}"#,
+    );
+    let label = make(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"type":"TEXT","x":30,"y":0,"width":1,"height":1,"props":{"characters":"Days","fontSize":14}}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"layoutMode":"HORIZONTAL","counterAlign":"BASELINE","sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
+    );
+    // The label's baseline sits on the icon's bottom.
+    let p = doc.props(idx(&doc, &label));
+    let base = f64::from(p.text_layout.as_ref().unwrap().glyphs[0].y);
+    assert!(base < 20.0);
+    assert_eq!(bounds(&doc, &icon).1, 0.0);
+    assert!((bounds(&doc, &label).1 + base - 20.0).abs() < 1e-4);
+    let below = bounds(&doc, &label).1 + bounds(&doc, &label).3;
+    assert!((bounds(&doc, &row).3 - below.max(20.0)).abs() < 1e-4);
+}
+
+#[test]
 fn strokes_take_space_when_the_frame_includes_them() {
     let mut doc = Document::open(&blank("x")).unwrap();
     let mut h = History::default();

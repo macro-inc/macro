@@ -801,6 +801,7 @@ fn layout(
             decorations: decorations.into(),
             layout_size: Some(box_size),
             lines: lines.len() as u32,
+            first_baseline: None,
         },
         box_size,
     )

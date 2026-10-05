@@ -325,14 +325,24 @@ impl Txn<'_> {
         // fixed; a stretched stack counts with what its own content needs.
         // Stretched children then take the inner size.
         let cross_of = |it: &Item| split(Vec2::new(it.bounds.w, it.bounds.h), h).1;
+        // Rows aligned on their baseline line up their children's first
+        // baselines (a child without text, its bottom): `bases` are the
+        // baselines from the top of each child's box, `top` the row's.
+        let bases: Option<Vec<f64>> = (h && al.counter_align.as_deref() == Some("BASELINE"))
+            .then(|| items.iter().map(|it| self.baseline_in_box(it)).collect());
+        let top = bases
+            .as_ref()
+            .map_or(0.0, |b| b.iter().copied().fold(0.0, f64::max));
         if al.hugs_counter() {
             let tallest = items
                 .iter()
-                .filter_map(|it| {
+                .enumerate()
+                .filter_map(|(k, it)| {
                     if it.child.stretches() {
                         self.stretched_need(it, !h)
                     } else {
-                        Some(cross_of(it))
+                        let below = bases.as_ref().map_or(0.0, |b| top - b[k]);
+                        Some(below + cross_of(it))
                     }
                 })
                 .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))));
@@ -377,7 +387,7 @@ impl Txn<'_> {
             Some("SPACE_AROUND") => (pad_start + free / (2.0 * n), free / n),
             _ => (pad_start, spacing),
         };
-        for it in &items {
+        for (k, it) in items.iter().enumerate() {
             let (main, cross, slot) = (main_of(it), cross_of(it), slot_of(it));
             if !it.floating {
                 let align = match it.child.align.as_deref() {
@@ -389,9 +399,10 @@ impl Txn<'_> {
                     }
                     _ => al.counter_align.as_deref(),
                 };
-                let offset = match align {
-                    Some("CENTER") => (inner_cross - cross) / 2.0,
-                    Some("MAX") => inner_cross - cross,
+                let offset = match (align, &bases) {
+                    (Some("CENTER"), _) => (inner_cross - cross) / 2.0,
+                    (Some("MAX"), _) => inner_cross - cross,
+                    (Some("BASELINE"), Some(b)) => top - b[k],
                     _ => 0.0,
                 };
                 let target = join(at + (slot - main) / 2.0, cross_start + offset, h);
@@ -431,6 +442,36 @@ impl Txn<'_> {
         let t = p.node_type();
         let thin = extent.abs() < THIN && !t.is_frame_like() && t != NodeType::Text;
         thin || quarter_turns(&p.transform()).is_none()
+    }
+
+    /// A layer's first baseline, from its top: a text layer's first line,
+    /// or the first one among a stack's children. `None` without text.
+    fn baseline(&self, i: NodeIdx) -> Option<f64> {
+        let p = self.doc.props(i);
+        if p.node_type() == NodeType::Text {
+            let layout = p.text_layout.as_ref()?;
+            return layout
+                .first_baseline
+                .or_else(|| layout.glyphs.first().map(|g| g.y))
+                .map(f64::from);
+        }
+        if !self.is_stack(i) {
+            return None;
+        }
+        self.flow_children(i).iter().find_map(|it| {
+            let b = self.baseline(it.i)?;
+            Some(self.doc.props(it.i).transform().m12 + b)
+        })
+    }
+
+    /// A child's baseline from the top of its box in the flow; a child
+    /// without text (or turned) aligns its bottom.
+    fn baseline_in_box(&self, it: &Item) -> f64 {
+        let t = self.doc.props(it.i).transform();
+        match self.baseline(it.i) {
+            Some(b) if quarter_turns(&t) == Some(false) && t.m11 > 0.0 => t.m12 + b - it.bounds.y,
+            _ => it.bounds.h,
+        }
     }
 
     /// What a stack's content needs along one axis (`x` or not), padding

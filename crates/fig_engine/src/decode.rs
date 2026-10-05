@@ -170,7 +170,7 @@ pub fn restrict_schema(schema: &mut Schema) {
             "rotation",
         ],
     );
-    schema.keep_only("Baseline", &["firstCharacter"]);
+    schema.keep_only("Baseline", &["firstCharacter", "lineY", "lineAscent"]);
     schema.keep_only("Image", &["hash", "dataBlob"]);
     schema.keep_only(
         "SymbolData",
@@ -421,6 +421,10 @@ fn text_layout(m: MsgRef) -> Option<TextLayout> {
         decorations,
         layout_size: m.msg("layoutSize").map(vec2),
         lines: m.list("baselines").count() as u32,
+        first_baseline: m
+            .msgs("baselines")
+            .next()
+            .and_then(|b| Some(b.f32("lineY").unwrap_or(0.0) + b.f32("lineAscent")?)),
     })
 }
 
