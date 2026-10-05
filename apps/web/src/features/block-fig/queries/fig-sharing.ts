@@ -46,6 +46,7 @@ export async function shareFigEngine(
   let lastChange: Version = applied;
   const incoming = new Set<() => void>();
   const storedElsewhere = new Set<() => void>();
+  let closed = false;
 
   const isEntry = (k: EntryKey) => k.container !== 'figMeta';
 
@@ -98,6 +99,8 @@ export async function shareFigEngine(
     },
     appliedVersion: () => applied,
     markStored: (version) => {
+      // The last save can finish after the design closed.
+      if (closed) return;
       doc.getMap('figMeta').set('saved', JSON.stringify(version));
       doc.commit({ origin: STORED_ORIGIN });
     },
@@ -106,6 +109,7 @@ export async function shareFigEngine(
       return () => storedElsewhere.delete(listener);
     },
     close: () => {
+      closed = true;
       unsubscribe();
       incoming.clear();
       storedElsewhere.clear();
