@@ -14,6 +14,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use mcp_select::ConnectorSelect;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
+use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
@@ -96,6 +97,75 @@ impl SlackDirectory {
             }
         }
         Ok(Self(users))
+    }
+}
+
+/// Live membership context shared by the accepted Slack rows in one batch.
+pub(super) struct SlackBatch<Sess> {
+    state: Option<Option<(Sess, SlackDirectory, Vec<MacroUserIdStr<'static>>)>>,
+}
+
+impl<Sess> Default for SlackBatch<Sess> {
+    fn default() -> Self {
+        Self { state: None }
+    }
+}
+
+impl<Sess: SlackWorkspaceSession> SlackBatch<Sess> {
+    pub(super) async fn resolve_emails<R, S, C, W>(
+        &mut self,
+        service: &ImportServiceImpl<R, S, C, W>,
+        user: &MacroUserIdStr<'static>,
+        team_id: Uuid,
+        meta: &SlackChannelMeta,
+    ) -> Vec<String>
+    where
+        R: ImportRepo + CanonicalImportRepo + Clone,
+        S: ConnectorSelect,
+        C: EntityCreator,
+        W: SlackWorkspaceSource<Session = Sess>,
+    {
+        if self.state.is_none() {
+            let loaded: anyhow::Result<_> = async {
+                let session = service.slack_source.open(user).await?;
+                let directory = SlackDirectory::load(&session).await?;
+                let roster = service.repo.team_members(team_id).await?;
+                Ok((session, directory, roster))
+            }
+            .await;
+            self.state = Some(
+                loaded
+                    .inspect_err(|error| {
+                        tracing::warn!(error = ?error, "Slack batch membership unavailable");
+                    })
+                    .ok(),
+            );
+        }
+
+        if let Some(Some((session, directory, roster))) = &self.state
+            && let Some(channel) = meta
+                .channel_id
+                .as_deref()
+                .and_then(SlackConversationId::new)
+        {
+            match resolve_members(session, directory, &channel, roster).await {
+                Ok(members) => {
+                    return members
+                        .participants
+                        .into_iter()
+                        .filter_map(|participant| participant.email)
+                        .collect();
+                }
+                Err(error) => {
+                    tracing::warn!(channel = %channel.as_str(), error = ?error, "Slack live membership resolution failed");
+                }
+            }
+        }
+        tracing::warn!(channel = ?meta.channel_id, "using staged Slack participants instead of live membership");
+        meta.participants
+            .iter()
+            .filter_map(|participant| participant.email.clone())
+            .collect()
     }
 }
 

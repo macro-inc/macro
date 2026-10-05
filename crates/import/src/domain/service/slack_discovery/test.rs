@@ -17,6 +17,8 @@ struct Workspace {
     user_calls: Mutex<Vec<Option<String>>>,
     member_calls: Mutex<Vec<(String, Option<String>)>>,
     rate_limits: Mutex<HashMap<String, usize>>,
+    open_calls: AtomicUsize,
+    not_connected: bool,
     directory_fails: bool,
     observe_staged: Option<Repo>,
     import_during_members: Option<Repo>,
@@ -31,6 +33,10 @@ impl SlackWorkspaceSource for FakeSlackSource {
     type Session = FakeSession;
 
     async fn open(&self, _: &MacroUserIdStr<'static>) -> Result<FakeSession, SlackSourceError> {
+        self.0.0.open_calls.fetch_add(1, Ordering::SeqCst);
+        if self.0.0.not_connected {
+            return Err(SlackSourceError::NotConnected);
+        }
         Ok(self.0.clone())
     }
 }
@@ -607,6 +613,189 @@ async fn manual_restarts_terminal_runs_without_auto_import() {
         assert_eq!(run.status, RunStatus::Ready);
         assert!(!run.auto_import);
     }
+}
+
+fn staged_metadata(index: usize) -> SlackChannelMeta {
+    SlackChannelMeta {
+        name: format!("channel-{index}"),
+        channel_id: Some(channel(index).id.as_str().into()),
+        purpose: None,
+        participants: vec![
+            SlackParticipant {
+                name: "Staged member".into(),
+                email: Some("staged@example.com".into()),
+            },
+            SlackParticipant {
+                name: "No email".into(),
+                email: None,
+            },
+        ],
+        member_count: Some(2),
+        archived: false,
+        members_resolved: true,
+    }
+}
+
+fn live_membership_workspace() -> Workspace {
+    Workspace {
+        users: vec![SlackUserPage {
+            users: vec![slack_user(0, Some("import@example.com"))],
+            next_cursor: None,
+        }],
+        members: vec![SlackMemberPage {
+            members: vec![slack_user(0, None).id],
+            next_cursor: None,
+        }],
+        ..Workspace::default()
+    }
+}
+
+#[tokio::test]
+async fn batch_lazily_opens_one_session_and_loads_directory_once_for_three_rows() {
+    let service = service(Repo::with_roster(vec![user()]), live_membership_workspace());
+    let team_id = service.repo.user_team_id(&user()).await.unwrap().unwrap();
+    let mut batch = SlackBatch::default();
+    let calls = &service.slack_source.0.0;
+    assert_eq!(calls.open_calls.load(Ordering::SeqCst), 0);
+    assert!(calls.user_calls.lock().unwrap().is_empty());
+
+    for index in 0..3 {
+        let emails = batch
+            .resolve_emails(&service, &user(), team_id, &staged_metadata(index))
+            .await;
+        assert_eq!(emails, ["import@example.com"]);
+    }
+
+    assert_eq!(calls.open_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(*calls.user_calls.lock().unwrap(), [None]);
+    assert_eq!(
+        *calls.member_calls.lock().unwrap(),
+        (0..3)
+            .map(|index| (channel(index).id.as_str().into(), None))
+            .collect::<Vec<_>>()
+    );
+    assert!(calls.conversation_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn batch_live_emails_replace_staged_participants_even_when_no_members_match() {
+    for roster in [vec![user()], Vec::new()] {
+        let expected: Vec<_> = roster
+            .iter()
+            .map(|user| user.email_str().to_string())
+            .collect();
+        let service = service(Repo::with_roster(roster), live_membership_workspace());
+        let team_id = service.repo.user_team_id(&user()).await.unwrap().unwrap();
+        let emails = SlackBatch::default()
+            .resolve_emails(&service, &user(), team_id, &staged_metadata(0))
+            .await;
+        assert_eq!(emails, expected);
+    }
+}
+
+#[tokio::test]
+async fn batch_not_connected_falls_back_without_reopening_for_later_rows() {
+    let service = service(
+        Repo::with_roster(vec![user()]),
+        Workspace {
+            not_connected: true,
+            ..live_membership_workspace()
+        },
+    );
+    let team_id = service.repo.user_team_id(&user()).await.unwrap().unwrap();
+    let mut batch = SlackBatch::default();
+    for index in 0..3 {
+        assert_eq!(
+            batch
+                .resolve_emails(&service, &user(), team_id, &staged_metadata(index))
+                .await,
+            ["staged@example.com"]
+        );
+    }
+    let calls = &service.slack_source.0.0;
+    assert_eq!(calls.open_calls.load(Ordering::SeqCst), 1);
+    assert!(calls.user_calls.lock().unwrap().is_empty());
+    assert!(calls.member_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn batch_directory_failure_is_cached_for_later_rows() {
+    let service = service(
+        Repo::with_roster(vec![user()]),
+        Workspace {
+            directory_fails: true,
+            ..live_membership_workspace()
+        },
+    );
+    let team_id = service.repo.user_team_id(&user()).await.unwrap().unwrap();
+    let mut batch = SlackBatch::default();
+    for index in 0..2 {
+        assert_eq!(
+            batch
+                .resolve_emails(&service, &user(), team_id, &staged_metadata(index))
+                .await,
+            ["staged@example.com"]
+        );
+    }
+    let calls = &service.slack_source.0.0;
+    assert_eq!(calls.open_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(*calls.user_calls.lock().unwrap(), [None]);
+    assert!(calls.member_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn batch_member_error_falls_back_but_next_row_uses_live_session() {
+    let service = service(
+        Repo::with_roster(vec![user()]),
+        Workspace {
+            rate_limits: Mutex::new(HashMap::from([(channel(0).id.as_str().into(), 2)])),
+            ..live_membership_workspace()
+        },
+    );
+    let team_id = service.repo.user_team_id(&user()).await.unwrap().unwrap();
+    let mut batch = SlackBatch::default();
+    assert_eq!(
+        batch
+            .resolve_emails(&service, &user(), team_id, &staged_metadata(0))
+            .await,
+        ["staged@example.com"]
+    );
+    assert_eq!(
+        batch
+            .resolve_emails(&service, &user(), team_id, &staged_metadata(1))
+            .await,
+        ["import@example.com"]
+    );
+    let calls = &service.slack_source.0.0;
+    assert_eq!(calls.open_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(*calls.user_calls.lock().unwrap(), [None]);
+    assert_eq!(calls.member_calls.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn batch_missing_or_invalid_channel_id_falls_back_without_poisoning_session() {
+    let service = service(Repo::with_roster(vec![user()]), live_membership_workspace());
+    let team_id = service.repo.user_team_id(&user()).await.unwrap().unwrap();
+    let mut batch = SlackBatch::default();
+    for channel_id in [None, Some("#general".into())] {
+        let mut metadata = staged_metadata(0);
+        metadata.channel_id = channel_id;
+        assert_eq!(
+            batch
+                .resolve_emails(&service, &user(), team_id, &metadata)
+                .await,
+            ["staged@example.com"]
+        );
+    }
+    let calls = &service.slack_source.0.0;
+    assert!(calls.member_calls.lock().unwrap().is_empty());
+    assert_eq!(
+        batch
+            .resolve_emails(&service, &user(), team_id, &staged_metadata(1))
+            .await,
+        ["import@example.com"]
+    );
+    assert_eq!(calls.open_calls.load(Ordering::SeqCst), 1);
 }
 
 #[test]

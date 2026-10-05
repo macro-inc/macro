@@ -40,6 +40,7 @@ mod slack;
 mod slack_discovery;
 
 pub use slack_discovery::NoSlackSource;
+use slack_discovery::SlackBatch;
 
 #[cfg(test)]
 mod test;
@@ -730,9 +731,13 @@ where
         Ok(())
     }
 
-    /// Copy one accepted Linear/Slack row in, deterministically from its
-    /// staged metadata.
-    async fn import_deterministic(&self, user: &MacroUserIdStr<'static>, row: &ImportEntity) {
+    /// Copy one accepted Linear/Slack row from staged metadata, refreshing Slack membership live.
+    async fn import_deterministic(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        row: &ImportEntity,
+        slack_batch: &mut SlackBatch<W::Session>,
+    ) {
         let created: anyhow::Result<(String, Option<Uuid>)> = match row.source {
             ImportSource::Linear => {
                 match serde_json::from_value::<LinearIssueMeta>(row.metadata.clone()) {
@@ -754,12 +759,15 @@ where
                         .user_team_id(user)
                         .await?
                         .ok_or_else(|| anyhow::anyhow!("Slack import requires a team"))?;
+                    let meta = serde_json::from_value(row.metadata.clone())?;
+                    let emails = slack_batch.resolve_emails(self, user, team_id, &meta).await;
                     let id = slack::ensure_channel(
                         &self.repo,
                         self.creator.as_ref(),
                         user,
                         row,
                         team_id,
+                        &emails,
                     )
                     .await?;
                     Ok((id.to_string(), Some(team_id)))
@@ -894,8 +902,11 @@ where
                 }
             }));
 
+            let mut slack_batch = SlackBatch::default();
             for row in &direct_rows {
-                service.import_deterministic(&user, row).await;
+                service
+                    .import_deterministic(&user, row, &mut slack_batch)
+                    .await;
             }
 
             if !notion_rows.is_empty() {
