@@ -166,6 +166,11 @@ impl ImageStore {
 
     /// Drops the least recently drawn levels until the store fits its
     /// budget.
+    /// Forgets `hash` (an image that was missing may have arrived).
+    pub fn forget(&mut self, hash: &str) {
+        self.entries.remove(hash);
+    }
+
     fn evict(&mut self) {
         let mut total: usize = self.entries.values().flatten().map(Entry::bytes).sum();
         while total > self.budget {

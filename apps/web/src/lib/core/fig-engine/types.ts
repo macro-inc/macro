@@ -255,3 +255,13 @@ export interface ComponentInfo {
   width: number;
   height: number;
 }
+
+/**
+ * One entry of a shared design's maps written (`value`) or deleted (`null`).
+ * Mirrors `fig_engine::collab::EntryChange`.
+ */
+export interface EntryChange {
+  container: string;
+  key: string;
+  value?: string | null;
+}

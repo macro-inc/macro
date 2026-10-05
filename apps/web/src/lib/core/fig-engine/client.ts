@@ -11,6 +11,7 @@
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import type {
   ComponentInfo,
+  EntryChange,
   FileSummary,
   LayerRow,
   NodeGeometry,
@@ -390,6 +391,43 @@ export class FigEngine {
 
   redo(page: number): Promise<EditResult> {
     return this.edit({ kind: 'edit', page, action: 'redo' });
+  }
+
+  /**
+   * Starts editing together with other people, in every worker: new layers
+   * get ids in `session` (unique per person and visit). `baseBlobs` is the
+   * shared `figMeta.baseBlobs`, when set. Resolves to changes to write.
+   */
+  async enableCollab(
+    session: number,
+    baseBlobs: number | null
+  ): Promise<EntryChange[]> {
+    for (const h of [...this.helpers, ...this.starting])
+      h.request({ kind: 'enableCollab', session, baseBlobs }).catch(() => {});
+    const r = await this.primary.request({
+      kind: 'enableCollab',
+      session,
+      baseBlobs,
+    });
+    if (r.kind !== 'query') throw new Error('unexpected response');
+    return JSON.parse(r.json) as EntryChange[];
+  }
+
+  /** The shared-map changes of this person's edits since the last call. */
+  async collabChanges(): Promise<EntryChange[]> {
+    const r = await this.primary.request({ kind: 'collabChanges' });
+    if (r.kind !== 'query') throw new Error('unexpected response');
+    return JSON.parse(r.json) as EntryChange[];
+  }
+
+  /** Applies other people's changes in every worker (not undoable here). */
+  applyRemote(page: number, changes: EntryChange[]): Promise<EditResult> {
+    return this.edit({
+      kind: 'edit',
+      page,
+      action: 'remote',
+      changes: JSON.stringify(changes),
+    });
   }
 
   /**

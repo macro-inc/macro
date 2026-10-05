@@ -23,10 +23,12 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { useUserId } from '@core/context/user';
 import { FigEngine } from '@core/fig-engine/client';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
+import { getDisplayName, tryMacroId } from '@core/user';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -35,6 +37,7 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import { Button } from '@ui/components/Button';
+import type { LoroDoc } from 'loro-crdt';
 import {
   createSignal,
   type JSX,
@@ -44,39 +47,63 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { FigViewerProvider } from './context/fig-viewer-context';
+import {
+  type FigCollaboration,
+  type FigSharing,
+  FigViewerProvider,
+} from './context/fig-viewer-context';
 import type { FigData } from './definition';
+import { createDesignCollabSession } from './queries/fig-collab';
 import { saveFigFile } from './queries/fig-file';
+import { shareFigEngine } from './queries/fig-sharing';
+import {
+  connectDesignSync,
+  designSyncExists,
+  initializeDesignSync,
+} from './queries/fig-sync';
 import { FigViewer } from './views/fig-viewer';
 
-/** Opens the file in the engine and mounts the viewer once ready. */
+/**
+ * Opens the file in the engine (and, for a shared design, applies what
+ * other people changed) and mounts the viewer once ready.
+ */
 function FigHost(props: {
   bytes: ArrayBuffer;
   fileName: () => string;
   documentId: string;
   canEdit: () => boolean;
+  /** The shared document, when the design is edited live. */
+  shared?: LoroDoc;
+  collaboration?: FigCollaboration;
 }) {
   const [engine, setEngine] = createSignal<FigEngine>();
+  const [sharing, setSharing] = createSignal<FigSharing>();
   const [failure, setFailure] = createSignal<string>();
   onMount(() => {
     let disposed = false;
     let opened: FigEngine | undefined;
-    FigEngine.open(props.bytes, {
-      onFailure: (e) => setFailure(e.message),
-    })
-      .then((e) => {
-        if (disposed) {
-          e.close();
-          return;
-        }
+    let shared: FigSharing | undefined;
+    const open = async () => {
+      try {
+        const e = await FigEngine.open(props.bytes, {
+          onFailure: (error) => setFailure(error.message),
+        });
         opened = e;
+        if (disposed) return;
+        if (props.shared) {
+          shared = await shareFigEngine(e, props.shared);
+          if (disposed) return;
+          setSharing(shared);
+        }
         setEngine(e);
-      })
-      .catch((e: unknown) =>
-        setFailure(e instanceof Error ? e.message : String(e))
-      );
+      } catch (e) {
+        setFailure(e instanceof Error ? e.message : String(e));
+      }
+    };
+    void open();
     onCleanup(() => {
       disposed = true;
+      shared?.close();
       opened?.close();
     });
   });
@@ -110,10 +137,68 @@ function FigHost(props: {
               notifyInfo: (message) => toast.success(message),
               canEdit: props.canEdit,
               save: (bytes) => saveFigFile(props.documentId, bytes),
+              collaboration: props.collaboration,
+              sharing: sharing(),
             }}
           >
             <FigViewer />
           </FigViewerProvider>
+        )}
+      </Match>
+    </Switch>
+  );
+}
+
+const displayName = (userId: string | undefined) =>
+  getDisplayName(tryMacroId(userId ?? ''), { emailFallback: 'local-part' }) ||
+  'Someone';
+
+/**
+ * The design as everyone with access edits it live: changes since the
+ * stored file go through the sync service (seeded the first time an editor
+ * opens it). Viewers before that, and sessions that can't reach the sync
+ * service, get the stored file read-only.
+ */
+function CollaborativeFigHost(props: {
+  bytes: ArrayBuffer;
+  fileName: () => string;
+  documentId: string;
+  canEdit: () => boolean;
+}) {
+  const userId = useUserId();
+  const session = createDesignCollabSession({
+    documentId: props.documentId,
+    userId: userId(),
+    canEdit: props.canEdit,
+    displayName,
+    exists: () => designSyncExists(props.documentId),
+    initialize: (snapshot) => initializeDesignSync(props.documentId, snapshot),
+    connect: () => connectDesignSync(props.documentId),
+  });
+  const ready = () => {
+    const state = session.state();
+    return state.t === 'ready' ? state.doc : undefined;
+  };
+  return (
+    <Switch
+      fallback={
+        <div class="flex size-full items-center justify-center text-ink-muted text-sm">
+          Opening design…
+        </div>
+      }
+    >
+      <Match
+        when={session.state().t === 'unshared' || session.state().t === 'error'}
+      >
+        <FigHost {...props} canEdit={() => false} />
+      </Match>
+      <Match when={ready()} keyed>
+        {(doc) => (
+          <FigHost
+            {...props}
+            shared={doc}
+            collaboration={session.collaboration}
+          />
         )}
       </Match>
     </Switch>
@@ -214,7 +299,7 @@ export default function FigBlock(props: { share?: string }) {
                 fallback={<DownloadOnly onDownload={() => void download()} />}
               >
                 {(bytes) => (
-                  <FigHost
+                  <CollaborativeFigHost
                     bytes={bytes()}
                     fileName={() => name() ?? 'Design'}
                     documentId={documentId}

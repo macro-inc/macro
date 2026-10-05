@@ -12,6 +12,7 @@
 import type { EditResult, FigEngine } from '@core/fig-engine/client';
 import type { NodeInfo, Rect, Sizing } from '@core/fig-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
+import type { FigSharing } from '../context/fig-viewer-context';
 import { type Alignment, alignOffset } from '../core/align';
 import type { Measure } from '../core/type';
 import type { FigViewer, Selected } from './create-fig-viewer';
@@ -149,10 +150,20 @@ export interface FigEditorOptions {
   /** Called with each changed page area, to re-render it. */
   onDirty: (rect: Rect) => void;
   notifyError: (message: string) => void;
+  /** Live edits with other people, when the design is shared. */
+  sharing?: FigSharing;
+  /**
+   * Whether this person stores the merged file (one person among those
+   * editing does). Defaults to always.
+   */
+  stores?: () => boolean;
 }
 
 /** Quiet time after the last edit before saving. */
 const SAVE_DELAY_MS = 1500;
+
+/** How often the steps of one gesture are shared with other people. */
+const GESTURE_PUSH_MS = 80;
 
 const TYPE_FOR_TOOL: Record<ShapeTool, string> = {
   frame: 'FRAME',
@@ -184,9 +195,15 @@ export function createFigEditor(options: FigEditorOptions) {
 
   // ---- saving ----------------------------------------------------------
 
+  const { sharing } = options;
+  // In a shared design one person stores the merged file; the others'
+  // edits are kept by the sync service until then.
+  const stores = () => options.stores?.() ?? true;
+
   const saveNow = async (): Promise<void> => {
     clearTimeout(saveTimer);
-    if (!options.save || !dirtySinceSave) return;
+    saveTimer = undefined;
+    if (!options.save || !dirtySinceSave || !stores()) return;
     if (saving) {
       await saving;
       if (!dirtySinceSave) return;
@@ -195,8 +212,10 @@ export function createFigEditor(options: FigEditorOptions) {
     setSaveState('saving');
     const run = (async () => {
       try {
+        const version = sharing?.appliedVersion();
         const bytes = await engine.save();
         await options.save?.(bytes);
+        if (version) sharing?.markStored(version);
         setSaveState(dirtySinceSave ? 'unsaved' : 'saved');
       } catch (e) {
         dirtySinceSave = true;
@@ -213,8 +232,11 @@ export function createFigEditor(options: FigEditorOptions) {
 
   const scheduleSave = () => {
     dirtySinceSave = true;
-    setSaveState('unsaved');
     clearTimeout(saveTimer);
+    saveTimer = undefined;
+    // Shared live, so nothing is lost while someone else stores the file.
+    if (!stores()) return;
+    setSaveState('unsaved');
     saveTimer = setTimeout(() => void saveNow(), SAVE_DELAY_MS);
   };
 
@@ -222,8 +244,24 @@ export function createFigEditor(options: FigEditorOptions) {
     if (document.visibilityState === 'hidden') void saveNow();
   };
   document.addEventListener('visibilitychange', onHidden);
+  // Whoever stores the file now (the one who did may have left) stores
+  // changes nobody stored yet.
+  const takeOver = sharing
+    ? setInterval(() => {
+        if (dirtySinceSave && stores() && !saveTimer && !saving) scheduleSave();
+      }, SAVE_DELAY_MS * 2)
+    : undefined;
+  const unsubscribeStored = sharing?.onStoredElsewhere(() => {
+    if (saving) return;
+    dirtySinceSave = false;
+    clearTimeout(saveTimer);
+    saveTimer = undefined;
+    setSaveState('saved');
+  });
   onCleanup(() => {
     document.removeEventListener('visibilitychange', onHidden);
+    clearInterval(takeOver);
+    unsubscribeStored?.();
     engine.retain(saveNow());
   });
 
@@ -239,6 +277,52 @@ export function createFigEditor(options: FigEditorOptions) {
     await viewer.afterEdit();
   };
 
+  /** Applies other people's changes that arrived (inside the queue). */
+  const pullShared = async () => {
+    const result = await sharing?.pull(viewer.page());
+    if (!result) return;
+    await settle(result);
+    await viewer.pruneSelection();
+  };
+
+  // Steps of one gesture (a drag, typing) are shared at most this often;
+  // anything else is shared right away.
+  let pushTimer: ReturnType<typeof setTimeout> | undefined;
+  const pushNow = async () => {
+    clearTimeout(pushTimer);
+    pushTimer = undefined;
+    await sharing?.push();
+  };
+  const pushSoon = () => {
+    if (pushTimer) return;
+    pushTimer = setTimeout(() => {
+      pushTimer = undefined;
+      queue = queue.then(async () => {
+        try {
+          await sharing?.push();
+        } catch (e) {
+          options.notifyError(e instanceof Error ? e.message : String(e));
+        }
+      });
+    }, GESTURE_PUSH_MS);
+  };
+  onCleanup(() => clearTimeout(pushTimer));
+
+  let pullQueued = false;
+  const unsubscribeIncoming = sharing?.onIncoming(() => {
+    if (pullQueued) return;
+    pullQueued = true;
+    queue = queue.then(async () => {
+      pullQueued = false;
+      try {
+        await pullShared();
+      } catch (e) {
+        options.notifyError(e instanceof Error ? e.message : String(e));
+      }
+    });
+  });
+  onCleanup(() => unsubscribeIncoming?.());
+
   /**
    * Applies operations as one undo step, in order with other edits.
    * Resolves to the engine's result (undefined when not allowed or failed).
@@ -247,7 +331,11 @@ export function createFigEditor(options: FigEditorOptions) {
     if (!enabled() || ops.length === 0) return Promise.resolve(undefined);
     const run = queue.then(async () => {
       try {
+        // Other people's changes that arrived first apply first.
+        await pullShared();
         const result = await engine.apply(viewer.page(), ops, coalesce);
+        if (coalesce) pushSoon();
+        else await pushNow();
         await settle(result);
         return result;
       } catch (e) {
@@ -263,10 +351,13 @@ export function createFigEditor(options: FigEditorOptions) {
     if (!enabled()) return;
     queue = queue.then(async () => {
       try {
+        await pullShared();
         const result =
           action === 'undo'
             ? await engine.undo(viewer.page())
             : await engine.redo(viewer.page());
+        // Undo is local: what it restores is shared as a new change.
+        await pushNow();
         await settle(result);
         await viewer.pruneSelection();
       } catch (e) {

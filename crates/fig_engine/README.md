@@ -45,6 +45,7 @@ render           tiles: fills, strokes (inside/outside via clipping), masks,
 inspect          layer rows, frames, hit tests, marquee, node info, search, SVG outlines
 edit             edit operations, undo/redo, fractional-index positions;
                  auto layout (stacks re-laid out after edits)
+collab           editing together: node states as CRDT map entries
 text             text layout for edited text (bundled Inter, kerning, wrapping)
 save             writing `.fig`: patch edited records, splice the rest; blank files
 wasm             the worker API (`FigFile`)
@@ -83,6 +84,28 @@ the instance's layers out again with the same constraints and auto layout
 code (on a temporary copy), keeping the result as the instance's derived
 layout, which saving writes to `derivedSymbolData`.
 
+## Editing together
+
+`collab` shares edits between people as flat maps (Loro maps in the web app,
+on the sync service): `figNodes` holds, per node id, the node's whole state
+after an edit (every modeled property bit for bit, parent and position,
+removed or not, and which fields were edited), `figBlobs` the geometry and
+glyph blobs edits made (keyed by content), and `figImages` images added
+during the session. Every peer opens the stored file and applies the
+entries; an entry is absolute, so applying it is idempotent, entries can
+arrive in any order, and concurrent edits to one node resolve
+last-writer-wins. Parents' children are derived from the nodes' parent links
+and positions, so concurrent moves, inserts, and deletes converge. Each peer
+creates nodes in its own guid session. Undo stays local: the nodes it
+restores are shared as ordinary changes. The edited-field flags accumulate
+across peers, so whoever saves writes every field anyone changed, whichever
+version of the file they opened; a later joiner opening a saved file and
+applying the same entries gets the same design. Blobs the file started with
+(`figMeta.baseBlobs`) are referenced by index, since saving keeps them in
+order. `fig_render collab` edits each file as one peer and checks that a
+second peer, both peers' saves, and a joiner from the saved file render
+identically.
+
 Instances have no stored children: the scene builds their sublayers from the
 component, applying overrides keyed by GUID paths (outer instances win), and
 uses the instance's derived sizes, transforms, and geometry. Rendering is a
@@ -96,6 +119,7 @@ progressively and only what is visible is drawn.
 cargo run -p fig_engine --features cli --release --bin fig_render -- info  FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- render --out out FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- compare --out out FILE.fig…
+cargo run -p fig_engine --features cli --release --bin fig_render -- collab FILE.fig…
 ```
 
 `info` prints decode statistics, `render` writes one PNG per page, and
