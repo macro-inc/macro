@@ -76,6 +76,8 @@ export function CommentThreadView(props: {
   onReply: (text: string, mentions: FigPerson[]) => Promise<unknown>;
   onResolve: (resolved: boolean) => void;
   onDelete: () => void;
+  /** Escape in the reply box. */
+  onClose?: () => void;
 }) {
   const now = Date.now();
   return (
@@ -128,6 +130,7 @@ export function CommentThreadView(props: {
           submitLabel="Reply"
           people={props.people}
           onSubmit={props.onReply}
+          onEscape={props.onClose}
         />
       </Show>
     </div>

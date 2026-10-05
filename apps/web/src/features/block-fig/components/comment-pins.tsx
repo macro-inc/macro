@@ -175,6 +175,7 @@ export function CommentPins(props: {
               onResolve={(resolved) =>
                 void store.setResolved(pin().thread.id, resolved)
               }
+              onClose={() => c.setOpenThread(undefined)}
               onDelete={() => {
                 const id = pin().thread.id;
                 c.setOpenThread(undefined);

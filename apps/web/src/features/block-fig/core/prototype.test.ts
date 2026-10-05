@@ -170,8 +170,9 @@ describe('interactions', () => {
       s = r.state;
       return r;
     };
-    expect(step(action({ destination: 'B', transition: 'DISSOLVE' })).transition)
-      .toEqual({ kind: 'dissolve', duration: 0.3 });
+    expect(
+      step(action({ destination: 'B', transition: 'DISSOLVE' })).transition
+    ).toEqual({ kind: 'dissolve', duration: 0.3 });
     expect(s).toEqual({ screen: 'B', history: ['A'], overlays: [] });
     step(action({ destination: 'M', navigation: 'OVERLAY' }));
     expect(s.overlays.map((o) => o.frame)).toEqual(['M']);
@@ -222,7 +223,10 @@ describe('interactions', () => {
     const p = info();
     const screen = p.frames[1];
     const menu = p.frames[4];
-    expect(overlayPosition(menu, screen, { frame: 'M' })).toEqual({ x: 0, y: 0 });
+    expect(overlayPosition(menu, screen, { frame: 'M' })).toEqual({
+      x: 0,
+      y: 0,
+    });
     const centered = { ...menu, overlay: null };
     expect(overlayPosition(centered, screen, { frame: 'M' })).toEqual({
       x: 25,

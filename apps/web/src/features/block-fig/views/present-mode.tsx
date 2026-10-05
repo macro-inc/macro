@@ -472,12 +472,19 @@ export function PresentMode(props: {
     const ref = (el: HTMLDivElement) => {
       const anim = screenAnimations(p.item.transition);
       const frames = p.item.leaving ? anim.outgoing : anim.incoming;
-      if (frames && p.item.transition.kind !== 'instant')
-        el.animate(frames, {
-          duration: p.item.transition.duration * 1000,
-          easing: 'ease-out',
-          fill: 'forwards',
-        });
+      if (frames && p.item.transition.kind !== 'instant') {
+        const ms = p.item.transition.duration * 1000;
+        // Once the screen is in the document (an animation started on a
+        // detached element sticks at its first frame in Chromium). The
+        // screen coming in ends as it is; the one leaving stays gone.
+        queueMicrotask(() =>
+          el.animate(frames, {
+            duration: ms,
+            easing: 'ease-out',
+            fill: p.item.leaving ? 'forwards' : 'none',
+          })
+        );
+      }
     };
     return (
       <Show when={f()}>

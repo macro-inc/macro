@@ -21,6 +21,8 @@ export function CommentComposer(props: {
   people: (query: string) => FigPerson[];
   onSubmit: (text: string, mentions: FigPerson[]) => Promise<unknown>;
   onCancel?: () => void;
+  /** Escape with nothing to cancel (closes what holds the box). */
+  onEscape?: () => void;
 }) {
   const [text, setText] = createSignal('');
   const [picked, setPicked] = createSignal<FigPerson[]>([]);
@@ -70,6 +72,8 @@ export function CommentComposer(props: {
       input.value = '';
       setText('');
       setPicked([]);
+      // Keep typing where you were (and keep the keys in the viewer).
+      if (input.isConnected) input.focus({ preventScroll: true });
     } catch {
       // The text stays for another try; the store reports the failure.
     } finally {
@@ -98,7 +102,8 @@ export function CommentComposer(props: {
     } else if (e.key === 'Escape') {
       e.preventDefault();
       if (query()) setQuery(undefined);
-      else props.onCancel?.();
+      else if (props.onCancel) props.onCancel();
+      else props.onEscape?.();
     }
     // Typing here never reaches the viewer's shortcuts.
     e.stopPropagation();
