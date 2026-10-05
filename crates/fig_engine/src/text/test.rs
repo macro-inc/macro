@@ -575,3 +575,30 @@ fn gives_the_editor_caret_stops() {
     assert_eq!((guessed.lines[1].start, guessed.lines[1].end), (3, 8));
     assert_eq!(guessed.lines[1].xs, b.xs);
 }
+
+#[test]
+fn restyling_a_whole_run_keeps_its_id() {
+    let mut doc = Document::open(&simple_file()).unwrap();
+    let mut h = History::default();
+    let t = new_text(
+        &mut doc,
+        &mut h,
+        r#"{"characters":"plain bold","fontSize":10}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"fontStyle":"Bold","textRange":[6,10]}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"textDecoration":"UNDERLINE","textRange":[6,10]}"#,
+    );
+    let c = content(&doc, t);
+    assert_eq!(&c.style_ids[..], &[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]);
+    assert_eq!(c.styles.len(), 1);
+    assert_eq!(c.styles[0].decoration.as_deref(), Some("UNDERLINE"));
+}

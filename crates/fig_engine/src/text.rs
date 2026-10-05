@@ -210,7 +210,11 @@ fn style_range(
     let mut next_id = runs.iter().map(|r| r.id).max().unwrap_or(0) + 1;
     // The run each old id becomes, so characters styled alike stay alike.
     let mut mapped: BTreeMap<u32, u32> = BTreeMap::new();
-    for id in &mut ids[start as usize..end as usize] {
+    // Runs used only inside the range change in place, keeping their ids.
+    let (s, e) = (start as usize, end as usize);
+    let outside: std::collections::BTreeSet<u32> =
+        ids[..s].iter().chain(&ids[e..]).copied().collect();
+    for id in &mut ids[s..e] {
         if let Some(&to) = mapped.get(id) {
             *id = to;
             continue;
@@ -231,6 +235,13 @@ fn style_range(
                 } == **r
         }) {
             same.id
+        } else if *id != 0
+            && !outside.contains(id)
+            && let Some(slot) = runs.iter_mut().find(|r| r.id == *id)
+        {
+            run.id = *id;
+            *slot = run;
+            *id
         } else {
             run.id = next_id;
             next_id += 1;
