@@ -254,6 +254,12 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
             .iter()
             .map(|(mangled, entry)| RequestSchema {
                 name: mangled.as_str().to_string(),
+                description: entry
+                    .tool
+                    .description
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_string(),
                 schema: Schema::from((*entry.tool.input_schema).clone()),
             })
             .collect();

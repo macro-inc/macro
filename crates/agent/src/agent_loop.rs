@@ -274,6 +274,7 @@ impl AgentLoop {
                         }
                         let adapter = DynToolSetAdapter::loaded(
                             tool.name,
+                            tool.description,
                             tool.schema,
                             toolset.clone(),
                             context.clone(),
