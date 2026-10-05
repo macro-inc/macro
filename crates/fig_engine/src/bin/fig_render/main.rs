@@ -333,6 +333,7 @@ fn compare(path: &Path, out: &Path) -> Option<f64> {
                 .node(scene.root())
                 .children
                 .iter()
+                .filter(|&&c| scene.props(&doc, c).visible())
                 .fold(Rect::EMPTY, |r, &c| r.union(&scene.frame_bounds(&doc, c)))
         });
         let background = given.is_none().then(|| doc.page_background(page));
