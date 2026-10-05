@@ -317,6 +317,7 @@ fn margins_cover_offsets_and_blurs() {
     let m = margin(&fx, 1.0);
     assert!(m >= 10 + 12, "{m}");
     assert!(margin(&fx, 0.25) < m);
+    // The style's scale is how its sizes were scaled already.
     let scaled = Effects { scale: 2.0, ..fx };
-    assert!(margin(&scaled, 1.0) > m);
+    assert_eq!(margin(&scaled, 1.0), m);
 }

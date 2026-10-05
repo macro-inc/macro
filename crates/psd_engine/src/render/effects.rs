@@ -108,10 +108,11 @@ fn degrees(v: f32) -> f32 {
     if v.is_finite() { v } else { 0.0 }
 }
 
-/// The scale effects are drawn at: the style's scale times `k`.
-fn effect_scale(fx: &Effects, k: f32) -> f32 {
-    let s = fx.scale * k;
-    if s.is_nan() { 0.0 } else { s.max(0.0) }
+/// The scale effects are drawn at: the view's `k`. (The style's own scale,
+/// [`Effects::scale`], records how its sizes were scaled already; Photoshop
+/// draws them as stored.)
+fn effect_scale(k: f32) -> f32 {
+    if k.is_nan() { 0.0 } else { k.max(0.0) }
 }
 
 /// How far (pixels at the scale `k`, which multiplies every size) effects
@@ -121,7 +122,7 @@ pub(crate) fn margin(fx: &Effects, k: f32) -> i32 {
     if !fx.enabled {
         return 0;
     }
-    let k = effect_scale(fx, k);
+    let k = effect_scale(k);
     let soft = |size: f32, spread: f32| {
         let size = px_size(size, k);
         let spread = unit(spread);
@@ -180,7 +181,7 @@ pub(crate) fn render(cx: &mut Cx, fx: &Effects, inputs: &Inputs) -> Stages {
     if !fx.enabled {
         return out;
     }
-    let k = effect_scale(fx, cx.scale());
+    let k = effect_scale(cx.scale());
     let a = inputs.shape.crop(inputs.region);
     // Bottom to top within each group; the first of several instances of
     // an effect is drawn topmost.

@@ -37,6 +37,23 @@ pub enum GradientKind {
     Diamond,
 }
 
+/// How a gradient mixes colors between stops (the interpolation methods of
+/// Photoshop 2022 and later).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GradientMethod {
+    /// The stored (gamma-encoded) values mix, eased by the smoothness: the
+    /// only method before Photoshop 2022, and files without one.
+    #[default]
+    Classic,
+    /// Colors mix in a perceptual space (Oklab), eased by the smoothness.
+    Perceptual,
+    /// Light mixes (linear sRGB), eased by the smoothness.
+    Linear,
+    /// Colors mix in Oklab, evenly between stops.
+    Smooth,
+}
+
 /// A color stop of a gradient.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,6 +102,9 @@ pub struct Gradient {
     pub offset: (f32, f32),
     /// Smoothness of transitions, `0..=1` (Photoshop's default is 1).
     pub smoothness: f32,
+    /// How colors mix between stops.
+    #[serde(default)]
+    pub method: GradientMethod,
     /// Color stops, by location.
     pub colors: Vec<ColorStop>,
     /// Opacity stops, by location.
@@ -103,6 +123,7 @@ impl Default for Gradient {
             align_with_layer: true,
             offset: (0.0, 0.0),
             smoothness: 1.0,
+            method: GradientMethod::Classic,
             colors: vec![
                 ColorStop {
                     location: 0.0,
@@ -173,47 +194,115 @@ fn interpolate<const N: usize>(
     stops.last().expect("not empty").2
 }
 
+/// An sRGB value as light.
+fn to_linear(v: f32) -> f32 {
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// Light as an sRGB value.
+fn from_linear(v: f32) -> f32 {
+    if v <= 0.003_130_8 {
+        v * 12.92
+    } else {
+        1.055 * v.max(0.0).powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// Linear sRGB to Oklab.
+fn to_oklab([r, g, b]: [f32; 3]) -> [f32; 3] {
+    let l = (0.412_221_46 * r + 0.536_332_55 * g + 0.051_445_995 * b).cbrt();
+    let m = (0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b).cbrt();
+    let s = (0.088_302_46 * r + 0.281_718_85 * g + 0.629_978_7 * b).cbrt();
+    [
+        0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s,
+        1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s,
+        0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s,
+    ]
+}
+
+/// Oklab to linear sRGB.
+fn from_oklab([l, a, b]: [f32; 3]) -> [f32; 3] {
+    let l_ = (l + 0.396_337_78 * a + 0.215_803_76 * b).powi(3);
+    let m_ = (l - 0.105_561_346 * a - 0.063_854_17 * b).powi(3);
+    let s_ = (l - 0.089_484_18 * a - 1.291_485_5 * b).powi(3);
+    [
+        4.076_741_7 * l_ - 3.307_711_6 * m_ + 0.230_969_94 * s_,
+        -1.268_438 * l_ + 2.609_757_4 * m_ - 0.341_319_38 * s_,
+        -0.004_196_086_3 * l_ - 0.703_418_6 * m_ + 1.707_614_7 * s_,
+    ]
+}
+
 impl Gradient {
     /// The straight RGBA color (`0..=1`) at `t` along the gradient, before
     /// `reverse` is applied.
     pub fn sample(&self, t: f32) -> [f32; 4] {
         let t = t.clamp(0.0, 1.0);
+        let method = self.method;
+        let space = |c: Rgb| -> [f32; 3] {
+            let rgb = [c.r, c.g, c.b];
+            match method {
+                GradientMethod::Classic => rgb,
+                GradientMethod::Linear => rgb.map(to_linear),
+                GradientMethod::Perceptual | GradientMethod::Smooth => to_oklab(rgb.map(to_linear)),
+            }
+        };
+        let smoothness = match method {
+            GradientMethod::Smooth => 0.0,
+            _ => self.smoothness,
+        };
         let colors: Vec<(f32, f32, [f32; 3])> = self
             .colors
             .iter()
-            .map(|s| (s.location, s.midpoint, [s.color.r, s.color.g, s.color.b]))
+            .map(|s| (s.location, s.midpoint, space(s.color)))
             .collect();
         let opacities: Vec<(f32, f32, [f32; 1])> = self
             .opacities
             .iter()
             .map(|s| (s.location, s.midpoint, [s.opacity]))
             .collect();
-        let [r, g, b] = if colors.is_empty() {
+        let mixed = if colors.is_empty() {
             [0.0; 3]
         } else {
-            interpolate(&colors, t, self.smoothness)
+            interpolate(&colors, t, smoothness)
         };
+        let [r, g, b] = match method {
+            GradientMethod::Classic => mixed,
+            GradientMethod::Linear => mixed.map(from_linear),
+            GradientMethod::Perceptual | GradientMethod::Smooth => {
+                from_oklab(mixed).map(from_linear)
+            }
+        }
+        .map(|v| v.clamp(0.0, 1.0));
         let [a] = if opacities.is_empty() {
             [1.0]
         } else {
-            interpolate(&opacities, t, self.smoothness)
+            interpolate(&opacities, t, smoothness)
         };
         [r, g, b, a]
     }
 
-    /// 256 straight RGBA8 samples from start to end (with `reverse`
-    /// applied), for drawing and gradient maps.
-    pub fn lut(&self) -> Vec<[u8; 4]> {
-        (0..256)
+    /// `n` (at least 2) straight RGBA colors (`0..=1`) evenly from start
+    /// to end, with `reverse` applied.
+    pub fn table(&self, n: usize) -> Vec<[f32; 4]> {
+        let n = n.max(2);
+        (0..n)
             .map(|i| {
-                let mut t = i as f32 / 255.0;
-                if self.reverse {
-                    t = 1.0 - t;
-                }
-                let c = self.sample(t);
-                let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-                [q(c[0]), q(c[1]), q(c[2]), q(c[3])]
+                let t = i as f32 / (n - 1) as f32;
+                self.sample(if self.reverse { 1.0 - t } else { t })
             })
+            .collect()
+    }
+
+    /// 256 straight RGBA8 samples from start to end (with `reverse`
+    /// applied), for gradient maps.
+    pub fn lut(&self) -> Vec<[u8; 4]> {
+        self.table(256)
+            .into_iter()
+            .map(|c| c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8))
             .collect()
     }
 }

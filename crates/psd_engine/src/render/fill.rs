@@ -47,6 +47,10 @@ pub(crate) fn paint(
     }
 }
 
+/// Colors a gradient is drawn from (finer than 8-bit steps, so long
+/// gradients don't band).
+const GRADIENT_STEPS: usize = 1024;
+
 /// A gradient's colors and geometry, ready to sample.
 pub(crate) struct GradientPaint {
     lut: Vec<[f32; 4]>,
@@ -61,11 +65,7 @@ pub(crate) struct GradientPaint {
 impl GradientPaint {
     /// Prepares a gradient over `frame` (level 0).
     pub(crate) fn new(g: &Gradient, frame: IRect) -> GradientPaint {
-        let lut = g
-            .lut()
-            .into_iter()
-            .map(|c| c.map(|v| v as f32 / 255.0))
-            .collect();
+        let lut = g.table(GRADIENT_STEPS);
         let (w, h) = (frame.w.max(1) as f64, frame.h.max(1) as f64);
         let degrees = if g.angle.is_finite() {
             g.angle as f64

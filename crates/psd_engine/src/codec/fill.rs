@@ -78,7 +78,15 @@ pub(crate) fn new_fill(fill: &Fill, class: &str, align_key: &str) -> Descriptor 
     let mut d = Descriptor::new(class);
     if let Fill::Gradient { .. } = fill {
         for key in [
-            "Dthr", "Rvrs", "Angl", "Type", "Algn", "Scl ", "Ofst", "Grad",
+            "Dthr",
+            "gradientsInterpolationMethod",
+            "Rvrs",
+            "Angl",
+            "Type",
+            "Algn",
+            "Scl ",
+            "Ofst",
+            "Grad",
         ] {
             d.items.push((key.into(), Value::Bool(false)));
         }
