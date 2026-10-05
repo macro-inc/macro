@@ -313,6 +313,11 @@ export class FigEngine {
     return this.query('search', page, query, limit);
   }
 
+  /** The page's distinct solid colors, most used first (`RRGGBB[AA]`). */
+  pageColors(page: number, limit = 24): Promise<string[]> {
+    return this.query('pageColors', page, limit);
+  }
+
   inRect(page: number, parent: string | undefined, rect: Rect) {
     return this.query<string[]>(
       'inRect',
