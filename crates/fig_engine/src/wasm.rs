@@ -80,8 +80,9 @@ pub struct FigFile {
     doc: Document,
     scene: Option<(usize, Scene)>,
     images: ImageStore,
-    /// The file as opened (saving patches it).
-    original: Vec<u8>,
+    /// The file as opened (saving patches it; image fills are read from
+    /// it in place).
+    original: std::sync::Arc<Vec<u8>>,
     history: History,
 }
 
@@ -89,14 +90,15 @@ pub struct FigFile {
 impl FigFile {
     /// Opens a `.fig` file.
     #[wasm_bindgen(constructor)]
-    pub fn new(bytes: &[u8]) -> Result<FigFile, JsError> {
+    pub fn new(bytes: Vec<u8>) -> Result<FigFile, JsError> {
         console_error_panic_hook::set_once();
-        let doc = Document::open(bytes).map_err(js_err)?;
+        let original = std::sync::Arc::new(bytes);
+        let doc = Document::open_shared(&original).map_err(js_err)?;
         Ok(FigFile {
             doc,
             scene: None,
             images: ImageStore::default(),
-            original: bytes.to_vec(),
+            original,
             history: History::default(),
         })
     }

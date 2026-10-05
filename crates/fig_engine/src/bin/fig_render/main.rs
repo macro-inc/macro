@@ -690,12 +690,12 @@ fn peak_rss_kb() -> u64 {
 }
 
 fn bench(path: &Path, tile: u32, grid: i32) {
-    let Ok(bytes) = std::fs::read(path) else {
+    let Ok(bytes) = std::fs::read(path).map(std::sync::Arc::new) else {
         eprintln!("{}: unreadable", path.display());
         return;
     };
     let t = Instant::now();
-    let Ok(container) = Container::open(&bytes) else {
+    let Ok(container) = Container::open_shared(&bytes) else {
         println!("{}: not a .fig file", stem(path));
         return;
     };
@@ -709,7 +709,6 @@ fn bench(path: &Path, tile: u32, grid: i32) {
         }
     };
     let decode = t.elapsed();
-    drop(bytes);
     // The page with the most layers, and how long its first build took.
     let (mut page, mut most, mut first_build) = (doc.pages[0], 0, std::time::Duration::ZERO);
     for &p in &doc.pages {

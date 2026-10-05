@@ -12,6 +12,35 @@ use crate::error::{FigError, Result, corrupt};
 use crate::zip::ZipArchive;
 use std::collections::HashMap;
 use std::io::Read;
+use std::ops::{Deref, Range};
+use std::sync::Arc;
+
+/// An encoded image file: a range of the `.fig` file it was stored in
+/// (shared rather than copied), or bytes of its own.
+#[derive(Clone)]
+pub enum Encoded {
+    Shared(Arc<Vec<u8>>, Range<usize>),
+    Owned(Vec<u8>),
+}
+
+impl Deref for Encoded {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        match self {
+            Encoded::Shared(file, range) => &file[range.clone()],
+            Encoded::Owned(bytes) => bytes,
+        }
+    }
+}
+
+/// What to do with the image files of a ZIP-layout file.
+enum Images<'a> {
+    Copy,
+    /// Refer to stored ones in place (the archive's bytes, shared).
+    Share(&'a Arc<Vec<u8>>),
+    Skip,
+}
 
 /// The pieces of a `.fig` file, decompressed.
 pub struct Container {
@@ -22,7 +51,7 @@ pub struct Container {
     /// The decompressed kiwi message.
     pub message: Vec<u8>,
     /// Image fills by lowercase hex SHA-1, still encoded (PNG, JPEG, …).
-    pub images: HashMap<String, Vec<u8>>,
+    pub images: HashMap<String, Encoded>,
     /// Figma's own render of (part of) the first page.
     pub thumbnail: Option<Vec<u8>>,
     /// `meta.json`, when the file has one.
@@ -43,18 +72,38 @@ pub fn is_fig(bytes: &[u8]) -> bool {
 impl Container {
     /// Splits a `.fig` file into its parts.
     pub fn open(bytes: &[u8]) -> Result<Container> {
+        Self::open_with(bytes, Images::Copy)
+    }
+
+    /// Splits a `.fig` file into its parts; stored image files stay in
+    /// `bytes`, which they share, rather than being copied out.
+    pub fn open_shared(bytes: &Arc<Vec<u8>>) -> Result<Container> {
+        Self::open_with(bytes, Images::Share(bytes))
+    }
+
+    /// The document alone, without the image files.
+    pub fn open_without_images(bytes: &[u8]) -> Result<Container> {
+        Self::open_with(bytes, Images::Skip)
+    }
+
+    fn open_with(bytes: &[u8], images: Images) -> Result<Container> {
         if bytes.starts_with(b"PK") {
-            return Self::open_zip(bytes);
+            return Self::open_zip(bytes, images);
         }
         Self::open_document(bytes, HashMap::new(), None, None)
     }
 
-    fn open_zip(bytes: &[u8]) -> Result<Container> {
+    fn open_zip(bytes: &[u8], mode: Images) -> Result<Container> {
         let zip = ZipArchive::new(bytes)?;
-        let canvas = zip
-            .find("canvas.fig")
-            .ok_or(FigError::NotFigma)
-            .and_then(|entry| zip.read(entry))?;
+        let canvas_entry = zip.find("canvas.fig").ok_or(FigError::NotFigma)?;
+        let canvas_copy;
+        let canvas = match zip.stored_range(canvas_entry) {
+            Some(range) => &bytes[range],
+            None => {
+                canvas_copy = zip.read(canvas_entry)?;
+                &canvas_copy
+            }
+        };
         let mut images = HashMap::new();
         let mut thumbnail = None;
         let mut meta = None;
@@ -63,19 +112,24 @@ impl Container {
                 if hash.is_empty() {
                     continue;
                 }
-                images.insert(hash.to_ascii_lowercase(), zip.read(entry)?);
+                let image = match (&mode, zip.stored_range(entry)) {
+                    (Images::Skip, _) => continue,
+                    (Images::Share(file), Some(range)) => Encoded::Shared(Arc::clone(file), range),
+                    _ => Encoded::Owned(zip.read(entry)?),
+                };
+                images.insert(hash.to_ascii_lowercase(), image);
             } else if entry.name == "thumbnail.png" {
                 thumbnail = Some(zip.read(entry)?);
             } else if entry.name == "meta.json" {
                 meta = serde_json::from_slice(&zip.read(entry)?).ok();
             }
         }
-        Self::open_document(&canvas, images, thumbnail, meta)
+        Self::open_document(canvas, images, thumbnail, meta)
     }
 
     fn open_document(
         bytes: &[u8],
-        images: HashMap<String, Vec<u8>>,
+        images: HashMap<String, Encoded>,
         thumbnail: Option<Vec<u8>>,
         meta: Option<serde_json::Value>,
     ) -> Result<Container> {

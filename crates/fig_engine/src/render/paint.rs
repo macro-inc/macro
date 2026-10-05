@@ -87,7 +87,7 @@ impl Painter<'_> {
         let Some(hash) = image.hash.as_deref() else {
             return;
         };
-        let encoded = self.doc.images.get(hash).map(Vec::as_slice);
+        let encoded = self.doc.images.get(hash).map(|e| &**e);
         let Some(decoded) = self.images.get(hash, encoded) else {
             // Missing or undecodable: Figma shows a neutral placeholder.
             let mut p = super::solid_paint(crate::model::Color {
