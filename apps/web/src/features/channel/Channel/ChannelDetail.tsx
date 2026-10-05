@@ -41,7 +41,7 @@ import {
   type ChannelTargetRequest,
 } from './ChannelSurface';
 import { ChannelTabProvider } from './ChannelTabContext';
-import { ChannelTabs } from './ChannelTabs';
+import { ChannelTabLayout, ChannelTabs } from './ChannelTabs';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
 import {
@@ -313,10 +313,14 @@ function ChannelDetailContent(props: ChannelDetailProps) {
               }}
             />
           </DebugSuspense>
-          <div class="flex min-h-0 flex-1 flex-col px-2">
-            <DebugSuspense name="ChannelDetail.tabs">
-              <ChannelTabs channelId={channelId} />
-            </DebugSuspense>
+          <ChannelTabLayout
+            class="flex-1 px-2"
+            tabs={
+              <DebugSuspense name="ChannelDetail.tabs">
+                <ChannelTabs channelId={channelId} />
+              </DebugSuspense>
+            }
+          >
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <DebugSuspense name="ChannelDetail.messages">
@@ -353,7 +357,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
                 </DebugSuspense>
               </Match>
             </Switch>
-          </div>
+          </ChannelTabLayout>
         </div>
       </ChannelTabProvider>
     </ChannelSurface>

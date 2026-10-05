@@ -32,7 +32,7 @@ import {
   ChannelTabProvider,
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
-import { ChannelTabs } from '@channel/Channel/ChannelTabs';
+import { ChannelTabLayout, ChannelTabs } from '@channel/Channel/ChannelTabs';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import { CHANNEL_TAB_ICONS } from '@channel/Channel/channel-tab-icons';
 import {
@@ -528,21 +528,23 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           pendingJoinCall={pendingJoinCall}
           onHandled={() => setPendingJoinCall(false)}
         />
-        <div
+        <ChannelTabLayout
           class={cn(
-            'h-full flex flex-col px-2 touch:px-0',
+            'h-full px-2 touch:px-0',
             // The channel block is full-frame on mobile (messages scroll
             // behind the chrome); the other tabs still need to start below
             // the status bar + floating header.
             activeTab() !== 'messages' &&
               'touch:pt-(--mobile-content-inset-top)'
           )}
+          tabs={
+            <Show when={!isTouchDevice()}>
+              <Suspense>
+                <ChannelTabs channelId={channelId} />
+              </Suspense>
+            </Show>
+          }
         >
-          <Show when={!isTouchDevice()}>
-            <Suspense>
-              <ChannelTabs channelId={channelId} />
-            </Suspense>
-          </Show>
           <Switch>
             <Match when={activeTab() === 'messages'}>
               <ChannelMessages
@@ -572,7 +574,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             </Match>
           </Switch>
           <NewTop channelId={channelId} />
-        </div>
+        </ChannelTabLayout>
       </ChannelTabProvider>
     </ChannelSurface>
   );
