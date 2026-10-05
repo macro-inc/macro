@@ -26,6 +26,7 @@ use crate::scene::Scene;
 use std::collections::HashMap;
 
 mod design;
+mod handoff;
 
 /// The schema of designs created in Macro: a subset of Figma's, with the
 /// same type and field names, so the files are ordinary `.fig` files.
@@ -91,7 +92,17 @@ message ComponentPropAssignment defID:GUID value:ComponentPropValue
 message VariantPropSpec propDefId:GUID value:string
 message StateGroupPropertyValueOrder property:string values:string[]
 message VectorData vectorNetworkBlob:uint normalizedSize:Vector
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID booleanOperation:BooleanOperation vectorData:VectorData componentPropDefs:ComponentPropDef[] componentPropRefs:ComponentPropRef[] componentPropAssignments:ComponentPropAssignment[] variantPropSpecs:VariantPropSpec[] stateGroupPropertyValueOrders:StateGroupPropertyValueOrder[] isStateGroup:bool propsAreBubbled:bool description:string key:string styleType:StyleType sortPosition:string isSoftDeleted:bool styleIdForFill:StyleId styleIdForStrokeFill:StyleId styleIdForEffect:StyleId styleIdForText:StyleId styleID:uint
+enum ImageType PNG JPEG SVG PDF
+enum ExportConstraintType CONTENT_SCALE CONTENT_WIDTH CONTENT_HEIGHT
+enum ExportSVGIDMode IF_NEEDED ALWAYS
+enum Axis X Y
+enum LayoutGridType MIN CENTER STRETCH MAX
+enum LayoutGridPattern STRIPES GRID
+struct ExportConstraint type:ExportConstraintType value:float
+message ExportSettings suffix:string imageType:ImageType constraint:ExportConstraint svgIDMode:ExportSVGIDMode svgOutlineText:bool contentsOnly:bool useAbsoluteBounds:bool quality:float
+message LayoutGrid type:LayoutGridType axis:Axis visible:bool numSections:int offset:float sectionSize:float gutterSize:float color:Color pattern:LayoutGridPattern
+message Guide axis:Axis offset:float guid:GUID
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID booleanOperation:BooleanOperation vectorData:VectorData componentPropDefs:ComponentPropDef[] componentPropRefs:ComponentPropRef[] componentPropAssignments:ComponentPropAssignment[] variantPropSpecs:VariantPropSpec[] stateGroupPropertyValueOrders:StateGroupPropertyValueOrder[] isStateGroup:bool propsAreBubbled:bool description:string key:string styleType:StyleType sortPosition:string isSoftDeleted:bool styleIdForFill:StyleId styleIdForStrokeFill:StyleId styleIdForEffect:StyleId styleIdForText:StyleId styleID:uint exportSettings:ExportSettings[] layoutGrids:LayoutGrid[] guides:Guide[]
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -794,6 +805,15 @@ impl<'s> Build<'s> {
                 self.set_enum(m, "stackPositioning", if a { "ABSOLUTE" } else { "AUTO" });
             }
         }
+        if edits & flags::EXPORTS != 0 {
+            self.export_settings(m, p);
+        }
+        if edits & flags::LAYOUT_GRIDS != 0 {
+            self.layout_grids(m, p);
+        }
+        if edits & flags::GUIDES != 0 {
+            self.guides(m, p);
+        }
         if edits & flags::PARENT != 0 {
             let parent_guid = node.parent.and_then(|pi| doc.props(pi).guid);
             if let (Some(g), Some(def)) = (parent_guid, self.sub(m.def, "parentIndex")) {
@@ -1220,11 +1240,12 @@ fn created_record(
 /// only edited ones are decoded and re-encoded.
 pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
     let mut container = Container::open_without_images(original)?;
-    let wants_shapes = doc
-        .nodes
-        .iter()
-        .any(|n| !n.removed && n.edits & (flags::BOOLEAN | flags::VECTOR) != 0);
-    if wants_shapes && let Some(extended) = with_shape_fields(&container.schema)? {
+    let wants = |bits: u64| doc.nodes.iter().any(|n| !n.removed && n.edits & bits != 0);
+    let wants_shapes = wants(flags::BOOLEAN | flags::VECTOR);
+    let wants_handoff = wants(flags::EXPORTS | flags::LAYOUT_GRIDS | flags::GUIDES);
+    if (wants_shapes || wants_handoff)
+        && let Some(extended) = with_fields(&container.schema, wants_shapes, wants_handoff)?
+    {
         container.schema = extended;
     }
     let schema = Schema::decode(&container.schema)?;
@@ -1382,21 +1403,35 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
 /// it lacks them (files made in Macro before it wrote them). Existing types
 /// keep their indices and field ids, so the file's records read the same.
 fn with_shape_fields(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
+    with_fields(bytes, true, false)
+}
+
+/// New schema types: name, kind, and fields (name and type, or enum value).
+type NewDef<'a> = (&'a str, crate::kiwi::Kind, Vec<(&'a str, i32)>);
+
+/// The schema with the fields saving needs, when it lacks them: the
+/// boolean and vector fields (`shapes`), and export presets, layout grids,
+/// and guides (`handoff`).
+fn with_fields(bytes: &[u8], shapes: bool, handoff: bool) -> Result<Option<Vec<u8>>> {
     use crate::kiwi::{Kind, Ty};
     let schema = Schema::decode(bytes)?;
     let Some(node) = schema.def_index("NodeChange") else {
         return Ok(None);
     };
     let has = |name: &str| schema.def(node).index_of(name).is_some();
-    if has("booleanOperation") && has("vectorData") {
+    let need_shapes = shapes && !(has("booleanOperation") && has("vectorData"));
+    let need_handoff = handoff && !(has("exportSettings") && has("layoutGrids") && has("guides"));
+    if !need_shapes && !need_handoff {
         return Ok(None);
     }
     let count = schema.defs.len() as u32;
-    // New types: name, kind, and fields (name and type, or enum value).
-    type NewDef<'a> = (&'a str, Kind, Vec<(&'a str, i32)>);
     let mut added: Vec<NewDef> = Vec::new();
-    let mut fields: Vec<(&str, i32)> = Vec::new();
-    if !has("booleanOperation") {
+    // New `NodeChange` fields: name, type, and whether it is a list.
+    let mut fields: Vec<(&str, i32, bool)> = Vec::new();
+    if need_handoff {
+        handoff::schema_additions(&schema, &has, count, &mut added, &mut fields);
+    }
+    if need_shapes && !has("booleanOperation") {
         let def = match schema.def_index("BooleanOperation") {
             Some(d) => d,
             None => {
@@ -1408,9 +1443,9 @@ fn with_shape_fields(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
                 count + added.len() as u32 - 1
             }
         };
-        fields.push(("booleanOperation", def as i32));
+        fields.push(("booleanOperation", def as i32, false));
     }
-    if !has("vectorData") {
+    if need_shapes && !has("vectorData") {
         let def = match schema.def_index("VectorData") {
             Some(d) => d,
             None => {
@@ -1422,7 +1457,7 @@ fn with_shape_fields(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
                 count + added.len() as u32 - 1
             }
         };
-        fields.push(("vectorData", def as i32));
+        fields.push(("vectorData", def as i32, false));
     }
     let ty = |t: Ty| match t {
         Ty::Bool => -1,
@@ -1455,11 +1490,11 @@ fn with_shape_fields(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
         }
         if extra > 0 {
             let mut next = d.fields.iter().map(|f| f.id).max().unwrap_or(0);
-            for (name, t) in &fields {
+            for (name, t, array) in &fields {
                 next += 1;
                 w.string(name);
                 w.var_int(*t);
-                w.byte(0);
+                w.byte(u8::from(*array));
                 w.var_uint(next);
             }
         }

@@ -9,6 +9,8 @@ use crate::model::text::{StyleRun, TextContent};
 use crate::model::*;
 use std::sync::Arc;
 
+mod handoff;
+
 /// The `NodeChange` fields the engine reads. Everything else is skipped while
 /// decoding, which keeps memory proportional to what is drawn.
 const NODE_FIELDS: &[&str] = &[
@@ -92,6 +94,8 @@ const NODE_FIELDS: &[&str] = &[
     "minSize",
     "maxSize",
     "exportSettings",
+    "layoutGrids",
+    "guides",
     "booleanOperation",
     "vectorData",
     "horizontalConstraint",
@@ -236,7 +240,7 @@ pub fn restrict_schema(schema: &mut Schema) {
     schema.keep_only("InstanceSwapPreferredValue", &["key"]);
     schema.keep_only("VariantPropSpec", &["propDefId", "value"]);
     schema.keep_only("StateGroupPropertyValueOrder", &["property", "values"]);
-    schema.keep_only("ExportSettings", &["suffix", "imageType", "constraint"]);
+    handoff::restrict_schema(schema);
     schema.keep_only("NodeGenerationData", &["overrides"]);
     schema.keep_only(
         "VectorData",
@@ -812,24 +816,7 @@ pub fn props(m: MsgRef) -> Props {
     p.override_key = m.msg("overrideKey").and_then(guid);
     p.auto_layout = auto_layout(&m).map(Arc::new);
     p.layout_child = layout_child(&m);
-    if m.has("exportSettings") {
-        p.export_settings = Some(
-            m.msgs("exportSettings")
-                .map(|e| {
-                    let c = e.msg("constraint");
-                    ExportSetting {
-                        format: e.enum_name("imageType").unwrap_or("PNG").to_owned(),
-                        suffix: e.str("suffix").unwrap_or("").to_owned(),
-                        constraint: c
-                            .and_then(|c| c.enum_name("type"))
-                            .unwrap_or("CONTENT_SCALE")
-                            .to_owned(),
-                        value: c.and_then(|c| c.f32("value")).unwrap_or(1.0),
-                    }
-                })
-                .collect(),
-        );
-    }
+    handoff::read(&m, &mut p);
     p.boolean_operation = m.enum_name("booleanOperation").map(Into::into);
     p.vector_data = m.msg("vectorData").map(|v| {
         Arc::new(VectorData {

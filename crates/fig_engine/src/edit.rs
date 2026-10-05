@@ -76,6 +76,13 @@ pub mod flags {
     pub const COMPONENT: u64 = 1 << 30;
     /// Shared styles: the styles a layer uses, and a style node's kind.
     pub const STYLES: u64 = 1 << 31;
+    // Handoff and layout aids (see `edit::handoff`) take bits from 40 up.
+    /// A layer's export presets.
+    pub const EXPORTS: u64 = 1 << 40;
+    /// A frame's layout grids.
+    pub const LAYOUT_GRIDS: u64 = 1 << 41;
+    /// A page's or frame's ruler guides.
+    pub const GUIDES: u64 = 1 << 42;
 }
 
 /// A paint as the editor describes it.
@@ -590,6 +597,22 @@ pub enum Op {
         collection: String,
         mode: Option<String>,
     },
+    // ---- handoff and layout aids (see `edit::handoff`) --------------------
+    /// Replaces layers' export presets.
+    SetExports {
+        ids: Vec<String>,
+        settings: Vec<crate::model::ExportSetting>,
+    },
+    /// Replaces frames' layout grids.
+    SetLayoutGrids {
+        ids: Vec<String>,
+        grids: Vec<GridSpec>,
+    },
+    /// Replaces the ruler guides of a page or frame.
+    SetGuides {
+        id: String,
+        guides: Vec<GuideSpec>,
+    },
 }
 
 /// A component property value as the editor sends it: `{"bool": true}`,
@@ -642,12 +665,14 @@ struct Txn<'a> {
 mod components;
 mod design;
 mod flip;
+mod handoff;
 mod instance_layout;
 mod overrides;
 mod paint;
 mod paste;
 pub mod shapes;
 pub(crate) use design::parse_variant_name;
+pub use handoff::{GridSpec, GuideSpec};
 pub(crate) use overrides::guid_of;
 pub use paste::{At, PasteSpec, View};
 pub(crate) mod layout;
@@ -1598,6 +1623,9 @@ impl<'a> Txn<'a> {
             | Op::DeleteStyle { .. }
             | Op::BindVariable { .. }
             | Op::SetVariableMode { .. } => self.apply_design(op)?,
+            Op::SetExports { ids, settings } => self.set_exports(ids, settings)?,
+            Op::SetLayoutGrids { ids, grids } => self.set_layout_grids(ids, grids)?,
+            Op::SetGuides { id, guides } => self.set_guides(id, guides)?,
         }
         Ok(())
     }

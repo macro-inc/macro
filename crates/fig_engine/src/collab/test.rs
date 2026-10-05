@@ -225,6 +225,7 @@ fn entries_round_trip_every_property() {
         let mut props = node.props.clone();
         props.stroke_sides = Some([1.0, 2.0, 3.0, 4.0]);
         set_design_system_fields(&mut props);
+        set_handoff_fields(&mut props);
         if let Some(a) = &mut props.auto_layout {
             Arc::make_mut(a).strokes_in_layout = true;
         }
@@ -274,6 +275,63 @@ fn entries_round_trip_every_property() {
         let back = Reader::new(&bytes, &resolve).node().unwrap();
         assert_eq!(back, state, "{:?}", node.props.guid);
     }
+}
+
+/// Export presets, layout grids, and guides: fields the showcase leaves
+/// unset, each with values off their defaults.
+fn set_handoff_fields(props: &mut crate::model::Props) {
+    use crate::model::{
+        Axis, Color, ExportConstraint, ExportFormat, ExportSetting, GridAlign, GridPattern, Guid,
+        Guide, LayoutGrid,
+    };
+    props.export_settings = Some(Arc::from([
+        ExportSetting::default(),
+        ExportSetting {
+            format: ExportFormat::Svg,
+            suffix: "-dark".into(),
+            constraint: ExportConstraint::ContentWidth,
+            value: 512.0,
+            svg_outline_text: false,
+            svg_include_id: true,
+            contents_only: false,
+            use_absolute_bounds: true,
+            quality: 42,
+        },
+    ]));
+    props.layout_grids = Some(Arc::from([
+        LayoutGrid::default_grid(),
+        LayoutGrid {
+            pattern: GridPattern::Stripes,
+            axis: Axis::Y,
+            align: GridAlign::Max,
+            visible: false,
+            count: i32::MAX,
+            offset: 8.5,
+            section_size: 64.0,
+            gutter: 12.0,
+            color: Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 0.4,
+            },
+        },
+    ]));
+    props.guides = Some(Arc::from([
+        Guide {
+            axis: Axis::X,
+            offset: -12.25,
+            guid: Some(Guid {
+                session: 3,
+                local: 9,
+            }),
+        },
+        Guide {
+            axis: Axis::Y,
+            offset: 300.0,
+            guid: None,
+        },
+    ]));
 }
 
 /// Components, variants, and styles: fields the showcase leaves unset.

@@ -6,8 +6,9 @@ use super::{
     dec_style_type, dec_variable_type, dec_winding,
 };
 use crate::model::{
-    Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting,
-    Glyph, Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
+    Affine, AutoLayout, Axis, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
+    ExportConstraint, ExportFormat, ExportSetting, Glyph, GridAlign, GridPattern, Guid, Guide,
+    ImageFilters, ImagePaint, LayoutChild, LayoutGrid, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
     Variable, VariableMode, VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
 };
@@ -362,6 +363,64 @@ impl<'a> Reader<'a> {
         })
     }
 
+    fn export_setting(&mut self) -> Decoded<ExportSetting> {
+        Ok(ExportSetting {
+            format: match self.u8()? {
+                1 => ExportFormat::Jpeg,
+                2 => ExportFormat::Svg,
+                3 => ExportFormat::Pdf,
+                _ => ExportFormat::Png,
+            },
+            suffix: self.string()?,
+            constraint: match self.u8()? {
+                1 => ExportConstraint::ContentWidth,
+                2 => ExportConstraint::ContentHeight,
+                _ => ExportConstraint::ContentScale,
+            },
+            value: self.f32()?,
+            svg_outline_text: self.bool()?,
+            svg_include_id: self.bool()?,
+            contents_only: self.bool()?,
+            use_absolute_bounds: self.bool()?,
+            quality: self.u8()?,
+        })
+    }
+
+    fn axis(&mut self) -> Decoded<Axis> {
+        Ok(if self.bool()? { Axis::Y } else { Axis::X })
+    }
+
+    fn layout_grid(&mut self) -> Decoded<LayoutGrid> {
+        Ok(LayoutGrid {
+            pattern: if self.bool()? {
+                GridPattern::Grid
+            } else {
+                GridPattern::Stripes
+            },
+            axis: self.axis()?,
+            align: match self.u8()? {
+                0 => GridAlign::Min,
+                1 => GridAlign::Center,
+                3 => GridAlign::Max,
+                _ => GridAlign::Stretch,
+            },
+            visible: self.bool()?,
+            count: self.var()? as u32 as i32,
+            offset: self.f32()?,
+            section_size: self.f32()?,
+            gutter: self.f32()?,
+            color: self.color()?,
+        })
+    }
+
+    fn ruler_guide(&mut self) -> Decoded<Guide> {
+        Ok(Guide {
+            axis: self.axis()?,
+            offset: self.f32()?,
+            guid: self.opt(Self::guid)?,
+        })
+    }
+
     fn variable(&mut self) -> Decoded<Variable> {
         Ok(Variable {
             set: self.opt(Self::guid)?,
@@ -474,16 +533,7 @@ impl<'a> Reader<'a> {
             override_key: self.opt(Self::guid)?,
             auto_layout: self.opt(|r| r.auto_layout().map(Arc::new))?,
             layout_child: self.opt(Self::layout_child)?,
-            export_settings: self.opt(|r| {
-                r.arc_list(|r| {
-                    Ok(ExportSetting {
-                        format: r.string()?,
-                        suffix: r.string()?,
-                        constraint: r.string()?,
-                        value: r.f32()?,
-                    })
-                })
-            })?,
+            export_settings: self.opt(|r| r.arc_list(Self::export_setting))?,
             boolean_operation: self.opt_arc_str()?,
             vector_data: self.opt(|r| {
                 Ok(Arc::new(VectorData {
@@ -531,6 +581,8 @@ impl<'a> Reader<'a> {
             mode_by_set: self.opt(|r| r.arc_list(|r| Ok((r.guid()?, r.guid()?))))?,
             generated: self.opt(|r| r.arc_list(Self::props))?,
             vector_styles: self.opt(|r| r.arc_list(Self::style_run))?,
+            layout_grids: self.opt(|r| r.arc_list(Self::layout_grid))?,
+            guides: self.opt(|r| r.arc_list(Self::ruler_guide))?,
             recomputed: self.bool()?,
         })
     }
