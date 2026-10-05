@@ -133,7 +133,13 @@ impl Txn<'_> {
 
     /// Lays out one stack frame's children. Returns whether the frame's own
     /// size changed.
+    ///
+    /// A hidden frame keeps its layout, as in Figma, which lays out hidden
+    /// frames only once they are shown again.
     pub(super) fn reflow(&mut self, frame: NodeIdx) -> bool {
+        if !self.doc.props(frame).visible() {
+            return false;
+        }
         let Some(al) = self.doc.props(frame).auto_layout.clone() else {
             return false;
         };

@@ -1468,9 +1468,11 @@ impl History {
 /// when its own content changed (its children, size, or settings), and
 /// `Some(false)` when only its place in its parent did.
 fn layout_change(old: &Node, new: &Node) -> Option<bool> {
+    // A frame shown again is laid out again: hidden ones keep their layout.
     let own = old.children != new.children
         || old.props.size != new.props.size
-        || old.props.auto_layout != new.props.auto_layout;
+        || old.props.auto_layout != new.props.auto_layout
+        || old.props.visible != new.props.visible;
     let placed = old.removed != new.removed
         || old.parent != new.parent
         || old.props.transform != new.props.transform

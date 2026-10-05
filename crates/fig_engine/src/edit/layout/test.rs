@@ -320,3 +320,26 @@ fn groups_scale_their_layers() {
     );
     assert_eq!(bounds(&doc, &kids[1]).2, 120.0);
 }
+
+fn set(doc: &mut Document, h: &mut History, id: &str, props: &str) {
+    apply(
+        doc,
+        h,
+        &format!(r#"[{{"op":"set","ids":["{id}"],"props":{props}}}]"#),
+    );
+}
+
+#[test]
+fn hidden_frames_keep_their_layout_until_shown() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = stack(&mut doc, &mut h);
+    set(&mut doc, &mut h, &frame, r#"{"visible":false}"#);
+    set(&mut doc, &mut h, &kids[0], r#"{"width":100}"#);
+    // Figma leaves a hidden frame's layout as it was.
+    assert_eq!(bounds(&doc, &kids[1]).0, 80.0);
+    assert_eq!(bounds(&doc, &frame).2, 200.0);
+    set(&mut doc, &mut h, &frame, r#"{"visible":true}"#);
+    assert_eq!(bounds(&doc, &kids[1]).0, 140.0);
+    assert_eq!(bounds(&doc, &frame).2, 260.0);
+}
