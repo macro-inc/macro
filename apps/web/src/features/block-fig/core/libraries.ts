@@ -13,6 +13,13 @@ import type {
   PublishedLibrary,
 } from '@core/fig-engine/library-types';
 
+/** The engine operations of team libraries (`fig_engine::edit::library`). */
+export type LibraryOp =
+  /** Keys and versions for every asset (keys from `seed`, the document id). */
+  | { op: 'publishLibrary'; seed: string; note?: string }
+  /** The libraries the file uses, replacing the list. */
+  | { op: 'setLibraries'; libraries: LibraryRef[] };
+
 /** A copy whose library published a newer version. */
 export interface LibraryUpdate {
   /** The library's document id. */
@@ -30,7 +37,10 @@ export interface LibraryUpdate {
 }
 
 /** Copies that are not top-level assets on their own (variants, whose set updates with them). */
-function shownAlone(copy: LibraryCopy, copies: readonly LibraryCopy[]): boolean {
+function shownAlone(
+  copy: LibraryCopy,
+  copies: readonly LibraryCopy[]
+): boolean {
   if (copy.kind !== 'COMPONENT' || !copy.setKey) return true;
   return !copies.some((c) => c.key === copy.setKey);
 }
@@ -121,7 +131,11 @@ export function groupAssets(
 ): AssetGroup[] {
   const q = query.trim().toLowerCase();
   const groups = new Map<string, AssetGroup>();
-  const add = (id: string, group: Omit<AssetGroup, 'assets'>, a: PublishedAsset) => {
+  const add = (
+    id: string,
+    group: Omit<AssetGroup, 'assets'>,
+    a: PublishedAsset
+  ) => {
     let g = groups.get(id);
     if (!g) {
       g = { ...group, assets: [] };
@@ -172,7 +186,9 @@ export function withLibrary(
 }
 
 /** What a style applies to: Figma's `ApplyStyle` kinds. */
-export function styleKind(asset: PublishedAsset): 'FILL' | 'TEXT' | 'EFFECT' | null {
+export function styleKind(
+  asset: PublishedAsset
+): 'FILL' | 'TEXT' | 'EFFECT' | null {
   switch (asset.style?.type) {
     case 'FILL':
       return 'FILL';
@@ -198,4 +214,33 @@ export function updateSummary(updates: readonly LibraryUpdate[]): string {
   if (styles) parts.push(plural(styles, 'style'));
   if (variables) parts.push(plural(variables, 'variable'));
   return parts.join(', ');
+}
+
+/** The drag data type of a library component dragged from the Assets panel. */
+export const LIBRARY_ASSET_MIME = 'application/x-macro-fig-asset';
+
+/** A dragged library component: its library and key. */
+export interface DraggedAsset {
+  library: string;
+  key: string;
+}
+
+/** The library component in drag data, if it holds one. */
+export function draggedAsset(text: string | undefined): DraggedAsset | null {
+  if (!text) return null;
+  try {
+    const v: unknown = JSON.parse(text);
+    if (
+      typeof v === 'object' &&
+      v !== null &&
+      'library' in v &&
+      'key' in v &&
+      typeof v.library === 'string' &&
+      typeof v.key === 'string'
+    )
+      return { library: v.library, key: v.key };
+  } catch {
+    // Not ours.
+  }
+  return null;
 }

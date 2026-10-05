@@ -14,7 +14,9 @@ import {
   withLibrary,
 } from './libraries';
 
-const asset = (a: Partial<PublishedAsset> & { key: string }): PublishedAsset => ({
+const asset = (
+  a: Partial<PublishedAsset> & { key: string }
+): PublishedAsset => ({
   id: `1:${a.key}`,
   name: a.key,
   kind: 'COMPONENT',
@@ -95,11 +97,16 @@ describe('libraryUpdates', () => {
       enabled: [{ id: 'other', name: 'Other' }],
       copies: [copy({ key: 'card' })],
     };
-    const libs = new Map([['lib', library([asset({ key: 'card', version: 'v2' })])]]);
+    const libs = new Map([
+      ['lib', library([asset({ key: 'card', version: 'v2' })])],
+    ]);
     expect(libraryUpdates(uses, libs)).toEqual([]);
-    expect(libraryUpdates({ ...uses, enabled: [{ id: 'lib', name: 'L' }] }, new Map())).toEqual(
-      []
-    );
+    expect(
+      libraryUpdates(
+        { ...uses, enabled: [{ id: 'lib', name: 'L' }] },
+        new Map()
+      )
+    ).toEqual([]);
   });
 });
 
@@ -114,7 +121,10 @@ describe('detachedCopies', () => {
       ],
     };
     const libs = new Map([['lib', library([asset({ key: 'kept' })])]]);
-    expect(detachedCopies(uses, libs).map((c) => c.key)).toEqual(['gone', 'figma']);
+    expect(detachedCopies(uses, libs).map((c) => c.key)).toEqual([
+      'gone',
+      'figma',
+    ]);
   });
 });
 
@@ -143,13 +153,19 @@ describe('groupAssets', () => {
       key: 'surface',
       name: 'Surface',
       kind: 'VARIABLE',
-      variable: { collection: 'Theme', resolvedType: 'COLOR', color: 'FFFFFFFF' },
+      variable: {
+        collection: 'Theme',
+        resolvedType: 'COLOR',
+        color: 'FFFFFFFF',
+      },
     }),
   ]);
 
   it('groups components by set or folder, then styles and variables', () => {
     const groups = groupAssets(lib, '');
-    expect(groups.map((g) => [g.kind, g.title, g.assets.map((a) => a.key)])).toEqual([
+    expect(
+      groups.map((g) => [g.kind, g.title, g.assets.map((a) => a.key)])
+    ).toEqual([
       ['components', 'Button', ['p']],
       ['components', 'Icon', ['star', 'heart']],
       ['styles', 'Color styles', ['brand']],
@@ -158,12 +174,12 @@ describe('groupAssets', () => {
   });
 
   it('searches names and sets', () => {
-    expect(groupAssets(lib, 'heart').flatMap((g) => g.assets.map((a) => a.key))).toEqual([
-      'heart',
-    ]);
-    expect(groupAssets(lib, 'button').flatMap((g) => g.assets.map((a) => a.key))).toEqual([
-      'p',
-    ]);
+    expect(
+      groupAssets(lib, 'heart').flatMap((g) => g.assets.map((a) => a.key))
+    ).toEqual(['heart']);
+    expect(
+      groupAssets(lib, 'button').flatMap((g) => g.assets.map((a) => a.key))
+    ).toEqual(['p']);
   });
 
   it('knows what a style applies to', () => {
@@ -195,8 +211,8 @@ describe('updateSummary', () => {
       from: null,
       to: 'v',
     });
-    expect(updateSummary([u('COMPONENT'), u('COMPONENT_SET'), u('STYLE')])).toBe(
-      '2 components, 1 style'
-    );
+    expect(
+      updateSummary([u('COMPONENT'), u('COMPONENT_SET'), u('STYLE')])
+    ).toBe('2 components, 1 style');
   });
 });

@@ -1,7 +1,7 @@
 /**
- * The Assets tab: the file's components, grouped by component set. Editors
- * click one to place an instance in the middle of the view; anyone can jump
- * to a main component.
+ * The Assets tab: the file's components, grouped by component set, then
+ * the assets of the team libraries it uses. Editors click one to place an
+ * instance in the middle of the view; anyone can jump to a main component.
  */
 
 import type { FigEngine } from '@core/fig-engine/client';
@@ -11,12 +11,17 @@ import DiamondsFour from '@phosphor/diamonds-four.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
 import type { FigEditor } from '../primitives/create-fig-editor';
+import type { FigLibraries } from '../primitives/create-fig-libraries';
 import type { FigViewer } from '../primitives/create-fig-viewer';
+import { LibrariesButton, LibrarySections } from './library-views';
 
 export function AssetsPanel(props: {
   viewer: FigViewer;
   engine: FigEngine;
   editor?: FigEditor;
+  /** Team libraries, where the app provides other designs. */
+  libraries?: FigLibraries;
+  fileName?: string;
 }) {
   const [query, setQuery] = createSignal('');
   const [components] = createResource(
@@ -54,6 +59,14 @@ export function AssetsPanel(props: {
           onInput={(e) => setQuery(e.currentTarget.value)}
           onKeyDown={(e) => e.stopPropagation()}
         />
+        <Show when={props.libraries}>
+          {(libraries) => (
+            <LibrariesButton
+              libraries={libraries()}
+              fileName={props.fileName ?? 'This file'}
+            />
+          )}
+        </Show>
       </label>
       <div class="min-h-0 flex-1 overflow-y-auto py-1 text-xs">
         <Show
@@ -111,6 +124,15 @@ export function AssetsPanel(props: {
               </div>
             )}
           </For>
+        </Show>
+        <Show when={props.libraries}>
+          {(libraries) => (
+            <LibrarySections
+              libraries={libraries()}
+              query={query()}
+              hasSelection={props.viewer.selected().length > 0}
+            />
+          )}
         </Show>
       </div>
     </div>
