@@ -2,13 +2,13 @@
 
 use super::{
     BlobRef, ENTRY_VERSION, NodeState, enc_align, enc_blend, enc_effect, enc_gradient, enc_mask,
-    enc_node_type, enc_prop_field, enc_scale_mode, enc_winding,
+    enc_node_type, enc_prop_field, enc_scale_mode, enc_style_type, enc_winding,
 };
 use crate::model::{
     Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
     Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    Vec2,
+    VariantOrder, VariantSpec, Vec2,
 };
 use std::sync::Arc;
 
@@ -399,6 +399,24 @@ impl<'a> Writer<'a> {
         self.list(list, |w, p| w.props(p));
     }
 
+    fn prop_value(&mut self, value: &PropValue) {
+        match value {
+            PropValue::Bool(b) => {
+                self.u8(0);
+                self.bool(*b);
+            }
+            PropValue::Text(t) => {
+                self.u8(1);
+                self.str(t);
+            }
+            PropValue::Symbol(g) => {
+                self.u8(2);
+                self.guid(g);
+            }
+            PropValue::Other => self.u8(3),
+        }
+    }
+
     /// Every field of `p`.
     pub fn props(&mut self, p: &Props) {
         let Props {
@@ -453,6 +471,14 @@ impl<'a> Writer<'a> {
             fill_style,
             stroke_style,
             effect_style,
+            text_style_id,
+            key,
+            style_type,
+            sort_position,
+            soft_deleted,
+            variant_specs,
+            variant_orders,
+            props_bubbled,
             recomputed,
         } = p;
         self.opt(guid, |w, g| w.guid(g));
@@ -519,21 +545,7 @@ impl<'a> Writer<'a> {
             w.list(list, |w, a| {
                 let PropAssignment { def_id, value } = a;
                 w.guid(def_id);
-                match value {
-                    PropValue::Bool(b) => {
-                        w.u8(0);
-                        w.bool(*b);
-                    }
-                    PropValue::Text(t) => {
-                        w.u8(1);
-                        w.str(t);
-                    }
-                    PropValue::Symbol(g) => {
-                        w.u8(2);
-                        w.guid(g);
-                    }
-                    PropValue::Other => w.u8(3),
-                }
+                w.prop_value(value);
             });
         });
         self.opt(prop_refs, |w, list| {
@@ -545,10 +557,18 @@ impl<'a> Writer<'a> {
         });
         self.opt(prop_defs, |w, list| {
             w.list(list, |w, d| {
-                let PropDef { id, name, kind } = d;
+                let PropDef {
+                    id,
+                    name,
+                    kind,
+                    initial,
+                    preferred,
+                } = d;
                 w.guid(id);
                 w.str(name);
                 w.str(kind);
+                w.opt(initial, |w, v| w.prop_value(v));
+                w.list(preferred, |w, k| w.str(k));
             });
         });
         self.opt(guid_path, |w, path| w.list(path, |w, g| w.guid(g)));
@@ -576,9 +596,28 @@ impl<'a> Writer<'a> {
         });
         self.opt_str(description);
         self.opt(is_state_group, |w, v| w.bool(*v));
-        for g in [fill_style, stroke_style, effect_style] {
+        for g in [fill_style, stroke_style, effect_style, text_style_id] {
             self.opt(g, |w, g| w.guid(g));
         }
+        self.opt_str(key);
+        self.opt(style_type, |w, t| w.u8(enc_style_type(*t)));
+        self.opt_str(sort_position);
+        self.opt(soft_deleted, |w, v| w.bool(*v));
+        self.opt(variant_specs, |w, list| {
+            w.list(list, |w, s| {
+                let VariantSpec { def_id, value } = s;
+                w.guid(def_id);
+                w.str(value);
+            });
+        });
+        self.opt(variant_orders, |w, list| {
+            w.list(list, |w, o| {
+                let VariantOrder { property, values } = o;
+                w.str(property);
+                w.list(values, |w, v| w.str(v));
+            });
+        });
+        self.opt(props_bubbled, |w, v| w.bool(*v));
         self.bool(*recomputed);
     }
 

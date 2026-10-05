@@ -105,6 +105,15 @@ const NODE_FIELDS: &[&str] = &[
     "inheritFillStyleID",
     "inheritFillStyleIDForStroke",
     "inheritEffectStyleID",
+    "styleIdForText",
+    "inheritTextStyleID",
+    "key",
+    "styleType",
+    "sortPosition",
+    "isSoftDeleted",
+    "variantPropSpecs",
+    "stateGroupPropertyValueOrders",
+    "propsAreBubbled",
     "backgroundPaints",
     "backgroundEnabled",
 ];
@@ -185,7 +194,21 @@ pub fn restrict_schema(schema: &mut Schema) {
         "ComponentPropRef",
         &["defID", "componentPropNodeField", "isDeleted"],
     );
-    schema.keep_only("ComponentPropDef", &["id", "name", "type", "isDeleted"]);
+    schema.keep_only(
+        "ComponentPropDef",
+        &[
+            "id",
+            "name",
+            "type",
+            "isDeleted",
+            "initialValue",
+            "preferredValues",
+        ],
+    );
+    schema.keep_only("ComponentPropPreferredValues", &["instanceSwapValues"]);
+    schema.keep_only("InstanceSwapPreferredValue", &["key"]);
+    schema.keep_only("VariantPropSpec", &["propDefId", "value"]);
+    schema.keep_only("StateGroupPropertyValueOrder", &["property", "values"]);
     schema.keep_only("ExportSettings", &["suffix", "imageType", "constraint"]);
 }
 
@@ -663,6 +686,15 @@ pub fn props(m: MsgRef) -> Props {
                         id: d.msg("id").and_then(guid)?,
                         name: d.str("name").unwrap_or("").to_owned(),
                         kind: d.enum_name("type").unwrap_or("").to_owned(),
+                        initial: d.msg("initialValue").map(|v| prop_value(Some(v))),
+                        preferred: d
+                            .msg("preferredValues")
+                            .map(|p| {
+                                p.msgs("instanceSwapValues")
+                                    .filter_map(|v| v.str("key").map(Into::into))
+                                    .collect()
+                            })
+                            .unwrap_or_else(|| Arc::from([])),
                     })
                 })
                 .collect(),
@@ -716,6 +748,40 @@ pub fn props(m: MsgRef) -> Props {
     p.fill_style = style("styleIdForFill", "inheritFillStyleID");
     p.stroke_style = style("styleIdForStrokeFill", "inheritFillStyleIDForStroke");
     p.effect_style = style("styleIdForEffect", "inheritEffectStyleID");
+    p.text_style_id = style("styleIdForText", "inheritTextStyleID");
+    p.key = m.str("key").filter(|k| !k.is_empty()).map(Into::into);
+    p.style_type = m
+        .enum_name("styleType")
+        .filter(|t| *t != "NONE")
+        .map(StyleType::parse);
+    p.sort_position = m.str("sortPosition").map(Into::into);
+    p.soft_deleted = m.bool("isSoftDeleted");
+    if m.has("variantPropSpecs") {
+        p.variant_specs = Some(
+            m.msgs("variantPropSpecs")
+                .filter_map(|v| {
+                    Some(VariantSpec {
+                        def_id: v.msg("propDefId").and_then(guid)?,
+                        value: v.str("value").unwrap_or("").into(),
+                    })
+                })
+                .collect(),
+        );
+    }
+    if m.has("stateGroupPropertyValueOrders") {
+        p.variant_orders = Some(
+            m.msgs("stateGroupPropertyValueOrders")
+                .map(|o| VariantOrder {
+                    property: o.str("property").unwrap_or("").into(),
+                    values: o
+                        .list("values")
+                        .filter_map(|v| v.as_str().map(Into::into))
+                        .collect(),
+                })
+                .collect(),
+        );
+    }
+    p.props_bubbled = m.bool("propsAreBubbled");
     p
 }
 

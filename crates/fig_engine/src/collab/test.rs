@@ -216,6 +216,7 @@ fn entries_round_trip_every_property() {
         // Fields the showcase leaves unset are set here, so they round-trip too.
         let mut props = node.props.clone();
         props.stroke_sides = Some([1.0, 2.0, 3.0, 4.0]);
+        set_design_system_fields(&mut props);
         if let Some(a) = &mut props.auto_layout {
             Arc::make_mut(a).strokes_in_layout = true;
         }
@@ -238,6 +239,61 @@ fn entries_round_trip_every_property() {
         let back = Reader::new(&bytes, &resolve).node().unwrap();
         assert_eq!(back, state, "{:?}", node.props.guid);
     }
+}
+
+/// Components, variants, and styles: fields the showcase leaves unset.
+fn set_design_system_fields(props: &mut crate::model::Props) {
+    use crate::model::{
+        Guid, PropAssignment, PropDef, PropValue, StyleType, VariantOrder, VariantSpec,
+    };
+    let g = |local| Guid { session: 7, local };
+    props.prop_defs = Some(Arc::from([
+        PropDef {
+            id: g(1),
+            name: "Label".into(),
+            kind: "TEXT".into(),
+            initial: Some(PropValue::Text("Go".into())),
+            preferred: Arc::from([]),
+        },
+        PropDef {
+            id: g(2),
+            name: "Icon".into(),
+            kind: "INSTANCE_SWAP".into(),
+            initial: Some(PropValue::Symbol(g(9))),
+            preferred: Arc::from([Arc::from("abc"), Arc::from("def")]),
+        },
+        PropDef {
+            id: g(3),
+            name: "Size".into(),
+            kind: "VARIANT".into(),
+            initial: None,
+            preferred: Arc::from([]),
+        },
+    ]));
+    props.prop_assignments = Some(Arc::from([
+        PropAssignment {
+            def_id: g(4),
+            value: PropValue::Bool(true),
+        },
+        PropAssignment {
+            def_id: g(5),
+            value: PropValue::Other,
+        },
+    ]));
+    props.text_style_id = Some(g(10));
+    props.key = Some("0123abcd".into());
+    props.style_type = Some(StyleType::Effect);
+    props.sort_position = Some("a!".into());
+    props.soft_deleted = Some(false);
+    props.variant_specs = Some(Arc::from([VariantSpec {
+        def_id: g(3),
+        value: "Large".into(),
+    }]));
+    props.variant_orders = Some(Arc::from([VariantOrder {
+        property: "Size".into(),
+        values: Arc::from([Arc::from("Small"), Arc::from("Large")]),
+    }]));
+    props.props_bubbled = Some(true);
 }
 
 #[test]

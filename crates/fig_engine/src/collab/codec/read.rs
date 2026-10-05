@@ -3,13 +3,13 @@
 use super::{
     BlobRef, DecodeError, Decoded, ENTRY_VERSION, NodeState, UNSUPPORTED_PAINTS, dec_align,
     dec_blend, dec_effect, dec_gradient, dec_mask, dec_node_type, dec_prop_field, dec_scale_mode,
-    dec_winding,
+    dec_style_type, dec_winding,
 };
 use crate::model::{
     Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
     Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    Vec2,
+    VariantOrder, VariantSpec, Vec2,
 };
 use std::sync::Arc;
 
@@ -342,6 +342,16 @@ impl<'a> Reader<'a> {
         })
     }
 
+    fn prop_value(&mut self) -> Decoded<PropValue> {
+        Ok(match self.u8()? {
+            0 => PropValue::Bool(self.bool()?),
+            1 => PropValue::Text(self.arc_str()?),
+            2 => PropValue::Symbol(self.guid()?),
+            3 => PropValue::Other,
+            _ => return Err(DecodeError::Invalid),
+        })
+    }
+
     pub fn props(&mut self) -> Decoded<Props> {
         Ok(Props {
             guid: self.opt(Self::guid)?,
@@ -395,15 +405,10 @@ impl<'a> Reader<'a> {
             swapped_symbol: self.opt(Self::guid)?,
             prop_assignments: self.opt(|r| {
                 r.arc_list(|r| {
-                    let def_id = r.guid()?;
-                    let value = match r.u8()? {
-                        0 => PropValue::Bool(r.bool()?),
-                        1 => PropValue::Text(r.arc_str()?),
-                        2 => PropValue::Symbol(r.guid()?),
-                        3 => PropValue::Other,
-                        _ => return Err(DecodeError::Invalid),
-                    };
-                    Ok(PropAssignment { def_id, value })
+                    Ok(PropAssignment {
+                        def_id: r.guid()?,
+                        value: r.prop_value()?,
+                    })
                 })
             })?,
             prop_refs: self.opt(|r| {
@@ -420,6 +425,8 @@ impl<'a> Reader<'a> {
                         id: r.guid()?,
                         name: r.string()?,
                         kind: r.string()?,
+                        initial: r.opt(Self::prop_value)?,
+                        preferred: r.arc_list(Self::arc_str)?,
                     })
                 })
             })?,
@@ -444,6 +451,28 @@ impl<'a> Reader<'a> {
             fill_style: self.opt(Self::guid)?,
             stroke_style: self.opt(Self::guid)?,
             effect_style: self.opt(Self::guid)?,
+            text_style_id: self.opt(Self::guid)?,
+            key: self.opt_arc_str()?,
+            style_type: self.opt(|r| Ok(dec_style_type(r.u8()?)))?,
+            sort_position: self.opt_arc_str()?,
+            soft_deleted: self.opt(Self::bool)?,
+            variant_specs: self.opt(|r| {
+                r.arc_list(|r| {
+                    Ok(VariantSpec {
+                        def_id: r.guid()?,
+                        value: r.arc_str()?,
+                    })
+                })
+            })?,
+            variant_orders: self.opt(|r| {
+                r.arc_list(|r| {
+                    Ok(VariantOrder {
+                        property: r.arc_str()?,
+                        values: r.arc_list(Self::arc_str)?,
+                    })
+                })
+            })?,
+            props_bubbled: self.opt(Self::bool)?,
             recomputed: self.bool()?,
         })
     }
