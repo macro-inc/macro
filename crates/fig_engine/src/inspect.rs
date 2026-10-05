@@ -10,8 +10,8 @@ use crate::scene::{Scene, SceneIdx};
 use serde::Serialize;
 
 mod colors;
-pub mod prototype;
 mod design;
+pub mod prototype;
 mod variables;
 pub use colors::page_colors;
 pub use design::{DesignInfo, StyleInfo, design_info, local_styles};
