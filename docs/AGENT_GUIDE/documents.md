@@ -27,6 +27,19 @@ deleting the shared property definition). Pins are saved with the document.
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;
 they do not show a success toast.
+## Create a document from an editor
+
+Type `/document` in a Markdown slash menu and choose **Document**. The popover
+has a **New document** title, a Markdown body, and a **Tags** pill. It starts
+without task property pills. Tags can also be applied with `#` in the title or
+body. Enter in the title moves into the body.
+
+Choose **Create Document** or press Cmd/Ctrl+Enter. The composer closes and the
+source editor shows a creation placeholder at the insertion point, then replaces
+it with the new document mention. If creation fails, the placeholder is removed
+and the composer reopens with the title, body, and tags for retry.
+**Create → Document** continues to open a document directly.
+
 ## Markdown outline
 
 On desktop, Markdown documents with at least three headings show a tick rail in
