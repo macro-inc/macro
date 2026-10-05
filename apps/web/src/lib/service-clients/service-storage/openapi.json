@@ -19897,6 +19897,22 @@
           }
         }
       },
+      "ChannelPictureChangedMetadata": {
+        "type": "object",
+        "description": "Metadata for a channel picture update, including removals.",
+        "required": ["channel_id", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "User who changed the picture."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel whose picture changed."
+          }
+        }
+      },
       "ChannelPreview": {
         "oneOf": [
           {
@@ -20037,6 +20053,21 @@
       },
       "ChannelTopicEvent": {
         "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel's profile picture changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.picture_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelPictureChangedMetadata",
+                "description": "A channel's profile picture changed."
+              }
+            }
+          },
           {
             "type": "object",
             "description": "A channel was created.",
@@ -28827,12 +28858,12 @@
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "description": "Last root creation time."
+            "description": "Last message creation time or activity occurrence time."
           },
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "Last root UUID, used to break timestamp ties."
+            "description": "Last entry UUID, used to break timestamp ties across both sources."
           }
         }
       },
@@ -29000,9 +29031,16 @@
       },
       "MessagePage": {
         "type": "object",
-        "description": "Bidirectional, bounded timeline page, ordered newest root first.",
+        "description": "Bidirectional, bounded timeline page, ordered newest first.",
         "required": ["items"],
         "properties": {
+          "activity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineActivity"
+            },
+            "description": "System activity within the same window when requested, newest first.\nClients merge it with `items` by `(created_at | occurred_at, id)`."
+          },
           "items": {
             "type": "array",
             "items": {
@@ -29017,7 +29055,7 @@
               },
               {
                 "$ref": "#/components/schemas/MessageCursor",
-                "description": "Continue to older roots."
+                "description": "Continue to older entries."
               }
             ]
           },
@@ -29028,7 +29066,7 @@
               },
               {
                 "$ref": "#/components/schemas/MessageCursor",
-                "description": "Continue to newer roots."
+                "description": "Continue to newer entries."
               }
             ]
           }
@@ -29367,6 +29405,10 @@
               "format": "uuid"
             },
             "description": "Restrict roots to this set, for selected source threads."
+          },
+          "include_activity": {
+            "type": "boolean",
+            "description": "Merge the parent's selected system activity into the same bounded page."
           },
           "include_deleted_threads": {
             "type": "boolean",
@@ -35910,6 +35952,34 @@
           "user_id": {
             "type": "string",
             "description": "User who owns this discussion, including imported discussions."
+          }
+        }
+      },
+      "TimelineActivity": {
+        "type": "object",
+        "description": "A displayable fact returned together with a message page.",
+        "required": ["id", "actor_id", "occurred_at", "action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Durable action tag. Unknown tags remain representable during rollouts."
+          },
+          "actor_id": {
+            "type": "string",
+            "description": "Principal who performed the action."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable activity identity, independent of message ids."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Immutable chronological position."
+          },
+          "payload": {
+            "description": "The action's stored payload."
           }
         }
       },

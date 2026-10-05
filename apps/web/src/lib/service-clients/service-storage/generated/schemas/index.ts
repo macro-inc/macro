@@ -1776,6 +1776,7 @@ export * from './threadPatchResolved';
 export * from './threadState';
 export * from './threadStateAnchor';
 export * from './threadStateDeletedAt';
+export * from './timelineActivity';
 export * from './touchedColumn';
 export * from './touchedRow';
 export * from './transcribeDictationParams';

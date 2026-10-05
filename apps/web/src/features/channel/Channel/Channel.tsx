@@ -748,7 +748,9 @@ export function Channel(props: ChannelProps) {
                                 insets={threadListScrollInsets()}
                                 followOnAppend={!messagesQuery.hasPreviousPage}
                                 onScrollNearTop={threadPaginator.shiftPaginate}
-                                onScrollNearBottom={threadPaginator.prependPaginate}
+                                onScrollNearBottom={
+                                  threadPaginator.prependPaginate
+                                }
                                 onReady={onThreadListReady}
                                 onScroll={onThreadListScroll}
                                 onUserNavigation={cancelLatestNavigation}
@@ -762,7 +764,8 @@ export function Channel(props: ChannelProps) {
                                       ? {
                                           type: 'restore',
                                           snapshot:
-                                            props.initialMessagesStateSnapshot.scroll,
+                                            props.initialMessagesStateSnapshot
+                                              .scroll,
                                         }
                                       : { type: 'latest' }
                                 }
@@ -772,7 +775,8 @@ export function Channel(props: ChannelProps) {
                                     item.id === messageIndex.entryKeys.at(-1);
                                   const activity = () =>
                                     messageIndex.activityByKey.get(item.id);
-                                  const message = () => messageById().get(item.id);
+                                  const message = () =>
+                                    messageById().get(item.id);
 
                                   return (
                                     <Switch>
@@ -781,12 +785,15 @@ export function Channel(props: ChannelProps) {
                                           <ThreadRow
                                             channelId={props.channelId}
                                             message={{
-                                              created_at: activity().occurred_at,
+                                              created_at:
+                                                activity().occurred_at,
                                             }}
                                             listMeta={listMetaByKey()[item.id]}
                                           >
                                             <SystemActivity
-                                              event={decodeSystemActivity(activity())}
+                                              event={decodeSystemActivity(
+                                                activity()
+                                              )}
                                             />
                                             <Show when={isNewestRow()}>
                                               <ThreadTypingIndicator
@@ -814,7 +821,9 @@ export function Channel(props: ChannelProps) {
                                                 id: (() => props.channelId)(),
                                               })}
                                               isNewestThread={isNewestRow()}
-                                              getMessageActions={getMessageActions}
+                                              getMessageActions={
+                                                getMessageActions
+                                              }
                                               isFindBarOpen={findBar.isOpen}
                                               targetNavigation={{
                                                 targetThreadId:
@@ -829,13 +838,18 @@ export function Channel(props: ChannelProps) {
                                                     : targetMessageController.pendingTargetReplyId(),
                                                 activeTargetReplyId:
                                                   targetMessageController.activeTargetMessageReplyId,
-                                                positionTarget: (_, targetElement) =>
+                                                positionTarget: (
+                                                  _,
+                                                  targetElement
+                                                ) =>
                                                   threadListNavigation()?.scrollToElement(
                                                     targetElement
                                                   ) ?? false,
                                                 onTargetMessageScrolled:
                                                   targetMessageController.completePendingScroll,
-                                                onTargetReplyScrolled: (replyId) => {
+                                                onTargetReplyScrolled: (
+                                                  replyId
+                                                ) => {
                                                   targetMessageController.completePendingReplyScroll(
                                                     item.id,
                                                     replyId
@@ -851,14 +865,22 @@ export function Channel(props: ChannelProps) {
                                               }
                                               unifiedReplyTarget={unifiedInput.replyTarget()}
                                               isExpanded={state.isExpanded}
-                                              setIsExpanded={state.setIsExpanded}
+                                              setIsExpanded={
+                                                state.setIsExpanded
+                                              }
                                               isReplying={state.isReplying}
-                                              setIsReplying={state.setIsReplying}
-                                              replyInputState={state.replyInputState}
+                                              setIsReplying={
+                                                state.setIsReplying
+                                              }
+                                              replyInputState={
+                                                state.replyInputState
+                                              }
                                               setReplyInputState={
                                                 state.setReplyInputState
                                               }
-                                              setReplyInputEl={state.setReplyInputEl}
+                                              setReplyInputEl={
+                                                state.setReplyInputEl
+                                              }
                                               replyInputHandle={
                                                 state.replyInputHandle
                                               }
@@ -868,7 +890,9 @@ export function Channel(props: ChannelProps) {
                                               replyInputFocusRequest={
                                                 state.replyInputFocusRequest
                                               }
-                                              listMeta={listMetaByKey()[item.id]}
+                                              listMeta={
+                                                listMetaByKey()[item.id]
+                                              }
                                               messageEditor={messageEditor}
                                               threadActions={{
                                                 onDismissNewMessages:
@@ -877,10 +901,14 @@ export function Channel(props: ChannelProps) {
                                               isNewMessage={
                                                 activityTracker.isNewMessage
                                               }
-                                              selectedMessageId={selection.selectedId}
+                                              selectedMessageId={
+                                                selection.selectedId
+                                              }
                                               onSelectMessage={selectMessage}
                                               onClearSelection={clearSelection}
-                                              messageListScopeId={messageListScopeId}
+                                              messageListScopeId={
+                                                messageListScopeId
+                                              }
                                             />
                                           );
                                         }}

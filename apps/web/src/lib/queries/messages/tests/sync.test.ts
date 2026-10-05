@@ -146,7 +146,11 @@ describe.each([
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
       pageParams: [null],
       pages: [
-        { entries: [{ type: 'message', message: item(parent) }], next_cursor: null, previous_cursor: null },
+        {
+          entries: [{ type: 'message', message: item(parent) }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
       ],
     });
     testQueryClient.setQueryData<MessageListItem[]>(
@@ -184,9 +188,9 @@ describe.each([
       reactions: [{ emoji: '👍', users: ['macro|a@example.com'] }],
     };
     applyMessage(edit, 'edited');
-    const root = timelineMessages(testQueryClient.getQueryData<MessageTimelineData>(
-      timelineKey()
-    )!.pages[0])[0];
+    const root = timelineMessages(
+      testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!.pages[0]
+    )[0];
     expect(root.thread.reply_count).toBe(1);
     expect(root.thread.preview).toEqual([expect.objectContaining(edit)]);
     expect(
@@ -240,7 +244,13 @@ describe.each([
     };
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
       pageParams: [null],
-      pages: [{ entries: [{ type: 'message', message: root }], next_cursor: null, previous_cursor: null }],
+      pages: [
+        {
+          entries: [{ type: 'message', message: root }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      ],
     });
     testQueryClient.setQueryData<MessageListItem[]>(
       messageKeys.messagesByIds(parent, ['root']).queryKey,
@@ -262,7 +272,10 @@ describe.each([
     });
 
     expect(
-      timelineMessages(testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!.pages[0])[0].thread
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0]
+      )[0].thread
     ).toEqual(root.thread);
     expect(
       testQueryClient.getQueryData<MessageListItem[]>(
@@ -298,7 +311,10 @@ describe.each([
       }),
     ]);
     expect(
-      timelineMessages(testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!.pages[0])[0].thread.reply_count
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0]
+      )[0].thread.reply_count
     ).toBe(1);
   });
   it('updates the canonical root when only a linked thread is cached', () => {
@@ -335,7 +351,10 @@ describe.each([
       'message_deleted'
     );
     expect(
-      timelineMessages(testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!.pages[0])[0].deleted_at
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0]
+      )[0].deleted_at
     ).toBe(time);
     expect(
       testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
@@ -346,7 +365,10 @@ describe.each([
     ).toBe(true);
     applyThreadState(parent, { ...state, deleted_at: time });
     expect(
-      timelineMessages(testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!.pages[0])
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0]
+      )
     ).toEqual(
       parent.type === 'document'
         ? [expect.objectContaining({ state: { ...state, deleted_at: time } })]
@@ -370,9 +392,10 @@ describe.each([
       },
     });
     expect(
-      timelineMessages(testQueryClient
-        .getQueryData<MessageTimelineData>(timelineKey())!
-        .pages[0]).map((root) => root.id)
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0]
+      ).map((root) => root.id)
     ).toEqual(['newer-root', 'root']);
 
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
@@ -387,9 +410,10 @@ describe.each([
     });
     applyMessage(message(parent, 'mid-conversation'), 'posted');
     expect(
-      timelineMessages(testQueryClient
-        .getQueryData<MessageTimelineData>(timelineKey())!
-        .pages[0]).map((root) => root.id)
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0]
+      ).map((root) => root.id)
     ).toEqual(['root']);
   });
   it(
@@ -433,8 +457,10 @@ describe.each([
         },
       });
       const newestRoot = () =>
-        timelineMessages(testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
-          .pages[0])[0];
+        timelineMessages(
+          testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+            .pages[0]
+        )[0];
       const agentSender = expect.objectContaining({
         type: 'bot',
         name: 'Bingus',
@@ -504,7 +530,11 @@ describe.each([
     resolveFetch({
       pageParams: [null],
       pages: [
-        { entries: [{ type: 'message', message: item(parent) }], next_cursor: null, previous_cursor: null },
+        {
+          entries: [{ type: 'message', message: item(parent) }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
       ],
     });
     await fetching.catch(() => undefined);
@@ -558,7 +588,11 @@ describe.each([
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
       pageParams: [null],
       pages: [
-        { entries: [{ type: 'message', message: item(parent) }], next_cursor: null, previous_cursor: null },
+        {
+          entries: [{ type: 'message', message: item(parent) }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
       ],
     });
     mocks.thread.mockReset();
@@ -600,9 +634,9 @@ describe.each([
     expect(mocks.thread).toHaveBeenCalledTimes(1);
 
     // The timeline preview mirrors the reply while the thread settles.
-    const root = timelineMessages(testQueryClient.getQueryData<MessageTimelineData>(
-      timelineKey()
-    )!.pages[0])[0];
+    const root = timelineMessages(
+      testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!.pages[0]
+    )[0];
     expect(root.thread.reply_count).toBe(1);
     expect(root.thread.preview).toEqual([
       expect.objectContaining({ id: 'reply' }),
