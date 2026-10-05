@@ -388,6 +388,30 @@ fn the_auto_gap_centres_a_lone_child() {
 }
 
 #[test]
+fn overflowing_children_touch_with_space_between_and_overlap_with_the_auto_gap() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = stack(&mut doc, &mut h);
+    // 40 + 60 + 20 = 120 in 100 less 20 of padding: 40 too much.
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"primaryAlign":"SPACE_BETWEEN","sizingHorizontal":"FIXED","width":100}"#,
+    );
+    assert_eq!(bounds(&doc, &kids[1]).0, 50.0);
+    assert_eq!(bounds(&doc, &kids[2]).0, 110.0);
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"primaryAlign":"SPACE_EVENLY"}"#,
+    );
+    assert_eq!(bounds(&doc, &kids[1]).0, 30.0);
+    assert_eq!(bounds(&doc, &kids[2]).0, 70.0);
+}
+
+#[test]
 fn hugging_respects_the_frames_own_limits() {
     let mut doc = Document::open(&blank("x")).unwrap();
     let mut h = History::default();

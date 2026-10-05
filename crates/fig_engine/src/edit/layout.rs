@@ -299,10 +299,10 @@ impl Txn<'_> {
             Some("MAX") => (pad_start + free - gaps, spacing),
             // Figma stores its "auto" gap as SPACE_EVENLY; it spaces like CSS
             // space-between, and centres a lone child (which SPACE_BETWEEN
-            // leaves at the start).
-            Some("SPACE_BETWEEN" | "SPACE_EVENLY") if items.len() > 1 => {
-                (pad_start, free / (n - 1.0))
-            }
+            // leaves at the start). With SPACE_BETWEEN children that
+            // overflow touch; the automatic gap overlaps them.
+            Some("SPACE_EVENLY") if items.len() > 1 => (pad_start, free / (n - 1.0)),
+            Some("SPACE_BETWEEN") if items.len() > 1 => (pad_start, (free / (n - 1.0)).max(0.0)),
             Some("SPACE_EVENLY") => (pad_start + free / 2.0, 0.0),
             Some("SPACE_EVENLY_CSS") => (pad_start + free / (n + 1.0), free / (n + 1.0)),
             Some("SPACE_AROUND") => (pad_start + free / (2.0 * n), free / n),
