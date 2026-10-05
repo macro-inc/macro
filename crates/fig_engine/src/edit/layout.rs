@@ -9,15 +9,18 @@
 
 use super::{Patch, Txn, flags};
 use crate::document::{Document, NodeIdx};
-use crate::model::{Affine, AutoLayout, LayoutChild, NodeType, Rect, Vec2};
+use crate::model::{Affine, AutoLayout, LayoutChild, NodeType, Rect, StrokeAlign, Vec2};
 use std::collections::HashSet;
 use std::sync::Arc;
 
 /// One child taking part in the flow.
 struct Item {
     i: NodeIdx,
-    /// Bounds in the frame's space.
+    /// Bounds in the frame's space (with its outer strokes when the frame
+    /// counts strokes in its layout).
     bounds: Rect,
+    /// What the bounds add to the layer's own width and height.
+    extra: Vec2,
     child: LayoutChild,
     /// Being dragged: it keeps its place on screen, and the others make
     /// room for it.
@@ -82,7 +85,65 @@ impl Txn<'_> {
         p.transform().map_rect(&Rect::new(0.0, 0.0, s.x, s.y))
     }
 
+    /// The stroke weights a layer's visible strokes reach (top, right,
+    /// bottom, left): outside its box (`outer`), or inside it.
+    fn stroke_reach(&self, i: NodeIdx, outer: bool) -> [f64; 4] {
+        let p = self.doc.props(i);
+        if !p.has_visible_strokes() {
+            return [0.0; 4];
+        }
+        let share = match (p.stroke_align(), outer) {
+            (StrokeAlign::Center, _) => 0.5,
+            (StrokeAlign::Outside, true) | (StrokeAlign::Inside, false) => 1.0,
+            _ => 0.0,
+        };
+        let w = p.stroke_weight();
+        p.stroke_sides
+            .unwrap_or([w; 4])
+            .map(|side| f64::from(side) * share)
+    }
+
+    /// A child's box in the flow: its bounds, and its outer strokes when
+    /// the frame counts strokes in its layout (`strokes`). Returns the box
+    /// and what it adds to the layer's width and height.
+    fn flow_box(&self, i: NodeIdx, strokes: bool) -> (Rect, Vec2) {
+        let b = self.local_bounds(i);
+        // Strokes of a turned layer stay out of it.
+        if !strokes || quarter_turns(&self.doc.props(i).transform()) != Some(false) {
+            return (b, Vec2::new(0.0, 0.0));
+        }
+        let [top, right, bottom, left] = self.stroke_reach(i, true);
+        let extra = Vec2::new(left + right, top + bottom);
+        (
+            Rect::new(b.x - left, b.y - top, b.w + extra.x, b.h + extra.y),
+            extra,
+        )
+    }
+
+    /// The frame's padding (top, right, bottom, left), with its own inner
+    /// strokes when it counts strokes in its layout.
+    fn padding(&self, frame: NodeIdx, al: &AutoLayout) -> [f64; 4] {
+        let pad = [
+            al.padding_top,
+            al.padding_right,
+            al.padding_bottom,
+            al.padding_left,
+        ]
+        .map(f64::from);
+        if !al.strokes_in_layout {
+            return pad;
+        }
+        let inner = self.stroke_reach(frame, false);
+        [0, 1, 2, 3].map(|k| pad[k] + inner[k])
+    }
+
     fn flow_children(&self, frame: NodeIdx) -> Vec<Item> {
+        let strokes = self
+            .doc
+            .props(frame)
+            .auto_layout
+            .as_ref()
+            .is_some_and(|al| al.strokes_in_layout);
         self.doc
             .node(frame)
             .children
@@ -94,12 +155,16 @@ impl Txn<'_> {
             })
             .filter_map(|c| {
                 let child = self.doc.props(c).layout_child.clone().unwrap_or_default();
-                (!child.is_absolute()).then(|| Item {
-                    i: c,
-                    bounds: self.local_bounds(c),
-                    child,
-                    floating: self.floating.contains(&c),
-                    slot: None,
+                (!child.is_absolute()).then(|| {
+                    let (bounds, extra) = self.flow_box(c, strokes);
+                    Item {
+                        i: c,
+                        bounds,
+                        extra,
+                        child,
+                        floating: self.floating.contains(&c),
+                        slot: None,
+                    }
                 })
             })
             .collect()
@@ -179,23 +244,12 @@ impl Txn<'_> {
             return false;
         }
         let h = al.horizontal();
+        let [top, right, bottom, left] = self.padding(frame, &al);
         let (pad_start, pad_end, cross_start, cross_end) = if h {
-            (
-                al.padding_left,
-                al.padding_right,
-                al.padding_top,
-                al.padding_bottom,
-            )
+            (left, right, top, bottom)
         } else {
-            (
-                al.padding_top,
-                al.padding_bottom,
-                al.padding_left,
-                al.padding_right,
-            )
+            (top, bottom, left, right)
         };
-        let (pad_start, pad_end) = (f64::from(pad_start), f64::from(pad_end));
-        let (cross_start, cross_end) = (f64::from(cross_start), f64::from(cross_end));
         let spacing = f64::from(al.spacing);
         let old_size = self.doc.props(frame).size();
         let (mut main_size, mut cross_size) = split(old_size, h);
@@ -247,21 +301,22 @@ impl Txn<'_> {
                     if !item.child.fills_primary() {
                         continue;
                     }
+                    let extra = split(item.extra, h).0;
                     let share = free * f64::from(item.child.grow.unwrap_or(1.0)) / grow;
                     // Figma keeps squeezed fill children at least a pixel.
-                    let share = item.child.clamp(share, h).max(1.0);
+                    let length = item.child.clamp(share - extra, h).max(1.0);
                     let i = item.i;
-                    if self.keeps_size(i, main_of(item)) {
-                        item.slot = Some(share);
+                    if self.keeps_size(i, main_of(item) - extra) {
+                        item.slot = Some(length + extra);
                         continue;
                     }
                     let (w, ht) = if h {
-                        (Some(share), None)
+                        (Some(length), None)
                     } else {
-                        (None, Some(share))
+                        (None, Some(length))
                     };
                     self.size_child(i, w, ht);
-                    item.bounds = self.local_bounds(i);
+                    item.bounds = self.flow_box(i, al.strokes_in_layout).0;
                 }
             }
         }
@@ -290,15 +345,16 @@ impl Txn<'_> {
         let inner_cross = cross_size - cross_start - cross_end;
         let stretch_to = inner_cross.max(0.01);
         for item in items.iter_mut() {
+            let extra = split(item.extra, h).1;
             if item.child.stretches()
                 && (cross_of(item) - stretch_to).abs() > EPS
-                && !self.keeps_size(item.i, cross_of(item))
+                && !self.keeps_size(item.i, cross_of(item) - extra)
             {
                 let i = item.i;
-                let v = item.child.clamp(stretch_to, !h);
+                let v = item.child.clamp((stretch_to - extra).max(0.01), !h);
                 let (w, ht) = if h { (None, Some(v)) } else { (Some(v), None) };
                 self.size_child(i, w, ht);
-                item.bounds = self.local_bounds(i);
+                item.bounds = self.flow_box(i, al.strokes_in_layout).0;
             }
         }
 
@@ -328,7 +384,9 @@ impl Txn<'_> {
                     Some(a @ ("MIN" | "CENTER" | "MAX")) => Some(a),
                     // A line or a turned layer stretched across sits in the
                     // middle.
-                    Some("STRETCH") if self.keeps_size(it.i, cross) => Some("CENTER"),
+                    Some("STRETCH") if self.keeps_size(it.i, cross - split(it.extra, h).1) => {
+                        Some("CENTER")
+                    }
                     _ => al.counter_align.as_deref(),
                 };
                 let offset = match align {
@@ -384,11 +442,8 @@ impl Txn<'_> {
         let al = self.doc.props(i).auto_layout.clone()?;
         let items = self.flow_children(i);
         let size = |it: &Item| if x { it.bounds.w } else { it.bounds.h };
-        let pad = if x {
-            al.padding_left + al.padding_right
-        } else {
-            al.padding_top + al.padding_bottom
-        };
+        let [top, right, bottom, left] = self.padding(i, &al);
+        let pad = if x { left + right } else { top + bottom };
         let content = if al.horizontal() == x {
             fixed_gaps(&al, items.len()) + items.iter().map(size).sum::<f64>()
         } else {
@@ -403,18 +458,19 @@ impl Txn<'_> {
                 })
                 .fold(0.0, f64::max)
         };
-        Some(f64::from(pad) + content)
+        Some(pad + content)
     }
 
     /// What a stretched child needs across a hugging frame (along `x` or
     /// not): a stack that hugs that way needs its content, one fixed that
     /// way its current size; other layers need nothing.
     fn stretched_need(&self, it: &Item, x: bool) -> Option<f64> {
-        let current = if x { it.bounds.w } else { it.bounds.h };
+        let extra = if x { it.extra.x } else { it.extra.y };
+        let current = if x { it.bounds.w } else { it.bounds.h } - extra;
         let p = self.doc.props(it.i);
         if p.node_type() == NodeType::Instance {
             // Laid out from its component: its size is what it needs.
-            return Some(it.child.clamp(current, x));
+            return Some(it.child.clamp(current, x) + extra);
         }
         let al = p.auto_layout.clone()?;
         if !self.is_stack(it.i) {
@@ -430,7 +486,7 @@ impl Txn<'_> {
         } else {
             current
         };
-        Some(it.child.clamp(need, x))
+        Some(it.child.clamp(need, x) + extra)
     }
 
     /// Resizes a child the layout sized: text re-wraps, and a child that is

@@ -664,3 +664,47 @@ fn stretched_stacks_count_when_hugging() {
     set(&mut doc, &mut h, &title, r#"{"width":80}"#);
     assert_eq!(bounds(&doc, &list).2, 413.0);
 }
+
+#[test]
+fn strokes_take_space_when_the_frame_includes_them() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let frame = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":400,"height":200}"#,
+    );
+    let mut kids = Vec::new();
+    for x in [0, 100] {
+        kids.push(make(
+            &mut doc,
+            &mut h,
+            &frame,
+            &format!(r#"{{"type":"RECTANGLE","x":{x},"y":0,"width":80,"height":80}}"#),
+        ));
+    }
+    let outline = r#"{"strokes":[{"color":"000000"}],"strokeWeight":8,"strokeAlign":"OUTSIDE"}"#;
+    for k in &kids {
+        set(&mut doc, &mut h, k, outline);
+    }
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"strokes":[{"color":"000000"}],"strokeWeight":4,"strokeAlign":"INSIDE","layoutMode":"HORIZONTAL","sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
+    );
+    // Without the option strokes take no room.
+    assert_eq!(bounds(&doc, &kids[1]).0, 80.0);
+    let f = idx(&doc, &frame) as usize;
+    let mut al = (**doc.nodes[f].props.auto_layout.as_ref().unwrap()).clone();
+    al.strokes_in_layout = true;
+    doc.nodes[f].props.auto_layout = Some(std::sync::Arc::new(al));
+    set(&mut doc, &mut h, &frame, r#"{"itemSpacing":32}"#);
+    // The frame's inner stroke pads it; each child takes 8 more a side.
+    assert_eq!(bounds(&doc, &kids[0]).0, 12.0);
+    assert_eq!(bounds(&doc, &kids[1]).0, 140.0);
+    assert_eq!(bounds(&doc, &kids[1]).1, 12.0);
+    assert_eq!(bounds(&doc, &frame).2, 4.0 + 96.0 + 32.0 + 96.0 + 4.0);
+    assert_eq!(bounds(&doc, &frame).3, 104.0);
+}
