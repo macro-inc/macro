@@ -13,7 +13,7 @@ import {
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { ParticipantRole } from '@service-storage/generated/schemas/participantRole';
-import { Card, Scroll } from '@ui';
+import { Card } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ChannelBotsPanel } from './ChannelBotsPanel';
 import { ChannelJoinLinkButton } from './ChannelJoinLinkButton';
@@ -172,16 +172,14 @@ export function ChannelParticipantsTab(props: {
               </Show>
             </div>
             <div class="min-h-0 flex-1">
-              <Scroll aria-label="Participants list">
-                <ParticipantsList
-                  participants={filteredParticipants}
-                  searchQuery={searchQuery}
-                  currentUserId={userId() ?? undefined}
-                  editable={isEditable()}
-                  onParticipantClick={openDirectMessage}
-                  onRemoveParticipant={removeParticipant}
-                />
-              </Scroll>
+              <ParticipantsList
+                participants={filteredParticipants}
+                searchQuery={searchQuery}
+                currentUserId={userId() ?? undefined}
+                editable={isEditable()}
+                onParticipantClick={openDirectMessage}
+                onRemoveParticipant={removeParticipant}
+              />
             </div>
           </Card.Body>
         </Card>
