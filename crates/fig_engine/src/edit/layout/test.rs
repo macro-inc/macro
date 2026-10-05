@@ -603,7 +603,7 @@ fn turned_layers_stretched_across_keep_their_size_in_the_middle() {
 }
 
 #[test]
-fn stretched_stacks_count_their_content_when_hugging() {
+fn stretched_stacks_count_when_hugging() {
     let mut doc = Document::open(&blank("x")).unwrap();
     let mut h = History::default();
     let list = make(
@@ -636,7 +636,7 @@ fn stretched_stacks_count_their_content_when_hugging() {
         &mut doc,
         &mut h,
         &row,
-        r#"{"layoutMode":"HORIZONTAL","sizingHorizontal":"FIXED","width":50}"#,
+        r#"{"layoutMode":"HORIZONTAL","sizingHorizontal":"HUG"}"#,
     );
     set(
         &mut doc,
@@ -645,8 +645,22 @@ fn stretched_stacks_count_their_content_when_hugging() {
         r#"{"layoutMode":"VERTICAL","sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
     );
     set(&mut doc, &mut h, &row, r#"{"sizingHorizontal":"FILL"}"#);
-    // The list is as wide as the row's content, 256 + 157, not its title.
+    // Filling, the row keeps a fixed width, and the list is as wide as it,
+    // 256 + 157, not as its title.
+    assert_eq!(super::axis_sizing(&doc, idx(&doc, &row), true), "FILL");
+    let row_al = doc.props(idx(&doc, &row)).auto_layout.clone().unwrap();
+    assert!(!row_al.hugs_primary());
     assert_eq!(bounds(&doc, &list).2, 413.0);
     assert_eq!(bounds(&doc, &row).2, 413.0);
     assert_eq!(bounds(&doc, &title).2, 73.0);
+
+    // A stretched stack that still hugs (as files can have it) needs its
+    // content rather than its size.
+    let r = idx(&doc, &row) as usize;
+    let mut al = (*row_al).clone();
+    al.primary_sizing = None;
+    doc.nodes[r].props.auto_layout = Some(std::sync::Arc::new(al));
+    doc.nodes[r].props.size = Some(Vec2::new(600.0, 20.0));
+    set(&mut doc, &mut h, &title, r#"{"width":80}"#);
+    assert_eq!(bounds(&doc, &list).2, 413.0);
 }

@@ -275,7 +275,7 @@ impl Txn<'_> {
                 .iter()
                 .filter_map(|it| {
                     if it.child.stretches() {
-                        self.content_size(it.i, !h).map(|v| it.child.clamp(v, !h))
+                        self.stretched_need(it, !h)
                     } else {
                         Some(cross_of(it))
                     }
@@ -396,7 +396,7 @@ impl Txn<'_> {
                 .iter()
                 .filter_map(|it| {
                     if it.child.stretches() {
-                        self.content_size(it.i, x).map(|v| it.child.clamp(v, x))
+                        self.stretched_need(it, x)
                     } else {
                         Some(size(it))
                     }
@@ -404,6 +404,33 @@ impl Txn<'_> {
                 .fold(0.0, f64::max)
         };
         Some(f64::from(pad) + content)
+    }
+
+    /// What a stretched child needs across a hugging frame (along `x` or
+    /// not): a stack that hugs that way needs its content, one fixed that
+    /// way its current size; other layers need nothing.
+    fn stretched_need(&self, it: &Item, x: bool) -> Option<f64> {
+        let current = if x { it.bounds.w } else { it.bounds.h };
+        let p = self.doc.props(it.i);
+        if p.node_type() == NodeType::Instance {
+            // Laid out from its component: its size is what it needs.
+            return Some(it.child.clamp(current, x));
+        }
+        let al = p.auto_layout.clone()?;
+        if !self.is_stack(it.i) {
+            return None;
+        }
+        let hugs = if al.horizontal() == x {
+            al.hugs_primary()
+        } else {
+            al.hugs_counter()
+        };
+        let need = if hugs {
+            self.content_size(it.i, x)?
+        } else {
+            current
+        };
+        Some(it.child.clamp(need, x))
     }
 
     /// Resizes a child the layout sized: text re-wraps, and a child that is
@@ -576,6 +603,29 @@ impl Txn<'_> {
         text
     }
 
+    /// Makes an auto layout frame hug its content along an axis (`x` or
+    /// not), or keep a fixed size. Returns whether `i` has auto layout.
+    fn set_stack_sizing(&mut self, i: NodeIdx, x: bool, hug: bool) -> bool {
+        let Some(old) = self.doc.props(i).auto_layout.as_deref() else {
+            return false;
+        };
+        let mut al = old.clone();
+        let size = if hug {
+            "RESIZE_TO_FIT_WITH_IMPLICIT_SIZE"
+        } else {
+            "FIXED"
+        };
+        if al.horizontal() == x {
+            al.primary_sizing = Some(size.into());
+        } else {
+            al.counter_sizing = Some(size.into());
+        }
+        if &al != old {
+            self.edit(i, flags::AUTO_LAYOUT).auto_layout = Some(Arc::new(al));
+        }
+        true
+    }
+
     fn set_sizing(&mut self, i: NodeIdx, x: bool, value: &str) -> Option<&'static str> {
         let parent_stack = self
             .doc
@@ -599,6 +649,9 @@ impl Txn<'_> {
                 self.edit(i, flags::LAYOUT_CHILD).layout_child = Some(child);
             }
             if fill {
+                // A stack filling its parent no longer hugs that way: Figma
+                // keeps the axis fixed.
+                self.set_stack_sizing(i, x, false);
                 return None;
             }
         }
@@ -606,21 +659,7 @@ impl Txn<'_> {
             return None;
         }
         let hug = value == "HUG";
-        if let Some(old) = self.doc.props(i).auto_layout.as_deref() {
-            let mut al = old.clone();
-            let size = if hug {
-                "RESIZE_TO_FIT_WITH_IMPLICIT_SIZE"
-            } else {
-                "FIXED"
-            };
-            if al.horizontal() == x {
-                al.primary_sizing = Some(size.into());
-            } else {
-                al.counter_sizing = Some(size.into());
-            }
-            if &al != old {
-                self.edit(i, flags::AUTO_LAYOUT).auto_layout = Some(Arc::new(al));
-            }
+        if self.set_stack_sizing(i, x, hug) {
             return None;
         }
         if self.doc.props(i).node_type() == NodeType::Text {
