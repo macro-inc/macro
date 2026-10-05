@@ -198,6 +198,39 @@ fn stroke_region(doc: &Document, p: &Props, fill: &Operand) -> Option<Path> {
     boolean::combine(op, &[stroke, fill.clone()])
 }
 
+/// The network editing a layer's points starts from, in its own space: a
+/// vector's network, or a shape's outline (which becomes a vector when its
+/// points change, as in Figma). `None` for layers without points to edit.
+pub fn editable_network(doc: &Document, i: NodeIdx) -> Option<Network> {
+    let p = doc.props(i);
+    if let Some(net) = node_network(doc, p) {
+        return Some(net);
+    }
+    match p.node_type() {
+        NodeType::Line => serde_json::from_value(serde_json::json!({
+            "vertices": [{ "x": 0.0, "y": 0.0 }, { "x": p.size().x, "y": 0.0 }],
+            "segments": [{ "start": 0, "end": 1 }],
+        }))
+        .ok(),
+        NodeType::Vector
+        | NodeType::Rectangle
+        | NodeType::RoundedRectangle
+        | NodeType::Ellipse
+        | NodeType::Star
+        | NodeType::RegularPolygon => {
+            let mut o = Vec::new();
+            fill_outline(doc, p, &Affine::IDENTITY, &mut o);
+            match o.len() {
+                0 => None,
+                1 => Some(Network::from_path(&o[0].0, winding(o[0].1))),
+                _ => boolean::combine(BoolOp::Union, &[o])
+                    .map(|p| Network::from_path(&p, WindingRule::NonZero)),
+            }
+        }
+        _ => None,
+    }
+}
+
 /// What a boolean layer's children combine to, in its space.
 pub fn combined(doc: &Document, b: NodeIdx) -> Option<Path> {
     let op = doc
