@@ -618,6 +618,7 @@ async fn main() -> anyhow::Result<()> {
     // The one sanctioned meeting point of the two MCP stacks: agents load
     // tools through this selector, which prefers a user's Pipedream
     // connectors and falls back to the native ones (see `mcp_select`).
+    // The import service's live Slack source shares this selector.
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
         Arc::new(pipedream_repo.clone()),
@@ -646,6 +647,9 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(entity_creator),
             recorder.clone(),
         )
+        .with_slack_source(Arc::new(
+            import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+        ))
         .with_admission(admission.clone())
         .with_notifier(import_notify),
     );
