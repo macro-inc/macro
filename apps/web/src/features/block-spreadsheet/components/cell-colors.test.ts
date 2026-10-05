@@ -37,7 +37,7 @@ describe('workbook display colors', () => {
   });
 
   it('treats white fills as paper that follows the app background', () => {
-    expect(cellBackground('#FFFFFF')).toBe('var(--color-panel)');
+    expect(cellBackground('#FFFFFF')).toBe('var(--color-surface)');
     expect(cellBackground('#fff2cc')).toBe('#fff2cc');
     expect(cellBackground()).toBeUndefined();
     expect(cellForeground(undefined, '#ffffff')).toBeUndefined();

@@ -413,7 +413,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
       <div class="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={setScroller}
-          class="relative min-h-0 flex-1 overflow-auto bg-panel"
+          class="relative min-h-0 flex-1 overflow-auto bg-surface"
           data-docx-scroller
         >
           <div

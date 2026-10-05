@@ -216,6 +216,8 @@ interface TableRange {
 /** A pointer gesture inside a table. */
 type TableGesture =
   | { kind: 'cells'; shape: number; from: CellRef; at: Point; moved: boolean }
+  /** Pressed on a table not being edited: a drag moves it, a click edits the cell. */
+  | { kind: 'frame'; shape: number; from: CellRef; at: Point }
   | {
       kind: 'border';
       shape: number;
@@ -894,6 +896,20 @@ export function PptxEditor() {
         };
         return;
       }
+      // Outside its cells (no caret or cell range in this table), a press
+      // grabs the table: dragging moves it, a click puts the caret in the cell.
+      const inCells =
+        (edit?.shape === t.shape.id && !!edit.cell) ||
+        tableRange()?.shape === t.shape.id;
+      if (!inCells) {
+        if (edit) editor.stopEditing();
+        setTableRange(null);
+        editor.pointerDown(at, { shift: false, detail: e.detail });
+        tableGesture = { kind: 'frame', shape: t.shape.id, from: t.cell, at };
+        e.preventDefault();
+        focusStage();
+        return;
+      }
       if (edit) editor.stopEditing();
       editor.select(t.shape.id);
       setTableRange(null);
@@ -968,6 +984,10 @@ export function PptxEditor() {
       setBorderGuide({ ...g });
       return;
     }
+    if (g?.kind === 'frame') {
+      editor.pointerMove(at, { shift: e.shiftKey, alt: e.altKey });
+      return;
+    }
     if (g?.kind === 'cells') {
       const shape = editor.findShape(g.shape);
       const geometry = shape && tableGeometry(shape);
@@ -1000,6 +1020,15 @@ export function PptxEditor() {
         g.axis === 'col' ? g.current.x - g.start.x : g.current.y - g.start.y;
       if (Math.abs(delta) > 0.5)
         void commands.resizeGrid?.(g.shape, g.axis, g.index, delta);
+      return;
+    }
+    if (g?.kind === 'frame') {
+      const moved = !!editor.drag()?.active;
+      void editor.pointerUp().then(() => {
+        if (moved) return;
+        const shape = editor.findShape(g.shape);
+        if (shape) void editCell(shape, g.from, g.at);
+      });
       return;
     }
     if (g?.kind === 'cells') {

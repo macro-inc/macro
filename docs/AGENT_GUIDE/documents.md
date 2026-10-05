@@ -564,7 +564,9 @@ Layout and test hooks:
   caret lies across the rotated line, and arrow keys follow the screen (in
   text rotated 90°, Down is the next character and Left the next line).
   Turning a text box that resizes to fit its text swaps its width and height.
-- **Tables**: click a cell to type in it in place (same caret); Tab and
+- **Tables**: press a table that has no caret or cell range in it and drag to
+  move it, or release without dragging to type in the clicked cell in place
+  (same caret); Tab and
   Shift+Tab move between cells (Tab in the last cell adds a row); drag across
   cells to select a range (`pptx-cell-range`), which the Table Design/Layout
   tabs and the table menu act on (merge/split, shading `pptx-cell-shading`,
@@ -572,7 +574,8 @@ Layout and test hooks:
   and columns, distribute, alignment, and Text Direction
   `pptx-cell-text-direction`, items `pptx-cell-text-direction-<value>`; a
   vertical cell's row grows to its text). Drag a column or row border of a
-  selected table to resize it; drag near the frame's edge to move the table.
+  selected table to resize it. While a cell is being edited, drag near the
+  frame's edge (or click outside the table first) to move it.
 - **Charts**: double-click a chart, or **Edit data** (`pptx-chart-edit-data`)
   on Chart Design, opens the data grid (`pptx-chart-data`, cells
   `pptx-chart-cell-<row>-<col>`, **Apply** `pptx-chart-apply`); Chart Design
@@ -909,6 +912,8 @@ and as colored dots on the thumbnails of slides they are on. A viewer who opens
 a deck nobody has shared yet, or anyone when the sync service is unreachable,
 gets the stored file read-only.
 
+**Ask Macro**, in the header beside **Share**, opens a new agent session in a
+split with the deck mentioned in the composer (nothing sends automatically).
 Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
 sections, transitions, header and footer, and every shape with its id, kind,
 placeholder role, position in points, text, table cells with merges and style,
@@ -1324,7 +1329,8 @@ updates live and shows each collaborator's caret with their name
   (labelled `Document text`); it must have focus, which a click on a page
   gives it. Read text back from another tab or after a download, not from
   the page.
-- Editors get a toolbar labelled `Document formatting`: `Undo`, `Redo`, the
+- Editors get a toolbar labelled `Document formatting`, docked full width
+  under the header (like the spreadsheet toolbar): `Undo`, `Redo`, the
   `Paragraph style`, `Font` and `Font size` selects, `Bold`, `Italic`,
   `Underline`, `Strikethrough`, `Superscript`, `Subscript`, the `Text color`
   and `Highlight` menus (`[data-docx-menu="color"]`,
@@ -1405,6 +1411,9 @@ updates live and shows each collaborator's caret with their name
   threads and are not written into the file.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
+- **Ask Macro**, in the header beside **Share**, opens a new agent session in
+  a split with the document mentioned in the composer (nothing sends
+  automatically).
 - AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
   open editors patch agent edits in as they land. `ReadWordDocument` lists
   every paragraph, table cell and content control with its id. `EditWordDocument`

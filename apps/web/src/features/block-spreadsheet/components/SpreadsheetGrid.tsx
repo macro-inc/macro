@@ -1065,7 +1065,7 @@ export function SpreadsheetGrid(props: {
           aria-readonly={props.readonly}
           aria-activedescendant={`${id}-${cellAddress(props.selection.anchor)}`}
           tabIndex={0}
-          class="relative min-h-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y touch-pinch-zoom outline-none bg-panel selection:bg-accent/20"
+          class="relative min-h-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y touch-pinch-zoom outline-none bg-surface selection:bg-accent/20"
           style={{
             '--spreadsheet-cell-padding': `${CELL_PADDING_X * scale()}px`,
             '--spreadsheet-cell-padding-y': `${CELL_PADDING_Y * scale()}px`,
@@ -1196,7 +1196,7 @@ export function SpreadsheetGrid(props: {
             <div
               role="row"
               aria-rowindex={1}
-              class="sticky top-0 z-20 flex bg-panel text-ink-muted font-medium select-none"
+              class="sticky top-0 z-20 flex bg-surface text-ink-muted font-medium select-none"
               style={{
                 height: `${headerHeight()}px`,
                 width: `${totalWidth()}px`,
@@ -1206,7 +1206,7 @@ export function SpreadsheetGrid(props: {
               <div
                 role="columnheader"
                 aria-label="Select all cells"
-                class="sticky left-0 z-30 shrink-0 border-b border-r border-edge bg-panel"
+                class="sticky left-0 z-30 shrink-0 border-b border-r border-edge bg-surface"
                 style={{ width: `${headerWidth()}px` }}
               >
                 <button
@@ -1358,7 +1358,7 @@ export function SpreadsheetGrid(props: {
                 >
                   <div
                     role="rowheader"
-                    class="sticky left-0 z-10 shrink-0 border-b border-r border-edge-muted bg-panel text-center text-ink-muted select-none"
+                    class="sticky left-0 z-10 shrink-0 border-b border-r border-edge-muted bg-surface text-center text-ink-muted select-none"
                     style={{
                       width: `${headerWidth()}px`,
                       'font-size': `${11 * scale()}px`,

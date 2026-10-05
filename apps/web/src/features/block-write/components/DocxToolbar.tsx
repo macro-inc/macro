@@ -285,14 +285,15 @@ const keepEditorFocus = (event: PointerEvent | MouseEvent) => {
 export function DocxToolbar(props: DocxToolbarProps) {
   return (
     <div
-      class="flex w-full shrink-0 justify-center overflow-x-auto px-3 py-2"
+      class="shrink-0 border-b border-edge-muted"
       onPointerDown={keepEditorFocus}
       onMouseDown={keepEditorFocus}
     >
+      {/* Docked under the header like the spreadsheet toolbar, not floating. */}
       <Toolbar
         size="icon-sm"
         aria-label="Document formatting"
-        class="max-w-full"
+        class="flex h-10 w-full min-w-0 gap-0.5 overflow-x-auto overscroll-x-contain rounded-none border-0 bg-transparent px-3 py-0 touch:h-[48px] touch:touch-pan-x touch:px-1"
       >
         <Show when={props.canEdit}>
           <Toolbar.Group>
@@ -311,7 +312,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               <ArrowClockwise />
             </Toolbar.Button>
           </Toolbar.Group>
-          <Toolbar.Divider />
+          <Toolbar.Divider class="mx-1.5 my-2.5" />
           <select
             aria-label="Paragraph style"
             class="h-6 max-w-36 rounded-md border border-edge-muted bg-input px-1.5 text-xs text-ink"
@@ -387,7 +388,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               )}
             </For>
           </select>
-          <Toolbar.Divider />
+          <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Group>
             <For each={INLINE}>
               {(item) => (
@@ -452,7 +453,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               <TextTSlash />
             </Toolbar.Button>
           </Toolbar.Group>
-          <Toolbar.Divider />
+          <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Group>
             <Toolbar.Button
               label="Bulleted list"
@@ -467,7 +468,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               <ListNumbers />
             </Toolbar.Button>
           </Toolbar.Group>
-          <Toolbar.Divider />
+          <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Group>
             <For each={ALIGNMENTS}>
               {(item) => (
@@ -515,7 +516,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               </For>
             </ToolbarMenu>
           </Toolbar.Group>
-          <Toolbar.Divider />
+          <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Button
             label="Insert table"
             onClick={() => props.onInsertTable()}
@@ -553,7 +554,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               </For>
             </ToolbarMenu>
           </Show>
-          <Toolbar.Divider />
+          <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Group>
             <Toolbar.Button
               label={props.tracking ? 'Stop tracking changes' : 'Track changes'}
@@ -605,7 +606,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               </Toolbar.Button>
             </Show>
           </Toolbar.Group>
-          <Toolbar.Divider />
+          <Toolbar.Divider class="mx-1.5 my-2.5" />
         </Show>
         <Show when={props.canComment}>
           <Toolbar.Button
