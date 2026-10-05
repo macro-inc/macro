@@ -8,6 +8,7 @@ import {
   realign,
   restyle,
   retext,
+  textLayerName,
   toPsText,
 } from './text';
 
@@ -72,5 +73,11 @@ describe('text layers', () => {
       'OpenSans-BoldItalic'
     );
     expect(postscriptName('Inter', 'Regular')).toBe('Inter-Regular');
+  });
+
+  it('names text layers after their first line', () => {
+    expect(textLayerName('Hello\rWorld\r')).toBe('Hello');
+    expect(textLayerName('\r')).toBe('');
+    expect(textLayerName('x'.repeat(80))).toHaveLength(64);
   });
 });

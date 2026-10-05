@@ -32,7 +32,14 @@ import {
   SelectField,
   SliderField,
 } from '../components/fields';
-import { ADJUSTMENT_LABELS, twoColorGradient } from '../core/adjustments';
+import { ADJUSTMENT_LABELS } from '../core/adjustments';
+import {
+  endColor,
+  GRADIENT_KINDS,
+  GRADIENT_METHODS,
+  recolorEnd,
+  twoColorGradient,
+} from '../core/gradient';
 import { leadStyle, postscriptName, realign, restyle } from '../core/text';
 import type { PsdEditor } from '../primitives/create-psd-editor';
 
@@ -535,48 +542,42 @@ function FillSection(props: {
             {(f) => {
               const g = () =>
                 (f() as Extract<Fill, { type: 'gradient' }>).gradient;
-              const from = () => g().colors[0]?.color ?? { r: 0, g: 0, b: 0 };
-              const to = () =>
-                g().colors[g().colors.length - 1]?.color ?? {
-                  r: 1,
-                  g: 1,
-                  b: 1,
-                };
-              const set = (patch: Partial<Gradient>, done: boolean) =>
-                props.onFill(
-                  { type: 'gradient', gradient: { ...g(), ...patch } },
-                  done
-                );
+              const set = (gradient: Gradient, done: boolean) =>
+                props.onFill({ type: 'gradient', gradient }, done);
               return (
                 <>
                   <ColorSwatch
                     label="From"
-                    color={from()}
+                    color={endColor(g(), 'first')}
                     disabled={!props.editable}
+                    testId="psd-gradient-from"
                     onChange={(c, done) =>
-                      set({ colors: twoColorGradient(c, to()).colors }, done)
+                      set(recolorEnd(g(), 'first', c), done)
                     }
                   />
                   <ColorSwatch
                     label="To"
-                    color={to()}
+                    color={endColor(g(), 'last')}
                     disabled={!props.editable}
+                    testId="psd-gradient-to"
                     onChange={(c, done) =>
-                      set({ colors: twoColorGradient(from(), c).colors }, done)
+                      set(recolorEnd(g(), 'last', c), done)
                     }
                   />
                   <SelectField
                     label="Style"
                     value={g().kind}
-                    options={[
-                      { value: 'linear', label: 'Linear' },
-                      { value: 'radial', label: 'Radial' },
-                      { value: 'angle', label: 'Angle' },
-                      { value: 'reflected', label: 'Reflected' },
-                      { value: 'diamond', label: 'Diamond' },
-                    ]}
+                    options={GRADIENT_KINDS}
                     disabled={!props.editable}
-                    onChange={(kind) => set({ kind }, true)}
+                    onChange={(kind) => set({ ...g(), kind }, true)}
+                  />
+                  <SelectField
+                    label="Method"
+                    value={g().method ?? 'classic'}
+                    options={GRADIENT_METHODS}
+                    disabled={!props.editable}
+                    testId="psd-gradient-method"
+                    onChange={(method) => set({ ...g(), method }, true)}
                   />
                   <SliderField
                     label="Angle"
@@ -585,7 +586,7 @@ function FillSection(props: {
                     max={180}
                     unit="°"
                     disabled={!props.editable}
-                    onChange={(angle, done) => set({ angle }, done)}
+                    onChange={(angle, done) => set({ ...g(), angle }, done)}
                   />
                 </>
               );

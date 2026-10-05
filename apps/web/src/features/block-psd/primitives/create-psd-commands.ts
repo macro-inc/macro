@@ -16,9 +16,9 @@ import { createSignal } from 'solid-js';
 import {
   defaultAdjustment,
   type EditableAdjustment,
-  twoColorGradient,
 } from '../core/adjustments';
 import type { FilterKind } from '../core/filters';
+import { twoColorGradient } from '../core/gradient';
 import { clippingOp, mergeDownOp, newLayerOp } from '../core/ops';
 import { stepBrushSize } from '../core/shortcuts';
 import type { CanvasTools } from './create-canvas-tools';
@@ -44,6 +44,8 @@ export interface PsdCommandsOptions {
   download: (blob: Blob, name: string) => void;
   notifyError: (message: string) => void;
   notifyInfo: (message: string) => void;
+  /** A dialog closed: the keys go back to the editor. */
+  onDialogClosed?: () => void;
 }
 
 const safeName = (name: string) =>
@@ -147,7 +149,8 @@ export function createPsdCommands(options: PsdCommandsOptions) {
 
   const ids = () => chosen();
 
-  const addMask = (init: MaskInit) => {
+  /** Adds a mask to the active layer; painting then edits the mask. */
+  const addMask = async (init: MaskInit) => {
     const row = active();
     if (!row) return;
     if (row.background) {
@@ -155,7 +158,8 @@ export function createPsdCommands(options: PsdCommandsOptions) {
       return;
     }
     if (row.hasMask) return;
-    void editor.apply([{ op: 'addMask', id: row.id, init }]);
+    const result = await editor.apply([{ op: 'addMask', id: row.id, init }]);
+    if (result && editor.active() === row.id) editor.setTarget('mask');
   };
 
   const filterOp = (filter: FilterSpec): Op[] => {
@@ -379,7 +383,10 @@ export function createPsdCommands(options: PsdCommandsOptions) {
   return {
     run,
     dialog,
-    closeDialog: () => setDialog(undefined),
+    closeDialog: () => {
+      setDialog(undefined);
+      options.onDialogClosed?.();
+    },
     paste,
     placeImage,
     filterOp,

@@ -16,18 +16,22 @@ export {
   versionCovers,
 } from '@app/features/block-fig/core/presence';
 
-/** A selection outline as published: polygons of `[x0, y0, x1, y1, …]`. */
-export interface SharedSelection {
-  bounds: IRect;
+/**
+ * A selection outline as published: polygons of `[x0, y0, x1, y1, …]`.
+ * Presence types are plain object types (not interfaces) so they are
+ * awareness values.
+ */
+export type SharedSelection = {
+  bounds: { x: number; y: number; w: number; h: number };
   outline: number[][];
-}
+};
 
 /** One person's presence, as published. */
 export type PsdPresence = {
   /** The layer id session (1–65535) this person creates layers in. */
   session: number;
   /** Pointer in canvas pixels; `null` when off the canvas. */
-  cursor: Point | null;
+  cursor: { x: number; y: number } | null;
   /** Ids of the layers they work on (the first is the active one). */
   layers: number[];
   /** Their selection's outline. */

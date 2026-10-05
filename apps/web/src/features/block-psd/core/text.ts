@@ -24,6 +24,19 @@ export function toPsText(text: string): string {
   return `${text.replace(/\r\n?/g, '\n').replace(/\n/g, '\r')}\r`;
 }
 
+/** Longest name a text layer takes from its text, in characters. */
+const NAME_LENGTH = 64;
+
+/**
+ * The name a text layer takes from its text (its first line), as the
+ * engine names new text layers and Photoshop keeps renaming them while
+ * they are typed into, until someone renames them.
+ */
+export function textLayerName(psText: string): string {
+  const first = psText.split(/[\r\n]/)[0] ?? '';
+  return [...first].slice(0, NAME_LENGTH).join('');
+}
+
 /** The default style of new text (Photoshop's, in the foreground color). */
 export function defaultTextStyle(color: Rgb, size = 24): TextStyle {
   return {

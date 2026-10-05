@@ -7,12 +7,12 @@
 import type {
   Adjustment,
   AdjustmentType,
-  Gradient,
   LevelsChannel,
   Rgb,
 } from '@core/psd-engine/types';
 import { match } from 'ts-pattern';
 import { BLACK, WHITE } from './color';
+import { twoColorGradient } from './gradient';
 
 /** The kinds the editor creates and edits, in Photoshop's menu order. */
 export const ADJUSTMENT_TYPES = [
@@ -63,33 +63,6 @@ export const IDENTITY_LEVELS: LevelsChannel = {
 
 /** Photoshop's Warming Filter (85). */
 const WARMING: Rgb = { r: 236 / 255, g: 138 / 255, b: 0 };
-
-/** A two-color gradient from `from` to `to`. */
-export function twoColorGradient(
-  from: Rgb,
-  to: Rgb,
-  name = 'Custom'
-): Gradient {
-  return {
-    name,
-    kind: 'linear',
-    angle: 90,
-    scale: 1,
-    reverse: false,
-    dither: false,
-    alignWithLayer: true,
-    offset: [0, 0],
-    smoothness: 1,
-    colors: [
-      { location: 0, midpoint: 0.5, color: from },
-      { location: 1, midpoint: 0.5, color: to },
-    ],
-    opacities: [
-      { location: 0, midpoint: 0.5, opacity: 1 },
-      { location: 1, midpoint: 0.5, opacity: 1 },
-    ],
-  };
-}
 
 /** A new adjustment of a kind, with Photoshop's defaults. */
 export function defaultAdjustment(type: EditableAdjustment): Adjustment {

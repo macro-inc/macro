@@ -6,7 +6,7 @@
 
 import CaretRight from '@phosphor/caret-right.svg';
 import { cn } from '@ui';
-import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
+import { createSignal, Index, type JSX, onCleanup, Show } from 'solid-js';
 
 export interface MenuItem {
   label: string;
@@ -42,58 +42,81 @@ export function MenuList(props: {
         props.class
       )}
     >
-      <For each={props.items}>
-        {(item, index) =>
-          item === 'divider' ? (
-            <div class="my-1 h-px bg-edge-muted" />
-          ) : (
-            <div
-              class="relative"
-              onPointerEnter={() =>
-                setSubmenu(item.items ? index() : undefined)
-              }
-            >
-              <button
-                type="button"
-                role="menuitem"
-                data-testid={item.testId}
-                disabled={item.disabled}
-                class="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-hover disabled:opacity-40 disabled:hover:bg-transparent"
-                onClick={() => {
-                  if (item.items) {
-                    setSubmenu(index());
-                    return;
-                  }
-                  item.onSelect?.();
-                  props.onDone();
-                }}
+      {/* By position: the entries are rebuilt as the editor changes, and
+          the rows (and the focus in them) stay. */}
+      <Index each={props.items}>
+        {(entry, index) => (
+          <Show
+            when={entry() !== 'divider' && (entry() as MenuItem)}
+            fallback={<div class="my-1 h-px bg-edge-muted" />}
+          >
+            {(item) => (
+              <div
+                class="relative"
+                onPointerEnter={() =>
+                  setSubmenu(item().items ? index : undefined)
+                }
               >
-                <span class="w-3 text-accent">{item.checked ? '✓' : ''}</span>
-                <span class="flex-1 truncate">{item.label}</span>
-                <Show when={item.shortcut}>
-                  <span class="text-ink-muted">{item.shortcut}</span>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid={item().testId}
+                  disabled={item().disabled}
+                  class="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-hover disabled:opacity-40 disabled:hover:bg-transparent"
+                  onClick={() => {
+                    if (item().items) {
+                      setSubmenu(index);
+                      return;
+                    }
+                    item().onSelect?.();
+                    props.onDone();
+                  }}
+                >
+                  <span class="w-3 text-accent">
+                    {item().checked ? '✓' : ''}
+                  </span>
+                  <span class="flex-1 truncate">{item().label}</span>
+                  <Show when={item().shortcut}>
+                    <span class="text-ink-muted">{item().shortcut}</span>
+                  </Show>
+                  <Show when={item().items}>
+                    <CaretRight class="size-3 text-ink-muted" />
+                  </Show>
+                </button>
+                <Show when={item().items && submenu() === index}>
+                  <MenuList
+                    items={item().items ?? []}
+                    onDone={props.onDone}
+                    class="absolute top-0 left-full ml-1"
+                  />
                 </Show>
-                <Show when={item.items}>
-                  <CaretRight class="size-3 text-ink-muted" />
-                </Show>
-              </button>
-              <Show when={item.items && submenu() === index()}>
-                <MenuList
-                  items={item.items ?? []}
-                  onDone={props.onDone}
-                  class="absolute top-0 left-full ml-1"
-                />
-              </Show>
-            </div>
-          )
-        }
-      </For>
+              </div>
+            )}
+          </Show>
+        )}
+      </Index>
     </div>
   );
 }
 
+/**
+ * Closes a menu, giving the keys to `button` when they were in the menu
+ * (which goes away), so shortcuts keep working; an item that moved focus
+ * elsewhere (a dialog's field) keeps it there.
+ */
+function closeMenu(close: () => void, button: HTMLElement | undefined) {
+  const focused = document.activeElement;
+  const lost =
+    !focused ||
+    focused === document.body ||
+    focused.closest('[role="menu"]') !== null;
+  close();
+  if (lost) button?.focus({ preventScroll: true });
+}
+
 export function MenuBar(props: { menus: MenuDefinition[] }) {
   const [open, setOpen] = createSignal<number>();
+  const titles: HTMLButtonElement[] = [];
   let root!: HTMLDivElement;
   const onDocumentDown = (e: PointerEvent) => {
     if (!root.contains(e.target as Node)) setOpen(undefined);
@@ -109,35 +132,42 @@ export function MenuBar(props: { menus: MenuDefinition[] }) {
         if (e.key === 'Escape') setOpen(undefined);
       }}
     >
-      <For each={props.menus}>
+      {/* By position, so the titles (and the focus on them) stay while
+          the menus are rebuilt. */}
+      <Index each={props.menus}>
         {(menu, index) => (
           <div class="relative">
             <button
+              ref={(el) => {
+                titles[index] = el;
+              }}
               type="button"
-              data-testid={menu.testId}
-              aria-expanded={open() === index()}
+              data-testid={menu().testId}
+              aria-expanded={open() === index}
               class="rounded-md px-2 py-1 font-medium text-xs"
               classList={{
-                'bg-hover text-ink': open() === index(),
-                'text-ink-muted hover:text-ink': open() !== index(),
+                'bg-hover text-ink': open() === index,
+                'text-ink-muted hover:text-ink': open() !== index,
               }}
-              onClick={() => setOpen(open() === index() ? undefined : index())}
+              onClick={() => setOpen(open() === index ? undefined : index)}
               onPointerEnter={() => {
-                if (open() !== undefined) setOpen(index());
+                if (open() !== undefined) setOpen(index);
               }}
             >
-              {menu.title}
+              {menu().title}
             </button>
-            <Show when={open() === index()}>
+            <Show when={open() === index}>
               <MenuList
-                items={menu.items}
-                onDone={() => setOpen(undefined)}
+                items={menu().items}
+                onDone={() =>
+                  closeMenu(() => setOpen(undefined), titles[index])
+                }
                 class="absolute top-full left-0 mt-1"
               />
             </Show>
           </div>
         )}
-      </For>
+      </Index>
     </div>
   );
 }
@@ -154,6 +184,7 @@ export function MenuButton(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   let root!: HTMLDivElement;
+  let button!: HTMLButtonElement;
   const onDocumentDown = (e: PointerEvent) => {
     if (!root.contains(e.target as Node)) setOpen(false);
   };
@@ -162,6 +193,7 @@ export function MenuButton(props: {
   return (
     <div ref={root} class="relative">
       <button
+        ref={button}
         type="button"
         aria-label={props.label}
         title={props.label}
@@ -176,7 +208,7 @@ export function MenuButton(props: {
       <Show when={open()}>
         <MenuList
           items={props.items}
-          onDone={() => setOpen(false)}
+          onDone={() => closeMenu(() => setOpen(false), button)}
           class={
             props.up
               ? 'absolute bottom-full left-0 mb-1'

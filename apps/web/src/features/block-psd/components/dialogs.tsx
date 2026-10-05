@@ -11,6 +11,7 @@ import type {
   Interpolation,
 } from '@core/psd-engine/types';
 import XIcon from '@phosphor/x.svg';
+import { cn } from '@ui';
 import { Button } from '@ui/components/Button';
 import {
   createSignal,
@@ -32,6 +33,11 @@ export function DialogShell(props: {
   testId: string;
   children: JSX.Element;
   okLabel?: string;
+  /**
+   * The dialog previews its result on the canvas: nothing dims the canvas
+   * and the dialog stands aside at the top right.
+   */
+  previews?: boolean;
   onCancel: () => void;
   onOk?: () => void;
 }) {
@@ -42,7 +48,12 @@ export function DialogShell(props: {
   });
   return (
     <div
-      class="absolute inset-0 z-40 flex items-start justify-center bg-modal-overlay pt-[10vh]"
+      class={cn(
+        'absolute inset-0 z-40 flex items-start',
+        props.previews
+          ? 'justify-end p-4'
+          : 'justify-center bg-modal-overlay pt-[10vh]'
+      )}
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) props.onCancel();
       }}
@@ -249,6 +260,7 @@ export function FilterDialog(props: {
     <DialogShell
       title={FILTER_TITLES[props.filter]}
       testId="psd-filter-dialog"
+      previews
       onCancel={() => {
         clearTimeout(timer);
         props.onCancel();
@@ -384,6 +396,7 @@ export function AdjustDialog(props: {
     <DialogShell
       title={ADJUSTMENT_LABELS[props.adjustment.type]}
       testId="psd-adjust-dialog"
+      previews
       onCancel={() => {
         clearTimeout(timer);
         props.onCancel();

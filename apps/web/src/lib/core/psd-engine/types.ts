@@ -142,6 +142,12 @@ export type GradientKind =
   | 'reflected'
   | 'diamond';
 
+/**
+ * How colors mix between a gradient's stops (Photoshop 2022 and later);
+ * files from before read as `'classic'`.
+ */
+export type GradientMethod = 'classic' | 'perceptual' | 'linear' | 'smooth';
+
 export interface ColorStop {
   location: number;
   midpoint: number;
@@ -165,6 +171,8 @@ export interface Gradient {
   alignWithLayer: boolean;
   offset: [number, number];
   smoothness: number;
+  /** Absent reads as `'classic'`; the engine always reports it. */
+  method?: GradientMethod;
   colors: ColorStop[];
   opacities: OpacityStop[];
 }

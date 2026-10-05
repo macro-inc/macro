@@ -21,6 +21,10 @@ import Stack from '@phosphor/stack.svg';
 import TextT from '@phosphor/text-t.svg';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 
+/** Transparency, as Photoshop's checkerboard (literal colors: it is data). */
+const CHECKERBOARD =
+  'repeating-conic-gradient(#cccccc 0 25%, #ffffff 0 50%) 50% / 8px 8px';
+
 export function LayerRow(props: {
   row: Row;
   /** Chosen in the panel. */
@@ -139,11 +143,7 @@ export function LayerRow(props: {
                   src={src()}
                   alt=""
                   class="max-h-full max-w-full object-contain"
-                  // Transparency shows as Photoshop's checkerboard.
-                  style={{
-                    background:
-                      'repeating-conic-gradient(#cccccc 0 25%, #ffffff 0 50%) 50% / 8px 8px',
-                  }}
+                  style={{ background: CHECKERBOARD }}
                   draggable={false}
                 />
               )}
@@ -153,11 +153,18 @@ export function LayerRow(props: {
           <Match when={props.row.kind === 'group'}>
             <FolderSimple class="size-4 text-ink-muted" />
           </Match>
+          <Match when={props.row.kind === 'text'}>
+            <TextT class="size-5 text-ink" />
+          </Match>
           <Match when={props.row.kind === 'adjustment'}>
             <CircleHalf class="size-4 text-ink-muted" />
           </Match>
           <Match when={props.row.kind === 'fill' && !props.thumbnail}>
             <Drop class="size-4 text-ink-muted" />
+          </Match>
+          <Match when={props.thumbnail === null}>
+            {/* A layer with no pixels yet: all transparent. */}
+            <span class="size-full" style={{ background: CHECKERBOARD }} />
           </Match>
         </Switch>
       </span>
@@ -185,9 +192,6 @@ export function LayerRow(props: {
         when={renaming()}
         fallback={
           <span class="min-w-0 flex-1 truncate" title={props.row.name}>
-            <Show when={props.row.kind === 'text'}>
-              <TextT class="mr-1 inline size-3 text-ink-muted" />
-            </Show>
             <Show when={props.row.kind === 'shape'}>
               <Shapes class="mr-1 inline size-3 text-ink-muted" />
             </Show>

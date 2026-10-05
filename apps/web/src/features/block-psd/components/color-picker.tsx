@@ -6,6 +6,7 @@
  */
 
 import type { Rgb } from '@core/psd-engine/types';
+import { cn } from '@ui';
 import { createSignal, For } from 'solid-js';
 import {
   css,
@@ -205,6 +206,50 @@ export function ColorPicker(props: {
           (v) => fromHsb({ ...current(), b: v / 100 })
         )}
       </div>
+    </div>
+  );
+}
+
+/** Which of the two colors the picker edits: the foreground or background. */
+export function ColorTargetSwitch(props: {
+  target: 'foreground' | 'background';
+  foreground: Rgb;
+  background: Rgb;
+  onTarget: (target: 'foreground' | 'background') => void;
+}) {
+  const option = (
+    value: 'foreground' | 'background',
+    label: string,
+    color: Rgb
+  ) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={props.target === value}
+      data-testid={`psd-color-target-${value}`}
+      class={cn(
+        'flex flex-1 items-center gap-1.5 rounded px-2 py-1 text-xs',
+        props.target === value
+          ? 'bg-active text-ink'
+          : 'text-ink-muted hover:text-ink'
+      )}
+      onClick={() => props.onTarget(value)}
+    >
+      <span
+        class="size-3.5 shrink-0 rounded-sm border border-edge"
+        style={{ 'background-color': css(color) }}
+      />
+      {label}
+    </button>
+  );
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Color to edit"
+      class="flex gap-1 rounded-md border border-edge-muted p-0.5"
+    >
+      {option('foreground', 'Foreground', props.foreground)}
+      {option('background', 'Background', props.background)}
     </div>
   );
 }

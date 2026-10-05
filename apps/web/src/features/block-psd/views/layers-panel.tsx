@@ -14,17 +14,21 @@ import {
   type LayerPatch,
   type LayerRow as Row,
 } from '@core/psd-engine/types';
+import ArrowsOutCardinal from '@phosphor/arrows-out-cardinal.svg';
+import Checkerboard from '@phosphor/checkerboard.svg';
 import CircleHalf from '@phosphor/circle-half.svg';
 import FolderSimplePlus from '@phosphor/folder-simple-plus.svg';
+import LockSimple from '@phosphor/lock-simple.svg';
+import PaintBrush from '@phosphor/paint-brush.svg';
 import Plus from '@phosphor/plus.svg';
 import SquareHalf from '@phosphor/square-half.svg';
 import Trash from '@phosphor/trash.svg';
 import { createSignal, For, Show } from 'solid-js';
 import {
-  CheckField,
   createDragKeys,
+  IconToggle,
+  ScrubField,
   SelectField,
-  SliderField,
 } from '../components/fields';
 import { LayerRow } from '../components/layer-row';
 import { MenuButton, type MenuEntry, MenuList } from '../components/menu-bar';
@@ -93,7 +97,15 @@ export function LayersPanel(props: {
   const [menu, setMenu] = createSignal<{ x: number; y: number }>();
   let dragged: number[] = [];
 
-  const rows = () => visibleRows(editor.layers());
+  const rows = () => {
+    const concealed = editor.concealed();
+    const all = visibleRows(editor.layers());
+    return concealed.length === 0
+      ? all
+      : all.map((r) =>
+          concealed.includes(r.id) ? { ...r, visible: true, shown: true } : r
+        );
+  };
   const active = () => editor.activeRow();
   const editable = () => editor.enabled();
 
@@ -260,81 +272,115 @@ export function LayersPanel(props: {
           </MenuButton>
         </div>
         <Show when={active()}>
-          {(row) => (
-            <>
-              <SelectField
-                value={row().blend}
-                options={BLEND_MODES.filter(
-                  (m) => m !== 'passThrough' || row().kind === 'group'
-                ).map((m) => ({ value: m, label: BLEND_LABELS[m] }))}
-                disabled={!editable()}
-                testId="psd-blend-mode"
-                onChange={(blend) => setLayer({ blend })}
-              />
-              <SliderField
-                label="Opacity"
-                value={Math.round((row().opacity / 255) * 100)}
-                min={0}
-                max={100}
-                unit="%"
-                disabled={!editable()}
-                testId="psd-layer-opacity"
-                onChange={(v, done) => {
-                  setLayer(
-                    { opacity: Math.round((v / 100) * 255) },
-                    keys.key('opacity')
-                  );
-                  if (done) keys.end();
-                }}
-              />
-              <SliderField
-                label="Fill"
-                value={Math.round((row().fillOpacity / 255) * 100)}
-                min={0}
-                max={100}
-                unit="%"
-                disabled={!editable()}
-                testId="psd-layer-fill"
-                onChange={(v, done) => {
-                  setLayer(
-                    { fillOpacity: Math.round((v / 100) * 255) },
-                    keys.key('fill')
-                  );
-                  if (done) keys.end();
-                }}
-              />
-              <div class="flex items-center gap-3">
-                <span class="text-ink-muted text-xs">Lock</span>
-                <CheckField
-                  label="Pixels"
-                  checked={row().locks.pixels}
-                  disabled={!editable()}
-                  testId="psd-lock-pixels"
-                  onChange={(pixels) =>
-                    setLayer({ locks: { ...row().locks, pixels } })
-                  }
-                />
-                <CheckField
-                  label="Alpha"
-                  checked={row().locks.transparency}
-                  disabled={!editable()}
-                  testId="psd-lock-transparency"
-                  onChange={(transparency) =>
-                    setLayer({ locks: { ...row().locks, transparency } })
-                  }
-                />
-                <CheckField
-                  label="Move"
-                  checked={row().locks.position}
-                  disabled={!editable()}
-                  testId="psd-lock-position"
-                  onChange={(position) =>
-                    setLayer({ locks: { ...row().locks, position } })
-                  }
-                />
-              </div>
-            </>
-          )}
+          {(row) => {
+            const locks = () => row().locks;
+            const allLocked = () =>
+              locks().transparency && locks().pixels && locks().position;
+            return (
+              <>
+                <div class="flex items-center gap-2">
+                  <div class="min-w-0 flex-1">
+                    <SelectField
+                      value={row().blend}
+                      options={BLEND_MODES.filter(
+                        (m) => m !== 'passThrough' || row().kind === 'group'
+                      ).map((m) => ({ value: m, label: BLEND_LABELS[m] }))}
+                      disabled={!editable()}
+                      testId="psd-blend-mode"
+                      onChange={(blend) => setLayer({ blend })}
+                    />
+                  </div>
+                  <ScrubField
+                    label="Opacity"
+                    value={Math.round((row().opacity / 255) * 100)}
+                    min={0}
+                    max={100}
+                    unit="%"
+                    disabled={!editable()}
+                    testId="psd-layer-opacity"
+                    onChange={(v, done) => {
+                      setLayer(
+                        { opacity: Math.round((v / 100) * 255) },
+                        keys.key('opacity')
+                      );
+                      if (done) keys.end();
+                    }}
+                  />
+                </div>
+                <div class="flex items-center gap-0.5">
+                  <span class="mr-1 text-ink-muted text-xs">Lock</span>
+                  <IconToggle
+                    label="Lock transparent pixels"
+                    on={locks().transparency}
+                    disabled={!editable()}
+                    testId="psd-lock-transparency"
+                    onChange={(transparency) =>
+                      setLayer({ locks: { ...locks(), transparency } })
+                    }
+                  >
+                    <Checkerboard class="size-3.5" />
+                  </IconToggle>
+                  <IconToggle
+                    label="Lock image pixels"
+                    on={locks().pixels}
+                    disabled={!editable()}
+                    testId="psd-lock-pixels"
+                    onChange={(pixels) =>
+                      setLayer({ locks: { ...locks(), pixels } })
+                    }
+                  >
+                    <PaintBrush class="size-3.5" />
+                  </IconToggle>
+                  <IconToggle
+                    label="Lock position"
+                    on={locks().position}
+                    disabled={!editable()}
+                    testId="psd-lock-position"
+                    onChange={(position) =>
+                      setLayer({ locks: { ...locks(), position } })
+                    }
+                  >
+                    <ArrowsOutCardinal class="size-3.5" />
+                  </IconToggle>
+                  <IconToggle
+                    label="Lock all"
+                    on={allLocked()}
+                    disabled={!editable()}
+                    testId="psd-lock-all"
+                    onChange={(all) =>
+                      setLayer({
+                        locks: {
+                          ...locks(),
+                          transparency: all,
+                          pixels: all,
+                          position: all,
+                        },
+                      })
+                    }
+                  >
+                    <LockSimple class="size-3.5" />
+                  </IconToggle>
+                  <span class="flex-1" />
+                  <ScrubField
+                    label="Fill"
+                    value={Math.round((row().fillOpacity / 255) * 100)}
+                    min={0}
+                    max={100}
+                    unit="%"
+                    disabled={!editable()}
+                    testId="psd-layer-fill"
+                    onChange={(v, done) => {
+                      setLayer(
+                        { fillOpacity: Math.round((v / 100) * 255) },
+                        keys.key('fill')
+                      );
+                      if (done) keys.end();
+                    }}
+                  />
+                </div>
+              </>
+            );
+          }}
         </Show>
       </div>
       <div
@@ -362,7 +408,9 @@ export function LayersPanel(props: {
                   editor.target() === 'mask' && editor.active() === row.id
                 }
                 thumbnail={
-                  row.kind === 'group' || row.kind === 'adjustment'
+                  row.kind === 'group' ||
+                  row.kind === 'adjustment' ||
+                  row.kind === 'text'
                     ? null
                     : thumbnails.url(row.id)
                 }

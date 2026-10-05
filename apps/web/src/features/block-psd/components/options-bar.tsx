@@ -6,11 +6,12 @@
  * Free Transform and Crop. Presentational.
  */
 
-import type { GradientKind } from '@core/psd-engine/types';
+import type { GradientKind, GradientMethod } from '@core/psd-engine/types';
 import Check from '@phosphor/check.svg';
 import X from '@phosphor/x.svg';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { BrushSettings } from '../core/brush';
+import { GRADIENT_KINDS, GRADIENT_METHODS } from '../core/gradient';
 import { SELECTION_TOOLS, TOOL_LABELS, type Tool } from '../core/tools';
 import { CheckField, NumberField, SelectField } from './fields';
 
@@ -23,6 +24,7 @@ export interface OptionsBarOptions {
   antialias: boolean;
   feather: number;
   gradient: GradientKind;
+  gradientMethod: GradientMethod;
   fontSize: number;
 }
 
@@ -222,15 +224,16 @@ export function OptionsBar(props: {
             <SelectField
               label="Style"
               value={props.options.gradient}
-              options={[
-                { value: 'linear', label: 'Linear' },
-                { value: 'radial', label: 'Radial' },
-                { value: 'angle', label: 'Angle' },
-                { value: 'reflected', label: 'Reflected' },
-                { value: 'diamond', label: 'Diamond' },
-              ]}
+              options={GRADIENT_KINDS}
               testId="psd-gradient-style"
               onChange={(gradient) => props.onOptions({ gradient })}
+            />
+            <SelectField
+              label="Method"
+              value={props.options.gradientMethod}
+              options={GRADIENT_METHODS}
+              testId="psd-gradient-tool-method"
+              onChange={(gradientMethod) => props.onOptions({ gradientMethod })}
             />
             <span class="text-ink-muted text-xs">
               Foreground to background · ⇧ snaps to 45°

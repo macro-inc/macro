@@ -7,7 +7,8 @@
 
 import type { Adjustment, LevelsChannel, Rgb } from '@core/psd-engine/types';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
-import { IDENTITY_LEVELS, twoColorGradient } from '../core/adjustments';
+import { IDENTITY_LEVELS } from '../core/adjustments';
+import { endColor, GRADIENT_METHODS, recolorEnd } from '../core/gradient';
 import { ColorSwatch } from './color-swatch';
 import { CurveEditor } from './curve-editor';
 import { CheckField, SelectField, SliderField } from './fields';
@@ -438,54 +439,47 @@ export function AdjustmentControls(props: {
           }
         </Match>
         <Match when={a().type === 'gradientMap' && (a() as Of<'gradientMap'>)}>
-          {(g) => {
-            const stops = () => g().gradient.colors;
-            const from = () => stops()[0]?.color ?? { r: 0, g: 0, b: 0 };
-            const to = () =>
-              stops()[stops().length - 1]?.color ?? { r: 1, g: 1, b: 1 };
-            return (
-              <>
-                <ColorSwatch
-                  label="Shadows"
-                  color={from()}
-                  disabled={props.disabled}
-                  onChange={(c, done) =>
-                    emit(
-                      {
-                        ...g(),
-                        gradient: twoColorGradient(c, to(), g().gradient.name),
-                      },
-                      done
-                    )
-                  }
-                />
-                <ColorSwatch
-                  label="Highlights"
-                  color={to()}
-                  disabled={props.disabled}
-                  onChange={(c, done) =>
-                    emit(
-                      {
-                        ...g(),
-                        gradient: twoColorGradient(
-                          from(),
-                          c,
-                          g().gradient.name
-                        ),
-                      },
-                      done
-                    )
-                  }
-                />
-                <CheckField
-                  label="Reverse"
-                  checked={g().reverse}
-                  disabled={props.disabled}
-                  onChange={(reverse) => emit({ ...g(), reverse }, true)}
-                />
-              </>
-            );
-          }}
+          {(g) => (
+            <>
+              <ColorSwatch
+                label="Shadows"
+                color={endColor(g().gradient, 'first')}
+                disabled={props.disabled}
+                onChange={(c, done) =>
+                  emit(
+                    { ...g(), gradient: recolorEnd(g().gradient, 'first', c) },
+                    done
+                  )
+                }
+              />
+              <ColorSwatch
+                label="Highlights"
+                color={endColor(g().gradient, 'last')}
+                disabled={props.disabled}
+                onChange={(c, done) =>
+                  emit(
+                    { ...g(), gradient: recolorEnd(g().gradient, 'last', c) },
+                    done
+                  )
+                }
+              />
+              <SelectField
+                label="Method"
+                value={g().gradient.method ?? 'classic'}
+                options={GRADIENT_METHODS}
+                disabled={props.disabled}
+                onChange={(method) =>
+                  emit({ ...g(), gradient: { ...g().gradient, method } }, true)
+                }
+              />
+              <CheckField
+                label="Reverse"
+                checked={g().reverse}
+                disabled={props.disabled}
+                onChange={(reverse) => emit({ ...g(), reverse }, true)}
+              />
+            </>
+          )}
         </Match>
       </Switch>
     </div>

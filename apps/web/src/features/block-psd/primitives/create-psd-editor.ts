@@ -446,6 +446,7 @@ export function createPsdEditor(options: PsdEditorOptions) {
   /**
    * Hides layers (locally) while Free Transform draws them on the overlay.
    */
+  const [concealed, setConcealed] = createSignal<number[]>([]);
   const beginTransform = (ids: number[]) =>
     enqueue(async () => {
       if (hiddenForTransform || ids.length === 0) return;
@@ -453,6 +454,7 @@ export function createPsdEditor(options: PsdEditorOptions) {
       if (shown.length === 0) return;
       localSteps++;
       hiddenForTransform = true;
+      setConcealed(shown.map((r) => r.id));
       const result = await engine.apply([
         { op: 'setLayer', ids: shown.map((r) => r.id), visible: false },
       ]);
@@ -467,6 +469,7 @@ export function createPsdEditor(options: PsdEditorOptions) {
         const undone = await engine.undo();
         localSteps--;
         await settle(undone, { local: true });
+        setConcealed([]);
       }
       if (ops && ops.length > 0 && enabled()) {
         const result = await engine.apply(ops);
@@ -544,6 +547,11 @@ export function createPsdEditor(options: PsdEditorOptions) {
     previewing: () => previewing,
     beginTransform,
     endTransform,
+    /**
+     * Layers hidden while Free Transform previews them: they are shown as
+     * visible, as they are to everyone else.
+     */
+    concealed,
     select,
     chooseLayers,
     refreshInfo,

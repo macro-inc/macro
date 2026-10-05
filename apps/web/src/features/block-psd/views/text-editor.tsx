@@ -9,10 +9,16 @@
 
 import { type Point, pageToScreen } from '@app/features/block-fig/core/camera';
 import { IS_MAC } from '@core/constant/isMac';
-import type { TextLayer } from '@core/psd-engine/types';
+import type { Op, TextLayer } from '@core/psd-engine/types';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { gestureKey, newLayerOp } from '../core/ops';
-import { defaultTextStyle, fromPsText, pointText, retext } from '../core/text';
+import {
+  defaultTextStyle,
+  fromPsText,
+  pointText,
+  retext,
+  textLayerName,
+} from '../core/text';
 import type { PsdEditor } from '../primitives/create-psd-editor';
 import type { PsdView } from '../primitives/create-psd-view';
 import { createSerialQueue } from '../primitives/serial-queue';
@@ -36,8 +42,14 @@ export function TextEditor(props: {
   );
   let layerId: number | undefined =
     'layer' in props.target ? props.target.layer : undefined;
+  const [editing, setEditing] = createSignal(layerId !== undefined);
   let layer: TextLayer | undefined;
   let created = false;
+  /**
+   * The layer's name while it is the one its text gives it: typing keeps
+   * it in step. Undefined once someone named the layer themselves.
+   */
+  let autoName: string | undefined;
   let input!: HTMLTextAreaElement;
   let finished = false;
 
@@ -50,6 +62,7 @@ export function TextEditor(props: {
           return;
         }
         layer = info.text;
+        if (info.name === textLayerName(info.text.text)) autoName = info.name;
         setValue(fromPsText(info.text.text));
         const b = info.bounds;
         if (b) setAnchor({ x: b.x, y: b.y + b.h });
@@ -78,13 +91,21 @@ export function TextEditor(props: {
         layerId = result?.created[0];
         layer = next;
         created = layerId !== undefined;
+        autoName = textLayerName(next.text);
+        setEditing(created);
         props.onLayer?.(layerId);
         return;
       }
       if (!layer) return;
       const next = retext(layer, text);
       layer = next;
-      await editor.apply([{ op: 'setText', id: layerId, text: next }], key);
+      const ops: Op[] = [{ op: 'setText', id: layerId, text: next }];
+      const name = textLayerName(next.text);
+      if (autoName !== undefined && name.length > 0 && name !== autoName) {
+        ops.push({ op: 'setLayer', ids: [layerId], name });
+        autoName = name;
+      }
+      await editor.apply(ops, key);
     });
   };
 
@@ -136,10 +157,7 @@ export function TextEditor(props: {
         onBlur={() => void finish()}
       />
       <div class="mt-1 flex items-center justify-between text-[11px] text-ink-muted">
-        <Show
-          when={created || layerId !== undefined}
-          fallback={<span>New text</span>}
-        >
+        <Show when={editing()} fallback={<span>New text</span>}>
           <span>Editing text</span>
         </Show>
         <span>Esc or {IS_MAC ? '⌘' : 'Ctrl'}↵ to finish</span>

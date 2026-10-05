@@ -13,10 +13,11 @@ import {
   stepZoom,
   zoomAt,
 } from '@app/features/block-fig/core/camera';
-import type { GradientKind, Rgb } from '@core/psd-engine/types';
+import type { GradientKind, GradientMethod, Rgb } from '@core/psd-engine/types';
 import { createSignal } from 'solid-js';
 import { type BrushSettings, DEFAULT_BRUSH } from '../core/brush';
 import { BLACK, WHITE } from '../core/color';
+import { DEFAULT_GRADIENT_METHOD } from '../core/gradient';
 import type { DocSize } from '../core/tiles';
 import { groupOf, TOOL_GROUPS, type Tool, toolForKey } from '../core/tools';
 
@@ -34,6 +35,8 @@ export interface ToolOptions {
   /** Marquee and lasso feather, in pixels. */
   feather: number;
   gradient: GradientKind;
+  /** Gradient: how its colors mix. */
+  gradientMethod: GradientMethod;
   /** Type: size of new text, in points. */
   fontSize: number;
   /** Type: PostScript name of new text's font. */
@@ -48,6 +51,7 @@ export const DEFAULT_TOOL_OPTIONS: ToolOptions = {
   antialias: true,
   feather: 0,
   gradient: 'linear',
+  gradientMethod: DEFAULT_GRADIENT_METHOD,
   fontSize: 48,
   font: 'Inter-Regular',
 };

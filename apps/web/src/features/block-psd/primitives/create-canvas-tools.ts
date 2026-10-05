@@ -15,8 +15,8 @@ import type { Point } from '@app/features/block-fig/core/camera';
 import { screenToPage } from '@app/features/block-fig/core/camera';
 import type { IRect, Op, SelectMode, Target } from '@core/psd-engine/types';
 import { createSignal } from 'solid-js';
-import { twoColorGradient } from '../core/adjustments';
 import { brushFor, newStrokeId, type PaintingTool } from '../core/brush';
+import { twoColorGradient } from '../core/gradient';
 import {
   gestureKey,
   movable,
@@ -77,7 +77,7 @@ type Gesture =
   | {
       kind: 'move';
       start: Point;
-      ids: Promise<number[] | undefined>;
+      pick: Promise<MovePick>;
       sent: { dx: number; dy: number };
       want: { dx: number; dy: number };
       inFlight: boolean;
@@ -114,6 +114,15 @@ type Gesture =
   | { kind: 'paint' }
   | { kind: 'zoom'; start: Point; screenStart: Point };
 
+/**
+ * What a Move drag takes, decided when it starts and acted on once it moves:
+ * the layers (copies of them when `copy`), or why they can't move.
+ */
+type MovePick =
+  | { ids: number[]; copy: boolean }
+  | { blocked: string }
+  | undefined;
+
 type BoxPart =
   | { kind: 'handle'; handle: Handle }
   | { kind: 'move' }
@@ -127,6 +136,8 @@ interface Stroke {
   buffer: [number, number, number][];
   inFlight: boolean;
   done: boolean;
+  /** A point came near enough the document to paint on it. */
+  entered: boolean;
   last: Point;
 }
 
@@ -224,10 +235,27 @@ export function createCanvasTools(options: CanvasToolsOptions) {
 
   // ---- painting ----------------------------------------------------------------
 
+  /** Whether a dab at any of the points could touch the document. */
+  const reachesDocument = (points: [number, number, number][]) => {
+    const { width, height } = editor.docSize();
+    const r = view.brush().size / 2 + 1;
+    return points.some(
+      ([x, y]) => x > -r && y > -r && x < width + r && y < height + r
+    );
+  };
+
   const flushStroke = () => {
     const s = stroke;
     if (!s || s.inFlight) return;
     if (s.buffer.length === 0 && !s.done) return;
+    // Nothing is sent (no undo step) until the stroke reaches the document.
+    if (!s.entered) {
+      s.entered = reachesDocument(s.buffer);
+      if (!s.entered) {
+        if (s.done && stroke === s) stroke = undefined;
+        return;
+      }
+    }
     const points = s.buffer.splice(0);
     const done = s.done;
     s.inFlight = true;
@@ -298,6 +326,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       buffer: [],
       inFlight: false,
       done: false,
+      entered: false,
       last: p.at,
     };
     if (p.shift && lastPaint)
@@ -337,10 +366,21 @@ export function createCanvasTools(options: CanvasToolsOptions) {
     if (dx === 0 && dy === 0) return;
     g.inFlight = true;
     const run = async () => {
-      const ids = await g.ids;
-      if (!ids || ids.length === 0) {
-        g.inFlight = false;
+      // Returning without clearing `inFlight` ends the drag's moves.
+      const pick = await g.pick;
+      if (!pick || ('ids' in pick && pick.ids.length === 0)) return;
+      if ('blocked' in pick) {
+        // Said once a drag moves, not for a click.
+        options.notifyError(pick.blocked);
         return;
+      }
+      let ids = pick.ids;
+      if (pick.copy) {
+        // ⌥-drag moves a copy, made as the drag starts moving.
+        const result = await editor.apply([{ op: 'duplicate', ids }], g.key);
+        if (!result || result.created.length === 0) return;
+        ids = result.created;
+        g.pick = Promise.resolve({ ids, copy: false });
       }
       g.sent = { dx: g.sent.dx + dx, dy: g.sent.dy + dy };
       await editor.apply([{ op: 'translate', ids, dx, dy }], g.key);
@@ -351,9 +391,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   };
 
   /** The layers a Move drag takes: the one under the pointer, or the chosen. */
-  const pickForMove = async (
-    p: CanvasPointer
-  ): Promise<number[] | undefined> => {
+  const pickForMove = async (p: CanvasPointer): Promise<MovePick> => {
     let ids = editor.selected();
     if (view.toolOptions().autoSelect && !p.shift) {
       const hit = await engine.hitTest(p.at.x, p.at.y);
@@ -364,21 +402,13 @@ export function createCanvasTools(options: CanvasToolsOptions) {
     }
     const rows = editor.layers().filter((r) => ids.includes(r.id));
     const locked = rows.find((r) => !movable(r));
-    if (locked) {
-      options.notifyError(
-        locked.background
+    if (locked)
+      return {
+        blocked: locked.background
           ? 'The Background layer cannot be moved.'
-          : `"${locked.name}" is locked in place.`
-      );
-      return undefined;
-    }
-    if (p.alt && rows.length > 0) {
-      // ⌥-drag moves a copy.
-      const result = await editor.apply([{ op: 'duplicate', ids }]);
-      if (!result) return undefined;
-      return result.created;
-    }
-    return rows.map((r) => r.id);
+          : `"${locked.name}" is locked in place.`,
+      };
+    return { ids: rows.map((r) => r.id), copy: p.alt && rows.length > 0 };
   };
 
   /** Arrow keys: whole pixels (one undo step for a run of presses). */
@@ -605,11 +635,10 @@ export function createCanvasTools(options: CanvasToolsOptions) {
     const mode = selectModeFor({ shift: p.shift, alt: p.alt });
     switch (tool) {
       case 'move': {
-        const ids = pickForMove(p);
         gesture = {
           kind: 'move',
           start: p.at,
-          ids,
+          pick: pickForMove(p),
           sent: { dx: 0, dy: 0 },
           want: { dx: 0, dy: 0 },
           inFlight: false,
@@ -866,7 +895,8 @@ export function createCanvasTools(options: CanvasToolsOptions) {
               ...twoColorGradient(
                 view.foreground(),
                 view.background(),
-                'Foreground to Background'
+                'Foreground to Background',
+                view.toolOptions().gradientMethod
               ),
               kind: view.toolOptions().gradient,
             },

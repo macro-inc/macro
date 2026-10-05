@@ -4,7 +4,6 @@
  * storage.
  */
 
-import { SessionNotice } from '@app/features/block-fig/components/session-notice';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import {
   ResponsiveBlockToolbar,
@@ -49,6 +48,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { SessionNotice } from './components/session-notice';
 import {
   type PsdCollaboration,
   PsdEditorProvider,

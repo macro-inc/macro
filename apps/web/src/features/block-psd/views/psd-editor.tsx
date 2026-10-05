@@ -29,7 +29,7 @@ import {
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import { ColorPicker } from '../components/color-picker';
+import { ColorPicker, ColorTargetSwitch } from '../components/color-picker';
 import {
   AdjustDialog,
   CanvasSizeDialog,
@@ -38,10 +38,10 @@ import {
   NumberDialog,
   ShortcutsDialog,
 } from '../components/dialogs';
-import { Section } from '../components/fields';
 import { MenuBar } from '../components/menu-bar';
 import { NoticeBanner } from '../components/notice-banner';
 import { OptionsBar } from '../components/options-bar';
+import { PanelTabs } from '../components/panel-tabs';
 import {
   FollowFrame,
   PeerAvatars,
@@ -115,6 +115,12 @@ export function PsdEditor() {
   const [colorTarget, setColorTarget] = createSignal<
     'foreground' | 'background'
   >('foreground');
+  const [panel, setPanel] = createSignal<'properties' | 'color'>('properties');
+  /** A swatch was clicked: the Color panel edits that color. */
+  const pickColor = (which: 'foreground' | 'background') => {
+    setColorTarget(which);
+    setPanel('color');
+  };
   const tools = createCanvasTools({
     editor,
     view,
@@ -130,6 +136,7 @@ export function PsdEditor() {
     download: context.download,
     notifyError: context.notifyError,
     notifyInfo: context.notifyInfo,
+    onDialogClosed: () => root.focus({ preventScroll: true }),
   });
   let root!: HTMLDivElement;
 
@@ -247,18 +254,31 @@ export function PsdEditor() {
    * does not use go on to the app (⌘K, ⌘S…).
    */
   onMount(() => {
+    // The editor keeps the keys when the control that had them went away
+    // or was disabled (focus falls back to the page), as long as the last
+    // press was in the editor.
+    let pressedInside = true;
+    const onWindowPointerDown = (e: PointerEvent) => {
+      pressedInside = e.target instanceof Node && root.contains(e.target);
+    };
     const onWindowKeyDown = (e: KeyboardEvent) => {
-      if (!(e.target instanceof Node) || !root.contains(e.target)) return;
+      if (!(e.target instanceof Node)) return;
+      const ours =
+        root.contains(e.target) ||
+        (pressedInside && e.target === document.body && root.isConnected);
+      if (!ours) return;
       onKeyDown(e);
     };
     const onWindowKeyUp = (e: KeyboardEvent) => {
       if (e.key === ' ') setSpaceHeld(false);
     };
     const release = () => setSpaceHeld(false);
+    window.addEventListener('pointerdown', onWindowPointerDown, true);
     window.addEventListener('keydown', onWindowKeyDown, true);
     window.addEventListener('keyup', onWindowKeyUp, true);
     window.addEventListener('blur', release);
     onCleanup(() => {
+      window.removeEventListener('pointerdown', onWindowPointerDown, true);
       window.removeEventListener('keydown', onWindowKeyDown, true);
       window.removeEventListener('keyup', onWindowKeyUp, true);
       window.removeEventListener('blur', release);
@@ -485,23 +505,19 @@ export function PsdEditor() {
         onCommit={() => void tools.commit()}
         onCancel={() => void tools.cancel()}
       >
-        <span
-          class="text-ink-muted text-xs tabular-nums"
-          data-testid="psd-zoom"
-        >
-          {zoomLabel(view.camera().zoom)}
-        </span>
         <Button
           variant="ghost"
           size="xs"
+          tooltip={`Fit on Screen · ${IS_MAC ? '⌘0' : 'Ctrl+0'}`}
           data-testid="psd-zoom-fit"
           onClick={() => commands.run.zoomFit()}
         >
-          Fit
+          Fit Screen
         </Button>
         <Button
           variant="ghost"
           size="xs"
+          tooltip={`100% · ${IS_MAC ? '⌘1' : 'Ctrl+1'}`}
           data-testid="psd-zoom-100"
           onClick={() => commands.run.zoom100()}
         >
@@ -518,7 +534,7 @@ export function PsdEditor() {
           onTool={chooseTool}
           onSwapColors={view.swapColors}
           onResetColors={view.resetColors}
-          onPickColor={setColorTarget}
+          onPickColor={pickColor}
         />
         <div class="relative min-w-0 flex-1">
           <PsdCanvas
@@ -565,8 +581,10 @@ export function PsdEditor() {
               class="pointer-events-none absolute bottom-2 left-2 rounded-md bg-menu/90 px-2 py-0.5 text-[11px] text-ink-muted tabular-nums shadow-sm"
               data-testid="psd-status"
             >
-              {zoomLabel(view.camera().zoom)} · {summary().width} ×{' '}
-              {summary().height} px
+              <span data-testid="psd-zoom">
+                {zoomLabel(view.camera().zoom)}
+              </span>{' '}
+              · {summary().width} × {summary().height} px
             </div>
           </PsdCanvas>
           <Show when={collab}>
@@ -598,34 +616,56 @@ export function PsdEditor() {
           class="flex w-72 shrink-0 flex-col overflow-hidden border-edge-muted border-l bg-panel"
           data-testid="psd-panels"
         >
-          <Section
-            title={
-              colorTarget() === 'foreground'
-                ? 'Color · Foreground'
-                : 'Color · Background'
-            }
-            testId="psd-color-panel"
-          >
-            <ColorPicker
-              color={
-                colorTarget() === 'foreground'
-                  ? view.foreground()
-                  : view.background()
-              }
-              testId="psd-color"
-              onChange={(c) =>
-                colorTarget() === 'foreground'
-                  ? view.setForeground(c)
-                  : view.setBackground(c)
-              }
+          <div class="flex max-h-[45%] shrink-0 flex-col border-edge-muted border-b">
+            <PanelTabs
+              tabs={[
+                {
+                  value: 'properties',
+                  label: 'Properties',
+                  testId: 'psd-tab-properties',
+                },
+                { value: 'color', label: 'Color', testId: 'psd-tab-color' },
+              ]}
+              value={panel()}
+              onChange={setPanel}
             />
-          </Section>
-          <div class="max-h-[40%] shrink-0 overflow-y-auto">
-            <PropertiesPanel
-              editor={editor}
-              documentFonts={fonts()}
-              onEditText={(id) => setTyping({ layer: id })}
-            />
+            <div class="min-h-0 overflow-y-auto">
+              <Show
+                when={panel() === 'color'}
+                fallback={
+                  <PropertiesPanel
+                    editor={editor}
+                    documentFonts={fonts()}
+                    onEditText={(id) => setTyping({ layer: id })}
+                  />
+                }
+              >
+                <div
+                  class="flex flex-col gap-2 px-3 py-2.5"
+                  data-testid="psd-color-panel"
+                >
+                  <ColorTargetSwitch
+                    target={colorTarget()}
+                    foreground={view.foreground()}
+                    background={view.background()}
+                    onTarget={setColorTarget}
+                  />
+                  <ColorPicker
+                    color={
+                      colorTarget() === 'foreground'
+                        ? view.foreground()
+                        : view.background()
+                    }
+                    testId="psd-color"
+                    onChange={(c) =>
+                      colorTarget() === 'foreground'
+                        ? view.setForeground(c)
+                        : view.setBackground(c)
+                    }
+                  />
+                </div>
+              </Show>
+            </div>
           </div>
           <LayersPanel editor={editor} commands={commands} />
         </aside>

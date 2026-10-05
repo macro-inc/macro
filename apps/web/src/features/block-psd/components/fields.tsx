@@ -5,6 +5,7 @@
  * one drag can be one undo step. Presentational.
  */
 
+import { cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
 const clamp = (v: number, min: number, max: number) =>
@@ -135,6 +136,129 @@ export function NumberField(props: {
   );
 }
 
+/** An icon button that is on or off (the Layers panel's locks). */
+export function IconToggle(props: {
+  label: string;
+  on: boolean;
+  disabled?: boolean;
+  testId?: string;
+  onChange: (on: boolean) => void;
+  children: JSX.Element;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={props.label}
+      aria-pressed={props.on}
+      title={props.label}
+      disabled={props.disabled}
+      data-testid={props.testId}
+      class={cn(
+        'flex size-6 items-center justify-center rounded disabled:opacity-40',
+        props.on
+          ? 'bg-accent/15 text-accent'
+          : 'text-ink-muted hover:bg-hover hover:text-ink'
+      )}
+      onClick={() => props.onChange(!props.on)}
+    >
+      {props.children}
+    </button>
+  );
+}
+
+/** Pointer travel per step of a scrubbed value, in CSS pixels. */
+const PIXELS_PER_STEP = 2;
+
+/**
+ * A number whose label scrubs it, as Photoshop's scrubby sliders do:
+ * dragging the label left or right changes the value (`done` false while
+ * dragging, `true` on release); the field takes typed values, and the up
+ * and down arrows step it (Shift by ten).
+ */
+export function ScrubField(props: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+  disabled?: boolean;
+  testId?: string;
+  onChange: (value: number, done: boolean) => void;
+}) {
+  const step = () => props.step ?? 1;
+  const scrub = (e: PointerEvent) => {
+    if (props.disabled || e.button !== 0) return;
+    e.preventDefault();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const start = props.value;
+    let last = start;
+    const move = (ev: PointerEvent) => {
+      const steps = Math.round((ev.clientX - startX) / PIXELS_PER_STEP);
+      const next = clamp(start + steps * step(), props.min, props.max);
+      if (next === last) return;
+      last = next;
+      props.onChange(next, false);
+    };
+    const up = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      if (last !== start) props.onChange(last, true);
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  };
+  return (
+    <span class="flex items-center gap-1.5 text-ink-muted text-xs">
+      <span
+        class="shrink-0 cursor-ew-resize select-none"
+        title={`${props.label} (drag to change)`}
+        data-testid={props.testId ? `${props.testId}-scrub` : undefined}
+        onPointerDown={scrub}
+      >
+        {props.label}
+      </span>
+      <span class="flex w-14 items-center rounded border border-edge-muted bg-input px-1">
+        <input
+          type="text"
+          inputMode="decimal"
+          class="w-full min-w-0 bg-transparent text-right text-ink tabular-nums outline-none"
+          value={formatNumber(props.value, step())}
+          disabled={props.disabled}
+          aria-label={props.label}
+          data-testid={props.testId}
+          onChange={(e) => {
+            const v = Number.parseFloat(e.currentTarget.value);
+            if (!Number.isFinite(v)) {
+              e.currentTarget.value = formatNumber(props.value, step());
+              return;
+            }
+            props.onChange(clamp(v, props.min, props.max), true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+            e.preventDefault();
+            const by = (e.shiftKey ? 10 : 1) * step();
+            const delta = e.key === 'ArrowUp' ? by : -by;
+            props.onChange(
+              clamp(props.value + delta, props.min, props.max),
+              true
+            );
+          }}
+        />
+        <Show when={props.unit}>
+          <span class="pl-0.5 text-ink-muted">{props.unit}</span>
+        </Show>
+      </span>
+    </span>
+  );
+}
+
 export function SelectField<T extends string>(props: {
   label?: string;
   value: T;
@@ -173,7 +297,7 @@ export function CheckField(props: {
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label class="flex items-center gap-1.5 text-ink-muted text-xs">
+    <label class="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-ink-muted text-xs">
       <input
         type="checkbox"
         class="accent-accent"
