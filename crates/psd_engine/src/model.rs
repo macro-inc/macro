@@ -343,6 +343,47 @@ pub struct SmartObject {
     pub linked: bool,
 }
 
+/// What an artboard is drawn on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum ArtboardBackground {
+    /// White.
+    #[default]
+    White,
+    /// Black.
+    Black,
+    /// Nothing: what is below shows through.
+    Transparent,
+    /// A color of its own.
+    Color {
+        /// The color.
+        color: Rgb,
+    },
+}
+
+impl ArtboardBackground {
+    /// The color it paints; `None` when transparent.
+    pub fn color(&self) -> Option<Rgb> {
+        match self {
+            ArtboardBackground::White => Some(Rgb::WHITE),
+            ArtboardBackground::Black => Some(Rgb::BLACK),
+            ArtboardBackground::Transparent => None,
+            ArtboardBackground::Color { color } => Some(*color),
+        }
+    }
+}
+
+/// An artboard: a group drawn on its own background and cut to its
+/// rectangle.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Artboard {
+    /// Its rectangle on the canvas.
+    pub rect: IRect,
+    /// What it is drawn on.
+    pub background: ArtboardBackground,
+}
+
 /// What a layer is.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -353,6 +394,9 @@ pub enum LayerKind {
     Group {
         /// Expanded in the layers panel.
         open: bool,
+        /// The group is an artboard.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        artboard: Option<Artboard>,
     },
     /// Text, drawn from its stored pixels until edited.
     Text {
@@ -522,6 +566,8 @@ pub mod flags {
     /// The pixels (and a linked mask) moved by whole pixels, unchanged
     /// otherwise: saving shifts their rectangles and keeps their data.
     pub const OFFSET: u64 = 1 << 23;
+    /// An artboard's rectangle or background.
+    pub const ARTBOARD: u64 = 1 << 24;
 
     /// Document: canvas size (or every layer moved with a crop).
     pub const DOC_CANVAS: u64 = 1 << 0;

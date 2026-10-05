@@ -1,6 +1,6 @@
 use crate::model::{
-    Adjustment, BlendMode, BlendRanges, Contour, Document, Effects, Fill, Knot, Layer, LayerKind,
-    LayerMask, Overlay, PathOp, Rgb, Shadow, Subpath, VectorMask,
+    Adjustment, Artboard, ArtboardBackground, BlendMode, BlendRanges, Contour, Document, Effects,
+    Fill, Knot, Layer, LayerKind, LayerMask, Overlay, PathOp, Rgb, Shadow, Subpath, VectorMask,
 };
 use crate::raster::{IRect, Raster};
 use crate::render::testing::{add, add_solid, assert_px, group, px, render};
@@ -384,4 +384,42 @@ fn interior_effects_blend_onto_the_composite_like_photoshop() {
     doc.layer_mut(difference).blend_interior_as_group = true;
     let out = render(&doc, rect, 0);
     assert_px(px(&out, rect, 45, 5), [65, 4, 49, 255], 1);
+}
+
+#[test]
+fn artboards_draw_on_their_backgrounds_and_cut_their_content() {
+    let mut doc = Document::new(40, 40);
+    // A red layer reaching past the artboard on both sides.
+    let red = add_solid(&mut doc, IRect::new(0, 10, 40, 10), [255, 0, 0, 255]);
+    let board = group(&mut doc, &[red], BlendMode::Normal);
+    let set = |doc: &mut Document, background: ArtboardBackground| {
+        doc.layer_mut(board).kind = LayerKind::Group {
+            open: true,
+            artboard: Some(Artboard {
+                rect: IRect::new(10, 0, 20, 40),
+                background,
+            }),
+        };
+    };
+    set(&mut doc, ArtboardBackground::White);
+    assert_px(at(&doc, 15, 15), [255, 0, 0, 255], 0);
+    assert_px(at(&doc, 15, 30), [255, 255, 255, 255], 0);
+    assert_px(at(&doc, 5, 15), [0, 0, 0, 0], 0);
+    assert_px(at(&doc, 35, 15), [0, 0, 0, 0], 0);
+    set(
+        &mut doc,
+        ArtboardBackground::Color {
+            color: Rgb::from_u8(0, 0, 255),
+        },
+    );
+    assert_px(at(&doc, 15, 30), [0, 0, 255, 255], 0);
+    set(&mut doc, ArtboardBackground::Transparent);
+    assert_px(at(&doc, 15, 30), [0, 0, 0, 0], 0);
+    assert_px(at(&doc, 15, 15), [255, 0, 0, 255], 0);
+    assert_px(at(&doc, 5, 15), [0, 0, 0, 0], 0);
+    // Zoomed out, the same.
+    let half = IRect::new(0, 0, 20, 20);
+    let out = render(&doc, half, 1);
+    assert_px(px(&out, half, 2, 7), [0, 0, 0, 0], 0);
+    assert_px(px(&out, half, 8, 7), [255, 0, 0, 255], 0);
 }

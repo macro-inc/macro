@@ -147,7 +147,7 @@ fn extent_in(
     let layer = doc.layers.get(idx as usize)?;
     let canvas = doc.bounds();
     let own = match &layer.kind {
-        LayerKind::Group { .. } => {
+        LayerKind::Group { artboard, .. } => {
             let mut out: Option<IRect> = None;
             let children = children(doc, idx, path);
             path.push(idx);
@@ -163,7 +163,12 @@ fn extent_in(
                 }
             }
             path.pop();
-            out?
+            // An artboard paints its background and nothing outside it.
+            match artboard {
+                Some(a) if a.background.color().is_some() => a.rect,
+                Some(a) => out?.intersect(&a.rect),
+                None => out?,
+            }
         }
         LayerKind::Fill { stroke, .. } => match &layer.vector_mask {
             Some(vm) if !vm.disabled => {
@@ -237,7 +242,7 @@ fn own_frame(cx: &mut Cx, idx: LayerIdx, path: &mut Vec<LayerIdx>) -> Option<IRe
             .as_ref()
             .filter(|v| !v.disabled)
             .and_then(|v| vector::path_bounds(&v.subpaths).map(|b| b.outset(-1))),
-        LayerKind::Group { .. } => {
+        LayerKind::Group { artboard, .. } => {
             let children = children(doc, idx, path);
             path.push(idx);
             let out = children
@@ -246,7 +251,11 @@ fn own_frame(cx: &mut Cx, idx: LayerIdx, path: &mut Vec<LayerIdx>) -> Option<IRe
                 .filter_map(|c| own_frame(cx, c, path))
                 .reduce(|a, b| a.union(&b));
             path.pop();
-            out
+            match artboard {
+                Some(a) if a.background.color().is_some() => Some(a.rect),
+                Some(a) => out.map(|o| o.intersect(&a.rect)),
+                None => out,
+            }
         }
         LayerKind::Adjustment { .. } => None,
         _ => cx.cache.content_bounds(&layer.pixels),

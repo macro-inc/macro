@@ -92,7 +92,7 @@ pub fn row(doc: &Document, i: LayerIdx, depth: usize) -> LayerRow {
         mask_disabled: l.mask.as_ref().is_some_and(|m| m.disabled),
         has_vector_mask: l.vector_mask.is_some(),
         has_effects: l.effects.as_ref().is_some_and(Effects::any_visible),
-        open: matches!(l.kind, LayerKind::Group { open: true }),
+        open: matches!(l.kind, LayerKind::Group { open: true, .. }),
         children: l.children.len(),
         bounds: crate::render::visual_bounds(doc, i),
     }

@@ -44,7 +44,10 @@ pub(crate) fn add_solid(doc: &mut Document, rect: IRect, rgba: [u8; 4]) -> Layer
 /// Moves top-level layers (bottom to top) into a new group at the top.
 pub(crate) fn group(doc: &mut Document, children: &[LayerIdx], blend: BlendMode) -> LayerIdx {
     let mut g = Layer::new(0, "group");
-    g.kind = LayerKind::Group { open: true };
+    g.kind = LayerKind::Group {
+        open: true,
+        artboard: None,
+    };
     g.blend = blend;
     g.children = children.to_vec();
     let gi = add(doc, g);

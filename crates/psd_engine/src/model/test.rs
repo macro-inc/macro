@@ -97,7 +97,10 @@ fn sample_document() -> Document {
     let mut doc = Document::new(100, 50);
     let bg = doc.push_layer(Layer::new(1, "Background"));
     let mut group = Layer::new(2, "Group");
-    group.kind = LayerKind::Group { open: true };
+    group.kind = LayerKind::Group {
+        open: true,
+        artboard: None,
+    };
     let group = doc.push_layer(group);
     let inner = doc.push_layer(Layer::new(3, "Inner"));
     doc.layer_mut(inner).parent = Some(group);

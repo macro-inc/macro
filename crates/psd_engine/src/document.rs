@@ -173,7 +173,17 @@ fn build_layers(doc: &mut Document, file: &PsdFile, warnings: &mut Vec<String>) 
         };
         let mut layer = decode_record(doc, file, index, record, id, warnings);
         if let Divider::Group { open } = divider {
-            layer.kind = LayerKind::Group { open };
+            let artboard = codec::artboard::KEYS
+                .iter()
+                .find_map(|k| record.block(k))
+                .and_then(|b| match codec::artboard::decode(&b.data) {
+                    Ok(a) => Some(a),
+                    Err(e) => {
+                        warnings.push(format!("layer \"{}\": artboard: {e}", layer_name(record)));
+                        None
+                    }
+                });
+            layer.kind = LayerKind::Group { open, artboard };
             if let Some(blend) = group_blend {
                 layer.blend = blend;
             }

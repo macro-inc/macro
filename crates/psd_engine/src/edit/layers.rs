@@ -55,7 +55,7 @@ pub(super) fn set_layer(ctx: &mut Ctx<'_>, ids: &[u32], patch: &LayerPatch) -> R
             layer.color_tag = v.min(7);
             edits |= flags::COLOR_TAG;
         }
-        if let (Some(v), LayerKind::Group { open }) = (patch.open, &mut layer.kind) {
+        if let (Some(v), LayerKind::Group { open, .. }) = (patch.open, &mut layer.kind) {
             *open = v;
             edits |= flags::OPEN;
         }
@@ -159,7 +159,10 @@ pub(super) fn new_layer(
         NewLayer::Pixel => (next_name(ctx, "Layer"), LayerKind::Pixel, None),
         NewLayer::Group => (
             next_name(ctx, "Group"),
-            LayerKind::Group { open: true },
+            LayerKind::Group {
+                open: true,
+                artboard: None,
+            },
             None,
         ),
         NewLayer::Fill { fill, path, stroke } => {
