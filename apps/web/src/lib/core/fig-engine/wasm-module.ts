@@ -45,6 +45,8 @@ export interface WasmFigFile {
   geometry: (page: number, ids: string) => string;
   /** SVG path data, page coordinates. */
   outline: (page: number, id: string) => string;
+  /** `PrototypeInfo` JSON. */
+  prototype: (page: number) => string;
   /** `SearchHit[]` JSON. */
   search: (page: number, query: string, limit: number) => string;
   /** `string[]` JSON of `RRGGBB[AA]` colors. */

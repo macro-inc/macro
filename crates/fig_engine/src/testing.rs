@@ -6,6 +6,8 @@
 
 use crate::kiwi::{Kind, Schema, Ty};
 
+mod prototype;
+pub use prototype::prototype_file;
 pub mod design_system;
 
 /// A Figma-shaped schema covering what the tests use.

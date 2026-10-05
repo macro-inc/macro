@@ -10,6 +10,7 @@
 
 import type { CollectionInfo, DesignInfo, StyleInfo } from './design-types';
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
+import type { PrototypeInfo } from './prototype-types';
 import type {
   ComponentInfo,
   CopiedLayers,
@@ -336,6 +337,11 @@ export class FigEngine {
 
   search(page: number, query: string, limit = 200): Promise<SearchHit[]> {
     return this.query('search', page, query, limit);
+  }
+
+  /** The page's flows, screens, and layers with interactions. */
+  prototype(page: number): Promise<PrototypeInfo> {
+    return this.query('prototype', page);
   }
 
   /** The page's distinct solid colors, most used first (`RRGGBB[AA]`). */

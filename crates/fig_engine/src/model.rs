@@ -13,6 +13,7 @@ use std::sync::Arc;
 pub mod geom;
 pub mod handoff;
 pub mod paint;
+pub mod prototype;
 pub mod text;
 pub mod variables;
 
@@ -24,6 +25,7 @@ pub use paint::{
     BlendMode, Color, ColorStop, Effect, EffectKind, GradientKind, ImageFilters, ImagePaint,
     ImageScaleMode, Paint, PaintKind,
 };
+pub use prototype::{Action, FlowStart, Interaction, OverlaySettings};
 pub use text::{Baseline, Decoration, Glyph, StyleRun, TextContent, TextLayout, TextStyle};
 pub use variables::{Variable, VariableMode, VariableType, VariableValue};
 
@@ -554,6 +556,14 @@ pub struct Props {
     pub layout_grids: Option<Arc<[LayoutGrid]>>,
     /// Ruler guides of a page or frame.
     pub guides: Option<Arc<[Guide]>>,
+    /// Prototype interactions on the layer.
+    pub interactions: Option<Arc<[Interaction]>>,
+    /// A flow starting point on a top-level frame.
+    pub flow_start: Option<Arc<FlowStart>>,
+    /// How the frame shows as an overlay.
+    pub overlay: Option<Arc<OverlaySettings>>,
+    /// A page's prototype start frame, in files from before flows.
+    pub prototype_start: Option<Guid>,
     /// On an instance's override or derived layout entry: made by the
     /// editor (and written when saving); the file's own are kept as they
     /// are.
@@ -588,6 +598,7 @@ impl Props {
             text_style_id, key, style_type, sort_position, soft_deleted, variant_specs,
             variant_orders, props_bubbled, variable, variable_modes, mode_by_set,
             layout_grids, guides,
+            interactions, flow_start, overlay, prototype_start,
         );
     }
 

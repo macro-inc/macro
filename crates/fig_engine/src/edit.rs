@@ -76,6 +76,8 @@ pub mod flags {
     pub const COMPONENT: u64 = 1 << 30;
     /// Shared styles: the styles a layer uses, and a style node's kind.
     pub const STYLES: u64 = 1 << 31;
+    /// Prototype interactions and a frame's flow starting point.
+    pub const PROTOTYPE: u64 = 1 << 32;
     // Handoff and layout aids (see `edit::handoff`).
     /// A layer's export presets.
     pub const EXPORTS: u64 = 1 << 33;
@@ -578,6 +580,17 @@ pub enum Op {
         id: String,
         network: crate::vector::Network,
     },
+    /// Replaces a layer's prototype interactions.
+    SetInteractions {
+        id: String,
+        interactions: Vec<InteractionSpec>,
+    },
+    /// Makes a top-level frame a flow starting point named `name`, or
+    /// (`null`) no longer one.
+    SetFlowStart {
+        id: String,
+        name: Option<String>,
+    },
     /// Deletes local styles; layers using them keep their values.
     DeleteStyle {
         ids: Vec<String>,
@@ -670,11 +683,13 @@ mod instance_layout;
 mod overrides;
 mod paint;
 mod paste;
+mod prototype;
 pub mod shapes;
 pub(crate) use design::parse_variant_name;
 pub use handoff::{GridSpec, GuideSpec};
 pub(crate) use overrides::guid_of;
 pub use paste::{At, PasteSpec, View};
+pub use prototype::{ActionSpec, InteractionSpec};
 pub(crate) mod layout;
 
 impl<'a> Txn<'a> {
@@ -1416,6 +1431,14 @@ impl<'a> Txn<'a> {
                 for i in self.layers(ids)? {
                     self.detach_instance(i)?;
                 }
+            }
+            Op::SetInteractions { id, interactions } => {
+                let i = self.resolve(id)?;
+                self.set_interactions(i, interactions)?;
+            }
+            Op::SetFlowStart { id, name } => {
+                let i = self.resolve(id)?;
+                self.set_flow_start(i, name.as_deref())?;
             }
             Op::Flip { ids, vertical } => {
                 let all = self.layers(ids)?;

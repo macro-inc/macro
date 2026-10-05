@@ -10,6 +10,7 @@ use crate::model::*;
 use std::sync::Arc;
 
 mod handoff;
+mod prototype;
 
 /// The `NodeChange` fields the engine reads. Everything else is skipped while
 /// decoding, which keeps memory proportional to what is drawn.
@@ -181,7 +182,31 @@ const DERIVED_TEXT_FIELDS: &[&str] = &[
 
 /// Narrows the schema to the fields read here.
 pub fn restrict_schema(schema: &mut Schema) {
-    schema.keep_only("NodeChange", NODE_FIELDS);
+    let node_fields: Vec<&str> = NODE_FIELDS
+        .iter()
+        .chain(prototype::FIELDS)
+        .copied()
+        .collect();
+    schema.keep_only("NodeChange", &node_fields);
+    schema.keep_only(
+        "PrototypeInteraction",
+        &["id", "event", "actions", "isDeleted"],
+    );
+    schema.keep_only("PrototypeEvent", &["interactionType", "transitionTimeout"]);
+    schema.keep_only(
+        "PrototypeAction",
+        &[
+            "transitionNodeID",
+            "transitionType",
+            "transitionDuration",
+            "easingType",
+            "connectionType",
+            "connectionURL",
+            "navigationType",
+            "openUrlInNewTab",
+            "overlayRelativePosition",
+        ],
+    );
     schema.keep_only("Paint", PAINT_FIELDS);
     schema.keep_only("Effect", EFFECT_FIELDS);
     schema.keep_only("TextData", TEXT_FIELDS);
@@ -923,6 +948,7 @@ pub fn props(m: MsgRef) -> Props {
             .collect();
         (!styles.is_empty()).then_some(styles)
     });
+    prototype::read(&m, &mut p);
     p
 }
 

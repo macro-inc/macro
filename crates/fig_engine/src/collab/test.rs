@@ -259,6 +259,55 @@ fn entries_round_trip_every_property() {
             network_blob: Some(3),
             normalized_size: Some(crate::model::Vec2 { x: 1.5, y: 2.5 }),
         }));
+        props.interactions = Some(Arc::from([
+            crate::model::Interaction {
+                id: Some(Guid {
+                    session: 7,
+                    local: 9,
+                }),
+                trigger: "ON_CLICK".into(),
+                timeout: None,
+                actions: Arc::from([crate::model::Action {
+                    easing: Some("OUT_CUBIC".into()),
+                    overlay_offset: Some(crate::model::Vec2 { x: 4.0, y: 5.0 }),
+                    ..crate::model::Action::navigate(Guid {
+                        session: 1,
+                        local: 11,
+                    })
+                }]),
+            },
+            crate::model::Interaction {
+                id: None,
+                trigger: "AFTER_TIMEOUT".into(),
+                timeout: Some(0.8),
+                actions: Arc::from([crate::model::Action {
+                    connection: "URL".into(),
+                    destination: None,
+                    url: Some("https://macro.com".into()),
+                    open_in_new_tab: Some(true),
+                    ..crate::model::Action::navigate(Guid::default())
+                }]),
+            },
+        ]));
+        props.flow_start = Some(Arc::new(crate::model::FlowStart {
+            name: "Flow 1".into(),
+            description: "Sign in".into(),
+            position: "!".into(),
+        }));
+        props.overlay = Some(Arc::new(crate::model::OverlaySettings {
+            position: "TOP_LEFT".into(),
+            close_on_click_outside: true,
+            background: Some(crate::model::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.5,
+            }),
+        }));
+        props.prototype_start = Some(Guid {
+            session: 1,
+            local: 10,
+        });
         let state = NodeState {
             props,
             removed: node.removed,
@@ -908,4 +957,29 @@ fn nothing_to_share_without_edits() {
         "{:?}",
         changes.iter().map(|c| &c.key).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn prototype_edits_reach_other_people_and_their_saves() {
+    let bytes = crate::testing::prototype_file();
+    let mut hub = Hub::default();
+    let mut a = Peer::open(1, &bytes, &mut hub);
+    let mut b = Peer::open(2, &bytes, &mut hub);
+    a.edit(
+        &mut hub,
+        r#"[{"op":"setInteractions","id":"1:22","interactions":[
+              {"id":"1:122","actions":[{"transition":"SLIDE_FROM_LEFT","duration":0.6}]},
+              {"trigger":"ON_HOVER","actions":[{"destination":"1:30","navigation":"OVERLAY"}]}]},
+            {"op":"setFlowStart","id":"1:50","name":"Side trip"}]"#,
+    );
+    b.receive(&mut hub);
+    assert_same(&a.doc, &b.doc);
+    let props = b.doc.props(b.find("1:22"));
+    let list = props.interactions.as_deref().unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(&*list[0].actions[0].transition, "SLIDE_FROM_LEFT");
+    // B stores the file; a joiner from it sees the same prototype.
+    let saved = crate::save::save(&b.doc, &bytes).unwrap();
+    let c = Peer::open(3, &saved, &mut hub);
+    assert_same(&a.doc, &c.doc);
 }

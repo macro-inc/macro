@@ -23,16 +23,26 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import {
+  enableFigComments,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { FigEngine } from '@core/fig-engine/client';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { blockMetadataSignal } from '@core/signal/load';
-import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
+import {
+  useCanComment,
+  useCanEdit,
+  useGetPermissions,
+} from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { idToEmail } from '@core/user/util';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
@@ -47,6 +57,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import type { FigCommentStore } from './context/fig-comments';
 import {
   type FigCollaboration,
   type FigSharing,
@@ -54,6 +65,7 @@ import {
 } from './context/fig-viewer-context';
 import type { FigData } from './definition';
 import { createDesignCollabSession } from './queries/fig-collab';
+import { useFigComments } from './queries/fig-comments';
 import { saveFigFile } from './queries/fig-file';
 import { shareFigEngine } from './queries/fig-sharing';
 import {
@@ -76,6 +88,9 @@ function FigHost(props: {
   /** The shared document, when the design is edited live. */
   shared?: LoroDoc;
   collaboration?: FigCollaboration;
+  comments?: FigCommentStore;
+  /** A frame to present on opening (from a frame link). */
+  present?: string;
 }) {
   const [engine, setEngine] = createSignal<FigEngine>();
   const [sharing, setSharing] = createSignal<FigSharing>();
@@ -141,6 +156,13 @@ function FigHost(props: {
               fileKey: props.documentId,
               collaboration: props.collaboration,
               sharing: sharing(),
+              comments: props.comments,
+              frameLink: (frame) =>
+                buildSimpleEntityUrl(
+                  { type: 'fig', id: props.documentId },
+                  { present: frame }
+                ),
+              presentAt: props.present,
               fonts: createFontSource(),
             }}
           >
@@ -167,6 +189,8 @@ function CollaborativeFigHost(props: {
   fileName: () => string;
   documentId: string;
   canEdit: () => boolean;
+  comments?: FigCommentStore;
+  present?: string;
 }) {
   const userId = useUserId();
   const session = createDesignCollabSession({
@@ -220,13 +244,24 @@ function DownloadOnly(props: { onDownload: () => void }): JSX.Element {
   );
 }
 
-export default function FigBlock(props: { share?: string }) {
+export default function FigBlock(props: { share?: string; present?: string }) {
   useBlockEntityCommands();
   const documentId = useBlockId();
   const name = useBlockDocumentName('Design');
   const downloadName = useBlockDocumentDownloadName();
   const permissions = useGetPermissions();
   const canEdit = useCanEdit();
+  const canComment = useCanComment();
+  const userId = useUserId();
+  const comments = isFeatureEnabled(enableFigComments)
+    ? useFigComments({
+        documentId,
+        userId,
+        canComment,
+        displayName,
+        email: idToEmail,
+      })
+    : undefined;
   const openShare = useShareModal(() => ({
     id: documentId,
     blockAlias: 'fig',
@@ -307,6 +342,8 @@ export default function FigBlock(props: { share?: string }) {
                     fileName={() => name() ?? 'Design'}
                     documentId={documentId}
                     canEdit={canEdit}
+                    comments={comments}
+                    present={props.present}
                   />
                 )}
               </Show>

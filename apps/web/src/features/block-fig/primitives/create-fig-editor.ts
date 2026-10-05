@@ -30,6 +30,7 @@ import {
 } from '../core/clipboard';
 import type { DesignOp } from '../core/design-system';
 import type { PaintType, StopSpec } from '../core/paint';
+import type { InteractionSpec } from '../core/prototype';
 import type { Measure } from '../core/type';
 import { type PenPoint, penNetwork } from '../core/vector';
 import type { FigViewer, Selected } from './create-fig-viewer';
@@ -187,6 +188,8 @@ export type Op =
       props?: Patch;
     }
   | { op: 'setVector'; id: string; network: VectorNetwork }
+  | { op: 'setInteractions'; id: string; interactions: InteractionSpec[] }
+  | { op: 'setFlowStart'; id: string; name: string | null }
   | DesignOp;
 
 export interface FigEditorOptions {

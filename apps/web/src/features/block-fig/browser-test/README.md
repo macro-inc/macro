@@ -24,7 +24,14 @@ design; saves stay in memory, and `?reload` reopens each one. Test-only
 - `fontRequests()`: font stylesheets and files the viewer fetched. The
   fixture stands in for Google Fonts and this computer's fonts
   (`font-source.ts`): every family is served as the bundled Inter, and
-  "Nowhere Grotesk" is installed locally.
+  "Nowhere Grotesk" is installed locally;
+- `comments`: the in-memory comment store (`memory-comments.ts`, the
+  `FigCommentStore` contract the app fulfils with document discussions):
+  `threads()`, `arrive(author, text, target)` (someone else comments or
+  replies), `notified()` (mentions that would notify), and `people`.
+
+`?present=<frame id>` opens presenting that frame, as a copied frame link
+does.
 
 Run the browser regressions (the configuration starts or reuses the fixture;
 `FIG_BROWSER_PORT` picks another port than 3019 for both, so checkouts running
@@ -59,7 +66,16 @@ properties, variant switching, swapping and resetting instances, editing
 a component set's variants and properties, binding layers to properties,
 and applying, creating, renaming, and detaching styles; on `variables.fig`
 (a collection with Light and Dark modes) it lists variables, binds fill
-colors to them, and switches a frame's mode.
+colors to them, and switches a frame's mode. `fig-review` opens
+`prototype.fig` (a flow with navigate, dissolve and slide transitions, an
+overlay, Back, Close, a link, and a legacy connection, made by
+`fig_engine::testing::prototype_file`) and covers presenting (flow order,
+the arrow keys, the selected frame, copying a frame link and opening it),
+clicking through the prototype (hotspot hints, overlays closing on a click
+outside), editing interactions and flows in the Prototype tab (with the
+connection noodles, undo, and saving), and comments (placing one on a
+frame, @mentions, replies, unread badges, resolving and reopening, and the
+pin following its frame).
 
 `?collab` opens several people on one design side by side
 (`&people=alice,bob` by default), each with the real shared-design session

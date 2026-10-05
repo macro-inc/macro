@@ -1121,7 +1121,56 @@ Layout and test hooks:
   and `fig-menu-flatten`), undo/redo (`fig-undo`,
   `fig-redo`), the save state (`fig-save-state`, `data-state` is `saved`,
   `unsaved`, `saving`, or `error`), the zoom menu (`fig-zoom-menu`), and the
-  shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?).
+  shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?). After the tools: Comment
+  (`fig-tool-comment`, C; `fig-comments-unread` counts unread threads)
+  where the design has comments, and Present (`fig-present-button`,
+  ⌥⌘↵ / Ctrl+Alt+Enter).
+- **Comments** (the comment tool, C): pins (`fig-comment-pin`,
+  `data-thread`, `data-unread`) at a constant size over the canvas; a click
+  places a comment on the top-level frame there (it moves with the frame)
+  or on the canvas, composed in `fig-comment-input` (Enter posts, ⇧Enter a
+  new line, `@` offers people: `fig-mention-menu`, `fig-mention-option`).
+  A pin opens its thread (`fig-comment-popover`: comments
+  `fig-comment-item`, mentions `fig-comment-mention`, `fig-comment-reply`
+  with `fig-comment-reply-post`, `fig-comment-resolve` /
+  `fig-comment-reopen`, and the author's `fig-comment-delete`). The right
+  panel becomes the comments list (`fig-comments-panel`, filters
+  `fig-comments-filter-<open|resolved|all>`, rows `fig-comment-row` with
+  `data-unread`; a row opens the thread on its page). Escape closes the
+  thread, then the tool. In the app, comments are document discussions
+  behind `VITE_ENABLE_FIG_COMMENTS` (off until the document storage
+  service accepts the `fig` thread anchor); the fixture keeps them in
+  memory.
+- **Present** (`fig-present`): the selection's top-level frame (or the
+  first flow's start, or the first frame) scaled to fit
+  (`fig-present-screen`, `data-frame`), with the prototype playing: clicks
+  on hotspots navigate (with dissolve, slide, push, move in and out; Smart
+  Animate dissolves), open overlays (`fig-present-overlay`; a click outside
+  closes one that allows it), go back, close overlays, open links, and
+  hover and after-delay interactions run; a click on nothing flashes the
+  hotspots (`fig-present-hint`). → ↓ Space and ← ↑ ⇧Space step through the
+  flow (its frames as it reaches them, or every frame in page order when the
+  frame is in no flow), R restarts, Escape leaves. The bottom bar shows the
+  flow (`fig-present-flow`), frame name (`fig-present-name`), position
+  (`fig-present-index`, "2 / 3"), `fig-present-previous` /
+  `fig-present-next`, Copy link to frame (`fig-present-copy-link`, a link
+  with `?present=<frame id>` that opens presenting it), and
+  `fig-present-exit`. Variant changes and Scroll to are not played.
+- **Prototype tab** (`fig-panel-tab-prototype`, beside Design and Code;
+  `fig-prototype-panel`): for a top-level frame, its flow starting point
+  (`fig-flow-add`, name `fig-flow-name`, `fig-flow-remove`); for a layer,
+  its interactions (`fig-proto-interaction`): editors add a click
+  interaction (`fig-proto-add`), and set its action (`fig-proto-action`:
+  Navigate to, Open overlay, Back), destination frame
+  (`fig-proto-destination`), animation (`fig-proto-transition`), and
+  duration in ms (`fig-proto-duration`), or remove it (`fig-proto-remove`);
+  other triggers and actions read as text (`fig-proto-summary`). The page's
+  flows (`fig-flow`) present from their start. While the tab is open the
+  canvas draws connections (`fig-noodle`, `data-from`, `data-to`; the
+  selection's when it has any) and flow tags (`fig-flow-badge`). The first
+  connection on a page without flows starts "Flow 1" at its frame, as in
+  Figma. Edits are undoable, shared live, and saved as Figma's
+  `prototypeInteractions` and `prototypeStartingPoint`.
 - **Text editing** (`fig-text-editing`): the text box `fig-text-box`, the
   caret `fig-text-caret`, and selection rectangles `fig-text-selection` are
   drawn from the engine's layout; typing goes to a hidden textarea
@@ -1165,12 +1214,14 @@ bunx vite --config src/features/block-fig/browser-test/vite.config.ts
 ```
 
 It opens files from `crates/fig_engine/tests/fixtures` (the synthetic
-`showcase.fig`, and `design-system.fig` with components, a component set,
-properties, and styles), or from any directory named by `FIG_CORPUS_DIR`; the header
+`showcase.fig`, `design-system.fig` with components, a component set,
+properties, and styles, and `prototype.fig`, a clickable prototype), or from any directory named by `FIG_CORPUS_DIR`; the header
 also opens a local `.fig`. `?edit` makes the file editable and `?new` opens a
 blank design (editable); saves stay in memory, and `?reload` reopens each one
 to check it round-trips. `window.figFixture` exposes `engine()`, `saves()`,
-`errors()`, `notices()`, `downloads()`, and `fontRequests()`; its font
+`errors()`, `notices()`, `downloads()`, `fontRequests()`, and `comments`
+(the in-memory comment store: `threads()`, `arrive()` for someone else's
+comment, `notified()`), and `?present=<frame id>` opens presenting; its font
 source serves the bundled Inter for every Google family and has "Nowhere
 Grotesk" installed locally, so font tests need no network. `?collab` (with
 `&people=alice,bob`, the default) shows several people editing one file side

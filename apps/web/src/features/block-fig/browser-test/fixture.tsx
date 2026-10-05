@@ -3,7 +3,9 @@
  * app: no authentication, routes, or document storage. `?file=<name>` opens
  * a file from the fixture corpus, `?new` a blank design; the header also
  * opens a local file. `?edit` makes it editable, with saves kept in memory
- * (`?reload` reopens each save, checking it round-trips).
+ * (`?reload` reopens each save, checking it round-trips). Comments stay in
+ * memory; `?present=<frame id>` opens presenting that frame, as a copied
+ * frame link does.
  * `window.figFixture` exposes the engine, saves, and reported messages.
  */
 
@@ -13,9 +15,11 @@ import { FigEngine } from '@core/fig-engine/client';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { FigViewerProvider } from '../context/fig-viewer-context';
+import type { FigCommentAnchor, FigPerson } from '../core/comments';
 import { FigViewer } from '../views/fig-viewer';
 import { CollabFixture, type FixturePerson } from './collab-fixture';
 import { fixtureFontSource } from './font-source';
+import { createMemoryComments, FIXTURE_PEOPLE } from './memory-comments';
 
 declare const __FIG_CORPUS_URL__: string;
 
@@ -32,6 +36,19 @@ declare global {
       fontRequests: () => string[];
       /** With `?collab`: the people editing together. */
       collab?: { people: () => FixturePerson[] };
+      /** The in-memory comments. */
+      comments: {
+        threads: () => unknown[];
+        /** Someone else comments (a reply, or a new thread). */
+        arrive: (
+          author: FigPerson,
+          text: string,
+          target: { threadId: string } | { anchor: FigCommentAnchor }
+        ) => string;
+        /** Mentions that would have notified someone. */
+        notified: () => { to: string; threadId: string }[];
+        people: FigPerson[];
+      };
     };
   }
 }
@@ -48,6 +65,7 @@ function Fixture() {
   >([]);
   const [saves, setSaves] = createSignal<Uint8Array[]>([]);
   const editable = params.has('edit') || params.has('new');
+  const comments = createMemoryComments();
 
   const fonts = fixtureFontSource();
   window.figFixture = {
@@ -56,6 +74,12 @@ function Fixture() {
     notices,
     downloads,
     saves,
+    comments: {
+      threads: comments.store.threads,
+      arrive: comments.arrive,
+      notified: comments.notified,
+      people: FIXTURE_PEOPLE,
+    },
     fontRequests: fonts.requests,
   };
 
@@ -143,6 +167,13 @@ function Fixture() {
                 notifyInfo: (m) => setNotices((x) => [...x, m]),
                 canEdit: () => editable,
                 fileKey: file ?? 'new',
+                comments: comments.store,
+                frameLink: (frame) => {
+                  const url = new URL(location.href);
+                  url.searchParams.set('present', frame);
+                  return url.toString();
+                },
+                presentAt: params.get('present') ?? undefined,
                 fonts,
                 save: async (bytes) => {
                   if (params.has('reload'))

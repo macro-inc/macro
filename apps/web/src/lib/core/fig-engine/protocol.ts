@@ -28,6 +28,7 @@ export type QueryMethod =
   | 'inRect'
   | 'exportSvg'
   | 'vectorNetwork'
+  | 'prototype'
   | 'fonts'
   | 'textGeometry';
 

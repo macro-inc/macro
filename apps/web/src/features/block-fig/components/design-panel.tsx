@@ -208,6 +208,13 @@ function TextFields(props: { text: TextInfo }) {
   );
 }
 
+export type PanelTab = 'design' | 'prototype' | 'code';
+
+const PANEL_TAB_LABELS: Record<PanelTab, string> = {
+  design: 'Design',
+  prototype: 'Prototype',
+  code: 'Code',
+};
 /** What the Type section offers beyond the layer's own values. */
 export interface TypeOptions {
   /** Fields the characters selected in the text editor differ in. */
@@ -251,6 +258,9 @@ export function DesignPanel(props: {
   onPageColor?: (hex: string, live: boolean) => void;
   /** Several selected layers' shared and mixed values. */
   mixed?: MixedInfo;
+  /** The Prototype tab's content; the tab shows when it is given. */
+  prototype?: JSX.Element;
+  onTabChange?: (tab: PanelTab) => void;
   /** Component, variant, and property sections for the selected layer. */
   designSections?: JSX.Element;
   /** Shown with the page when nothing is selected (local styles). */
@@ -258,14 +268,22 @@ export function DesignPanel(props: {
   /** The shared style control of a fill, stroke, text, or effect section. */
   styleControl?: (kind: StyleKind) => JSX.Element;
 }) {
-  const [tab, setTab] = createSignal<'design' | 'code'>('design');
+  const [tab, setTabSignal] = createSignal<PanelTab>('design');
+  const setTab = (t: PanelTab) => {
+    setTabSignal(t);
+    props.onTabChange?.(t);
+  };
+  const tabs = (): PanelTab[] =>
+    props.prototype === undefined
+      ? ['design', 'code']
+      : ['design', 'prototype', 'code'];
   return (
     <div
       class="flex size-full min-h-0 flex-col text-ink text-xs"
       data-testid="fig-design-panel"
     >
       <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2">
-        <For each={['design', 'code'] as const}>
+        <For each={tabs()}>
           {(t) => (
             <button
               type="button"
@@ -274,14 +292,21 @@ export function DesignPanel(props: {
                 'bg-hover text-ink': tab() === t,
                 'text-ink-muted': tab() !== t,
               }}
+              data-testid={`fig-panel-tab-${t}`}
               onClick={() => setTab(t)}
             >
-              {t === 'design' ? 'Design' : 'Code'}
+              {PANEL_TAB_LABELS[t]}
             </button>
           )}
         </For>
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto">
+      <Show when={tab() === 'prototype'}>
+        <div class="min-h-0 flex-1 overflow-y-auto">{props.prototype}</div>
+      </Show>
+      <div
+        class="min-h-0 flex-1 overflow-y-auto"
+        classList={{ hidden: tab() === 'prototype' }}
+      >
         <Show
           when={props.onAlign && props.selectionCount > 0 && tab() === 'design'}
         >

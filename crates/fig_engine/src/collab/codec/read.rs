@@ -6,11 +6,12 @@ use super::{
     dec_style_type, dec_variable_type, dec_winding,
 };
 use crate::model::{
-    Affine, AutoLayout, Axis, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
-    ExportConstraint, ExportFormat, ExportSetting, Glyph, GridAlign, GridPattern, Guid, Guide,
-    ImageFilters, ImagePaint, LayoutChild, LayoutGrid, Paint, PaintKind, PathRef, PropAssignment,
-    PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    Variable, VariableMode, VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
+    Action, Affine, AutoLayout, Axis, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
+    ExportConstraint, ExportFormat, ExportSetting, FlowStart, Glyph, GridAlign, GridPattern, Guid,
+    Guide, ImageFilters, ImagePaint, Interaction, LayoutChild, LayoutGrid, OverlaySettings, Paint,
+    PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props, StyleRun, SymbolData,
+    TextContent, TextLayout, TextStyle, Variable, VariableMode, VariableValue, VariantOrder,
+    VariantSpec, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -421,6 +422,27 @@ impl<'a> Reader<'a> {
         })
     }
 
+    fn interaction(&mut self) -> Decoded<Interaction> {
+        Ok(Interaction {
+            id: self.opt(Self::guid)?,
+            trigger: self.arc_str()?,
+            timeout: self.opt(Self::f32)?,
+            actions: self.arc_list(|r| {
+                Ok(Action {
+                    connection: r.arc_str()?,
+                    navigation: r.arc_str()?,
+                    destination: r.opt(Self::guid)?,
+                    transition: r.arc_str()?,
+                    duration: r.f32()?,
+                    easing: r.opt_arc_str()?,
+                    url: r.opt_arc_str()?,
+                    open_in_new_tab: r.opt(Self::bool)?,
+                    overlay_offset: r.opt(Self::vec2)?,
+                })
+            })?,
+        })
+    }
+
     fn variable(&mut self) -> Decoded<Variable> {
         Ok(Variable {
             set: self.opt(Self::guid)?,
@@ -583,6 +605,22 @@ impl<'a> Reader<'a> {
             vector_styles: self.opt(|r| r.arc_list(Self::style_run))?,
             layout_grids: self.opt(|r| r.arc_list(Self::layout_grid))?,
             guides: self.opt(|r| r.arc_list(Self::ruler_guide))?,
+            interactions: self.opt(|r| r.arc_list(Self::interaction))?,
+            flow_start: self.opt(|r| {
+                Ok(Arc::new(FlowStart {
+                    name: r.arc_str()?,
+                    description: r.arc_str()?,
+                    position: r.arc_str()?,
+                }))
+            })?,
+            overlay: self.opt(|r| {
+                Ok(Arc::new(OverlaySettings {
+                    position: r.arc_str()?,
+                    close_on_click_outside: r.bool()?,
+                    background: r.opt(Self::color)?,
+                }))
+            })?,
+            prototype_start: self.opt(Self::guid)?,
             recomputed: self.bool()?,
         })
     }

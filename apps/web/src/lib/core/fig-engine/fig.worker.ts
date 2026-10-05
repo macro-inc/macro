@@ -184,6 +184,9 @@ async function serve(request: FigRequest) {
         case 'vectorNetwork':
           json = f.vectorNetwork(a as number, b as string) ?? 'null';
           break;
+        case 'prototype':
+          json = f.prototype(a as number);
+          break;
       }
       post({ id: request.id, ok: true, kind: 'query', json });
       return;

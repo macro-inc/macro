@@ -3,6 +3,7 @@
 
 mod collab;
 mod pdf;
+mod prototype;
 mod text;
 
 use clap::{Parser, Subcommand};
@@ -89,6 +90,9 @@ enum Command {
     /// save it, reopen it, and compare the pasted layers' render with the
     /// originals'.
     Paste { files: Vec<PathBuf> },
+    /// Read each file's prototype, edit it as the Prototype tab does, save,
+    /// reopen, and check the reopened file reads the same.
+    Prototype { files: Vec<PathBuf> },
     /// Export the first page's top-level layers as SVG, each beside the
     /// engine's PNG of it, to compare in a browser.
     Svg {
@@ -138,6 +142,11 @@ fn main() {
             std::fs::create_dir_all(&out).expect("output directory");
             for path in files {
                 render_pages(&path, &out, max, outline);
+            }
+        }
+        Command::Prototype { files } => {
+            for path in files {
+                prototype::check(&path);
             }
         }
         Command::Roundtrip { files } => {

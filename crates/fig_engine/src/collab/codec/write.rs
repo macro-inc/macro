@@ -5,11 +5,12 @@ use super::{
     enc_node_type, enc_prop_field, enc_scale_mode, enc_style_type, enc_variable_type, enc_winding,
 };
 use crate::model::{
-    Affine, AutoLayout, Axis, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
-    ExportConstraint, ExportFormat, ExportSetting, Glyph, GridAlign, GridPattern, Guid, Guide,
-    ImageFilters, ImagePaint, LayoutChild, LayoutGrid, Paint, PaintKind, PathRef, PropAssignment,
-    PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    Variable, VariableMode, VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
+    Action, Affine, AutoLayout, Axis, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
+    ExportConstraint, ExportFormat, ExportSetting, FlowStart, Glyph, GridAlign, GridPattern, Guid,
+    Guide, ImageFilters, ImagePaint, Interaction, LayoutChild, LayoutGrid, OverlaySettings, Paint,
+    PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props, StyleRun, SymbolData,
+    TextContent, TextLayout, TextStyle, Variable, VariableMode, VariableValue, VariantOrder,
+    VariantSpec, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -502,6 +503,40 @@ impl<'a> Writer<'a> {
         self.opt(guid, |w, g| w.guid(g));
     }
 
+    fn interaction(&mut self, i: &Interaction) {
+        let Interaction {
+            id,
+            trigger,
+            timeout,
+            actions,
+        } = i;
+        self.opt(id, |w, g| w.guid(g));
+        self.str(trigger);
+        self.opt(timeout, |w, v| w.f32(*v));
+        self.list(actions, |w, a| {
+            let Action {
+                connection,
+                navigation,
+                destination,
+                transition,
+                duration,
+                easing,
+                url,
+                open_in_new_tab,
+                overlay_offset,
+            } = a;
+            w.str(connection);
+            w.str(navigation);
+            w.opt(destination, |w, g| w.guid(g));
+            w.str(transition);
+            w.f32(*duration);
+            w.opt_str(easing);
+            w.opt_str(url);
+            w.opt(open_in_new_tab, |w, v| w.bool(*v));
+            w.opt(overlay_offset, |w, v| w.vec2(v));
+        });
+    }
+
     fn props_list(&mut self, list: &[Props]) {
         self.list(list, |w, p| w.props(p));
     }
@@ -630,6 +665,10 @@ impl<'a> Writer<'a> {
             vector_styles,
             layout_grids,
             guides,
+            interactions,
+            flow_start,
+            overlay,
+            prototype_start,
             recomputed,
         } = p;
         self.opt(guid, |w, g| w.guid(g));
@@ -786,6 +825,30 @@ impl<'a> Writer<'a> {
         });
         self.opt(layout_grids, |w, list| w.list(list, Self::layout_grid));
         self.opt(guides, |w, list| w.list(list, Self::ruler_guide));
+        self.opt(interactions, |w, list| {
+            w.list(list, |w, i| w.interaction(i))
+        });
+        self.opt(flow_start, |w, f| {
+            let FlowStart {
+                name,
+                description,
+                position,
+            } = &**f;
+            w.str(name);
+            w.str(description);
+            w.str(position);
+        });
+        self.opt(overlay, |w, o| {
+            let OverlaySettings {
+                position,
+                close_on_click_outside,
+                background,
+            } = &**o;
+            w.str(position);
+            w.bool(*close_on_click_outside);
+            w.opt(background, |w, c| w.color(c));
+        });
+        self.opt(prototype_start, |w, g| w.guid(g));
         self.bool(*recomputed);
     }
 

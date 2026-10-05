@@ -12,6 +12,7 @@ use serde::Serialize;
 mod colors;
 mod design;
 mod handoff;
+pub mod prototype;
 mod variables;
 pub use colors::page_colors;
 pub use design::{DesignInfo, StyleInfo, design_info, local_styles};

@@ -7,6 +7,7 @@ import type { EditResult, FigEngine } from '@core/fig-engine/client';
 import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 import type { LocalFont } from '../core/fonts';
 import type { FigPeer, FigPresence, Version } from '../core/presence';
+import type { FigCommentStore } from './fig-comments';
 
 /** Presence of the other people in a shared design. */
 export interface FigCollaboration {
@@ -79,6 +80,12 @@ export interface FigViewerContext {
   collaboration?: FigCollaboration;
   /** The live edits of a shared design. */
   sharing?: FigSharing;
+  /** Comments on the design; absent where they are not available. */
+  comments?: FigCommentStore;
+  /** A link that opens the design presenting `frameId`. */
+  frameLink?: (frameId: string) => string;
+  /** A frame to start presenting when the viewer opens (from a link). */
+  presentAt?: string;
   /** Fonts for laying out edited text (Inter alone without it). */
   fonts?: FigFontSource;
 }

@@ -49,7 +49,8 @@ scene            one page with instances expanded: overrides, component
                  properties, swaps, shared styles, world transforms, bounds
 render           tiles: fills, strokes (inside/outside via clipping), masks,
                  blend modes, isolation, effects (shadows, blurs), images, text
-inspect          layer rows, frames, hit tests, marquee, node info, search, SVG outlines
+inspect          layer rows, frames, hit tests, marquee, node info, search, SVG
+                 outlines; a page's prototype (inspect/prototype)
 edit             edit operations, undo/redo, fractional-index positions;
                  auto layout (stacks re-laid out after edits); booleans,
                  flatten, and vectors (edit/shapes); pasting (edit/paste)
@@ -188,6 +189,39 @@ followed) for the layers they affect, instances' layers as overrides.
 `inspect::design_info`, `inspect::local_styles`, and `inspect::variables`
 describe all of this to the design panel.
 
+## Prototypes
+
+Prototype interactions decode into `Props::interactions` from
+`prototypeInteractions` (each a trigger, `PrototypeEvent.interactionType`,
+and its `PrototypeAction`s: `connectionType` `INTERNAL_NODE`/`URL`/`BACK`/
+`CLOSE`, `navigationType` `NAVIGATE`/`OVERLAY`/`SWAP`/`SCROLL_TO`/
+`SWAP_STATE`, `transitionNodeID`, `transitionType`, `transitionDuration`,
+`easingType`, `connectionURL`), or from the single connection older files
+keep on the node (`transitionNodeID`, `transitionType`…). Absent enums take
+Figma's defaults (a click, navigate, instant). Flow starting points
+(`prototypeStartingPoint`: name, description, position) and overlay settings
+(`overlayPositionType`, `overlayBackgroundInteraction`,
+`overlayBackgroundAppearance`) are read too, and a page's
+`prototypeStartNodeID` for files from before flows. Instance sublayers carry
+their component's interactions with overrides applied.
+`inspect::prototype::prototype` lists a page's flows, screens (top-level
+frames and frames directly in top-level sections), and every visible layer
+with interactions, in paint order, which the web app plays in present mode.
+
+`Op::SetInteractions` replaces a layer's interactions (an interaction sent
+back with its id, and each action at the same index, keeps what the editor
+does not show) and `Op::SetFlowStart` adds, renames, or removes a frame's
+flow (`edit::flags::PROTOTYPE`). Saving writes `prototypeInteractions`
+starting from the file's own records (conditions, variables, and easing
+curves survive), drops the legacy fields once a node has interactions, and
+writes `prototypeStartingPoint`; a file whose schema has no prototype types
+(designs made in Macro) gets Figma's, by name, when an edit adds any.
+`fig_render prototype` reads each file's prototype, edits it as the
+Prototype tab does, saves, reopens, and checks the result reads the same.
+`testing::prototype_file` builds `tests/fixtures/prototype.fig`, the browser
+fixture's click-through prototype (regenerate with
+`cargo test -p fig_engine --lib write_prototype_fixture -- --ignored`).
+
 ## Editing together
 
 `collab` shares edits between people as flat maps (Loro maps in the web app,
@@ -224,6 +258,7 @@ cargo run -p fig_engine --features cli --release --bin fig_render -- info  FILE.
 cargo run -p fig_engine --features cli --release --bin fig_render -- render --out out FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- compare --out out FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- collab FILE.fig…
+cargo run -p fig_engine --features cli --release --bin fig_render -- prototype FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- text --fonts DIR --verbose FILE.fig…
 ```
 
