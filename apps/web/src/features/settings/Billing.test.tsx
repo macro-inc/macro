@@ -80,6 +80,9 @@ vi.mock('./AiUsage', () => ({
 vi.mock('@ui', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: { children: JSX.Element }) => <>{props.children}</>,
+  ComposerSurface: (props: { children: JSX.Element; class?: string }) => (
+    <div class={props.class}>{props.children}</div>
+  ),
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" onClick={props.onClick}>
       {props.children}

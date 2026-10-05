@@ -9,7 +9,6 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
-  enableEmailSignatures,
   enableMultiInbox,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
@@ -18,13 +17,10 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import GmailIcon from '@icon/mcp-gmail.svg';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
-import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import {
   type BackfillProgress,
   estimateEtaSeconds,
@@ -38,17 +34,17 @@ import {
   type Link as EmailLink,
   SyncStatus,
 } from '@service-email/generated/schemas';
-import { Button, Dialog, Panel, Tooltip } from '@ui';
+import { Dialog, Panel, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ConnectAction, StatusDot } from './integration-ui';
-import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 import {
-  clearSignatureState,
-  isSignatureExpanded,
-  SignatureSection,
-  toggleSignatureExpanded,
-} from './SignatureSection';
+  SettingsButton as Button,
+  IntegrationRow,
+  SettingsCard,
+  SettingsRow,
+} from './primitives';
+import { clearSignatureState } from './SignatureSection';
 
 /**
  * Gmail integration as a single Connected-accounts card: a header row with the
@@ -74,7 +70,9 @@ export function EmailCard() {
   // as "complete").
   const latestBackfillByLinkId = createMemo(() => {
     const latest = new Map<string, BackfillJob>();
-    for (const job of backfillJobsQuery.data?.jobs ?? []) {
+    for (const job of backfillJobsQuery.isSuccess
+      ? backfillJobsQuery.data.jobs
+      : []) {
       if (job.link_id && !latest.has(job.link_id)) {
         latest.set(job.link_id, job);
       }
@@ -106,7 +104,7 @@ export function EmailCard() {
   // The primary inbox is the user's own is_primary link; it sorts to the top
   // and is labelled. Everything else (other own inboxes + delegated/shared) follows.
   const inboxes = createMemo(() => {
-    const links = emailLinksQuery.data?.links ?? [];
+    const links = emailLinksQuery.isSuccess ? emailLinksQuery.data.links : [];
     const uid = userId();
     const primary = links.find(
       (link) => link.is_primary && link.macro_id === uid
@@ -246,12 +244,13 @@ export function EmailCard() {
               <Tooltip label="Add inbox">
                 <Button
                   variant="outline"
-                  size="icon-sm"
+                  size="md"
                   depth={3}
                   aria-label="Add inbox"
                   onClick={openAddInboxDialog}
                 >
-                  <PlusIcon class="size-4" />
+                  <PlusIcon class="size-3.5" />
+                  Add account
                 </Button>
               </Tooltip>
             </SettingsRow>
@@ -386,7 +385,7 @@ function Chip(props: { label: string }) {
 // flow, which re-links and backfills.
 function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
   return (
-    <div class="bg-surface flex items-center justify-between gap-3 h-15.25 px-6">
+    <div class="flex items-center justify-between gap-3 min-h-16 px-4 py-4">
       <div class="min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
           <span class="ph-no-capture text-sm truncate text-ink-muted">
@@ -397,7 +396,7 @@ function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
         </div>
         <span class="text-xs text-ink-muted">Sync disabled</span>
       </div>
-      <Button variant="outline" size="sm" depth={3} onClick={props.onEnable}>
+      <Button variant="outline" size="md" depth={3} onClick={props.onEnable}>
         Enable
       </Button>
     </div>
@@ -416,32 +415,10 @@ function InboxRow(props: {
   onRemove: () => void;
   onTurnOffCalendar: () => void;
 }) {
-  const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   const calendarUiEnabled = useCalendarUiFlag();
-  const showSignature = () => isSignatureExpanded(props.link.id);
-  const signatureSectionId = `signature-section-${props.link.id}`;
-  const [attachHotkeys, signatureHotkeyScope] =
-    useHotkeyDOMScope('email-signature');
-  let signatureTrigger: HTMLButtonElement | undefined;
-  const closeSignature = () => {
-    if (!showSignature()) return;
-    toggleSignatureExpanded(props.link.id);
-    signatureTrigger?.focus();
-  };
-  registerHotkey({
-    scopeId: signatureHotkeyScope,
-    hotkey: 'escape',
-    description: 'Close signature editor',
-    condition: showSignature,
-    runWithInputFocused: true,
-    keyDownHandler: () => {
-      closeSignature();
-      return true;
-    },
-  });
   return (
-    <div class="bg-surface flex flex-col" ref={attachHotkeys}>
-      <div class="flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
+    <div class="flex flex-col">
+      <div class="flex flex-wrap items-center justify-between gap-3 min-h-15.25 py-4 px-4">
         <div class="min-w-0 flex flex-col gap-0.5">
           <div class="flex items-center gap-2 min-w-0">
             <span class="ph-no-capture text-sm truncate">
@@ -496,23 +473,7 @@ function InboxRow(props: {
             </Switch>
           </Show>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <Show when={emailSignaturesFlag().enabled && props.isOwn}>
-            <Tooltip label="Edit signature">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                depth={3}
-                ref={signatureTrigger}
-                onClick={() => toggleSignatureExpanded(props.link.id)}
-                aria-label={`Edit signature for ${props.link.email_address}`}
-                aria-expanded={showSignature()}
-                aria-controls={signatureSectionId}
-              >
-                <SignatureIcon class="size-4" />
-              </Button>
-            </Tooltip>
-          </Show>
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
           <Show
             when={
               ENABLE_INBOX_SYNC_STATUS &&
@@ -521,7 +482,7 @@ function InboxRow(props: {
           >
             <Button
               variant="accent"
-              size="sm"
+              size="md"
               depth={3}
               onClick={props.onReconnect}
               aria-label={`Reconnect ${props.link.email_address}`}
@@ -537,8 +498,8 @@ function InboxRow(props: {
             when={calendarUiEnabled() && props.link.needs_calendar_permission}
           >
             <Button
-              variant="accent"
-              size="sm"
+              variant="outline"
+              size="md"
               depth={3}
               onClick={props.onEnableCalendar}
               aria-label={`Enable calendar for ${props.link.email_address}`}
@@ -591,24 +552,17 @@ function InboxRow(props: {
           </Show>
           <Tooltip label="Remove inbox">
             <Button
-              variant="outline"
-              size="icon-sm"
+              variant="ghost"
+              size="md"
               depth={3}
               onClick={props.onRemove}
               aria-label={`Remove ${props.link.email_address}`}
             >
-              <TrashIcon class="size-4" />
+              Remove
             </Button>
           </Tooltip>
         </div>
       </div>
-      <Show
-        when={emailSignaturesFlag().enabled && props.isOwn && showSignature()}
-      >
-        <div id={signatureSectionId} class="px-6 pb-4">
-          <SignatureSection link={props.link} onClose={closeSignature} />
-        </div>
-      </Show>
     </div>
   );
 }

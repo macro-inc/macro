@@ -1,4 +1,5 @@
-import { SearchBar, ViewShell, ViewSidebar } from '@app/components/view-shell';
+import { useViewShell, ViewShell } from '@app/components/view-shell';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   useParams,
   useNavigate as useSplitNavigate,
@@ -7,12 +8,12 @@ import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanel } from '@components/app/split-panel';
 import { useLogout } from '@core/auth/logout';
+import { enableEmailSignatures } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
 import {
-  type SettingsTabGroup,
   settingsSlugToTab,
   settingsTabToSlug,
   useSettingsTabs,
@@ -22,20 +23,21 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
-import SignOutIcon from '@phosphor/sign-out.svg';
-import { pressHandlers } from '@ui';
 import {
   createMemo,
   createRenderEffect,
   createSignal,
-  For,
   onMount,
   Show,
   untrack,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { SettingsSearchTarget } from './components/settings-search-target';
+import { SettingsSidebar } from './components/settings-sidebar';
+import {
+  type SettingsSearchResult,
+  searchSettings,
+} from './core/settings-search';
 import { SettingsTabContent } from './SettingsTabContent';
-import { filterSettingsTabGroups } from './settingsSearch';
 
 export function SettingsPanelComponentWrapper() {
   const params = useParams<{ tab?: string }>();
@@ -81,27 +83,22 @@ type SettingsPanelProps = {
 export function SettingsPanel(props: SettingsPanelProps) {
   const { closeSettings, activeTabId, selectTab } = useSettingsState();
   const splitNavigate = useSplitNavigate();
-  const { searchGroups, flatTabs } = useSettingsTabs();
+  const { groups, searchGroups, flatTabs } = useSettingsTabs();
   const logout = useLogout();
+  const signatures = useFeatureFlag(enableEmailSignatures);
 
-  const activeNavigationTab = () =>
-    activeTabId() === 'Harness' ? 'Agents' : activeTabId();
+  const activeNavigationTab = activeTabId;
 
   const [searchQuery, setSearchQuery] = createSignal('');
-
-  const filteredGroups = createMemo(() =>
-    filterSettingsTabGroups(searchGroups(), searchQuery())
+  const [searchSelection, setSearchSelection] =
+    createSignal<SettingsSearchResult>();
+  const searchResults = createMemo(() =>
+    searchSettings(searchGroups(), searchQuery(), {
+      emailSignatures: signatures().enabled,
+    })
   );
 
-  // Runtimes is a search-only row. While it is on screen, highlight that row
-  // for the Harness tab; otherwise the standing Agents row stands in for it.
-  const showsHarnessResult = () =>
-    filteredGroups().some((group) =>
-      group.items.some((item) => item.tab === 'Harness')
-    );
-  const isItemActive = (tab: SettingsTab) =>
-    activeTabId() === tab ||
-    (tab === 'Agents' && activeTabId() === 'Harness' && !showsHarnessResult());
+  const isItemActive = (tab: SettingsTab) => activeTabId() === tab;
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -118,7 +115,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
   });
 
   function handleEscapeKey() {
-    closeSettings();
+    if (searchQuery()) {
+      setSearchQuery('');
+      setSearchSelection(undefined);
+    } else closeSettings();
     return true;
   }
 
@@ -131,6 +131,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   });
 
   const selectRoutedTab = (tab: SettingsTab) => {
+    setSearchSelection(undefined);
     selectTab(tab, (next) => {
       splitNavigate(`/settings/${settingsTabToSlug(next)}`);
     });
@@ -148,44 +149,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
     }
     return false;
   }
-
-  function getCurrentTabIndex() {
-    return flatTabs().findIndex((tab) => tab.tab === activeNavigationTab());
-  }
-
-  function handleNextTab() {
-    const tabs = flatTabs();
-    const nextIndex =
-      getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
-    navigateToTabIndex(nextIndex);
-    return true;
-  }
-
-  function handlePreviousTab() {
-    const tabs = flatTabs();
-    const nextIndex =
-      getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
-    navigateToTabIndex(nextIndex);
-    return true;
-  }
-
-  // Register Tab key for next tab navigation
-  registerHotkey({
-    hotkey: 'tab',
-    scopeId: settingsHotkeyScope,
-    description: 'Next settings tab',
-    keyDownHandler: handleNextTab,
-    hide: true,
-  });
-
-  // Register Shift+Tab for previous tab navigation
-  registerHotkey({
-    description: 'Previous settings tab',
-    keyDownHandler: handlePreviousTab,
-    scopeId: settingsHotkeyScope,
-    hotkey: 'shift+tab',
-    hide: true,
-  });
 
   // Register number keys 1-9 for direct tab navigation
   for (let i = 1; i <= 9; i++) {
@@ -214,7 +177,15 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const content = () => (
     <Show when={activeTabId()}>
-      {(tab) => <SettingsTabContent tab={tab()} />}
+      {(tab) => (
+        <SettingsSearchTarget
+          result={
+            searchSelection()?.tab === tab() ? searchSelection() : undefined
+          }
+        >
+          <SettingsTabContent tab={tab()} />
+        </SettingsSearchTarget>
+      )}
     </Show>
   );
 
@@ -262,11 +233,21 @@ export function SettingsPanel(props: SettingsPanelProps) {
               asidePreferenceKey="settings"
               resizable
               aside={{ preserveDuringResize: false }}
-              main={{ preferredWidth: 720 }}
+              main={{ preferredWidth: 960 }}
             >
               <ViewShell.Aside>
                 <SettingsSidebar
-                  groups={filteredGroups()}
+                  groups={groups()}
+                  results={searchResults()}
+                  selectedResultId={
+                    searchSelection()?.tab === activeTabId()
+                      ? searchSelection()?.id
+                      : undefined
+                  }
+                  onSelectResult={(result) => {
+                    selectRoutedTab(result.tab);
+                    setSearchSelection({ ...result });
+                  }}
                   searchQuery={searchQuery()}
                   onSearchQueryChange={setSearchQuery}
                   isItemActive={isItemActive}
@@ -275,7 +256,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 />
               </ViewShell.Aside>
               <ViewShell.Main>
-                <ViewShell.TopBar />
+                <SettingsNavigationBar />
                 <div class="relative min-h-0 flex-1 overflow-hidden">
                   {content()}
                 </div>
@@ -288,83 +269,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
   );
 }
 
-/**
- * Settings' inner navigation, laid out like every other view's sidebar: a
- * title bar, a search field, the grouped section pills, and Log out pinned to
- * the bottom.
- */
-function SettingsSidebar(props: {
-  groups: SettingsTabGroup[];
-  searchQuery: string;
-  onSearchQueryChange: (query: string) => void;
-  isItemActive: (tab: SettingsTab) => boolean;
-  onSelect: (tab: SettingsTab) => void;
-  onLogout: () => void;
-}) {
+/** Reserve toolbar space only when the navigation controls are visible. */
+function SettingsNavigationBar() {
+  const shell = useViewShell();
   return (
-    <ViewSidebar.Root aria-label="Settings navigation">
-      <ViewSidebar.Header>
-        <div class="flex min-w-0 items-center gap-1">
-          <ViewSidebar.CloseButton class="shrink-0" />
-          <ViewSidebar.Title>Settings</ViewSidebar.Title>
-        </div>
-      </ViewSidebar.Header>
-
-      <ViewSidebar.Primary>
-        <SearchBar
-          label="Search settings"
-          placeholder="Search"
-          autocomplete="off"
-          value={props.searchQuery}
-          onValueChange={props.onSearchQueryChange}
-          class="h-9"
-        />
-      </ViewSidebar.Primary>
-
-      <ViewSidebar.Content class="gap-4">
-        <Show
-          when={props.groups.length > 0}
-          fallback={
-            <div class="py-4 text-center text-sm text-ink-muted">
-              No settings found
-            </div>
-          }
-        >
-          <For each={props.groups}>
-            {(group) => (
-              <section class="flex min-w-0 flex-col gap-0.5">
-                <h2 class="flex h-7 min-w-0 items-center px-(--sidebar-item-inset) text-sm font-medium text-ink-extra-muted">
-                  <span class="truncate">{group.label}</span>
-                </h2>
-                <ViewSidebar.Nav aria-label={group.label}>
-                  <For each={group.items}>
-                    {(item) => (
-                      <ViewSidebar.Item
-                        active={props.isItemActive(item.tab)}
-                        {...pressHandlers(() => props.onSelect(item.tab))}
-                      >
-                        <ViewSidebar.Icon>
-                          <Dynamic component={item.icon} class="size-4" />
-                        </ViewSidebar.Icon>
-                        <span class="truncate">{item.label}</span>
-                      </ViewSidebar.Item>
-                    )}
-                  </For>
-                </ViewSidebar.Nav>
-              </section>
-            )}
-          </For>
-        </Show>
-      </ViewSidebar.Content>
-
-      <ViewSidebar.Footer class="py-(--sidebar-gutter)">
-        <ViewSidebar.Item {...pressHandlers(() => props.onLogout())}>
-          <ViewSidebar.Icon>
-            <SignOutIcon class="size-4" />
-          </ViewSidebar.Icon>
-          <span class="truncate">Log out</span>
-        </ViewSidebar.Item>
-      </ViewSidebar.Footer>
-    </ViewSidebar.Root>
+    <Show when={shell.aside.isCollapsed() || shell.aside.isOverlay()}>
+      <ViewShell.TopBar />
+    </Show>
   );
 }

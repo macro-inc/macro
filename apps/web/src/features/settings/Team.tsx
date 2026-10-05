@@ -442,7 +442,7 @@ function MemberRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-2 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
@@ -548,7 +548,7 @@ function InviteRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-2 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
@@ -604,7 +604,7 @@ function UserInviteRow(props: {
   isDeclining: boolean;
 }) {
   return (
-    <div class="flex items-center justify-between gap-3 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-3 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />

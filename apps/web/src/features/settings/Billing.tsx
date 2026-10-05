@@ -181,7 +181,7 @@ export const Billing = () => {
         </>
       }
     >
-      <SettingsSection>
+      <SettingsSection title="Subscription">
         <SettingsCard>
           <section class="flex flex-col gap-4 p-4">
             <header class="flex items-center gap-2">

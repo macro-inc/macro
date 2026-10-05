@@ -63,7 +63,6 @@ import {
   useNavigate,
 } from '@solidjs/router';
 import { cn, ImperativeDialogHost } from '@ui';
-import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
   createEffect,
   createMemo,
@@ -317,7 +316,6 @@ function LayoutInner(props: RouteSectionProps) {
         </Show>
       </Suspense>
       <DevStatusBar />
-      <ScreencastHotkeys />
     </div>
   );
 }

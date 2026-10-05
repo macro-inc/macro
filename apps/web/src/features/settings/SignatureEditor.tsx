@@ -79,6 +79,8 @@ export default function SignatureEditor(props: {
   /** Fires with the editor's current HTML on every edit; '' when emptied. */
   onInput: (html: string) => void;
   placeholder?: string;
+  label?: string;
+  disabled?: boolean;
   /** Exposes an imperative handle once mounted so commit actions (Save/Remove)
    * can set the editor content deterministically, not via the reactive value. */
   onReady?: (handle: { setContent: (html: string) => void }) => void;
@@ -199,6 +201,10 @@ export default function SignatureEditor(props: {
         },
       },
     });
+    quill.enable(!props.disabled);
+    quill.root.setAttribute('role', 'textbox');
+    quill.root.setAttribute('aria-multiline', 'true');
+    quill.root.setAttribute('aria-label', props.label ?? 'Email signature');
     setHtml(props.value);
     quill.on('text-change', () => props.onInput(currentHtml()));
     teardownResizer = setupImageResizer(quill);
@@ -224,6 +230,10 @@ export default function SignatureEditor(props: {
     };
     quill.root.addEventListener('paste', onPaste, true);
     onCleanup(() => quill?.root.removeEventListener('paste', onPaste, true));
+  });
+
+  createEffect(() => {
+    quill?.enable(!props.disabled);
   });
 
   // Reseed the editor when `props.value` changes. The draft store keeps
