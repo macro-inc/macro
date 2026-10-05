@@ -16,6 +16,9 @@ pub enum ImportError {
     /// AI work was refused or usage validation is temporarily unavailable.
     #[error(transparent)]
     Admission(#[from] ai_billing::AiAdmissionError),
+    /// This source does not support user-triggered discovery.
+    #[error("manual discovery is not supported for {source}", source = .0.as_ref())]
+    UnsupportedDiscovery(ImportSource),
     /// Database failure.
     #[error("database error: {0}")]
     Db(rootcause::Report),

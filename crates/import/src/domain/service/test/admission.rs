@@ -3,7 +3,7 @@ use ai_billing::{AiAdmissionError, AiAdmissionService, DenyReason};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn user() -> MacroUserIdStr<'static> {
+pub(in crate::domain::service) fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|import@example.com").unwrap()
 }
 
@@ -47,17 +47,26 @@ impl AiAdmissionService for Admission {
 }
 
 #[derive(Default, Clone)]
-struct Repo(Arc<Mutex<Ledger>>);
+pub(in crate::domain::service) struct Repo(Arc<Mutex<Ledger>>);
 
 #[derive(Default)]
 struct Ledger {
     rows: Vec<ImportEntity>,
     runs: Vec<ImportRun>,
     team_id: Option<Uuid>,
+    roster: Vec<MacroUserIdStr<'static>>,
     target: Option<ImportTargetReservation>,
 }
 
 impl Repo {
+    pub(in crate::domain::service) fn with_roster(roster: Vec<MacroUserIdStr<'static>>) -> Self {
+        Self(Arc::new(Mutex::new(Ledger {
+            team_id: Some(Uuid::now_v7()),
+            roster,
+            ..Ledger::default()
+        })))
+    }
+
     fn seed(&self, source: ImportSource) -> ImportEntity {
         let row = ImportEntity {
             id: Uuid::now_v7(),
@@ -170,11 +179,22 @@ impl ImportRepo for Repo {
     }
     async fn start_manual_run(
         &self,
-        _: &MacroUserIdStr<'static>,
-        _: ImportSource,
-        _: &[RunStatus],
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        from: &[RunStatus],
     ) -> Result<bool> {
-        Ok(true)
+        let won = self.start_run(user, source, from, false).await?;
+        if won {
+            self.0
+                .lock()
+                .unwrap()
+                .runs
+                .iter_mut()
+                .find(|run| run.source == source)
+                .unwrap()
+                .auto_import = false;
+        }
+        Ok(won)
     }
     async fn finish_run(
         &self,
@@ -298,8 +318,10 @@ impl ImportRepo for Repo {
     async fn user_team_id(&self, _: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
         Ok(self.0.lock().unwrap().team_id)
     }
-    async fn team_members(&self, _: Uuid) -> Result<Vec<MacroUserIdStr<'static>>> {
-        Ok(Vec::new())
+    async fn team_members(&self, team: Uuid) -> Result<Vec<MacroUserIdStr<'static>>> {
+        let ledger = self.0.lock().unwrap();
+        assert_eq!(Some(team), ledger.team_id);
+        Ok(ledger.roster.clone())
     }
     async fn fail_stale_importing(&self, _: &MacroUserIdStr<'static>, _: i64) -> Result<u64> {
         Ok(0)
@@ -341,6 +363,20 @@ impl ImportRepo for Repo {
         foreign_id: &str,
         metadata: &serde_json::Value,
     ) -> Result<Option<ImportEntity>> {
+        {
+            let mut ledger = self.0.lock().unwrap();
+            if let Some(row) = ledger
+                .rows
+                .iter_mut()
+                .find(|row| row.source == source && row.foreign_id == foreign_id)
+            {
+                if row.status != ImportStatus::Staged {
+                    return Ok(None);
+                }
+                row.metadata = metadata.clone();
+                return Ok(Some(row.clone()));
+            }
+        }
         let mut row = self.seed(source);
         row.foreign_id = foreign_id.into();
         row.initiator = initiator;
@@ -380,7 +416,7 @@ impl ImportRepo for Repo {
         _: &MacroUserIdStr<'static>,
         _: ImportSource,
     ) -> Result<Option<Vec<ImportEntity>>> {
-        unreachable!()
+        Ok(None)
     }
     async fn finish_auto_import(
         &self,
@@ -392,7 +428,7 @@ impl ImportRepo for Repo {
     }
 }
 
-struct NoConnector;
+pub(in crate::domain::service) struct NoConnector;
 impl ConnectorSelect for NoConnector {
     async fn user_toolset(&self, _: &MacroUserIdStr<'static>) -> UserMcpTools {
         panic!("unexpected connector call")
@@ -414,7 +450,7 @@ impl ConnectorSelect for NoConnector {
 }
 
 #[derive(Default)]
-struct Creator(AtomicUsize);
+pub(in crate::domain::service) struct Creator(AtomicUsize);
 impl EntityCreator for Creator {
     async fn create_task(
         &self,
@@ -448,7 +484,7 @@ impl EntityCreator for Creator {
     }
 }
 
-type Service = ImportServiceImpl<Repo, NoConnector, Creator>;
+type Service<W = NoSlackSource> = ImportServiceImpl<Repo, NoConnector, Creator, W>;
 fn service(admission: Arc<Admission>) -> Service {
     ImportServiceImpl::new(
         Repo::default(),
@@ -675,7 +711,7 @@ async fn default_constructor_keeps_admission_disabled() {
 }
 
 #[tokio::test]
-async fn slack_direct_gather_bypasses_admission_but_fallback_does_not() {
+async fn slack_agent_fallback_still_requires_admission() {
     let admission = Admission::refusing(denied());
     let service = service(admission.clone());
     assert!(
@@ -684,33 +720,19 @@ async fn slack_direct_gather_bypasses_admission_but_fallback_does_not() {
             .await
             .unwrap()
     );
-    let tools = Arc::new(Tools {
-        name: "mcp__Slack__search_channels",
-        result: serde_json::json!({"channels": [{"id": "C0123456789", "name": "general"}]}),
-        calls: AtomicUsize::new(0),
-    });
-    service
-        .gather_with_tools(&user(), ImportSource::Slack, tools.clone())
-        .await
-        .unwrap();
-    assert_eq!(tools.calls.load(Ordering::SeqCst), 1);
-    assert_eq!(service.repo.0.lock().unwrap().rows.len(), 1);
     assert_eq!(admission.calls.load(Ordering::SeqCst), 0);
-    let empty = Arc::new(Tools {
-        name: "mcp__Slack__search_channels",
-        result: serde_json::json!({"channels": []}),
+    let tools = Arc::new(Tools {
+        name: "unused",
+        result: serde_json::json!({}),
         calls: AtomicUsize::new(0),
     });
     let error = service
-        .gather_with_tools(&user(), ImportSource::Slack, empty)
+        .gather_agent_session(&user(), ImportSource::Slack, GATHER_MODEL, tools.clone())
         .await
         .unwrap_err();
     assert_eq!(error.downcast_ref::<AiAdmissionError>(), Some(&denied()));
-    assert_eq!(
-        admission.calls.load(Ordering::SeqCst),
-        1,
-        "no alternate model after refusal"
-    );
+    assert_eq!(admission.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(tools.calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

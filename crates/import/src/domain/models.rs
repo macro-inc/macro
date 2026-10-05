@@ -219,7 +219,7 @@ impl SlackConversationId {
 }
 
 /// A stable Slack user ID.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SlackUserId(String);
 
 impl SlackUserId {

@@ -488,7 +488,7 @@ impl ConnectorSelect for NoConnector {
     ) -> anyhow::Result<Option<UserMcpTools>> {
         assert_eq!(caller, &user());
         let slack = ImportSource::Slack.connector_ref();
-        assert_eq!(connector.pipedream_app_slug, slack.pipedream_app_slug);
+        assert_eq!(connector.pipedream_app_slugs, slack.pipedream_app_slugs);
         assert_eq!(connector.native_server_url, slack.native_server_url);
         Ok(None)
     }
