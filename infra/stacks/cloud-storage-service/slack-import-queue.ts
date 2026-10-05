@@ -8,9 +8,7 @@ interface SlackImportQueueArgs {
   tags: { [key: string]: string };
 }
 
-/** Independent worker queue and policies; DSS only signs and verifies uploads.
- * The worker policy also grants sqs:SendMessage on the notification ingress queue.
- */
+/** Independent worker queue and policies; DSS only signs and verifies uploads. */
 export class SlackImportQueue extends pulumi.ComponentResource {
   readonly queue: aws.sqs.Queue;
   readonly dlq: aws.sqs.Queue;

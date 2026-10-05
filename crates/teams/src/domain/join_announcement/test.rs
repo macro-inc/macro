@@ -27,7 +27,6 @@ fn strings(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| value.to_string()).collect()
 }
 
-/// Accepts each eligible address once, as the ledger does.
 #[derive(Default)]
 struct FakeRepository {
     eligible: HashSet<String>,
@@ -89,7 +88,6 @@ impl JoinAnnouncementRepository for FakeRepository {
     }
 }
 
-/// Records every request and rejects the ones addressed to `failing` recipients.
 #[derive(Default)]
 struct FakeIngress {
     failing: HashSet<String>,

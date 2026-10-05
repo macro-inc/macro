@@ -20,7 +20,6 @@ use crate::domain::join_announcement::{
 /// [`JoinAnnouncementRepository`] over MacroDB.
 #[derive(Clone)]
 pub struct JoinAnnouncementRepositoryImpl {
-    /// The underlying sqlx::PgPool connected to macrodb.
     pool: PgPool,
 }
 

@@ -345,8 +345,6 @@ where
         }
         self.ledger.complete(&reservation, metadata.kind).await?;
         self.targets.bind(&context.lease, &plan, &warnings).await?;
-        // Bind runs again on retry and on every later import of this channel.
-        // The email is best-effort, so a port error must not change this result.
         self.announce_join(context.lease.event.job_id, &plan, users)
             .await;
         Ok(Some(plan))

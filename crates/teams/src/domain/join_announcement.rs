@@ -15,8 +15,7 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use rootcause::Report;
 use uuid::Uuid;
 
-/// Bounds the addresses one crash can claim without emailing.
-const CLAIM_CHUNK: usize = 50;
+const MAX_UNSENT_CLAIMS_PER_CRASH: usize = 50;
 
 const NOTIFICATION_ID_NAMESPACE: Uuid = Uuid::from_u128(0x7465_616d_2d6a_6f69_6e65_642d_6d61_6372);
 
@@ -109,8 +108,7 @@ impl<R, N> JoinAnnouncementServiceImpl<R, N> {
     }
 }
 
-/// Retrying an enqueue that failed but landed reuses this id, and the ingress drops the copy.
-fn notification_id(team_id: Uuid, recipient: &MacroUserIdStr<'_>) -> Uuid {
+fn idempotent_notification_id(team_id: Uuid, recipient: &MacroUserIdStr<'_>) -> Uuid {
     Uuid::new_v5(
         &NOTIFICATION_ID_NAMESPACE,
         format!("{team_id}:{}", recipient.email_str()).as_bytes(),
@@ -138,7 +136,7 @@ where
         candidates.dedup();
 
         let mut report = AnnounceReport::default();
-        for chunk in candidates.chunks(CLAIM_CHUNK) {
+        for chunk in candidates.chunks(MAX_UNSENT_CLAIMS_PER_CRASH) {
             for ClaimedJoinEmail {
                 recipient,
                 team_name,
@@ -157,7 +155,7 @@ where
                         recipient_email: EmailStr(recipient.email_part()).into_owned(),
                     },
                 }
-                .into_request_with_id(notification_id(team_id, &recipient))
+                .into_request_with_id(idempotent_notification_id(team_id, &recipient))
                 .with_email();
                 match self.ingress.send_notification(request).await {
                     Ok(_) => report.sent += 1,

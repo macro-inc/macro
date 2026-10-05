@@ -551,12 +551,7 @@ async fn progress(repo: &PgSlackImportRepo, team: TeamId, job: JobId) -> ImportP
     repo.progress(team, job).await.unwrap().unwrap()
 }
 
-/// The historical composition publishes no live channel notifications. Mentions,
-/// reactions, external members and replies must not produce notifications,
-/// invitation emails or unread activity. The one live send is the colleague join
-/// email. This test observes that send on the notification ingress queue. The
-/// worker only publishes it. `notification_service` writes the notification tables.
-async fn assert_backfill_is_silent(pool: &PgPool) {
+async fn assert_no_notification_or_activity_rows(pool: &PgPool) {
     let counts = sqlx::query!(
         r#"
         SELECT
@@ -713,7 +708,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
         )
         .unwrap(),
     );
-    assert_backfill_is_silent(&pool).await;
+    assert_no_notification_or_activity_rows(&pool).await;
     // Shape creation followed by history and an exact repeat reuse the same IDs.
     let mut canonical = None;
     for (attempt, history) in [false, true, true].into_iter().enumerate() {
@@ -849,7 +844,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
             progress(&repo, team, job).await.status,
             JobStatus::Completed
         );
-        assert_backfill_is_silent(&pool).await;
+        assert_no_notification_or_activity_rows(&pool).await;
     }
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM comms_messages")
@@ -951,7 +946,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
     })
     .await
     .expect("disabled worker did not persist exhausted work as Failed");
-    assert_backfill_is_silent(&pool).await;
+    assert_no_notification_or_activity_rows(&pool).await;
     assert_one_external_colleague(&pool, team).await;
     assert!(ingress_bodies(&sqs, &ingress_url).await.is_empty());
     stop.cancel();
