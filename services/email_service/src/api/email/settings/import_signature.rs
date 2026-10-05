@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use email::domain::ports::GmailTokenProvider;
+use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use email_utils::sanitize_html_fragment;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
@@ -19,7 +19,7 @@ pub enum ImportSignatureError {
     #[error("Failed to fetch Gmail signature")]
     GmailApiError(#[from] gmail_client::GmailApiHttpError),
     #[error("Failed to get Gmail access token")]
-    TokenError(String),
+    TokenError(#[from] EmailApiError),
     #[error("Failed to update settings")]
     DatabaseError(#[from] anyhow::Error),
 }
@@ -66,23 +66,26 @@ pub async fn import_signature_handler(
     link: Extension<Link>,
 ) -> Result<Json<ImportSignatureResponse>, ImportSignatureError> {
     let access_token = ctx
-        .gmail_token_state
-        .inner
-        .fetch_gmail_access_token(&link)
-        .await
-        .map_err(|e| ImportSignatureError::TokenError(e.to_string()))?;
+        .email_api
+        .get_access_token(link.id, TokenFreshness::Fresh)
+        .await?;
 
-    let send_as_response = ctx.gmail_client.list_send_as(&access_token).await?;
+    let send_as_response = ctx
+        .gmail_client
+        .list_send_as(access_token.expose_secret())
+        .await?;
 
     let aliases = send_as_response.send_as.unwrap_or_default();
 
-    let signature = aliases
-        .into_iter()
-        .find(|alias| {
-            alias.send_as_email.eq_ignore_ascii_case(&link.email_address.0)
-                || alias.is_primary == Some(true)
-        })
-        .and_then(|alias| alias.signature)
+    // Prefer the alias for this inbox's own address; fall back to the primary.
+    let email_address = link.email_address.0.as_ref();
+    let alias = aliases
+        .iter()
+        .find(|alias| alias.send_as_email.eq_ignore_ascii_case(email_address))
+        .or_else(|| aliases.iter().find(|alias| alias.is_primary == Some(true)));
+
+    let signature = alias
+        .and_then(|alias| alias.signature.clone())
         .filter(|sig| !sig.trim().is_empty())
         .ok_or(ImportSignatureError::NoSignatureFound)?;
 
