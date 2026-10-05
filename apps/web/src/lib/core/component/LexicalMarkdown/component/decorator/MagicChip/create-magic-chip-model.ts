@@ -10,6 +10,7 @@ import {
 } from '@app/features/block-agent/component/parts/shared';
 import type { InteractionController } from '@app/features/block-agent/context/interaction';
 import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
+import { issueSessionAction } from '@app/features/block-agent/queries/issue-session-action';
 import { describeToolCall } from '@app/features/block-agent/state/tool-approval-wording';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
@@ -181,7 +182,7 @@ export function createMagicChipModel(props: MagicChipData): {
     sessionId: () => props.agentSessionId,
     pending: pendingForTurn,
     canEdit,
-    issue: (action) => live.issue(action),
+    issue: (action) => issueSessionAction(live, action),
     onFailure: toast.failure,
   });
   const asking = (): MagicChipInteraction | undefined => {

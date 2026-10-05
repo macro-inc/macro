@@ -19,17 +19,19 @@ afterEach(() => {
 
 function setup() {
   const google = vi.fn().mockResolvedValue(undefined);
+  const signIn = vi.fn();
   renderWithFakeOnboarding(
     () => (
       <SignupJourneyView
         onGoogle={google}
         onBackFromEmail={() => {}}
+        onSignIn={signIn}
         showingEmail={false}
       />
     ),
     { viewer: null }
   );
-  return { google };
+  return { google, signIn };
 }
 
 describe('sign-up starts before authentication', () => {
@@ -88,5 +90,15 @@ describe('sign-up starts before authentication', () => {
       accent: '#65d8ac',
       authenticating: false,
     });
+  });
+
+  it('offers returning users a way to sign in from the first slide only', () => {
+    const { signIn } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in instead' }));
+    expect(signIn).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
+    expect(
+      screen.queryByRole('button', { name: 'Sign in instead' })
+    ).toBeNull();
   });
 });

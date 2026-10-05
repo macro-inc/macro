@@ -1,13 +1,10 @@
 import { analytics } from '@app/lib/analytics';
+import { isAiUsageLimitError } from '@app/lib/service-clients/ai-usage-limit';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
-
-import {
-  AI_USAGE_LIMIT_ERROR,
-  cognitionApiServiceClient,
-} from '@service-cognition/client';
+import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 
@@ -48,11 +45,9 @@ export function useSendChatMessage() {
     });
 
     if (response.isErr()) {
-      const usageLimit = response.error.find(
-        (e) => e.code === AI_USAGE_LIMIT_ERROR
-      );
+      const usageLimit = response.error.find(isAiUsageLimitError);
       if (usageLimit) {
-        return { error: true, usageLimit: usageLimit.message };
+        return { error: true, usageLimit: usageLimit.reason };
       }
     }
     if (isPaymentError(response)) {

@@ -73,7 +73,11 @@ const landed = (): FixtureLanding | undefined => {
 };
 
 const landingText = (landing: FixtureLanding | undefined) =>
-  landing?.t === 'app' ? `Entered Macro at ${landing.target}` : 'Signed out';
+  landing?.t === 'app'
+    ? `Entered Macro at ${landing.target}`
+    : landing?.t === 'sign-in'
+      ? 'Sign in'
+      : 'Signed out';
 
 declare global {
   interface Window {
@@ -105,6 +109,7 @@ function Fixture() {
           <SignupJourneyView
             onGoogle={signUpWithGoogle}
             onBackFromEmail={() => {}}
+            onSignIn={() => land({ t: 'sign-in' })}
             showingEmail={false}
           />
         </Match>

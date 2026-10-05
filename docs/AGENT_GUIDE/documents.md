@@ -4,6 +4,13 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
+when the backend refuses a request with a usage-limit code. Free users can choose
+**View plans**; paid users can choose **Open usage settings** to add credits. The
+failed edit leaves the document unchanged and clears its running state. Other edit
+failures still show **AI edit failed**. The dialog also opens for usage-limit failures
+from live document-editing tools in chat.
+
 Snippet owners manage team sharing under **Share → Team access**. The details
 panel has no separate Sharing section. Choose **Edit** to grant the access the
 old snippet toggle provided, or **None** to remove team access.

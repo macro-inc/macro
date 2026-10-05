@@ -7,6 +7,7 @@ import {
   type ErrorResponseHandler,
   type SafeFetchInit,
   safeFetch,
+  statusError,
 } from '@core/util/safeFetch';
 import { Telemetry } from '@macro-inc/observability';
 
@@ -743,7 +744,7 @@ export const authServiceClient = {
     cancelUrl: string;
   }) {
     return (
-      await fetchWithAuth<{ url: string }>(
+      await fetchWithAuth<{ url: string }, 'PAID_PLAN_REQUIRED'>(
         `${authHost}/ai-billing/credits/checkout`,
         {
           method: 'POST',
@@ -752,6 +753,15 @@ export const authServiceClient = {
             successUrl: args.successUrl,
             cancelUrl: args.cancelUrl,
           }),
+          errorResponseHandler: async (response) => {
+            if (response.status === 402) {
+              return {
+                code: 'PAID_PLAN_REQUIRED',
+                message: 'A paid plan is required',
+              };
+            }
+            return statusError(response.status);
+          },
         }
       )
     ).map((result) => result.url);

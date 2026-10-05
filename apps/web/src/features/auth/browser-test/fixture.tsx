@@ -158,6 +158,7 @@ function Fixture() {
                 ? (slots) => <SignupJourney {...slots} />
                 : undefined
             }
+            onSignIn={() => location.assign(`${location.pathname}?page=login`)}
             signedIn={(user) => <SignedIn user={user} />}
           />
         </Match>

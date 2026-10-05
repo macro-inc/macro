@@ -106,6 +106,22 @@ test('desktop sign-up: slides, Google, then onboarding resumes at the work inbox
   ).toBe('#b8a1ed');
 });
 
+test('a returning visitor on sign-up can switch to sign in', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=signup');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Create your workspace' })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Sign in instead' }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Welcome to Macro' })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Continue with email' }).click();
+  await signInWithCode(page, 'returning@acme.com', '424242');
+  await expectLanded(page, '/');
+});
+
 test('a mobile-web visitor gets a desktop link instead of signing up', async ({
   page,
 }) => {

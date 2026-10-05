@@ -6,6 +6,10 @@ import {
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
+import {
+  type AI_USAGE_LIMIT_ERROR,
+  aiUsageErrorResponseHandler,
+} from '../ai-usage-limit';
 import type {
   ActionExecutionRecord,
   CreateScheduledAction,
@@ -86,9 +90,9 @@ export const scheduledActionClient = {
   },
 
   runNow: async (args: { scheduleId: string }) =>
-    scheduledActionFetch<InProgressExecution>(
-      `/scheduled-actions/${args.scheduleId}/execute`,
-      { method: 'POST' }
+    fetchWithToken<InProgressExecution, typeof AI_USAGE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/${args.scheduleId}/execute`,
+      { method: 'POST', errorResponseHandler: aiUsageErrorResponseHandler }
     ),
 
   listHistory: async (args: { scheduleId: string }) =>

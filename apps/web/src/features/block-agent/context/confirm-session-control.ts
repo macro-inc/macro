@@ -1,12 +1,14 @@
 import type { AgentSession } from '@core/agent-session/AgentSession';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 
+import { issueSessionAction } from '../queries/issue-session-action';
+
 /** HTTP acceptance only queues a control. Wait for its correlated ACP outcome. */
 export async function confirmSessionControl(
   session: Pick<AgentSession, 'issue' | 'snapshot' | 'subscribe'>,
   action: AgentAction
 ): Promise<void> {
-  const result = await session.issue(action);
+  const result = await issueSessionAction(session, action);
   if (result.isErr())
     throw new Error(result.error.map((error) => error.message).join(' '));
   const actionId = result.value.actionId;
