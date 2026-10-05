@@ -776,6 +776,41 @@ fn bench(path: &Path, tile: u32, grid: i32) {
             t.elapsed()
         ));
     }
+    // The tiles the viewer asks for when the page is fitted to the screen,
+    // and at twice that zoom (at most 64 of each).
+    for s in [scale, scale * 2.0] {
+        let side = f64::from(tile) / s;
+        let (x0, y0) = ((bounds.x / side).floor(), (bounds.y / side).floor());
+        let (x1, y1) = (
+            (bounds.right() / side).floor(),
+            (bounds.bottom() / side).floor(),
+        );
+        let t = Instant::now();
+        let (mut count, mut slowest) = (0, std::time::Duration::ZERO);
+        let mut iy = y0;
+        while iy <= y1 && count < 64 {
+            let mut ix = x0;
+            while ix <= x1 && count < 64 {
+                let vp = Viewport {
+                    x: ix * side,
+                    y: iy * side,
+                    scale: s,
+                    width: tile,
+                    height: tile,
+                };
+                let one = Instant::now();
+                render::render(&doc, &scene, &mut images, &vp, opts);
+                slowest = slowest.max(one.elapsed());
+                count += 1;
+                ix += 1.0;
+            }
+            iy += 1.0;
+        }
+        tiles.push(format!(
+            "{count} fit tiles at {s:.3}x {:?} (slowest {slowest:?})",
+            t.elapsed()
+        ));
+    }
     println!(
         "{}: unpack {unpack:?} decode {decode:?}; page {:?} ({most} layers) first build \
          {first_build:?}, again {rebuild:?}; fit {}x{} cold {fit_cold:?} warm {fit_warm:?}; {}",
