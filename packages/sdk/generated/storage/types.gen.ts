@@ -3966,28 +3966,6 @@ export type CreateProjectResponse = {
 };
 
 /**
- * Request body for creating a reminder.
- */
-export type CreateReminderRequest = {
-    /**
-     * What to remind the caller about.
-     */
-    description: string;
-    /**
-     * Id of the entity to attach the reminder to. Requires `entityType`.
-     */
-    entityId?: string | null;
-    /**
-     * Type of the entity to attach the reminder to. Requires `entityId`.
-     */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
-    /**
-     * When and how often the reminder fires.
-     */
-    schedule: ReminderSchedule;
-};
-
-/**
  * Request body for creating a skill — a markdown document containing
  * instructions that AI reads and follows when the skill is referenced in an
  * AI input.
@@ -9630,20 +9608,6 @@ export type Reminder = {
 };
 
 /**
- * One continuous collection, including completed recurring reminders that still fire.
- */
-export type ReminderCollectionPage = {
-    /**
-     * Rows in server order.
-     */
-    items: Array<ReminderCollectionRow>;
-    /**
-     * Absent only on the final page.
-     */
-    nextCursor?: string | null;
-};
-
-/**
  * A native reminder row with its source and workflow capabilities resolved in bulk.
  */
 export type ReminderCollectionRow = {
@@ -9735,21 +9699,6 @@ export type ReminderSchedule = {
      */
     timezone: string;
     type: 'recurring';
-};
-
-/**
- * The caller's reminders, soonest firing first.
- */
-export type RemindersList = {
-    /**
-     * Pass back as `cursor` to fetch the next page. Absent on the last page —
-     * its absence is the only end-of-list signal, since a page can be short.
-     */
-    nextCursor?: string | null;
-    /**
-     * The reminders.
-     */
-    reminders: Array<Reminder>;
 };
 
 /**
@@ -12951,37 +12900,6 @@ export type UpdateMeetingRequest = {
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
-
-/**
- * Request body for modifying a reminder. Omitted fields are left unchanged;
- * the entity association is not modifiable.
- *
- * Every field is optional but **not** nullable. `Option` here means "absent",
- * and serde cannot tell an explicit `null` from an omitted key — so a body of
- * `{"enabled": null}` would deserialize to an empty patch and be rejected as
- * having no fields to update. `nullable = false` keeps the schema from
- * advertising a value the API has no meaning for; the deserializer still
- * tolerates `null` rather than erroring on it.
- */
-export type UpdateReminderRequest = {
-    /**
-     * Mark the reminder as dealt with, or live again. Distinct from
-     * `enabled`, which controls whether the dispatcher considers it.
-     */
-    completed?: boolean;
-    /**
-     * Replacement description.
-     */
-    description?: string;
-    /**
-     * Whether the reminder should fire at all.
-     */
-    enabled?: boolean;
-    /**
-     * Replacement schedule.
-     */
-    schedule?: ReminderSchedule;
-};
 
 export type UpdateSharePermissionRequestV2 = {
     /**
@@ -19368,122 +19286,6 @@ export type RecentlyDeletedResponses = {
 
 export type RecentlyDeletedResponse = RecentlyDeletedResponses[keyof RecentlyDeletedResponses];
 
-export type ListRemindersData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Restrict to reminders attached to an entity of these types.
-         */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row'>;
-        /**
-         * Restrict to reminders attached to these entity ids.
-         */
-        entityId?: Array<string>;
-        /**
-         * Include reminders that have already fired.
-         */
-        includeCompleted?: boolean;
-        /**
-         * Page size. Defaults to 100; larger values are capped at 500. A value
-         * that is not a non-negative integer is rejected by the query extractor.
-         */
-        limit?: number;
-        /**
-         * `nextCursor` from a previous page.
-         */
-        cursor?: string;
-    };
-    url: '/reminders';
-};
-
-export type ListRemindersErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListRemindersError = ListRemindersErrors[keyof ListRemindersErrors];
-
-export type ListRemindersResponses = {
-    200: RemindersList;
-};
-
-export type ListRemindersResponse = ListRemindersResponses[keyof ListRemindersResponses];
-
-export type CreateReminderData = {
-    body: CreateReminderRequest;
-    path?: never;
-    query?: never;
-    url: '/reminders';
-};
-
-export type CreateReminderErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    /**
-     * No access to the requested entity
-     */
-    403: ErrorResponse;
-    /**
-     * The requested entity does not exist
-     */
-    404: ErrorResponse;
-    /**
-     * Malformed request body (plain text)
-     */
-    422: unknown;
-    500: ErrorResponse;
-};
-
-export type CreateReminderError = CreateReminderErrors[keyof CreateReminderErrors];
-
-export type CreateReminderResponses = {
-    201: Reminder;
-};
-
-export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
-
-export type ListReminderCollectionData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Omit to include both done and not-done occurrences.
-         */
-        completed?: boolean;
-        /**
-         * Page size, bounded to 1–500.
-         */
-        limit?: number;
-        /**
-         * Position returned by the previous page.
-         */
-        cursor?: string;
-    };
-    url: '/reminders/collection';
-};
-
-export type ListReminderCollectionErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListReminderCollectionError = ListReminderCollectionErrors[keyof ListReminderCollectionErrors];
-
-export type ListReminderCollectionResponses = {
-    200: ReminderCollectionPage;
-};
-
-export type ListReminderCollectionResponse = ListReminderCollectionResponses[keyof ListReminderCollectionResponses];
-
 export type ListEmailRemindersData = {
     body?: never;
     path?: never;
@@ -19586,101 +19388,6 @@ export type SetEmailFollowupResponses = {
 };
 
 export type SetEmailFollowupResponse = SetEmailFollowupResponses[keyof SetEmailFollowupResponses];
-
-export type DeleteReminderData = {
-    body?: never;
-    path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/reminders/{id}';
-};
-
-export type DeleteReminderErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteReminderError = DeleteReminderErrors[keyof DeleteReminderErrors];
-
-export type DeleteReminderResponses = {
-    /**
-     * Reminder deleted
-     */
-    204: void;
-};
-
-export type DeleteReminderResponse = DeleteReminderResponses[keyof DeleteReminderResponses];
-
-export type GetReminderData = {
-    body?: never;
-    path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/reminders/{id}';
-};
-
-export type GetReminderErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetReminderError = GetReminderErrors[keyof GetReminderErrors];
-
-export type GetReminderResponses = {
-    200: Reminder;
-};
-
-export type GetReminderResponse = GetReminderResponses[keyof GetReminderResponses];
-
-export type UpdateReminderData = {
-    body: UpdateReminderRequest;
-    path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/reminders/{id}';
-};
-
-export type UpdateReminderErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    /**
-     * Malformed request body (plain text)
-     */
-    422: unknown;
-    500: ErrorResponse;
-};
-
-export type UpdateReminderError = UpdateReminderErrors[keyof UpdateReminderErrors];
-
-export type UpdateReminderResponses = {
-    200: Reminder;
-};
-
-export type UpdateReminderResponse = UpdateReminderResponses[keyof UpdateReminderResponses];
 
 export type GetViewsHandlerData = {
     body?: never;

@@ -381,7 +381,7 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
-  // Email follow-ups are available through the generated client, like reminders.
+  // Email follow-ups are available through the generated client.
   'getEmailFollowup',
   'setEmailFollowup',
   'listEmailReminders',
@@ -393,14 +393,12 @@ export const storageBacklog = [
   'createEntityMention',
   'createHarnessPairing',
   'createInitiative',
-  'createReminder',
   'createUserApiKey',
   'deleteAnchor',
   'deleteEntityMention',
   'deleteHarness',
   'deleteInitiative',
   'deleteSelfHarness',
-  'deleteReminder',
   'deleteUserApiKey',
   'editAnchor',
   'editCallTranscript',
@@ -422,15 +420,12 @@ export const storageBacklog = [
   'getHarnessPairing',
   'getInitiative',
   'getSelfHarness',
-  'getReminder',
   'listAgents',
   'listHarnessAgents',
   'listHarnessSessions',
   'listHarnesses',
   'listInitiatives',
   'listOccurrences',
-  'listReminders',
-  'listReminderCollection',
   'listTeamOutOfOffice',
   'listUserApiKeys',
   // Meeting management uses the generated client.
@@ -452,7 +447,6 @@ export const storageBacklog = [
   'toggleShareWithTeam',
   'updateAgent',
   'updateInitiative',
-  'updateReminder',
   'validateDocumentPermissionsToken',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
