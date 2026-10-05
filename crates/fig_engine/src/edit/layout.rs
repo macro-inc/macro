@@ -9,7 +9,7 @@
 
 use super::{Patch, Txn, flags};
 use crate::document::{Document, NodeIdx};
-use crate::model::{AutoLayout, LayoutChild, NodeType, Rect, Vec2};
+use crate::model::{Affine, AutoLayout, LayoutChild, NodeType, Rect, Vec2};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -44,6 +44,19 @@ fn join(main: f64, cross: f64, horizontal: bool) -> Vec2 {
         Vec2::new(main, cross)
     } else {
         Vec2::new(cross, main)
+    }
+}
+
+/// Whether a transform turns its layer by an odd number of quarter turns
+/// (`Some(true)`, swapping width and height in its parent) or an even one;
+/// `None` at any other angle.
+fn quarter_turns(t: &Affine) -> Option<bool> {
+    if t.m01.abs() < EPS && t.m10.abs() < EPS {
+        Some(false)
+    } else if t.m00.abs() < EPS && t.m11.abs() < EPS {
+        Some(true)
+    } else {
+        None
     }
 }
 
@@ -238,7 +251,7 @@ impl Txn<'_> {
                     // Figma keeps squeezed fill children at least a pixel.
                     let share = item.child.clamp(share, h).max(1.0);
                     let i = item.i;
-                    if self.is_thin(i, main_of(item)) {
+                    if self.keeps_size(i, main_of(item)) {
                         item.slot = Some(share);
                         continue;
                     }
@@ -279,7 +292,7 @@ impl Txn<'_> {
         for item in items.iter_mut() {
             if item.child.stretches()
                 && (cross_of(item) - stretch_to).abs() > EPS
-                && !self.is_thin(item.i, cross_of(item))
+                && !self.keeps_size(item.i, cross_of(item))
             {
                 let i = item.i;
                 let v = item.child.clamp(stretch_to, !h);
@@ -313,8 +326,9 @@ impl Txn<'_> {
             if !it.floating {
                 let align = match it.child.align.as_deref() {
                     Some(a @ ("MIN" | "CENTER" | "MAX")) => Some(a),
-                    // A line stretched across sits in the middle.
-                    Some("STRETCH") if self.is_thin(it.i, cross) => Some("CENTER"),
+                    // A line or a turned layer stretched across sits in the
+                    // middle.
+                    Some("STRETCH") if self.keeps_size(it.i, cross) => Some("CENTER"),
                     _ => al.counter_align.as_deref(),
                 };
                 let offset = match align {
@@ -347,15 +361,18 @@ impl Txn<'_> {
         }
     }
 
-    /// Whether a layer of `extent` along an axis keeps that size when the
-    /// layout would fill or stretch it: a line (or a flat vector) has no
-    /// thickness to scale, so Figma centres it in the space instead.
-    fn is_thin(&self, i: NodeIdx, extent: f64) -> bool {
+    /// Whether a layer `extent` long along an axis keeps its size where the
+    /// layout would fill or stretch it, and is centred in the space instead
+    /// (as Figma does): a line (or a flat vector) has no thickness to
+    /// scale, and a layer turned at an angle cannot take a box's size.
+    fn keeps_size(&self, i: NodeIdx, extent: f64) -> bool {
         // Turned lines keep a trace of width from rounding in their
         // rotation.
         const THIN: f64 = 1e-3;
-        let t = self.doc.props(i).node_type();
-        extent.abs() < THIN && !t.is_frame_like() && t != NodeType::Text
+        let p = self.doc.props(i);
+        let t = p.node_type();
+        let thin = extent.abs() < THIN && !t.is_frame_like() && t != NodeType::Text;
+        thin || quarter_turns(&p.transform()).is_none()
     }
 
     /// What a stack's content needs along one axis (`x` or not), padding
@@ -394,13 +411,10 @@ impl Txn<'_> {
     fn size_child(&mut self, i: NodeIdx, width: Option<f64>, height: Option<f64>) {
         // The sizes are in the frame's space: a quarter-turned child swaps
         // them, and one at another angle keeps its size.
-        let t = self.doc.props(i).transform();
-        let (width, height) = if t.m01.abs() < EPS && t.m10.abs() < EPS {
-            (width, height)
-        } else if t.m00.abs() < EPS && t.m11.abs() < EPS {
-            (height, width)
-        } else {
-            return;
+        let (width, height) = match quarter_turns(&self.doc.props(i).transform()) {
+            Some(false) => (width, height),
+            Some(true) => (height, width),
+            None => return,
         };
         let patch = Patch {
             width,

@@ -569,6 +569,40 @@ fn turned_lines_fill_like_flat_ones() {
 }
 
 #[test]
+fn turned_layers_stretched_across_keep_their_size_in_the_middle() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let column = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":200,"height":200}"#,
+    );
+    let tile = make(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":100,"height":20}"#,
+    );
+    set(&mut doc, &mut h, &tile, r#"{"rotation":45}"#);
+    set(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"layoutMode":"VERTICAL","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    set(&mut doc, &mut h, &tile, r#"{"sizingHorizontal":"FILL"}"#);
+    let p = doc.props(idx(&doc, &tile));
+    assert_eq!(p.size(), Vec2::new(100.0, 20.0));
+    let s = p.size();
+    let b = p
+        .transform()
+        .map_rect(&crate::model::Rect::new(0.0, 0.0, s.x, s.y));
+    assert!((b.x - (200.0 - b.w) / 2.0).abs() < 1e-6, "{b:?}");
+    assert!(b.y.abs() < 1e-6, "{b:?}");
+}
+
+#[test]
 fn stretched_stacks_count_their_content_when_hugging() {
     let mut doc = Document::open(&blank("x")).unwrap();
     let mut h = History::default();
