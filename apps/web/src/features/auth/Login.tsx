@@ -1,10 +1,12 @@
-import { clearSignupDraft } from '@app/features/setup/core/signupDraft';
-import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
-import { NoiseBackground } from '@app/features/setup/flow/shared';
-import { SignupJourney } from '@app/features/setup/views/SignupJourney';
+import {
+  clearSignupDraft,
+  Onboarding,
+  OnboardingSignup,
+} from '@app/features/onboarding/onboarding';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { NoiseBackground } from '@core/component/NoiseBackground';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
@@ -87,7 +89,7 @@ function PostAuthGate() {
     <Suspense fallback={<LoadingBlock />}>
       <Show when={userInfoQuery.data} fallback={<LoadingBlock />}>
         <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
-          <OnboardingFlow />
+          <Onboarding />
         </Show>
       </Show>
     </Suspense>
@@ -674,7 +676,7 @@ export function Login(props: { signupMode?: boolean }) {
           </div>
         }
       >
-        <SignupJourney
+        <OnboardingSignup
           onGoogle={() => startSignup(GOOGLE_GMAIL_IDP)}
           showingEmail={stage() !== Stage.None}
           onBackFromEmail={onBack}

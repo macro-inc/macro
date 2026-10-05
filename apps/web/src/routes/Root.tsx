@@ -16,7 +16,7 @@ import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-p
 import { MobileAuthWelcome } from '@app/features/mobile-onboarding/MobileAuthWelcome';
 import { MobileOnboarding } from '@app/features/mobile-onboarding/MobileOnboarding';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
-import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
+import { Onboarding } from '@app/features/onboarding/onboarding';
 import { SearchProvider } from '@app/features/soup/search/context';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import { InteractiveOnboardingModal } from '@app/features/tutorial/InteractiveOnboardingModal';
@@ -264,7 +264,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/onboarding',
     component: () =>
-      isNativeMobilePlatform() ? <MobileOnboarding /> : <OnboardingFlow />,
+      isNativeMobilePlatform() ? <MobileOnboarding /> : <Onboarding />,
   },
   {
     // A personal GTM invite link (`?token=`): welcome page, then signup.

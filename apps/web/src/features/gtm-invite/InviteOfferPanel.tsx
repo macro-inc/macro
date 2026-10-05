@@ -1,5 +1,4 @@
 import { PLAN_FEATURES, PLANS } from '@app/features/paywall/plans';
-import { SkipButton } from '@app/features/setup/flow/shared';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import Check from '@phosphor/check.svg';
@@ -87,11 +86,15 @@ export function InviteOfferPanel(props: {
           {props.finishing ? 'Heading to checkout…' : 'Claim your free month'}
           <ArrowRight class="size-5" />
         </Button>
-        <SkipButton
-          label="Continue as Guest instead"
+        <Button
+          variant="ghost"
+          size="sm"
+          class="self-center text-ink-muted"
           disabled={props.finishing}
           onClick={() => props.onContinueFree()}
-        />
+        >
+          Continue as Guest instead
+        </Button>
       </div>
     </div>
   );
