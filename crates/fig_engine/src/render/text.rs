@@ -2,7 +2,7 @@
 //! character style's) paints.
 
 use super::{Painter, Shape, Surface};
-use crate::model::{Affine, Paint, PaintKind, Props, Vec2};
+use crate::model::{Affine, Paint, PaintKind, Props, Rect, Vec2};
 use crate::scene::SceneIdx;
 use std::sync::Arc;
 use tiny_skia::{FillRule, Mask, PathBuilder, PathSegment};
@@ -117,31 +117,48 @@ impl Painter<'_> {
             // clip them to (or out of) the glyphs.
             let align = props.stroke_align();
             let mut owned = None;
+            let sts = ts.to_skia();
+            // The mask is read where the strokes draw.
+            let read = shapes
+                .iter()
+                .filter_map(|s| s.path().bounds().transform(sts))
+                .fold(Rect::EMPTY, |acc, b| {
+                    acc.union(&Rect::new(
+                        f64::from(b.x()),
+                        f64::from(b.y()),
+                        f64::from(b.width()),
+                        f64::from(b.height()),
+                    ))
+                });
             if align != crate::model::StrokeAlign::Center
-                && let Some(mut mask) = Mask::new(surface.pixmap.width(), surface.pixmap.height())
+                && let Some(mut mask) = self.area_mask(surface, Some(read))
             {
-                let sts = ts.to_skia();
                 for g in layout.glyphs.iter() {
                     if let Some(path) = g.blob.and_then(|b| self.doc.blobs.path(b)) {
                         let gts = sts
                             .pre_translate(g.x, g.y)
                             .pre_scale(g.font_size, -g.font_size);
-                        mask.fill_path(&path.path, FillRule::Winding, true, gts);
+                        mask.fill_path(&path.path, FillRule::Winding, gts);
                     }
                 }
                 if align == crate::model::StrokeAlign::Outside {
                     mask.invert();
                 }
                 if let Some(c) = clip {
-                    super::multiply_masks(&mut mask, c);
+                    mask.multiply(c);
                 }
                 owned = Some(mask);
             }
-            let stroke_clip = owned.as_ref().or(clip);
-            for paint in props.strokes().iter().filter(|p| p.is_visible()) {
-                for s in &shapes {
-                    self.fill_shape(surface, s, ts, paint, size, opacity, stroke_clip);
+            {
+                let stroke_clip = owned.as_ref().map(|m| &m.mask).or(clip);
+                for paint in props.strokes().iter().filter(|p| p.is_visible()) {
+                    for s in &shapes {
+                        self.fill_shape(surface, s, ts, paint, size, opacity, stroke_clip);
+                    }
                 }
+            }
+            if let Some(m) = owned {
+                self.recycle(m);
             }
         }
     }

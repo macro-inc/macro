@@ -5,7 +5,7 @@
 //! gradients are centered on (0.5, 0.5) with radius 0.5, and an angular
 //! gradient sweeps clockwise from the +x axis around (0.5, 0.5).
 
-use super::{Painter, Shape, Surface, multiply_masks};
+use super::{Painter, Shape, Surface};
 use crate::model::{
     Affine, ColorStop, GradientKind, ImagePaint, ImageScaleMode, Paint, PaintKind, Rect, Vec2,
 };
@@ -147,8 +147,7 @@ impl Painter<'_> {
                 && rect.right() >= node.right() - 0.01
                 && rect.bottom() >= node.bottom() - 0.01)
             {
-                let Some(mut mask) = Mask::new(surface.pixmap.width(), surface.pixmap.height())
-                else {
+                let Some(mut mask) = self.area_mask(surface, None) else {
                     return;
                 };
                 let image_rect = crate::geometry::rect_path(0.0, 0.0, iw as f32, ih as f32);
@@ -156,12 +155,11 @@ impl Painter<'_> {
                     mask.fill_path(
                         &r,
                         tiny_skia::FillRule::Winding,
-                        true,
                         ts.mul(&image_to_node).to_skia(),
                     );
                 }
                 if let Some(c) = clip {
-                    multiply_masks(&mut mask, c);
+                    mask.multiply(c);
                 }
                 owned = Some(mask);
             }
@@ -171,8 +169,11 @@ impl Painter<'_> {
             &p,
             shape.rule(),
             ts.to_skia(),
-            owned.as_ref().or(clip),
+            owned.as_ref().map(|m| &m.mask).or(clip),
         );
+        if let Some(m) = owned {
+            self.recycle(m);
+        }
     }
 }
 

@@ -223,3 +223,41 @@ fn strokes_ellipses_along_their_outline() {
         "the stroke follows the curve"
     );
 }
+
+#[test]
+fn area_masks_match_whole_masks_where_read() {
+    let path = crate::geometry::rect_path(10.0, 10.0, 20.0, 15.0).unwrap();
+    let ts = Transform::from_translate(3.5, 2.25);
+    let mut parent = Mask::new(64, 48).unwrap();
+    for (i, a) in parent.data_mut().iter_mut().enumerate() {
+        *a = (i * 7 % 256) as u8;
+    }
+
+    // Filled, inverted, and multiplied over the whole surface.
+    let mut whole = Mask::new(64, 48).unwrap();
+    whole.fill_path(&path, FillRule::EvenOdd, true, ts);
+    whole.invert();
+    for (a, &b) in whole.data_mut().iter_mut().zip(parent.data()) {
+        *a = ((u16::from(*a) * u16::from(b) + 127) / 255) as u8;
+    }
+
+    let mut area = AreaMask {
+        mask: Mask::new(64, 48).unwrap(),
+        area: [0; 4],
+    };
+    area.include(tiny_skia::Rect::from_xywh(0.0, 0.0, 40.0, 30.0).unwrap());
+    area.fill_path(&path, FillRule::EvenOdd, ts);
+    area.invert();
+    area.multiply(&parent);
+    for y in 0..30 {
+        for x in 0..40 {
+            let at = y * 64 + x;
+            assert_eq!(area.mask.data()[at], whole.data()[at], "pixel {x},{y}");
+        }
+    }
+    area.clear();
+    assert!(
+        area.mask.data().iter().all(|&a| a == 0),
+        "cleared for reuse"
+    );
+}

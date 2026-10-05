@@ -82,6 +82,8 @@ pub(crate) struct Painter<'a> {
     pub scale: f64,
     /// Device-space region being drawn (with margin).
     pub region: Rect,
+    /// Cleared masks to reuse (see [`AreaMask`]).
+    masks: Vec<Mask>,
 }
 
 /// Renders a viewport of a scene into a premultiplied RGBA pixmap.
@@ -102,6 +104,7 @@ pub fn render(
         base,
         scale: vp.scale,
         region,
+        masks: Vec::new(),
     };
     // Effects sample beyond what they cover: render with a margin so blurs
     // and shadows from just outside the region are complete inside it.
@@ -152,6 +155,7 @@ pub fn render_node(
         base,
         scale,
         region: Rect::new(0.0, 0.0, f64::from(vp.width), f64::from(vp.height)),
+        masks: Vec::new(),
     };
     let mut surface = Surface::new(0, 0, vp.width, vp.height)?;
     if let Some(bg) = opts.background {
@@ -505,7 +509,10 @@ impl<'a> Painter<'a> {
                 if props.clips_content() {
                     let mask = self.clip_mask(i, surface, clip);
                     match mask {
-                        ClipResult::Mask(m) => self.draw_children(&children, surface, Some(&m)),
+                        ClipResult::Mask(m) => {
+                            self.draw_children(&children, surface, Some(&m.mask));
+                            self.recycle(m);
+                        }
                         ClipResult::Unchanged => self.draw_children(&children, surface, clip),
                         ClipResult::Empty => {}
                     }
@@ -611,30 +618,46 @@ impl<'a> Painter<'a> {
         if align != StrokeAlign::Center && !geometry_is_open(props) {
             let fill = self.fill_shapes(i);
             if !fill.is_empty() {
-                let mut shape_mask =
-                    match Mask::new(surface.pixmap.width(), surface.pixmap.height()) {
-                        Some(m) => m,
-                        None => return,
-                    };
+                // The mask is read where the strokes draw.
                 let sts = ts.to_skia();
+                let read = shapes
+                    .iter()
+                    .filter_map(|s| s.path().bounds().transform(sts))
+                    .map(|b| {
+                        Rect::new(
+                            f64::from(b.x()),
+                            f64::from(b.y()),
+                            f64::from(b.width()),
+                            f64::from(b.height()),
+                        )
+                    })
+                    .fold(Rect::EMPTY, |acc, b| acc.union(&b));
+                let Some(mut shape_mask) = self.area_mask(surface, Some(read)) else {
+                    return;
+                };
                 for s in &fill {
-                    shape_mask.fill_path(s.path(), s.rule(), true, sts);
+                    shape_mask.fill_path(s.path(), s.rule(), sts);
                 }
                 if align == StrokeAlign::Outside {
                     shape_mask.invert();
                 }
                 if let Some(parent) = clip {
-                    multiply_masks(&mut shape_mask, parent);
+                    shape_mask.multiply(parent);
                 }
                 owned_clip = Some(shape_mask);
             }
         }
-        let clip = owned_clip.as_ref().or(clip);
         let size = props.size();
-        for paint in props.strokes().iter().filter(|p| p.is_visible()) {
-            for shape in &shapes {
-                self.fill_shape(surface, shape, ts, paint, size, opacity, clip);
+        {
+            let clip = owned_clip.as_ref().map(|m| &m.mask).or(clip);
+            for paint in props.strokes().iter().filter(|p| p.is_visible()) {
+                for shape in &shapes {
+                    self.fill_shape(surface, shape, ts, paint, size, opacity, clip);
+                }
             }
+        }
+        if let Some(m) = owned_clip {
+            self.recycle(m);
         }
     }
 
@@ -720,7 +743,7 @@ impl<'a> Painter<'a> {
         }
     }
 
-    fn clip_mask(&self, i: SceneIdx, surface: &Surface, parent: Option<&Mask>) -> ClipResult {
+    fn clip_mask(&mut self, i: SceneIdx, surface: &Surface, parent: Option<&Mask>) -> ClipResult {
         let props = self.props(i);
         let ts = self.node_transform(i, surface);
         let size = props.size();
@@ -742,25 +765,25 @@ impl<'a> Painter<'a> {
             }
         }
         let shapes = self.fill_shapes(i);
-        let Some(mut mask) = Mask::new(surface.pixmap.width(), surface.pixmap.height()) else {
-            return ClipResult::Empty;
-        };
         if shapes.is_empty() {
             return ClipResult::Empty;
         }
+        let Some(mut mask) = self.area_mask(surface, None) else {
+            return ClipResult::Empty;
+        };
         let sts = ts.to_skia();
         for s in &shapes {
-            mask.fill_path(s.path(), s.rule(), true, sts);
+            mask.fill_path(s.path(), s.rule(), sts);
         }
         if let Some(p) = parent {
-            multiply_masks(&mut mask, p);
+            mask.multiply(p);
         }
         ClipResult::Mask(mask)
     }
 }
 
 enum ClipResult {
-    Mask(Mask),
+    Mask(AreaMask),
     Unchanged,
     Empty,
 }
@@ -830,9 +853,122 @@ fn geometry_is_open(props: &Props) -> bool {
         || props.fill_geometry().is_empty() && matches!(props.node_type(), NodeType::Vector)
 }
 
-pub(crate) fn multiply_masks(dst: &mut Mask, src: &Mask) {
-    for (a, b) in dst.data_mut().iter_mut().zip(src.data()) {
-        *a = ((u16::from(*a) * u16::from(*b) + 127) / 255) as u8;
+/// A clip mask the size of its surface (tiny-skia clips with those) that is
+/// only computed within `area`: the pixels filled into it plus those it will
+/// be read at. Elsewhere it reads 0, so inverting, multiplying, and clearing
+/// it for reuse cost what it covers rather than the whole surface.
+pub(crate) struct AreaMask {
+    pub mask: Mask,
+    /// Columns `x0..x1`, rows `y0..y1`.
+    area: [usize; 4],
+}
+
+impl AreaMask {
+    /// Widens the area by a rectangle of surface pixels.
+    fn include(&mut self, r: tiny_skia::Rect) {
+        let (w, h) = (self.mask.width() as f32, self.mask.height() as f32);
+        let x0 = (r.left() - 2.0).floor().clamp(0.0, w) as usize;
+        let y0 = (r.top() - 2.0).floor().clamp(0.0, h) as usize;
+        let x1 = (r.right() + 2.0).ceil().clamp(0.0, w) as usize;
+        let y1 = (r.bottom() + 2.0).ceil().clamp(0.0, h) as usize;
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        let a = &mut self.area;
+        if a[0] >= a[2] || a[1] >= a[3] {
+            *a = [x0, y0, x1, y1];
+        } else {
+            *a = [a[0].min(x0), a[1].min(y0), a[2].max(x1), a[3].max(y1)];
+        }
+    }
+
+    /// Fills `path` (anti-aliased) into the mask.
+    pub fn fill_path(&mut self, path: &Path, rule: FillRule, ts: Transform) {
+        match path.bounds().transform(ts) {
+            Some(b) => self.include(b),
+            None => {
+                self.area = [
+                    0,
+                    0,
+                    self.mask.width() as usize,
+                    self.mask.height() as usize,
+                ]
+            }
+        }
+        self.mask.fill_path(path, rule, true, ts);
+    }
+
+    /// The area's rows, as ranges of the mask's data.
+    fn rows(&self) -> impl Iterator<Item = std::ops::Range<usize>> + use<> {
+        let stride = self.mask.width() as usize;
+        let [x0, y0, x1, y1] = self.area;
+        (y0..y1.max(y0)).map(move |y| y * stride + x0..y * stride + x1.max(x0))
+    }
+
+    pub fn invert(&mut self) {
+        let rows = self.rows();
+        let data = self.mask.data_mut();
+        for row in rows {
+            data[row].iter_mut().for_each(|a| *a = 255 - *a);
+        }
+    }
+
+    /// Multiplies the mask by `other` (the same size).
+    pub fn multiply(&mut self, other: &Mask) {
+        let rows = self.rows();
+        let (data, src) = (self.mask.data_mut(), other.data());
+        for row in rows {
+            let Some(s) = src.get(row.clone()) else {
+                continue;
+            };
+            for (a, &b) in data[row].iter_mut().zip(s) {
+                *a = ((u16::from(*a) * u16::from(b) + 127) / 255) as u8;
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        let rows = self.rows();
+        let data = self.mask.data_mut();
+        for row in rows {
+            data[row].fill(0);
+        }
+        self.area = [0; 4];
+    }
+}
+
+/// Masks kept for reuse by one render.
+const MASK_POOL: usize = 8;
+
+impl Painter<'_> {
+    /// A cleared mask the size of `surface`, which will be read within
+    /// `read` (surface pixels) besides where it is filled.
+    pub(crate) fn area_mask(&mut self, surface: &Surface, read: Option<Rect>) -> Option<AreaMask> {
+        let (w, h) = (surface.pixmap.width(), surface.pixmap.height());
+        let mask = match self
+            .masks
+            .iter()
+            .position(|m| m.width() == w && m.height() == h)
+        {
+            Some(at) => self.masks.swap_remove(at),
+            None => Mask::new(w, h)?,
+        };
+        let mut m = AreaMask { mask, area: [0; 4] };
+        if let Some(r) = read
+            && let Some(r) =
+                tiny_skia::Rect::from_xywh(r.x as f32, r.y as f32, r.w as f32, r.h as f32)
+        {
+            m.include(r);
+        }
+        Some(m)
+    }
+
+    /// Clears a mask and keeps it for reuse.
+    pub(crate) fn recycle(&mut self, mut m: AreaMask) {
+        if self.masks.len() < MASK_POOL {
+            m.clear();
+            self.masks.push(m.mask);
+        }
     }
 }
 
