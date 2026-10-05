@@ -1415,6 +1415,144 @@ colors, or absent glows. Wait for the tiles to sharpen after zooming. The
 fixture preserves imported text outlines, but
 its substitute fonts do not verify the appearance of newly edited text.
 
+## Illustrator files
+
+Uploaded `.ai` files open in the `ai` block (`/app/ai/<documentId>`), and
+**Illustrator file** in the create menu (key **V**, also in project create
+menus) makes a new one with a single 1920 × 1080 artboard. Both are behind
+the `enable-ai-editor` PostHog flag (on by default in development builds;
+`ENABLE_AI_EDITOR` overrides it); with the flag off the block offers the
+file for download. The file is read, rendered, and edited by the Rust
+`ai_engine` compiled to WebAssembly, in a primary worker plus up to three
+tile-raster helpers; the canvas composites tiles at the device pixel ratio
+over a gray pasteboard and redraws only what an edit changed.
+
+People with edit access get the editor; others get the same view read-only
+(only the selection, direct selection, hand, and zoom tools; no editing
+keys). Edits save automatically 1.5 s after the last change, when the tab
+is hidden, and on close, as a new document version through
+`PUT /documents/{id}/simple_save`. Saving writes a standard PDF-based `.ai`
+that Illustrator and PDF readers open; an unedited file is written back
+byte for byte. For files Illustrator saved, a dismissible note
+(`ai-illustrator-note`) says that Illustrator-only editing data (live
+effects and the like) is not kept, and what the engine could not read
+faithfully is listed in `ai-warnings`.
+
+Everyone with the file open edits it live. Changes go through the sync
+service as the Loro maps `aiMeta`, `aiDoc`, `aiNodes`, and `aiImages`
+(`ai_engine::collab`); the stored `.ai` stays the base everyone opens, and
+the first person who can edit seeds the shared copy. Each person creates
+objects in an id session (1–4095) picked at random among those the people
+present do not use, published in their presence. Undo takes back only your
+own changes. Of the people editing, one (the lowest peer id) stores the
+merged file, and the saved file becomes the new base. Presence: pointers
+with name tags (`ai-peer-cursor`, `data-peer="<name>"`), outlines of what
+others selected in their colors, and avatars at the top right
+(`ai-collaborators`, one `ai-collaborator` per person; a click shows their
+view). When the sync service is unreachable the file opens read-only with
+a bar (`ai-session-notice`, **Retry** is `ai-session-action`); a file
+stored outside the session (a new upload) starts the shared copy over, and
+people still in it get a **Reload** bar.
+
+Layout and test hooks (root `ai-editor`, canvas `ai-canvas`):
+
+- **Left panel**: the main menu (`ai-main-menu`: `ai-menu-download` for the
+  `.ai`, `ai-menu-export-png` and `ai-menu-export-png-2x` for the active
+  artboard, then the view items) and the tabs `ai-tab-layers` and
+  `ai-tab-artboards`.
+- **Layers** (`ai-layers-panel`, tree `ai-layer-tree`): rows
+  (`ai-layer-row`, `data-layer-id` is the engine's node id, `data-kind`
+  `layer`/`group`/`clipGroup`/`path`/`text`/`image`/`artwork`,
+  `aria-selected`) list top-most first, as Illustrator does. A click
+  selects (⇧ a range, ⌘/Ctrl toggles) and the canvas follows; a row's
+  `ai-layer-toggle` expands it, layers show their color (`ai-layer-color`,
+  a click cycles it), and hovering shows `ai-layer-lock` and
+  `ai-layer-visibility`. Double-click renames (`ai-layer-rename`). Rows
+  drag to restack, and into groups and other layers. `ai-layer-new` adds a
+  layer on top; `ai-layer-delete` deletes the selection.
+- **Artboards** (`ai-artboards-panel`): `ai-artboard-row` per artboard
+  (click fits it in the window, double-click renames in
+  `ai-artboard-rename`, hover `ai-artboard-delete`) and `ai-artboard-new`.
+- **Toolbar** (`ai-toolbar`, floating on the canvas): `ai-tool-<tool>` for
+  `select` (V), `direct` (A), `pen` (P), `type` (T), `line` (\\),
+  `rectangle` (M), `ellipse` (L), `polygon`, `star`, `eyedropper` (I),
+  `artboard` (⇧O), `hand` (H), and `zoom` (Z); below them the fill and
+  stroke new objects get, or the selection has (`ai-swatch-fill`,
+  `ai-swatch-stroke`, each with a color picker and `…-none`),
+  `ai-swap-colors` (⇧X), and `ai-default-colors` (D).
+- **Properties** (`ai-properties`, title `ai-selection-title`): with
+  nothing selected, the active artboard (`ai-artboard-section`). Otherwise
+  Transform (`ai-field-x`, `-y`, `-w`, `-h` measure outlines without
+  strokes, as Illustrator does; `ai-field-rotation`, flips), Appearance
+  (`ai-fill-hex`, `ai-stroke-hex` take hex or `none`, `ai-field-stroke-width`,
+  `ai-stroke-cap`, `ai-stroke-join`, `ai-field-dash`, `ai-field-opacity`,
+  `ai-blend`; gradients show as swatches without a hex field), Character
+  and Paragraph for text (font picker, `ai-font-style`,
+  `ai-field-font-size`, `ai-field-tracking`, `ai-field-line-height`,
+  `ai-text-align`), Align (`ai-align-left|center|right|top|middle|bottom`,
+  `ai-distribute-horizontal|vertical`), Pathfinder
+  (`ai-pathfinder-unite|subtract|intersect|exclude`), and Quick actions
+  (`ai-arrange-front|forward|backward|back`, `ai-action-group`,
+  `-ungroup`, `-clip`, `-release`, `-outline`).
+- **Status bar** (`ai-status-bar`, bottom center): `ai-undo`, `ai-redo`,
+  `ai-save-state` (`data-state` is `saved`, `unsaved`, `saving`, or
+  `error`), and the zoom menu (`ai-zoom-menu`: `ai-zoom-fit`,
+  `ai-zoom-fit-all`, `ai-zoom-100`, `ai-outline-toggle`).
+- **Canvas gestures**: scroll pans, ⌘/Ctrl or ⌥ + scroll and pinches zoom,
+  Space or the middle button drags to pan. The selection tool selects (⇧
+  adds), draws marquees, moves (⇧ constrains, ⌥ drags a copy), scales by
+  the eight handles (⇧ keeps proportions, ⌥ from the center), and rotates
+  just outside a corner (⇧ by 45°); double-click enters a group or edits
+  text. Direct selection drags anchor points and, once an anchor is
+  chosen, its handles (⌥ breaks a smooth point). Shape tools drag out a box
+  (⇧ square, ⌥ from the center; a click makes a 100 pt one). The pen clicks
+  corners and drags smooth points, closes on its first point, and Enter
+  or Escape ends an open path. The type tool clicks for point text, drags
+  for area text, or clicks into text to edit it; typing happens in an
+  overlay (`ai-text-editing`, input `ai-text-input`, `ai-text-caret`,
+  `ai-text-selection`), and Escape or a click outside ends it. The
+  eyedropper gives the selection the clicked object's fill and stroke.
+  The artboard tool chooses, moves (with the artwork on it), resizes, and
+  draws artboards; Delete deletes the chosen one. Image files dropped on
+  the canvas or pasted are placed (at most 1000 pt long).
+- **Shortcuts** (⌘ is Ctrl off macOS): ⌘Z/⇧⌘Z, ⌘C/⌘X/⌘V (pastes 10 pt
+  further each time), ⌘D duplicate, Delete, arrows nudge 1 pt (⇧ 10 pt),
+  ⌘A / ⇧⌘A select all / none, ⌘G / ⇧⌘G group / ungroup, ⌘7 / ⌥⌘7 make /
+  release clipping mask, ⌘] / ⌘[ forward / backward and ⇧⌘] / ⇧⌘[ front
+  / back, ⇧⌘O create outlines, ⌘Y outline view, ⌘0 fit artboard, ⌥⌘0 fit
+  all, ⌘1 actual size, ⌘+ / ⌘- zoom. While the editor has focus its keys
+  come before the app's; keys it does not use, and Escape with nothing to
+  deselect, stay the app's.
+
+The editor has a browser fixture that needs no backend. From `apps/web`
+(build the engine first with `just ensure-ai-engine-wasm`):
+
+```sh
+bunx vite --config src/features/block-ai/browser-test/vite.config.ts
+# http://127.0.0.1:3021/?sample
+```
+
+`?new` opens a blank document as the create menu makes it, `?sample` a
+sample built with the engine (an 800 × 600 artboard with a red rectangle,
+a blue circle, and the text "Hello" on "Layer 1", and an empty layer
+"Notes"), and `?file=<name>` a file from the directory named by
+`AI_CORPUS_DIR` (with a trailing slash); the header also opens a local
+`.ai`. Saves stay in memory (`?reload` reopens each one); `?readonly`
+opens it as a viewer would. `window.aiFixture` exposes `engine()`,
+`saves()`, `errors()`, `notices()`, `downloads()`, `fontRequests()`, and
+`rowsOf(bytes)`. `?collab` (with `&people=alice,bob`, the default, and
+`&sample` or `&file=`) shows several people side by side
+(`ai-person-<Name>` holds each editor), each with the real shared-document
+session over an in-page sync server; `window.aiFixture.collab` has
+`people()` (each `engine()`, `session()`, `saves()`, `status()`,
+`peers()`), `storeOutside()`, `reopen(name)`, `setReachable(bool)`, and
+`stored()`. The Playwright suite runs with
+`bunx playwright test --config src/features/block-ai/browser-test/playwright.config.ts`
+(`AI_BROWSER_PORT` picks another port than 3021; set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed). The sections above were verified on this fixture; the
+`/app/ai` route itself needs a backend with an uploaded `.ai`.
+
 ## Create and type
 
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
