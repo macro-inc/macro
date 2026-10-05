@@ -1,4 +1,5 @@
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   type Accessor,
@@ -28,7 +29,8 @@ export interface PlatformNotificationInterface {
 }
 
 export type CreateAppNotificationInterface = (
-  setDisabled: () => Promise<void>
+  setDisabled: () => Promise<void>,
+  shouldSend: Accessor<boolean>
 ) => PlatformNotificationInterface;
 
 export type NotificationUnsupported = 'not-supported';
@@ -162,6 +164,24 @@ function PlatformNotificationState(props: {
     }
   );
 
+  function currentPermission(): NotificationPermission | UiDisabled {
+    // A failed native read must leave the setting usable so the user can
+    // retry. Reading resource.latest directly would throw into the UI.
+    if (permission.error !== undefined) return 'denied';
+    return permission.latest ?? 'default';
+  }
+
+  async function refreshPermission() {
+    try {
+      await refetch();
+    } catch {
+      // currentPermission exposes a failed read as denied, without breaking UI.
+    }
+  }
+
+  // System Settings can change authorization while this app is open.
+  makeEventListener(window, 'focus', refreshPermission);
+
   async function requestPermission() {
     if (platformNotif === 'not-supported') {
       console.warn(
@@ -172,6 +192,7 @@ function PlatformNotificationState(props: {
     props.setManuallyDisabled('allowed');
     const res = await platformNotif.requestPermission();
     await refetch();
+    if (permission.error !== undefined) throw permission.error;
     return res;
   }
 
@@ -183,7 +204,17 @@ function PlatformNotificationState(props: {
       return manuallyDisabled;
     }
 
-    if (permission.latest !== 'granted' || platformNotif === 'not-supported') {
+    if (currentPermission() !== 'granted') {
+      await refreshPermission();
+    }
+    if (props.manuallyDisabled() === 'disabled-in-ui') {
+      return 'disabled-in-ui';
+    }
+
+    if (
+      currentPermission() !== 'granted' ||
+      platformNotif === 'not-supported'
+    ) {
       return 'not-granted';
     }
 
@@ -193,7 +224,7 @@ function PlatformNotificationState(props: {
   return (
     <NotificationStateContext.Provider
       value={{
-        permission: () => permission.latest ?? 'default',
+        permission: currentPermission,
         requestPermission,
         unregisterNotification: platformNotif.unregisterNotifications,
         showNotification,
@@ -218,7 +249,8 @@ export function PlatformNotificationProvider(props: {
   };
 
   const value = (props.overrideDefault ?? createDefaultBrowserInterface)(
-    setDisabled
+    setDisabled,
+    () => manuallyDisabled() !== 'disabled-in-ui'
   );
 
   return (
