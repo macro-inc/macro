@@ -243,11 +243,14 @@ impl Txn<'_> {
                 cross_size = t + cross_start + cross_end;
             }
         }
-        let inner_cross = (cross_size - cross_start - cross_end).max(0.01);
+        // Padding can leave less than nothing inside; children are still
+        // aligned against it.
+        let inner_cross = cross_size - cross_start - cross_end;
+        let stretch_to = inner_cross.max(0.01);
         for item in items.iter_mut() {
-            if item.child.stretches() && (cross_of(item) - inner_cross).abs() > EPS {
+            if item.child.stretches() && (cross_of(item) - stretch_to).abs() > EPS {
                 let i = item.i;
-                let v = item.child.clamp(inner_cross, !h);
+                let v = item.child.clamp(stretch_to, !h);
                 let (w, ht) = if h { (None, Some(v)) } else { (Some(v), None) };
                 self.size_child(i, w, ht);
                 item.bounds = self.local_bounds(i);
@@ -262,10 +265,11 @@ impl Txn<'_> {
             Some("CENTER") => (pad_start + (free - gaps) / 2.0, spacing),
             Some("MAX") => (pad_start + free - gaps, spacing),
             // Figma stores its "auto" gap as SPACE_EVENLY; it spaces like CSS
-            // space-between.
+            // space-between, and centres a lone child.
             Some("SPACE_BETWEEN" | "SPACE_EVENLY") if items.len() > 1 => {
                 (pad_start, free / (n - 1.0))
             }
+            Some("SPACE_BETWEEN" | "SPACE_EVENLY") => (pad_start + free / 2.0, 0.0),
             Some("SPACE_EVENLY_CSS") => (pad_start + free / (n + 1.0), free / (n + 1.0)),
             Some("SPACE_AROUND") => (pad_start + free / (2.0 * n), free / n),
             _ => (pad_start, spacing),

@@ -321,6 +321,16 @@ fn groups_scale_their_layers() {
     assert_eq!(bounds(&doc, &kids[1]).2, 120.0);
 }
 
+/// Creates a layer in `parent` from a `create` op's node JSON; returns its id.
+fn make(doc: &mut Document, h: &mut History, parent: &str, node: &str) -> String {
+    apply(
+        doc,
+        h,
+        &format!(r#"[{{"op":"create","parent":"{parent}","node":{node}}}]"#),
+    )[0]
+    .clone()
+}
+
 fn set(doc: &mut Document, h: &mut History, id: &str, props: &str) {
     apply(
         doc,
@@ -342,4 +352,57 @@ fn hidden_frames_keep_their_layout_until_shown() {
     set(&mut doc, &mut h, &frame, r#"{"visible":true}"#);
     assert_eq!(bounds(&doc, &kids[1]).0, 140.0);
     assert_eq!(bounds(&doc, &frame).2, 260.0);
+}
+
+#[test]
+fn the_auto_gap_centres_a_lone_child() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let frame = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":200,"height":100}"#,
+    );
+    let kid = make(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":40,"height":20}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"layoutMode":"HORIZONTAL","primaryAlign":"SPACE_EVENLY","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    assert_eq!(bounds(&doc, &kid).0, 80.0);
+}
+
+#[test]
+fn children_align_against_padding_wider_than_the_frame() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    // A key: 34 wide with 22 of padding on each side.
+    let frame = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":34,"height":46}"#,
+    );
+    let kid = make(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":11,"height":24}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"layoutMode":"VERTICAL","primaryAlign":"CENTER","counterAlign":"CENTER","paddingLeft":22,"paddingRight":22,"sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    // Centred on the 10 px the padding overlaps by: 22 + (-10 - 11) / 2.
+    assert_eq!(bounds(&doc, &kid).0, 11.5);
+    assert_eq!(bounds(&doc, &kid).1, 11.0);
 }
