@@ -40,6 +40,7 @@ use super::metering::{MeteringContext, WireProtocol};
 use super::metering_http::MeteredHttpClient;
 use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use super::types::Model;
+use super::usage_amount::usage_amount;
 use super::{PredefinedModel, ReasoningEffort};
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, StreamBridge};
@@ -94,6 +95,16 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
             RoutedModel::Gemini(m) => m.model().provider(),
             RoutedModel::OpenAiChatCompletions(m) => m.model().provider(),
             RoutedModel::OpenAiResponses(m) => m.model().provider(),
+        }
+    }
+
+    /// The wire protocol the provider speaks, which fixes its usage semantics.
+    pub(crate) fn protocol(&self) -> WireProtocol {
+        match self {
+            RoutedModel::Anthropic(_) => WireProtocol::Anthropic,
+            RoutedModel::Gemini(_) => WireProtocol::Gemini,
+            RoutedModel::OpenAiChatCompletions(_) => WireProtocol::ChatCompletions,
+            RoutedModel::OpenAiResponses(_) => WireProtocol::Responses,
         }
     }
 
@@ -214,6 +225,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
             ProviderAgent::Anthropic(agent) => {
                 drive_stream(
                     agent,
+                    WireProtocol::Anthropic,
                     prompt,
                     history,
                     max_turns,
@@ -229,6 +241,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
             ProviderAgent::Gemini(agent) => {
                 drive_stream(
                     agent,
+                    WireProtocol::Gemini,
                     prompt,
                     history,
                     max_turns,
@@ -244,6 +257,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
             ProviderAgent::OpenAiChatCompletions(agent) => {
                 drive_stream(
                     agent,
+                    WireProtocol::ChatCompletions,
                     prompt,
                     history,
                     max_turns,
@@ -259,6 +273,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
             ProviderAgent::OpenAiResponses(agent) => {
                 drive_stream(
                     agent,
+                    WireProtocol::Responses,
                     prompt,
                     history,
                     max_turns,
@@ -530,6 +545,7 @@ fn build_agent<M: CompletionModel>(
 #[allow(clippy::too_many_arguments)]
 async fn drive_stream<M>(
     agent: &Agent<M>,
+    protocol: WireProtocol,
     prompt: Message,
     history: Vec<Message>,
     max_turns: usize,
@@ -698,11 +714,11 @@ where
                                 );
                                 // Aggregate analytics only. Financial evidence is
                                 // persisted per HTTP attempt before SDK parsing.
-                                recorder.record(usage_ctx.clone().into_event(
-                                    model.clone(),
-                                    usage.input_tokens,
-                                    usage.output_tokens,
-                                ));
+                                recorder.record(
+                                    usage_ctx
+                                        .clone()
+                                        .into_event(model.clone(), usage_amount(protocol, &usage)),
+                                );
                                 let _ =
                                     driver_tx.send(Ok(StreamPart::Usage(crate::stream::Usage {
                                         input_tokens: usage.input_tokens,
@@ -811,8 +827,10 @@ where
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
     > {
+        // Scripted fakes report Anthropic-shaped usage: input excludes cache.
         Box::pin(drive_stream(
             self,
+            WireProtocol::Anthropic,
             prompt,
             history,
             max_turns,
