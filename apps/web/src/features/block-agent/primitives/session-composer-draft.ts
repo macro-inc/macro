@@ -58,13 +58,15 @@ function readDraft(sessionId: string | undefined): string | undefined {
   const parsed = readJson(
     sessionId ? agentSessionDraftKey(sessionId) : undefined
   );
-  return typeof parsed === 'string' && parsed.length > 0 ? parsed : undefined;
+  return typeof parsed === 'string' && parsed.trim().length > 0
+    ? parsed
+    : undefined;
 }
 
 function writeDraft(sessionId: string | undefined, value: string) {
   writeJson(
     sessionId ? agentSessionDraftKey(sessionId) : undefined,
-    value.length > 0 ? value : undefined
+    value.trim().length > 0 ? value : undefined
   );
 }
 

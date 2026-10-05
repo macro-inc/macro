@@ -82,6 +82,38 @@ describe('session composer drafts', () => {
     });
   });
 
+  it('removes a cleared editor draft when its markdown contains only whitespace', () => {
+    withRoot(() => {
+      const draft = createSessionComposerDraft(() => 'session-a');
+      const other = createSessionComposerDraft(() => 'session-b');
+      draft.setDraft('Follow up');
+      other.setDraft('  Keep the indentation\n');
+      draft.setDraft('\n \n');
+    });
+
+    expect(localStorage.getItem(agentSessionDraftKey('session-a'))).toBeNull();
+    withRoot(() => {
+      expect(createSessionComposerDraft(() => 'session-a').draft()).toBe('');
+      expect(createSessionComposerDraft(() => 'session-b').draft()).toBe(
+        '  Keep the indentation\n'
+      );
+    });
+  });
+
+  it('ignores a previously saved whitespace-only draft when seeding context', () => {
+    localStorage.setItem(
+      agentSessionDraftKey('session-a'),
+      JSON.stringify('\n \n')
+    );
+    withRoot(() => {
+      const draft = createSessionComposerDraft(
+        () => 'session-a',
+        () => 'Document context'
+      );
+      expect(draft.draft()).toBe('Document context');
+    });
+  });
+
   it('prefers a saved draft over seeded context', () => {
     withRoot(() => {
       createSessionComposerDraft(() => 'session-a').setDraft('Already typed');
