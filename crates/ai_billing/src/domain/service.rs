@@ -21,8 +21,16 @@ use ai_usage::AiUsageEnforcement;
 use chrono::{DateTime, Utc};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use macro_uuid::Uuid;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, PoisonError};
 use teams::domain::open_seat_release::OpenSeatRelease;
+
+/// How long a payer whose subscription period read came back empty, failed,
+/// or did not contain `now` meters the fallback period before the next read.
+/// A miss stores nothing, so without this every AI request from that payer
+/// would read the provider again. One minute bounds that to one read per
+/// payer per process while Stripe rolls a period or a provider recovers.
+const PERIOD_MISS_BACKOFF: chrono::Duration = chrono::Duration::minutes(1);
 
 /// The billing service over its four ports.
 #[derive(Clone)]
@@ -35,6 +43,10 @@ pub struct BillingServiceImpl<E, U, R, P> {
     enforcement: AiUsageEnforcement,
     billing: AiUsageBilling,
     period_sync: Option<Arc<dyn PeriodSync>>,
+    /// Payers whose last subscription period read missed, and until when the
+    /// read is not repeated. Shared by clones so every holder of this service
+    /// in a process backs off together.
+    period_misses: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
 }
 
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
@@ -51,6 +63,7 @@ impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
             enforcement: AiUsageEnforcement::Disabled,
             billing: AiUsageBilling::Disabled,
             period_sync: None,
+            period_misses: Arc::default(),
         }
     }
 
@@ -217,6 +230,12 @@ where
             return BillingPeriod::current(anchor, now);
         }
         let payer = &entitlement.payer;
+        if self.period_read_missed_recently(payer, now) {
+            tracing::debug!(
+                "subscription period read missed recently; metering the fallback period"
+            );
+            return BillingPeriod::current(anchor, now);
+        }
         let read = match self.entitlements.stripe_customer_id(payer).await {
             Ok(Some(customer_id)) => {
                 self.payments
@@ -234,6 +253,7 @@ where
                         period_end = %period.end,
                         "subscription period past the stored anchor does not contain now; metering the fallback period"
                     );
+                    self.note_period_miss(payer, now);
                     return BillingPeriod::current(anchor, now);
                 };
                 let _ = self
@@ -247,6 +267,7 @@ where
             }
             Ok(None) => {
                 tracing::debug!("no subscription period to read; metering the fallback period");
+                self.note_period_miss(payer, now);
                 BillingPeriod::current(anchor, now)
             }
             Err(e) => {
@@ -254,9 +275,27 @@ where
                     error = ?e,
                     "reading the subscription period failed; metering the fallback period"
                 );
+                self.note_period_miss(payer, now);
                 BillingPeriod::current(anchor, now)
             }
         }
+    }
+
+    fn period_read_missed_recently(&self, payer: &MacroUserIdStr<'_>, now: DateTime<Utc>) -> bool {
+        self.period_misses
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(payer.as_ref())
+            .is_some_and(|until| now < *until)
+    }
+
+    fn note_period_miss(&self, payer: &MacroUserIdStr<'_>, now: DateTime<Utc>) {
+        let mut misses = self
+            .period_misses
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        misses.retain(|_, until| now < *until);
+        misses.insert(payer.as_ref().to_string(), now + PERIOD_MISS_BACKOFF);
     }
 
     async fn release_at(

@@ -2157,6 +2157,78 @@ async fn provider_failure_rolls_an_ended_anchor_forward() {
 }
 
 #[tokio::test]
+async fn a_failed_read_is_not_repeated_for_a_minute() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_period(PeriodReply::Failed);
+    let first = apr_18_noon();
+
+    svc.position(&payer, first).await.unwrap();
+    let within = svc
+        .position(&payer, first + chrono::Duration::seconds(59))
+        .await
+        .unwrap();
+    assert_eq!(
+        within.period,
+        BillingPeriod {
+            start: d(2026, 4, 1),
+            end: d(2026, 5, 1),
+        }
+    );
+    assert_eq!(payments.period_requests().len(), 1);
+
+    payments.set_period(PeriodReply::Found(BillingPeriod {
+        start: d(2026, 4, 10),
+        end: d(2026, 5, 10),
+    }));
+    let after = svc
+        .position(&payer, first + chrono::Duration::seconds(60))
+        .await
+        .unwrap();
+    assert_eq!(
+        after.period,
+        BillingPeriod {
+            start: d(2026, 4, 10),
+            end: d(2026, 5, 10),
+        }
+    );
+    assert_eq!(payments.period_requests().len(), 2);
+    assert_eq!(
+        repo.settings(&payer).await.unwrap().period_anchor,
+        Some((d(2026, 4, 10), d(2026, 5, 10)))
+    );
+}
+
+#[tokio::test]
+async fn an_empty_or_unadoptable_read_is_not_repeated_for_a_minute() {
+    let future_window = PeriodReply::Found(BillingPeriod {
+        start: d(2026, 4, 19),
+        end: d(2026, 5, 19),
+    });
+    for reply in [PeriodReply::Missing, future_window] {
+        let (svc, _, payments, _) = premium_service(0);
+        let payer = user("payer@x.com");
+        payments.set_period(reply);
+
+        svc.position(&payer, apr_18_noon()).await.unwrap();
+        let again = svc
+            .position(&payer, apr_18_noon() + chrono::Duration::seconds(30))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            again.period,
+            BillingPeriod {
+                start: d(2026, 4, 1),
+                end: d(2026, 5, 1),
+            },
+            "{reply:?}"
+        );
+        assert_eq!(payments.period_requests().len(), 1, "{reply:?}");
+    }
+}
+
+#[tokio::test]
 async fn covering_anchor_never_reads_the_provider() {
     let (svc, repo, payments, _) = premium_service(0);
     let payer = user("payer@x.com");
