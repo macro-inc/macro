@@ -49,6 +49,8 @@ export interface FigViewerContext {
   canEdit?: () => boolean;
   /** Stores the edited `.fig` as a new version. */
   save?: (bytes: Uint8Array) => Promise<void>;
+  /** Identifies the file on the clipboard (the document id). */
+  fileKey?: string;
   /** Other people in the design, when it is shared live. */
   collaboration?: FigCollaboration;
   /** The live edits of a shared design. */

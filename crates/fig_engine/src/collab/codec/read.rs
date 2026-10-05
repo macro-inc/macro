@@ -9,7 +9,7 @@ use crate::model::{
     Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting,
     Glyph, Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
     PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    Vec2,
+    Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -453,6 +453,12 @@ impl<'a> Reader<'a> {
                 })
             })?,
             boolean_operation: self.opt_arc_str()?,
+            vector_data: self.opt(|r| {
+                Ok(Arc::new(VectorData {
+                    network_blob: r.opt(Self::blob)?,
+                    normalized_size: r.opt(Self::vec2)?,
+                }))
+            })?,
             constraints: self.opt(|r| Ok((r.arc_str()?, r.arc_str()?)))?,
             description: self.opt_arc_str()?,
             is_state_group: self.opt(Self::bool)?,

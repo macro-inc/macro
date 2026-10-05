@@ -554,4 +554,95 @@ impl FigFile {
     pub fn thumbnail(&self) -> Option<Vec<u8>> {
         self.doc.thumbnail.clone()
     }
+
+    /// One layer (and what it holds) as an SVG document.
+    #[wasm_bindgen(js_name = exportSvg)]
+    pub fn export_svg(&mut self, page: usize, id: &str) -> Result<String, JsError> {
+        let i = self.find(page, id)?;
+        let (_, scene) = self.scene.as_ref().expect("scene built above");
+        crate::svg::export(&self.doc, scene, i)
+            .ok_or_else(|| js_err("this layer has nothing to export"))
+    }
+
+    /// The points of a layer, in page coordinates, for editing them
+    /// (`Network` JSON); `undefined` for layers without points.
+    #[wasm_bindgen(js_name = vectorNetwork)]
+    pub fn vector_network(&mut self, page: usize, id: &str) -> Result<Option<String>, JsError> {
+        self.scene(page)?;
+        if id.starts_with('I') {
+            return Ok(None);
+        }
+        let Some(i) = crate::model::Guid::parse(id).and_then(|g| self.doc.find(g)) else {
+            return Ok(None);
+        };
+        let Some(net) = crate::edit::shapes::editable_network(&self.doc, i) else {
+            return Ok(None);
+        };
+        to_json(&net.transformed(&self.doc.world(i))).map(Some)
+    }
+
+    /// Copies layers (`string[]` JSON of ids) as Figma's clipboard holds
+    /// them: a `.fig` document and a ZIP of the images they use.
+    pub fn copy(&mut self, page: usize, ids: &str) -> Result<Clipboard, JsError> {
+        let ids: Vec<String> = serde_json::from_str(ids).map_err(js_err)?;
+        self.scene(page)?;
+        let nodes: Vec<NodeIdx> = ids
+            .iter()
+            .filter(|id| !id.starts_with('I'))
+            .filter_map(|id| crate::model::Guid::parse(id).and_then(|g| self.doc.find(g)))
+            .collect();
+        let copied = crate::save::copy(&self.doc, &self.original, &nodes).map_err(js_err)?;
+        Ok(Clipboard {
+            document: copied.document,
+            images: copied.images,
+        })
+    }
+
+    /// Pastes copied layers (a `.fig` document and, optionally, a ZIP of
+    /// their images) as one undoable step; `spec` is `PasteSpec` JSON.
+    /// Returns an `EditResult` JSON.
+    pub fn paste(
+        &mut self,
+        page: usize,
+        document: &[u8],
+        images: Option<Vec<u8>>,
+        spec: &str,
+    ) -> Result<String, JsError> {
+        let spec: crate::edit::PasteSpec = serde_json::from_str(spec).map_err(js_err)?;
+        self.scene(page)?;
+        let mut applied = self
+            .history
+            .paste(
+                &mut self.doc,
+                &self.original,
+                document,
+                images.as_deref(),
+                &spec,
+            )
+            .map_err(js_err)?;
+        if let Some(collab) = &mut self.collab {
+            collab.record(&mut self.doc, &mut applied.touched, false);
+        }
+        self.after_edit(page, applied.touched, applied.created)
+    }
+}
+
+/// Copied layers: the `.fig` document and the images ZIP.
+#[wasm_bindgen]
+pub struct Clipboard {
+    document: Vec<u8>,
+    images: Vec<u8>,
+}
+
+#[wasm_bindgen]
+impl Clipboard {
+    #[wasm_bindgen(getter)]
+    pub fn document(&self) -> Vec<u8> {
+        self.document.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn images(&self) -> Vec<u8> {
+        self.images.clone()
+    }
 }

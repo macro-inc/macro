@@ -40,6 +40,7 @@ export type ViewerAction =
   | 'tool-text'
   | 'tool-line'
   | 'tool-arrow'
+  | 'tool-pen'
   | 'undo'
   | 'redo'
   | 'delete'
@@ -54,6 +55,11 @@ export type ViewerAction =
   | 'create-component'
   | 'detach-instance'
   | 'remove-auto-layout'
+  | 'boolean-union'
+  | 'boolean-subtract'
+  | 'boolean-intersect'
+  | 'boolean-exclude'
+  | 'flatten'
   | 'bring-forward'
   | 'send-backward'
   | 'bring-to-front'
@@ -98,6 +104,10 @@ export function shortcutAction(
 
   if (e.altKey && !mod && !otherMod) {
     if (e.shiftKey && e.code === 'KeyA') return 'remove-auto-layout';
+    if (e.shiftKey && e.code === 'KeyU') return 'boolean-union';
+    if (e.shiftKey && e.code === 'KeyS') return 'boolean-subtract';
+    if (e.shiftKey && e.code === 'KeyI') return 'boolean-intersect';
+    if (e.shiftKey && e.code === 'KeyX') return 'boolean-exclude';
     if (e.code === 'Digit1') return 'toggle-layers';
     if (e.code === 'Digit8') return 'toggle-design';
     if (e.code === 'KeyL') return 'collapse-layers';
@@ -125,6 +135,7 @@ export function shortcutAction(
     }
     if (e.code === 'KeyZ') return 'undo';
     if (e.code === 'KeyD') return 'duplicate';
+    if (e.code === 'KeyE') return 'flatten';
     if (e.code === 'KeyC') return 'copy';
     if (e.code === 'KeyX') return 'cut';
     if (e.code === 'KeyV') return 'paste';
@@ -224,6 +235,8 @@ export function shortcutAction(
       return 'tool-text';
     case 'l':
       return 'tool-line';
+    case 'p':
+      return 'tool-pen';
     case 'Delete':
     case 'Backspace':
       return 'delete';
@@ -247,6 +260,7 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'tool-text',
   'tool-line',
   'tool-arrow',
+  'tool-pen',
   'undo',
   'redo',
   'delete',
@@ -258,6 +272,11 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'frame-selection',
   'add-auto-layout',
   'remove-auto-layout',
+  'boolean-union',
+  'boolean-subtract',
+  'boolean-intersect',
+  'boolean-exclude',
+  'flatten',
   'create-component',
   'detach-instance',
   'bring-forward',
@@ -297,6 +316,7 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
       { action: 'Line', keys: ['L'] },
       { action: 'Arrow', keys: ['⇧', 'L'] },
       { action: 'Text', keys: ['T'] },
+      { action: 'Pen', keys: ['P'] },
       { action: 'Hand (pan)', keys: ['H'] },
       { action: 'Pan while held', keys: ['Space'] },
     ],
@@ -307,7 +327,7 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
       { action: 'Undo', keys: ['mod', 'Z'] },
       { action: 'Redo', keys: ['mod', '⇧', 'Z'] },
       { action: 'Duplicate', keys: ['mod', 'D'] },
-      { action: 'Copy / paste', keys: ['mod', 'C / V'] },
+      { action: 'Copy / paste (across files)', keys: ['mod', 'C / V'] },
       { action: 'Delete', keys: ['⌫'] },
       { action: 'Nudge', keys: ['←↑→↓'] },
       { action: 'Nudge 10', keys: ['⇧', '←↑→↓'] },
@@ -332,6 +352,17 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
       { action: 'Lock/unlock', keys: ['mod', '⇧', 'L'] },
       { action: 'Flip horizontal', keys: ['⇧', 'H'] },
       { action: 'Flip vertical', keys: ['⇧', 'V'] },
+    ],
+  },
+  {
+    title: 'Shapes',
+    items: [
+      { action: 'Union', keys: ['⌥', '⇧', 'U'] },
+      { action: 'Subtract', keys: ['⌥', '⇧', 'S'] },
+      { action: 'Intersect', keys: ['⌥', '⇧', 'I'] },
+      { action: 'Exclude', keys: ['⌥', '⇧', 'X'] },
+      { action: 'Flatten', keys: ['mod', 'E'] },
+      { action: 'Edit points', keys: ['Enter'] },
     ],
   },
   {

@@ -3,7 +3,10 @@
  * pointer gestures (scroll to pan, ⌘/Ctrl+scroll or pinch to zoom, Space or
  * middle-drag to pan, click and marquee to select). When the file is
  * editable: drag to move (⌥ to copy, ⇧ to constrain), the selection's
- * handles to resize, and the shape tools to draw.
+ * handles to resize, the shape tools to draw, the pen to draw paths (click
+ * for corners, drag for curves, click the first point to close), and,
+ * while a layer's points are edited, drag its points and handles (⌥ breaks
+ * a handle's mirroring).
  */
 
 import { IS_MAC } from '@core/constant/isMac';
@@ -18,13 +21,28 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { drawOverlay, type OverlayModel } from '../components/overlay';
+import {
+  drawOverlay,
+  type OverlayModel,
+  type VectorOverlay,
+} from '../components/overlay';
 import { PeerCursors } from '../components/peer-presence';
 import { type Point, screenToPage } from '../core/camera';
 import { measure } from '../core/measure';
 import type { PeerOverlay } from '../core/presence';
 import { rotationFor } from '../core/rotation';
 import { type Guide, snapMove } from '../core/snap';
+import {
+  closesPath,
+  dragHandle,
+  endsPath,
+  hitVector,
+  moveHandle,
+  moveVertex,
+  penNetwork,
+  VECTOR_EDITABLE,
+  type VectorHit,
+} from '../core/vector';
 import type { FigEditor, ShapeTool } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
 import { createTileCompositor } from '../primitives/create-tile-compositor';
@@ -59,6 +77,15 @@ const HANDLE_SLOP = 6;
 
 /** How far beyond a corner (CSS px) a press rotates instead. */
 const ROTATE_REACH = 18;
+
+/** Distance (CSS px) from the first point within which the pen closes. */
+const PEN_CLOSE = 8;
+
+/** Pen drags shorter than this (CSS px) place a corner. */
+const PEN_DRAG = 2;
+
+/** Distance (CSS px) within which a point or handle takes a press. */
+const VECTOR_SLOP = 6;
 
 /** A curved arrow, the rotate cursor. */
 const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
@@ -102,6 +129,15 @@ type Drag =
       kind: 'pinch';
       distance: number;
       center: Point;
+    }
+  /** The pen placed a point; dragging pulls out its handle. */
+  | { kind: 'pen'; start: Point }
+  /** A point or handle of the layer being edited. */
+  | {
+      kind: 'vector';
+      hit: VectorHit;
+      mover: ReturnType<FigEditor['startVectorDrag']>;
+      mirror: boolean;
     };
 
 const isShapeTool = (tool: string): tool is ShapeTool =>
@@ -286,6 +322,8 @@ export function ViewerCanvas(props: {
   let marquee: Rect | undefined;
   let linePreview: [Point, Point] | undefined;
   let guides: Guide[] = [];
+  /** Where the pointer is (page coordinates) while the pen draws. */
+  let penCursor: Point | undefined;
 
   /** Bounds of the layers a moving selection can snap to. */
   const snapTargets = async (ids: string[]): Promise<Rect[]> => {
@@ -309,17 +347,44 @@ export function ViewerCanvas(props: {
     return measure(a, b);
   };
 
+  /** The pen's path (with its next segment), or the points being edited. */
+  const vectorOverlay = (): VectorOverlay | undefined => {
+    const editor = props.editor;
+    if (!editor) return undefined;
+    const points = editor.penPath();
+    if (points && points.length > 0) {
+      const z = viewer.camera().zoom;
+      const placing = drag?.kind === 'pen';
+      const cursor = placing ? undefined : penCursor;
+      const shown = cursor
+        ? [...points, { ...cursor, handle: { x: 0, y: 0 } }]
+        : points;
+      return {
+        network: penNetwork(shown, false),
+        pending: !!cursor,
+        closing: !!cursor && closesPath(points, cursor, PEN_CLOSE / z),
+        selected: placing ? points.length - 1 : undefined,
+      };
+    }
+    const edit = editor.vectorEdit();
+    return edit
+      ? { network: edit.network, selected: edit.selected }
+      : undefined;
+  };
+
   const overlayModel = (): OverlayModel => {
     const hover = viewer.hover();
     const selectionIds = new Set(viewer.selected().map((s) => s.id));
+    // Editing points hides the selection box, as in Figma.
+    const editingPoints = !!props.editor?.vectorEdit();
     return {
       camera: viewer.camera(),
       viewport: viewer.viewport(),
       dpr: dpr(),
       frames: viewer.layout()?.frames ?? [],
       selectedIds: selectionIds,
-      selection: viewer.selectionGeometry(),
-      selectionBounds: viewer.selectionBounds(),
+      selection: editingPoints ? [] : viewer.selectionGeometry(),
+      selectionBounds: editingPoints ? undefined : viewer.selectionBounds(),
       componentSelection: false,
       hoverPath: hoverPath(),
       hoverComponent:
@@ -331,6 +396,7 @@ export function ViewerCanvas(props: {
       rulers: viewer.rulers(),
       pixelGrid: viewer.pixelGrid(),
       darkCanvas: luminance(background()) < 0.35,
+      vector: vectorOverlay(),
       peers: props.peers?.(),
     };
   };
@@ -344,6 +410,8 @@ export function ViewerCanvas(props: {
         viewer.pixelGrid,
         props.altHeld,
         viewer.hoverBounds,
+        () => props.editor?.penPath(),
+        () => props.editor?.vectorEdit(),
         () => props.peers?.(),
       ],
       requestDraw
@@ -509,6 +577,50 @@ export function ViewerCanvas(props: {
     }
     if (e.button !== 0) return;
     const tool = viewer.tool();
+    const editor = props.editor;
+    if (editing() && tool === 'pen' && editor) {
+      const at = pageAt(p);
+      const points = editor.penPath() ?? [];
+      const reach = PEN_CLOSE / viewer.camera().zoom;
+      if (closesPath(points, at, reach)) {
+        penCursor = undefined;
+        void editor.penFinish(true);
+        return;
+      }
+      // Pressing the last point again (a double-click) ends the path.
+      if (endsPath(points, at, reach)) {
+        if (points.length > 1) {
+          penCursor = undefined;
+          void editor.penFinish(false);
+        }
+        return;
+      }
+      const point = { x: Math.round(at.x), y: Math.round(at.y) };
+      editor.penAdd({ ...point, handle: { x: 0, y: 0 } });
+      drag = { kind: 'pen', start: point };
+      return;
+    }
+    const edit = editor?.vectorEdit();
+    if (editing() && edit && editor) {
+      const hit = hitVector(
+        edit.network,
+        pageAt(p),
+        VECTOR_SLOP / viewer.camera().zoom,
+        edit.selected
+      );
+      if (hit) {
+        if (hit.kind === 'vertex') editor.selectVertex(hit.index);
+        drag = {
+          kind: 'vector',
+          hit,
+          mover: editor.startVectorDrag(),
+          mirror: !e.altKey,
+        };
+        return;
+      }
+      // A press elsewhere ends editing points.
+      editor.endVectorEdit();
+    }
     if (editing() && isShapeTool(tool)) {
       drag = { kind: 'create', tool, start: p, current: p };
       return;
@@ -616,6 +728,11 @@ export function ViewerCanvas(props: {
     const p = local(e);
     if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
     if (e.pointerType !== 'touch') props.onPointer?.(pageAt(p));
+    if (!drag && editing() && viewer.tool() === 'pen') {
+      penCursor = pageAt(p);
+      requestDraw();
+      return;
+    }
     if (!drag) {
       if (e.pointerType !== 'touch' && !panning()) {
         const handle = handleAt(p);
@@ -646,6 +763,25 @@ export function ViewerCanvas(props: {
         linePreview = [drag.start, lineEnd(drag.start, p, e.shiftKey)];
       else marquee = shapeRect(drag.start, p, e.shiftKey);
       requestDraw();
+    } else if (drag.kind === 'pen') {
+      props.editor?.penHandle(
+        dragHandle(drag.start, pageAt(p), PEN_DRAG / viewer.camera().zoom)
+      );
+      requestDraw();
+    } else if (drag.kind === 'vector') {
+      const edit = props.editor?.vectorEdit();
+      if (edit) {
+        const at = pageAt(p);
+        const round = (v: number) => Math.round(v * 100) / 100;
+        drag.mover.to(
+          drag.hit.kind === 'vertex'
+            ? moveVertex(edit.network, drag.hit.index, {
+                x: round(at.x),
+                y: round(at.y),
+              })
+            : moveHandle(edit.network, drag.hit, at, drag.mirror)
+        );
+      }
     } else if (drag.kind === 'resize') {
       const rect = resizeRect(drag.start, drag.handle, pageAt(p), e.shiftKey);
       drag.resizer.to(rect);
@@ -750,6 +886,10 @@ export function ViewerCanvas(props: {
       linePreview = undefined;
       requestDraw();
       void finishCreate(ended, e.shiftKey);
+    } else if (ended.kind === 'vector') {
+      void ended.mover.end();
+    } else if (ended.kind === 'pen') {
+      requestDraw();
     } else if (ended.kind === 'resize') {
       void ended.resizer.end();
     } else if (ended.kind === 'rotate') {
@@ -779,18 +919,23 @@ export function ViewerCanvas(props: {
   };
 
   const onDoubleClick = async (e: MouseEvent) => {
-    if (panning() || isShapeTool(viewer.tool())) return;
+    const tool = viewer.tool();
+    if (panning() || isShapeTool(tool) || tool === 'pen') return;
+    if (props.editor?.vectorEdit()) return;
+    const before = viewer.selected().map((s) => s.id);
     await viewer.clickAt(local(e), {
       deep: false,
       additive: false,
       double: true,
     });
     const sel = viewer.selected();
-    if (editing() && sel.length === 1 && props.info?.()?.id === sel[0].id) {
-      // Double-click on a text layer types into it.
-      const info = props.info?.();
-      if (info?.type === 'TEXT') props.onEditText?.(info.id);
-    }
+    if (!editing() || sel.length !== 1) return;
+    const [row] = await props.engine.rows(viewer.page(), [sel[0].id]);
+    // Double-click on a text layer types into it; on a shape that stays
+    // selected, edits its points.
+    if (row?.type === 'TEXT') props.onEditText?.(row.id);
+    else if (row && VECTOR_EDITABLE.has(row.type) && before.includes(row.id))
+      await props.editor?.editVector(row.id);
   };
 
   // Wheel must be non-passive to stop the page (and browser zoom) moving.
@@ -841,6 +986,7 @@ export function ViewerCanvas(props: {
     if (drag?.kind === 'pan') return 'grabbing';
     if (panning()) return 'grab';
     if (editing() && viewer.tool() === 'text') return 'text';
+    if (editing() && viewer.tool() === 'pen') return 'crosshair';
     if (editing() && isShapeTool(viewer.tool())) return 'crosshair';
     return cursorOverride() ?? 'default';
   };

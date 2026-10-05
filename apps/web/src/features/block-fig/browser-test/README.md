@@ -38,7 +38,10 @@ and shadows from the design panel with undo and redo, typing and styling
 text, auto layout (adding it, gap and padding, sizing, drag to reorder),
 constraints, resizing several layers and rotating one, components
 (creating, placing instances from Assets, overriding their layers,
-detaching), adding pages, and read-only access. `fig-design-ui` covers
+detaching), adding pages, and read-only access. `fig-shapes` covers
+boolean operations and flattening, drawing with the pen and editing
+points, SVG export (compared with the PNG) and Copy as SVG, and copying
+layers into another file through the system clipboard. `fig-design-ui` covers
 the right-click menus, the color and paint pickers (gradients, dashes,
 reordering paints), mixed values for several layers, and the layers
 panel's range selection and arrow keys.
