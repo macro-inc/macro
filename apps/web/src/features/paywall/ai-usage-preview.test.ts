@@ -31,13 +31,13 @@ const snapshot: AiUsageSnapshot = {
 
 beforeEach(() => {
   state.dev = true;
-  useAiUsagePreview().setActive(false);
+  useAiUsagePreview().reset();
 });
 
 describe('AI usage preview', () => {
   it('shares an exhausted preview across consumers without mutating the summary', () => {
     const before = { ...snapshot };
-    useAiUsagePreview().setActive(true);
+    useAiUsagePreview().previewLimit('paid');
     const preview = useAiUsagePreview().withPreview(snapshot);
     expect(preview).toMatchObject({
       used_cents: snapshot.included_cents,
@@ -47,12 +47,12 @@ describe('AI usage preview', () => {
       blocked_reason: 'allowance_exhausted',
     });
     expect(snapshot).toEqual(before);
-    useAiUsagePreview().setActive(false);
+    useAiUsagePreview().reset();
     expect(useAiUsagePreview().withPreview(snapshot)).toBe(snapshot);
   });
 
   it('uses the backend allowance and Free refusal reason in the preview', () => {
-    useAiUsagePreview().setActive(true);
+    useAiUsagePreview().previewLimit('free');
     const preview = useAiUsagePreview().withPreview({
       ...snapshot,
       tier: 'free',
@@ -69,7 +69,7 @@ describe('AI usage preview', () => {
 
   it('cannot override billing data outside development', () => {
     state.dev = false;
-    useAiUsagePreview().setActive(true);
+    useAiUsagePreview().previewLimit('paid');
     expect(useAiUsagePreview().active()).toBe(false);
     expect(useAiUsagePreview().withPreview(snapshot)).toBe(snapshot);
   });
