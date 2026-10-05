@@ -216,6 +216,7 @@ export * from './sharePermissionV2LinkShareAccessLevel';
 export * from './sharePermissionV2TeamShareAccessLevel';
 export * from './slackChannelMeta';
 export * from './slackChannelMetaChannelId';
+export * from './slackChannelMetaMemberCount';
 export * from './slackChannelMetaPurpose';
 export * from './slackParticipant';
 export * from './slackParticipantEmail';
