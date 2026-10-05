@@ -236,6 +236,15 @@ pub(crate) fn write_copy(
     {
         container.schema = extended;
     }
+    // Library keys and versions travel with what is copied.
+    if all.iter().any(|&n| {
+        let node = doc.node(n);
+        node.edits & flags::LIBRARY != 0
+            && (node.props.library.is_some() || node.props.key.is_some())
+    }) && let Some(extended) = super::library::with_library_fields(&container.schema)?
+    {
+        container.schema = extended;
+    }
     let schema = Schema::decode(&container.schema)?;
     let b = Build { schema: &schema };
     let message_def = b
