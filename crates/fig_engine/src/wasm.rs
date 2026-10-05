@@ -87,6 +87,8 @@ pub struct FigFile {
     history: History,
     /// Set while the file is edited together with other people.
     collab: Option<Collab>,
+    /// Scenes library thumbnails were drawn from.
+    thumbnails: crate::library::Thumbnails,
 }
 
 #[wasm_bindgen]
@@ -104,6 +106,7 @@ impl FigFile {
             original,
             history: History::default(),
             collab: None,
+            thumbnails: crate::library::Thumbnails::default(),
         })
     }
 
@@ -142,6 +145,7 @@ impl FigFile {
         touched: Vec<NodeIdx>,
         created: Vec<String>,
     ) -> Result<String, JsError> {
+        self.thumbnails.clear();
         let before = self.touched_bounds(&touched);
         let count_before = self.scene.as_ref().map_or(0, |(_, s)| s.nodes.len());
         // Property edits update the scene in place; tree changes rebuild it.
@@ -721,7 +725,7 @@ impl FigFile {
     #[wasm_bindgen(js_name = nodeThumbnail)]
     pub fn node_thumbnail(&mut self, id: &str, size: u32) -> Vec<u8> {
         crate::model::Guid::parse(id)
-            .and_then(|g| crate::library::thumbnail(&self.doc, &mut self.images, g, size))
+            .and_then(|g| self.thumbnails.render(&self.doc, &mut self.images, g, size))
             .unwrap_or_default()
     }
 }

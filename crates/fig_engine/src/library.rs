@@ -438,33 +438,66 @@ pub fn uses(doc: &Document) -> LibraryUse {
     }
 }
 
-/// A PNG of the asset (or any layer) `id`, on whatever canvas it is
-/// (library copies live on the internal one), fitted in `size` pixels.
+/// Scenes of the canvases thumbnails were drawn from, kept until the
+/// document changes (a library's assets share a few canvases).
+#[derive(Default)]
+pub struct Thumbnails {
+    scenes: Vec<(NodeIdx, crate::scene::Scene)>,
+}
+
+impl Thumbnails {
+    /// Forgets the scenes (after an edit).
+    pub fn clear(&mut self) {
+        self.scenes.clear();
+    }
+
+    /// A PNG of the asset (or any layer) `id`, on whatever canvas it is
+    /// (library copies live on the internal one), fitted in `size` pixels.
+    pub fn render(
+        &mut self,
+        doc: &Document,
+        images: &mut crate::images::ImageStore,
+        id: Guid,
+        size: u32,
+    ) -> Option<Vec<u8>> {
+        let i = doc.find(id)?;
+        let canvas = doc.page_of(i)?;
+        let k = match self.scenes.iter().position(|(c, _)| *c == canvas) {
+            Some(k) => k,
+            None => {
+                self.scenes
+                    .push((canvas, crate::scene::Scene::build(doc, canvas)));
+                self.scenes.len() - 1
+            }
+        };
+        let scene = &self.scenes[k].1;
+        let at = scene.find(doc, &id.to_string())?;
+        let bounds = scene.node(at).bounds;
+        let longest = bounds.w.max(bounds.h);
+        if longest <= 0.0 {
+            return None;
+        }
+        let scale = (f64::from(size) / longest).min(4.0);
+        let pixmap = crate::render::render_node(
+            doc,
+            scene,
+            images,
+            at,
+            scale,
+            crate::render::RenderOptions::default(),
+        )?;
+        Some(crate::images::encode_png(&pixmap))
+    }
+}
+
+/// A PNG of the asset (or any layer) `id` (see [`Thumbnails::render`]).
 pub fn thumbnail(
     doc: &Document,
     images: &mut crate::images::ImageStore,
     id: Guid,
     size: u32,
 ) -> Option<Vec<u8>> {
-    let i = doc.find(id)?;
-    let canvas = doc.page_of(i)?;
-    let scene = crate::scene::Scene::build(doc, canvas);
-    let at = scene.find(doc, &id.to_string())?;
-    let bounds = scene.node(at).bounds;
-    let longest = bounds.w.max(bounds.h);
-    if longest <= 0.0 {
-        return None;
-    }
-    let scale = (f64::from(size) / longest).min(4.0);
-    let pixmap = crate::render::render_node(
-        doc,
-        &scene,
-        images,
-        at,
-        scale,
-        crate::render::RenderOptions::default(),
-    )?;
-    Some(crate::images::encode_png(&pixmap))
+    Thumbnails::default().render(doc, images, id, size)
 }
 
 /// The ids of the components, styles, and variables `p` uses (its
