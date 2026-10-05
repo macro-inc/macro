@@ -131,7 +131,7 @@ pub fn variables(doc: &Document) -> Vec<CollectionInfo> {
                         })
                         .collect(),
                     variables: Vec::new(),
-                    remote: n.props.key.is_some(),
+                    remote: crate::library::is_copy(&n.props),
                 },
             ));
         }

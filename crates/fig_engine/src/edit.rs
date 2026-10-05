@@ -78,6 +78,10 @@ pub mod flags {
     pub const STYLES: u64 = 1 << 31;
     /// Prototype interactions and a frame's flow starting point.
     pub const PROTOTYPE: u64 = 1 << 32;
+    /// Team libraries: an asset's key and publishing or library details,
+    /// a copy's override key, and Macro's data (the libraries a file
+    /// uses, what a library published).
+    pub const LIBRARY: u64 = 1 << 36;
 }
 
 /// A paint as the editor describes it.
@@ -603,6 +607,20 @@ pub enum Op {
         collection: String,
         mode: Option<String>,
     },
+    // ---- team libraries (see `edit::library`) ------------------------------
+    /// "Publish library": the file's components, component sets, styles,
+    /// and variables get keys (from `seed`, the library's document id) and
+    /// their current versions, published with `note`.
+    PublishLibrary {
+        seed: String,
+        #[serde(default)]
+        note: Option<String>,
+    },
+    /// The libraries the file uses (the Libraries dialog), replacing the
+    /// list.
+    SetLibraries {
+        libraries: Vec<crate::library::LibraryRef>,
+    },
 }
 
 /// A component property value as the editor sends it: `{"bool": true}`,
@@ -656,6 +674,7 @@ mod components;
 mod design;
 mod flip;
 mod instance_layout;
+mod library;
 mod overrides;
 mod paint;
 mod paste;
@@ -663,6 +682,8 @@ mod prototype;
 pub mod shapes;
 pub(crate) use design::parse_variant_name;
 pub(crate) use overrides::guid_of;
+pub use library::{LIBRARY_SESSIONS, LibrarySpec};
+pub(crate) use paste::remap_props;
 pub use paste::{At, PasteSpec, View};
 pub use prototype::{ActionSpec, InteractionSpec};
 pub(crate) mod layout;
@@ -692,6 +713,18 @@ impl<'a> Txn<'a> {
     /// Like [`Txn::resolve`], but deleted layers resolve too (pasting what
     /// was cut).
     fn resolve_any(&self, id: &str) -> Result<NodeIdx> {
+        // A library asset by its key (a copy before the file's own).
+        if let Some(key) = id.strip_prefix("key:") {
+            return self
+                .doc
+                .nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| !n.removed && n.props.key.as_deref() == Some(key))
+                .max_by_key(|(_, n)| crate::library::is_copy(&n.props))
+                .map(|(i, _)| i as NodeIdx)
+                .ok_or_else(|| FigError::NoSuchNode(id.into()));
+        }
         if id.starts_with('I') {
             return Err(FigError::Unsupported(
                 "layers inside an instance cannot be edited".into(),
@@ -1621,6 +1654,7 @@ impl<'a> Txn<'a> {
             | Op::DeleteStyle { .. }
             | Op::BindVariable { .. }
             | Op::SetVariableMode { .. } => self.apply_design(op)?,
+            Op::PublishLibrary { .. } | Op::SetLibraries { .. } => self.apply_library(op)?,
         }
         Ok(())
     }

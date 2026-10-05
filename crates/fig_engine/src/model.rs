@@ -11,12 +11,14 @@ use std::fmt;
 use std::sync::Arc;
 
 pub mod geom;
+pub mod library;
 pub mod paint;
 pub mod prototype;
 pub mod text;
 pub mod variables;
 
 pub use geom::{Affine, Rect, Vec2};
+pub use library::LibraryLink;
 pub use paint::{
     BlendMode, Color, ColorStop, Effect, EffectKind, GradientKind, ImageFilters, ImagePaint,
     ImageScaleMode, Paint, PaintKind,
@@ -527,8 +529,9 @@ pub struct Props {
     pub effect_style: Option<Guid>,
     /// The shared text style a text layer's type comes from.
     pub text_style_id: Option<Guid>,
-    /// A component's (or style's) library key; set on those imported from
-    /// libraries.
+    /// A component's (or style's, or variable's) library key: set when it
+    /// is published, and on copies of library assets (`key`, or
+    /// `componentKey` on Figma's copies of library components).
     pub key: Option<Arc<str>>,
     /// On shared style nodes: what they style, their place in the styles
     /// list, and whether they were deleted (kept for layers using them).
@@ -566,6 +569,11 @@ pub struct Props {
     pub overlay: Option<Arc<OverlaySettings>>,
     /// A page's prototype start frame, in files from before flows.
     pub prototype_start: Option<Guid>,
+    /// Being published from a library, or coming from one.
+    pub library: Option<Arc<LibraryLink>>,
+    /// Macro's own data on the node (`pluginData` under
+    /// [`library::MACRO_PLUGIN`]): key and value.
+    pub macro_data: Option<Arc<[(Arc<str>, Arc<str>)]>>,
     /// On an instance's override or derived layout entry: made by the
     /// editor (and written when saving); the file's own are kept as they
     /// are.
@@ -599,7 +607,7 @@ impl Props {
             vector_styles,
             text_style_id, key, style_type, sort_position, soft_deleted, variant_specs,
             variant_orders, props_bubbled, variable, variable_modes, mode_by_set,
-            interactions, flow_start, overlay, prototype_start,
+            interactions, flow_start, overlay, prototype_start, library, macro_data,
         );
     }
 
@@ -677,6 +685,20 @@ impl Props {
     /// Whether any paint is visible.
     pub fn has_visible_fills(&self) -> bool {
         self.fills().iter().any(Paint::is_visible)
+    }
+
+    /// The library this node is a copy of an asset from.
+    pub fn library_source(&self) -> Option<&str> {
+        self.library.as_ref()?.source.as_deref()
+    }
+
+    /// One of Macro's values on the node (see [`Props::macro_data`]).
+    pub fn macro_value(&self, key: &str) -> Option<&str> {
+        self.macro_data
+            .as_deref()?
+            .iter()
+            .find(|(k, _)| k.as_ref() == key)
+            .map(|(_, v)| v.as_ref())
     }
 
     pub fn has_visible_strokes(&self) -> bool {

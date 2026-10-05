@@ -215,7 +215,7 @@ impl Txn<'_> {
     }
 
     /// The file's internal canvas (where styles live), made when missing.
-    fn internal_canvas(&mut self) -> NodeIdx {
+    pub(crate) fn internal_canvas(&mut self) -> NodeIdx {
         let root = self.doc.root;
         if let Some(&c) = self.doc.node(root).children.iter().find(|&&c| {
             let p = self.doc.props(c);
@@ -323,7 +323,7 @@ impl Txn<'_> {
     }
 
     /// Gives every layer using `style` its current values.
-    fn propagate_style(&mut self, style: NodeIdx) -> Result<()> {
+    pub(crate) fn propagate_style(&mut self, style: NodeIdx) -> Result<()> {
         let s = self.doc.props(style).clone();
         let Some(g) = s.guid else { return Ok(()) };
         let text = s

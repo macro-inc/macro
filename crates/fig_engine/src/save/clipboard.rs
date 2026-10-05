@@ -206,9 +206,22 @@ pub fn copy(doc: &Document, original: &[u8], ids: &[NodeIdx]) -> Result<Copied> 
         }
         scan = next;
     }
+    write_copy(doc, original, &roots, &layers, &components, &component_nodes)
+}
 
+/// Writes a copy: `layers` (the subtrees of `roots`, parents first) on its
+/// page at their page positions, and `component_nodes` (the subtrees of
+/// `components`) on its internal page.
+pub(crate) fn write_copy(
+    doc: &Document,
+    original: &[u8],
+    roots: &[NodeIdx],
+    layers: &[NodeIdx],
+    components: &[NodeIdx],
+    component_nodes: &[NodeIdx],
+) -> Result<Copied> {
     let mut container = Container::open_without_images(original)?;
-    let all: Vec<NodeIdx> = layers.iter().chain(&component_nodes).copied().collect();
+    let all: Vec<NodeIdx> = layers.iter().chain(component_nodes).copied().collect();
     if all
         .iter()
         .any(|&n| doc.node(n).edits & (flags::BOOLEAN | flags::VECTOR) != 0)
@@ -370,11 +383,11 @@ pub fn copy(doc: &Document, original: &[u8], ids: &[NodeIdx]) -> Result<Copied> 
         Ok(())
     };
     let root_set: HashSet<NodeIdx> = roots.iter().copied().collect();
-    for &n in &layers {
+    for &n in layers {
         emit(n, root_set.contains(&n).then_some(page_guid), &mut out)?;
     }
     let component_set: HashSet<NodeIdx> = components.iter().copied().collect();
-    for &n in &component_nodes {
+    for &n in component_nodes {
         emit(
             n,
             component_set.contains(&n).then_some(internal_guid),

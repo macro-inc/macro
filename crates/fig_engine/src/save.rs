@@ -797,6 +797,9 @@ impl<'s> Build<'s> {
         if edits & flags::PROTOTYPE != 0 {
             self.prototype(m, p);
         }
+        if edits & flags::LIBRARY != 0 {
+            self.library_fields(m, p);
+        }
         if edits & flags::PARENT != 0 {
             let parent_guid = node.parent.and_then(|pi| doc.props(pi).guid);
             if let (Some(g), Some(def)) = (parent_guid, self.sub(m.def, "parentIndex")) {
@@ -1243,6 +1246,17 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
     {
         container.schema = extended;
     }
+    let wants_library = doc.nodes.iter().any(|n| {
+        !n.removed
+            && n.edits & flags::LIBRARY != 0
+            && (n.props.library.is_some()
+                || n.props.macro_data.is_some()
+                || n.props.key.is_some()
+                || n.props.override_key.is_some())
+    });
+    if wants_library && let Some(extended) = library::with_library_fields(&container.schema)? {
+        container.schema = extended;
+    }
     let schema = Schema::decode(&container.schema)?;
     let b = Build { schema: &schema };
     let message_def = b
@@ -1366,8 +1380,13 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
                 match guid.and_then(|g| plans.get(&g)) {
                     Some(Plan::Drop) => {}
                     Some(Plan::Patch(k)) => {
-                        let mut m = decode()?;
                         let node = &doc.nodes[*k];
+                        // A copy a library update replaced starts from the
+                        // library's record.
+                        let mut m = match node.source.and_then(|s| doc.foreign.get(&s)) {
+                            Some(bytes) => decoder.decode(&mut Reader::new(bytes), node_def)?,
+                            None => decode()?,
+                        };
                         b.patch(&mut m, node, doc, node.edits);
                         schema.encode(&m, &mut out.w);
                     }
@@ -1771,8 +1790,10 @@ pub fn blank(name: &str) -> Vec<u8> {
 }
 
 mod clipboard;
+mod library;
 mod prototype;
-pub(crate) use clipboard::remap_blobs;
+mod schema;
+pub(crate) use clipboard::{remap_blobs, write_copy};
 pub use clipboard::{Copied, copy};
 
 #[cfg(test)]

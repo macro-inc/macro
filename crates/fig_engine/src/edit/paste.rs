@@ -128,7 +128,7 @@ impl Clip {
 }
 
 /// Every node change in a message, by id.
-fn decode_records(schema: &Schema, message: &[u8]) -> Result<HashMap<Guid, Msg>> {
+pub(super) fn decode_records(schema: &Schema, message: &[u8]) -> Result<HashMap<Guid, Msg>> {
     let message_def = schema
         .def_index("Message")
         .ok_or_else(|| corrupt("the schema has no Message type"))?;
@@ -159,7 +159,7 @@ fn decode_records(schema: &Schema, message: &[u8]) -> Result<HashMap<Guid, Msg>>
 
 /// `m` (of type `src_def` in `src`) as a message of type `dst_def` in `dst`:
 /// fields by name, enum values by name; what `dst` lacks is dropped.
-fn translate(src: &Schema, dst: &Schema, m: &Msg, dst_def: u32) -> Msg {
+pub(super) fn translate(src: &Schema, dst: &Schema, m: &Msg, dst_def: u32) -> Msg {
     let mut out = Msg::new(dst_def);
     for (index, value) in &m.fields {
         let field = &src.def(m.def).fields[*index as usize];
@@ -198,7 +198,7 @@ fn translate_value(src: &Schema, dst: &Schema, v: &Value, from: Ty, to: Ty) -> O
 }
 
 /// Points a node's geometry at blobs copied into `doc`.
-fn remap_props(p: &mut Props, map: &mut dyn FnMut(u32) -> u32) {
+pub(crate) fn remap_props(p: &mut Props, map: &mut dyn FnMut(u32) -> u32) {
     let paths = |refs: &Option<Arc<[PathRef]>>, map: &mut dyn FnMut(u32) -> u32| {
         refs.as_ref().map(|r| {
             r.iter()

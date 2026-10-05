@@ -12,9 +12,8 @@
 
 use super::Build;
 use crate::error::Result;
-use crate::kiwi::{Kind, Msg, Schema, Ty, Value, Writer};
+use crate::kiwi::{Kind, Msg, Schema, Value};
 use crate::model::{Action, Guid, Interaction, Props};
-use std::collections::HashMap;
 
 /// The node's own (legacy) connection fields.
 const LEGACY: &[&str] = &[
@@ -163,23 +162,12 @@ impl Build<'_> {
 
 // ---- schema ---------------------------------------------------------------
 
-/// A field's type: a primitive (kiwi's negative type codes) or a type by name.
-enum FieldType {
-    Prim(i32),
-    Named(&'static str),
-}
-
-use FieldType::{Named, Prim};
-
-const FLOAT: FieldType = Prim(-5);
-const STRING: FieldType = Prim(-6);
-const BOOL: FieldType = Prim(-1);
-
-type NewField = (&'static str, FieldType, bool);
+use super::schema::FieldType::{Named, Prim};
+use super::schema::{BOOL, FLOAT, NewType, STRING};
 
 /// The prototype types Figma's schema has (values and fields the engine
 /// writes), by name.
-fn prototype_types() -> Vec<(&'static str, Kind, Vec<NewField>)> {
+fn prototype_types() -> Vec<NewType> {
     let values = |names: &[&'static str]| names.iter().map(|n| (*n, Prim(0), false)).collect();
     vec![
         (
@@ -309,111 +297,21 @@ fn prototype_types() -> Vec<(&'static str, Kind, Vec<NewField>)> {
 }
 
 /// The schema with Figma's prototype types and `NodeChange` fields, when it
-/// lacks them. Existing types keep their indices and field ids, so the
-/// file's records read the same.
+/// lacks them.
 pub(super) fn with_prototype_fields(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
-    let schema = Schema::decode(bytes)?;
-    let Some(node) = schema.def_index("NodeChange") else {
-        return Ok(None);
-    };
-    let node_fields: Vec<NewField> = [
-        ("prototypeInteractions", Named("PrototypeInteraction"), true),
-        (
-            "prototypeStartingPoint",
-            Named("PrototypeStartingPoint"),
-            false,
-        ),
-    ]
-    .into_iter()
-    .filter(|(name, _, _)| schema.def(node).index_of(name).is_none())
-    .collect();
-    if node_fields.is_empty() {
-        return Ok(None);
-    }
-    let added: Vec<_> = prototype_types()
-        .into_iter()
-        .filter(|(name, _, _)| schema.def_index(name).is_none())
-        .collect();
-    let mut index: HashMap<&str, i32> = HashMap::new();
-    let count = schema.defs.len();
-    for (k, (name, _, _)) in added.iter().enumerate() {
-        index.insert(name, (count + k) as i32);
-    }
-    let resolve = |t: &FieldType| match t {
-        Prim(p) => Some(*p),
-        Named(n) => index
-            .get(n)
-            .copied()
-            .or_else(|| schema.def_index(n).map(|d| d as i32)),
-    };
-    let ty = |t: Ty| match t {
-        Ty::Bool => -1,
-        Ty::Byte => -2,
-        Ty::Int => -3,
-        Ty::Uint => -4,
-        Ty::Float => -5,
-        Ty::String => -6,
-        Ty::Int64 => -7,
-        Ty::Uint64 => -8,
-        Ty::Def(i) => i as i32,
-    };
-    let kind = |k: Kind| match k {
-        Kind::Enum => 0,
-        Kind::Struct => 1,
-        Kind::Message => 2,
-    };
-    // Fields whose types this schema cannot name are left out.
-    let resolved = |fields: &[NewField]| -> Vec<(&'static str, i32, bool)> {
-        fields
-            .iter()
-            .filter_map(|(name, t, array)| Some((*name, resolve(t)?, *array)))
-            .collect()
-    };
-    let extra = resolved(&node_fields);
-    let mut w = Writer::default();
-    w.var_uint((count + added.len()) as u32);
-    for (k, d) in schema.defs.iter().enumerate() {
-        w.string(&d.name);
-        w.byte(kind(d.kind));
-        let more = if k as u32 == node { extra.len() } else { 0 };
-        w.var_uint((d.fields.len() + more) as u32);
-        for f in &d.fields {
-            w.string(&f.name);
-            w.var_int(ty(f.ty));
-            w.byte(u8::from(f.array));
-            w.var_uint(f.id);
-        }
-        if more > 0 {
-            let mut next = d.fields.iter().map(|f| f.id).max().unwrap_or(0);
-            for (name, t, array) in &extra {
-                next += 1;
-                w.string(name);
-                w.var_int(*t);
-                w.byte(u8::from(*array));
-                w.var_uint(next);
-            }
-        }
-    }
-    for (name, k, fields) in &added {
-        let fields = if *k == Kind::Enum {
-            fields.iter().map(|(n, _, _)| (*n, 0, false)).collect()
-        } else {
-            resolved(fields)
-        };
-        w.string(name);
-        w.byte(kind(*k));
-        w.var_uint(fields.len() as u32);
-        for (i, (field, t, array)) in fields.iter().enumerate() {
-            w.string(field);
-            w.var_int(*t);
-            w.byte(u8::from(*array));
-            // Enum values are their own ids; message fields count from 1.
-            w.var_uint(if *k == Kind::Enum {
-                i as u32
-            } else {
-                i as u32 + 1
-            });
-        }
-    }
-    Ok(Some(w.bytes))
+    super::schema::extend(
+        bytes,
+        vec![(
+            "NodeChange",
+            vec![
+                ("prototypeInteractions", Named("PrototypeInteraction"), true),
+                (
+                    "prototypeStartingPoint",
+                    Named("PrototypeStartingPoint"),
+                    false,
+                ),
+            ],
+        )],
+        prototype_types(),
+    )
 }

@@ -7,6 +7,7 @@ use super::{
 use crate::model::{
     Action, Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
     ExportSetting, FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild,
+    LibraryLink,
     OverlaySettings, Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props,
     StyleRun, SymbolData, TextContent, TextLayout, TextStyle, Variable, VariableMode,
     VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
@@ -595,6 +596,8 @@ impl<'a> Writer<'a> {
             flow_start,
             overlay,
             prototype_start,
+            library,
+            macro_data,
             recomputed,
         } = p;
         self.opt(guid, |w, g| w.guid(g));
@@ -784,6 +787,26 @@ impl<'a> Writer<'a> {
             w.opt(background, |w, c| w.color(c));
         });
         self.opt(prototype_start, |w, g| w.guid(g));
+        self.opt(library, |w, l| {
+            let LibraryLink {
+                publishable,
+                version,
+                published_version,
+                source,
+                publish_id,
+            } = &**l;
+            w.opt(publishable, |w, v| w.bool(*v));
+            w.opt_str(version);
+            w.opt_str(published_version);
+            w.opt_str(source);
+            w.opt(publish_id, |w, g| w.guid(g));
+        });
+        self.opt(macro_data, |w, list| {
+            w.list(list, |w, (k, v)| {
+                w.str(k);
+                w.str(v);
+            });
+        });
         self.bool(*recomputed);
     }
 

@@ -8,6 +8,7 @@ use super::{
 use crate::model::{
     Action, Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
     ExportSetting, FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild,
+    LibraryLink,
     OverlaySettings, Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props,
     StyleRun, SymbolData, TextContent, TextLayout, TextStyle, Variable, VariableMode,
     VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
@@ -569,6 +570,16 @@ impl<'a> Reader<'a> {
                 }))
             })?,
             prototype_start: self.opt(Self::guid)?,
+            library: self.opt(|r| {
+                Ok(Arc::new(LibraryLink {
+                    publishable: r.opt(Self::bool)?,
+                    version: r.opt_arc_str()?,
+                    published_version: r.opt_arc_str()?,
+                    source: r.opt_arc_str()?,
+                    publish_id: r.opt(Self::guid)?,
+                }))
+            })?,
+            macro_data: self.opt(|r| r.arc_list(|r| Ok((r.arc_str()?, r.arc_str()?))))?,
             recomputed: self.bool()?,
         })
     }
