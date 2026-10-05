@@ -730,7 +730,7 @@ impl<'a> Writer<'a> {
         self.props(&state.props);
         self.bool(state.removed);
         self.bool(state.listed);
-        self.u32(state.edits);
+        self.var(state.edits);
         self.opt(&state.source, |w, g| w.guid(g));
         let body = std::mem::take(&mut self.out);
         let keys = std::mem::take(&mut self.keys);

@@ -342,7 +342,7 @@ impl Build<'_> {
     }
 
     /// [`flags::COMPONENT`]: the component and variant fields `p` sets.
-    pub(super) fn component_fields(&self, m: &mut Msg, p: &Props, edits: u32) {
+    pub(super) fn component_fields(&self, m: &mut Msg, p: &Props, edits: u64) {
         let s = self.schema;
         if let Some(defs) = p.prop_defs.as_deref() {
             self.prop_defs(m, defs);

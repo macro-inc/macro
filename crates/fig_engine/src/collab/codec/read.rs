@@ -545,7 +545,7 @@ impl<'a> Reader<'a> {
             props: self.props()?,
             removed: self.bool()?,
             listed: self.bool()?,
-            edits: self.u32()?,
+            edits: self.var()?,
             source: self.opt(Self::guid)?,
         };
         if self.at != self.data.len() {

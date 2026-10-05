@@ -606,7 +606,7 @@ impl<'s> Build<'s> {
     }
 
     /// Rewrites the fields of `m` that `edits` names, from `node`.
-    fn patch(&self, m: &mut Msg, node: &Node, doc: &Document, edits: u32) {
+    fn patch(&self, m: &mut Msg, node: &Node, doc: &Document, edits: u64) {
         let p = &node.props;
         let s = self.schema;
         if edits & flags::TRANSFORM != 0 {

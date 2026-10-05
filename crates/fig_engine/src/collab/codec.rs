@@ -33,7 +33,7 @@ pub struct NodeState {
     /// components deleted with their layers still show in instances).
     pub listed: bool,
     /// [`crate::edit::flags`] of every field edited during the collaboration.
-    pub edits: u32,
+    pub edits: u64,
     /// For a copy: the file node it was copied from.
     pub source: Option<Guid>,
 }

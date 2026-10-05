@@ -23,59 +23,59 @@ use std::sync::Arc;
 
 /// Bits of [`Node::edits`].
 pub mod flags {
-    pub const TRANSFORM: u32 = 1 << 0;
-    pub const SIZE: u32 = 1 << 1;
-    pub const NAME: u32 = 1 << 2;
-    pub const VISIBLE: u32 = 1 << 3;
-    pub const LOCKED: u32 = 1 << 4;
-    pub const OPACITY: u32 = 1 << 5;
-    pub const FILLS: u32 = 1 << 6;
-    pub const STROKES: u32 = 1 << 7;
+    pub const TRANSFORM: u64 = 1 << 0;
+    pub const SIZE: u64 = 1 << 1;
+    pub const NAME: u64 = 1 << 2;
+    pub const VISIBLE: u64 = 1 << 3;
+    pub const LOCKED: u64 = 1 << 4;
+    pub const OPACITY: u64 = 1 << 5;
+    pub const FILLS: u64 = 1 << 6;
+    pub const STROKES: u64 = 1 << 7;
     /// Stroke weight and dashes.
-    pub const STROKE_WEIGHT: u32 = 1 << 8;
-    pub const STROKE_ALIGN: u32 = 1 << 9;
-    pub const RADIUS: u32 = 1 << 10;
-    pub const TEXT: u32 = 1 << 11;
+    pub const STROKE_WEIGHT: u64 = 1 << 8;
+    pub const STROKE_ALIGN: u64 = 1 << 9;
+    pub const RADIUS: u64 = 1 << 10;
+    pub const TEXT: u64 = 1 << 11;
     /// Parent or position among siblings.
-    pub const PARENT: u32 = 1 << 12;
-    pub const BLEND: u32 = 1 << 13;
-    pub const CLIP: u32 = 1 << 14;
+    pub const PARENT: u64 = 1 << 12;
+    pub const BLEND: u64 = 1 << 13;
+    pub const CLIP: u64 = 1 << 14;
     /// Fill and stroke geometry replaced (or dropped to be recomputed).
-    pub const GEOMETRY: u32 = 1 << 15;
-    pub const EFFECTS: u32 = 1 << 16;
+    pub const GEOMETRY: u64 = 1 << 15;
+    pub const EFFECTS: u64 = 1 << 16;
     /// The node did not exist in the file.
-    pub const CREATED: u32 = 1 << 17;
+    pub const CREATED: u64 = 1 << 17;
     /// A page's canvas color.
-    pub const BACKGROUND: u32 = 1 << 18;
+    pub const BACKGROUND: u64 = 1 << 18;
     /// Auto layout settings of a frame.
-    pub const AUTO_LAYOUT: u32 = 1 << 19;
+    pub const AUTO_LAYOUT: u64 = 1 << 19;
     /// How a layer sits in its auto layout parent.
-    pub const LAYOUT_CHILD: u32 = 1 << 20;
+    pub const LAYOUT_CHILD: u64 = 1 << 20;
     /// How a layer follows its frame when the frame is resized.
-    pub const CONSTRAINTS: u32 = 1 << 21;
+    pub const CONSTRAINTS: u64 = 1 << 21;
     /// The node's type changed (a frame made a component, an instance
     /// detached).
-    pub const TYPE: u32 = 1 << 22;
+    pub const TYPE: u64 = 1 << 22;
     /// Which component an instance shows.
-    pub const INSTANCE_OF: u32 = 1 << 23;
+    pub const INSTANCE_OF: u64 = 1 << 23;
     /// An instance's overrides (edits to the layers inside it).
-    pub const OVERRIDES: u32 = 1 << 24;
+    pub const OVERRIDES: u64 = 1 << 24;
     /// An instance's component property values.
-    pub const PROP_ASSIGNMENTS: u32 = 1 << 25;
+    pub const PROP_ASSIGNMENTS: u64 = 1 << 25;
     /// How open paths end (lines, arrows).
-    pub const STROKE_CAP: u32 = 1 << 26;
+    pub const STROKE_CAP: u64 = 1 << 26;
     /// An instance's derived layout (where its layers are at its size).
-    pub const DERIVED: u32 = 1 << 27;
+    pub const DERIVED: u64 = 1 << 27;
     /// A boolean layer's operation.
-    pub const BOOLEAN: u32 = 1 << 28;
+    pub const BOOLEAN: u64 = 1 << 28;
     /// A vector layer's network.
-    pub const VECTOR: u32 = 1 << 29;
+    pub const VECTOR: u64 = 1 << 29;
     /// Component properties and variants: a component's (or set's)
     /// property definitions and variant value orders, a variant's values,
     /// a layer's bindings to properties, and nested instances' exposure.
-    pub const COMPONENT: u32 = 1 << 30;
+    pub const COMPONENT: u64 = 1 << 30;
     /// Shared styles: the styles a layer uses, and a style node's kind.
-    pub const STYLES: u32 = 1 << 31;
+    pub const STYLES: u64 = 1 << 31;
 }
 
 /// A paint as the editor describes it.
@@ -660,7 +660,7 @@ impl<'a> Txn<'a> {
         &mut self.doc.nodes[i as usize]
     }
 
-    fn edit(&mut self, i: NodeIdx, flag: u32) -> &mut Props {
+    fn edit(&mut self, i: NodeIdx, flag: u64) -> &mut Props {
         let node = self.touch(i);
         node.edits |= flag;
         &mut node.props
@@ -1080,7 +1080,7 @@ impl<'a> Txn<'a> {
         let node = self.touch(i);
         node.props = props;
         node.removed = false;
-        node.edits = u32::MAX;
+        node.edits = u64::MAX;
         i
     }
 
@@ -1209,7 +1209,7 @@ impl<'a> Txn<'a> {
         let edits = if source.is_some() {
             original.edits | flags::CREATED | flags::PARENT | flags::TRANSFORM
         } else {
-            u32::MAX
+            u64::MAX
         };
         props.guid = Some(guid);
         props.override_key = None;
