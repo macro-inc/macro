@@ -22,7 +22,12 @@ length-prefixed chunks: a compressed [kiwi](https://github.com/evanw/kiwi)
 schema, the compressed message, and sometimes a PNG thumbnail. Every file
 carries its own schema, so the engine looks fields up by name and works across
 Figma versions; fields it does not use are skipped without being
-materialized.
+materialized. Opening a file decodes each node change in place (strings and
+bytes stay in the message, nested values go to tables reused for the next
+node change) and builds the node's properties from it; what is built from a
+field is shared with every node change whose field has the same bytes, so
+instances of one component share their overrides and derived layout, and
+repeated paints, effects, text, and names are stored once.
 
 The message is a flat list of node changes (each with a GUID, a parent GUID,
 and a fractional-index position string) plus blobs. Figma stores what it
@@ -42,7 +47,8 @@ contrast, and the rest) with curves calibrated against Figma's renders.
 
 ```
 container, zip   the two file layouts, decompression
-kiwi             schema and message decoding (allowlisted fields, by-name access)
+kiwi             schema and message decoding (allowlisted fields, by-name access;
+                 kiwi/flat: in-place decoding and sharing for opening files)
 decode           kiwi messages → `model::Props` (paints, effects, text, symbols)
 document         nodes, the tree, pages, blobs (geometry parsed lazily, once)
 scene            one page with instances expanded: overrides, component
@@ -77,7 +83,8 @@ with its full schema, copies every unedited node record byte for byte,
 re-encodes edited ones with only the edited fields replaced, and appends new
 nodes (copies start from their source's record) and blobs. Fields the engine
 does not model therefore survive, and saving a large file takes about as
-long as compressing it. `fig_render roundtrip` checks that edited, saved,
+long as compressing it: the new message is deflated into the archive as it
+is written, so it is never held whole beside the original. `fig_render roundtrip` checks that edited, saved,
 and reopened files render identically.
 
 Auto layout frames are laid out again when an edit changes them or their
@@ -262,7 +269,9 @@ cargo run -p fig_engine --features cli --release --bin fig_render -- prototype F
 cargo run -p fig_engine --features cli --release --bin fig_render -- text --fonts DIR --verbose FILE.fig…
 ```
 
-`info` prints decode statistics, `render` writes one PNG per page, and
+`info` prints decode statistics, `bench` times opening (with the heap it
+takes; `--open` stops there), scene builds, and page and tile renders,
+`render` writes one PNG per page, and
 `compare` renders the region of Figma's own embedded thumbnail and reports a
 similarity score (a fidelity check that needs no Figma account). Run it over
 any local collection of `.fig` files after rendering changes; third-party

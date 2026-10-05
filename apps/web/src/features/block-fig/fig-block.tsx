@@ -53,6 +53,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { FigOpening } from './components/fig-opening';
 import type { FigCommentStore } from './context/fig-comments';
 import {
   type FigCollaboration,
@@ -121,16 +122,7 @@ function FigHost(props: {
   });
 
   return (
-    <Switch
-      fallback={
-        <div
-          class="flex size-full items-center justify-center text-ink-muted text-sm"
-          data-testid="fig-opening"
-        >
-          Opening design…
-        </div>
-      }
-    >
+    <Switch fallback={<FigOpening bytes={props.bytes} />}>
       <Match when={failure()}>
         {(message) => (
           <div class="flex size-full items-center justify-center p-6 text-center text-ink-muted text-sm">
