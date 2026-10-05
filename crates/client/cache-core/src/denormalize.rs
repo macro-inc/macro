@@ -364,19 +364,22 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
             if normalized && self.retain_output {
                 if let Some(projection) = self.projection.as_mut() {
                     match &planned_field.source {
-                        FieldSource::Stored { key, ty } => projection.field(
-                            owner,
-                            key,
-                            fields.get(key.as_ref()),
-                            (ty.kind != meta::FieldKind::Composite).then_some(self.path.as_slice()),
-                        ),
+                        FieldSource::Stored { key, ty } => {
+                            let value = fields.get(key.as_ref());
+                            let selection = projection::ValueProjection::compile(
+                                value,
+                                field,
+                                ty,
+                                self.variables,
+                                self.entity_resolvers,
+                                self.plans,
+                            )?;
+                            projection.selected_field(owner, key, value, &self.path, selection);
+                        }
                         FieldSource::Entity { storage_key, .. }
-                        | FieldSource::Missing(storage_key) => projection.field(
-                            owner,
-                            storage_key,
-                            fields.get(storage_key.as_ref()),
-                            None,
-                        ),
+                        | FieldSource::Missing(storage_key) => {
+                            projection.guard(owner, storage_key, fields.get(storage_key.as_ref()))
+                        }
                         _ => {}
                     }
                 }

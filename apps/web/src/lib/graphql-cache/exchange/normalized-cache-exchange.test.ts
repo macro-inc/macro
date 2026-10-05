@@ -45,6 +45,7 @@ import {
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
   type MutationClaim,
+  type MutationSettlement,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   type ReadResult,
   type WriteResult,
@@ -2577,6 +2578,145 @@ describe('normalizedCacheExchange', () => {
     const optimistic = { setEntityProperty: { id: 'prop-1' } };
 
     it.each([false, true])(
+      'discards an old query when a different tab commits the mutation (hydration=%s)',
+      async (hydration) => {
+        let settle!: (settlement: MutationSettlement) => void;
+        vi.spyOn(host, 'onMutationSettled').mockImplementation((callback) => {
+          settle = callback;
+          return () => undefined;
+        });
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        settle({ status: 'committed', transactionId: 'other-tab-transaction' });
+        network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+      }
+    );
+
+    it('honors cache-only if a subscriber changes policy before an obsolete response arrives', async () => {
+      const { ops, network, forwarded } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      ops.next(makeMutationOp(2));
+      await tick();
+      network.next(queryResult(forwarded[1], { saved: true }));
+      ops.next(makeOp(1, 'cache-only'));
+      await tick();
+      network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+      await tick();
+      expect(forwarded.filter(({ kind }) => kind === 'query')).toHaveLength(1);
+    });
+
+    it.each([false, true])(
+      'restarts a pre-mutation read without publishing or persisting its stale response (hydration=%s)',
+      async (hydration) => {
+        const hydrate = vi.spyOn(host, 'hydrateQuery');
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        const read = forwarded[0];
+        ops.next(makeMutationOp(2));
+        await tick();
+        network.next(queryResult(forwarded[1], { saved: true }));
+        await tick();
+        network.next({
+          ...queryResult(read, { from: 'obsolete' }),
+          hasNext: true,
+        });
+        await tick();
+        expect(forwarded).toHaveLength(2);
+        network.next(queryResult(read, { from: 'obsolete' }));
+        await tick();
+        expect(forwarded).toHaveLength(3);
+        expect(
+          results.filter(({ operation }) => operation.kind === 'query')
+        ).toEqual([]);
+        expect(host.writes).not.toContainEqual(
+          expect.objectContaining({ data: { from: 'obsolete' } })
+        );
+        network.next(queryResult(forwarded[2], { from: 'fresh' }));
+        await tick();
+        expect(results.at(-1)?.data).toEqual({ from: 'fresh' });
+        if (hydration) {
+          expect(hydrate).toHaveBeenCalledWith(
+            expect.objectContaining({
+              query: expect.stringContaining('@cacheOnly'),
+            })
+          );
+        }
+      }
+    );
+
+    it.each([false, true])(
+      'does not restart an obsolete query after teardown (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded } = controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        ops.next(makeMutationOp(2));
+        await tick();
+        network.next(queryResult(forwarded[1], { saved: true }));
+        ops.next(teardownOf(forwarded[0]));
+        network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+        await tick();
+        expect(forwarded.filter(({ kind }) => kind === 'query')).toHaveLength(
+          1
+        );
+        expect(host.writes).not.toContainEqual(
+          expect.objectContaining({ data: { from: 'obsolete' } })
+        );
+      }
+    );
+
+    it('rechecks a response held behind an earlier persistence turn after mutation settlement', async () => {
+      const pending = deferred<void>();
+      const write = host.writeQuery.bind(host);
+      vi.spyOn(host, 'writeQuery').mockImplementationOnce(async (args) => {
+        const result = await write(args);
+        await pending.promise;
+        return result;
+      });
+      const { ops, network, forwarded } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      await tick();
+      network.next({
+        ...queryResult(forwarded[0], { from: 'first' }),
+        hasNext: true,
+      });
+      await tick();
+      network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+      ops.next(makeMutationOp(2));
+      await tick();
+      network.next(queryResult(forwarded[1], { saved: true }));
+      await tick();
+      pending.resolve();
+      await tick();
+      expect(host.writes).not.toContainEqual(
+        expect.objectContaining({ data: { from: 'obsolete' } })
+      );
+      expect(forwarded.filter(({ kind }) => kind === 'query')).toHaveLength(2);
+    });
+
+    it('does not discard an in-flight query after a rejected mutation', async () => {
+      const { ops, network, forwarded, results } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      ops.next(makeMutationOp(2));
+      await tick();
+      network.next({
+        ...queryResult(forwarded[1], undefined),
+        error: new CombinedError({ graphQLErrors: [new Error('forbidden')] }),
+      });
+      network.next(queryResult(forwarded[0], { from: 'valid' }));
+      await tick();
+      expect(forwarded).toHaveLength(2);
+      expect(results.at(-1)?.data).toEqual({ from: 'valid' });
+    });
+
+    it.each([false, true])(
       'rolls back rejected favorites rather than committing list patches (replay=%s)',
       async (replay) => {
         let submitted: Operation | undefined;
@@ -4064,6 +4204,72 @@ describe('normalizedCacheExchange', () => {
         requestPolicy: 'network-only',
       });
     });
+
+    it.each(['query', 'persistence'] as const)(
+      'bounds conditional link recovery while %s is stalled without retrying a committed mutation',
+      async (stage) => {
+        vi.useFakeTimers();
+        const read = deferred<OperationResult>();
+        const persistence = deferred<undefined>();
+        try {
+          const commit = host.commitOptimisticWrite.bind(host);
+          host.commitOptimisticWrite = async (...args) => ({
+            ...(await commit(...args)),
+            revalidations: [
+              {
+                query: stringifyDocument(QUERY),
+                operationName: 'Soup',
+                variablesJson: '{}',
+                onlyOnLinkFailure: true,
+              },
+            ],
+          });
+          const onCacheError = vi.fn();
+          const { ops, client, results, forwarded } = harness(host, undefined, {
+            onCacheError,
+          });
+          vi.mocked(client.query).mockReturnValue({
+            toPromise: () => read.promise,
+          } as never);
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+          expect(host.commits).toHaveLength(1);
+          expect(client.query).toHaveBeenCalledOnce();
+          if (stage === 'persistence') {
+            read.resolve({
+              ...queryResult(makeOp(2, 'network-only')),
+              extensions: {
+                __macroNormalizedCache: {
+                  source: 'live-network',
+                  persistence: persistence.promise,
+                },
+              },
+            });
+          }
+          await vi.advanceTimersByTimeAsync(59_999);
+          expect(results).toHaveLength(0);
+          await vi.advanceTimersByTimeAsync(1);
+          expect(results).toHaveLength(1);
+          expect(optimisticMutationDispositionOf(results[0])).toEqual({
+            kind: 'committed',
+            data: results[0].data,
+          });
+          expect(onCacheError).toHaveBeenCalledWith(
+            expect.objectContaining({
+              message: 'Timed out delivering mutation updates',
+            }),
+            expect.anything()
+          );
+          expect(forwarded).toHaveLength(1);
+          expect(host.rollbacks).toHaveLength(0);
+          expect(host.defers).toHaveLength(0);
+        } finally {
+          read.resolve(queryResult(makeOp(2, 'network-only')));
+          persistence.resolve(undefined);
+          vi.useRealTimers();
+        }
+      }
+    );
 
     it.each([true, false])(
       'delegates persisted commit revalidations only when an owner accepts: %s',

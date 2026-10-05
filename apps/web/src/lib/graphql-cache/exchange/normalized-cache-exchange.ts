@@ -101,6 +101,9 @@ import { queryShape } from './query-shape';
  * carries its own transaction.
  */
 const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
+/** Server writes acknowledged since this query left for the network. */
+const QUERY_MUTATION_VERSION_CONTEXT_KEY =
+  'normalizedCacheQueryMutationVersion';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 /** Prevents a replacement-registration cache read from forwarding the API again. */
@@ -249,7 +252,7 @@ function hydrationTransportOperation(op: Operation): Operation {
     {
       ...op.context,
       requestPolicy: 'network-only',
-      [HYDRATION_DOCUMENT_CONTEXT_KEY]: op.query,
+      [HYDRATION_DOCUMENT_CONTEXT_KEY]: hydrationDocument(op) ?? op.query,
     }
   );
 }
@@ -486,6 +489,11 @@ export function normalizedCacheExchange(
     const documentReader = createDocumentQueryReader(host);
     let cacheGeneration = 0;
     let storageGeneration = 0;
+    let mutationVersion = 0;
+    host.onMutationSettled((settlement) => {
+      // Another tab's durable queue runner can commit into this same cache.
+      if (settlement.status !== 'permanently-failed') mutationVersion += 1;
+    });
     const liveQueries = new Map<
       number,
       { view: LiveQuery; result: OperationResult }
@@ -677,7 +685,16 @@ export function normalizedCacheExchange(
       });
     };
 
-    const emitAffectedWhileNetworkBound = (key: number): void => {
+    const pendingAffectedReads = new Set<Promise<void>>();
+    const trackAffectedRead = (read: Promise<void>): void => {
+      pendingAffectedReads.add(read);
+      const settled = () => pendingAffectedReads.delete(read);
+      void read.then(settled, settled);
+    };
+
+    const emitAffectedWhileNetworkBound = async (
+      key: number
+    ): Promise<void> => {
       const operation = activeOps.get(key);
       if (!operation) return;
       const state = queryState(key);
@@ -686,7 +703,7 @@ export function normalizedCacheExchange(
       // finishes first; only teardown/remount may discard that update.
       state.cacheReadVersion += 1;
       const generation = cacheGeneration;
-      void documentReader
+      await documentReader
         .read({
           opKey: operation.key,
           query: queryText(operation),
@@ -759,7 +776,8 @@ export function normalizedCacheExchange(
           recoverRetainedReplacementFallback(key);
         } else if (state && state.networkBoundQueries > 0) {
           state.deferredAffected = true;
-          if (!state.replacementFallback) emitAffectedWhileNetworkBound(key);
+          if (!state.replacementFallback)
+            trackAffectedRead(emitAffectedWhileNetworkBound(key));
         } else if (
           host.watchQuery &&
           !registrationOnly &&
@@ -767,7 +785,7 @@ export function normalizedCacheExchange(
           !liveQueries.get(key)?.result.error &&
           !liveQueries.get(key)?.result.hasNext
         ) {
-          void emitWatchedQuery(key);
+          trackAffectedRead(emitWatchedQuery(key));
         } else {
           reexecuteAffected(key, registrationOnly);
         }
@@ -807,13 +825,41 @@ export function normalizedCacheExchange(
       // Async cache reads re-inject network-bound operations here.
       const { source: forwardQueue$, next: enqueueForward } =
         makeSubject<Operation>();
+      const hydrationRequests = new Set<number>();
+
+      const atMutationVersion = (op: Operation): Operation =>
+        makeOperation('query', op, {
+          ...op.context,
+          [QUERY_MUTATION_VERSION_CONTEXT_KEY]: mutationVersion,
+        });
+
+      const enqueueHydrationForward = (op: Operation): void => {
+        const request = atMutationVersion(hydrationTransportOperation(op));
+        hydrationRequests.add(op.key);
+        enqueueForward(request);
+      };
 
       const enqueueQueryForward = (op: Operation): void => {
         const state = queryState(op.key);
         state.networkBoundQueries += 1;
         state.networkRequestsInFlight += 1;
         state.networkError = undefined;
-        enqueueForward(op);
+        enqueueForward(atMutationVersion(op));
+      };
+
+      const predatesMutation = (op: Operation): boolean => {
+        const version: unknown = op.context[QUERY_MUTATION_VERSION_CONTEXT_KEY];
+        return typeof version === 'number' && version < mutationVersion;
+      };
+
+      // A response from before an acknowledged write cannot safely replace
+      // either live data or normalized records. Fetch a new snapshot without
+      // replaying urql's previous result or dropping the mounted subscription.
+      const refreshObsoleteQuery = (op: Operation): void => {
+        const active = activeOps.get(op.key);
+        if (active && active.context.requestPolicy !== 'cache-only') {
+          enqueueQueryForward(active);
+        }
       };
 
       const finishNetworkQuery = (
@@ -1004,7 +1050,7 @@ export function normalizedCacheExchange(
               );
               if (generation !== storageGeneration) return;
               if (rolledBack.kind === 'rolled-back') {
-                revalidateAfterSettlement(
+                void revalidateAfterSettlement(
                   rolledBack.revalidations ?? [],
                   replayOperation
                 );
@@ -1072,10 +1118,10 @@ export function normalizedCacheExchange(
         }
       }
 
-      function revalidateAfterSettlement(
+      async function revalidateAfterSettlement(
         revalidations: QueryRevalidationWire[],
         mutation?: Operation
-      ): void {
+      ): Promise<void> {
         const reportError = (error: unknown, operation = mutation) => {
           // Diagnostics cannot turn a durably settled attempt back into a retry.
           if (!operation) return;
@@ -1085,7 +1131,8 @@ export function normalizedCacheExchange(
             // The settlement is already final.
           }
         };
-        for (const revalidation of revalidations) {
+        const repairs: Promise<void>[] = [];
+        async function refresh(revalidation: QueryRevalidationWire) {
           try {
             const variables: unknown = JSON.parse(revalidation.variablesJson);
             if (
@@ -1105,20 +1152,52 @@ export function normalizedCacheExchange(
                 variables: variables as Record<string, unknown>,
               })
             )
-              continue;
-            void client
+              return;
+            const result = await client
               .query(document, variables as Record<string, unknown>, {
                 requestPolicy: 'network-only',
               })
-              .toPromise()
-              .then((result) => {
-                if (result.error)
-                  reportError(result.error, mutation ?? result.operation);
-              })
-              .catch(reportError);
+              .toPromise();
+            if (result.error)
+              reportError(result.error, mutation ?? result.operation);
+            const metadata = normalizedCacheResultMetadata(result);
+            if (metadata?.source === 'live-network') await metadata.persistence;
           } catch (error) {
             reportError(error);
           }
+        }
+        for (const revalidation of revalidations) {
+          const pending = refresh(revalidation);
+          // Ordinary membership refreshes continue in the background.
+          if (revalidation.onlyOnLinkFailure) repairs.push(pending);
+        }
+        if (repairs.length === 0 && pendingAffectedReads.size === 0) return;
+        const deliver = async () => {
+          await Promise.all(repairs);
+          // Persistence schedules subscriber reads but does not publish their
+          // values. Even a healthy commit must hand off optimism to those reads.
+          while (pendingAffectedReads.size > 0) {
+            await Promise.allSettled([...pendingAffectedReads]);
+          }
+        };
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        try {
+          // Include shared requests, persistence, and subscriber publication.
+          // A slow read must not block the mutation queue indefinitely.
+          await Promise.race([
+            deliver(),
+            new Promise<never>((_, reject) => {
+              timeout = setTimeout(
+                () =>
+                  reject(new Error('Timed out delivering mutation updates')),
+                QUEUE_REQUEST_TIMEOUT_MS
+              );
+            }),
+          ]);
+        } catch (error) {
+          reportError(error);
+        } finally {
+          clearTimeout(timeout);
         }
       }
 
@@ -1126,7 +1205,7 @@ export function normalizedCacheExchange(
         op: Operation
       ): Promise<OperationResult | undefined> {
         if (isHydrateOnly(op)) {
-          enqueueForward(hydrationTransportOperation(op));
+          enqueueHydrationForward(op);
           return undefined;
         }
         const readState = queryState(op.key);
@@ -1409,6 +1488,12 @@ export function normalizedCacheExchange(
         };
         try {
           await invalidateOlderRetainedFallback(state, resultVersion);
+          // A previous write turn may have delayed this response until after
+          // mutation settlement, even though publication happened earlier.
+          if (predatesMutation(op)) {
+            refreshObsoleteQuery(op);
+            return undefined;
+          }
           // Resolver failures must not persist partial nulls as authoritative absence.
           if (result.data == null || result.error) return undefined;
           const isActive = () =>
@@ -1510,8 +1595,16 @@ export function normalizedCacheExchange(
 
       async function writeThrough(
         result: OperationResult
-      ): Promise<OperationResult> {
+      ): Promise<OperationResult | undefined> {
         const op = result.operation;
+        if (
+          op.kind === 'mutation' &&
+          result.data != null &&
+          !result.error &&
+          !result.hasNext
+        ) {
+          mutationVersion += 1;
+        }
         const output =
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
@@ -1546,6 +1639,13 @@ export function normalizedCacheExchange(
             }
           }
         } else if (op.kind === 'query' && isHydrateOnly(op)) {
+          if (predatesMutation(op)) {
+            if (!result.hasNext && hydrationRequests.has(op.key)) {
+              enqueueHydrationForward(op);
+            }
+            return undefined;
+          }
+          if (!result.hasNext) hydrationRequests.delete(op.key);
           if (result.error) return { ...result, data: undefined };
           if (result.data == null) return result;
           try {
@@ -1581,6 +1681,17 @@ export function normalizedCacheExchange(
           }
         } else if (op.kind === 'query') {
           const state = queryState(op.key);
+          if (predatesMutation(op)) {
+            if (result.hasNext !== true) {
+              state.networkRequestsInFlight = Math.max(
+                0,
+                state.networkRequestsInFlight - 1
+              );
+              refreshObsoleteQuery(op);
+              finishNetworkQuery(op.key, state, false);
+            }
+            return undefined;
+          }
           const version = ++state.networkResultVersion;
           if (result.hasNext !== true) {
             state.networkRequestsInFlight = Math.max(
@@ -1667,7 +1778,7 @@ export function normalizedCacheExchange(
                     disposition = 'superseded';
                   } else {
                     disposition = 'permanently-failed';
-                    revalidateAfterSettlement(
+                    void revalidateAfterSettlement(
                       rolledBack.revalidations ?? [],
                       op
                     );
@@ -1717,7 +1828,7 @@ export function normalizedCacheExchange(
                     ? 'superseded'
                     : 'permanently-failed';
                   if (!replacementTransactionId) {
-                    revalidateAfterSettlement(
+                    void revalidateAfterSettlement(
                       committed.revalidations ?? [],
                       op
                     );
@@ -1738,7 +1849,7 @@ export function normalizedCacheExchange(
                     await applyOperationCacheEffects(op, effects, isCurrent);
                   }
                   if (isCurrent())
-                    revalidateAfterSettlement(
+                    await revalidateAfterSettlement(
                       committed.revalidations ?? [],
                       op
                     );
@@ -1840,6 +1951,7 @@ export function normalizedCacheExchange(
             subscriptionGenerations.set(op.key, {});
           }
           if (op.kind === 'teardown') {
+            hydrationRequests.delete(op.key);
             subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
             liveQueries.delete(op.key);
@@ -1854,7 +1966,8 @@ export function normalizedCacheExchange(
       const forwarded$ = pipe(
         merge([forwardQueue$, passthrough$]),
         forward,
-        mergeMap((result) => fromPromise(writeThrough(result)))
+        mergeMap((result) => fromPromise(writeThrough(result))),
+        filter((result): result is OperationResult => result !== undefined)
       );
 
       if (!host.disabled) {

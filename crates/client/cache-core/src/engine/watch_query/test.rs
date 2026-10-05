@@ -3,6 +3,8 @@ use crate::{store::InMemoryStorage, value::CacheValue};
 use pollster::block_on;
 use serde_json::json;
 
+mod embedded;
+
 const PAGE: &str = "query Page($input: SoupInput!) { user { id soup(input: $input) { items { __typename id ... on GraphqlSoupEmailThread { isRead } } nextCursor } } }";
 const DETAIL: &str = "query Detail($id: ID!, $show: Boolean! = true) { user { alias: emailThread(input: {threadId: $id}) { ...Fields @include(if: $show) } } } fragment Fields on GraphqlSoupEmailThread { seen: isRead }";
 

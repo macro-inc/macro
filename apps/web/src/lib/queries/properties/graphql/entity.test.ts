@@ -561,6 +561,17 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
         normalizedCacheOptimistic: {
           linkPatches: [
             {
+              recordRoot: {
+                entityKey: `GraphqlSoupDocument:task-${index + 1}`,
+              },
+              operation: {
+                kind: 'upsertByField',
+                entityKey: `GraphqlProperty:assignment-task-${index + 1}`,
+                whereField: 'propertyDefinitionId',
+                equals: 'priority',
+              },
+            },
+            {
               operation: {
                 kind: 'removeEmbeddedLink',
                 entityKey: `GraphqlSoupDocument:task-${index + 1}`,
@@ -574,6 +585,10 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
             },
           ],
           revalidations: [
+            {
+              operationName: 'EntityProperties',
+              onlyOnLinkFailure: true,
+            },
             {
               operationName: 'GroupSoupMembership',
               variablesJson: JSON.stringify({ input }),

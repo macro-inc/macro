@@ -49,6 +49,13 @@ const action = fc
       fc.record({ kind: fc.constant('reverse' as const) }),
       fc.record({ kind: fc.constant('remove' as const), index: fc.nat(20) }),
       fc.record({ kind: fc.constant('insert' as const), row: rowValue }),
+      fc.record({
+        kind: fc.constant('replace' as const),
+        rows: fc.uniqueArray(fc.record({ id: fc.nat(20), value: rowValue }), {
+          maxLength: 12,
+          selector: (row) => row.id,
+        }),
+      }),
       fc.record({ kind: fc.constant('poll' as const) })
     )
   )
@@ -139,6 +146,14 @@ describe('generated live query updates', () => {
                     __typename: 'Task',
                     id: String(nextId++),
                   });
+                } else if (action.kind === 'replace') {
+                  // A single server snapshot can reorder, edit, insert and
+                  // remove records together. Exercise those combinations too.
+                  model.rows = action.rows.map(({ id, value }) => ({
+                    ...value,
+                    __typename: 'Task',
+                    id: `replacement-${id}`,
+                  }));
                 }
                 if (action.incremental) {
                   patches ??= [

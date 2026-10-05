@@ -88,6 +88,7 @@ pub(super) fn apply(
 ) -> Result<(), LinkPatchError> {
     let typename = inserted.as_ref().split_once(':').map(|(name, _)| name);
     let mut retained = Vec::with_capacity(links.len() + 1);
+    let mut replacement_index = None;
     for link in links.iter() {
         if let CacheValue::Ref(key) = link
             && key.as_ref().split_once(':').map(|(name, _)| name) == typename
@@ -103,12 +104,17 @@ pub(super) fn apply(
                     field: field.to_string(),
                 })?;
             if cache_scalar_equals(value, equals) {
+                replacement_index.get_or_insert(retained.len());
                 continue;
             }
         }
         retained.push(link.clone());
     }
-    retained.insert(0, CacheValue::Ref(inserted.clone()));
+    // Updating a member must not reorder the list or invalidate other rows.
+    retained.insert(
+        replacement_index.unwrap_or(0),
+        CacheValue::Ref(inserted.clone()),
+    );
     *links = retained;
     Ok(())
 }

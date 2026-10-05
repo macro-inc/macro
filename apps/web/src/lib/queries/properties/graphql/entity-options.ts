@@ -27,10 +27,7 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
-import {
-  buildOptimisticEntityPropertyOptions,
-  isTemporaryGraphqlProperty,
-} from '../graphql-optimistic';
+import { buildOptimisticEntityPropertyOptions } from '../graphql-optimistic';
 import {
   type EntityPropertyOptionSelection,
   getEntityPropertyOptionDeltas,
@@ -59,20 +56,26 @@ function getPropertyDefinitionId(
 }
 
 /**
- * Recover an absent/evicted parent after a new assignment commits. Cached
- * parents are linked atomically by the mutation's response-derived recipe.
+ * Recover an absent or incomplete parent when a link recipe cannot apply.
+ * Complete parents are linked atomically from the mutation's response.
  * Never inspect all cached Soup variants here: backfills can exceed the cache's
  * inspection budget, and cache bookkeeping must not prevent the mutation.
  * The descriptor is durable, so an offline commit also reconciles on replay.
  */
-function newPropertyLinkRevalidations(
+function propertyLinkRevalidations(
   entityType: EntityType | PropertyTargetEntityType,
   entityId: string
 ): QueryRevalidation[] {
   if (!getGraphqlCacheHost()) return [];
   const input = buildGraphqlEntitySoupInput(entityType, entityId);
   return input
-    ? [{ document: EntityPropertiesDocument, variables: { input } }]
+    ? [
+        {
+          document: EntityPropertiesDocument,
+          variables: { input },
+          onlyOnLinkFailure: true,
+        },
+      ]
     : [];
 }
 
@@ -119,10 +122,9 @@ export async function updateGraphqlEntityPropertyOptions(
     );
     return record ? [record] : [];
   });
-  const newAssignments = optimisticProperties.filter((property) =>
-    isTemporaryGraphqlProperty(property.id)
-  );
-  const updates = newAssignments.flatMap((property) =>
+  // A cached assignment may have been removed/recreated elsewhere. Resolve
+  // every parent link from the committed response, even for an existing ID.
+  const updates = optimisticProperties.flatMap((property) =>
     buildPropertyAssignmentLinks(
       entityType,
       input.entityId,
@@ -130,10 +132,10 @@ export async function updateGraphqlEntityPropertyOptions(
       property.propertyDefinitionId
     )
   );
-  const revalidations =
-    newAssignments.length > 0
-      ? newPropertyLinkRevalidations(input.entityType, input.entityId)
-      : [];
+  const revalidations = propertyLinkRevalidations(
+    input.entityType,
+    input.entityId
+  );
 
   const result = await executeOptimisticMutation(
     getGraphqlSoupClient(),

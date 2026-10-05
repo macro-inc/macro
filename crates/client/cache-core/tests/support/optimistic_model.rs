@@ -130,7 +130,6 @@ struct Pending {
     superseded: bool,
     document: u8,
     assignment: Assignment,
-    link: bool,
     bulk: bool,
 }
 
@@ -182,17 +181,15 @@ fn assignment_json(assignment: &Assignment, aliased: bool) -> Json {
     }
 }
 
-fn apply(documents: &mut [Document], document: u8, assignment: &Assignment, link: bool) {
+fn apply(documents: &mut [Document], document: u8, assignment: &Assignment) {
     let properties = &mut documents[usize::from(document)].properties;
-    if link {
-        properties.retain(|current| current.definition != assignment.definition);
-        properties.insert(0, assignment.clone());
-    } else {
-        let current = properties
-            .iter_mut()
-            .find(|current| current.definition == assignment.definition)
-            .expect("an existing assignment stays attached");
+    if let Some(current) = properties
+        .iter_mut()
+        .find(|current| current.definition == assignment.definition)
+    {
         *current = assignment.clone();
+    } else {
+        properties.insert(0, assignment.clone());
     }
 }
 
@@ -358,12 +355,7 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
     fn effective(&self) -> Vec<Document> {
         let mut documents = self.base.clone();
         for pending in &self.pending {
-            apply(
-                &mut documents,
-                pending.document,
-                &pending.assignment,
-                pending.link,
-            );
+            apply(&mut documents, pending.document, &pending.assignment);
         }
         documents
     }
@@ -462,10 +454,10 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
                     .properties
                     .iter()
                     .find(|assignment| assignment.definition == definition);
-                let link =
+                let temporary =
                     existing.is_none_or(|assignment| assignment.id.starts_with("temporary:"));
                 let assignment = Assignment {
-                    id: if link {
+                    id: if temporary {
                         format!("temporary:{document}:{definition}")
                     } else {
                         existing.unwrap().id.clone()
@@ -485,14 +477,9 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
                     superseded: false,
                     document,
                     assignment,
-                    link,
                     bulk,
                 };
-                let patches = if link {
-                    vec![link_patch(&pending)]
-                } else {
-                    vec![]
-                };
+                let patches = vec![link_patch(&pending)];
                 let (id, _) = self
                     .engine
                     .begin_optimistic_write(
@@ -531,8 +518,8 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
                     let pending = self.pending.remove(0);
                     let assignment = Assignment {
                         id: format!(
-                            "server:{}:{}",
-                            pending.document, pending.assignment.definition
+                            "server:{}:{}:{}",
+                            pending.document, pending.assignment.definition, pending.transaction
                         ),
                         options: canonical.unwrap_or_else(|| pending.assignment.options.clone()),
                         ..pending.assignment.clone()
@@ -548,7 +535,7 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
                         )
                         .await
                         .unwrap();
-                    apply(&mut self.base, pending.document, &assignment, pending.link);
+                    apply(&mut self.base, pending.document, &assignment);
                 }
             }
             Action::Reject => {
@@ -618,7 +605,6 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
                         definition,
                         options,
                     },
-                    true,
                 );
                 self.write_base().await;
             }

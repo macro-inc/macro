@@ -126,6 +126,9 @@ jobs:
     - name: Check Types
       run: bun run --bun --silent tsc --project ./tsconfig.json
       working-directory: apps/web
+    - name: Check Functional Test Types
+      run: bun run --bun --silent tsc --project tests/functional/tsconfig.json
+      working-directory: apps/web
     - name: Check Collaboration Package Types
       run: bun run type-check
       working-directory: packages/collaboration
@@ -244,6 +247,8 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
+      with:
+        playwright: 'true'
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -276,6 +281,9 @@ jobs:
       run: sccache --start-server
     - name: Build
       run: just build-dev
+      working-directory: apps/web
+    - name: Test Optimistic Mutations in Chromium
+      run: bun run test:functional
       working-directory: apps/web
     - name: show sccache stats
       if: always()

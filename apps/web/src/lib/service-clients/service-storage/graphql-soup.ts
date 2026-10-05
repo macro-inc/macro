@@ -9,6 +9,7 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
+import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
 import {
   HYDRATE_ONLY_CONTEXT_KEY,
   normalizedCacheExchange,
@@ -288,7 +289,7 @@ export async function dssGraphqlFetch(
 
 const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
-  exchanges: [fetchExchange],
+  exchanges: [networkRevalidationExchange(), fetchExchange],
   fetch: dssGraphqlFetch,
   // urql's default ("within-url-limit") sends small documents as GET, but
   // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
@@ -359,6 +360,7 @@ function getUncachedRealtimeClient(): Client {
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
+      networkRevalidationExchange(),
       graphqlSoupSubscriptionExchange(websocketClient),
       fetchExchange,
     ],
@@ -529,6 +531,7 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           optimisticResolversExchange(soupOptimisticResolvers),
+          networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
             deletedRecordKeys: emailCacheDeletionKeys,
             onCacheError: (error, operation) => {

@@ -75,6 +75,7 @@ pub enum LinkOperation {
     },
     /// Replaces links with the same scalar identity using the matching record
     /// in this mutation's normalized response. The response may assign a new ID.
+    /// Keeps the first matching member's position; prepends a new member.
     UpsertByField {
         /// Optimistic identity; its type constrains the response record lookup.
         #[serde(rename = "entityKey")]
@@ -159,6 +160,9 @@ pub struct QueryRevalidation {
     pub operation_name: Option<String>,
     /// Canonical JSON object containing query variables.
     pub variables_json: String,
+    /// Refresh only if relation recipes were omitted or could not all apply.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub only_on_link_failure: bool,
 }
 
 /// One mutation-scoped update rooted at a generated query or an explicit record.
@@ -190,6 +194,7 @@ impl OptimisticLinkPatch {
             query: self.query.clone(),
             operation_name: self.operation_name.clone(),
             variables_json: self.variables_json.clone(),
+            only_on_link_failure: false,
         })
     }
 
@@ -427,21 +432,23 @@ fn is_json_scalar(value: &Json) -> bool {
 ///
 /// When `skip_not_applicable` is true, stale/missing recipes are ignored. This
 /// mode is used during hydration and successful settlement, where stale query
-/// fields must never be recreated.
+/// fields must never be recreated. Returns whether every recipe was applied.
 pub fn apply_link_patches(
     effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patches: &[OptimisticLinkPatch],
     skip_not_applicable: bool,
-) -> Result<(), LinkPatchError> {
+) -> Result<bool, LinkPatchError> {
     let patches = deduplicate_patches(patches)?;
 
     // Work on clones so strict validation is all-or-nothing.
     let mut staged_effective = effective.clone();
     let mut staged_updates = updates.clone();
+    let mut all_applied = true;
     for patch in &patches {
         if let Err(error) = apply_one(&mut staged_effective, &mut staged_updates, updates, patch) {
             if skip_not_applicable {
+                all_applied = false;
                 continue;
             }
             return Err(error);
@@ -449,7 +456,7 @@ pub fn apply_link_patches(
     }
     *effective = staged_effective;
     *updates = staged_updates;
-    Ok(())
+    Ok(all_applied)
 }
 
 fn apply_one(

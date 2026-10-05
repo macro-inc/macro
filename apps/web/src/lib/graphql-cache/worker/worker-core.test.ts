@@ -698,6 +698,77 @@ describe('CacheWorkerCore', () => {
     expect(hydrateQuery).toHaveBeenCalledBefore(writeQuery);
   });
 
+  it.each(['commit', 'delete'] as const)(
+    'preserves a %s after older hydration queued behind a busy worker',
+    async (action) => {
+      const blocker = Promise.withResolvers<void>();
+      const started = Promise.withResolvers<void>();
+      let title: string | undefined = 'initial';
+      const written = {
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          readQuery: async () => {
+            started.resolve();
+            await blocker.promise;
+            return { kind: 'miss' };
+          },
+          hydrateQuery: async () => {
+            title = 'stale';
+            return { ...written, kind: 'data', data: null };
+          },
+          commitOptimisticWrite: async () => {
+            title = 'committed';
+            return { ...written, kind: 'committed' };
+          },
+          deleteKeys: async () => {
+            title = undefined;
+            return written;
+          },
+        }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      const running = core.handleRequest(port, {
+        id: 2,
+        kind: 'read',
+        query: 'query Blocker { blocker }',
+      });
+      await started.promise;
+      const hydration = core.handleRequest(port, {
+        id: 3,
+        kind: 'hydrate',
+        query: 'query Old { document { title } }',
+        data: { document: { title: 'stale' } },
+      });
+      const write = core.handleRequest(
+        port,
+        action === 'commit'
+          ? {
+              id: 4,
+              kind: 'commit-optimistic-write',
+              transactionId: 'txn',
+              leaseOwner: 'runner',
+              leaseGeneration: '1',
+              query: 'mutation Save { document { title } }',
+              data: { document: { title: 'committed' } },
+            }
+          : { id: 4, kind: 'delete-records', keys: ['Document:doc-1'] }
+      );
+      blocker.resolve();
+      await Promise.all([running, hydration, write]);
+      expect(title).toBe(action === 'commit' ? 'committed' : undefined);
+      expect(port.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false })
+      );
+    }
+  );
+
   it('checks storage generation after earlier hydration before later foreground reads', async () => {
     const order: string[] = [];
     const blocker = Promise.withResolvers<void>();

@@ -110,8 +110,13 @@ function isOrderingBarrier(request: CacheRequest): boolean {
   );
 }
 
-function isQueryDataWrite(request: CacheRequest): boolean {
-  return request.kind === 'write' || request.kind === 'hydrate';
+function isAuthoritativeWrite(request: CacheRequest): boolean {
+  return (
+    request.kind === 'write' ||
+    request.kind === 'hydrate' ||
+    request.kind === 'commit-optimistic-write' ||
+    request.kind === 'delete-records'
+  );
 }
 
 function revisionAdvancementCategory(
@@ -394,7 +399,7 @@ export class CacheWorkerCore {
 
   /**
    * Runs the highest-priority request before the next lifecycle barrier.
-   * Cache-view writes retain FIFO order with each other; overlapping reads
+   * Authoritative writes retain FIFO order with each other; overlapping reads
    * may observe the newer state, which is linearizable and avoids stale work.
    */
   private drainQueue(): void {
@@ -405,9 +410,9 @@ export class CacheWorkerCore {
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
 
-    const firstQueryDataWrite = this.queue
+    const firstAuthoritativeWrite = this.queue
       .slice(0, segmentEnd)
-      .findIndex((queued) => isQueryDataWrite(queued.request));
+      .findIndex((queued) => isAuthoritativeWrite(queued.request));
     let index = 0;
     if (segmentEnd > 0) {
       for (let i = 1; i < segmentEnd; i += 1) {
@@ -415,8 +420,8 @@ export class CacheWorkerCore {
         const selected = this.queue[index];
         const preservesWriteOrder =
           !candidate ||
-          !isQueryDataWrite(candidate.request) ||
-          i === firstQueryDataWrite;
+          !isAuthoritativeWrite(candidate.request) ||
+          i === firstAuthoritativeWrite;
         if (
           candidate &&
           selected &&

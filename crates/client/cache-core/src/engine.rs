@@ -2490,7 +2490,9 @@ impl<S: Storage> Engine<S> {
         // and recovered by the returned revalidations.
         let mut effective = bases.clone();
         merge_updates_into_effective(&mut effective, &updates);
-        apply_link_patches(&mut effective, &mut updates, &recipes, true)?;
+        let links_applied = apply_link_patches(&mut effective, &mut updates, &recipes, true)?;
+        revalidations
+            .retain(|query| !query.only_on_link_failure || recipes.is_empty() || !links_applied);
         let (durable_changed, entries) = stage_updates(&bases, updates);
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)

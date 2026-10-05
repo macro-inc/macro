@@ -129,9 +129,25 @@ describe('updateGraphqlEntityPropertyOptions', () => {
         },
       },
     ]);
-    // The record already exists, so the entity's property link list is intact.
-    expect(options.updates).toEqual([]);
-    expect(options.revalidations).toEqual([]);
+    // The response may replace an assignment that this client still has cached.
+    expect(options.updates).toMatchObject([
+      {
+        recordRoot: { entityKey: 'GraphqlSoupDocument:doc-1' },
+        operation: {
+          kind: 'upsertByField',
+          entityKey: 'GraphqlProperty:assignment-1',
+          whereField: 'propertyDefinitionId',
+          equals: 'tag-def',
+        },
+      },
+    ]);
+    expect(options.revalidations).toEqual([
+      {
+        document: EntityPropertiesDocument,
+        variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1') },
+        onlyOnLinkFailure: true,
+      },
+    ]);
     expect(validateUuid(options.uuid)).toBe(true);
     expect(inspectMock).not.toHaveBeenCalled();
   });
@@ -210,6 +226,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
       {
         document: EntityPropertiesDocument,
         variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1') },
+        onlyOnLinkFailure: true,
       },
     ]);
     expect(inspectMock).not.toHaveBeenCalled();
@@ -255,7 +272,13 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(optimisticData.updateEntityPropertyOptions).toMatchObject([
       { id: 'assignment-1', dataType: 'TAG', value: null },
     ]);
-    expect(options.revalidations).toEqual([]);
+    expect(options.revalidations).toEqual([
+      {
+        document: EntityPropertiesDocument,
+        variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1') },
+        onlyOnLinkFailure: true,
+      },
+    ]);
     expect(inspectMock).not.toHaveBeenCalled();
   });
 
@@ -303,6 +326,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
           variables: {
             input: buildGraphqlEntitySoupInput(entityType, 'target-1'),
           },
+          onlyOnLinkFailure: true,
         },
       ]);
       expect(inspectMock).not.toHaveBeenCalled();

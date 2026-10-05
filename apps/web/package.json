@@ -9,6 +9,7 @@
     "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
     "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
     "test": "bunx vitest run",
+    "test:functional": "playwright test --config tests/functional/playwright.config.ts",
     "native:e2e:build": "bash tests/native/build.sh",
     "native:e2e": "bash tests/native/run.sh",
     "native:e2e:smoke": "bash tests/native/run.sh --smoke",

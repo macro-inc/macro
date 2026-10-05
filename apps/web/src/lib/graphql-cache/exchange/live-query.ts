@@ -107,6 +107,7 @@ export class LiveQuery {
       );
       return;
     }
+    const previousSnapshot = this.snapshot;
     this.snapshot = data;
     untrack(() =>
       batch(() => {
@@ -114,10 +115,12 @@ export class LiveQuery {
         this.setState(
           'data',
           reconcile(
-            storeValue(data, this.shape, unwrap(this.state.data)) as Record<
-              string,
-              unknown
-            >,
+            storeValue(
+              data,
+              this.shape,
+              unwrap(this.state.data),
+              previousSnapshot
+            ) as Record<string, unknown>,
             {
               key: RECONCILE_KEY,
               merge: false,

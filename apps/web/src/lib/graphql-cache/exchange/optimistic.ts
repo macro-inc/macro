@@ -112,6 +112,8 @@ export type OptimisticUpdate = OptimisticLinkPatchWire & {
 export type QueryRevalidation = {
   document: DocumentNode;
   variables: AnyVariables;
+  /** Recover incomplete relations without refetching successful local edits. */
+  onlyOnLinkFailure?: boolean;
 };
 
 export type OptimisticMutationOptions = {
@@ -246,6 +248,7 @@ function serializeRevalidation(
     query: stringifyDocument(revalidation.document),
     operationName: documentOperationName(revalidation.document),
     variablesJson: JSON.stringify(revalidation.variables ?? {}),
+    ...(revalidation.onlyOnLinkFailure ? { onlyOnLinkFailure: true } : {}),
   };
 }
 

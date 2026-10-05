@@ -17,6 +17,53 @@ const apply = (view: LiveQuery, isRead: boolean) =>
   );
 
 describe('live query field propagation', () => {
+  it('preserves unchanged untyped properties through structural snapshots without notifying their readers', () => {
+    createRoot((dispose) => {
+      try {
+        const shape = queryShape(gql`query Rows {
+          user { id rows { __typename id properties { id value { __typename optionIds } } } }
+        }`);
+        const initial = {
+          user: {
+            id: 'viewer',
+            rows: Array.from({ length: 1000 }, (_, id) => ({
+              __typename: 'Task',
+              id: String(id),
+              properties: [
+                {
+                  id: `property-${id}`,
+                  value: {
+                    __typename: 'Options',
+                    optionIds: ['initial'],
+                  },
+                },
+              ],
+            })),
+          },
+        };
+        const view = new LiveQuery(initial, shape);
+        const held = (view.data as typeof initial).user.rows[18];
+        const property = held.properties[0];
+        let reads = 0;
+        createComputed(() => {
+          held.properties[0].value.optionIds.join(',');
+          reads++;
+        });
+        for (const optionIds of [['changed'], [], ['initial']]) {
+          const next = structuredClone(initial);
+          next.user.rows[17].properties[0].value.optionIds = optionIds;
+          next.user.rows.reverse();
+          view.replace(next);
+          expect((view.data as typeof initial).user.rows[981]).toBe(held);
+          expect(held.properties[0]).toBe(property);
+          expect(reads).toBe(1);
+          expect(JSON.parse(JSON.stringify(view.data))).toEqual(next);
+        }
+      } finally {
+        dispose();
+      }
+    });
+  });
   it('keeps typed descendants reactive when a structural snapshot replaces an untyped ancestor', () => {
     const shape = queryShape(
       gql`query Rows { user { id rows { __typename id name properties { __typename id } } } }`
@@ -236,6 +283,31 @@ describe('live query field propagation', () => {
     });
     expect((view.data.rows as object[])[1]).toBe(first);
     expect(first).toEqual({ __typename: 'Task', id: 'a', read: true });
+  });
+
+  it.each([
+    { __typename: 'Task', id: 'c', tags: ['second'] },
+    { id: 'c', tags: ['second'] },
+    { tags: ['second'] },
+  ])('does not borrow a reordered row for a new identity: %j', (inserted) => {
+    const view = new LiveQuery({
+      rows: [
+        { __typename: 'Task', id: 'a', tags: ['first'] },
+        { __typename: 'Task', id: 'b', tags: ['second'] },
+      ],
+    });
+    const before = view.snapshot;
+    const retained = (view.data.rows as object[])[1];
+    const next = {
+      rows: [{ __typename: 'Task', id: 'b', tags: ['first'] }, inserted],
+    };
+    view.replace(next);
+    expect(view.data).toEqual(next);
+    expect((view.data.rows as object[])[0]).toBe(retained);
+    expect(before.rows).toEqual([
+      { __typename: 'Task', id: 'a', tags: ['first'] },
+      { __typename: 'Task', id: 'b', tags: ['second'] },
+    ]);
   });
 
   it('preserves row identity and unchanged observers when a list field is patched', () => {

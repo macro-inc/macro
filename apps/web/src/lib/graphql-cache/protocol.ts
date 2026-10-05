@@ -323,6 +323,8 @@ export function validateCacheSearchArgs(
 export type QueryRevalidationWire = {
   query: string;
   operationName?: string;
+  /** Run only if the mutation's relation recipes could not all be applied. */
+  onlyOnLinkFailure?: boolean;
   /** Canonical JSON object, kept as text in the durable queue. */
   variablesJson: string;
 };

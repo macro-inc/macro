@@ -12,8 +12,23 @@ pub(crate) struct QueryProjection {
 
 pub(crate) struct FieldProjection {
     value: Option<CacheValue>,
-    paths: Vec<Vec<ResponsePathSegment>>,
+    selections: Vec<(Vec<ResponsePathSegment>, ValueProjection)>,
     structural: bool,
+}
+
+/// A selected embedded value retains schema-resolved keys and response aliases.
+/// Normalized links remain structural: changing one must rebuild dependencies.
+pub(super) enum ValueProjection {
+    Leaf,
+    Object(Vec<EmbeddedField>),
+    List(Vec<ValueProjection>),
+    Structural,
+}
+
+pub(super) struct EmbeddedField {
+    key: String,
+    response_key: String,
+    value: ValueProjection,
 }
 
 impl QueryProjection {
@@ -31,20 +46,21 @@ impl QueryProjection {
                                 + 128
                                 + binding.value.as_ref().map_or(0, value_bytes)
                                 + binding
-                                    .paths
+                                    .selections
                                     .iter()
-                                    .map(|path| {
-                                        32 + path
-                                            .iter()
-                                            .map(|part| {
-                                                32 + match part {
-                                                    ResponsePathSegment::Field(field) => {
-                                                        field.len()
+                                    .map(|(path, selection)| {
+                                        32 + selection.retained_bytes()
+                                            + path
+                                                .iter()
+                                                .map(|part| {
+                                                    32 + match part {
+                                                        ResponsePathSegment::Field(field) => {
+                                                            field.len()
+                                                        }
+                                                        ResponsePathSegment::Index(_) => 0,
                                                     }
-                                                    ResponsePathSegment::Index(_) => 0,
-                                                }
-                                            })
-                                            .sum::<usize>()
+                                                })
+                                                .sum::<usize>()
                                     })
                                     .sum::<usize>()
                         })
@@ -59,16 +75,15 @@ impl QueryProjection {
             crate::identity::DELETED_FIELD,
             crate::identity::ALIAS_FIELD,
         ] {
-            self.field(key, field, record.fields.get(field), None);
+            self.guard(key, field, record.fields.get(field));
         }
     }
 
-    pub(super) fn field(
+    pub(super) fn guard(
         &mut self,
         key: &EntityKey<'static>,
         field: &str,
         value: Option<&CacheValue>,
-        path: Option<&[ResponsePath<'_>]>,
     ) {
         let binding = self
             .records
@@ -77,22 +92,31 @@ impl QueryProjection {
             .entry(field.to_owned())
             .or_insert_with(|| FieldProjection {
                 value: value.cloned(),
-                paths: Vec::new(),
+                selections: Vec::new(),
                 structural: false,
             });
-        match path {
-            None => binding.structural = true,
-            Some(path) => binding.paths.push(
-                path.iter()
-                    .map(|part| match part {
-                        ResponsePath::Field(field) => {
-                            ResponsePathSegment::Field((*field).to_owned())
-                        }
-                        ResponsePath::Index(index) => ResponsePathSegment::Index(*index),
-                    })
-                    .collect(),
-            ),
-        }
+        binding.structural = true;
+    }
+
+    pub(super) fn selected_field(
+        &mut self,
+        owner: &EntityKey<'static>,
+        key: &str,
+        value: Option<&CacheValue>,
+        path: &[ResponsePath<'_>],
+        selection: ValueProjection,
+    ) {
+        let binding = self
+            .records
+            .entry(owner.clone())
+            .or_default()
+            .entry(key.to_string())
+            .or_insert_with(|| FieldProjection {
+                value: value.cloned(),
+                selections: Vec::new(),
+                structural: false,
+            });
+        binding.selections.push((response_path(path), selection));
     }
 
     /// Inspect only records touched since the last accepted revision. A missing
@@ -114,11 +138,14 @@ impl QueryProjection {
                 if binding.structural {
                     return None;
                 }
-                let value = leaf_json(value?)?;
-                patches.extend(binding.paths.iter().map(|path| LiveFieldPatch {
-                    path: path.clone(),
-                    value: value.clone(),
-                }));
+                for (path, selection) in &binding.selections {
+                    selection.update(
+                        binding.value.as_ref()?,
+                        value?,
+                        &mut path.clone(),
+                        &mut patches,
+                    )?;
+                }
             }
         }
         let mut byte_delta = 0;
@@ -133,6 +160,126 @@ impl QueryProjection {
             }
         }
         Some((patches, byte_delta))
+    }
+}
+
+fn response_path(path: &[ResponsePath<'_>]) -> Vec<ResponsePathSegment> {
+    path.iter()
+        .map(|part| match part {
+            ResponsePath::Field(field) => ResponsePathSegment::Field((*field).to_owned()),
+            ResponsePath::Index(index) => ResponsePathSegment::Index(*index),
+        })
+        .collect()
+}
+
+impl ValueProjection {
+    pub(super) fn compile<'a>(
+        value: Option<&CacheValue>,
+        field: &'a FieldNode,
+        ty: &meta::FieldType,
+        variables: &serde_json::Map<String, Json>,
+        resolvers: &EntityResolverLookup,
+        plans: &mut ReadPlans<'a>,
+    ) -> Result<Self, DenormalizeError> {
+        if ty.kind != meta::FieldKind::Composite {
+            return Ok(Self::Leaf);
+        }
+        Ok(match value {
+            Some(CacheValue::Object(values)) => {
+                let concrete = match values.get("__typename") {
+                    Some(CacheValue::String(name)) => name.as_str(),
+                    _ => ty.name,
+                };
+                let mut fields = Vec::new();
+                for selected in plans
+                    .fields(&field.selection_set, concrete, variables, resolvers)?
+                    .iter()
+                {
+                    match &selected.source {
+                        FieldSource::Typename => {}
+                        FieldSource::Stored { key, ty } => fields.push(EmbeddedField {
+                            key: key.to_string(),
+                            response_key: selected.node.response_key.clone(),
+                            value: Self::compile(
+                                values.get(key.as_ref()),
+                                selected.node,
+                                ty,
+                                variables,
+                                resolvers,
+                                plans,
+                            )?,
+                        }),
+                        _ => return Ok(Self::Structural),
+                    }
+                }
+                Self::Object(fields)
+            }
+            Some(CacheValue::List(values)) => Self::List(
+                values
+                    .iter()
+                    .map(|value| Self::compile(Some(value), field, ty, variables, resolvers, plans))
+                    .collect::<Result<_, _>>()?,
+            ),
+            _ => Self::Structural,
+        })
+    }
+
+    fn update(
+        &self,
+        before: &CacheValue,
+        after: &CacheValue,
+        path: &mut Vec<ResponsePathSegment>,
+        patches: &mut Vec<LiveFieldPatch>,
+    ) -> Option<()> {
+        if before == after {
+            return Some(());
+        }
+        match (self, before, after) {
+            (Self::Leaf, _, value) => patches.push(LiveFieldPatch {
+                path: path.clone(),
+                value: leaf_json(value)?,
+            }),
+            (Self::Object(fields), CacheValue::Object(before), CacheValue::Object(after))
+                if before.get("__typename") == after.get("__typename") =>
+            {
+                for field in fields {
+                    path.push(ResponsePathSegment::Field(field.response_key.clone()));
+                    field.value.update(
+                        before.get(&field.key)?,
+                        after.get(&field.key)?,
+                        path,
+                        patches,
+                    )?;
+                    path.pop();
+                }
+            }
+            (Self::List(items), CacheValue::List(before), CacheValue::List(after))
+                if before.len() == after.len() && items.len() == after.len() =>
+            {
+                for (index, ((selection, before), after)) in
+                    items.iter().zip(before).zip(after).enumerate()
+                {
+                    path.push(ResponsePathSegment::Index(index));
+                    selection.update(before, after, path, patches)?;
+                    path.pop();
+                }
+            }
+            _ => return None,
+        }
+        Some(())
+    }
+
+    fn retained_bytes(&self) -> usize {
+        32 + match self {
+            Self::Object(fields) => fields
+                .iter()
+                .map(|field| {
+                    64 + field.key.len() + field.response_key.len() + field.value.retained_bytes()
+                })
+                .sum(),
+            Self::List(items) => items.iter().map(Self::retained_bytes).sum(),
+            _ => 0,
+        }
     }
 }
 
