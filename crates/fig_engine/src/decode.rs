@@ -191,7 +191,7 @@ pub fn guid(m: MsgRef) -> Option<Guid> {
     })
 }
 
-fn f(m: &MsgRef, name: &str) -> f64 {
+fn f(m: &MsgRef, name: &'static str) -> f64 {
     f64::from(m.f32(name).unwrap_or(0.0))
 }
 
@@ -349,7 +349,7 @@ fn text_content(m: MsgRef) -> TextContent {
                 id,
                 fills: s
                     .has("fillPaints")
-                    .then(|| s.msgs("fillPaints").map(paint).collect()),
+                    .then(|| s.collect_msgs("fillPaints", paint)),
                 font_family: font.and_then(|f| f.str("family")).map(Into::into),
                 font_style: font.and_then(|f| f.str("style")).map(Into::into),
                 font_size: s.f32("fontSize"),
@@ -372,27 +372,24 @@ fn text_layout(m: MsgRef) -> Option<TextLayout> {
     if !m.has("glyphs") && !m.has("layoutSize") {
         return None;
     }
-    let glyphs = m
-        .msgs("glyphs")
-        .map(|g| {
-            let pos = g.msg("position").map(vec2).unwrap_or_default();
-            let emoji = g
-                .uints("emojiCodePoints")
-                .filter(|c| !c.is_empty())
-                .map(Arc::from);
-            Glyph {
-                blob: g.u32("commandsBlob"),
-                x: pos.x as f32,
-                y: pos.y as f32,
-                font_size: g.f32("fontSize").unwrap_or(0.0),
-                style_id: g.u32("styleID").unwrap_or(0),
-                first_char: g.u32("firstCharacter").unwrap_or(0),
-                advance: g.f32("advance").unwrap_or(0.0),
-                rotation: g.f32("rotation").unwrap_or(0.0),
-                emoji,
-            }
-        })
-        .collect();
+    let glyphs = m.collect_msgs("glyphs", |g| {
+        let pos = g.msg("position").map(vec2).unwrap_or_default();
+        let emoji = g
+            .uints("emojiCodePoints")
+            .filter(|c| !c.is_empty())
+            .map(Arc::from);
+        Glyph {
+            blob: g.u32("commandsBlob"),
+            x: pos.x as f32,
+            y: pos.y as f32,
+            font_size: g.f32("fontSize").unwrap_or(0.0),
+            style_id: g.u32("styleID").unwrap_or(0),
+            first_char: g.u32("firstCharacter").unwrap_or(0),
+            advance: g.f32("advance").unwrap_or(0.0),
+            rotation: g.f32("rotation").unwrap_or(0.0),
+            emoji,
+        }
+    });
     let decorations = m
         .msgs("decorations")
         .map(|d| Decoration {
@@ -459,7 +456,7 @@ fn prop_value(v: Option<MsgRef>) -> PropValue {
     }
 }
 
-fn prop_assignments(m: &MsgRef, field: &str) -> Arc<[PropAssignment]> {
+fn prop_assignments(m: &MsgRef, field: &'static str) -> Arc<[PropAssignment]> {
     m.msgs(field)
         .filter_map(|a| {
             Some(PropAssignment {
@@ -546,13 +543,13 @@ pub fn props(m: MsgRef) -> Props {
         }),
     };
     if m.has("fillPaints") {
-        p.fills = Some(m.msgs("fillPaints").map(paint).collect());
+        p.fills = Some(m.collect_msgs("fillPaints", paint));
     } else if m.has("backgroundPaints") && m.bool("backgroundEnabled") != Some(false) {
         // Frames in older files keep their fill as a background.
-        p.fills = Some(m.msgs("backgroundPaints").map(paint).collect());
+        p.fills = Some(m.collect_msgs("backgroundPaints", paint));
     }
     if m.has("strokePaints") {
-        p.strokes = Some(m.msgs("strokePaints").map(paint).collect());
+        p.strokes = Some(m.collect_msgs("strokePaints", paint));
     }
     p.stroke_weight = m.f32("strokeWeight");
     p.stroke_align = m.enum_name("strokeAlign").map(|a| match a {
@@ -570,7 +567,7 @@ pub fn props(m: MsgRef) -> Props {
         p.stroke_geometry = Some(path_refs(m.msgs("strokeGeometry")));
     }
     if m.has("effects") {
-        p.effects = Some(m.msgs("effects").map(effect).collect());
+        p.effects = Some(m.collect_msgs("effects", effect));
     }
     p.corner_radius = m.f32("cornerRadius");
     if m.bool("rectangleCornerRadiiIndependent") == Some(true)
@@ -608,12 +605,12 @@ pub fn props(m: MsgRef) -> Props {
     if let Some(symbol) = m.msg("symbolData") {
         p.symbol = Some(Arc::new(SymbolData {
             symbol_id: symbol.msg("symbolID").and_then(guid),
-            overrides: symbol.msgs("symbolOverrides").map(props).collect(),
+            overrides: symbol.collect_msgs("symbolOverrides", props),
             uniform_scale: symbol.f32("uniformScaleFactor"),
         }));
     }
     if m.has("derivedSymbolData") {
-        p.derived = Some(m.msgs("derivedSymbolData").map(props).collect());
+        p.derived = Some(m.collect_msgs("derivedSymbolData", props));
     }
     p.swapped_symbol = m.msg("overriddenSymbolID").and_then(guid);
     if m.has("componentPropAssignments") {
@@ -689,7 +686,7 @@ pub fn props(m: MsgRef) -> Props {
         .filter(|d| !d.is_empty())
         .map(Into::into);
     p.is_state_group = m.bool("isStateGroup");
-    let style = |new: &str, legacy: &str| {
+    let style = |new: &'static str, legacy: &'static str| {
         m.msg(new)
             .and_then(|s| s.msg("guid"))
             .and_then(guid)
