@@ -54,18 +54,23 @@ export const FooterActions = (props: {
   };
 
   // An open settings split keeps its section; a fresh open lands on Account.
+  const currentTab = () => (settingsOpen() ? activeTabId() : undefined);
+
   const open = (event: MouseEvent) => {
     event.preventDefault();
     analytics.track('sidebar_click', { view: 'settings' });
-    const tab = settingsOpen() ? activeTabId() : undefined;
-    if (event.shiftKey) openSettingsInSplit(tab);
-    else openSettings(tab);
+    if (event.shiftKey) openSettingsInSplit(currentTab());
+    else openSettings(currentTab());
   };
 
   return (
     <div class="flex w-full shrink-0 justify-center">
       <SidebarOpenInSplitMenu
         content={() => SETTINGS_CONTENT}
+        // Route through settings state so the menu reuses an open settings
+        // split (there is only ever one) and keeps its section.
+        onOpenCurrentSplit={() => openSettings(currentTab())}
+        onOpenNewSplit={() => openSettingsInSplit(currentTab())}
         onOpenChange={props.onMenuOpenChange}
         triggerClass="size-10"
       >
