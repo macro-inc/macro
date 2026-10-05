@@ -97,6 +97,31 @@ async fn provider_errors_are_payment_errors() {
     }
 }
 
+#[tokio::test]
+async fn other_failures_carry_the_response_body() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(PERIOD_PATH))
+        .respond_with(
+            ResponseTemplate::new(400)
+                .set_body_string("Failed to deserialize query string: missing field `customerId`"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    match gateway(&server)
+        .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+        .await
+    {
+        Err(BillingError::Payment(error)) => assert_eq!(
+            format!("{error:#}"),
+            "reading the subscription period from the authentication service: Failed to deserialize query string: missing field `customerId`"
+        ),
+        other => panic!("expected a payment error, got {other:?}"),
+    }
+}
+
 fn gateway(server: &MockServer) -> HttpPaymentGateway {
     HttpPaymentGateway::new(Arc::new(AuthServiceClient::new(
         "key".to_string(),

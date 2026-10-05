@@ -512,7 +512,7 @@ impl PaymentGateway for StripePaymentGateway {
         }
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     async fn subscription_period(
         &self,
         customer_id: &str,

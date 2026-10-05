@@ -56,7 +56,7 @@ impl AuthServiceClient {
     /// scope (`team_id` is `None`) or the team scope. `Ok(None)` when no
     /// non-canceled subscription matches. The caller picks `timeout` because it
     /// knows what is waiting on the answer.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn ai_subscription_period(
         &self,
         customer_id: &str,

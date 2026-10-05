@@ -1,5 +1,5 @@
 use super::{
-    ReturnUrlError, SubscriptionPeriodQuery, get_plans_handler, scope_from_query,
+    ReturnUrlError, SettleRequest, SubscriptionPeriodQuery, get_plans_handler, scope_from_query,
     validate_return_url,
 };
 use crate::domain::{PlanTier, SubscriptionScope};
@@ -92,4 +92,10 @@ fn subscription_period_query_selects_the_scope() {
         scope_from_query(personal.team_id),
         SubscriptionScope::Personal
     );
+}
+
+#[test]
+fn settle_request_reads_the_camel_case_user_id() {
+    let request: SettleRequest = serde_json::from_str(r#"{"userId":"macro|a@b.c"}"#).unwrap();
+    assert_eq!(request.user_id, "macro|a@b.c");
 }
