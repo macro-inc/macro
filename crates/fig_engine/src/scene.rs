@@ -721,23 +721,21 @@ impl<'a> Builder<'a> {
         levels.pop();
     }
 
-    /// An override that only names a shared style takes the style's paints.
+    /// An override that names a shared style takes the style's paints (its
+    /// own copy may be stale, as on nodes; see `document::resolve_styles`).
     fn apply_styles(&self, p: &mut Props, o: &Props) {
         let style = |g: Option<Guid>| g.and_then(|g| self.doc.find(g)).map(|i| self.doc.props(i));
-        if o.fills.is_none()
-            && let Some(s) = style(o.fill_style)
+        if let Some(s) = style(o.fill_style)
             && s.fills.is_some()
         {
             p.fills = s.fills.clone();
         }
-        if o.strokes.is_none()
-            && let Some(s) = style(o.stroke_style)
+        if let Some(s) = style(o.stroke_style)
             && s.fills.is_some()
         {
             p.strokes = s.fills.clone();
         }
-        if o.effects.is_none()
-            && let Some(s) = style(o.effect_style)
+        if let Some(s) = style(o.effect_style)
             && s.effects.is_some()
         {
             p.effects = s.effects.clone();

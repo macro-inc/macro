@@ -461,3 +461,72 @@ fn draws_emoji_stand_ins() {
         "a green check mark box, not black: {r} {g} {b}"
     );
 }
+
+/// An instance override naming a shared style shows the style's paints
+/// over the override's own (stale) copy.
+#[test]
+fn overrides_take_their_shared_styles() {
+    let guid = crate::testing::guid;
+    let bytes = file(
+        vec![
+            node(
+                5,
+                Some((1, "~")),
+                "RECTANGLE",
+                "Light",
+                vec![
+                    ("visible", V::Bool(false)),
+                    ("fillPaints", V::List(vec![solid(0.0, 1.0, 0.0)])),
+                ],
+            ),
+            node(
+                10,
+                Some((1, "a")),
+                "SYMBOL",
+                "Icon",
+                vec![
+                    ("size", size(20.0, 20.0)),
+                    ("transform", translate(100.0, 0.0)),
+                ],
+            ),
+            node(
+                11,
+                Some((10, "a")),
+                "RECTANGLE",
+                "Glyph",
+                vec![
+                    ("size", size(20.0, 20.0)),
+                    ("transform", translate(0.0, 0.0)),
+                    ("fillPaints", V::List(vec![solid(1.0, 0.0, 0.0)])),
+                ],
+            ),
+            node(
+                20,
+                Some((1, "b")),
+                "INSTANCE",
+                "Icon",
+                vec![
+                    ("size", size(20.0, 20.0)),
+                    ("transform", translate(0.0, 0.0)),
+                    (
+                        "symbolData",
+                        V::Msg(vec![
+                            ("symbolID", guid(10)),
+                            (
+                                "symbolOverrides",
+                                V::List(vec![V::Msg(vec![
+                                    ("guidPath", V::Msg(vec![("guids", V::List(vec![guid(11)]))])),
+                                    ("fillPaints", V::List(vec![solid(0.0, 0.0, 0.0)])),
+                                    ("styleIdForFill", V::Msg(vec![("guid", guid(5))])),
+                                ])]),
+                            ),
+                        ]),
+                    ),
+                ],
+            ),
+        ],
+        vec![],
+    );
+    let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 40, 20));
+    assert_eq!(rgba(&p, 10, 10), [0, 255, 0, 255]);
+}
