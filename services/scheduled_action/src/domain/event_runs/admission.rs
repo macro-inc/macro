@@ -68,6 +68,9 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess> EventIngestion for EventAdmis
                 let Owner::User(owner) = &configuration.owner else {
                     continue;
                 };
+                if !incoming.is_for_owner(owner) {
+                    continue;
+                }
                 let Some(access) = self.access.authorize(owner, &event).await? else {
                     continue;
                 };

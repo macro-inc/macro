@@ -1,237 +1,338 @@
-import type { LoroDoc, LoroMap } from 'loro-crdt';
-import type { DocxPackageState } from './docx-package';
-import { compareKeyed, keysBetween } from './fractional-index';
+import type {
+  BlockRecord,
+  Change,
+  CollabState,
+  DeltaOp,
+  RemoteChange,
+  V1State,
+} from '@core/docx-engine/types';
+import { type LoroDoc, type LoroEvent, LoroMap, LoroText } from 'loro-crdt';
 
 /**
- * Root containers of a collaborative DOCX. Every root is a flat map so two
- * peers editing different blocks, parts, or comment marks never conflict;
- * concurrent writes to the same key resolve last-writer-wins.
+ * Root containers of a collaborative DOCX (see `crates/docx_engine` `collab`).
+ *
+ * Parts, relationships and content types are flat maps of strings. Each
+ * block is a map (`k` kind, `p` parent, `o` position key, `a` attributes,
+ * `x` properties) and each paragraph's text is a rich-text container whose
+ * marks are its formatting, so concurrent typing in one paragraph merges
+ * character by character. Comment marks keep their own map.
  */
 export const DOCX_LORO_CONTAINERS = {
   meta: 'docxMeta',
+  marks: 'docxMarks',
+  parts: 'wordParts',
+  types: 'wordTypes',
+  rels: 'wordRels',
+  blocks: 'wordBlocks',
+} as const;
+
+/** Containers of the first format, read once to migrate. */
+export const LEGACY_CONTAINERS = {
   blocks: 'docxBlocks',
   order: 'docxOrder',
   parts: 'docxParts',
-  marks: 'docxMarks',
 } as const;
 
-export const DOCX_FORMAT_VERSION = 1;
+export const DOCX_FORMAT_VERSION = 2;
 
-function container(doc: LoroDoc, name: string): LoroMap {
-  return doc.getMap(name);
-}
+/** Commit origins of writes that do not come from the editing engine. */
+export const DOCX_ORIGINS = {
+  /** Edits made by this peer's engine (already applied there). */
+  local: 'docx-local',
+  seed: 'docx-seed',
+  migrate: 'docx-migrate',
+  comment: 'docx-comment',
+} as const;
 
-function stringEntries(map: LoroMap): Array<[string, string]> {
-  const out: Array<[string, string]> = [];
-  for (const key of map.keys()) {
-    const value = map.get(key);
-    if (typeof value === 'string') out.push([key, value]);
-  }
-  return out;
+const FLAT = [
+  DOCX_LORO_CONTAINERS.parts,
+  DOCX_LORO_CONTAINERS.types,
+  DOCX_LORO_CONTAINERS.rels,
+] as const;
+
+/**
+ * Every peer must read and write paragraph marks the same way: a mark never
+ * grows over text typed next to it, because the engine states the full
+ * formatting of every insertion.
+ */
+export function configureDocxText(doc: LoroDoc) {
+  doc.configDefaultTextStyle({ expand: 'none' });
 }
 
 export function docxFormatVersion(doc: LoroDoc): number | undefined {
-  const value = container(doc, DOCX_LORO_CONTAINERS.meta).get('formatVersion');
+  const value = doc.getMap(DOCX_LORO_CONTAINERS.meta).get('formatVersion');
   return typeof value === 'number' ? value : undefined;
 }
 
-/** True once a peer has seeded the document body. */
+/** True once a peer has seeded the document. */
 export function isDocxSeeded(doc: LoroDoc): boolean {
   return docxFormatVersion(doc) !== undefined;
 }
 
-export type OrderKeys = ReadonlyMap<string, string>;
-
-/** The current block order keys, for computing a minimal reorder. */
-export function readOrderKeys(doc: LoroDoc): Map<string, string> {
-  return new Map(stringEntries(container(doc, DOCX_LORO_CONTAINERS.order)));
+function stringEntries(map: LoroMap): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of map.keys()) {
+    const value = map.get(key);
+    if (typeof value === 'string') out[key] = value;
+  }
+  return out;
 }
 
-/**
- * The document the collaborative state describes. A block is visible only
- * when it has both content and a position; a half-written block (possible
- * mid-merge after a concurrent delete) is skipped rather than guessed at.
- */
-export function readDocxState(doc: LoroDoc): DocxPackageState {
-  const blocks = new Map(
-    stringEntries(container(doc, DOCX_LORO_CONTAINERS.blocks))
-  );
-  const keyed = stringEntries(container(doc, DOCX_LORO_CONTAINERS.order))
-    .filter(([id]) => blocks.has(id))
-    .map(([id, key]) => ({ id, key }))
-    .sort(compareKeyed);
+function field(map: LoroMap, key: string): string {
+  const value = map.get(key);
+  return typeof value === 'string' ? value : '';
+}
+
+/** One block as stored, or null when it is not (or no longer) a block. */
+export function readBlock(doc: LoroDoc, id: string): BlockRecord | null {
+  const value = doc.getMap(DOCX_LORO_CONTAINERS.blocks).get(id);
+  if (!(value instanceof LoroMap)) return null;
+  const k = field(value, 'k');
+  if (!k) return null;
+  const record: BlockRecord = {
+    id,
+    k,
+    p: field(value, 'p'),
+    o: field(value, 'o'),
+    a: field(value, 'a'),
+    x: field(value, 'x'),
+  };
+  const text = value.get('t');
+  if (text instanceof LoroText) record.t = text.toDelta() as DeltaOp[];
+  else if (k === 'p') record.t = [];
+  return record;
+}
+
+/** The whole shared state, for opening the document in the engine. */
+export function readCollabState(doc: LoroDoc): CollabState {
+  const blocks: BlockRecord[] = [];
+  const map = doc.getMap(DOCX_LORO_CONTAINERS.blocks);
+  for (const id of map.keys()) {
+    const record = readBlock(doc, id);
+    if (record) blocks.push(record);
+  }
   return {
-    order: keyed.map((entry) => entry.id),
+    parts: stringEntries(doc.getMap(DOCX_LORO_CONTAINERS.parts)),
+    types: stringEntries(doc.getMap(DOCX_LORO_CONTAINERS.types)),
+    rels: stringEntries(doc.getMap(DOCX_LORO_CONTAINERS.rels)),
     blocks,
-    parts: new Map(stringEntries(container(doc, DOCX_LORO_CONTAINERS.parts))),
   };
 }
 
-/** Write a freshly split package as the initial collaborative state. */
-export function seedDocxState(doc: LoroDoc, state: DocxPackageState) {
-  const blocks = container(doc, DOCX_LORO_CONTAINERS.blocks);
-  const order = container(doc, DOCX_LORO_CONTAINERS.order);
-  const parts = container(doc, DOCX_LORO_CONTAINERS.parts);
-  const keys = keysBetween(null, null, state.order.length);
-  state.order.forEach((id, index) => {
-    blocks.set(id, state.blocks.get(id) ?? '');
-    order.set(id, keys[index]);
-  });
-  for (const [name, value] of state.parts) parts.set(name, value);
-  container(doc, DOCX_LORO_CONTAINERS.meta).set(
-    'formatVersion',
-    DOCX_FORMAT_VERSION
-  );
-  doc.commit({ origin: 'docx-seed' });
+function writeBlock(doc: LoroDoc, record: BlockRecord) {
+  const map = doc
+    .getMap(DOCX_LORO_CONTAINERS.blocks)
+    .setContainer(record.id, new LoroMap());
+  map.set('k', record.k);
+  map.set('p', record.p);
+  map.set('o', record.o);
+  map.set('a', record.a);
+  map.set('x', record.x);
+  if (record.t) {
+    const text = map.setContainer('t', new LoroText());
+    if (record.t.length) text.applyDelta(record.t);
+  }
 }
 
-export type DocxChanges = {
-  /** Blocks whose content was created or changed. */
-  upserts: ReadonlyMap<string, string>;
-  /** Blocks removed from the document. */
-  removed: readonly string[];
-  /** The complete new block order, when it changed. */
-  order?: readonly string[];
-  /** Parts created or changed (string) or removed (null). */
-  parts: ReadonlyMap<string, string | null>;
+/** Writes a document's whole state (seeding or migrating) in one commit. */
+export function writeCollabState(
+  doc: LoroDoc,
+  state: CollabState,
+  origin: string = DOCX_ORIGINS.seed
+) {
+  configureDocxText(doc);
+  for (const [container, entries] of [
+    [DOCX_LORO_CONTAINERS.parts, state.parts],
+    [DOCX_LORO_CONTAINERS.types, state.types],
+    [DOCX_LORO_CONTAINERS.rels, state.rels],
+  ] as const) {
+    const map = doc.getMap(container);
+    for (const [key, value] of Object.entries(entries)) map.set(key, value);
+  }
+  for (const record of state.blocks) writeBlock(doc, record);
+  doc
+    .getMap(DOCX_LORO_CONTAINERS.meta)
+    .set('formatVersion', DOCX_FORMAT_VERSION);
+  doc.commit({ origin });
+}
+
+/** The first format's state, for migrating it. */
+export function readV1State(doc: LoroDoc): V1State {
+  const blocks = stringEntries(doc.getMap(LEGACY_CONTAINERS.blocks));
+  const keys = stringEntries(doc.getMap(LEGACY_CONTAINERS.order));
+  const order = Object.entries(keys)
+    .filter(([id]) => id in blocks)
+    .sort(([ia, ka], [ib, kb]) =>
+      ka < kb ? -1 : ka > kb ? 1 : ia < ib ? -1 : ia > ib ? 1 : 0
+    )
+    .map(([id]) => id);
+  return {
+    order,
+    blocks,
+    parts: stringEntries(doc.getMap(LEGACY_CONTAINERS.parts)),
+  };
+}
+
+/** Empties the first format's containers once their content moved. */
+export function clearV1(doc: LoroDoc) {
+  for (const name of Object.values(LEGACY_CONTAINERS)) {
+    const map = doc.getMap(name);
+    for (const key of map.keys()) map.delete(key);
+  }
+}
+
+/**
+ * Writes the engine's changes into the shared containers (not committed).
+ * `adjust` rewrites a text delta made against an older version of the text.
+ */
+export function writeChanges(
+  doc: LoroDoc,
+  changes: readonly Change[],
+  adjust: (id: string, delta: DeltaOp[]) => DeltaOp[] = (_, d) => d
+) {
+  const blocks = doc.getMap(DOCX_LORO_CONTAINERS.blocks);
+  for (const change of changes) {
+    switch (change.t) {
+      case 'block':
+        writeBlock(doc, change.block);
+        break;
+      case 'fields': {
+        const map = blocks.get(change.id);
+        if (!(map instanceof LoroMap)) break;
+        for (const [key, value] of Object.entries(change.fields))
+          map.set(key, value);
+        break;
+      }
+      case 'text': {
+        const map = blocks.get(change.id);
+        if (!(map instanceof LoroMap)) break;
+        let text = map.get('t');
+        if (!(text instanceof LoroText))
+          text = map.setContainer('t', new LoroText());
+        const delta = adjust(change.id, change.delta);
+        if (delta.length) (text as LoroText).applyDelta(delta);
+        break;
+      }
+      case 'remove':
+        blocks.delete(change.id);
+        break;
+      case 'entry': {
+        const map = doc.getMap(change.container);
+        if (change.value === null) map.delete(change.key);
+        else map.set(change.key, change.value);
+        break;
+      }
+    }
+  }
+}
+
+/** What other peers (or the shared undo history) changed, by event path. */
+export type Touched = {
+  blocks: Set<string>;
+  /** `container\u0000key` of flat-map entries. */
+  entries: Set<string>;
+  /** Text deltas per block, in order. */
+  text: Map<string, DeltaOp[][]>;
 };
 
-export function hasChanges(changes: DocxChanges): boolean {
-  return (
-    changes.upserts.size > 0 ||
-    changes.removed.length > 0 ||
-    changes.order !== undefined ||
-    changes.parts.size > 0
-  );
+export function emptyTouched(): Touched {
+  return { blocks: new Set(), entries: new Set(), text: new Map() };
 }
 
-/** Indices of a longest strictly increasing subsequence of `values`. */
-function longestIncreasing(values: readonly string[]): Set<number> {
-  const tails: number[] = [];
-  const previous = new Array<number>(values.length).fill(-1);
-  values.forEach((value, index) => {
-    let low = 0;
-    let high = tails.length;
-    while (low < high) {
-      const mid = (low + high) >> 1;
-      if (values[tails[mid]] < value) low = mid + 1;
-      else high = mid;
-    }
-    if (low > 0) previous[index] = tails[low - 1];
-    tails[low] = index;
-  });
-  const keep = new Set<number>();
-  let cursor = tails.length ? tails[tails.length - 1] : -1;
-  while (cursor >= 0) {
-    keep.add(cursor);
-    cursor = previous[cursor];
-  }
-  return keep;
-}
+const SEPARATOR = '\u0000';
 
-/**
- * Position keys for `order` that reuse as many existing keys as possible:
- * blocks already in relative order keep their keys; moved and new blocks get
- * fresh keys between their kept neighbours. Returns only keys that change.
- */
-export function reorderKeys(
-  existing: OrderKeys,
-  order: readonly string[]
-): Map<string, string> {
-  const current = order.map((id) => existing.get(id));
-  const candidates: number[] = [];
-  current.forEach((key, index) => {
-    if (key !== undefined) candidates.push(index);
-  });
-  // Ties between concurrently minted keys break by id, matching readDocxState.
-  const sortable = candidates.map(
-    (index) => `${current[index]}\u0000${order[index]}`
-  );
-  const keptCandidates = longestIncreasing(sortable);
-  const kept = new Set<number>();
-  let previousKey: string | undefined;
-  candidates.forEach((index, i) => {
-    if (!keptCandidates.has(i)) return;
-    // Concurrent peers can mint the same key; re-key the later block so new
-    // keys always have a strictly ordered pair of neighbours.
-    if (current[index] === previousKey) return;
-    previousKey = current[index];
-    kept.add(index);
-  });
-
-  const changed = new Map<string, string>();
-  let index = 0;
-  while (index < order.length) {
-    if (kept.has(index)) {
-      index++;
+/** Notes the blocks and entries a batch of events changed. */
+export function collectTouched(
+  events: ReadonlyArray<Pick<LoroEvent, 'path' | 'diff'>>,
+  into: Touched
+) {
+  for (const event of events) {
+    const [root, id, sub] = event.path;
+    const diff = event.diff;
+    if (root === DOCX_LORO_CONTAINERS.blocks) {
+      if (id === undefined) {
+        // Blocks added or removed.
+        if (diff.type === 'map')
+          for (const key of Object.keys(diff.updated)) into.blocks.add(key);
+        continue;
+      }
+      into.blocks.add(String(id));
+      if (sub === 't' && diff.type === 'text') {
+        const list = into.text.get(String(id)) ?? [];
+        list.push(diff.diff as DeltaOp[]);
+        into.text.set(String(id), list);
+      }
       continue;
     }
-    const runStart = index;
-    while (index < order.length && !kept.has(index)) index++;
-    const low = runStart > 0 ? (current[runStart - 1] ?? null) : null;
-    const high = index < order.length ? (current[index] ?? null) : null;
-    const keys = keysBetween(low, high, index - runStart);
-    for (let i = runStart; i < index; i++) {
-      const key = keys[i - runStart];
-      current[i] = key;
-      changed.set(order[i], key);
+    if (
+      typeof root === 'string' &&
+      (FLAT as readonly string[]).includes(root) &&
+      diff.type === 'map'
+    ) {
+      for (const key of Object.keys(diff.updated))
+        into.entries.add(`${root}${SEPARATOR}${key}`);
     }
   }
-  return changed;
 }
 
-/** Apply local document changes to the collaborative state in one commit. */
-export function writeDocxChanges(doc: LoroDoc, changes: DocxChanges) {
-  if (!hasChanges(changes)) return;
-  const blocks = container(doc, DOCX_LORO_CONTAINERS.blocks);
-  const order = container(doc, DOCX_LORO_CONTAINERS.order);
-  const parts = container(doc, DOCX_LORO_CONTAINERS.parts);
-  for (const [id, xml] of changes.upserts) blocks.set(id, xml);
-  for (const id of changes.removed) {
-    blocks.delete(id);
-    order.delete(id);
+/** The engine's view of what was touched: whole blocks and entries as they now are. */
+export function remoteChanges(doc: LoroDoc, touched: Touched): RemoteChange[] {
+  const out: RemoteChange[] = [];
+  // Parents before children, so a new table's rows find it.
+  const records: BlockRecord[] = [];
+  for (const id of touched.blocks) {
+    const record = readBlock(doc, id);
+    if (record) records.push(record);
+    else out.push({ t: 'remove', id });
   }
-  if (changes.order) {
-    const existing = readOrderKeys(doc);
-    // A block another peer deleted concurrently stays deleted unless this
-    // peer also changed its content.
-    const ordered = changes.order.filter(
-      (id) => existing.has(id) || changes.upserts.has(id)
-    );
-    for (const [id, key] of reorderKeys(existing, ordered)) order.set(id, key);
-  }
-  for (const [name, value] of changes.parts) {
-    if (value === null) parts.delete(name);
-    else parts.set(name, value);
-  }
-  doc.commit({ origin: 'docx-edit' });
-}
-
-/** Changes that turn `before` into `after`. */
-export function diffDocxStates(
-  before: DocxPackageState,
-  after: DocxPackageState
-): DocxChanges {
-  const upserts = new Map<string, string>();
-  for (const id of after.order) {
-    const xml = after.blocks.get(id);
-    if (xml !== undefined && before.blocks.get(id) !== xml)
-      upserts.set(id, xml);
-  }
-  const present = new Set(after.order);
-  const removed = before.order.filter((id) => !present.has(id));
-  const orderChanged =
-    before.order.length !== after.order.length ||
-    before.order.some((id, index) => after.order[index] !== id);
-  const parts = new Map<string, string | null>();
-  for (const [name, value] of after.parts)
-    if (before.parts.get(name) !== value) parts.set(name, value);
-  for (const name of before.parts.keys())
-    if (!after.parts.has(name)) parts.set(name, null);
-  return {
-    upserts,
-    removed,
-    order: orderChanged ? after.order : undefined,
-    parts,
+  const byId = new Map(records.map((r) => [r.id, r]));
+  const depth = (r: BlockRecord) => {
+    let d = 0;
+    let parent = byId.get(r.p);
+    while (parent && d < 64) {
+      d++;
+      parent = byId.get(parent.p);
+    }
+    return d;
   };
+  records.sort((a, b) => depth(a) - depth(b));
+  for (const block of records) out.push({ t: 'block', block });
+  for (const entry of touched.entries) {
+    const [container, key] = entry.split(SEPARATOR);
+    const value = doc.getMap(container).get(key);
+    out.push({
+      t: 'entry',
+      container,
+      key,
+      value: typeof value === 'string' ? value : null,
+    });
+  }
+  return out;
+}
+
+/** Paragraph texts of the shared document in document order (tests, checks). */
+export function sharedParagraphTexts(doc: LoroDoc): string[] {
+  const { blocks } = readCollabState(doc);
+  const children = new Map<string, BlockRecord[]>();
+  for (const b of blocks) {
+    const list = children.get(b.p) ?? [];
+    list.push(b);
+    children.set(b.p, list);
+  }
+  for (const list of children.values())
+    list.sort((a, b) =>
+      a.o < b.o ? -1 : a.o > b.o ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+    );
+  const out: string[] = [];
+  const walk = (parent: string) => {
+    for (const b of children.get(parent) ?? []) {
+      if (b.k === 'p')
+        out.push(
+          (b.t ?? []).map((op) => ('insert' in op ? op.insert : '')).join('')
+        );
+      walk(b.id);
+    }
+  };
+  walk('');
+  return out;
 }

@@ -123,7 +123,6 @@ use github_pull_requests::inbound::changes_router::{
     GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
 };
 use initiative::domain::models::{
-    AssignTaskStatus, AssignTasksRequest, AssignTasksResponse, AssignTasksResult,
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
 };
@@ -455,8 +454,6 @@ use utoipa::OpenApi;
         initiative::inbound::axum_router::get::get_initiative_handler,
         initiative::inbound::axum_router::update::update_initiative_handler,
         initiative::inbound::axum_router::delete::delete_initiative_handler,
-        initiative::inbound::axum_router::assign_tasks::assign_initiative_tasks_handler,
-        initiative::inbound::axum_router::unassign_task::unassign_initiative_task_handler,
         // databases
         databases::inbound::axum_router::list_databases_handler,
         databases::inbound::starter_router::ensure_starter_handler,
@@ -740,10 +737,6 @@ use utoipa::OpenApi;
             CreateInitiativeRequest,
             InitialPropertyValue,
             UpdateInitiativeRequest,
-            AssignTasksRequest,
-            AssignTasksResult,
-            AssignTasksResponse,
-            AssignTaskStatus,
             CollabSurfaceResponse,
             CollabSurfaceTokenResponse,
             EnsureCollabSurfaceRequest,

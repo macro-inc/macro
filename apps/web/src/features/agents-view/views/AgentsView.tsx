@@ -34,6 +34,8 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { routineContent } from '../../routines/routine-navigation';
+import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
@@ -79,7 +81,12 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
   const dataMode = () => dataModeFor(mode());
-  const [page, setPage] = createSignal<AgentsPage>('new');
+  const [localPage, setPage] = createSignal<AgentsPage>('new');
+  const isRoutinesPage = () => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'routines';
+  };
+  const page = () => (isRoutinesPage() ? 'routines' : localPage());
   const [selected, setSelected] = createSignal<
     SelectedConversation | undefined
   >(
@@ -90,7 +97,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
         }
       : undefined
   );
-  const [mobileList, setMobileList] = createSignal(true);
+  const [mobileList, setMobileList] = createSignal(!isRoutinesPage());
   const [draft, setDraft] = createSignal('');
   const [search, setSearch] = createSignal('');
   const rosterSource = createAgentRosterSource();
@@ -165,6 +172,26 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   );
   const openPage = (next: AgentsPage) => {
     setMobileList(false);
+    if (next === 'routines') {
+      layout.openWithSplit(routineContent(), {
+        handle: panel.handle,
+        activate: true,
+        search: {},
+      });
+      return;
+    }
+    if (isRoutinesPage()) {
+      layout.openWithSplit(
+        {
+          type: 'component',
+          id: 'agents',
+          preserveParams: true,
+          params: { agentPage: next, agentPageRequest: crypto.randomUUID() },
+        },
+        { handle: panel.handle, activate: true, search: {} }
+      );
+      return;
+    }
     setSelected(undefined);
     setPage(next);
   };
@@ -187,9 +214,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     )
   );
   const openRoster = (_kind: AgentKind) => {
-    setMobileList(false);
-    setSelected(undefined);
-    setPage('agents');
+    openPage('agents');
   };
   const openConversation = (
     conversation: AgentConversationTarget,
@@ -258,6 +283,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     });
   };
   const pageTitle = () => {
+    if (page() === 'routines') return 'Routines';
     if (page() === 'agents') return 'Agents';
     if (page() === 'connections') return 'Connections';
     return 'New conversation';
@@ -324,17 +350,22 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                     keyed
                     fallback={
                       <>
-                        <Topbar
-                          title={pageTitle()}
-                          onBack={
-                            isTouchDevice()
-                              ? () => setMobileList(true)
-                              : undefined
-                          }
-                        />
+                        <Show when={page() !== 'routines'}>
+                          <Topbar
+                            title={pageTitle()}
+                            onBack={
+                              isTouchDevice()
+                                ? () => setMobileList(true)
+                                : undefined
+                            }
+                          />
+                        </Show>
                         <div class="body">
                           <Suspense fallback={<LoadingComposer />}>
                             <Switch>
+                              <Match when={page() === 'routines'}>
+                                <RoutinesPage />
+                              </Match>
                               <Match when={page() === 'connections'}>
                                 <McpConnections />
                               </Match>

@@ -47,7 +47,6 @@ afterEach(() => {
 const detail: ProjectDetail = {
   id: 'launch',
   name: 'Launch',
-  descriptionDocumentId: 'description',
   updatedAt: '',
   ownerId: 'owner',
   memberIds: ['owner', 'collaborator'],
@@ -69,7 +68,6 @@ function launch(source: {
     userId: () => 'owner',
     createCollectionSource: unused,
     createPropertyDefinitionsSource: unused,
-    createReferencesSource: unused,
     createProjectSource: (id) => {
       requested.push(id());
       return {

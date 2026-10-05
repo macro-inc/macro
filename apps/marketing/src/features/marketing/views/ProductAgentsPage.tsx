@@ -6,17 +6,16 @@ import { setPageSeo } from '../../../app/utils/utilSeo';
 import HermesIcon from '../assets/hermes.svg';
 import OpenClawIcon from '../assets/openclaw.svg';
 import {
-  AgentArtifactDemo,
-  AgentContextDemo,
-  AgentEmailReviewDemo,
-  AgentRequestDemo,
-  AgentTaskResultDemo,
+  AgentMcpDemo,
+  AgentMemoryDemo,
+  AgentModelsDemo,
+  AgentSearchDemo,
 } from '../components/agents/AgentStories';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import {
   ContextGraphic,
-  EditingGraphic,
+  DiffGraphic,
   LinkedWorkGraphic,
   ThreadGraphic,
 } from '../components/product/ProductGraphics';
@@ -28,49 +27,97 @@ import {
 import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 import './agents-page.css';
 
+/** Clients the app's MCP settings and Bring your own agent card name. */
 const existingAgents = [
+  { name: 'Claude', icon: ClaudeIcon },
+  { name: 'ChatGPT', icon: ChatGPTIcon },
+  { name: 'Cursor', icon: CursorIcon },
   { name: 'Hermes', icon: HermesIcon },
   { name: 'OpenClaw', icon: OpenClawIcon },
-  { name: 'ChatGPT', icon: ChatGPTIcon },
-  { name: 'Claude', icon: ClaudeIcon },
-  { name: 'Cursor', icon: CursorIcon },
+];
+
+const agentsFaq = [
+  {
+    q: 'What does Macro’s memory actually remember?',
+    a: 'Who works on what, what you’ve promised customers, and who knows the most about a topic. We rebuild it every night from your team’s email, channels, docs, tasks, calls, and CRM. When an agent needs the latest details, it searches for them. It only uses what the person asking is allowed to see.',
+  },
+  {
+    q: 'What can agents do in Macro?',
+    a: 'Most of what you can. They search and read email, chat, docs, tasks, and calls. They write and edit docs, create and assign tasks, update customers in the CRM, post in channels, and draft email. The results land in the same workspace your team already uses.',
+  },
+  {
+    q: 'Which models can I use?',
+    a: 'The latest from Anthropic, OpenAI, and Google. The model is a dropdown in the composer, and you can switch in the middle of a conversation if you want a second opinion. Memory and tools work the same with every model, so you’re never locked into one lab.',
+  },
+  {
+    q: 'Can an agent see things I can’t?',
+    a: 'No. An agent runs with the permissions of the person using it. If a doc, channel, or email isn’t shared with you, your agent can’t read it either.',
+  },
+  {
+    q: 'Will an agent send email without asking me?',
+    a: 'No. The agent drafts the email in the conversation, and it only goes out after you’ve checked the recipients and the wording. Other changes, like doc edits and new tasks, happen right away, the same way a teammate’s would.',
+  },
+  {
+    q: 'Can I edit what an agent makes?',
+    a: 'Yes. A doc or task an agent creates is an ordinary Macro doc or task. Edit it, reassign it, or ask another agent to pick it up.',
+  },
+  {
+    q: 'Does a doc have to be open for an agent to edit it?',
+    a: 'No. Agents edit through the same sync service your teammates use, so the doc can be closed. If you have it open, you’ll see the edits arrive live and can keep typing alongside them.',
+  },
+  {
+    q: 'Can I use Macro from Claude Code, ChatGPT, or Cursor?',
+    a: (
+      <>
+        Yes. Our MCP server gives them the same tools our agents use, with your
+        permissions. In Claude Code, run{' '}
+        <code>
+          claude mcp add --transport http macro https://mcp-server.macro.com/mcp
+        </code>
+        . In Claude.ai, add it under Settings → Connectors. ChatGPT needs
+        Developer mode turned on. Cursor and other IDEs take the JSON config
+        from the MCP server page in Macro’s settings.
+      </>
+    ),
+  },
 ];
 
 export function RouteAgents() {
   setPageSeo({
     title: 'Macro Agents — AI With Your Whole Workspace as Context',
     description:
-      'Team-level memory built from email, chat, documents, tasks, and calls. Bring your existing agents, search your workspace, and edit documents live—even when they aren’t open.',
+      'Agents with memory of your team’s email, chat, docs, tasks, and calls. One search across everything, any model, and an MCP server for the agents you already use.',
     path: '/agents',
   });
   return (
     <ProductPage>
       <ProductHero
         product="Agents"
-        title={['One memory for your team', 'and all its agents.']}
+        title={['Agents that know what', 'your team is doing.']}
         description={[
-          'Shared memory of what everyone on your team is doing.',
-          'Email, chat, docs, tasks, and calls.',
+          'Macro remembers your email, chat, docs, tasks, and calls.',
+          'Use any model, from any device, and pick up where you left off.',
         ]}
         cta="agents_hero_get_started"
       />
       <WorkspaceDesktopDemo
         view="agents"
+        initialAgent="launch-status"
         label="Explore Macro Agents"
-        caption="Ask about the launch tasks or create a task in this local sample workspace."
+        caption="A sample workspace. Ask about the launch or open a linked task."
       />
       <nav class="feature-page-jump-links" aria-label="On this page">
-        <a href="#agent-request">
+        <a href="#agent-memory">
           <ThreadGraphic />
-          <span>Team-level memory</span>
+          <span>Team memory</span>
         </a>
-        <a href="#agent-context">
+        <a href="#agent-search">
           <ContextGraphic />
-          <span>Full workspace context</span>
+          <span>One search</span>
         </a>
-        <a href="#agent-edits">
-          <EditingGraphic />
-          <span>Live document editing</span>
+        <a href="#agent-models">
+          <DiffGraphic />
+          <span>Any model</span>
         </a>
         <a href="#existing-agents">
           <LinkedWorkGraphic />
@@ -78,61 +125,82 @@ export function RouteAgents() {
         </a>
       </nav>
       <FeaturePageSection
-        id="agent-request"
-        title="Memory of what your whole team is doing."
+        id="agent-memory"
+        title="Memory for the whole team."
         description={
-          'Who owns this project? What did we promise the customer? Who can help?\nYour agents remember the work, the decisions, and the people involved.'
+          'ChatGPT remembers your chats. Macro remembers your company.\nAsk who owns something, what you promised a customer, or who to ask.'
         }
       >
         <div class="feature-page-visual">
-          <AgentRequestDemo />
+          <AgentMemoryDemo />
         </div>
         <ProductProse>
           <p>
-            Macro builds memory from your team’s emails, channel conversations,
-            documents, tasks, and calls. It develops a shared understanding of
-            active projects, who is responsible for what, and the decisions your
-            team has made. That understanding carries across people, agents, and
-            model providers. An agent can identify the right task owner, find
-            the person who knows a customer, or pick up work another agent
-            started. Search retrieves the latest details, with your sharing
-            permissions determining what each agent can access.
+            ChatGPT and Claude build memory from your conversations with them.
+            Macro builds it from everything your team does: email, channels,
+            docs, tasks, calls, and the CRM, refreshed every night. It learns
+            who works on what, so it can assign a task to the right person,
+            route a customer issue, or tell you who knows the most about
+            something. It only uses what you’re allowed to see.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="agent-context"
-        title="Your entire workspace is context."
+        id="agent-search"
+        title="One search across everything."
         description={
-          'Email, messages, documents, images, PDFs, tasks, and call transcripts.\nOne search tool. Full content. References back to the source.'
+          'Agents search email, chat, docs, tasks, and calls with one tool.\nNo stitching together five integrations that each return half the answer.'
         }
       >
         <div class="feature-page-visual">
-          <AgentContextDemo />
+          <AgentSearchDemo />
         </div>
         <ProductProse>
           <p>
-            Macro gives agents multimodal context: text, images, files, and the
-            transcripts of your team’s calls. Unified search finds related work
-            across these sources, and reading tools retrieve the content the
-            agent needs to answer or take action. @mention an item to give the
-            agent a starting point, or let it find the relevant sources itself.
-            Follow the references to inspect the email, document, conversation,
-            or task behind its answer.
+            Plug Claude into Slack, Notion, Linear, and Gmail and it has to
+            search each one, dedupe the results, and guess what happened in what
+            order. We built Macro’s tools the way we built the app: one search
+            across everything, one way to read any item, and links back to the
+            source. Your agent spends its time on your question instead of on
+            plumbing.
+          </p>
+        </ProductProse>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="agent-models"
+        title="Any model. Same memory."
+        description={
+          'Switch between the latest models from Anthropic, OpenAI, and Google.\nYour memory and tools come with you.'
+        }
+      >
+        <div class="feature-page-visual">
+          <AgentModelsDemo />
+        </div>
+        <ProductProse>
+          <p>
+            Models leapfrog each other every few months, and you shouldn’t have
+            to move your company’s memory every time they do. In Macro, the
+            model is a dropdown, and everything the agent knows about your team
+            works the same whichever one you pick. Agents run in the cloud, too,
+            so you can start something on your laptop, close it, and check the
+            result on your phone.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
         id="existing-agents"
-        title="Bring the agents you already use."
+        title="Bring Claude, ChatGPT, or Cursor."
         description={
-          'Give your agents tools to read, search, and edit your Macro workspace.\nHermes, OpenClaw, ChatGPT, Claude, and Cursor.'
+          'Connect any MCP client and it gets the same tools our agents use.\nOne command for Claude Code, or a connector for Claude.ai and ChatGPT.'
         }
       >
-        <ul class="agents-page-providers" aria-label="Existing agents">
+        <ul
+          class="agents-page-providers"
+          aria-label="Agents that connect to Macro"
+        >
           <For each={existingAgents}>
             {(agent) => (
-              <li>
+              <li data-agent={agent.name}>
                 <span class="agents-page-provider-icon">
                   <agent.icon aria-hidden="true" />
                 </span>
@@ -141,125 +209,28 @@ export function RouteAgents() {
             )}
           </For>
         </ul>
-        <ProductProse>
-          <p>
-            Connect an MCP-compatible agent to Macro’s MCP server. It can search
-            the workspace, read and edit native documents, and update properties
-            using your access permissions. The agent you use for coding can also
-            read the brief, check a customer conversation, and update the
-            document your team is working on. Macro’s built-in agents also let
-            you choose the model. Your team’s memory and workspace tools carry
-            across model providers.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="agent-edits"
-        title="Agents edit documents—even when they’re closed."
-        description={
-          'Ask an agent to update any native Markdown document it has access to.\nIt joins the same live collaboration system as your teammates.'
-        }
-      >
-        <div class="feature-page-visual">
-          <AgentArtifactDemo />
+        <div class="feature-page-visual agents-page-mcp">
+          <AgentMcpDemo />
         </div>
         <ProductProse>
           <p>
-            Agents read the current document and apply edits through Macro’s
-            CRDT sync service. A CRDT is a data structure that merges concurrent
-            changes, so a person and an agent can write in the same document at
-            the same time. The editing tool connects to the document on the
-            server. You don’t have to open it or keep an editor tab running.
-            When you are in the document, you can watch the agent’s edits arrive
-            live and keep writing alongside it. Its changes remain editable by
-            your team.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="agent-email-review"
-        title="Draft from your actual conversations."
-        description={
-          'Ask for a reply using the email thread, meeting transcript, and relevant files.\nReview the recipient, attachments, and wording before sending.'
-        }
-      >
-        <div class="feature-page-visual">
-          <AgentEmailReviewDemo />
-        </div>
-        <ProductProse>
-          <p>
-            Agents can search past emails, read the thread, and draft with
-            information from your documents and calls. They can prepare the
-            recipients, subject, body, and requested attachments. The email
-            tools ask for confirmation before sending. You can edit the draft
-            and check who will receive it before approving the send.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="agent-result"
-        title="Agents create real tasks."
-        description={
-          'Ask an agent to create a task, assign an owner, or update a brief.\nIts tools make those changes directly in your workspace.'
-        }
-      >
-        <div class="feature-page-visual">
-          <AgentTaskResultDemo />
-        </div>
-        <ProductProse>
-          <p>
-            Task tools create and update workspace items, including their
-            descriptions, status, priority, and assignees. The result opens in
-            the task list and can be linked in a document or channel. People and
-            agents use the same tasks. Assign the next step, edit the checklist,
-            or ask another agent to continue from the brief.
+            Our MCP server gets the same care as the app. Point Claude Code,
+            Cursor, Claude.ai, or ChatGPT at it and your agent can search the
+            workspace, read and edit docs, and update tasks and customers, all
+            with your permissions.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageFaq
         id="agents-faq-title"
-        eyebrow="Search, memory, and tools"
-        title="How agents work in Macro."
+        title="Questions about Macro agents"
         introduction={
           <p>
-            Agents read and change workspace items through tools that follow
-            your access permissions.
+            Agents in Macro use the same permissions you do. Here are the
+            details.
           </p>
         }
-        items={[
-          {
-            q: 'What does team-level memory include?',
-            a: 'Macro builds a shared understanding of projects, responsibilities, and decisions from your team’s email, messages, documents, tasks, and calls. Agents use that memory and search for current details. Access to workspace items still follows your sharing permissions.',
-          },
-          {
-            q: 'What can agents do in Macro?',
-            a: 'Agents can search and read your email, chat, docs, tasks, and calls; edit native Markdown documents; create and update tasks; and prepare emails. Available tools and connected accounts determine what each conversation can do.',
-          },
-          {
-            q: 'Can I choose the model?',
-            a: 'The agent composer includes a model picker. The available models depend on your account and current product configuration.',
-          },
-          {
-            q: 'Do agents bypass sharing permissions?',
-            a: 'No. Workspace tools operate with the permissions of the user who runs the agent.',
-          },
-          {
-            q: 'Does every action require approval?',
-            a: 'No. Approval depends on the action and tool. Email tools can ask for confirmation before sending; document edits can appear directly in the working document.',
-          },
-          {
-            q: 'Can I edit the result myself?',
-            a: 'Yes. Generated documents and tasks remain ordinary workspace items, and email drafts can be reviewed and edited before sending.',
-          },
-          {
-            q: 'Does a document need to be open for an agent to edit it?',
-            a: 'No. Agents edit native Markdown documents through the server’s collaboration service, even when the document is closed. The same CRDT system merges their changes with live edits from people. Uploaded PDFs, images, and other files can be read as sources; direct document editing applies to native Markdown documents.',
-          },
-          {
-            q: 'Can I use Macro with an external agent?',
-            a: 'Yes. Macro’s MCP server exposes workspace search, document reading and editing, and property updates to external agents. Tools use your access permissions.',
-          },
-        ]}
+        items={agentsFaq}
       />
       <HomepageClosing />
     </ProductPage>

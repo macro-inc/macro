@@ -8,8 +8,8 @@ use model_entity::EntityType;
 use uuid::Uuid;
 
 use crate::{
-    GraphqlInitiativeTasksPage, GraphqlTaskInitiativeReference, InitiativeEntityLoader,
-    InitiativeGraphqlContext, InitiativeTasksInput, graphql_error,
+    GraphqlInitiativeTasksPage, InitiativeEntityLoader, InitiativeGraphqlContext,
+    InitiativeTasksInput, graphql_error,
 };
 
 /// Hydrate the canonical Soup object from the primary for read-after-write consistency.
@@ -69,22 +69,4 @@ pub async fn resolve_initiative_tasks(
         .await
         .map_err(graphql_error)?;
     Ok(page.into())
-}
-
-/// Resolve project chips without exposing inaccessible project identifiers.
-pub async fn resolve_task_initiative_references<E: SoupEntityEdges>(
-    ctx: &Context<'_>,
-    user: MacroUserIdStr<'static>,
-    task_ids: Vec<ID>,
-) -> async_graphql::Result<Vec<GraphqlTaskInitiativeReference<E>>> {
-    let references = ctx
-        .data::<InitiativeGraphqlContext>()?
-        .0
-        .references(
-            user,
-            task_ids.into_iter().map(|id| id.to_string()).collect(),
-        )
-        .await
-        .map_err(graphql_error)?;
-    Ok(references.references.into_iter().map(Into::into).collect())
 }

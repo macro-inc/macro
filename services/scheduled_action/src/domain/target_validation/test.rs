@@ -25,7 +25,7 @@ impl RoutineSessions for Sessions {
         if command.owner.as_ref() != OWNER {
             return Err(RoutineSessionError::Forbidden);
         }
-        if command.bot_id.to_string() != BOT {
+        if command.bot_id.to_string() != BOT && command.bot_id != bot_id::MACRO_NEW_BOT_ID {
             return Err(RoutineSessionError::PersonaUnavailable);
         }
         if let Some(error) = *self.error.lock().unwrap() {
@@ -86,15 +86,31 @@ async fn local_validation_precedes_gate_and_remote_authorization() {
                 Some(&TargetValidationError::InvalidTask)
             );
         }
-        validator
+    }
+    assert!(sessions.validations.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn model_selection_validates_macro_session_without_the_named_agent_gate() {
+    let sessions = Arc::new(Sessions::default());
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    for enabled in [false, true] {
+        TargetValidation::new(sessions.clone(), enabled)
             .validate_task(
-                &json!({"model":"legacy/model", "prompt":"instructions", "user_prompt":"task"}),
+                &json!({"model":"runtime/model", "prompt":"instructions", "user_prompt":"task"}),
                 &owner,
             )
             .await
             .unwrap();
     }
-    assert!(sessions.validations.lock().unwrap().is_empty());
+    let validations = sessions.validations.lock().unwrap();
+    assert_eq!(validations.len(), 2);
+    for selection in validations.iter() {
+        assert_eq!(selection.bot_id, bot_id::MACRO_NEW_BOT_ID);
+        assert_eq!(selection.model.as_deref(), Some("runtime/model"));
+        assert_eq!(selection.owner, owner);
+    }
+    assert!(sessions.preparations.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

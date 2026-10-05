@@ -15,7 +15,6 @@ import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
 import {
-  isAutomationEntity,
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
@@ -26,10 +25,10 @@ import {
   isProjectContainedEntity,
   isProjectEntity,
   isReminderEntity,
+  isRoutineEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
-import { AutomationWideContent } from './automation';
 import { CalendarStamp, CalendarWideContent } from './calendar';
 import { CallParticipants, CallWideContent } from './call';
 import {
@@ -44,6 +43,7 @@ import {
   GithubPullRequestPills,
 } from './foreign';
 import { ReminderWideContent } from './reminder';
+import { RoutineWideContent } from './routine';
 import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import type { LayoutProps } from './shared';
@@ -80,8 +80,9 @@ export function WideLayout(props: LayoutProps) {
         'gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr]',
         // Drop the indicator column entirely when the checkbox is hidden so the
         // content isn't indented by an empty gutter.
-        // A scheduled send's badge is wider than a date, so it sizes its column.
+        // Action slots and scheduled-send badges size their own column.
         props.actions ||
+          props.leadingAction ||
           props.scheduleStatus ||
           (isEmailEntity(props.entity) && props.entity.scheduledSendTime)
           ? props.hideCheckbox
@@ -156,8 +157,8 @@ export function WideLayout(props: LayoutProps) {
               />
             )}
           </Match>
-          <Match when={isAutomationEntity(props.entity) && props.entity}>
-            {(entity) => <AutomationWideContent entity={entity()} />}
+          <Match when={isRoutineEntity(props.entity) && props.entity}>
+            {(entity) => <RoutineWideContent entity={entity()} />}
           </Match>
           <Match when={isReminderEntity(props.entity) && props.entity}>
             {(entity) => <ReminderWideContent entity={entity()} />}

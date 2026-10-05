@@ -105,6 +105,7 @@ function documentMentionEntityType(blockName: string): string {
       return 'call';
     case 'calendar':
       return 'calendar_event';
+    case 'routine':
     case 'automation':
       return 'automation';
     case 'company':

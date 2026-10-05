@@ -1,7 +1,7 @@
 //! Domain models for collab surfaces.
 
 use chrono::{DateTime, Utc};
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -58,6 +58,38 @@ pub struct CollabSurface {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Who creates and retires the surfaces under a parent entity type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceOwnership {
+    /// Any caller with access to the parent, through the public API.
+    Callers,
+    /// The parent's own domain, through [`OwnedSurfaceService`]. The public
+    /// API mints tokens for these surfaces but never ensures or deletes them.
+    ///
+    /// [`OwnedSurfaceService`]: crate::domain::ports::OwnedSurfaceService
+    ParentDomain,
+}
+
+/// The surface policy for a parent entity type; `None` when surfaces cannot
+/// attach to it.
+///
+/// `ChannelMessage` is deliberately absent: it has no access resolution in
+/// `entity_access`, so a message-scoped surface attaches to its channel
+/// instead (the `Call → Channel` precedent). The rest are excluded until they
+/// have a surface story.
+pub fn surface_ownership(parent: EntityType) -> Option<SurfaceOwnership> {
+    match parent {
+        EntityType::Document
+        | EntityType::Channel
+        | EntityType::Project
+        | EntityType::Chat
+        | EntityType::EmailThread
+        | EntityType::Call => Some(SurfaceOwnership::Callers),
+        EntityType::Initiative => Some(SurfaceOwnership::ParentDomain),
+        _ => None,
+    }
+}
+
 /// Errors returned by the collab-surface service.
 #[derive(Debug, thiserror::Error)]
 pub enum CollabSurfaceError {
@@ -77,8 +109,8 @@ pub enum CollabSurfaceError {
     /// a session. A new surface only ever creates its own session.
     #[error("this surface id is already in use")]
     IdReserved,
-    /// The surface exists but has not proven its sync-service session is its
-    /// own (initialization failed or never ran), so it cannot be connected to.
+    /// The surface exists but its sync-service session is not initialized yet,
+    /// so it cannot be connected to.
     #[error("collab surface is not ready")]
     NotReady,
     /// The request was invalid.

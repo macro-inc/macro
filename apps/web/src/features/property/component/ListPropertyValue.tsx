@@ -29,6 +29,7 @@ export function ListPropertyValue(props: {
   if (isInlineType()) {
     return (
       <Property.Root
+        class="min-w-0 max-w-full"
         property={props.property}
         canEdit={context.canEdit}
         onSave={context.saveHandler.saveProperty}
@@ -51,6 +52,7 @@ export function ListPropertyValue(props: {
 
   return (
     <Property.Root
+      class="min-w-0 max-w-full"
       property={props.property}
       canEdit={context.canEdit}
       onSave={context.saveHandler.saveProperty}
@@ -102,6 +104,9 @@ export function ListPropertyValue(props: {
               </Switch>
               <Property.Text
                 property={props.property}
+                resolveSingleEntity={
+                  props.property.specificEntityType === 'INITIATIVE'
+                }
                 class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:hidden"
               />
             </Show>

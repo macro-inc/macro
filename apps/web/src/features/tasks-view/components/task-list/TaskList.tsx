@@ -63,11 +63,7 @@ import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
 import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
-import { ProjectPropertyCell } from '@app/features/projects/project-property';
-import {
-  ProjectAssignmentDialog,
-  useTaskProjectReferences,
-} from '@app/features/projects/projects';
+import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 
 function ResponsiveTaskListHeader() {
   const layout = useListLayout();
@@ -223,11 +219,6 @@ export function TaskList(props: TaskListProps) {
   );
 
   const visibleRows = source.items;
-  const projectReferences = useTaskProjectReferences(() =>
-    visibleRows().flatMap((row) =>
-      row.kind === 'entity' ? [row.entity.id] : []
-    )
-  );
   const columnCount = () => taskGridColumnCount(projectsEnabled());
   const [assigningProjectTasks, setAssigningProjectTasks] =
     createSignal<string[]>();
@@ -523,16 +514,7 @@ export function TaskList(props: TaskListProps) {
                             }}
                           >
                             <TaskListEntity
-                              projectSlot={
-                                projectsEnabled() ? (
-                                  <ProjectPropertyCell
-                                    taskId={entityRow().entity.id}
-                                    reference={projectReferences
-                                      .references()
-                                      .get(entityRow().entity.id)}
-                                  />
-                                ) : undefined
-                              }
+                              showProject={projectsEnabled()}
                               rowId={entityRow().id}
                               entity={entityRow().entity}
                               highlighted={list.focus.key() === entityRow().id}

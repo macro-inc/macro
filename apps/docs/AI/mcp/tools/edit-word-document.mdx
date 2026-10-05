@@ -1,0 +1,18 @@
+---
+title: EditWordDocument
+description: >-
+  Edit an uploaded Word (.docx) document in place: an ordered batch of
+  operations applied atomically to its live copy, so everyone with it open sees
+  the change at once, and nothing changes if any operation fails.
+---
+
+# EditWordDocument
+
+Edit an uploaded Word (.docx) document in place: an ordered batch of operations applied atomically to its live copy, so everyone with it open sees the change at once, and nothing changes if any operation fails. ReadWordDocument first and address paragraphs, tables and blocks by the ids it reports (they are not numbers). Use replaceText for wording changes (exact text within one paragraph; formatting is kept), setText to rewrite a whole paragraph, formatText for bold, italic, underline or strikethrough, insertParagraph to add paragraphs (each line of text becomes one; a style is optional), setStyle to change a paragraph style such as Heading1, and delete to remove a paragraph, table or block. Only insertParagraph text may contain line breaks. Paragraphs inside table cells are edited the same way. Returns the changed blocks as they now read, with the ids of new paragraphs; check them. At most 50 operations. Comments are separate: use CommentOnDocument.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `documentId` | string | Yes | Word document ID. |
+| `operations` | WordDocumentOperation[] | Yes | Ordered operations applied together. |

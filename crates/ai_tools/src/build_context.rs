@@ -266,6 +266,11 @@ pub async fn build_tool_service_context_from_env(
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
+    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+        pool.clone(),
+        s3_client.clone(),
+        env.document_storage_bucket.to_string(),
+    );
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
         env.document_storage_bucket.to_string(),
@@ -351,7 +356,8 @@ pub async fn build_tool_service_context_from_env(
             Arc::new(lexical_client.clone()),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_presentation_files(Arc::new(presentation_files));
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),
@@ -450,7 +456,6 @@ pub async fn build_tool_service_context_from_env(
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        side_effect_clients.sqs,
         side_effect_clients.macro_event_broker,
     );
 
@@ -515,7 +520,7 @@ pub async fn build_tool_service_context_from_env(
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
         skill_tool_context,
-        schedule_tool_context: crate::NoOpScheduleContext,
+        schedule_tool_context: crate::build_routine_tool_context()?,
         anthropic_tool_context,
         admission: ai_billing::composition::pg_admission_service(pool.clone(), enforcement),
         recorder,

@@ -54,7 +54,7 @@ impl From<ScheduledAction> for ScheduledActionResponse {
     fn from(action: ScheduledAction) -> Self {
         let (schedule, timezone) = match &action.trigger {
             ActionTrigger::Cron { schedule, timezone } => (Some(schedule.clone()), Some(*timezone)),
-            ActionTrigger::Events { .. } => (None, None),
+            _ => (None, None),
         };
         Self {
             action,
@@ -137,7 +137,9 @@ where
         )
         .route(
             "/scheduled-actions/{id}",
-            put(update_action::<S, Svc, Auth>).delete(delete_action::<S, Svc, Auth>),
+            get(get_action::<S, Svc, Auth>)
+                .put(update_action::<S, Svc, Auth>)
+                .delete(delete_action::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/enabled",
@@ -247,6 +249,35 @@ where
             .map(ScheduledActionResponse::from)
             .collect::<Vec<_>>(),
     ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}",
+    tag = "scheduled actions",
+    operation_id = "get_scheduled_action",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn get_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<Json<ScheduledActionResponse>, ScheduledActionApiError>
+where
+    S: ScheduledActionService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let action = state.service.get_action(entity_access_receipt).await?;
+    Ok(Json(action.into()))
 }
 
 #[utoipa::path(

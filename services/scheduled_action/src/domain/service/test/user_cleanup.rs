@@ -59,7 +59,12 @@ impl ScheduledActionRepo for FakeRepo {
     async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unreachable!()
     }
-    async fn claim_action(&self, _: &Uuid, _: ConfigurationRevision) -> Result<ClaimToken> {
+    async fn claim_action(
+        &self,
+        _: &Uuid,
+        _: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<ClaimToken> {
         unreachable!()
     }
     async fn release_action(&self, _: &Uuid, _: ClaimToken) -> Result<()> {

@@ -3,21 +3,16 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::HashSet;
 use std::fmt;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 #[cfg(feature = "ports")]
-use entity_access::domain::models::{AccessError, EditAccessLevel, EntityAccessReceipt};
+use entity_access::domain::models::AccessError;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareFacts,
-};
-use models_permissions::share_permission::{
-    LinkShareState, SharePermissionV2, UpdateSharePermissionRequestV2,
-};
+use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
+use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -26,9 +21,6 @@ pub const MAX_INITIATIVE_NAME_GRAPHEMES: usize = 100;
 
 /// Maximum length of the create-time description prefill, counted in Unicode grapheme clusters.
 pub const MAX_INITIATIVE_DESCRIPTION_GRAPHEMES: usize = 2_000;
-
-/// Maximum number of tasks accepted in one assign call.
-pub const MAX_TASKS_PER_ASSIGN: usize = 100;
 
 /// Opaque identifier for an initiative. Minted as UUIDv7 in application code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -67,53 +59,6 @@ impl FromStr for InitiativeId {
     }
 }
 
-/// Id of the markdown document that holds an initiative's description.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(transparent)]
-pub struct DescriptionDocumentId(Uuid);
-
-impl DescriptionDocumentId {
-    /// Wrap an already-persisted id.
-    pub fn from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-
-    /// The inner UUID.
-    pub fn as_uuid(&self) -> Uuid {
-        self.0
-    }
-}
-
-impl fmt::Display for DescriptionDocumentId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for DescriptionDocumentId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Uuid::parse_str(s)?))
-    }
-}
-
-/// The description document the service asks the documents side to create. Every field is
-/// already validated by the initiative domain.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewDescriptionDocument {
-    /// Document owner; the initiative owner, so both entities agree on who may team-share.
-    pub owner: MacroUserIdStr<'static>,
-    /// The initiative's name at create time. Renames are not mirrored.
-    pub name: String,
-    /// Trimmed initial markdown; empty when the request had none.
-    pub prefill_markdown: String,
-    /// The initiative's resolved link share, applied verbatim so the markdown default
-    /// (PUBLIC/Edit) never exists for this document.
-    pub link_share: LinkShareState,
-}
-
 /// Minimal initiative identity used by access checks and internal lookups.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -136,8 +81,6 @@ pub struct InitiativeSummary {
     pub id: InitiativeId,
     /// Display name.
     pub name: String,
-    /// The markdown document holding the description; open it in the editor.
-    pub description_document_id: DescriptionDocumentId,
     /// When the initiative was last updated.
     pub updated_at: DateTime<Utc>,
 }
@@ -151,8 +94,6 @@ pub struct InitiativeDetail {
     pub id: InitiativeId,
     /// Display name.
     pub name: String,
-    /// The markdown document holding the description; open it in the editor.
-    pub description_document_id: DescriptionDocumentId,
     /// Owner of the initiative.
     pub owner_id: MacroUserIdStr<'static>,
     /// Member user ids. The owner is never stored here.
@@ -187,8 +128,8 @@ pub struct InitialPropertyValue {
 pub struct CreateInitiativeRequest {
     /// Display name.
     pub name: String,
-    /// Initial markdown for the description document. Not stored on the initiative; later
-    /// edits happen in the document editor.
+    /// Initial markdown for the description surface. Not stored on the initiative; later
+    /// edits happen in the collaborative description editor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// Optional member user ids. Invalid ids fail at the service boundary.
@@ -205,7 +146,7 @@ pub struct CreateInitiativeRequest {
 }
 
 /// Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
-/// present is a full replace. The description is edited in its document, not here.
+/// present is a full replace. The description is edited in its collab surface, not here.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -221,80 +162,6 @@ pub struct UpdateInitiativeRequest {
     pub share_permission: Option<UpdateSharePermissionRequestV2>,
 }
 
-/// Assign-tasks HTTP body.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct AssignTasksRequest {
-    /// Task ids to assign, in request order.
-    pub task_ids: Vec<String>,
-}
-
-/// A bounded, deduplicated task request, validated before looking up access receipts.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TaskAssignmentBatch(Vec<String>);
-
-impl TaskAssignmentBatch {
-    /// Deduplicate in request order and enforce the assignment limit before access lookup.
-    pub fn try_new(task_ids: Vec<String>) -> Result<Self, InitiativeError> {
-        let mut seen = HashSet::new();
-        let mut unique = Vec::new();
-        for task_id in task_ids {
-            if seen.insert(task_id.clone()) {
-                if unique.len() == MAX_TASKS_PER_ASSIGN {
-                    return Err(InitiativeError::BadRequest(format!(
-                        "cannot assign more than {MAX_TASKS_PER_ASSIGN} tasks at once"
-                    )));
-                }
-                unique.push(task_id);
-            }
-        }
-        Ok(Self(unique))
-    }
-
-    /// Consume the batch for receipt generation.
-    pub fn into_task_ids(self) -> Vec<String> {
-        self.0
-    }
-}
-
-/// Per-task outcome of an assign call.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct AssignTasksResult {
-    /// Task id this outcome describes.
-    pub task_id: String,
-    /// What happened to the task.
-    pub status: AssignTaskStatus,
-}
-
-/// Assign-tasks HTTP response.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct AssignTasksResponse {
-    /// Outcomes in request order after dedupe.
-    pub results: Vec<AssignTasksResult>,
-}
-
-/// Status written onto one assign result.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub enum AssignTaskStatus {
-    /// Newly assigned to this initiative.
-    Assigned,
-    /// Moved here from another initiative.
-    Moved,
-    /// The id exists but is not a task.
-    NotATask,
-    /// The id does not exist.
-    NotFound,
-    /// The caller cannot assign this task.
-    SkippedNoPermission,
-}
-
 /// Accessible-initiative list.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -302,62 +169,6 @@ pub enum AssignTaskStatus {
 pub struct InitiativeList {
     /// Initiatives the caller can view.
     pub initiatives: Vec<InitiativeSummary>,
-}
-
-/// One task in an assign-tasks service call, retaining the verified edit capability.
-#[cfg(feature = "ports")]
-#[derive(Debug, Clone)]
-pub enum TaskAssignment {
-    /// The caller can edit this document; persistence confirms its task subtype.
-    Authorized {
-        /// Verified capability for the task, retained through the domain boundary.
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-    },
-    /// Inbound could not find this task.
-    NotFound {
-        /// Task id.
-        task_id: String,
-    },
-    /// Inbound found the task but the caller cannot assign it.
-    SkippedNoPermission {
-        /// Task id.
-        task_id: String,
-    },
-}
-
-#[cfg(feature = "ports")]
-impl TaskAssignment {
-    /// Retain a verified task capability or classify the access failure for a partial batch.
-    pub fn from_access(
-        task_id: String,
-        result: Result<EntityAccessReceipt<EditAccessLevel>, AccessError>,
-    ) -> Result<Self, InitiativeError> {
-        match result {
-            Ok(receipt) if receipt.entity().entity_id == task_id => {
-                Ok(Self::Authorized { receipt })
-            }
-            Ok(_) => Err(InitiativeError::BadRequest(
-                "task receipt does not match the requested task".to_string(),
-            )),
-            Err(AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
-                Ok(Self::SkippedNoPermission { task_id })
-            }
-            Err(AccessError::NotFound(_) | AccessError::BadRequest(_)) => {
-                Ok(Self::NotFound { task_id })
-            }
-            Err(error) => Err(InitiativeError::Internal(
-                rootcause::Report::new(error).into_dynamic(),
-            )),
-        }
-    }
-
-    /// Task id this assignment refers to.
-    pub fn task_id(&self) -> &str {
-        match self {
-            Self::Authorized { receipt } => &receipt.entity().entity_id,
-            Self::NotFound { task_id } | Self::SkippedNoPermission { task_id } => task_id,
-        }
-    }
 }
 
 /// Arguments for creating an initiative row. No serde: repository-only.
@@ -369,8 +180,6 @@ pub struct CreateInitiativeRepoArgs {
     pub owner_id: MacroUserIdStr<'static>,
     /// Validated name.
     pub name: String,
-    /// The description document, already committed by the documents side.
-    pub description_document_id: DescriptionDocumentId,
     /// Member ids with the owner removed and duplicates dropped.
     pub member_ids: Vec<MacroUserIdStr<'static>>,
 }
@@ -388,28 +197,8 @@ pub struct UpdateInitiativeRepoArgs {
     pub member_ids_removed: Vec<MacroUserIdStr<'static>>,
     /// Share permission patch when the owner sent one.
     pub share_permission: Option<UpdateSharePermissionRequestV2>,
-    /// Authorized team-share writes for both entities, if any.
-    pub team_share: Option<LockstepTeamShare>,
-}
-
-/// Team-share commands for an initiative and its description document, authorized by the
-/// owner against one snapshot of facts.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LockstepTeamShare {
-    /// Command whose expected facts name the initiative.
-    pub initiative: AuthorizedTeamShareCommand,
-    /// Command whose expected facts name the description document.
-    pub description: AuthorizedTeamShareCommand,
-}
-
-/// Team-share facts for an initiative and its description document, read in one guarded
-/// transaction so the service authorizes both against the same snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LockstepTeamShareFacts {
-    /// Facts for the initiative entity.
-    pub initiative: TeamShareFacts,
-    /// Facts for the description document entity.
-    pub description: TeamShareFacts,
+    /// Authorized team-share write, if any.
+    pub team_share: Option<AuthorizedTeamShareCommand>,
 }
 
 /// Errors returned by the initiative service.
@@ -418,9 +207,6 @@ pub enum InitiativeError {
     /// The initiative does not exist.
     #[error("initiative not found")]
     NotFound,
-    /// The document exists but does not have the task subtype.
-    #[error("document is not a task")]
-    NotATask,
     /// The caller cannot perform this action.
     #[error("unauthorized")]
     Unauthorized,

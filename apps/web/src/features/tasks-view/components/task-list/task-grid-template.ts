@@ -34,10 +34,23 @@ export const TASK_GRID_COLUMNS = [
   },
 ] as const;
 
+/** The task's project, shown only while Projects is enabled. */
+export const TASK_PROJECT_COLUMN = {
+  id: 'initiative',
+  label: 'Project',
+  defId: SYSTEM_PROPERTY_IDS.PROJECT,
+  dataType: DataType.ENTITY,
+  isMultiSelect: false,
+  specificEntityType: EntityType.INITIATIVE,
+  width: 'var(--task-col-initiative, 8rem)',
+} as const;
+
 /** Width for the "Created By" column - only shown on wide containers */
 const CREATED_BY_COLUMN_WIDTH = 'var(--task-col-created-by, 7rem)';
 
-export type TaskGridColumn = (typeof TASK_GRID_COLUMNS)[number];
+export type TaskGridColumn =
+  | (typeof TASK_GRID_COLUMNS)[number]
+  | typeof TASK_PROJECT_COLUMN;
 
 /**
  * Wide-container grid (includes Created By). The project column exists only
@@ -51,9 +64,7 @@ export function taskGridTemplate(options: {
     ...(options.indicator ? [{ id: 'indicator', width: '1rem' }] : []),
     { id: 'content', width: 'minmax(0, 100%)' },
     ...TASK_GRID_COLUMNS,
-    ...(options.project
-      ? [{ id: 'initiative', width: 'var(--task-col-initiative, 8rem)' }]
-      : []),
+    ...(options.project ? [TASK_PROJECT_COLUMN] : []),
     { id: 'createdBy', width: CREATED_BY_COLUMN_WIDTH },
     { id: 'timestamp', width: 'var(--task-col-timestamp, 5rem)' },
   ];

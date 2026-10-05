@@ -34,7 +34,6 @@ const item: EntityItem<InitiativeEntity> = {
     id: 'initiative-1',
     name: 'Roadmap',
     ownerId: 'owner',
-    descriptionDocumentId: 'description-1',
   },
 };
 

@@ -395,6 +395,557 @@ client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
 
+## Presentations (PowerPoint)
+
+Uploaded `.pptx` files open in the `pptx` block (`/app/pptx/<documentId>`).
+With the `enable-pptx-editor` PostHog flag (on by default in development
+builds; `ENABLE_PPTX_EDITOR` overrides it) the block is a full editor; with the
+flag off it offers the file for download, as before. The deck is parsed,
+rendered, and edited by the Rust `pptx_engine` compiled to WebAssembly in a
+lazily created module worker, so the first open of a session pays a
+one-time ~6 MB module download.
+
+Layout and test hooks:
+
+- **Ribbon** (`pptx-toolbar`): tabs `pptx-tab-<id>` for Home, Insert,
+  Design, Transitions, Slide Show, Review, and View, plus contextual Shape Format,
+  Picture Format, Table Design, Layout (tables), Chart Design, and SmartArt
+  Design tabs that appear for the selection (`pptx-tab-shape-format`,
+  `pptx-tab-picture-format`, `pptx-tab-table-design`,
+  `pptx-tab-table-layout`, `pptx-tab-chart-design`,
+  `pptx-tab-smartart-design`). Undo/Redo sit left of the
+  tabs; the save state (`pptx-save-state`), Download, and **Present**
+  (`pptx-present`) sit right. Home: clipboard and **Format Painter**
+  (`pptx-format-painter`: click, then click a shape or select text to paint
+  the selection's look and text formatting; double-click keeps it armed until
+  Escape; the stage carries `data-format-painter` while armed), **New slide**
+  (`pptx-new-slide`), layouts, font (`pptx-font-family`) and size
+  (`pptx-font-size`) boxes, Bold (`pptx-bold`) and the other run toggles,
+  text and highlight colors (`pptx-text-color`), Character Spacing
+  (`pptx-char-spacing`: Very Tight to Very Loose as
+  `pptx-char-spacing-<points>`, or More spacing `pptx-char-spacing-custom`),
+  bullets and numbering, list
+  levels, line spacing, alignment, Text Direction (`pptx-text-direction`:
+  Horizontal, Rotate all text 90°, Rotate all text 270°, and Stacked as
+  `pptx-text-direction-<horz|vert|vert270|wordArtVert>`, More Options…
+  `pptx-text-direction-more`), the shape gallery (`pptx-insert-shape`,
+  then `pptx-shape-<preset>`), Arrange (`pptx-arrange`), Shape fill
+  (`pptx-fill`) and outline (`pptx-outline`), Find, and Replace. Insert: table
+  grid (`pptx-insert-table`, then a cell of `pptx-table-grid`), Pictures
+  (`pptx-image-input`), Shapes, Chart (`pptx-insert-chart`, then
+  `pptx-chart-<kind>-<grouping>`), SmartArt (`pptx-insert-smartart`; see
+  **SmartArt** below), Video and Audio (`pptx-insert-video`,
+  `pptx-insert-audio`; file inputs `pptx-video-input`, `pptx-audio-input`;
+  clips up to 50 MB, or 2 MB in a shared presentation because the sync
+  service keeps presentations under 4 MB, are embedded with a poster frame
+  or speaker icon), Comment (`pptx-insert-comment`), Text
+  box (`pptx-insert-textbox`), and Link (`pptx-insert-link`). A selected
+  video or audio shape shows Play (`pptx-media-play`), which plays it over
+  the shape (`pptx-media-player`, with `pptx-media-video` or
+  `pptx-media-audio`) until the slide is clicked; in a slide show a click on
+  the clip plays it in place (`pptx-slideshow-media`) instead of advancing.
+  Design: slide background, and Variants that restyle every slide through the
+  theme: Colors (`pptx-theme-colors`, then `pptx-theme-colors-<set name>`,
+  such as `Red Violet`) and Fonts (`pptx-theme-fonts`, then
+  `pptx-theme-fonts-<pair name>`, such as `Georgia`). Transitions: `pptx-transition-<kind>`, Effect options, duration
+  (`pptx-transition-duration`), automatic advance, and Apply to all
+  (`pptx-transition-all`). Color menus are PowerPoint's theme grid with tints,
+  standard colors, Recent colors (`pptx-recent-colors`, custom colors picked
+  lately), More colors… (`pptx-more-colors`), and Eyedropper
+  (`pptx-eyedropper`, in browsers with a screen color picker).
+- **Header & Footer** (Insert ▸ Header & Footer `pptx-insert-header-footer`,
+  Date & Time `pptx-insert-date-time`, or Slide Number
+  `pptx-insert-slide-number`) opens `pptx-header-footer`, starting from what
+  the current slide shows: Date and time (`pptx-hf-date`) updating
+  automatically (`pptx-hf-date-auto`, format select `pptx-hf-date-format`
+  listing today's date in `datetime1`–`datetime13`) or Fixed
+  (`pptx-hf-date-fixed`, text `pptx-hf-date-fixed-text`), Slide number
+  (`pptx-hf-slide-number`), Footer (`pptx-hf-footer`, text
+  `pptx-hf-footer-text`), and Don't show on title slide
+  (`pptx-hf-not-on-title`). **Apply** (`pptx-hf-apply`) changes the selected
+  slides; **Apply to All** (`pptx-hf-apply-all`) every slide. A layout without
+  the placeholder cannot show the element.
+- **Slide Size** (Design ▸ Customize ▸ `pptx-slide-size`): Standard (4:3)
+  `pptx-slide-size-standard`, Widescreen (16:9) `pptx-slide-size-widescreen`,
+  or Custom Slide Size… `pptx-slide-size-custom`, which opens
+  `pptx-slide-size-dialog` (preset `pptx-slide-size-preset`, width and height
+  `pptx-slide-size-width|height` in inches, or cm in metric locales,
+  orientation `pptx-slide-size-portrait|landscape`, OK `pptx-slide-size-ok`).
+  When content must change shape, `pptx-slide-size-scale` asks **Maximize**
+  (`pptx-slide-size-maximize`) or **Ensure Fit** (`pptx-slide-size-fit`); a
+  proportional change scales without asking. Stage, thumbnails, sorter, show,
+  and print follow the new size.
+- **Slide rail** (`nav` "Slides", `data-testid="pptx-slide-rail"`): one
+  `pptx-thumbnail` button per slide, labelled `Slide N: <title>`, with
+  `aria-current="true"` on the current one. Hovering a thumbnail shows
+  **Duplicate slide**, **Hide slide**/**Show slide**, and **Delete slide**;
+  thumbnails reorder by dragging; right-click opens cut/copy/paste, new,
+  duplicate, delete, layout, background, and hide. **New slide** is at the
+  bottom. Shift-click selects a range and Cmd/Ctrl-click adds or removes a
+  slide (`aria-selected`; the status bar shows `pptx-status-selected`);
+  duplicate, delete, hide, layout, transitions, background, copy, cut, and
+  dragging then act on every selected slide. Cmd/Ctrl+A selects all slides
+  and Cmd/Ctrl+D duplicates them while the rail has focus.
+- **Sections** (rail and sorter): a deck with sections shows a
+  `pptx-section-header` row (`data-section-id`, `aria-expanded`) before each
+  section's slides with its name and slide count. Its caret
+  (`pptx-section-toggle`, or double-click) collapses the section's
+  thumbnails (view only); clicking the header selects its slides; dragging it
+  onto another header moves the section there. Right-click a header for
+  Rename Section (in place: `pptx-section-rename`, Enter keeps, Escape
+  cancels), Remove Section, Remove Section & Slides, Remove All Sections,
+  Move Section Up/Down, Collapse All, and Expand All. The slide menu's **Add
+  Section** starts "Untitled Section" at that slide and opens its name for
+  typing. Home ▸ Section (`pptx-section-menu`): Add (`pptx-section-add`),
+  Rename (`pptx-section-rename-current`), Remove (`pptx-section-remove`),
+  Remove All (`pptx-section-remove-all`), Collapse All
+  (`pptx-section-collapse-all`), Expand All (`pptx-section-expand-all`).
+- **Slide Sorter** (View ▸ Slide Sorter, or `pptx-view-sorter` in the status
+  bar; `pptx-view-normal` returns): every slide in a grid
+  (`pptx-slide-sorter`, same `pptx-thumbnail` buttons and menu as the rail),
+  with the same selection and drag-to-reorder; ★ marks a transition;
+  double-click or Enter opens a slide in Normal view.
+- **Slide Master view** (View ▸ Master views ▸ **Slide Master**,
+  `pptx-view-slide-master`) edits the slide masters and their layouts with
+  the same stage, text editing, and Home/Insert tools as slides; every slide
+  on a layout (or, for a master, on any of its layouts) follows. It opens on
+  the current slide's layout. The rail becomes `pptx-master-rail`: one
+  `pptx-master-thumbnail` per page (`data-kind="master|layout"`,
+  `data-page-id` the engine id, `aria-current` on the one edited, and a
+  PowerPoint tooltip such as "Title Only Layout: used by slide(s) 3-8"),
+  masters numbered with their layouts indented beneath. Placeholders show
+  dotted outlines (`pptx-placeholder-outlines`). The contextual **Slide
+  Master** tab (`pptx-tab-slide-master`, first) has Insert Layout
+  (`pptx-master-insert-layout`: a "Custom Layout" with a title and the
+  master's footers after the selected layout), Delete
+  (`pptx-master-delete`, disabled with a reason in its tooltip while slides
+  use the layout, or for a master's last layout or the last master), Rename
+  (`pptx-master-rename`, dialog `pptx-rename-layout-dialog` with
+  `pptx-rename-layout-name` and `pptx-rename-layout-ok`), Insert Placeholder
+  (`pptx-master-insert-placeholder`, then
+  `pptx-master-placeholder-<content|text|picture|chart|table|smartArt|media>`,
+  `-vertical` for the vertical content and text ones; it lands in the middle
+  of the layout, selected), the layout's Title and Footers checkboxes
+  (`pptx-master-title`, `pptx-master-footers`), theme Colors and Fonts
+  (`pptx-master-theme-colors`, `pptx-master-theme-fonts`), Background
+  Styles (`pptx-master-background-styles`: the theme's twelve styles,
+  `pptx-master-background-style-<1-12>`, and Reset Background,
+  `pptx-master-background-reset`), Format
+  Background (`pptx-master-format-background`, the background pane for the
+  master or layout), Hide Background Graphics
+  (`pptx-master-hide-background`), Slide Size, and **Close Master View**
+  (`pptx-master-close`; the status bar's Normal button does the same).
+  Right-click a page for Insert Layout, Duplicate Layout, Delete
+  Layout/Master, Rename Layout/Master, and Format background…; Delete in the
+  rail deletes the page, and Cmd/Ctrl+M inserts a layout. Formatting a whole
+  placeholder (or whole paragraphs) of a layout or master also sets the text
+  style its slides inherit, so bolding a layout's title bolds the titles of
+  its slides. The status bar reads "Slide Master" (`pptx-status-master`);
+  Design, Transitions, Animations, Slide Show, the Slides groups, notes, and
+  find are not shown there. Engine and AI spelling: the outline's `masters`
+  (ids, names, layouts with `slideIds` and placeholder types), any slide-id
+  operation on shapes, text, tables, pictures, and backgrounds with a
+  master's or layout's id, and `addLayout`, `renameLayout`, `deleteLayout`,
+  `insertPlaceholder`, `setLayoutOptions`, and `setBackgroundStyle`.
+- **Stage** (`pptx-stage`, focusable): click selects a shape
+  (`pptx-selection`, handles `pptx-handle-<nw|n|ne|e|se|s|sw|w>` and
+  `pptx-rotate-handle`); Shift/Cmd/Ctrl-click adds to the selection, dragging
+  on empty slide draws a marquee (`pptx-marquee`), and several selected shapes
+  show `pptx-selection-outline` boxes inside one handle box; drag moves,
+  handles resize (several shapes scale together) and rotate. Right-click opens
+  a menu for what is under the pointer (shapes, text being edited, a table, a
+  chart, or the empty slide). The stage covers exactly the slide, so slide
+  point `(x, y)` is at `stage.left + x × stage.width / slideWidth`.
+- **Text**: double-click (or Enter/F2 on a selected text shape, or just start
+  typing) starts editing; keystrokes go to a hidden textarea
+  (`pptx-text-input`, "Slide text"). The caret is `pptx-caret`, an SVG line of
+  zero width, so assert it with `toBeAttached()`, not `toBeVisible()`. Escape
+  stops editing. Vertical text (Text Direction) is edited in place too: the
+  caret lies across the rotated line, and arrow keys follow the screen (in
+  text rotated 90°, Down is the next character and Left the next line).
+  Turning a text box that resizes to fit its text swaps its width and height.
+- **Tables**: click a cell to type in it in place (same caret); Tab and
+  Shift+Tab move between cells (Tab in the last cell adds a row); drag across
+  cells to select a range (`pptx-cell-range`), which the Table Design/Layout
+  tabs and the table menu act on (merge/split, shading `pptx-cell-shading`,
+  borders `pptx-cell-borders`, styles `pptx-table-styles`, insert/delete rows
+  and columns, distribute, alignment, and Text Direction
+  `pptx-cell-text-direction`, items `pptx-cell-text-direction-<value>`; a
+  vertical cell's row grows to its text). Drag a column or row border of a
+  selected table to resize it; drag near the frame's edge to move the table.
+- **Charts**: double-click a chart, or **Edit data** (`pptx-chart-edit-data`)
+  on Chart Design, opens the data grid (`pptx-chart-data`, cells
+  `pptx-chart-cell-<row>-<col>`, **Apply** `pptx-chart-apply`); Chart Design
+  also changes the type (`pptx-chart-type`), title, legend, data labels, and
+  colors.
+- **Equations** (Office Math, typeset by the engine): Insert ▸ **Equation**
+  (`pptx-insert-equation`, or Alt+=) starts a new equation at the caret of
+  the text being edited (selected text on one line becomes its text), or in a
+  new text box centered on the slide when no text is edited. Its arrow
+  (`pptx-insert-equation-menu`) inserts a built-in equation at once
+  (`pptx-equation-prebuilt-<id>`: `area-of-circle`, `binomial-theorem`,
+  `expansion-of-a-sum`, `fourier-series`, `pythagorean-theorem`,
+  `quadratic-formula`, `taylor-expansion`, `trig-identity-1`,
+  `trig-identity-2`). The equation is written in a floating editor
+  (`pptx-equation-editor`): LaTeX-style linear text (`pptx-equation-input`;
+  `\frac{a}{b}`, `x^2`, `\sqrt[n]{x}`, `\sum_{i=1}^n`, `\int_a^b`,
+  `\left( \right)`, `\begin{pmatrix}…\end{pmatrix}`, `\begin{cases}`, Greek,
+  `\mathbb{R}`, `\text{…}`), a live preview (`pptx-equation-preview`), errors
+  (`pptx-equation-error`), a Display toggle (`pptx-equation-display`: own
+  line, centered, versus inline), **Insert**/**Done** (`pptx-equation-insert`,
+  or Enter; Shift+Enter is a new line of text), and close
+  (`pptx-equation-close`, or Escape). An equation counts as one character
+  (U+FFFC) of its paragraph: clicking it while editing the text selects it
+  whole and shows its text in the editor, where every valid change lands on
+  the slide as it is typed (one undo step per equation); double-click focuses
+  the editor; Delete or Backspace removes a selected equation, and typing
+  replaces it. The contextual **Equation** tab (`pptx-tab-equation`, shown
+  while an equation is written or selected) has the built-ins
+  (`pptx-equation-prebuilt`, which replace the equation's text), Linear
+  (`pptx-equation-linear`, reopens the editor), Display
+  (`pptx-equation-display-toggle`), **Symbols** (`pptx-equation-symbols`,
+  then `pptx-equation-symbol-<command>` such as `pm`, `alpha`, `infty`, or
+  `pptx-equation-symbol-u<hex>` for a character without a command), and the
+  Structures galleries `pptx-equation-structure-<fraction|script|radical|integral|large-operator|bracket|function|accent|limit-and-log|operator|matrix>`
+  (item `n` is `pptx-equation-structure-<gallery>-<n>`). Symbols and
+  structures go into the linear text at its caret; a structure wraps the
+  selected linear text and puts the caret in its first empty slot.
+- **SmartArt**: Insert ▸ SmartArt opens Choose a SmartArt Graphic
+  (`pptx-smartart-dialog`): categories `pptx-smartart-category-<all|list|process|cycle|hierarchy|relationship|pyramid>`,
+  layouts `pptx-smartart-layout-<id>` (`default` Basic Block List, `vList2`,
+  `hList1`, `process1`, `chevron1`, `cycle2`, `radial1`, `hierarchy1`,
+  `orgChart1`, `venn1`, `pyramid1`), the picked name `pptx-smartart-picked`,
+  and **OK** `pptx-smartart-ok`. The graphic is inserted selected with its
+  Text Pane open (`pptx-smartart-pane`, one `pptx-smartart-pane-line` input
+  per node, its `li` carrying `data-level`; close `pptx-smartart-pane-close`;
+  the tab on the graphic's left edge `pptx-smartart-pane-toggle` shows and
+  hides it). Typing in a bullet edits the node live; Enter adds a node after
+  it (splitting at the caret), Tab/Shift+Tab demote/promote, Backspace on an
+  empty bullet deletes the node, and the arrow keys move between bullets.
+  Empty nodes show "[Text]" (`pptx-smartart-prompt`, editor only). With the
+  graphic selected, click a node to pick it (`pptx-smartart-active-node`,
+  `data-node`), then type (replaces its text), press Enter/F2, or
+  double-click to edit it in place (`pptx-smartart-node-input`; Escape ends);
+  Delete removes the picked node. SmartArt Design: Add Shape
+  (`pptx-smartart-add-shape`, then `pptx-smartart-add-<after|before|above|below|assistant>`),
+  Text Pane (`pptx-smartart-text-pane`), Promote/Demote
+  (`pptx-smartart-promote`, `pptx-smartart-demote`), Move Up/Down
+  (`pptx-smartart-move-up`, `pptx-smartart-move-down`), Layouts
+  (`pptx-smartart-layouts`, then `pptx-smartart-layout-option-<id>`), Change
+  Colors (`pptx-smartart-colors`, then `pptx-smartart-colors-<id>`:
+  `accent0_1`…, `colorful1`…`colorful5`, `accentN_1`…`accentN_5`), SmartArt
+  Styles (`pptx-smartart-styles`, then `pptx-smartart-style-simple1`…`5`),
+  Reset Graphic (`pptx-smartart-reset`), and Convert
+  (`pptx-smartart-convert`, then `pptx-smartart-convert-shapes` or
+  `-text`). The right-click menu offers Add Shape, Change Layout, Change
+  Colors, Reset Graphic, and Convert to Shapes/Text. SmartArt in other
+  layouts (from PowerPoint) keeps its drawing: text edits apply in place and
+  structural edits say "this layout's structure can't be changed here".
+- **Effects**: Shape Format's **Shape effects** (`pptx-shape-effects`) and
+  Picture Format's **Picture effects** (`pptx-picture-effects`) open
+  PowerPoint's Shadow, Reflection, Glow, and Soft Edges flyouts (hover
+  `pptx-effects-<shadow|reflection|glow|soft-edges>`). Tiles preview each
+  effect: `pptx-effect-shadow-<preset>` (`outerBottomRight`, `innerTop`,
+  `perspectiveBelow`...), `pptx-effect-reflection-<preset>` (`tightTouching`
+  ... `full8pt`), `pptx-effect-glow-<accent1-6>-<5|8|11|18>` (More Glow Colors
+  is `pptx-effect-glow-more`), `pptx-effect-soft-edge-<1|2.5|5|10|25|50>`, and
+  `-none` for each. A choice applies to every selected shape as one undo step.
+  **Text effects** (`pptx-text-effects`, Shape Format's WordArt styles) give
+  the selected text, or whole selected shapes, a shadow or glow
+  (`pptx-text-effects-<shadow|glow>`, tiles `pptx-text-effect-shadow-<preset>`
+  and `pptx-text-effect-glow-<accentN>-<size>`).
+- **Pictures** (Picture Format): **Corrections** (`pptx-picture-corrections`,
+  a 5 × 5 brightness × contrast grid of live previews, tiles
+  `pptx-picture-correction-b<±n>_c<±n>` such as `b+20_c-40`), **Color**
+  (`pptx-picture-color`, Recolor plus dark and light accent variations,
+  `pptx-picture-recolor-<value>` with `:` written `-`, such as
+  `duotone-accent1`), **Transparency** (`pptx-picture-transparency`, tiles
+  `pptx-picture-transparency-<0|15|30|50|65|80|95>`), Change picture
+  (`pptx-picture-change`), Reset (`pptx-picture-reset`, then
+  `pptx-picture-reset-picture` or `pptx-picture-reset-size`), Picture border
+  (`pptx-picture-border`), Arrange, and Size. **Crop** (`pptx-picture-crop`)
+  toggles crop mode; its arrow (`pptx-picture-crop-menu`) offers Crop to
+  Shape (`pptx-crop-to-shape`, then `pptx-shape-<preset>`), Aspect Ratio
+  (`pptx-crop-aspect`, then `pptx-crop-aspect-<w>x<h>`, which crops the
+  centered part and enters crop mode), Fill (`pptx-crop-fill`), and Fit
+  (`pptx-crop-fit`). The picture's right-click menu has Crop and Format
+  picture….
+- **Crop mode** (`pptx-crop-overlay`): the slide without the picture, the
+  whole image ghosted outside the frame, and black crop handles
+  `pptx-crop-handle-<nw|n|ne|e|se|s|sw|w>` (Shift keeps the aspect ratio,
+  Ctrl/Alt crops both sides; dragging past the image pads it). Dragging the
+  picture (`pptx-crop-frame`) or arrow keys move the image under the frame,
+  and the round `pptx-crop-image-handle-<nw|ne|se|sw>` scale it. Enter, Esc,
+  a click outside, or Crop again apply the crop as one undo step; rotated
+  and flipped pictures crop in place too.
+- **Edit Shape** (Shape Format ▸ `pptx-edit-shape`): Change Shape
+  (`pptx-change-shape`, then `pptx-shape-<preset>`) and **Edit Points**
+  (`pptx-edit-points`; also right-click a shape ▸ Edit Points). Edit Points
+  (`pptx-edit-points-overlay`) draws the outline as a red path
+  (`pptx-edit-points-path`) with black square vertices (`pptx-edit-point`,
+  `data-selected` on the clicked one, whose Bézier handles show as white
+  squares `pptx-edit-points-handle-in|out`; on a straight side they sit a
+  third of the way along it). Drag a vertex or handle to reshape, drag a
+  segment to bend it; Ctrl/Cmd+click a segment adds a point and
+  Ctrl/Cmd+click a vertex (or Delete) removes it. The path follows the
+  pointer live and the shape updates on release, one undo step per gesture
+  (Cmd/Ctrl+Z works in the mode). Right-click a vertex for Delete Point,
+  Open/Close Path, Smooth/Straight/Corner Point; a segment for Add Point,
+  Delete Segment, Open/Close Path, Straight/Curved Segment; anywhere for
+  Exit Edit Points. Esc or a click away from the outline leaves the mode.
+  Rotated, flipped, and grouped shapes edit in place; a preset becomes
+  custom geometry (`setCustomGeometry`) keeping its fill, outline, effects,
+  text and text area, and the box follows the outline.
+- **Merge Shapes** (Shape Format ▸ `pptx-merge-shapes`, enabled with two or
+  more shapes, text boxes, or pictures selected):
+  `pptx-merge-<union|combine|fragment|intersect|subtract>`. The result takes
+  the first selected shape's formatting, text, rotation, and id (a picture
+  stays a picture with its image in place), replaces the shapes, and is
+  selected (Fragment selects every piece); curves stay curves. Engine and
+  AI spelling: `mergeShapes` with `shapes` in selection order.
+- **Format pane** (`pptx-format-pane`): Format shape… in menus opens fill and
+  line, size and position (with alt text `pptx-alt-text`), and text box and
+  paragraph settings (Text box's Text direction select is
+  `pptx-pane-text-direction`); Format background… opens the slide background. Its
+  tabs (`pptx-pane-tab-<shape|effects|size|picture|text>`) include
+  **Effects** (shadow, reflection, glow, and soft edge presets and values,
+  such as `pptx-pane-shadow-blur` and `pptx-pane-glow-size`) and, for
+  pictures, **Picture** (`pptx-pane-brightness`, `pptx-pane-contrast`,
+  `pptx-pane-recolor`, `pptx-pane-transparency`, crop edges in percent
+  `pptx-pane-crop-<left|top|right|bottom>`, and `pptx-pane-picture-reset`).
+  Sliders apply while dragged, one undo step per drag.
+- **Find and replace** (`pptx-find`, Cmd/Ctrl+F and Cmd/Ctrl+H): find input
+  `pptx-find-input`, `pptx-replace-input`, count `pptx-find-count`, and
+  `pptx-replace-all`; Enter steps through matches, selecting each in its shape
+  or cell.
+- **Animations** tab (`pptx-tab-animations`): with shapes selected, the
+  gallery (`pptx-animation-gallery`, tiles
+  `pptx-animation-<entrance|emphasis|exit|path>-<effect>`, `pptx-animation-none`)
+  replaces their effect; Add Animation (`pptx-animation-add`) adds another;
+  Effect Options (`pptx-animation-options`) holds directions
+  (`pptx-animation-option-<value>`) and, for text, Sequence As One Object /
+  By Paragraph (`pptx-animation-sequence-object|paragraph`). Timing: Start
+  (`pptx-animation-start` select: onClick, withPrevious, afterPrevious),
+  Duration and Delay in seconds (`pptx-animation-duration`,
+  `pptx-animation-delay`), Move Earlier/Later (`pptx-animation-earlier|later`).
+  Preview (`pptx-animation-preview`) plays the slide in place. The Animation
+  Pane (`pptx-animation-pane-toggle`, `pptx-animation-pane`) lists
+  `pptx-animation-row`s (click picks one and selects its shape; Delete or
+  `pptx-animation-remove` removes it), and numbered `pptx-animation-tag`s
+  mark animated shapes while the tab or pane is open.
+- **Export as pictures** (header `pptx-export-open`) opens `pptx-export`: PNG
+  or JPEG (`pptx-export-png`, `pptx-export-jpeg`), this slide, the selected
+  slides, or all (`pptx-export-current`, `pptx-export-selected`,
+  `pptx-export-all`), and a width (`pptx-export-width`); Export
+  (`pptx-export-run`) downloads one picture (`<deck> - SlideN.png`) or a zip
+  of `SlideN` pictures. Right-click a shape ▸ **Save as picture…** downloads
+  it alone as a PNG cropped to its bounds.
+- **View ▸ Show**: Ruler (`pptx-view-ruler`: inch rulers along the slide's
+  top and left edges, `pptx-ruler-horizontal`/`pptx-ruler-vertical`, measured
+  from the center, with the selection shaded as `pptx-ruler-span`), Gridlines
+  (`pptx-view-gridlines`, drawn as `pptx-gridlines`), and Grid settings
+  (`pptx-view-grid-settings`: Snap objects to grid `pptx-view-snap-grid`,
+  spacing `pptx-view-grid-spacing` in points, and smart guides
+  `pptx-view-smart-guides`, and Display drawing guides
+  `pptx-view-drawing-guides`). Snapping moves the dragged box's top-left corner
+  to the grid where no smart guide is within reach; Alt-drag snaps to
+  nothing. These choices are remembered in the browser.
+- **Guides** (View ▸ Show ▸ Guides `pptx-view-guides`, or Alt+F9) draw the
+  deck's drawing guides as dashed lines over every slide (`pptx-guides`, one
+  `pptx-guide` line per guide with `data-orient` and `data-position` in
+  points; layout and master guides are `pptx-layout-guide` and do not move).
+  Dragging a guide moves it in 1/24" steps (Alt: freely) with a tooltip of its
+  distance from the slide's center in inches (`pptx-guide-tooltip`, such as
+  `← 2.50`); Ctrl+drag copies it; dragging it off the slide deletes it. A
+  selected shape or the text being edited keeps clicks over a guide.
+  Right-click a guide for Add Vertical Guide, Add Horizontal Guide, Color, and
+  Delete; the empty slide's menu has Grid and Guides ▸ Guides, Gridlines,
+  Smart Guides, Add Vertical Guide, and Add Horizontal Guide (new guides go
+  to the center, or half an inch beside guides already there). While guides
+  show, dragged shapes snap their edges and center to them. Guide changes
+  are `setGuides` edits: saved in the file (PowerPoint's
+  `p15:sldGuideLst`) and undoable.
+- **Selection Pane** (Arrange ▸ Selection Pane… `pptx-selection-pane-toggle`,
+  or Alt+F10) opens `pptx-selection-pane`: one `pptx-selection-row` per
+  object (`data-shape-id`), topmost first with groups nested. Click selects
+  (Cmd/Ctrl adds), the eye (`pptx-selection-eye`) hides or shows, Show All /
+  Hide All (`pptx-selection-show-all`, `pptx-selection-hide-all`) do every
+  object, double-click or F2 renames (`pptx-selection-rename`), and dragging a
+  row or Bring Forward / Send Backward (`pptx-selection-forward`,
+  `pptx-selection-backward`) reorders it among its siblings.
+- **Comments** (Review tab `pptx-tab-review`): New Comment
+  (`pptx-review-new-comment`, Insert ▸ Comment, right-click ▸ **New
+  Comment**, or Ctrl+Alt+M) opens the Comments pane (`pptx-comments-pane`)
+  with a draft attached to the selected shape, else to the slide
+  (`pptx-comment-draft`, its marker `pptx-comment-marker-draft`; Post
+  `pptx-comment-post` or Ctrl+Enter, Cancel `pptx-comment-cancel`). Each `pptx-comment-thread` (`data-comment-id`,
+  `data-resolved`, `aria-current` when picked) shows the author
+  (`pptx-comment-author`), a relative time (`pptx-comment-time`, "A few
+  seconds ago"), the text (`pptx-comment-text`), replies
+  (`pptx-comment-reply-item`), and a reply box (`pptx-comment-reply`, send
+  `pptx-comment-reply-post`). Each comment's "…" (`pptx-comment-menu`) has
+  Edit comment (`pptx-comment-edit`, then `pptx-comment-edit-input` and
+  `pptx-comment-save`), Delete thread or comment (`pptx-comment-delete`), and
+  Resolve or Reopen thread (`pptx-comment-resolve`, `pptx-comment-reopen`);
+  resolved threads collapse and grey out. Speech-bubble markers
+  (`pptx-comment-marker`, `data-comment-id`, `aria-pressed` on the picked
+  one) sit at each thread's anchor: beside its shape's top-right corner, at
+  its position, or at the slide's top-left corner; clicking one opens its
+  thread. Review ▸ Delete (`pptx-review-delete`) offers this comment, all on
+  the slide, or all in the presentation (`pptx-review-delete-comment|slide|all`);
+  Previous and Next (`pptx-review-previous|next`) walk threads across slides;
+  Show Comments (`pptx-review-show-comments`) toggles the pane, and its menu
+  (`pptx-review-show-menu`) toggles Show Markup (`pptx-review-show-markup`,
+  the markers). Thumbnails of slides with comments show
+  `pptx-thumbnail-comments`. Comments are saved as PowerPoint for Microsoft
+  365 writes them (threaded comments with `ppt/authors.xml`); comments in the
+  pre-2021 format show too and can be edited or deleted, but not replied to
+  or resolved. They are signed with the host's user name (the fixture's
+  `?author=`, default "Alex Morgan"). Engine and AI: `addComment`,
+  `replyComment`, `editComment`, `resolveComment`, `deleteComment`, and
+  `deleteAllComments`; slide outlines list `comments`.
+- **Spelling**: misspelled words on the slide being edited get red wavy
+  underlines (`pptx-spell-squiggles`, a `pptx-squiggle` per line piece with
+  `data-word`), checked against an en-US dictionary that loads a moment
+  after the editor opens. Words with digits, ALL-CAPS words, and web and
+  e-mail addresses are skipped; the word being typed waits until the caret
+  leaves it. Right-clicking an underlined word puts the caret in it, and the
+  menu starts with suggestions (`pptx-spelling-menu-suggestion`), Ignore All
+  (`pptx-spelling-menu-ignore-all`), and Add to Dictionary
+  (`pptx-spelling-menu-add`); added and ignored words are remembered in this
+  browser. Review ▸ Spelling (`pptx-review-spelling`, or F7) opens
+  `pptx-spelling-pane`, which walks the deck from the current slide, selecting
+  each word on its slide: the word (`pptx-spelling-word`), Ignore Once,
+  Ignore All, and Add (`pptx-spelling-ignore-once|ignore-all|add`),
+  suggestions (`pptx-spelling-suggestion`, `aria-selected`), and Change and
+  Change All (`pptx-spelling-change|change-all`), ending with
+  `pptx-spelling-complete` ("Spell check complete. You're good to go!", OK
+  `pptx-spelling-ok`).
+- **Links** (Insert ▸ Link, Cmd/Ctrl+K, or **Link…** in the right-click menu)
+  open `pptx-link-dialog`. While editing text it links the selection, or the
+  whole link around the caret; at a bare caret it inserts the "Text to
+  display" (`pptx-link-text`) as linked text. With shapes selected (not their
+  text) it links the shapes themselves. Link to: Web Page or File
+  (`pptx-link-kind-web`, address `pptx-link-address`; `macro.com` becomes
+  `https://macro.com`), Place in This Document (`pptx-link-kind-place`:
+  `pptx-link-place-nextslide` and the other jumps, or
+  `pptx-link-place-slide-<n>`, with a preview `pptx-link-preview`), or E-mail
+  Address (`pptx-link-kind-email`, `pptx-link-email`, `pptx-link-subject`).
+  ScreenTip is `pptx-link-tip`; OK is `pptx-link-ok`; editing an existing link
+  adds **Remove Link** (`pptx-link-remove`). Right-clicking linked text or a
+  linked shape offers Edit link…, Open link (a web page in a new tab, or the
+  linked slide), Copy link, and Remove link; Cmd/Ctrl+click follows a link
+  while editing text. Engine and AI spelling: `formatText` `link` /
+  `linkTip` and `setShapeLink`, with `#slide=<id>` or `#nextslide`-style jumps
+  for places in the deck.
+- **Slide show** (`pptx-slideshow`, F5 from the start, Shift+F5 from the
+  current slide): full screen with the slides' transitions; →/Space/click
+  play the next animation step, then advance (`pptx-slideshow-canvas` carries
+  `data-slide-index` and `data-step`; animated shapes are `[data-piece]`
+  layers), ← goes back, a number then Enter jumps, B/W blank the screen, S
+  shows notes, Esc ends. Over a link the pointer becomes a hand and its
+  ScreenTip shows (`pptx-slideshow-link-tip`); clicking follows the link
+  instead of advancing. **Morph** (`pptx-transition-morph`) plays as a scene
+  (`pptx-morph`, `data-pairs` = objects matched): objects on both slides
+  glide, resize, and turn to their new place (matched by a `!!` name, then
+  the same name and kind, as a duplicated slide keeps them, then the same
+  text, then the same placeholder); text-only boxes move without stretching;
+  the rest fade out or in. With Effect options ▸ Words or Characters,
+  text-only boxes morph word by word or letter by letter: each one travels
+  to where the same word sits on the next slide (`data-units` = words
+  matched; sprites carry `data-shape`, `data-unit`, and `data-morph` =
+  `from`/`to`). A click finishes it.
+- **Presenter View** (Slide Show ▸ Presenter view `pptx-present-presenter`,
+  Alt+F5): opens the audience show in a pop-up window (`pptx-audience-canvas`;
+  double-click it for full screen) and turns the tab into the speaker
+  console (`pptx-presenter`): current slide (`pptx-presenter-current`), next
+  slide (`pptx-presenter-next`), notes (`pptx-presenter-notes`), timer
+  (`pptx-presenter-timer`), counter (`pptx-presenter-counter`), All slides
+  (`pptx-presenter-grid-toggle`, or G), and End slide show
+  (`pptx-presenter-end`). Show keys work in either window. A blocked pop-up
+  shows **Open audience window** (`pptx-presenter-audience-closed`). A video
+  or audio clip on the current slide has a Play button on the console
+  (`pptx-presenter-media-play`), and clicking the clip in the audience window
+  also plays or pauses it instead of advancing: it plays on the audience
+  screen (`pptx-audience-media`) while the console mirrors a video silently
+  (`pptx-presenter-media-video`) with controls (`pptx-presenter-media-controls`:
+  `pptx-presenter-media-toggle`, `pptx-presenter-media-stop`, seek
+  `pptx-presenter-media-seek`, time `pptx-presenter-media-time`). With the
+  audience window closed, the console's copy plays the sound.
+- **Keyboard** on the stage: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (or Ctrl+Y),
+  Cmd/Ctrl+S saves now, Cmd/Ctrl+A selects all, Shift+Cmd/Ctrl+C and V copy
+  and paste formatting, Cmd/Ctrl+C/X/V copy, cut, and
+  paste shapes (and slides from the rail; also across decks), Cmd/Ctrl+D
+  duplicates, Cmd/Ctrl+G and Shift+Cmd/Ctrl+G group and ungroup, Cmd/Ctrl+] and
+  [ (with Shift: to front/back) reorder, Cmd/Ctrl+M adds a slide, arrows nudge
+  (Shift for 10 pt), Delete removes, Tab walks through shapes, PageUp/PageDown
+  change slides, F7 checks spelling, Ctrl+Alt+M adds a comment,
+  Cmd/Ctrl+±/0 and Cmd/Ctrl+wheel zoom. The status bar shows the
+  slide number and a zoom slider (`pptx-zoom` fits the slide).
+- **Print** (`pptx-print-open` beside Download, or Cmd/Ctrl+P) opens
+  `pptx-print`: layout (`pptx-print-layout-slides|notes|handouts3|handouts6`),
+  all/current/range slides (`pptx-print-range`, e.g. `1-3, 5`), hidden slides,
+  frames, and paper. **Print** (`pptx-print-go`) uses the browser's print
+  dialog; **Save as PDF** (`pptx-print-pdf`) downloads a PDF directly.
+  `pptx-print-summary` shows the page count or progress.
+- **Speaker notes** (`pptx-notes`) sit below the slide.
+
+Changes save automatically 1.5 s after the last edit, when the tab is hidden,
+and when the editor closes; `pptx-save-state` reads **Saved**, **Unsaved
+changes**, **Saving…**, or **Save failed**. Each save stores the whole file as a
+new document version through `PUT /documents/{id}/simple_save` (limit
+100 MB). Viewers without edit access get the same view with editing disabled.
+
+Everyone with the deck open edits it live. The deck is shared through the sync
+service as Loro maps (one entry per shape, slide position, relationship, and
+part; see `pptx_engine::collab`), seeded from the stored file the first time
+someone who can edit opens it. Others' edits appear within a second; edits to
+different shapes merge, and edits to the same shape resolve to the latest.
+Undo takes back only your own changes. Presence shows in the stage's top-right
+corner (`pptx-collaborators`, one `pptx-collaborator` avatar per person), as
+outlines with name tags around the shapes others selected
+(`pptx-peer-selection`, `data-peer="<name>"`, "… is typing" while they type),
+and as colored dots on the thumbnails of slides they are on. A viewer who opens
+a deck nobody has shared yet, or anyone when the sync service is unreachable,
+gets the stored file read-only.
+
+Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
+sections, transitions, header and footer, and every shape with its id, kind,
+placeholder role, position in points, text, table cells with merges and style,
+chart type and data, picture crop and adjustments, and shadow, glow, soft edge,
+and reflection effects; an equation stands in text as U+FFFC, the engine
+outline lists each paragraph's `equations` (index, LaTeX-style text, display
+flag), and the `insertEquation` and `setEquation` operations write them;
+`ReadContent` returns the same description) and changes them with
+`EditPresentation`, an atomic batch of the editor's own operations saved as a
+new version (`saveAs` creates an edited copy instead). When an `EditPresentation` result arrives in chat, an open
+editor of that deck reloads in place and says **Updated with changes made
+elsewhere.** If it holds unsaved edits it keeps them and says the deck also
+changed elsewhere; saving those edits replaces the other version.
+
+To exercise the editor without a backend, run the browser fixture from
+`apps/web`:
+
+```sh
+bunx vite --config src/features/block-pptx/browser-test/vite.config.ts
+# http://127.0.0.1:3018/?deck=generated/kitchen-sink-financial.pptx
+```
+
+It mounts the real editor and worker over corpus decks (`?readonly` for a
+viewer, `?autosave=0` to save only on demand). `window.pptxFixture` exposes
+`saved()`, `saves()`, `engine()`, `errors()`, `notices()`, and
+`externalEdit(ops)`, which applies operations to the stored copy with a second
+engine instance and announces the change the way an AI edit does. With `document`, `user`, `worker`, `socket`, and `token` parameters the
+fixture is one collaborator on the real sync service
+(`browser-test/sync-server.ts` boots the compiled sync Worker in Miniflare;
+build it once with `\cd services/sync-service && just worker-build`), and
+`window.pptxFixture.collab` exposes the connection status, peers, and shared
+entries. Its Playwright suites run with
+`bunx playwright test --config src/features/block-pptx/browser-test/playwright.config.ts`
+(set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed); `collaboration.browser.e2e.ts` opens several people on one deck. The editor sections above were verified on this fixture; the
+`/app/pptx` route itself needs a backend with an uploaded deck.
+
 ## Create and type
 
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
@@ -759,33 +1310,108 @@ shown as a bare highlight.
 When `enable-docx-editor` is on, uploaded `.docx` files open at
 `/app/write/<id>` in an editor instead of the PDF preview. The flag is a
 PostHog flag that is on by default in dev mode; set `VITE_ENABLE_DOCX_EDITOR`
-to override it locally. The header label has a **Beta** badge. The page is the
-Docxodus WASM engine. Edits sync through the sync service, so every open copy
-updates live and shows each collaborator's caret with their name.
+to override it locally. The header label has a **Beta** badge. Pages are laid
+out and drawn by Macro's own DOCX engine (Rust compiled to wasm, in a worker)
+as `<canvas>` sheets with Word's pagination, so the document's text is not
+in the DOM. Edits sync through the sync service as you type: every open copy
+updates live and shows each collaborator's caret with their name
+(`[data-docx-peer]`).
 
-- Editors get a toolbar labelled `Document formatting` with the following
-  controls: `Undo`, `Redo`, a `Paragraph style` select, bold, italic,
-  underline and strikethrough, `Bulleted list`, `Numbered list`, the alignment
-  buttons, `Insert table` and `Track changes`.
-- Typing is committed after about a second of idle time, or on blur. Wait
-  roughly 1.5 s before checking another tab for the text.
-- Editors see editable `Header` and `Footer` bands. Viewers and commenters get
-  a read-only paginated rendering instead.
+- Pages are `[data-docx-page="<index>"]` elements. Click a page to place the
+  caret, drag to select, double-click for a word and triple-click for a
+  paragraph. On a touch screen a swipe scrolls, a tap places the caret, and
+  a double tap or a held press selects a word. Keystrokes go to a hidden textarea, `[data-docx-input]`
+  (labelled `Document text`); it must have focus, which a click on a page
+  gives it. Read text back from another tab or after a download, not from
+  the page.
+- Editors get a toolbar labelled `Document formatting`: `Undo`, `Redo`, the
+  `Paragraph style`, `Font` and `Font size` selects, `Bold`, `Italic`,
+  `Underline`, `Strikethrough`, `Superscript`, `Subscript`, the `Text color`
+  and `Highlight` menus (`[data-docx-menu="color"]`,
+  `[data-docx-menu="highlight"]`), `Clear formatting`, `Bulleted list`,
+  `Numbered list`, the alignment buttons, `Decrease indent`, `Increase
+  indent`, the `Line spacing` menu, `Insert table` (inside a table also the
+  `Table rows and columns` menu, `[data-docx-menu="table"]`, to insert or
+  delete rows and columns or the table), the `Insert footnote or endnote`
+  menu (`[data-docx-menu="notes"]`, in the body), `Track changes`, `Hide tracked
+  changes` / `Show tracked changes`, `Comment on selection`, `Find and
+  replace` and `Download .docx` (viewers get `Find and replace` and
+  `Download .docx`).
+  While tracking is on (or the caret is on a tracked change) it also shows
+  `Accept change`, `Reject change`, `Accept all changes` and `Reject all
+  changes`.
+- The browser's own find cannot see canvas text, so Mod+F in the document
+  (or `Find and replace`) opens the editor's find bar (`[data-docx-find]`) in
+  the top right; Ctrl+H (Cmd+Shift+H on a Mac) opens it with the replace
+  field. The `Find in document` field (`[data-docx-find-query]`) searches as
+  you type and shows `<n> of <total>` (`[data-docx-find-status]`); matches
+  are highlighted on the pages (`[data-docx-find-match]`). Enter and
+  Shift+Enter (or the arrow buttons, or Mod+G) move between matches and
+  select them; `Match case` and `Whole words only` narrow the search. Straight
+  and curly quotes match each other. The `Replace` toggle shows `Replace
+  with` (`[data-docx-find-replacement]`) with `Replace`
+  (`[data-docx-replace]`) and `Replace all` (`[data-docx-replace-all]`);
+  replacements follow tracked changes and one undo takes back a replace all.
+  Escape closes the bar with the current match selected.
+- Arabic and Hebrew paragraphs lay out right to left as in Word (joined
+  Arabic letters, mixed-direction lines in visual order); the left and
+  right arrow keys move left and right on the page.
+- Mod+Z, Mod+Shift+Z and Ctrl+Y (or the toolbar buttons) undo and redo your
+  own edits only, never a collaborator's. Mod+B/I/U format, Tab and
+  Shift+Tab indent list items, Enter splits paragraphs and Shift+Enter
+  inserts a line break.
+- `Track changes` turns tracking on for the whole document (it is saved in
+  the file, as in Word): every editor's typing then shows as an underlined
+  insertion and deletions stay visible struck through, each under its
+  author's name. Formatting changes (bold, alignment, lists, indents) are
+  recorded too: the text looks formatted, and Accept and Reject appear when
+  the caret is in it. A thin bar in the left margin marks every line that
+  holds a change. Accept and reject act on the selection, the change at
+  the caret, or every change.
+- Double-click a page's header or footer area to edit it. The body dims, the
+  area gets a dashed edge and a `Header` (or `Footer`) label with a `Close`
+  button; Escape or a click on the body returns to the body. Header and
+  footer edits reach collaborators and the download like body edits.
+- Click a footnote or endnote at the bottom of the page (or after the body)
+  to type in it, as in Word; nothing dims. Escape or a click on the body
+  returns to the body. Comments stay with the body text.
+- To add a footnote or endnote at the caret, use the toolbar's asterisk
+  menu (`Insert footnote or endnote` → `Footnote` / `Endnote`) or Word's
+  shortcuts (Ctrl+Alt+F / Ctrl+Alt+D; Cmd+Option+F / Cmd+Option+E on a
+  Mac). The number appears in the text and the caret moves into the new
+  note at the foot of the page (endnotes go after the body).
+- Clicking a DOCX in the Home list opens the editor in the Home preview pane.
+  Viewers and commenters see the same paginated pages, read-only.
 - To comment on any text, including table cells: select it, then click the
-  floating `Comment` button beside the selection. You can also use the toolbar
-  `Comment on selection` button or Mod+Alt+M. The draft opens a thread card in
-  the right margin. Posting creates a normal document discussion (`markdown`
-  anchor with `mark_id`), so it also appears in channels and notifications.
-- Highlighted text is drawn with the CSS Custom Highlight API rather than DOM
-  marks: query `CSS.highlights`, not `<mark>` elements.
+  floating `Comment` button beside the selection
+  (`[data-docx-comment-button]`). You can also use the toolbar `Comment on
+  selection` button or Mod+Alt+M. The draft opens a thread card in the right
+  margin. Posting creates a normal document discussion (`markdown` anchor
+  with `mark_id`), so it also appears in channels and notifications.
+  Commented text is highlighted by overlay elements
+  (`[data-docx-comment-highlight]`) above the canvas. Comments anchor in the
+  body only, not in headers or footers.
+- Comments written in Word (stored in the file) show in the same margin as
+  read-only cards (`[data-docx-word-comment="<id>"]`): author, date, text and
+  replies, marked `In the document` (and `Resolved` when done). Their text is
+  highlighted too (`[data-docx-comment-highlight="word:<id>"]`). They stay in
+  the file on download; reply with a Macro comment.
 - Threads whose text was deleted are listed under `Comments on text that has
   changed`, above the `Discussion` composer.
 - AI `CommentOnDocument` works on DOCX by quote. The editor pins each quote to
   the first matching text the next time someone opens the file.
-- `Download .docx` exports the current collaborative state with every edit.
-  Comments stay in Macro threads and are not written into the file.
+- `Download .docx` exports the current collaborative state with every edit,
+  including headers, footers and tracked changes. Comments stay in Macro
+  threads and are not written into the file.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
+- AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
+  open editors patch agent edits in as they land. `ReadWordDocument` lists
+  every paragraph, table cell and content control with its id. `EditWordDocument`
+  applies an atomic batch of `replaceText`, `setText`, `formatText`,
+  `insertParagraph`, `setStyle` and `delete` operations to those ids. Both
+  refuse a DOCX nobody has opened in the editor yet: it has no live copy.
+  `EditDocument` still rejects DOCX.
 
 ## Document history
 

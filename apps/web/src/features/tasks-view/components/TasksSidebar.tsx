@@ -6,9 +6,11 @@ import {
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { openProject } from '@app/features/projects/open-project';
+import { ProjectsSidebarSection } from '@app/features/projects/projects';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useNavigate } from '@app/lib/split-router';
-import { reviewsSplitRoute } from '@app/routes/routes';
+import { useNavigate, useParams } from '@app/lib/split-router';
+import { projectDetailRoute, reviewsSplitRoute } from '@app/routes/routes';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
@@ -165,6 +167,7 @@ function TaskFavorites(props: {
 
 export function TasksSidebar() {
   const layout = useSplitLayout();
+  const routeParams = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
   const panel = useSplitPanelOrThrow();
   const reviewsFlag = useFeatureFlag(enableTasksReviews);
@@ -214,6 +217,26 @@ export function TasksSidebar() {
           open={isSidebarSectionOpen('favorites')}
           onOpenChange={(open) => setSidebarSectionOpen('favorites', open)}
         />
+        <Show when={projectsEnabled()}>
+          <ProjectsSidebarSection
+            open={isSidebarSectionOpen('projects')}
+            onOpenChange={(open) => setSidebarSectionOpen('projects', open)}
+            activeProjectId={routeParams.projectId}
+            onCreate={() =>
+              layout.popoverSplit({ type: 'component', id: 'project-compose' })
+            }
+            onOpen={(id, event) => {
+              if (event.shiftKey) {
+                openProject(layout, id, { newSplit: true });
+                return;
+              }
+              navigate({
+                route: projectDetailRoute,
+                params: { projectId: id, section: 'overview' },
+              });
+            }}
+          />
+        </Show>
         <div ref={tourTarget(TASKS_TOUR.tags)}>
           <SidebarTagsSection
             activeIds={state.facets.tags ?? []}

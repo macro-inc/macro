@@ -48,7 +48,7 @@ import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
-import '@queries/agent-schedule/sync';
+import '@app/features/routines/queries/sync';
 import {
   createConnectionWebsocketEffect,
   parseWebsocketPayload,

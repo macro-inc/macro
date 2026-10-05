@@ -201,7 +201,9 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
                 FileType::from_str(ft).map_err(|_| AttachmentError::UnsupportedFileType(ft.clone()))
             })?;
 
-        if let Some(context) = crate::domain::content::spreadsheet_attachment_context(&document) {
+        if let Some(context) = crate::domain::content::spreadsheet_attachment_context(&document)
+            .or_else(|| crate::domain::content::presentation_attachment_context(&document))
+        {
             return Ok(AttachmentContent {
                 reference: EntityType::Document.with_entity_string(id.to_string()),
                 name: Some(document.document_name),
@@ -216,7 +218,13 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
                     .get_document_text(receipt)
                     .await
                     .map_err(|e| AttachmentError::Internal(e.into()))?;
-                NonEmpty::one(AttachmentPart::Content(text))
+                let mut parts = vec![AttachmentPart::Content(text)];
+                if let Some(context) =
+                    crate::domain::content::word_document_attachment_context(&document)
+                {
+                    parts.push(AttachmentPart::Content(context));
+                }
+                NonEmpty::new(parts).expect("content is non-empty")
             }
             FileAssociation::Md(_) => {
                 return markdown::resolve_markdown(self, user_id, id, &document).await;

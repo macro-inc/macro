@@ -23,6 +23,11 @@ use models_permissions::share_permission::access_level::EditAccessLevel;
 use s3_key::build_cloud_storage_bucket_document_key;
 use serde::Deserialize;
 
+/// Largest request `simple_save` accepts: a file of up to 100 MiB plus its
+/// multipart framing. Presentations edited in the browser are saved whole,
+/// so this is well above axum's 2 MB default.
+pub(in crate::api) const MAX_BODY_BYTES: usize = 100 * 1024 * 1024 + 64 * 1024;
+
 #[derive(Deserialize)]
 pub struct Params {
     pub document_id: String,

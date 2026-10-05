@@ -22,7 +22,6 @@ const project = {
   __typename: 'GraphqlSoupInitiative',
   id: 'project-1',
   displayName: 'Launch',
-  descriptionDocumentId: 'description-1',
   metadata: {
     ownerId: 'macro|owner@example.com',
     updatedAt: '2026-09-22T12:00:00Z',
@@ -85,7 +84,6 @@ describe('initiative GraphQL transport', () => {
       ownerId: 'macro|owner@example.com',
       updatedAt: '2026-09-22T12:00:00Z',
       createdAt: '2026-09-20T12:00:00Z',
-      descriptionDocumentId: 'description-1',
       userAccessLevel: 'comment',
       taskIds: ['task-1'],
       sharePermission: {
@@ -149,57 +147,5 @@ describe('initiative GraphQL transport', () => {
     });
     const result = await client.get('project-1', controller.signal);
     expect(result.isErr()).toBe(true);
-  });
-
-  it('does not expose a restricted task relationship', async () => {
-    const { client, requests } = clientWith(() => ({
-      data: {
-        user: {
-          taskInitiativeReferences: [
-            { taskId: 'task-1', state: 'UNAVAILABLE', initiative: null },
-            {
-              taskId: 'task-2',
-              state: 'VISIBLE',
-              initiative: {
-                __typename: 'GraphqlSoupInitiative',
-                id: 'project-1',
-                displayName: 'Launch',
-              },
-            },
-          ],
-        },
-      },
-    }));
-    const result = await client.taskReferences(['task-1', 'task-2']);
-    expect(requests[0].variables).toEqual({ taskIds: ['task-1', 'task-2'] });
-    expect(result.isOk() && result.value.references).toEqual([
-      { taskId: 'task-1', state: 'unavailable', initiative: null },
-      {
-        taskId: 'task-2',
-        state: 'visible',
-        initiative: { id: 'project-1', name: 'Launch' },
-      },
-    ]);
-  });
-
-  it('preserves per-task failures instead of treating a batch response as full success', async () => {
-    const { client, requests } = clientWith(() => ({
-      data: {
-        assignInitiativeTasks: [
-          { taskId: 'task-1', status: 'MOVED' },
-          { taskId: 'task-2', status: 'SKIPPED_NO_PERMISSION' },
-          { taskId: 'task-3', status: 'NOT_A_TASK' },
-        ],
-      },
-    }));
-    const result = await client.assignTasks('project-1', {
-      taskIds: ['task-1', 'task-2', 'task-3'],
-    });
-    expect(requests[0].kind).toBe('mutation');
-    expect(result.isOk() && result.value.results).toEqual([
-      { taskId: 'task-1', status: 'moved' },
-      { taskId: 'task-2', status: 'skippedNoPermission' },
-      { taskId: 'task-3', status: 'notATask' },
-    ]);
   });
 });

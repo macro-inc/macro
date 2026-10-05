@@ -38,7 +38,9 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
         props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY &&
         !(
           ctx.entityType === 'TASK' &&
-          props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
+          (props.property.propertyDefinitionId ===
+            SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+            props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT)
         )
       }
       canEdit={ctx.canEdit}

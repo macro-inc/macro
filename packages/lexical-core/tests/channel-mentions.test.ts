@@ -28,6 +28,7 @@ describe('extractChannelMentionsFromMarkdown', () => {
       ['call', 'call'],
       ['calendar', 'calendar_event'],
       ['automation', 'automation'],
+      ['routine', 'automation'],
       ['company', 'crm_company'],
       ['contact', 'crm_contact'],
     ];
@@ -65,6 +66,14 @@ describe('extractChannelMentionsFromMarkdown', () => {
   it('deduplicates repeated mentions', () => {
     const markdown = `${documentMention('doc-1', 'md')} twice ${documentMention('doc-1', 'md')}`;
     expect(extractChannelMentionsFromMarkdown(markdown)).toHaveLength(1);
+  });
+
+  it('deduplicates routines across current and saved block names', () => {
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${documentMention('routine-1', 'routine')} ${documentMention('routine-1', 'automation')}`
+      )
+    ).toEqual([{ entityType: 'automation', entityId: 'routine-1' }]);
   });
 
   it('extracts mentions from content containing bare angle brackets', () => {

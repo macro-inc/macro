@@ -35,6 +35,7 @@ import FileDashed from '@phosphor/file-dashed.svg';
 import FileDoc from '@phosphor/file-doc.svg';
 import FileHtml from '@phosphor/file-html.svg';
 import FilePdf from '@phosphor/file-pdf.svg';
+import Presentation from '@phosphor/file-ppt.svg';
 import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
@@ -70,6 +71,7 @@ import FileDashedBold from '@phosphor-icons/core/bold/file-dashed-bold.svg';
 import FileDocBold from '@phosphor-icons/core/bold/file-doc-bold.svg';
 import FileHtmlBold from '@phosphor-icons/core/bold/file-html-bold.svg';
 import FilePdfBold from '@phosphor-icons/core/bold/file-pdf-bold.svg';
+import PresentationBold from '@phosphor-icons/core/bold/file-ppt-bold.svg';
 import FileVideoBold from '@phosphor-icons/core/bold/file-video-bold.svg';
 import FilesBold from '@phosphor-icons/core/bold/files-bold.svg';
 import FolderBold from '@phosphor-icons/core/bold/folder-simple-bold.svg';
@@ -165,6 +167,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-success',
     background: 'bg-success/20',
     prettyName: 'Spreadsheet',
+  },
+  pptx: {
+    icon: Presentation,
+    boldIcon: PresentationBold,
+    foreground: 'text-orange',
+    background: 'bg-orange/20',
+    prettyName: 'Presentation',
   },
   database: {
     icon: Database,
@@ -418,12 +427,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-chat/20',
     prettyName: 'Skill',
   },
-  automation: {
+  routine: {
     icon: ClockClockwise,
     boldIcon: ClockClockwiseBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
-    prettyName: 'Automation',
+    prettyName: 'Routine',
   },
   crm_company: {
     icon: BuildingOffice,
@@ -460,6 +469,7 @@ export function isArchiveType(ext: string): boolean {
 }
 
 function validateEntity(entity: string): EntityWithValidIcon {
+  if (entity === 'automation') return 'routine';
   if (entity in ENTITY_ICON_CONFIGS) {
     return entity as EntityWithValidIcon;
   } else if (isBlockAlias(entity)) {
@@ -642,7 +652,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
         : 'reminder'
     )
     .with({ type: 'call' }, () => 'call')
-    .with({ type: 'automation' }, () => 'automation')
+    .with({ type: 'routine' }, () => 'routine')
     .with({ type: 'foreign' }, (e) => {
       if (e.foreignSource !== 'github_pull_request') return 'default';
       return match<unknown, EntityWithValidIcon>(e.metadata?.status)

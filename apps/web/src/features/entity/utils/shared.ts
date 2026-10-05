@@ -4,7 +4,7 @@ import type { EntityData } from '../types/entity';
 
 const OWNER_PRINCIPAL_ROW = [
   'agent_session',
-  'automation',
+  'routine',
   'calendar_event',
   'chat',
   'database',

@@ -25,6 +25,7 @@ const blocks = new Set([
   'csv',
   'write',
   'automation',
+  'routine',
   'pr',
   'md',
   'task',

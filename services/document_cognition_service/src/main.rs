@@ -275,6 +275,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized soup service");
 
     let s3_client = macro_aws_config::s3_client().await;
+    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+        db.clone(),
+        s3_client.clone(),
+        config.document_storage_bucket.to_string(),
+    );
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
         config.document_storage_bucket.to_string(),
@@ -363,7 +368,8 @@ async fn main() -> anyhow::Result<()> {
             lexical_client.clone(),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_presentation_files(Arc::new(presentation_files));
 
     tracing::info!("initialized document tool context");
 
@@ -663,7 +669,6 @@ async fn main() -> anyhow::Result<()> {
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        aws_sdk_sqs::Client::new(&aws_config),
         macro_event_broker.clone(),
     );
 
@@ -736,7 +741,7 @@ async fn main() -> anyhow::Result<()> {
             soup_service.clone(),
             &document_tool_context,
         ),
-        schedule_tool_context: ai_tools::NoOpScheduleContext,
+        schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         admission,
         recorder,

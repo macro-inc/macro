@@ -1,11 +1,10 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
-import { TaskProjectProperty } from '@app/features/projects/task-project-property';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
@@ -27,6 +26,7 @@ import type { Entity } from '@core/types';
 import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { useNotificationsForEntity } from '@notifications';
 import {
   getDefaultPinnedProperties,
@@ -98,18 +98,6 @@ export function MarkdownSidePanelSections() {
         defaultOpen
         order={25}
       >
-        <Show when={isTask()}>
-          <ShowFeatureFlag flag={enableProjects}>
-            <SidePanel.Grid>
-              <SidePanel.Row label="Project">
-                <TaskProjectProperty
-                  taskId={documentId()}
-                  canEdit={canEdit()}
-                />
-              </SidePanel.Row>
-            </SidePanel.Grid>
-          </ShowFeatureFlag>
-        </Show>
         <PropertiesSectionContent
           documentId={documentId()}
           isTask={isTask()}
@@ -214,6 +202,7 @@ function PropertiesSectionContent(props: {
   const entityType: PropertiesEntityType = props.isTask ? 'TASK' : 'DOCUMENT';
 
   const pins = createPinnedProperties(() => mdData.editor);
+  const projects = useFeatureFlag(enableProjects);
 
   return (
     <EntityPropertiesSection
@@ -228,6 +217,12 @@ function PropertiesSectionContent(props: {
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
       onPropertyUnpinned={pins.unpin}
       showTags={false}
+      // A task joins a project through its Project property, edited like the others.
+      defaultProperties={() =>
+        props.isTask && projects().enabled
+          ? [buildTaskProjectDefaultProperty()]
+          : []
+      }
     />
   );
 }
@@ -239,6 +234,7 @@ const PINNED_ORDER: readonly string[] = [
   SYSTEM_PROPERTY_IDS.STATUS,
   SYSTEM_PROPERTY_IDS.PRIORITY,
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  SYSTEM_PROPERTY_IDS.PROJECT,
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
