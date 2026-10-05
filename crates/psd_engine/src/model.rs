@@ -1521,6 +1521,9 @@ pub struct LayerMask {
     pub density: f32,
     /// Feather, in pixels.
     pub feather: f32,
+    /// Bumped whenever the mask's values are replaced wholesale, as
+    /// [`Layer::generation`] is for pixels.
+    pub generation: u32,
 }
 
 impl LayerMask {
@@ -1623,6 +1626,9 @@ pub mod flags {
     pub const KIND: u64 = 1 << 21;
     /// Advanced blending (knockout, blend clipped layers as group, …).
     pub const ADVANCED: u64 = 1 << 22;
+    /// The pixels (and a linked mask) moved by whole pixels, unchanged
+    /// otherwise: saving shifts their rectangles and keeps their data.
+    pub const OFFSET: u64 = 1 << 23;
 
     /// Document: canvas size (or every layer moved with a crop).
     pub const DOC_CANVAS: u64 = 1 << 0;
@@ -1697,9 +1703,10 @@ pub struct Layer {
     pub edits: u64,
     /// Deleted (kept for undo and for other people's changes).
     pub removed: bool,
-    /// Pixel generation: bumped whenever the pixels are replaced wholesale
-    /// (a transform, a rasterized edit), so shared tile changes from an
-    /// older generation are not applied over new pixels.
+    /// Pixel generation: a new value (unique among the people editing)
+    /// whenever the pixels are replaced wholesale (a transform, text laid
+    /// out again), so shared tile changes are only applied to the pixels
+    /// they were made on. Files open at generation 0.
     pub generation: u32,
 }
 

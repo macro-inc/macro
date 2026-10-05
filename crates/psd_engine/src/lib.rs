@@ -12,14 +12,22 @@
 pub mod binary;
 pub mod channels;
 pub mod codec;
+pub mod collab;
 pub mod color;
+pub mod describe;
+pub mod document;
 pub mod edit;
 pub mod error;
 pub mod file;
+pub mod inspect;
 pub mod model;
 pub mod raster;
 pub mod render;
 pub mod resources;
+pub mod save;
+pub mod text;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 
 pub use error::{PsdError, Result};
 pub use model::{Document, Layer, LayerIdx};
