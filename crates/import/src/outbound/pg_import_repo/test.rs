@@ -8,6 +8,147 @@ use macro_user_id::cowlike::CowLike;
 use sqlx::{Pool, Postgres};
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_members_returns_only_the_requested_roster(pool: PgPool) {
+    let owner = ledger_actor(&pool, "roster-owner").await;
+    let peer = ledger_actor(&pool, "roster-peer").await;
+    let outsider = ledger_actor(&pool, "roster-outsider").await;
+    let team = ledger_team(&pool, &owner).await;
+    join_ledger_team(&pool, &peer, team).await;
+    ledger_team(&pool, &outsider).await;
+    let repo = PgImportRepo::new(pool);
+
+    let members = repo.team_members(team).await.unwrap();
+    assert_eq!(members.len(), 2);
+    assert!(members.contains(&owner));
+    assert!(members.contains(&peer));
+    assert!(repo.team_members(Uuid::now_v7()).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn manual_run_inserts_without_auto_import(pool: PgPool) {
+    let actor = ledger_actor(&pool, "manual-insert").await;
+    let repo = PgImportRepo::new(pool);
+    assert!(repo.list_runs(&actor).await.unwrap().is_empty());
+    assert!(
+        repo.start_manual_run(&actor, ImportSource::Slack, &[])
+            .await
+            .unwrap()
+    );
+
+    let runs = repo.list_runs(&actor).await.unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].source, ImportSource::Slack);
+    assert_eq!(runs[0].status, RunStatus::Running);
+    assert!(!runs[0].auto_import);
+    assert!(runs[0].error.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn manual_run_clears_auto_import_and_error_only_when_claimed(pool: PgPool) {
+    let repo = PgImportRepo::new(pool.clone());
+    let from = [
+        RunStatus::Ready,
+        RunStatus::Completed,
+        RunStatus::Failed,
+        RunStatus::Dismissed,
+    ];
+    for status in from {
+        let actor = ledger_actor(&pool, status.as_ref()).await;
+        assert!(
+            repo.start_run(&actor, ImportSource::Slack, &[], true)
+                .await
+                .unwrap()
+        );
+        assert!(
+            repo.finish_run(&actor, ImportSource::Slack, status, Some("previous error"))
+                .await
+                .unwrap()
+        );
+        assert!(repo.list_runs(&actor).await.unwrap()[0].auto_import);
+
+        assert!(
+            repo.start_manual_run(&actor, ImportSource::Slack, &from)
+                .await
+                .unwrap()
+        );
+        let runs = repo.list_runs(&actor).await.unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].status, RunStatus::Running);
+        assert!(!runs[0].auto_import);
+        assert!(runs[0].error.is_none());
+
+        // A subsequent initial gather must not re-enable automatic import.
+        assert!(
+            repo.start_run(&actor, ImportSource::Slack, &[RunStatus::Running], true)
+                .await
+                .unwrap()
+        );
+        assert!(!repo.list_runs(&actor).await.unwrap()[0].auto_import);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn manual_run_does_not_take_over_active_runs(pool: PgPool) {
+    let actor = ledger_actor(&pool, "manual-active").await;
+    let repo = PgImportRepo::new(pool);
+    let from = [
+        RunStatus::Ready,
+        RunStatus::Completed,
+        RunStatus::Failed,
+        RunStatus::Dismissed,
+    ];
+    assert!(
+        repo.start_run(&actor, ImportSource::Slack, &[], true)
+            .await
+            .unwrap()
+    );
+    for status in [RunStatus::Running, RunStatus::Importing] {
+        if status == RunStatus::Importing {
+            assert!(
+                repo.transition_run(&actor, ImportSource::Slack, &[RunStatus::Running], status)
+                    .await
+                    .unwrap()
+            );
+        }
+        let before = repo.list_runs(&actor).await.unwrap().pop().unwrap();
+        assert!(
+            !repo
+                .start_manual_run(&actor, ImportSource::Slack, &from)
+                .await
+                .unwrap()
+        );
+        let after = repo.list_runs(&actor).await.unwrap().pop().unwrap();
+        assert_eq!(after.status, status);
+        assert!(after.auto_import);
+        assert_eq!(after.error, before.error);
+        assert_eq!(after.updated_at, before.updated_at);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn staged_manual_entity_round_trips(pool: PgPool) {
+    let actor = ledger_actor(&pool, "manual-entity").await;
+    let repo = PgImportRepo::new(pool);
+    let metadata = serde_json::json!({"name": "general", "channel_id": "C123"});
+    let row = repo
+        .upsert_staged(
+            &actor,
+            ImportSource::Slack,
+            Initiator::Manual,
+            "C123",
+            &metadata,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.initiator, Initiator::Manual);
+    assert_eq!(row.status, ImportStatus::Staged);
+    let stored = repo.get(&actor, row.id).await.unwrap().unwrap();
+    assert_eq!(stored.initiator, Initiator::Manual);
+    assert_eq!(stored.metadata, metadata);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn read_only_targets_are_exact_scoped_and_never_reserve(pool: PgPool) {
     use crate::domain::{models::ImportTargetLookup, ports::ImportTargetReader};
     let admin = ledger_actor(&pool, "reader").await;

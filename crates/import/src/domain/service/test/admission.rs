@@ -168,6 +168,14 @@ impl ImportRepo for Repo {
         }
         Ok(true)
     }
+    async fn start_manual_run(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: &[RunStatus],
+    ) -> Result<bool> {
+        Ok(true)
+    }
     async fn finish_run(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -289,6 +297,9 @@ impl ImportRepo for Repo {
     }
     async fn user_team_id(&self, _: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
         Ok(self.0.lock().unwrap().team_id)
+    }
+    async fn team_members(&self, _: Uuid) -> Result<Vec<MacroUserIdStr<'static>>> {
+        Ok(Vec::new())
     }
     async fn fail_stale_importing(&self, _: &MacroUserIdStr<'static>, _: i64) -> Result<u64> {
         Ok(0)

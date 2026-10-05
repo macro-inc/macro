@@ -251,6 +251,13 @@ pub trait ImportRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
 
+    /// IDs of the team's members. Macro user IDs encode emails, so this is
+    /// the roster the import domain matches Slack emails against.
+    fn team_members(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
+
     /// All gather runs for the user.
     fn list_runs(
         &self,
@@ -267,6 +274,16 @@ pub trait ImportRepo: Send + Sync + 'static {
         source: ImportSource,
         from: &[RunStatus],
         auto_import: bool,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// CAS a run to `running` with `auto_import = false`. Wins when no run
+    /// exists or the existing status is in `from`. Unlike `start_run`, a
+    /// successful claim always clears `auto_import`.
+    fn start_manual_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        from: &[RunStatus],
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// CAS the `running` run for `source` to `to` (ready/failed), recording
