@@ -211,8 +211,6 @@ fn every_non_allowlisted_variant_is_rejected() {
         "document.interaction",
         "channel.updated",
         "channel.deleted",
-        "channel.message_deleted",
-        "channel.message_attachment_removed",
         "channel.participant_added",
         "channel.participant_removed",
     ] {
@@ -221,6 +219,14 @@ fn every_non_allowlisted_variant_is_rejected() {
             Err(EventRejection::UnsupportedEvent)
         );
         assert!(serde_json::from_value::<EventName>(json!(name)).is_err());
+    }
+    for name in ["message.deleted", "message.attachment_removed"] {
+        let event = IncomingEvent {
+            event_id: Uuid::parse_str(EVENT_ID).unwrap(),
+            schema_version: 1,
+            payload: EventPayload::Message(message_fact(name, metadata())),
+        };
+        assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
     }
     assert!(serde_json::from_value::<EventName>(json!("document.future_event")).is_err());
     assert!(serde_json::from_value::<EventName>(json!("document.*")).is_err());

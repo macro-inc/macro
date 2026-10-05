@@ -8,7 +8,10 @@ import {
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
 import { Telemetry } from '@macro-inc/observability';
-import { EmailThreadMessageFieldsFragmentDoc } from '@service-storage/graphql/generated/graphql';
+import {
+  EmailDraftThreadFieldsFragmentDoc,
+  EmailThreadMessageFieldsFragmentDoc,
+} from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
@@ -22,13 +25,69 @@ import {
 } from '../soup/cache';
 import { markThreadDraftSaved } from './draft-cache';
 import {
+  draftFailureCode,
   executeGraphqlDeleteEmailDraft,
   executeGraphqlSaveEmailDraft,
   type GraphqlSaveEmailDraftArgs,
   type SaveEmailDraftFailureCode,
 } from './graphql/draft';
+import { mapGraphqlEmailMessage } from './graphql/mapper';
 import { emailKeys } from './keys';
 import { fetchAndCacheThread, type ThreadQueryTransport } from './thread';
+
+/** Read content and persistence state together, including resolved local handles. */
+export async function readEmailDraft(draftId: string) {
+  const host = getGraphqlCacheHost();
+  if (!host) return;
+  const result = await readRecordsByKeys(
+    host,
+    selectRecords(EmailThreadMessageFieldsFragmentDoc),
+    [`GraphqlSoupEmailMessage:${draftId}`]
+  );
+  const selected = result.records[0];
+  if (!selected) return;
+  return {
+    // Rollback can expose a sent base before its settlement arrives. Keep
+    // its mutation handle for correlation, without exposing editable content.
+    draft: selected.record.isDraft
+      ? mapGraphqlEmailMessage(selected.record)
+      : undefined,
+    persistence: selected.identity?.pending
+      ? ('queued' as const)
+      : ('committed' as const),
+    mutationUuid: selected.identity?.mutationUuid ?? undefined,
+  };
+}
+
+/** Subscribers read durable state; missing a notification is harmless on remount. */
+export function watchEmailDrafts(
+  changed: (settlement?: {
+    mutationUuid?: string;
+    failed: boolean;
+    code?: DraftWriteRejection;
+  }) => void
+): () => void {
+  // A surface can enable the queue after mounting, before its first write
+  // initializes the client. Subscribe to that host before any save settles.
+  getGraphqlSoupClient();
+  const host = getGraphqlCacheHost();
+  const cache = host?.onCacheChanged(() => changed());
+  const settlement = host?.onMutationSettled((result) => {
+    const code =
+      result.status === 'permanently-failed'
+        ? draftFailureCode(result.errorCode)
+        : undefined;
+    changed({
+      mutationUuid: result.mutationUuid,
+      failed: result.status === 'permanently-failed',
+      code,
+    });
+  });
+  return () => {
+    cache?.();
+    settlement?.();
+  };
+}
 
 /**
  * Whether a surface's draft writes ride the durable GraphQL mutation queue,
@@ -94,24 +153,68 @@ function rejection(
   return code;
 }
 
+const SNAPSHOT_READ_ATTEMPTS = 3;
+
+/** The draft and thread records a queued write rebases onto, when cached. */
+async function readCachedDraftAndThread(
+  draftId: string,
+  threadId: string
+): Promise<
+  Pick<
+    GraphqlSaveEmailDraftArgs,
+    | 'draftId'
+    | 'threadDbId'
+    | 'existingDraft'
+    | 'existingThread'
+    | 'mutationUuid'
+  >
+> {
+  const host = getGraphqlCacheHost();
+  if (!host) return { draftId, threadDbId: threadId };
+  // Settlement can land between these reads. Compose from one revision so a
+  // local draft is never combined with a thread already using its server ID.
+  for (let attempt = 0; attempt < SNAPSHOT_READ_ATTEMPTS; attempt++) {
+    const [draft, thread] = await Promise.all([
+      readRecordsByKeys(
+        host,
+        selectRecords(EmailThreadMessageFieldsFragmentDoc),
+        [`GraphqlSoupEmailMessage:${draftId}`]
+      ),
+      readRecordsByKeys(
+        host,
+        selectRecords(EmailDraftThreadFieldsFragmentDoc),
+        [`GraphqlSoupEmailThread:${threadId}`]
+      ),
+    ]);
+    if (draft.revision !== thread.revision) continue;
+    return {
+      draftId: draft.records[0]?.record.id ?? draftId,
+      threadDbId: thread.records[0]?.record.id ?? threadId,
+      existingDraft: draft.records[0]?.record,
+      existingThread: thread.records[0]?.record,
+      mutationUuid: draft.records[0]?.identity?.mutationUuid ?? undefined,
+    };
+  }
+  throw new Error('Email draft cache kept changing; retry the draft write');
+}
+
 /** Saves over the queue; a commit mirrors useSaveDraftMutation's cache effects. */
 export async function saveEmailDraftQueued(input: {
   args: GraphqlSaveEmailDraftArgs;
   completingThread?: boolean;
   previousThreadId?: string;
 }): Promise<QueuedDraftSave> {
-  const client = getGraphqlSoupClient();
-  const host = getGraphqlCacheHost();
-  const cached = host
-    ? await readRecordsByKeys(
-        host,
-        selectRecords(EmailThreadMessageFieldsFragmentDoc),
-        [`GraphqlSoupEmailMessage:${input.args.draftId}`]
-      )
-    : undefined;
-  const outcome = await executeGraphqlSaveEmailDraft(client, {
+  const cached = await readCachedDraftAndThread(
+    String(input.args.draftId),
+    input.args.threadDbId
+  );
+  const outcome = await executeGraphqlSaveEmailDraft(getGraphqlSoupClient(), {
     ...input.args,
-    existingDraft: cached?.records[0]?.record,
+    ...cached,
+    mutationUuid:
+      cached.mutationUuid ??
+      input.args.mutationUuid ??
+      String(input.args.draftId),
   });
   if (outcome.kind === 'failed') {
     return {
@@ -158,9 +261,12 @@ export async function deleteEmailDraftQueued(input: {
   threadId: string;
   completingThread?: boolean;
 }): Promise<QueuedDraftDelete> {
+  const cached = await readCachedDraftAndThread(input.draftId, input.threadId);
   const outcome = await executeGraphqlDeleteEmailDraft(getGraphqlSoupClient(), {
-    draftId: input.draftId,
-    threadDbId: input.threadId,
+    existingThread: cached.existingThread,
+    mutationUuid: cached.mutationUuid ?? input.draftId,
+    draftId: String(cached.draftId),
+    threadDbId: cached.threadDbId,
   });
   if (outcome.kind === 'failed') {
     return {

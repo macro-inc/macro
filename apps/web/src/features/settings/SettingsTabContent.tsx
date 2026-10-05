@@ -1,6 +1,8 @@
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { Show, Suspense } from 'solid-js';
+import { CrmSettings as Crm } from '../crm/crm-settings';
+import { SchedulingSettings } from '../scheduling/scheduling';
 import { Account } from './Account';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
@@ -10,7 +12,7 @@ import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
 import { ConnectedAccounts } from './ConnectedAccounts';
-import { Crm } from './Crm';
+import { McpConnections } from './McpConnections';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
@@ -32,6 +34,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
     >
       <Show when={isCurrentTab('Account')}>
         <Account />
+      </Show>
+      <Show when={isCurrentTab('Calendar')}>
+        <SchedulingSettings />
       </Show>
       <Show when={isCurrentTab('API Keys')}>
         <ApiKeys />
@@ -59,6 +64,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Connected')}>
         <ConnectedAccounts />
+      </Show>
+      <Show when={isCurrentTab('Connections')}>
+        <McpConnections />
       </Show>
       <Show when={isCurrentTab('Mobile App')}>
         <MobileApp />

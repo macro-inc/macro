@@ -4,8 +4,12 @@ import type { Property, PropertyOptionValue } from '../types';
 
 type PropertyValueUnion = string | number | Date | boolean;
 
+const NUMBER_FORMAT = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: NUMBER_DECIMAL_PLACES,
+});
+
 /**
- * Format a number to show up to 4 decimal places
+ * Format a number with thousands separators and up to 4 decimal places
  * Uses exponential notation for numbers beyond safe integer range
  */
 export function formatNumber(value: number): string {
@@ -16,20 +20,23 @@ export function formatNumber(value: number): string {
   }
   // Round to 4 decimal places and remove trailing zeros
   const rounded = parseFloat(value.toFixed(NUMBER_DECIMAL_PLACES));
-  return rounded.toString();
+  return NUMBER_FORMAT.format(rounded === 0 ? 0 : rounded);
 }
+
+// One formatter for every date: toLocaleDateString builds one per call,
+// which a table of a thousand dates pays for a thousand times.
+const DATE_FORMAT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
 
 /**
  * Format a date value for display
  */
 export function formatDate(value: Date | string): string {
   const date = typeof value === 'string' ? new Date(value) : value;
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return DATE_FORMAT.format(date);
 }
 
 /**

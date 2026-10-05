@@ -19,6 +19,7 @@ export interface BlockMethodRegistry {
   call: EmptySpec;
   calendar: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
+  database: EmptySpec;
   channel: EmptySpec;
   write: EmptySpec;
   pdf: EmptySpec;
@@ -28,6 +29,7 @@ export interface BlockMethodRegistry {
   image: EmptySpec;
   canvas: AssertSpec<CanvasSpec>;
   spreadsheet: EmptySpec;
+  pptx: EmptySpec;
   project: EmptySpec;
   start: EmptySpec;
   unknown: EmptySpec;
@@ -41,6 +43,7 @@ export interface BlockMethodRegistry {
   routine: EmptySpec;
   pr: EmptySpec;
   agent: EmptySpec;
+  initiative: EmptySpec;
 }
 
 // Type helper to get the method spec for a block name

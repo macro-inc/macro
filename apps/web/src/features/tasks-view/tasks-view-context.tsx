@@ -16,6 +16,11 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import {
+  taskDetailRoute,
+  tasksProjectsRoute,
+  tasksSplitRoute,
+} from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,
@@ -50,7 +55,6 @@ import {
   type UseTasksDataSourceOptions,
   useTasksDataSource,
 } from './queries/use-tasks-query';
-import { taskDetailRoute, tasksProjectsRoute, tasksSplitRoute } from './route';
 import { tasksTabSearch, tasksTabSearchCodec } from './tasks-tab-search';
 import type {
   TaskDetailTarget,

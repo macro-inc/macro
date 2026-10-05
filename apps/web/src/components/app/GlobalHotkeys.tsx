@@ -55,9 +55,9 @@ import type { ThemeV3 } from '@theme/types/themeTypes';
 import {
   applySystemTheme,
   applyTheme,
-  clearThemePreview,
   previewTheme,
   resolveActiveThemeId,
+  scheduleThemePreviewEnd,
 } from '@theme/utils/themeUtils';
 import { type Component, onCleanup, Show } from 'solid-js';
 import { useSplitLayout } from './split-layout/layout';
@@ -434,7 +434,7 @@ export default function GlobalShortcuts() {
       const theme = systemResolvedTheme();
       if (theme) previewTheme(theme.id);
     },
-    onHighlightEnd: clearThemePreview,
+    onHighlightEnd: scheduleThemePreviewEnd,
   });
 
   themes().forEach((theme) => {
@@ -452,7 +452,7 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
       onHighlight: () => previewTheme(theme.id),
-      onHighlightEnd: clearThemePreview,
+      onHighlightEnd: scheduleThemePreviewEnd,
     });
   });
 
@@ -478,7 +478,7 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
       onHighlight: () => previewTheme(theme.id),
-      onHighlightEnd: clearThemePreview,
+      onHighlightEnd: scheduleThemePreviewEnd,
     });
   });
 
@@ -504,7 +504,7 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
       onHighlight: () => previewTheme(theme.id),
-      onHighlightEnd: clearThemePreview,
+      onHighlightEnd: scheduleThemePreviewEnd,
     });
   });
 

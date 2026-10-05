@@ -1,0 +1,18 @@
+id: ts-crm-public-boundary
+language: typescript
+severity: error
+message: Import a CRM entry point or host adapter; CRM implementation layers are private.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/features/crm/**
+rule:
+  kind: string
+  regex: "[/]crm[/](core|context|queries|primitives|components|views)[/]"
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source

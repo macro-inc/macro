@@ -11,7 +11,9 @@ describe('openAgentsPage', () => {
       [
         {
           id: 'routines',
-          entryMetadata: { route: { matches: [{ id: 'view-routines' }] } },
+          entryMetadata: {
+            route: { matches: [{ id: 'app' }, { id: 'view-routines' }] },
+          },
         },
         { activate: true, search: {} },
       ],
@@ -21,6 +23,7 @@ describe('openAgentsPage', () => {
           entryMetadata: {
             route: {
               matches: [
+                { id: 'app' },
                 { id: 'routine-detail', params: { routineId: 'routine-1' } },
               ],
             },

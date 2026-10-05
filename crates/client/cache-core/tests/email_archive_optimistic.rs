@@ -52,6 +52,7 @@ async fn enqueue(
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                identity_bindings: &[],
                 uuid,
                 query: MUTATION,
                 operation_name: Some("SetEmailThreadArchived"),

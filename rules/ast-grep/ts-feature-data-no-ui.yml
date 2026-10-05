@@ -13,12 +13,22 @@ note: |-
 files:
   - apps/web/src/features/routines/queries/**
   - apps/web/src/features/routines/primitives/**
+  - apps/web/src/features/scheduling/core/**
+  - apps/web/src/features/scheduling/context/**
+  - apps/web/src/features/scheduling/queries/**
+  - apps/web/src/features/scheduling/primitives/**
+  - apps/web/src/features/crm/queries/**
+  - apps/web/src/features/crm/primitives/**
+  - apps/web/src/features/slack-import/queries/**
+  - apps/web/src/features/slack-import/primitives/**
   - apps/web/src/features/channels-view/queries/channel-detail-source*
   - apps/web/src/features/channels-view/primitives/create-channel-detail*
   - apps/web/src/features/channel/queries/channel-invite*
   - apps/web/src/features/channel/primitives/create-channel-invites*
   - apps/web/src/features/projects/queries/**
   - apps/web/src/features/projects/primitives/**
+  - apps/web/src/features/channel/Call/chat/queries/**
+  - apps/web/src/features/channel/Call/chat/primitives/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
   - apps/web/src/features/meetings/queries/**
@@ -40,6 +50,8 @@ files:
   - apps/web/src/features/email-compose/primitives/**
   - apps/web/src/features/agent-changes/queries/**
   - apps/web/src/features/agent-changes/primitives/**
+  - apps/web/src/features/block-write/queries/**
+  - apps/web/src/features/block-write/primitives/**
 rule:
   kind: string
   regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views|ui|component)(/|['"]))

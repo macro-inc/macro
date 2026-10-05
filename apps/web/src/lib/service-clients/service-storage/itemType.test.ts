@@ -14,6 +14,12 @@ describe('itemTypeToReferenceEntityType', () => {
       'agent_session'
     );
   });
+  test('the initiative block names a task project, never a folder', () => {
+    expect(blockNameToItemType('initiative')).toBe('initiative');
+    expect(blockNameToItemType('project')).toBe('project');
+    expect(stringToItemType('initiative')).toBe('initiative');
+    expect(itemTypeToReferenceEntityType('initiative')).toBe('initiative');
+  });
   test('maps email to the thread type used by referencium', () => {
     expect(itemTypeToReferenceEntityType('email')).toBe('thread');
   });
@@ -52,6 +58,7 @@ describe('stringToItemType', () => {
     'project',
     'channel',
     'crm_company',
+    'initiative',
   ])('parses %s as itself', (raw) => {
     expect(stringToItemType(raw)).toBe(raw);
   });

@@ -41,6 +41,27 @@ async fn seeded_pricing_is_available(pool: PgPool) {
         repo.get_pricing("whisper-1").await.unwrap(),
         Some(ModelPricing::Audio { per_minute: 0.006 })
     );
+    let price = repo
+        .get_pricing("gemini-2.5-flash-image")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        price,
+        ModelPricing::Tokens {
+            input: 0.30,
+            output: 30.0
+        }
+    );
+    let cost = crate::Price::compute(
+        price,
+        UsageAmount::Tokens {
+            input: 100,
+            output: 1290,
+        },
+    )
+    .unwrap();
+    assert!((cost.total - 0.03873).abs() < 0.000001);
     assert_eq!(repo.get_pricing("nonexistent-model").await.unwrap(), None);
 }
 
@@ -53,10 +74,13 @@ async fn insert_and_query_roundtrips(pool: PgPool) {
         repo.get_pricing("claude-opus-4-8").await.unwrap().unwrap(),
         row.cost.amount,
     );
-    repo.insert_usage(&row).await.unwrap();
-    repo.insert_usage(&completion(AiFeature::Memory, "unknown-model", 10, 20))
-        .await
-        .unwrap();
+    repo.insert_usage(&row, true).await.unwrap();
+    repo.insert_usage(
+        &completion(AiFeature::Memory, "unknown-model", 10, 20),
+        false,
+    )
+    .await
+    .unwrap();
 
     let all = repo.query_usage(&UsageApiParams::default()).await.unwrap();
     assert_eq!(all.len(), 2);
@@ -79,12 +103,10 @@ async fn set_pricing_recomputes_existing_rows(pool: PgPool) {
     let repo = PgUsageRepo::new(pool);
 
     // Record with an unknown model so price starts NULL.
-    repo.insert_usage(&completion(
-        AiFeature::Automation,
-        "brand-new-model",
-        1_000_000,
-        0,
-    ))
+    repo.insert_usage(
+        &completion(AiFeature::Automation, "brand-new-model", 1_000_000, 0),
+        true,
+    )
     .await
     .unwrap();
 
@@ -114,13 +136,69 @@ async fn set_pricing_recomputes_existing_rows(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn counting_decisions_survive_repricing_and_remain_visible_to_analytics(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool.clone());
+    let model = "counting-test-model";
+    let row = completion(AiFeature::Chat, model, 1_000_000, 0);
+    repo.insert_usage(&row, true).await.unwrap();
+    repo.insert_usage(&row, false).await.unwrap();
+    // Legacy writers omit the column, just like historical rows before migration.
+    sqlx::query!(
+        r#"INSERT INTO ai_usage (id, feature, user_id, model, input_tokens, output_tokens)
+           VALUES ($1, 'chat', $2, $3, 1000000, 0)"#,
+        macro_uuid::generate_uuid_v7(),
+        row.user.as_ref(),
+        model,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let before = sqlx::query!("SELECT id, count_usage FROM ai_usage ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(before.iter().filter(|row| row.count_usage).count(), 1);
+    assert_eq!(before.len(), 3);
+
+    for pricing in [
+        ModelPricing::Tokens {
+            input: 2.0,
+            output: 8.0,
+        },
+        ModelPricing::Audio { per_minute: 0.006 },
+        ModelPricing::Tokens {
+            input: 4.0,
+            output: 16.0,
+        },
+    ] {
+        repo.set_pricing(model, pricing).await.unwrap();
+        let after = sqlx::query!("SELECT id, count_usage FROM ai_usage ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        assert!(before.iter().zip(&after).all(
+            |(before, after)| before.id == after.id && before.count_usage == after.count_usage
+        ));
+        let all = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+        assert_eq!(
+            all.len(),
+            3,
+            "admin analytics includes uncounted and legacy rows"
+        );
+        let expected = Price::compute(pricing, row.cost.amount);
+        assert!(all.iter().all(|row| row.cost.price == expected));
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn query_filters_by_user(pool: PgPool) {
     let repo = PgUsageRepo::new(pool);
 
     let mut other = completion(AiFeature::Chat, "claude-opus-4-8", 1, 1);
     other.user = MacroUserIdStr::try_from("macro|someone@example.com".to_string()).unwrap();
-    repo.insert_usage(&other).await.unwrap();
-    repo.insert_usage(&completion(AiFeature::Chat, "claude-opus-4-8", 1, 1))
+    repo.insert_usage(&other, true).await.unwrap();
+    repo.insert_usage(&completion(AiFeature::Chat, "claude-opus-4-8", 1, 1), false)
         .await
         .unwrap();
 
@@ -175,13 +253,11 @@ async fn duration_usage_roundtrips_and_reprices_without_affecting_tokens(pool: P
         repo.get_pricing("whisper-1").await.unwrap().unwrap(),
         audio.cost.amount,
     );
-    repo.insert_usage(&audio).await.unwrap();
-    repo.insert_usage(&completion(
-        AiFeature::Chat,
-        "claude-opus-4-8",
-        1_000_000,
-        0,
-    ))
+    repo.insert_usage(&audio, false).await.unwrap();
+    repo.insert_usage(
+        &completion(AiFeature::Chat, "claude-opus-4-8", 1_000_000, 0),
+        true,
+    )
     .await
     .unwrap();
 
@@ -241,9 +317,12 @@ async fn duration_usage_roundtrips_and_reprices_without_affecting_tokens(pool: P
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn repricing_cannot_apply_audio_rates_to_token_usage(pool: PgPool) {
     let repo = PgUsageRepo::new(pool);
-    repo.insert_usage(&completion(AiFeature::Chat, "mixed-history", 1_000_000, 0))
-        .await
-        .unwrap();
+    repo.insert_usage(
+        &completion(AiFeature::Chat, "mixed-history", 1_000_000, 0),
+        true,
+    )
+    .await
+    .unwrap();
     repo.set_pricing("mixed-history", ModelPricing::Audio { per_minute: 0.006 })
         .await
         .unwrap();

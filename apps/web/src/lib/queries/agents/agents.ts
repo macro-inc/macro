@@ -1,5 +1,5 @@
 import { throwOnErr } from '@core/util/result';
-import { botKeys } from '@queries/bots/keys';
+import { botKeys, botProfileKeys } from '@queries/bots/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -104,7 +104,14 @@ export function useCreateAgentMutation() {
         agentKeys.list.queryKey,
         (current = []) => [...current, agent]
       );
-      await invalidateAgentChannelBots(agent.channel_ids);
+      queryClient.setQueryData(
+        botKeys.detail(agent.bot.id).queryKey,
+        agent.bot
+      );
+      await Promise.all([
+        invalidateAgentChannelBots(agent.channel_ids),
+        queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
+      ]);
     },
     onError: (error) => console.error('failed to create agent', error),
   }));
@@ -134,10 +141,6 @@ export function useUpdateAgentMutation() {
         })
       ),
     onSuccess: async (updated) => {
-      const previousChannelIds =
-        queryClient
-          .getQueryData<Agent[]>(agentKeys.list.queryKey)
-          ?.find((agent) => agent.bot.id === updated.bot.id)?.channel_ids ?? [];
       queryClient.setQueryData<Agent[]>(
         agentKeys.list.queryKey,
         (current = []) =>
@@ -145,9 +148,20 @@ export function useUpdateAgentMutation() {
             agent.bot.id === updated.bot.id ? updated : agent
           )
       );
-      await invalidateAgentChannelBots([
-        ...previousChannelIds,
-        ...updated.channel_ids,
+      queryClient.setQueryData(
+        botKeys.detail(updated.bot.id).queryKey,
+        updated.bot
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
+        queryClient.invalidateQueries({
+          queryKey: botProfileKeys.detail(updated.bot.id).queryKey,
+        }),
+        // Global agents have no selected channel IDs but can still appear in
+        // a channel's bot list, which takes precedence in the mention menu.
+        queryClient.invalidateQueries({
+          queryKey: channelKeys.channelBots._def,
+        }),
       ]);
     },
     onError: (error) => console.error('failed to update agent', error),
@@ -179,6 +193,9 @@ export function useDeleteAgentMutation() {
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
+        queryClient.invalidateQueries({
+          queryKey: botProfileKeys.detail(vars.agentId).queryKey,
+        }),
         ...[...new Set(vars.channelIds)].flatMap((channelId) => [
           queryClient.invalidateQueries({
             queryKey: channelKeys.channelBots(channelId).queryKey,

@@ -85,7 +85,7 @@ pub type DcsMessageService =
     MessageServiceImpl<PgChatRepo<PgBotsRepo>, DcsAttachmentProvider, DcsEventBroker>;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 #[cfg(test)]
 pub use test::test_api_context;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -152,6 +152,8 @@ pub struct ApiContext {
     pub non_user_owners: NonUserOwners,
     /// Plan allowance gate for AI requests.
     pub ai_billing: Arc<DcsAiBillingService>,
+    /// Shared admission for new AI operations, after authorization.
+    pub ai_admission: Arc<dyn ai_billing::AiAdmissionService>,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub notification_ingress_service: Arc<NotificationIngressType>,

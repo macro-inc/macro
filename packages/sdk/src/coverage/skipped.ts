@@ -287,6 +287,14 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Slack archive imports are browser-admin workflows, not SDK surface in v1.
+  'cancelSlackImport',
+  'completeSlackImportUploads',
+  'createSlackImport',
+  'finalizeSlackImport',
+  'getSlackImport',
+  'listSlackImports',
+  'registerSlackImportUploads',
   'bulkWakeupSyncServiceDocuments',
   'callWebhook',
   'checkActiveCall',
@@ -296,9 +304,13 @@ export const storageExcluded = [
   'createViewHandler',
   'deleteCollabSurface',
   'ensureCollabSurface',
+  // First-run sample content is provisioned by the app's feature-gated onboarding.
+  'ensureStarterHandler',
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',
+  // Old numeric comment links resolve inside the web app only.
+  'entityMessageLegacy',
   'excludeDefaultViewHandler',
   'getAttachmentReferences',
   'getBatchCallRecordPreview',
@@ -306,7 +318,12 @@ export const storageExcluded = [
   'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
+  'getBotOwnerProfiles',
   'getCollabSurface',
+  // Storage for the web app's saved questions, not a user-facing surface.
+  'getDatabaseQuery',
+  // The web grid's incremental refresh after a version ping, not a user-facing surface.
+  'getDatabaseTableChanges',
   'getDocumentListHandler',
   'getDocumentLocationV3',
   'getDocumentProcessingResult',
@@ -329,20 +346,30 @@ export const storageExcluded = [
   'jobProcessingResultHandler',
   'joinChannelByCode',
   'leaveOrEndCall',
-  // Joining and leaving live meetings are app session flows.
+  // Live meeting admission and participant previews are app session flows.
   'meetingGuestJoin',
+  // Browser setup reserves an empty RTC room before creating a meeting.
+  'meetingPrepare',
+  'meetingCancelPreparation',
+  'meetingGuestParticipants',
   'meetingJoin',
   'meetingLeave',
+  'meetingParticipants',
   'mentionPreviews',
   'patchViewHandler',
-  'postChannelMessages',
   'postItemsSoup',
   'postItemsSoupAst',
   'postItemsSoupAstGrouped',
   'removeBotFromChannelByBot',
-  'resolveChannelMessage',
+  // Storage for the web app's saved questions, not a user-facing surface.
+  'saveDatabaseQuery',
+  // Live presence between viewers of a database, internal to the web app.
+  'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.
   'transcribeDictation',
+  // The web app's Ctrl+Z over the viewer's own session edits; the SDK's
+  // applyOps does not surface the journal changes an undo names.
+  'undoDatabaseChange',
   'uploadExtractFolderHandler',
   'uploadFolderHandler',
   'upsertHistoryHandler',
@@ -350,8 +377,11 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  // Email follow-ups are available through the generated client, like reminders.
+  'getEmailFollowup',
+  'setEmailFollowup',
+  'listEmailReminders',
   'approveHarnessPairing',
-  'assignInitiativeTasks',
   'claimHarnessPairing',
   'createAgent',
   'createAnchor',
@@ -371,16 +401,8 @@ export const storageBacklog = [
   'editAnchor',
   'editCallTranscript',
   'editThreadV2',
-  'entityMessageCreate',
-  'entityMessageDeleteMessage',
   'entityMessageDeleteThread',
-  'entityMessageEdit',
-  'entityMessageGetMessage',
-  'entityMessageGetThread',
-  'entityMessageLegacy',
   'entityMessagePatchThread',
-  'entityMessageReact',
-  'entityMessageTyping',
   'getActivity',
   'getDocumentAnchors',
   'getDocumentByTeamSlug',
@@ -388,6 +410,9 @@ export const storageBacklog = [
   'getDocumentPermissionsV2',
   'getDocumentVersion',
   'getEntityPermission',
+  'getGithubPullRequest',
+  'getGithubPullRequestChanges',
+  'getGithubPullRequestChangesPatch',
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
   'getHarnessPairing',
@@ -401,9 +426,9 @@ export const storageBacklog = [
   'listInitiatives',
   'listOccurrences',
   'listReminders',
+  'listReminderCollection',
   'listTeamOutOfOffice',
   'listUserApiKeys',
-  'messageTimeline',
   // Meeting management uses the generated client.
   'meetingCancel',
   'meetingCreate',
@@ -421,7 +446,6 @@ export const storageBacklog = [
   'setChannelPicture',
   'simpleSave',
   'toggleShareWithTeam',
-  'unassignInitiativeTask',
   'updateAgent',
   'updateInitiative',
   'updateReminder',

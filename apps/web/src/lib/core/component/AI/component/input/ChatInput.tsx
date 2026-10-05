@@ -223,6 +223,9 @@ export function ChatInput(props: ChatInputComponentProps) {
       },
     })
     .onEnter((e) => {
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
       if (canSendMessage()) {
         sendMessage({ metaKey: e?.metaKey });
       }

@@ -6,6 +6,7 @@ import { McpToolCall } from '@core/component/AI/component/tool/McpToolCall';
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@service-cognition/generated/schemas/assistantMessagePart';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
+import type { ToolName } from '@service-cognition/generated/tools/tool';
 import {
   type Accessor,
   createEffect,
@@ -71,7 +72,10 @@ type RenderItem =
 const STANDALONE_TOOLS: ReadonlySet<string> = new Set([
   'CreateCalendarEvent',
   'DisplayResults',
+  'GenerateImage',
   'ReadActivity',
+  'QueryDatabase',
+  'SaveDatabaseView',
   'SendEmail',
 ]);
 
@@ -165,6 +169,11 @@ export function AssistantMessageParts(props: {
         (part.type !== 'thinking' || part.thinking.trim().length > 0)
     );
   });
+  /** Whether a visible part after `index` calls the tool named `name`. */
+  const followedBy = (index: number) => (name: ToolName) =>
+    parts()
+      .slice(index + 1)
+      .some((part) => part.type === 'toolCall' && part.name === name);
   const streamingTailTextIndex = createMemo(() => {
     if (!props.isStreaming) return;
     const visibleParts = parts();
@@ -312,6 +321,7 @@ export function AssistantMessageParts(props: {
                   renderContext: {
                     isStreaming: outer.isStreaming,
                     grouped: props.grouped(),
+                    followedBy: followedBy(props.entry().index),
                   },
                 }}
               />
@@ -336,6 +346,7 @@ export function AssistantMessageParts(props: {
                   renderContext: {
                     isStreaming: outer.isStreaming,
                     grouped: props.grouped(),
+                    followedBy: followedBy(props.entry().index),
                   },
                 }}
               />
@@ -413,6 +424,7 @@ export function AssistantMessageParts(props: {
           renderContext: {
             isStreaming: outer.isStreaming,
             grouped: false,
+            followedBy: followedBy(props.item().index),
           },
         }}
       />

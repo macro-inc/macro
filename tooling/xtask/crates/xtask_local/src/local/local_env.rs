@@ -97,6 +97,7 @@ impl LocalEnv {
         } else {
             frontend::https_origin(instance)?
         };
+        let infra = InfraEnv::local(&frontend_origin);
         Ok(LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
@@ -118,7 +119,7 @@ impl LocalEnv {
             preview_ssh_proxy_host: tunnels.preview_ssh.map(str::to_owned),
             preview_ssh_port: instance.port(Port::PreviewSsh),
             preview_https_port: instance.port(Port::PreviewHttps),
-            infra: InfraEnv::local(instance),
+            infra,
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
@@ -219,13 +220,13 @@ struct InfraEnv {
 }
 
 impl InfraEnv {
-    fn local(instance: &Instance) -> Self {
+    fn local(frontend_origin: &str) -> Self {
         InfraEnv {
             database_url: "postgres://user:password@postgres:5432/macrodb".into(),
             redis_uri: "redis://redis:6379".into(),
             opensearch_url: "http://search:9200".into(),
             local_aws_url: "http://localstack:4566".into(),
-            local_aws_public_url: format!("http://localhost:{}", instance.port(Port::LocalStack)),
+            local_aws_public_url: format!("{frontend_origin}/local-storage"),
             // The broker's in-network listener (see docker/docker-compose-databases.yml);
             // host processes use localhost:9092 instead.
             kafka_brokers: "kafka:29092".into(),
@@ -247,6 +248,16 @@ impl InfraEnv {
             "LOCAL_AWS_PUBLIC_URL".into(),
             self.local_aws_public_url.clone(),
         );
+        // Document GET URLs skip CloudFront signing locally. Keep their base
+        // on this instance's published S3 endpoint, above the Doppler layer.
+        env.insert(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
+            format!(
+                "{}/{}",
+                self.local_aws_public_url,
+                resources::DOC_STORAGE_BUCKET
+            ),
+        );
         env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
         // In-network services resolve the gateway through the OVERRIDE_ var;
         // without it the resolver's Environment::Local default
@@ -265,6 +276,12 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
+        );
+        // Historical indexing calls the processing service's scoped backfill API,
+        // not the search query service. Both run on the local Compose network.
+        env.insert(
+            "OVERRIDE_SEARCH_PROCESSING_SERVICE_URL".into(),
+            "http://search-processing-service:8080".into(),
         );
         // Account deletion awaits both owning services from the auth container.
         env.insert(
@@ -637,6 +654,9 @@ struct BootStubEnv;
 
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
+        // The worker is opt-in and ships paused; an explicit env-file can enable it.
+        env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
+        env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());
@@ -658,13 +678,8 @@ impl BootStubEnv {
         env.insert("PIPEDREAM_WEBHOOK_SECRET".into(), "local".into());
         env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
         env.insert("OPENSEARCH_PASSWORD".into(), "local".into());
-        // document_storage_service's presigned-URL config. Locally the
-        // `is_local_aws()` branch skips CloudFront signing entirely, so only a
-        // well-formed base URL is needed.
-        env.insert(
-            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
-            "http://localhost:8100".into(),
-        );
+        // Local document URLs use the instance endpoint supplied by InfraEnv;
+        // signing is skipped by the `is_local_aws()` branch.
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID".into(),
             "local-cloudfront-signer".into(),

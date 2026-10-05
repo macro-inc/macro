@@ -3,12 +3,10 @@
 #[cfg(test)]
 mod test;
 
-pub mod assign_tasks;
 pub mod create;
 pub mod delete;
 pub mod get;
 pub mod list;
-pub mod unassign_task;
 pub mod update;
 
 use std::str::FromStr;
@@ -29,9 +27,8 @@ use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 
 pub use self::{
-    assign_tasks::assign_initiative_tasks_handler, create::create_initiative_handler,
-    delete::delete_initiative_handler, get::get_initiative_handler, list::list_initiatives_handler,
-    unassign_task::unassign_initiative_task_handler, update::update_initiative_handler,
+    create::create_initiative_handler, delete::delete_initiative_handler,
+    get::get_initiative_handler, list::list_initiatives_handler, update::update_initiative_handler,
 };
 use crate::domain::{
     models::{InitiativeBasic, InitiativeError, InitiativeId},
@@ -101,16 +98,6 @@ pub struct InitiativeIdParams {
     pub initiative_id: String,
 }
 
-/// Path parameters for unassigning one task.
-#[derive(Debug, Deserialize, utoipa::IntoParams)]
-#[into_params(parameter_in = Path)]
-pub struct UnassignTaskParams {
-    /// Initiative identifier.
-    pub initiative_id: String,
-    /// Task identifier.
-    pub task_id: String,
-}
-
 /// Build the initiative router.
 ///
 /// Nested under `/initiatives` by the composition root.
@@ -127,14 +114,6 @@ where
             routing::get(get_initiative_handler::<S, Eas, Auth>)
                 .patch(update_initiative_handler::<S, Eas, Auth>)
                 .delete(delete_initiative_handler::<S, Eas, Auth>),
-        )
-        .route(
-            "/{initiative_id}/tasks",
-            routing::put(assign_initiative_tasks_handler::<S, Eas, Auth>),
-        )
-        .route(
-            "/{initiative_id}/tasks/{task_id}",
-            routing::delete(unassign_initiative_task_handler::<S, Eas, Auth>),
         )
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -212,7 +191,7 @@ impl IntoResponse for InitiativeError {
         let status_code = match &self {
             InitiativeError::NotFound => StatusCode::NOT_FOUND,
             InitiativeError::Unauthorized => StatusCode::UNAUTHORIZED,
-            InitiativeError::BadRequest(_) | InitiativeError::NotATask => StatusCode::BAD_REQUEST,
+            InitiativeError::BadRequest(_) => StatusCode::BAD_REQUEST,
             InitiativeError::Conflict(_) => StatusCode::CONFLICT,
             InitiativeError::NameTooLong { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             InitiativeError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,

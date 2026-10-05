@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session_log SET created_at = created_at + interval '1 second' WHERE agent_session_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ea2a143eab94461f62be76320578f818dd75d5e15944b8775a07e48c43edb66"
+}

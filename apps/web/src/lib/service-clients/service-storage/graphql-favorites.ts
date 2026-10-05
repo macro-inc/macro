@@ -44,6 +44,8 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   agent_session: 'AGENT_SESSION',
   scheduled_action: 'SCHEDULED_ACTION',
   initiative: 'INITIATIVE',
+  database: 'DATABASE',
+  database_row: 'DATABASE_ROW',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -55,6 +57,8 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   CHAT: 'chat',
   CRM_COMPANY: 'crm_company',
   CRM_CONTACT: 'crm_contact',
+  DATABASE: 'database',
+  DATABASE_ROW: 'database_row',
   DOCUMENT: 'document',
   EMAIL_THREAD: 'email_thread',
   FOREIGN_ENTITY: 'foreign_entity',
@@ -140,6 +144,8 @@ function favoriteSoupEffects(
     skill: undefined,
     scheduled_action: undefined,
     initiative: 'GraphqlSoupInitiative',
+    database: undefined,
+    database_row: undefined,
   } as const satisfies Record<FavoriteEntityType, string | undefined>;
   const typename = typenames[args.entityType];
   return typename

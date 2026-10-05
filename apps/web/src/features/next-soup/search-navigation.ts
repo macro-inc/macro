@@ -99,9 +99,10 @@ export function searchLocationTarget(
       namespace: callDetailSearch.namespace,
       params: callDetailSearchCodec.serialize({
         transcriptId: target.transcriptId,
+        messageId: '',
         seek,
       })!,
-      fields: ['transcriptId', 'seek'],
+      fields: ['transcriptId', 'messageId', 'seek'],
     }))
     .exhaustive();
 }

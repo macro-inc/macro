@@ -98,8 +98,11 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
 
 fn empty_write_result() -> WriteResultWire {
     WriteResultWire {
+        identity_errors: Vec::new(),
+        mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
+        search_changed_buckets: None,
         changed: Vec::new(),
         affected_ops: Vec::new(),
         reset: false,
@@ -108,7 +111,53 @@ fn empty_write_result() -> WriteResultWire {
 }
 
 #[test]
+fn query_writes_preserve_search_proof_and_viewer_field_scope_through_native_wire() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), Some("viewer"));
+    read(&handle, Some("client:1"));
+    let mut other = variables();
+    other.insert("input".into(), serde_json::json!({"limit":2}));
+    let result = block_on(handle.write(WriteRequest {
+        origin_op_id: None,
+        registration: None,
+        query: QUERY.into(),
+        operation_name: Some("Soup".into()),
+        variables: other,
+        data: soup_data(false),
+        identity: Some("viewer".into()),
+    }))
+    .unwrap();
+    assert!(result.revision_advanced);
+    assert!(result.affected_ops.is_empty());
+    assert_eq!(
+        serde_json::to_value(result).unwrap()["searchChangedBuckets"],
+        serde_json::json!([])
+    );
+    let reset = write(&handle, None, soup_data(false), Some("new-viewer"));
+    assert!(reset.reset);
+    assert!(
+        serde_json::to_value(reset)
+            .unwrap()
+            .get("searchChangedBuckets")
+            .is_none()
+    );
+    handle.shutdown().unwrap();
+}
+
+#[test]
 fn tagged_wire_enum_fields_are_camel_case() {
+    let mut committed = empty_write_result();
+    committed
+        .identity_errors
+        .push("missing identity response object".into());
+    let value =
+        serde_json::to_value(CommitOptimisticWriteResultWire::Committed { result: committed })
+            .unwrap();
+    assert_eq!(value["kind"], "committed");
+    assert_eq!(
+        value["identityErrors"],
+        serde_json::json!(["missing identity response object"])
+    );
     assert_eq!(
         serde_json::to_value(MutationUpsertKindWire::ReplacedPending {
             removed_transaction_id: "1".to_string(),
@@ -139,6 +188,22 @@ fn tagged_wire_enum_fields_are_camel_case() {
         .unwrap()["replacementTransactionId"],
         "4"
     );
+    for replacement_transaction_id in [None, Some("4".to_string())] {
+        let value = serde_json::to_value(CommitOptimisticWriteResultWire::Failed {
+            error: "missing identity response id".to_string(),
+            replacement_transaction_id: replacement_transaction_id.clone(),
+            result: empty_write_result(),
+        })
+        .unwrap();
+        assert_eq!(value["kind"], "failed");
+        assert_eq!(value["error"], "missing identity response id");
+        assert_eq!(
+            value
+                .get("replacementTransactionId")
+                .and_then(serde_json::Value::as_str),
+            replacement_transaction_id.as_deref()
+        );
+    }
     assert_eq!(
         serde_json::to_value(RollbackOptimisticWriteResultWire::DiscardedSuperseded {
             replacement_transaction_id: "5".to_string(),
@@ -186,7 +251,7 @@ fn identical_hydration_does_not_advance_the_native_revision() {
 }
 
 #[test]
-fn hydration_returns_only_unmarked_fields() {
+fn hydration_returns_only_unmarked_fields_and_retains_entities_without_pages() {
     let handle = spawn_handle();
     let result = block_on(handle.hydrate_query(
         HYDRATION_QUERY.to_string(),
@@ -204,10 +269,29 @@ fn hydration_returns_only_unmarked_fields() {
         }))
     );
     assert!(!result.write_result.changed.is_empty());
-    let ReadResultWire::Hit { data } = read(&handle, None) else {
-        panic!("expected hydrated cache hit");
+    assert!(matches!(read(&handle, None), ReadResultWire::Miss));
+    let ReadResultWire::Hit { data } = block_on(handle.read(
+        None,
+        "query Viewer { user { id } }".to_string(),
+        Some("Viewer".to_string()),
+        Variables::new(),
+        Vec::new(),
+    ))
+    .unwrap() else {
+        panic!("expected hydrated viewer");
     };
-    assert_eq!(data, soup_data(true));
+    assert_eq!(data, serde_json::json!({"user": {"id": "user-1"}}));
+    let records = block_on(handle.read_records_by_keys(
+        "fragment Document on GraphqlSoupDocument { __typename id }".to_string(),
+        "Document".to_string(),
+        vec!["GraphqlSoupDocument:doc-1".to_string()],
+    ))
+    .unwrap();
+    assert_eq!(records.records.len(), 1);
+    assert_eq!(
+        records.records[0].record,
+        serde_json::json!({"__typename": "GraphqlSoupDocument", "id": "doc-1"})
+    );
 }
 
 #[test]
@@ -477,6 +561,7 @@ fn optimistic_layer_commits_durably() {
         soup_data(true),
         vec![],
         vec![],
+        vec![],
         0,
         "runner".to_string(),
         10,
@@ -497,6 +582,7 @@ fn optimistic_layer_commits_durably() {
     assert_eq!(claimed.transaction_id, optimistic.transaction_id);
     assert_eq!(claimed.uuid, "00000000-0000-4000-8000-000000000001");
     assert!(!claimed.superseded);
+    assert!(!claimed.requires_confirmation);
 
     // The optimistic view answers reads.
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -537,6 +623,7 @@ fn rollback_drops_optimistic_contribution() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        vec![],
         vec![],
         vec![],
         0,

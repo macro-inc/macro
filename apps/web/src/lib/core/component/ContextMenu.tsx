@@ -12,6 +12,7 @@ import {
 import { Hotkey } from '@ui/components/Hotkey';
 import {
   type Component,
+  type ComponentProps,
   createEffect,
   type JSX,
   Match,
@@ -19,6 +20,7 @@ import {
   type ParentProps,
   Show,
   Switch,
+  splitProps,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -271,6 +273,39 @@ export function MenuGroup(props: { children: JSX.Element; class?: string }) {
     <ContextMenu.Group class={cn('w-full', props.class)}>
       {props.children}
     </ContextMenu.Group>
+  );
+}
+
+/**
+ * Solid delegates a portal's events to where it sits in the component tree,
+ * so an editor portaled out of a trigger would open the trigger's menu and
+ * lose its native one.
+ */
+const ignorePortaledEvents = (
+  event: Event & { currentTarget: HTMLElement }
+) => {
+  if (
+    !(event.target instanceof Node) ||
+    !event.currentTarget.contains(event.target)
+  )
+    event.stopPropagation();
+};
+
+/** Kobalte's context-menu trigger, ignoring events from portaled content. */
+export function ContextMenuTrigger(
+  props: ComponentProps<typeof ContextMenu.Trigger>
+) {
+  const [local, others] = splitProps(props, ['children']);
+  return (
+    <ContextMenu.Trigger {...others}>
+      <div
+        class="contents"
+        onContextMenu={ignorePortaledEvents}
+        onPointerDown={ignorePortaledEvents}
+      >
+        {local.children}
+      </div>
+    </ContextMenu.Trigger>
   );
 }
 

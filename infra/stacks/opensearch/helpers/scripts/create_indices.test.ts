@@ -6,6 +6,24 @@ import {
   selectIndexSpecs,
 } from './create_indices';
 
+test('channel fallback authors are searchable content, not sender identities', () => {
+  const spec = INDEX_SPECS.find((spec) => spec.aliasName === 'channels');
+  expect(spec?.body).toMatchObject({
+    mappings: {
+      dynamic: 'false',
+      properties: {
+        imported_author: {
+          type: 'text',
+          analyzer: 'content_text',
+          copy_to: 'content',
+        },
+        content: { type: 'text', analyzer: 'content_text' },
+        sender_id: { type: 'keyword', index: true },
+      },
+    },
+  });
+});
+
 describe('planCreateIndex', () => {
   test('fresh env — index missing, alias free → create with alias', () => {
     const plan = planCreateIndex({

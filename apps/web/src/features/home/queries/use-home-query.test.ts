@@ -1,4 +1,7 @@
 import type { EmailEntity, EntityData } from '@entity/types/entity';
+import { unreadFilterFn } from '@entity/utils/filter';
+import { getDocumentCommentNotification } from '@notifications/document-comment-notification';
+import type { UnifiedNotification } from '@notifications/types';
 import type { SoupAstItemsQuery } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupPageTimestamp } from '@queries/soup/page-timestamp';
@@ -11,6 +14,7 @@ import { type HomeDataSource, useHomeDataSource } from './use-home-query';
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
+  ...(await import('@app/features/soup/collection/row-store')),
   useSearchContext: () => ({ entityPool: () => [] }),
   createSearchState: () => ({
     isSearching: () => false,
@@ -55,6 +59,7 @@ function email(id: string, day: number): EmailEntity {
     isRead: false,
     isDraft: false,
     isImportant: true,
+    isSignal: true,
     done: false,
     updatedAt: timestamp,
     notifiedAt: timestamp,
@@ -146,6 +151,104 @@ describe('Home data source', () => {
   afterEach(() => {
     dispose?.();
     vi.useRealTimers();
+  });
+
+  it('keeps old notifications unread but presents newer own activity as the task', () => {
+    const comment: UnifiedNotification = {
+      id: 'comment-notification',
+      entity_id: 'task',
+      entity_type: 'document',
+      sender_id: 'peter',
+      state: 'unseen',
+      created_at: '2026-09-01T16:37:00Z',
+      updated_at: '2026-09-01T16:37:00Z',
+      viewed_at: null,
+      sent: true,
+      notification_event_type: 'replied_to_document_comment_thread',
+      notification_metadata: {
+        tag: 'replied_to_document_comment_thread',
+        content: {
+          documentName: 'emails not sending',
+          owner: 'alice',
+          fileType: 'md',
+          commentId: 'comment',
+          threadId: 'thread',
+          text: 'Making progress',
+        },
+      },
+    };
+    const task = {
+      type: 'document' as const,
+      id: 'task',
+      name: 'emails not sending',
+      ownerId: 'alice',
+      fileType: 'md',
+      updatedAt: comment.created_at,
+      notifiedAt: comment.created_at,
+      notifications: () => [comment],
+    };
+    const notifications = makeQuery([task], false);
+    const activity = makeQuery(
+      [{ ...task, touchedAt: '2026-09-10T13:02:00Z' }],
+      false
+    );
+    const { source } = mount(notifications, activity);
+    const [row] = rows(source);
+    expect(row.sortTs).toBe('2026-09-10T13:02:00Z');
+    expect(getDocumentCommentNotification(row)).toBeUndefined();
+    expect(row.notifications?.()).toEqual([comment]);
+    expect(unreadFilterFn(row)).toBe(true);
+
+    const fresh = {
+      ...comment,
+      id: 'fresh',
+      created_at: '2026-09-10T14:00:00Z',
+    };
+    notifications.setEntities([
+      {
+        ...task,
+        notifiedAt: fresh.created_at,
+        notifications: () => [fresh, comment],
+      },
+    ]);
+    const [refreshed] = rows(source);
+    expect(refreshed.sortTs).toBe(fresh.created_at);
+    expect(getDocumentCommentNotification(refreshed)).toEqual(fresh);
+  });
+
+  it('excludes Noise and unclassified emails from recent activity, even when important or drafted', () => {
+    const activity = makeQuery(
+      [
+        { ...email('noise', 10), isSignal: false },
+        { ...email('noise-draft', 10), isSignal: false, isDraft: true },
+        { ...email('unclassified', 10), isSignal: undefined },
+        { ...email('signal', 10), isImportant: false },
+      ],
+      false
+    );
+    const { source, setState } = mount(
+      makeQuery([email('received', 9)], false),
+      activity
+    );
+    expect(ids(source)).toEqual(['signal', 'received']);
+    setState('facets', { read: ['unread'], type: ['email'] });
+    expect(ids(source)).toEqual(['signal', 'received']);
+
+    activity.setEntities([{ ...email('signal', 10), isSignal: false }]);
+    expect(ids(source)).toEqual(['received']);
+  });
+
+  it('continues pagination through a page containing only Noise activity', async () => {
+    const notifications = makeQuery([email('received', 1)], false);
+    const activity = makeQuery([{ ...email('noise', 10), isSignal: false }]);
+    const { source } = mount(notifications, activity);
+    expect(ids(source)).toEqual([]);
+    expect(source.hasMore()).toBe(true);
+    await source.loadMore();
+    expect(activity.fetchNextPage).toHaveBeenCalledOnce();
+    activity.setEntities((previous) => [...previous, email('signal', 9)]);
+    activity.setMore(false);
+    expect(ids(source)).toEqual(['signal', 'received']);
   });
 
   it('does not treat older cache-only rows as fetched page coverage', async () => {

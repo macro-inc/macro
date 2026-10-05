@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_import_job\n                (id, team_id, user_id, idempotency_token, request_sha256,\n                 source_workspace_id, confirmed_unknown, include_message_history)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n               ON CONFLICT (team_id, user_id, idempotency_token) DO NOTHING\n               RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5c61df8f8596e73b68ee4ceab0636c10383ae2c04066b5804e3c8de193e694d6"
+}

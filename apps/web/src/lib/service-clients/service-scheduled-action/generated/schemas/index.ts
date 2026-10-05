@@ -27,6 +27,7 @@ export * from './agentTask';
 export * from './agentTaskAgent';
 export * from './agentTaskAgentProperty';
 export * from './agentTaskModel';
+export * from './aiAdmissionErrorBody';
 export * from './createScheduledAction';
 export * from './emptyResponse';
 export * from './eventFilter';

@@ -3,6 +3,7 @@
 //! recording announcer. Only the edges are doubles.
 
 mod chat_reply;
+mod quota;
 mod user_cleanup;
 
 use agent_session::domain::service::AgentSessionService as _;
@@ -48,7 +49,7 @@ use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor, ContextMessage,
     ContextThread, ConversationContext, DeclinedMention, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, SessionBlocker, SessionDefaults,
+    HarnessDefaults, MentionOrigin, OpenSession, SessionBlocker, SessionDefaults, SessionOrigin,
     SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
@@ -97,15 +98,29 @@ fn open_command() -> OpenSession {
             instructions: String::new(),
             mcp_servers: AgentMcpServers::OwnerConnections,
         },
-        origin: MentionOrigin {
+        origin: SessionOrigin::Mention(MentionOrigin {
             parent: MessageParent::Channel(macro_uuid::generate_uuid_v7()),
             thread_id,
             message_id: thread_id,
             sender: sender(),
             content: "@claude fix the failing test".to_owned(),
             attachments: vec![],
-        },
+        }),
     }
+}
+
+fn mention_origin(command: &OpenSession) -> &MentionOrigin {
+    let SessionOrigin::Mention(origin) = &command.origin else {
+        panic!("expected a mention");
+    };
+    origin
+}
+
+fn mention_origin_mut(command: &mut OpenSession) -> &mut MentionOrigin {
+    let SessionOrigin::Mention(origin) = &mut command.origin else {
+        panic!("expected a mention");
+    };
+    origin
 }
 
 /// A prompt arriving from a channel that is not the session's own, so it is
@@ -117,6 +132,7 @@ fn forward_message(content: &str) -> DeliverAction {
         AgentAction::prompt(content),
         Some(staff_sender()),
         Some(AnnounceOrigin {
+            reuse_origin_message: false,
             parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xf0)),
             thread_id: macro_uuid::Uuid::from_u128(0xf1),
             message_id: macro_uuid::Uuid::from_u128(0xf2),
@@ -192,14 +208,15 @@ type PromptCompositionCall = (String, Option<String>, Option<ConversationContext
 #[derive(Clone, Default)]
 struct PromptComposerMock {
     calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
+    parents: Arc<Mutex<Vec<Option<MessageParent>>>>,
     failure: Arc<Mutex<Option<String>>>,
 }
 
 impl PromptComposerMock {
     fn failing(message: &str) -> Self {
         Self {
-            calls: Arc::default(),
             failure: Arc::new(Mutex::new(Some(message.to_owned()))),
+            ..Default::default()
         }
     }
 
@@ -213,9 +230,10 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
-        _parent: Option<&MessageParent>,
+        parent: Option<&MessageParent>,
         context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
+        self.parents.lock().unwrap().push(parent.cloned());
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
             instructions.map(str::to_owned),
@@ -624,8 +642,14 @@ async fn disconnected_session(
     repo: &InMemoryAgentSessionRepo,
     containers: &MockContainerManager,
 ) -> AgentSessionId {
-    let OpenSession { origin, .. } = open_command();
-    disconnected_session_owned_by(repo, containers, model_owner::Owner::User(origin.sender)).await
+    let command = open_command();
+    let origin = mention_origin(&command);
+    disconnected_session_owned_by(
+        repo,
+        containers,
+        model_owner::Owner::User(origin.sender.clone()),
+    )
+    .await
 }
 
 /// [`disconnected_session`] for an arbitrary owner: the in-memory repo stores
@@ -636,7 +660,8 @@ async fn disconnected_session_owned_by(
     containers: &MockContainerManager,
     owner: model_owner::Owner,
 ) -> AgentSessionId {
-    let OpenSession { origin, .. } = open_command();
+    let command = open_command();
+    let origin = mention_origin(&command);
     // The coder bot: resume-on-disconnect only exists for managed sessions.
     let bot_id = bot_id::MACRO_CODER_BOT_ID;
     let id = AgentSessionId::new();
@@ -681,7 +706,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
     let (service, repo, containers, announcer, _runtimes) = harness();
     let command = open_command();
     let id = AgentSessionId::new();
-    let origin = command.origin.clone();
+    let origin = mention_origin(&command).clone();
 
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
@@ -711,6 +736,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
     assert_eq!(session.harness, "opencode");
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
+    assert!(!announced[0].reuse_origin_message);
     assert_eq!(announced[0].origin_parent, origin.parent);
     assert_eq!(announced[0].origin_thread_id, origin.thread_id);
     assert_eq!(announced[0].triggered_by, origin.sender);
@@ -736,7 +762,7 @@ async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
     let mut command = open_command();
     command.runtime.kind = AgentKind::ClaudeCloud;
     command.runtime.harness = "claude-cloud".into();
-    let owner = command.origin.sender.clone();
+    let owner = command.origin.actor().clone();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
@@ -884,9 +910,9 @@ async fn context_failure_still_calls_composer_with_empty_messages_and_delivers()
     let (result, container) = tokio::join!(open, drive);
 
     result.expect("context lookup is best-effort after Kafka admission");
-    // Authorized twice: once before provisioning, once at dispatch, so a
-    // revocation between the two still stops the prompt.
-    assert_eq!(context.authorized().len(), 2);
+    // Access precedes provisioning and queue admission, and is rechecked at
+    // dispatch so a revocation while queued still stops the prompt.
+    assert_eq!(context.authorized().len(), 3);
     assert_eq!(announcer.announced().len(), 1);
     assert_eq!(
         composer.calls(),
@@ -962,7 +988,7 @@ async fn open_sends_context_and_agent_instructions_in_the_first_prompt() {
     );
     let mut command = open_command();
     command.runtime.instructions = "Diagnose first.".to_owned();
-    let raw = command.origin.content.clone();
+    let raw = mention_origin(&command).content.clone();
     let id = AgentSessionId::new();
 
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -1043,7 +1069,7 @@ async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
         composer.clone(),
     );
     let command = open_command();
-    let raw = command.origin.content.clone();
+    let raw = mention_origin(&command).content.clone();
     let id = AgentSessionId::new();
 
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -1102,7 +1128,7 @@ async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
         command.bot_id = bot_id;
         command.runtime.kind = kind;
         command.runtime.harness = harness_slug.to_owned();
-        let origin = command.origin.clone();
+        let origin = mention_origin(&command).clone();
 
         let outcome = service
             .execute(id, HarnessCommand::Open(command))
@@ -1119,6 +1145,7 @@ async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
             [DeclinedMention {
                 bot_id,
                 origin: AnnounceOrigin {
+                    reuse_origin_message: false,
                     parent: origin.parent,
                     thread_id: origin.thread_id,
                     message_id: origin.message_id,
@@ -1722,7 +1749,7 @@ async fn live_sandboxed_coder_session(
 ) -> ContainerMock {
     let mut command = open_command();
     command.bot_id = bot_id::MACRO_CODER_BOT_ID;
-    command.origin.sender = staff_sender();
+    mention_origin_mut(&mut command).sender = staff_sender();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
@@ -3231,6 +3258,7 @@ async fn an_external_open_with_a_mention_announces_as_the_sessions_bot() {
     let mut request = open_external_request("/srv/agent");
     let bot = request.bot_id;
     request.thread = Some(agent_session::domain::ports::SessionThread {
+        reuse_origin_message: false,
         parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xC1)),
         thread_id: macro_uuid::Uuid::from_u128(0xC2),
         message_id: macro_uuid::Uuid::from_u128(0xC2),
@@ -3276,6 +3304,7 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: bot,
                 origin: AnnounceOrigin {
+                    reuse_origin_message: false,
                     parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
                     message_id: macro_uuid::Uuid::from_u128(0xAC),
@@ -3316,6 +3345,7 @@ async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
                 origin: AnnounceOrigin {
+                    reuse_origin_message: false,
                     parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
                     message_id: macro_uuid::Uuid::from_u128(0xAC),
@@ -3439,6 +3469,62 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
             .sandbox_size,
         SandboxSize::Small
     );
+}
+
+#[tokio::test]
+async fn open_external_session_refuses_a_bot_owner() {
+    let (service, repo, _containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+
+    let error = service
+        .open_external_session(OpenExternalAgentSession {
+            id: Some(id),
+            owner: model_owner::Owner::Bot(BotId::TEST_A),
+            ..open_external_request("/srv/agent")
+        })
+        .await
+        .expect_err("a bot cannot own a session");
+
+    assert!(
+        matches!(
+            error,
+            AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot)
+        ),
+        "unexpected error: {error:?}"
+    );
+    assert!(repo.get(id).await.is_err(), "no session row is created");
+    assert!(announcer.announced().is_empty());
+}
+
+#[tokio::test]
+async fn open_managed_session_refuses_a_bot_owner() {
+    let (service, repo, containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+
+    let error = service
+        .open_managed_session(OpenManagedSession {
+            id: Some(id),
+            repo_url: None,
+            repo_branch: None,
+            instructions: None,
+            model: None,
+            owner: model_owner::Owner::Bot(BotId::TEST_A),
+            prompt: None,
+            profile: None,
+        })
+        .await
+        .expect_err("a bot cannot own a session");
+
+    assert!(
+        matches!(
+            error,
+            AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot)
+        ),
+        "unexpected error: {error:?}"
+    );
+    assert!(repo.get(id).await.is_err(), "no session row is created");
+    assert!(announcer.announced().is_empty());
+    assert!(containers.spawn_sizes().is_empty());
 }
 
 #[tokio::test]
@@ -4267,7 +4353,7 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
             servers: Vec::new(),
         },
     };
-    command.origin.content = "@codex inspect the repository".into();
+    mention_origin_mut(&mut command).content = "@codex inspect the repository".into();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {

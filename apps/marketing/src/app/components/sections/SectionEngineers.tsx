@@ -5,7 +5,7 @@ export function SectionEngineers() {
         'font-size': '24px',
         'line-height': 1.25,
         'font-family': 'display',
-        'font-weight': '400',
+        'font-weight': '315',
       }}
     >
       Designed by engineers obsessed with performance{' '}

@@ -1,5 +1,6 @@
 import type { SplitLocation } from '@app/lib/split-router';
-import { isRecord } from '@app/lib/split-router/utils';
+import { isRecord } from '@app/lib/split-router';
+import { paneRoute } from '@app/routes/app-route';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 
 export const ROUTINES_ROUTE_ID = 'view-routines';
@@ -8,15 +9,13 @@ export const ROUTINE_CREATE_ROUTE_ID = 'routine-create';
 
 export function routineLocation(routineId?: string): SplitLocation {
   return {
-    route: {
-      matches: [
-        routineId === 'new'
-          ? { id: ROUTINE_CREATE_ROUTE_ID, params: {} }
-          : routineId
-            ? { id: ROUTINE_DETAIL_ROUTE_ID, params: { routineId } }
-            : { id: ROUTINES_ROUTE_ID, params: {} },
-      ],
-    },
+    route: paneRoute(
+      routineId === 'new'
+        ? { id: ROUTINE_CREATE_ROUTE_ID, params: {} }
+        : routineId
+          ? { id: ROUTINE_DETAIL_ROUTE_ID, params: { routineId } }
+          : { id: ROUTINES_ROUTE_ID, params: {} }
+    ),
   };
 }
 

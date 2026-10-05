@@ -1,5 +1,7 @@
+import type { ChannelThreadEntity, WithNotification } from '@entity';
+import type { UnifiedNotification } from '@notifications/types';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HomeListEntity } from './HomeListEntity';
 
@@ -8,7 +10,8 @@ vi.mock('@app/features/agents-view/views/AgentSessionListItem', () => ({
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'test-user' }));
 vi.mock('@core/user', () => ({
-  getDisplayName: () => 'Peter',
+  getDisplayName: (id: string) =>
+    id === 'macro|teo@macro.com' ? 'Teo' : 'Peter',
   tryMacroId: (id: string) => id,
 }));
 vi.mock('@components/app/split-panel', () => ({
@@ -19,7 +22,6 @@ vi.mock('@entity', () => ({
   Entity: { Title: () => 'Recent chat', Timestamp: () => 'now' },
   MaybeEntityRow: (props: { children: JSX.Element }) => props.children,
 }));
-vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: () => false }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ mutedEntities: () => [] }),
 }));
@@ -30,6 +32,91 @@ vi.mock('@ui', async () => ({
 }));
 
 afterEach(cleanup);
+
+describe('Home channel reply row', () => {
+  const replyNotification = (
+    senderId: string | null,
+    senderDisplayName: string | null = null
+  ): UnifiedNotification => ({
+    id: 'reply-notification',
+    entity_id: 'bug-reports',
+    entity_type: 'channel',
+    sender_id: senderId,
+    state: 'seen',
+    created_at: '2026-10-01T16:34:48Z',
+    updated_at: '2026-10-01T16:34:48Z',
+    sent: true,
+    viewed_at: null,
+    notification_event_type: 'channel_message_reply',
+    notification_metadata: {
+      tag: 'channel_message_reply',
+      content: {
+        messageId: 'reply',
+        messageContent: 'Reply to Peter',
+        threadId: 'root',
+        channelType: 'private',
+        senderDisplayName,
+        threadParentSenderId: 'macro|peter@macro.com',
+      },
+    },
+  });
+
+  const renderThread = (initial: UnifiedNotification[] = []) => {
+    const [notifications, setNotifications] = createSignal(initial);
+    const entity: WithNotification<ChannelThreadEntity> = {
+      type: 'channel_thread',
+      id: 'root',
+      name: 'bug-reports',
+      ownerId: 'macro|peter@macro.com',
+      channelId: 'bug-reports',
+      channelType: 'private',
+      messageId: 'root',
+      threadId: 'root',
+      senderId: 'macro|peter@macro.com',
+      sender: { id: 'macro|peter@macro.com', type: 'user' },
+      content: 'calendar invite has raw html',
+      attachments: [],
+      reactions: [],
+      thread: { replyCount: 2, preview: [] },
+      notifications,
+    };
+    const view = render(() => (
+      <HomeListEntity entity={entity} occurrenceKey="root" />
+    ));
+    const row = view.container.querySelector<HTMLElement>('[data-home-item]')!;
+    return { row, setNotifications };
+  };
+
+  it('updates the sender from a human reply to a bot reply', () => {
+    const { row, setNotifications } = renderThread([
+      replyNotification('macro|teo@macro.com'),
+    ]);
+    expect(row.textContent).toContain('Teo in #bug-reports');
+
+    setNotifications([
+      replyNotification(null, 'Codex'),
+      replyNotification('macro|teo@macro.com'),
+    ]);
+    expect(row.textContent).toContain('Codex in #bug-reports');
+    expect(row.textContent).not.toContain('Peter');
+  });
+
+  it('uses the thread author when there is no notification', () => {
+    expect(renderThread().row.textContent).toContain('Peter in #bug-reports');
+  });
+
+  it('does not attribute an unnamed bot reply to the thread author', () => {
+    expect(renderThread([replyNotification(null)]).row.textContent).toContain(
+      'Someone in #bug-reports'
+    );
+  });
+
+  it('keeps the current user label for human replies', () => {
+    expect(
+      renderThread([replyNotification('test-user')]).row.textContent
+    ).toContain('You in #bug-reports');
+  });
+});
 
 describe('Home recent press', () => {
   function setup() {
@@ -89,7 +176,10 @@ describe('Home document comment row', () => {
     },
   });
 
-  const renderRow = (state: 'unseen' | 'seen' | 'done') =>
+  const renderRow = (
+    state: 'unseen' | 'seen' | 'done',
+    notificationDisplayCutoff?: string
+  ) =>
     render(() => (
       <HomeListEntity
         entity={
@@ -99,6 +189,7 @@ describe('Home document comment row', () => {
             name: 'Plan',
             ownerId: 'test-user',
             fileType: 'md',
+            notificationDisplayCutoff,
             notifications: () => [commentNotification(state)],
           } as never
         }
@@ -117,6 +208,24 @@ describe('Home document comment row', () => {
 
   it('reads as the plain document once the notification is done', () => {
     expect(renderRow('done').textContent).not.toContain('mentioned you');
+  });
+
+  it.each(['unseen', 'seen'] as const)(
+    'shows the task instead of an older %s comment after newer activity',
+    (state) => {
+      const row = renderRow(state, '2026-10-01T17:02:49Z');
+      expect(row.textContent).toContain('Recent chat');
+      expect(row.textContent).not.toContain('Peter mentioned');
+      expect(row.querySelector('[aria-label="Unread"]') !== null).toBe(
+        state === 'unseen'
+      );
+    }
+  );
+
+  it('announces a comment that supplied the row timestamp', () => {
+    expect(renderRow('seen', '2026-09-23T00:00:00Z').textContent).toContain(
+      'Peter mentioned you on Recent chat'
+    );
   });
 
   it('names the agent that replied instead of someone', () => {

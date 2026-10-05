@@ -1,0 +1,11 @@
+[package]
+name = "tauri-plugin-android-mobile"
+version = "0.1.0"
+edition.workspace = true
+links = "tauri-plugin-android-mobile"
+
+[build-dependencies]
+tauri-plugin = { version = "2.4", features = ["build"] }
+
+[dependencies]
+tauri = { workspace = true }

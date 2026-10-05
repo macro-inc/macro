@@ -49,14 +49,40 @@ That address is emulator-only; the host-side server check must be skipped.
 
 Build commands embed the production frontend. Outputs are under
 `tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64.
-Release builds require the signing configuration below and produce signed artifacts.
+Release builds automatically prepare the signing configuration below and produce
+signed artifacts. Debug builds do not fetch release signing credentials.
 
 ## Release signing
 
-Obtain the existing upload keystore and signing credentials from the release
-maintainers. Keep them outside the checkout and provision them securely for CI.
+The existing upload keystore and signing credentials are stored in Doppler
+`android-release/prd`, secret `ANDROID_UPLOAD_SIGNING_JSON`. It contains
+`keystore_base64`, `keystore_sha256`, `certificate_sha256`, `package_name`,
+`key_alias`, `key_password`, and `store_password`. Keep them outside the checkout
+and provision them securely for CI.
 Coordinate key replacement with Play Console; do not generate a new key for
 routine builds.
+
+`just android-build` preserves existing `gen/android/keystore.properties`
+configuration, including CI-provisioned signing. When it is missing, the launcher
+reuses signing files in `~/.macro-android-signing`, or fetches the existing key
+from Doppler and creates that private directory on the first release build.
+Other worktrees reuse the same directory through their own properties symlink.
+Install the Doppler CLI and authenticate with read access to `android-release/prd`
+(CI can use `DOPPLER_TOKEN`). Missing access fails before compilation.
+Broken symlinks or incomplete signing directories fail without replacing files;
+restore the files or manually provision to a new private directory.
+
+To use a different private location, provision signing from `apps/web` (the
+private destination directory must not already exist):
+
+```sh
+bun scripts/android-release.ts signing /absolute/private/path/android-signing tauri/src-tauri/gen/android/keystore.properties
+```
+
+This validates the package and keystore checksum, writes owner-only files, and
+symlinks Gradle's properties file. It refuses to replace existing configuration.
+The destination's parent must exist. Do not print the secret JSON in terminals or
+CI logs.
 
 Gradle reads ignored `tauri/src-tauri/gen/android/keystore.properties`:
 
@@ -94,10 +120,58 @@ The upload certificate identifies locally signed artifacts. When Google creates
 the Play App Signing key, Play-delivered APKs use that separate certificate; add
 its fingerprint to production associations before testing Play-installed links.
 
+### Production release APKs
+
+`.github/workflows/release-production.yml` builds an ARM64 signed APK alongside
+each production deployment, from the release commit. It uses production services,
+the pinned production Firebase config, and the normal OTA-enabled release build.
+The GitHub Actions `ANDROID_RELEASE_DOPPLER_TOKEN` secret must have read access to
+`android-release/prd`, including both the signing JSON and pinned Firebase secret.
+CI passes this dedicated read-only service token as `DOPPLER_TOKEN` only during
+configuration retrieval. Signing files live in the runner's temporary directory
+and are removed even when the build fails. Only APK/checksum files are attached
+to the release; the separate `android-build-log` Actions artifact is retained for
+seven days, including on failed builds.
+
+Release tags must follow `vYYYY.M.D.N`, with a valid date, years 2000–2099, and a
+daily revision from 0–99. Android's `versionCode` is `YYYYMMDDNN` (for example,
+`v2026.9.28.1` becomes `2026092801`), and `versionName` is `2026.9.28-1`.
+New releases must increase the date/revision; a rerun retains the same version.
+Always keep the signing key to allow upgrades over earlier distributed APKs.
+
+Before upload, CI verifies the signing certificate, package/version, ARM64 ABI,
+non-debuggable manifest, and 16 KiB ZIP alignment. Publishing waits for the web,
+cloud-storage, sync-service, and AI editing worker deployments. Android failures
+fail their job without blocking web/backend rollout. CI verification does not
+replace the device qualification described above.
+
+To recover an Android artifact without redeploying production, manually run
+`release-production.yml` with `release_tag` set to an existing published
+production release. The source is checked out from that tag; web/backend jobs
+are skipped. `publish_android` defaults to false so the first run can validate
+the build and leave the APK in the `android-release` Actions artifact. Set it to
+true to attach the verified APK and checksum to the selected release:
+
+```sh
+gh workflow run release-production.yml --ref main -f release_tag=v2026.9.30.0 -f publish_android=true
+```
+
+The Android job uses an ephemeral GitHub-hosted runner without a separate Nix
+cache mount. Do not invoke the shared `teardown-nix` cache-volume action there:
+its `fuser -km /nix` can kill the runner when `/nix` is on the root filesystem,
+preventing GitHub from receiving the build logs. Let the hosted VM be discarded.
+
+The public GitHub release receives `macro-<tag>-android-arm64.apk` and
+`macro-<tag>-android-arm64.apk.sha256`. Share the APK's release download link;
+recipients do not need GitHub access. They open the downloaded APK and allow
+installation from that browser/file manager when Android prompts. Subsequent
+APKs install as updates when the certificate matches and the version increases.
+Play Store migration must preserve app-signing compatibility with these APKs.
+
 ## Firebase
 
-Debug builds work without Firebase configuration for auth/navigation development.
-Remote notifications require the matching Firebase configuration and Google Play
+The launcher fetches Firebase configuration before both development and release
+builds. Remote notifications require the matching configuration and Google Play
 services on the device. Notification permission alone does not register the
 device: sign in to Macro and enable notifications in Settings. Android 13 and
 newer show a runtime permission prompt; older versions use the app's system
@@ -125,22 +199,83 @@ The launcher requires package **com.macro.app.prod** and validates these project
 | `android-dev` | `macro-app-dev-12ae0` |
 | `android-build` (including `--debug`) | `macro-app-955f1` |
 
-Download `google-services.json` for that package from the matching Firebase
-project's settings. Keep local copies in ignored
-`tauri/src-tauri/firebase/dev/google-services.json` and
-`tauri/src-tauri/firebase/prod/google-services.json`; the launcher selects the
-matching file automatically. Alternatively, inject a downloaded configuration:
+### Reproducible configuration
+
+Install the Doppler CLI and run `doppler login` with access to the `android-release`
+project. A fresh checkout then needs no manually downloaded Firebase files:
+
+```sh
+just android-dev
+just android-build
+```
+
+The launcher reads `scripts/android-firebase.lock.json`, fetches only its named
+Doppler key (`dev` for development, `prd` for production), and checks the SHA-256
+of the UTF-8 value with leading/trailing whitespace removed. It validates the
+Firebase project and Android package before atomically writing the ignored
+`tauri/src-tauri/gen/android/app/google-services.json` consumed by Gradle.
+
+Each config has a versioned key, initially `GOOGLE_SERVICES_JSON_V1`. Missing
+authentication, a missing key, a checksum mismatch, or an invalid config stops
+the build before Cargo starts. Existing local config files are not a fallback:
+they cannot silently change which Firebase configuration a commit builds with.
+The config is fetched on each invocation, so the default path requires network
+access. The lock file pins Firebase configuration, not every input needed for
+byte-identical APKs; the toolchain, dependencies, frontend configuration, and
+release signing must also be supplied consistently.
+
+For CI, install the Doppler CLI and provide a read-only Doppler service token for
+`android-release/prd` as the CI secret `DOPPLER_TOKEN` (`android-release/dev` for
+development). Run the same `just android-build` command. The CLI uses this token
+without an interactive login. Never expose the production token to builds of
+untrusted fork PRs. This setup retrieves Firebase configuration only; release
+signing still uses the credentials described above.
+
+### Custom builds and forks
+
+To build without Doppler, explicitly supply a config downloaded from Firebase:
 
 ```sh
 just android-dev --firebase-config /absolute/path/google-services.json
 just android-build --firebase-config /absolute/path/google-services.json
 ```
 
-The launcher validates both the package and Firebase project before copying the
-file to ignored `gen/android/app/google-services.json`. It also validates an
-existing destination when no source is supplied, so switching build modes cannot
-silently reuse the wrong environment. Do not commit these files. Release builds
-fail with an explicit error if configuration is absent.
+An explicit file bypasses the Doppler fetch and checksum pin. It still must
+contain `com.macro.app.prod`, the current Android package. Other Firebase project
+IDs are allowed for forks; Macro's known dev/prod projects are still rejected
+when used with the opposite build command. Forks changing the Android package
+must also update the package validation in `scripts/android-firebase.ts` and
+configure their own backend. Local files under `firebase/dev` or `firebase/prod`
+are used only if passed explicitly with `--firebase-config`.
+
+Do not commit Firebase config files or Doppler tokens. Only the lock file belongs
+in Git; keeping the actual configs outside this public repository lets forks use
+their own Firebase resources.
+
+### Updating the pinned configuration
+
+1. Download the updated Android config from the intended Firebase project and
+   validate its package and project ID.
+2. Store it under a **new** key in the matching `android-release` Doppler config
+   (for example, `GOOGLE_SERVICES_JSON_V2`). Keep every older pinned key unchanged
+   so older commits remain buildable. Pass the value through stdin, not a command
+   argument, and suppress command output to avoid printing it:
+
+   ```sh
+   doppler secrets set GOOGLE_SERVICES_JSON_V2 --project android-release --config prd < /path/google-services.json > /dev/null
+   ```
+
+3. Update that environment's key and SHA-256 in `scripts/android-firebase.lock.json`.
+   Compute the checksum using the same whitespace normalization as the downloader:
+
+   ```sh
+   bun -e 'const text = (await Bun.file(process.argv[1]).text()).trim(); console.log(new Bun.CryptoHasher("sha256").update(text).digest("hex"));' /path/google-services.json
+   ```
+
+4. Test retrieval into a new temporary destination with
+   `bun scripts/android-firebase.ts build --doppler /tmp/android-firebase-check/google-services.json`
+   (use `dev` for development). Review and commit the lock-file change; never
+   replace the checksum just to silence an unexpected mismatch.
 
 ## Browser authentication
 
@@ -160,6 +295,95 @@ Gmail/calendar/GitHub linking completes server-side and refreshes queries withou
 replacing the Macro session. After process death mid-flow, restart authentication;
 orphaned callbacks must not silently log in the replacement process. Macro logout
 does not sign out of Google/GitHub in the system browser.
+
+iOS retains its existing auth/keyboard plugins. Android uses `android_mobile_plugin`
+for live window/IME insets, committed system Back, content-URI sharing, clipboard
+images, and file export; it does not build the old keyboard scaffold.
+
+## Input, navigation, and files
+
+The Android mobile plugin publishes window insets from the native WebView. The
+WebView keeps its full edge-to-edge size under the keyboard, as on iOS: resizing it
+made Chromium relayout the whole document on top of the CSS work. Instead the
+plugin publishes the keyboard height and JS shrinks the layout root through
+`--dvh` and lifts fixed sheets by `--virtual-keyboard-height`, so nothing subtracts
+the keyboard twice. Native density can change before Chromium updates its CSS
+viewport, so insets are scaled by the WebView width (which the keyboard never
+changes) and re-applied on WebView resize as well as native inset events. Every
+root custom-property write recalculates style for the whole document, so only
+changed values are written.
+System bars and cutouts remain separate safe-area values; floating keyboards with
+no bottom inset do not consume viewport height. Insets refresh after layout,
+rotation, and resume. Font scale, density, layout direction, and navigation-mode
+changes are handled in the current Activity so Tauri retains a live WebView and
+unsent drafts. See [Android's inset guidance](https://developer.android.com/develop/ui/views/layout/edge-to-edge).
+
+Committed Back hides the IME first, then uses the existing overlay Escape handlers,
+then mobile pane history. At the root it backgrounds the task. Canceled predictive
+Back gestures do not dispatch navigation. The native share composer asks before
+discarding on Back/outside dismissal; Keep editing retains its current contents.
+Android editors use normal Lexical caret handling, without the iOS cursor plugin.
+
+Incoming SEND/SEND_MULTIPLE text, URLs, and `content://` streams enter an atomic
+private-cache queue. Providers are read while their URI grant is valid; names and
+reported sizes are not trusted as paths or byte counts. Staging limits each intent
+to 500 MiB total and 100 attachments. Files are checksummed while copying;
+PDFs and other documents use the regular document-creation flow with native
+streaming PUT and the S3 checksum header. Media uses the static-file uploader.
+Failed uploads stay visible with a Retry action and block sending until resolved.
+Missing or corrupt batches report an error and do not strand later shares.
+The queue retains original bytes until send/cancel, survives process restarts and
+login, and keeps a second share behind the active composer. Abandoned staging is
+removed after 24 hours. Ordinary attachment selection continues to use the WebView
+file input and Android's picker; no parallel photo-picker adapter is introduced.
+
+Blob downloads use chunked native export and Android's Save dialog. Large transfers
+show progress and can be canceled before the system chooser opens; canceled Save
+dialogs do not report success. Email clipboard attachments use native bytes and
+their actual size/checksum, including the email attachment-size limit. Image sharing
+and copying use FileProvider content URIs with temporary read grants. Exported
+files remain in a narrow private-cache provider directory for asynchronous
+receivers and expire after 24 hours. The provider also exposes app-specific
+Pictures for the WebView camera-capture fallback; it does not expose external
+storage roots. The app removes device-info's unused legacy read/write-storage and
+battery-stat permissions from the merged manifest. Downloads already authenticated/fetched by the app preserve those
+bytes rather than reopening a URL in an unauthenticated external browser.
+
+From `apps/web`, after installing the current debug APK and letting Macro load:
+
+```sh
+ANDROID_SERIAL=<dedicated-emulator-serial> bun tests/native/android/smoke.mjs
+bunx vitest run src/lib/core/mobile/androidWindowInsets.test.ts src/lib/core/mobile/androidBack.test.tsx src/lib/core/mobile/androidFiles.test.ts src/lib/service-clients/service-storage/util/upload-native.test.ts src/features/channel/Input/tests/upload-attachments.test.ts
+```
+
+Use a dedicated emulator with no pending personal share. The smoke test injects a
+temporary input, exercises native clipboard/export and incoming-share commands,
+verifies font-scale and display-density changes retain the WebView/draft and
+keep bottom controls inside the CSS viewport at tablet/foldable-sized windows, force-stops/relaunches
+Macro, and writes results/screenshots under
+`/tmp/macro-task03-smoke`. It never sends a message; a signed-in share composer can
+upload the test attachment as it normally does. In Gboard's settings, Physical
+keyboard → Show on-screen keyboard must be enabled to test the docked IME; the
+system setting alone can leave Gboard showing only its physical-keyboard toolbar.
+
+The plugin's tests use an isolated package (`com.macro.mobile.test`) and never
+clear Macro's data. From the generated Gradle project, build/run them with:
+
+```sh
+./gradlew :tauri-plugin-android-mobile:testDebugUnitTest :tauri-plugin-android-mobile:assembleDebugAndroidTest
+adb -s <serial> install -r ../../../android_mobile_plugin/android/build/outputs/apk/androidTest/debug/tauri-plugin-android-mobile-debug-androidTest.apk
+adb -s <serial> shell am instrument -w com.macro.mobile.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+These instrumented tests exercise Android content providers, duplicate URIs,
+multiple streams with text, delayed consumption/recreation, missing files,
+permission failures, MIME fallback, bounded large streams, and corrupt queues. Keep device qualification separate
+from these checks: test real channel/email/AI/document editors, selection and
+formatting, non-Latin IME composition, emoji/dictation, hardware keyboards,
+TalkBack/large text, Samsung Keyboard, cloud providers/large files, rotation,
+three-button/gesture navigation, canceled predictive Back, and tablet/foldable
+windows before closing task 03. An API 36 emulator cannot establish the whole
+physical-device matrix.
 
 ## App Links
 

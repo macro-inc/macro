@@ -1,6 +1,7 @@
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { isServer } from 'solid-js/web';
 import markDesyncPlaceholder from '../../assets/mark-desync-placeholder.jpg';
+import { SavingsCalculator } from '../../features/marketing/components/pricing/SavingsCalculator';
 import { HomeSectionRule } from '../components/sections/HomeSectionRule';
 import { SectionFinalCta } from '../components/sections/SectionFinalCta';
 import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
@@ -29,7 +30,7 @@ const CARD_BORDER = 'color-mix(in srgb, var(--b4) 20%, transparent)';
 function planEyebrowStyle(): JSX.CSSProperties {
   return {
     color: 'var(--c1)',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': breakpoint() ? '12px' : '16px',
     'font-weight': '700',
     'letter-spacing': '0.1em',
@@ -41,7 +42,7 @@ function planEyebrowStyle(): JSX.CSSProperties {
 function eyebrowStyle(): JSX.CSSProperties {
   return {
     color: 'var(--c1)',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': breakpoint() ? '12px' : '16px',
     'font-weight': '700',
     'letter-spacing': '0.1em',
@@ -55,7 +56,7 @@ function sectionHeadingStyle(): JSX.CSSProperties {
     color: 'var(--c1)',
     'font-family': 'display',
     'font-size': mobile() ? '32px' : breakpoint() ? '38px' : '44px',
-    'font-weight': '410',
+    'font-weight': '315',
     'letter-spacing': '-0.015em',
     'line-height': 1.1,
     margin: 0,
@@ -114,7 +115,7 @@ function PlanCard(props: {
               color: 'var(--c0)',
               'font-family': 'display',
               'font-size': mobile() ? '48px' : '52px',
-              'font-weight': '410',
+              'font-weight': '315',
               'letter-spacing': '-0.015em',
               'line-height': 1,
             }}
@@ -340,7 +341,7 @@ function ComparisonCell(props: { value: CellValue }) {
       <span
         style={{
           color: 'var(--c2)',
-          'font-family': 'rajdhani, body',
+          'font-family': 'Inter, body',
           'font-size': '14px',
           'font-weight': '600',
         }}
@@ -354,7 +355,7 @@ function ComparisonCell(props: { value: CellValue }) {
 function comparisonPlanHeadingStyle(color: string): JSX.CSSProperties {
   return {
     color: color,
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '14px',
     'font-weight': '700',
     'letter-spacing': '0.1em',
@@ -521,7 +522,7 @@ function CaseStudyVideo() {
               color: 'var(--c1)',
               'font-family': 'display',
               'font-size': compact() ? '28px' : '34px',
-              'font-weight': '410',
+              'font-weight': '315',
               'letter-spacing': '-0.01em',
               'line-height': 1.14,
               margin: '0',
@@ -534,7 +535,7 @@ function CaseStudyVideo() {
           <div
             style={{
               color: 'var(--c4)',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': compact() ? '13px' : '14px',
               'font-weight': '700',
               'letter-spacing': '0.08em',
@@ -664,7 +665,7 @@ function CaseStudyVideo() {
                 <div
                   style={{
                     color: 'var(--c1)',
-                    'font-family': 'rajdhani, body',
+                    'font-family': 'Inter, body',
                     'font-size': compact() ? '14px' : '15px',
                     'font-weight': '700',
                     'letter-spacing': '0.1em',
@@ -698,12 +699,10 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     q: "What's the main purpose of Macro?",
     a: (
       <>
-        To unify everything you do into a single system. Access everything with
-        one login from one fast, keyboard-driven interface; give your agents
-        unified context instead of scattering it across Slack, Notion, email,
-        and drives; and give your team a single source of truth with
-        best-in-class CRM, ticketing, email, messaging, and docs all under one
-        roof.
+        Macro combines email, chat, documents, tasks, calls, and agents. Read
+        them in one inbox, search across the workspace, and use agents to edit
+        documents, draft replies, and update tasks. Documents use CRDTs for live
+        collaboration and offline sync.
       </>
     ),
   },
@@ -729,11 +728,10 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     q: 'How does Macro compare to Superhuman?',
     a: (
       <>
-        Macro Mail is like Superhuman but better: multiple email accounts in one
-        inbox, and a shared omni-box across messages, email, @mentions, and
-        tasks. The same j / k / e shortcuts you know are here. Macro Mail
-        integrates with Gmail directly, so most users find they no longer need
-        Superhuman.
+        Macro Mail uses familiar J / K / E shortcuts, combines your email
+        accounts in one inbox, and shares that inbox with messages, @mentions,
+        tasks, and agent responses. Agents can search indexed email, draft
+        replies, and share threads with your team.
       </>
     ),
   },
@@ -741,11 +739,10 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     q: 'How does Macro compare to Slack?',
     a: (
       <>
-        Channels in Macro are quieter and more organized, with the first few
-        replies shown inline so you rarely need to open a thread. Everything you
-        @mention is shared with the channel, so access follows the @mention —
-        add someone and they get context, remove them and they lose it. If you
-        still need Slack, connect it via MCP.
+        Macro Chat shows replies inline and treats conversations as inbox items
+        you can mark done. When you can share a document or email thread,
+        @mentioning it in a channel grants access to that channel. Agents
+        participate in channels and can read the referenced work.
       </>
     ),
   },
@@ -798,9 +795,10 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     a: (
       <>
         Macro works great solo or as a team, and pricing is the same either way.
-        Teams add auto-shared email, tasks, and calls without sharing everything
-        manually, plus team-level memory for your agents across tasks, emails,
-        docs, and calls. Note there is no free plan for teams.
+        Teams share email, tasks, documents, and calls through workspace
+        permissions. Agents can search and read the work you have access to, and
+        use memory built from your workspace activity. Note there is no free
+        plan for teams.
       </>
     ),
   },
@@ -808,9 +806,10 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     q: 'How do you use my data?',
     a: (
       <>
-        We make a good product and charge for our hosted version — we are not
-        interested in your data. See our <a href="/privacy">privacy policy</a>{' '}
-        and <a href="/terms">terms of service</a> for full details.
+        Workspace access follows your sharing permissions. For details on data
+        collection, processing, retention, and AI handling, see our{' '}
+        <a href="/privacy">privacy policy</a> and{' '}
+        <a href="/terms">terms of service</a> for full details.
       </>
     ),
   },
@@ -913,6 +912,51 @@ function FaqSection() {
   );
 }
 
+function SavingsSection() {
+  return (
+    <section
+      aria-labelledby="pricing-savings-title"
+      id="savings"
+      style={{
+        'box-sizing': 'border-box',
+        display: 'grid',
+        gap: mobile() ? '24px' : '40px',
+        'justify-items': 'center',
+        'padding-block': mobile() ? '56px' : '80px',
+        'padding-inline': mobile() ? '18px' : '24px',
+        width: '100%',
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gap: '16px',
+          'justify-items': 'center',
+          'text-align': 'center',
+        }}
+      >
+        <span style={eyebrowStyle()}>Calculator</span>
+        <h2 id="pricing-savings-title" style={sectionHeadingStyle()}>
+          See what you’d save
+        </h2>
+        <p
+          style={{
+            color: 'var(--c4)',
+            'font-size': mobile() ? '15px' : '16px',
+            'line-height': 1.6,
+            margin: 0,
+            'max-width': '440px',
+            'text-wrap': 'balance',
+          }}
+        >
+          Choose the tools your team pays for today and how many seats you need.
+        </p>
+      </div>
+      <SavingsCalculator />
+    </section>
+  );
+}
+
 function PricingFinalCta() {
   return (
     <SectionFinalCta
@@ -968,7 +1012,7 @@ export const RoutePricing: Component = () => {
           style={{
             'font-family': 'display',
             'font-size': mobile() ? 'clamp(46px, 13vw, 62px)' : '52.36px',
-            'font-weight': '380',
+            'font-weight': '315',
             'letter-spacing': '-0.012em',
             'line-height': 1.12,
             margin: 0,
@@ -989,6 +1033,10 @@ export const RoutePricing: Component = () => {
       <HomeSectionRule />
 
       <ComparisonGrid />
+
+      <HomeSectionRule />
+
+      <SavingsSection />
 
       <HomeSectionRule />
 

@@ -69,7 +69,9 @@ where
         )
         .await
         .map_err(|error| match error {
-            ManagedPersonaError::Forbidden => RoutineSessionError::Forbidden,
+            ManagedPersonaError::Forbidden | ManagedPersonaError::OwnerNotUser(_) => {
+                RoutineSessionError::Forbidden
+            }
             ManagedPersonaError::Lookup(error) => session_error(error),
             ManagedPersonaError::Unknown
             | ManagedPersonaError::NotAgent
@@ -217,7 +219,7 @@ where
                 },
             )
             .await
-            .map_err(|_| RoutineSessionError::PromptDeliveryUnknown)?;
+            .map_err(prompt_error)?;
         if accepted.action_id != action.action_id {
             return Err(RoutineSessionError::PromptDeliveryUnknown);
         }
@@ -269,8 +271,18 @@ fn validate_session_id(id: AgentSessionId) -> Result<(), RoutineSessionError> {
     Ok(())
 }
 
+fn prompt_error(error: AgentSessionError) -> RoutineSessionError {
+    match error {
+        #[cfg(feature = "admission")]
+        AgentSessionError::Admission(error) => RoutineSessionError::Admission(error),
+        _ => RoutineSessionError::PromptDeliveryUnknown,
+    }
+}
+
 fn session_error(error: AgentSessionError) -> RoutineSessionError {
     match error {
+        #[cfg(feature = "admission")]
+        AgentSessionError::Admission(error) => RoutineSessionError::Admission(error),
         AgentSessionError::Forbidden
         | AgentSessionError::UnknownOwner
         | AgentSessionError::OwnerNotUser(_) => RoutineSessionError::Forbidden,

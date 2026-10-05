@@ -7,7 +7,7 @@ import type { Thread } from './thread';
 /**
  * Post a message using the endpoint supported by the caller's credentials.
  *
- * Most credentials use `POST /channels/{id}/message`. User-owned bots without
+ * Most credentials use `POST /messages/channel/{id}`. User-owned bots without
  * an acting user instead use `POST /channels/{id}/webhook`, which authorizes
  * through channel membership. The bot owner is read from `GET /bots/me` and
  * cached by the client.
@@ -28,8 +28,8 @@ export async function postToChannel(
 
   if (await hasEntityAccess(client)) {
     const { id } = unwrap(
-      await client.storage.postMessage({
-        path: { channel_id: channelId },
+      await client.storage.entityMessageCreate({
+        path: { parent_type: 'channel', parent_id: channelId },
         body: {
           content: body.content,
           mentions: body.mentions,

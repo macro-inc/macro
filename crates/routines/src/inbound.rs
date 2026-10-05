@@ -45,7 +45,7 @@ pub fn routine_toolset() -> AsyncToolCollection<RoutineToolContext> {
 #[derive(Deserialize, JsonSchema)]
 #[schemars(
     title = "CreateRoutine",
-    description = "Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListBots. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine."
+    description = "Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine."
 )]
 pub struct CreateRoutine {
     /// Name, instructions, target, and schedule.

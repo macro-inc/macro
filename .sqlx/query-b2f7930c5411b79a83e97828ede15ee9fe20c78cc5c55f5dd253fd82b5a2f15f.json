@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT slack_channel_id, part_index, object_key, sha256, byte_length, record_count,\n           verified_version_id, verified_etag FROM slack_import_upload\n           WHERE job_id = $1 AND (slack_channel_id IS NULL OR slack_channel_id = $2)\n           AND verified_at IS NOT NULL ORDER BY part_index NULLS FIRST",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slack_channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "part_index",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "object_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "sha256",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "byte_length",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "record_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "verified_version_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "verified_etag",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b2f7930c5411b79a83e97828ede15ee9fe20c78cc5c55f5dd253fd82b5a2f15f"
+}

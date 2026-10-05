@@ -140,6 +140,34 @@ fn parent_aware_events_name_their_parent_and_are_new_variants() {
     assert_eq!(value["metadata"]["source"], "mentioned");
 }
 
+#[test]
+fn task_assignment_round_trips_and_opens_on_its_discussion() {
+    let message = MessagePostedMetadata {
+        content: "Complete the assigned task".to_owned(),
+        ..posted(document(), None)
+    };
+    let assigned = NewAgentSessionEvent::AssignedToTask(AgentAssignedToTaskEvent {
+        bot_id: BotId::TEST_A,
+        parent: message.parent.clone(),
+        discussion_id: message.message_id,
+        actor: message.sender.as_user().unwrap().clone(),
+        prompt: message.content.clone(),
+    });
+    let published = AgentSessionMacroEvent::new_session(assigned.clone());
+    assert_eq!(published.key(), BotId::TEST_A.to_string());
+    assert_eq!(published.event().event.bot_id(), Some(BotId::TEST_A));
+    assert!(assigned.requested().is_none());
+    assert!(assigned.mention().is_none());
+
+    let value = serde_json::to_value(&published.event().event).expect("serialize assignment");
+    assert_eq!(value["event_type"], "agent_trigger.new");
+    assert_eq!(value["metadata"]["source"], "assigned_to_task");
+    assert_eq!(value["metadata"]["parent"]["type"], "document");
+    let decoded: AgentTriggerTopicEvent =
+        serde_json::from_value(value).expect("deserialize assignment");
+    assert_eq!(decoded, published.event().event);
+}
+
 /// Consumers read both shapes through one view: the channel shape converts
 /// to a channel parent, the parent-aware shape passes through.
 #[test]

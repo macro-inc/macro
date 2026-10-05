@@ -7,7 +7,7 @@ import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { projectRouteId } from '@app/features/projects/core/route';
-import { useSplitRouter } from '@app/lib/split-router';
+import { type PaneId, useSplitRouter } from '@app/lib/split-router';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import {
@@ -48,7 +48,7 @@ import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import type { SplitContent, SplitId } from '../layoutManager';
+import type { SplitContent } from '../layoutManager';
 import {
   closeSplitOrReturnToList,
   shouldShowSplitCloseButton,
@@ -113,12 +113,19 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
             'email',
             'project',
             'call',
-            'routine'
+            'routine',
+            'database'
           ),
         },
         (entity) => ({ type: entity.type, id: entity.id })
       )
       .exhaustive()
+  );
+}
+
+function hasAgentsBackFallback(content: SplitContent) {
+  return (
+    content.type === 'agent' || (isTouchDevice() && content.type === 'chat')
   );
 }
 
@@ -132,10 +139,21 @@ function SplitBackButton() {
       class="p-1 touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
-      disabled={!context.handle.canGoBack()}
+      disabled={
+        !context.handle.canGoBack() &&
+        !hasAgentsBackFallback(context.handle.content())
+      }
       onClick={() => {
         if (splitBackInterceptor()?.()) return;
-        context.handle.goBack();
+        if (
+          !context.handle.canGoBack() &&
+          hasAgentsBackFallback(context.handle.content())
+        ) {
+          context.handle.replace({
+            next: { type: 'component', id: 'agents' },
+            mergeHistory: true,
+          });
+        } else context.handle.goBack();
       }}
     >
       <CaretLeft />
@@ -321,9 +339,10 @@ function SoupNavigationButtons() {
 /** Shared header controls; each host supplies its current list navigation. */
 export function ListNavigationButtons(props: {
   navigation: ListDetailNavigationTarget;
+  class?: string;
 }) {
   return (
-    <div class="flex items-center gap-0.5">
+    <div class={cn('flex items-center gap-0.5', props.class)}>
       <Button
         size="icon-md"
         label="Previous item"
@@ -351,7 +370,7 @@ export function ListNavigationButtons(props: {
 function SplitHeaderContextMenu(props: ParentProps) {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
-  const router = useSplitRouter<SplitId>();
+  const router = useSplitRouter();
   if (!panel || !layout) return props.children;
 
   const splitIndex = createMemo(() =>
@@ -396,7 +415,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
             activeSplitId: layout.manager.activeSplitId(),
             currentSplitId: panel.handle.id,
             currentSplitIndex: splitIndex(),
-            currentSplitUrl: router.href(panel.handle.id),
+            currentSplitUrl: router.href(panel.handle.id as string as PaneId),
             splits: splits.map((split, index) => ({
               index,
               id: split.id,
@@ -602,7 +621,8 @@ export function SplitHeader(props: {
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                (!panel.handle.canGoBack() ||
+                ((!panel.handle.canGoBack() &&
+                  !hasAgentsBackFallback(panel.handle.content())) ||
                   isListViewID(panel.handle.content().id)) &&
                   'hidden'
               )}
@@ -627,7 +647,7 @@ export function SplitHeader(props: {
             }}
           />
 
-          <div class="header-actions h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
+          <div class="header-actions h-full grow shrink flex items-center justify-end gap-1 px-2 touch:px-0 touch:gap-2">
             <div
               class="contents"
               ref={(ref) => {

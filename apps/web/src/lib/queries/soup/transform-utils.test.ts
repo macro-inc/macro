@@ -12,6 +12,40 @@ vi.mock('@core/constant/allBlocks', () => ({
 vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
 vi.mock('@core/user', () => ({ emailToId: vi.fn() }));
 
+describe('email soup entities', () => {
+  it.each([true, false])(
+    'preserves server Signal membership (%s) for Home activity',
+    (isSignal) => {
+      const item = {
+        tag: 'emailThread',
+        frecency_score: 0,
+        is_favorited: false,
+        data: {
+          id: 'email',
+          ownerId: 'owner',
+          properties: [],
+          attachments: [],
+          labels: [],
+          participants: [],
+          createdAt: '2026-09-01T00:00:00Z',
+          updatedAt: '2026-09-01T00:00:00Z',
+          sortTs: '2026-09-01T00:00:00Z',
+          inboxVisible: true,
+          isDraft: false,
+          isRead: false,
+          isImportant: !isSignal,
+          isSignal,
+        },
+      } satisfies SoupApiItem;
+      expect(mapApiSoupItemToEntity(item)).toMatchObject({
+        type: 'email',
+        isSignal,
+        isImportant: !isSignal,
+      });
+    }
+  );
+});
+
 describe('initiative soup entities', () => {
   it('keeps projects separate from folders and backing description documents', () => {
     const item = {
@@ -22,7 +56,6 @@ describe('initiative soup entities', () => {
         id: 'initiative',
         name: 'Launch',
         ownerId: 'owner',
-        descriptionDocumentId: 'description',
         properties: [],
         createdAt: '2026-09-01T00:00:00Z',
         updatedAt: '2026-09-26T00:00:00Z',
@@ -33,7 +66,6 @@ describe('initiative soup entities', () => {
       type: 'initiative',
       id: 'initiative',
       name: 'Launch',
-      descriptionDocumentId: 'description',
       properties: [],
     });
   });

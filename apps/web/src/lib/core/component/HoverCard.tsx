@@ -120,6 +120,8 @@ export type HoverCardComponentProps = {
    * otherwise the pointer-down dismisses it and the click reopens it.
    */
   keepOpenOnTriggerPress?: boolean;
+  /** Dismiss on outside scrolling (default: true). Disable for stationary triggers. */
+  closeOnScroll?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
   /**
@@ -305,11 +307,11 @@ export function HoverCard(props: HoverCardComponentProps) {
   // rapid scrolling never fires the close — leaving cards stranded as new
   // triggers slide under the cursor.
   createEffect(() => {
-    if (!isHoverCardOpen()) return;
+    if (!isHoverCardOpen() || props.closeOnScroll === false) return;
 
     const onScroll = (e: Event) => {
-      const target = e.target as Node | null;
-      if (contentEl && target && contentEl.contains(target)) return;
+      const target = e.target;
+      if (target instanceof Node && contentEl?.contains(target)) return;
       handleOpenChange(false);
     };
 

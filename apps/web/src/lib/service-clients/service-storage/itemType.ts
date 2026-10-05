@@ -10,12 +10,14 @@ export type ItemType =
   | 'channel_message'
   | 'channel_thread'
   | 'call'
+  | 'database'
   | 'agent_session'
   | 'routine'
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'
-  | 'crm_contact';
+  | 'crm_contact'
+  | 'initiative';
 
 /** Item type assumed when a surface has no better information. */
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
@@ -45,6 +47,7 @@ export function stringToItemType(str: string): ItemType | undefined {
     .with('email', 'thread', 'email_thread', () => 'email')
     .with('routine', 'automation', () => 'routine')
     .with(
+      'database',
       'agent_session',
       'call',
       'calendar_event',
@@ -53,6 +56,7 @@ export function stringToItemType(str: string): ItemType | undefined {
       'project',
       'channel',
       'crm_company',
+      'initiative',
       (itemType) => itemType
     )
     .otherwise(() => undefined);
@@ -62,7 +66,17 @@ export function blockNameToItemType(
   blockName: BlockName | BlockAlias
 ): ItemType {
   return match<BlockName | BlockAlias, ItemType>(blockName)
-    .with('chat', 'call', 'channel', 'project', 'email', 'routine', (b) => b)
+    .with(
+      'chat',
+      'call',
+      'channel',
+      'project',
+      'email',
+      'routine',
+      'database',
+      'initiative',
+      (b) => b
+    )
     .with('agent', () => 'agent_session')
     .with('calendar', () => 'calendar_event')
     .with('company', () => 'crm_company')
@@ -70,6 +84,8 @@ export function blockNameToItemType(
     .with('pr', () => 'foreign')
     .otherwise(() => DEFAULT_ITEM_TYPE);
 }
+
+export type HistoryItemType = (typeof ITEM_TYPES)[number];
 
 /** Item types accepted by user history endpoints. */
 export const ITEM_TYPES = [
@@ -81,6 +97,7 @@ export const ITEM_TYPES = [
   'channel_message',
   'channel_thread',
   'call',
+  'database',
   'agent_session',
   'routine',
   'calendar_event',

@@ -1,4 +1,3 @@
-import { useReactiveColorString } from '@theme/signals/themeReactive';
 import {
   createEffect,
   createUniqueId,
@@ -347,8 +346,6 @@ export function Module(props: {
   state?: ModuleState;
   class?: string;
 }) {
-  const accentColor = useReactiveColorString('a0');
-  const inkColor = useReactiveColorString('c0');
   let root: SVGGElement | undefined;
   let logoGroup: SVGGElement | undefined;
   let ventsGroup: SVGGElement | undefined;
@@ -408,7 +405,7 @@ export function Module(props: {
     if (!root || prefersReducedMotion()) return;
     for (const animation of clickAnimations) animation.cancel();
     clickAnimations = [];
-    const accent = accentColor();
+    const accent = 'var(--color-accent)';
     const dur = { duration: ACCELERATION.durationMs } as const;
     const add = {
       duration: ACCELERATION.durationMs,
@@ -436,7 +433,8 @@ export function Module(props: {
     )) {
       // Flash from the state-specific resting stroke so linked-module vents
       // don't jump from accent back to ink.
-      const resting = props.state === 'linked' ? accentColor() : inkColor();
+      const resting =
+        props.state === 'linked' ? 'var(--color-accent)' : 'var(--color-ink)';
       clickAnimations.push(
         vent.animate(
           [

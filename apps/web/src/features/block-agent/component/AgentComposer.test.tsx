@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentInputProps } from '../ui/AgentInput';
@@ -8,6 +8,7 @@ import { AgentComposer } from './AgentComposer';
 
 const mocks = vi.hoisted(() => ({
   session: () => ({ canEdit: false as boolean | undefined }),
+  turn: () => 'idle' as 'idle' | 'working' | 'starting' | 'stopping',
   issue: vi.fn(),
   selectModel: vi.fn(),
   sendNext: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     messages: () => [],
     metadata: () => undefined,
     pending: () => false,
+    initialInput: 'Document context',
     queue: {
       entries: () => [
         { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
@@ -53,7 +55,7 @@ vi.mock('../context/AgentSessionContext', () => ({
       remove: mocks.removeQueued,
     },
     sendNext: mocks.sendNext,
-    turn: () => 'idle',
+    turn: () => mocks.turn(),
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -76,10 +78,17 @@ vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.turn = () => 'idle';
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
 });
 afterEach(cleanup);
+
+it('passes opening context to the composer without issuing it', () => {
+  render(() => <AgentComposer />);
+  expect(mocks.input?.initialInput).toBe('Document context');
+  expect(mocks.issue).not.toHaveBeenCalled();
+});
 
 describe('view-only session controls', () => {
   it('disables and guards prompt, model, stop, queue, and attachment actions', () => {
@@ -143,4 +152,24 @@ describe('view-only session controls', () => {
       });
     }
   );
+});
+
+it('explicitly sends the queue head and disables it while the turn transitions', () => {
+  const [turn, setTurn] = createSignal<'working' | 'stopping' | 'starting'>(
+    'working'
+  );
+  mocks.turn = turn;
+  mocks.session = () => ({ canEdit: true });
+  render(() => <AgentComposer />);
+  const sendNext = screen.getByRole('button', {
+    name: 'Send next queued message now',
+  });
+  fireEvent.click(sendNext);
+  expect(mocks.sendNext).toHaveBeenCalledTimes(1);
+  for (const next of ['stopping', 'starting'] as const) {
+    setTurn(next);
+    expect(sendNext.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(sendNext);
+  }
+  expect(mocks.sendNext).toHaveBeenCalledTimes(1);
 });

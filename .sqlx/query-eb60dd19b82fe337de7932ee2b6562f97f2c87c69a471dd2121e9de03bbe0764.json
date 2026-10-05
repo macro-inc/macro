@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)\n            VALUES ($1, $2, $3, $4, $5, GREATEST(clock_timestamp(), (\n                SELECT created_at + interval '1 microsecond'\n                FROM agent_session_log WHERE agent_session_id = $2\n                ORDER BY created_at DESC, id DESC LIMIT 1\n            )))\n            RETURNING created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "eb60dd19b82fe337de7932ee2b6562f97f2c87c69a471dd2121e9de03bbe0764"
+}

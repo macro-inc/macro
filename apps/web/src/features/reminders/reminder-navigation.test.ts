@@ -1,3 +1,4 @@
+import { paneRoute } from '@app/routes/app-route';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
   SplitHandle,
@@ -14,6 +15,16 @@ import {
   reminderDetailUrl,
   reminderIdFromDetailContent,
 } from './reminder-navigation';
+import { reminderSourceContent } from './reminder-source';
+
+vi.mock('@core/constant/allBlocks', () => ({
+  itemToBlockName: (item: {
+    referencedEntity: { type: string; fileType?: string; subType?: string };
+  }) =>
+    item.referencedEntity.subType ??
+    item.referencedEntity.fileType ??
+    item.referencedEntity.type,
+}));
 
 afterEach(() => setGlobalSplitManager(undefined));
 
@@ -29,14 +40,10 @@ describe('reminder detail destination', () => {
         id: REMINDER_DETAIL_COMPONENT_ID,
         params: { reminderId: 'reminder-1' },
         entryMetadata: {
-          route: {
-            matches: [
-              {
-                id: REMINDER_DETAIL_ROUTE_ID,
-                params: { reminderId: 'reminder-1' },
-              },
-            ],
-          },
+          route: paneRoute({
+            id: REMINDER_DETAIL_ROUTE_ID,
+            params: { reminderId: 'reminder-1' },
+          }),
         },
       },
     });
@@ -131,4 +138,24 @@ describe('openReminderDetail', () => {
       status: 'unavailable',
     });
   });
+});
+
+it('opens attached sources while retaining explicit reminder detail destinations', () => {
+  expect(
+    reminderSourceContent({ referencedEntity: { id: 'email', type: 'email' } })
+  ).toEqual({ type: 'email', id: 'email' });
+  expect(
+    reminderSourceContent({
+      referencedEntity: {
+        id: 'task',
+        type: 'document',
+        fileType: 'md',
+        subType: 'task',
+      },
+    })
+  ).toEqual({ type: 'task', id: 'task' });
+  expect(reminderSourceContent({})).toBeUndefined();
+  expect(reminderDetailDestination('reminder').content.id).toBe(
+    'reminder-detail'
+  );
 });

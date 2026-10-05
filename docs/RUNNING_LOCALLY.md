@@ -131,15 +131,23 @@ This command:
 When startup finishes, the command prints the frontend URL and the important service URLs.
 
 The reverse proxy is HTTPS at `https://localhost:8090` (or the instance's proxy port) using a generated machine certificate signed by the checked-in development CA. Trust `infra/local/certs/ca.pem` once so the browser accepts it; see that directory's README. Local Caddy also reflects any `Origin` (wildcard CORS) so `https://` and `*.localhost` frontends can call the proxy.
+For document sync, local Caddy normalizes the upstream `Origin` to the worker's
+accepted localhost origin so HTTPS machine hostnames can open WebSockets.
+Sync's local Durable Object, KV, R2 and D1 state lives in the Compose `sync_state`
+volume so replacing its container preserves document content. When upgrading an
+existing stack without that mount, stop sync and copy `/app/.wrangler/state` into
+the volume before replacing the container. A restart alone does not rebuild its
+compiled worker; rebuild the sync image after backend protocol changes.
 
 Open the frontend URL in your browser.
 
 The local environment supplies both `LOCAL_AWS_URL` (the container endpoint)
-and `LOCAL_AWS_PUBLIC_URL` (the instance's published LocalStack port). SFS and
-other presigned uploads use the public endpoint in browser-facing URLs. If an
-upload attempts `localhost:4566` on a named instance, rebuild the service and
-reload its generated environment; named instances publish storage on their own
-port.
+and `LOCAL_AWS_PUBLIC_URL` (the app's HTTPS origin with `/local-storage`).
+Document downloads and presigned uploads use this storage proxy, so remote
+browsers do not need a separate localhost storage connection. Container clients
+translate that public endpoint back to LocalStack internally. If a download or
+upload still attempts HTTP localhost, rebuild the services, reload the generated
+environment and proxy, and hard-refresh the browser to discard cached URLs.
 
 If LocalStack loses its temporary resources after a restart, restore missing
 buckets, queues, tables, and keys without resetting Postgres or volumes:
@@ -150,6 +158,28 @@ The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
 inbox.
+
+### Recover an existing instance without resetting data
+
+`run_local` and `stack up` initialize clean state, including snapshot restoration.
+Do not use them to recover an instance whose application or auth data must
+survive. Keep its generated env/Compose files and existing named volumes; start
+stopped containers with `docker start`, or recreate only the affected services
+with the same Compose project/files and `up -d --no-deps --no-build <service>`.
+Never use `down -v`, `reset_local`, or `destroy_local` for this recovery.
+
+On SELinux hosts, FusionAuth can become healthy while silently skipping an
+unreadable kickstart. The generated per-instance kickstart directory uses
+`:ro,Z`: read-only with a private container label. Regenerate the override with
+`cargo x gen-compose --instance <name>`, then recreate only FusionAuth against
+its existing volumes. Verify the kickstart is readable in the container and the
+configured application API returns 200 with the local API key; a healthy process
+alone does not prove kickstart ran. Do not disable SELinux, change host permissions,
+or delete the FusionAuth database. Diagnose other bind-mount denials separately;
+private labels must not be applied to directories shared by several containers.
+
+For the synthetic Slack recovery harness and separate browser/native coverage,
+see [the Slack import runbook](SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
 
 ### Seeding sample data (recommended)
 

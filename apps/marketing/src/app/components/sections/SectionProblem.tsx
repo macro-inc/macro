@@ -28,7 +28,7 @@ export function SectionProblem() {
           style={{
             'font-family': 'display',
             'font-size': breakpoint() ? '24px' : '32px',
-            'font-weight': '450',
+            'font-weight': '315',
             'letter-spacing': '-0.02em',
             'line-height': breakpoint() ? '28px' : '36px',
           }}

@@ -1,21 +1,15 @@
-import {
-  type EntityActionListState,
-  type EntityActionViewContext,
-  makeAddTagAction,
+import type {
+  EntityActionListState,
+  EntityActionViewContext,
 } from '@app/features/next-soup/actions';
-import { ProjectPickerPopover } from '@app/features/projects/project-property';
-import { ContextMenuContent, MenuSeparator } from '@core/component/ContextMenu';
+import {
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import {
-  TagPickerPopover,
-  tagEntityType,
-  useSoupDocTags,
-} from '@property/tags';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
 import {
   type Accessor,
@@ -26,8 +20,13 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { getSoupMenuEntities } from './collection/rows';
 import { useSoupEntityActionDrawer } from './SoupEntityActionDrawerContext';
 import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
+import {
+  createSoupEntityMenuPickers,
+  type SoupEntityMenuAnchor,
+} from './SoupEntityMenuPickers';
 
 interface SoupEntityContextMenuProps {
   entity: EntityData;
@@ -45,56 +44,20 @@ interface SoupEntityContextMenuProps {
   extraItems?: JSX.Element;
 }
 
-function RowTagPicker(props: {
-  entityId: string;
-  entityType: EntityType;
-  properties: Accessor<SoupProperty[] | undefined>;
-  position: { x: number; y: number } | undefined;
-  onClose: () => void;
-}) {
-  const docTags = useSoupDocTags(
-    props.entityId,
-    props.entityType,
-    props.properties
-  );
-
-  return (
-    <TagPickerPopover
-      docTags={docTags}
-      open
-      onOpenChange={(open) => {
-        if (!open) props.onClose();
-      }}
-      getAnchorRect={() => props.position}
-    />
-  );
-}
-
 export const SoupEntityContextMenu: FlowComponent<
   SoupEntityContextMenuProps
 > = (props) => {
   const drawerManager = useSoupEntityActionDrawer();
-  const addTagAction = makeAddTagAction();
+  const [menuPosition, setMenuPosition] = createSignal<SoupEntityMenuAnchor>();
 
-  const [tagPickerOpen, setTagPickerOpen] = createSignal(false);
-  const [projectTasks, setProjectTasks] = createSignal<string[]>();
-  const [menuPosition, setMenuPosition] = createSignal<{
-    x: number;
-    y: number;
-  }>();
+  const menuEntities = () =>
+    getSoupMenuEntities(props.entity, props.selectedEntities());
 
-  const menuEntities = () => {
-    const selected = props.selectedEntities();
-    if (
-      selected.length > 1 &&
-      selected.some((entity) => entity.id === props.entity.id)
-    ) {
-      return selected;
-    }
-    return [props.entity];
-  };
-
-  const canEditTags = () => addTagAction.canExecute(props.entity);
+  const pickers = createSoupEntityMenuPickers({
+    entity: () => props.entity,
+    entities: menuEntities,
+    anchor: menuPosition,
+  });
 
   return (
     <Switch>
@@ -120,7 +83,7 @@ export const SoupEntityContextMenu: FlowComponent<
       </Match>
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
-          <ContextMenu.Trigger
+          <ContextMenuTrigger
             as={props.as}
             class={cn('h-full w-full group/cm-trigger', props.class)}
             on:contextmenu={(event: MouseEvent) =>
@@ -128,7 +91,7 @@ export const SoupEntityContextMenu: FlowComponent<
             }
           >
             {props.children}
-          </ContextMenu.Trigger>
+          </ContextMenuTrigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>
               <ContextMenuContent class="w-64 text-xs text-ink-muted">
@@ -136,50 +99,15 @@ export const SoupEntityContextMenu: FlowComponent<
                   entities={menuEntities()}
                   list={props.list}
                   viewContext={props.viewContext}
-                  onSetProject={() => {
-                    const ids = menuEntities().map((entity) => entity.id);
-                    setTimeout(() => setProjectTasks(ids), 0);
-                  }}
-                  onEditTags={
-                    canEditTags()
-                      ? () => setTimeout(() => setTagPickerOpen(true), 0)
-                      : undefined
-                  }
+                  onSetProject={pickers.openProjectPicker}
+                  onEditTags={pickers.openTagPicker()}
+                  extraItems={props.extraItems}
                 />
-                <Show when={props.extraItems}>
-                  <MenuSeparator />
-                  {props.extraItems}
-                </Show>
               </ContextMenuContent>
             </Show>
           </ContextMenu.Portal>
         </ContextMenu>
-        <Show when={projectTasks()}>
-          {(ids) => (
-            <ProjectPickerPopover
-              taskIds={ids()}
-              open
-              onOpenChange={(open) => {
-                if (!open) setProjectTasks(undefined);
-              }}
-              getAnchorRect={() => menuPosition()}
-            />
-          )}
-        </Show>
-        <Show when={tagPickerOpen() && tagEntityType(props.entity)}>
-          {(entityType) => (
-            <RowTagPicker
-              entityId={props.entity.id}
-              entityType={entityType()}
-              properties={() => {
-                const entity = props.entity;
-                return 'properties' in entity ? entity.properties : undefined;
-              }}
-              position={menuPosition()}
-              onClose={() => setTagPickerOpen(false)}
-            />
-          )}
-        </Show>
+        <pickers.Pickers />
       </Match>
     </Switch>
   );

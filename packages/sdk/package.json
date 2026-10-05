@@ -1,6 +1,6 @@
 {
   "name": "@macro-inc/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/macro-inc/macro.git",
@@ -41,7 +41,8 @@
     "format": "biome format --write"
   },
   "dependencies": {
-    "ts-pattern": "^5.8.0"
+    "ts-pattern": "^5.8.0",
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",

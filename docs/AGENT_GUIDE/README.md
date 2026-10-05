@@ -8,11 +8,14 @@ verified live against a local stack (`just run_local`).
 | --- | --- |
 | [login.md](login.md) | Passwordless login end to end, Mailpit, known crash + recovery |
 | [navigation.md](navigation.md) | Routes, sidebar, command menu, keyboard model, splits |
-| [documents.md](documents.md) | Creating docs, typing in the editor, AI edit, comments, side panel |
+| [documents.md](documents.md) | Creating docs, typing in the editor, AI edit, comments, Word (DOCX) editor, PowerPoint presentations, side panel |
+| [databases.md](databases.md) | Properties, records, kanban boards, saved views, AI questions, live answers |
 | [ai-chat.md](ai-chat.md) | Standalone and doc-scoped AI chat |
 | [../CLAUDE_CLOUD_DEMO.md](../CLAUDE_CLOUD_DEMO.md) | Claude in Harness settings, encrypted saved connection, Open in Claude, and cloud-side transcript polling |
 | [channels.md](channels.md) | Channels: create, invite, message, participants, bots |
 | [tasks.md](tasks.md) | Task list and creation dialog |
+| [view-tours.md](view-tours.md) | Desktop feature flyovers, dismissal, targeting, and embedded videos |
+| [reminders.md](reminders.md) | Creating and editing reminders, scheduling controls, and safe failure verification |
 | [surfaces.md](surfaces.md) | Every other surface: inbox, email, search, files, calendar, calls, customers, activity, settings |
 | [browser-technique.md](browser-technique.md) | Generic chrome-devtools MCP lessons learned on this app |
 | [observability.md](observability.md) | Correlating a UI action to backend traces/logs with the Grafana MCP |

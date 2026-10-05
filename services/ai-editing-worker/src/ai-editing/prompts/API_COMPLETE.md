@@ -391,7 +391,7 @@ Existing chips in the document XML look like `<user-mention>`, `<date-mention>`,
 - `mentionUser(blockId, at, { userId, email })`
 - `mentionContact(blockId, at, { contactId, name, emailOrDomain, isCompany })`
 - `mentionGroup(blockId, at, { groupAlias })`
-- `mentionDocument(blockId, at, { documentId, documentName, blockName, blockParams? })` — documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, automations (`blockName` is `md`/`channel`/`chat`/`project`/`task`/`email`/`calendar`/`skill`/`call`/`automation`/…). `blockParams` is for channel messages (`channel_message_id`) and calendar occurrences (`occurrenceKey`).
+- `mentionDocument(blockId, at, { documentId, documentName, blockName, blockParams? })` — documents, channels, chats, folders, projects, tasks, emails, calendar events, skills, calls, automations (`blockName` is `md`/`channel`/`chat`/`project`/`initiative`/`task`/`email`/`calendar`/`skill`/`call`/`automation`/…). A project (initiative) is `blockName: 'initiative'` with the initiative id as `documentId`; `project` is a folder. `blockParams` is for channel messages (`channel_message_id`) and calendar occurrences (`occurrenceKey`).
 - `mentionAgentSession(blockId, at, { id, label?, expanded? })` — existing agent session. `expanded: true` inserts the card that follows the session's latest turn.
 - `mentionPullRequest(blockId, at, { id, label? })`
 - `mentionTag(blockId, at, { optionId, propertyDefinitionId, scope, name, color? })`

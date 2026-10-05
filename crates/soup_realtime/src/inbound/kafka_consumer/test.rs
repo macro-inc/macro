@@ -2,13 +2,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use channels::domain::{
-    broker_events::{
-        ChannelEventAttachment, ChannelMessageAttachmentCreatedMetadata,
-        ChannelMessageDeletedMetadata, ChannelMessagePostedMetadata, ChannelTopicEvent,
-    },
-    models::{ChannelSender, ChannelType},
-};
+use channels::domain::models::ChannelSender;
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
     ChatUpdatedMetadata,
@@ -26,6 +20,10 @@ use email::domain::events::{
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::events::{
+    MessageAttachmentCreatedMetadata, MessageDeletedMetadata, MessageEventAttachment,
+    MessagePostedMetadata,
+};
 use messages::domain::models::SimpleMention;
 use model_owner::Owner;
 use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
@@ -120,6 +118,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.chats",
             "macro.email",
             "macro.channels",
+            "macro.messages",
             "macro.properties",
             "macro.initiatives",
         ]
@@ -453,6 +452,37 @@ fn attributed_initiative_clears_and_other_system_clears_still_refresh_soup() {
 }
 
 #[test]
+fn a_cell_edit_updates_the_database_row() {
+    let row = "70000000-0000-0000-0000-000000000001";
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        entity_property_id: Uuid::from_u128(0xe0000000_0000_0000_0000_000000000001),
+        entity_id: row.to_string(),
+        entity_type: PropertyEntityType::DatabaseRow,
+        property_definition_id: Uuid::from_u128(0x5e1ec700_0000_0000_0000_000000000001),
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        value: None,
+        previous_value: None,
+        updated_at: Utc::now(),
+    });
+
+    let patches = patches_from_property_event(&event);
+
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(
+        patch_entity(&patches[0]).entity_type,
+        EntityType::DatabaseRow
+    );
+    assert_eq!(patch_entity(&patches[0]).entity_id, row);
+    assert_eq!(
+        patches[0].access_source.entity_type,
+        EntityType::DatabaseRow
+    );
+}
+
+#[test]
 fn property_events_for_non_property_soup_items_are_ignored() {
     for entity_type in [PropertyEntityType::Channel, PropertyEntityType::User] {
         let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
@@ -579,23 +609,44 @@ fn new_email_events_map_to_realtime_thread_patches() {
     );
 }
 
+fn posted(
+    parent: MessageParent,
+    message_id: Uuid,
+    mentions: Vec<SimpleMention>,
+) -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent,
+        message_id,
+        thread_id: None,
+        root_id: message_id,
+        sender: ChannelSender::new_from_user(user()),
+        triggered_by: None,
+        content: "shared".to_string(),
+        mentions,
+        attachments: Vec::new(),
+        created_at: Utc::now(),
+    }
+}
+
 #[test]
 fn attachment_events_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
-    let event =
-        ChannelTopicEvent::MessageAttachmentCreated(ChannelMessageAttachmentCreatedMetadata {
-            channel_id,
-            message_id: Uuid::now_v7(),
-            actor: ChannelSender::new_from_user(user()),
-            attachments: vec![ChannelEventAttachment {
-                attachment_id: Uuid::now_v7(),
-                entity_type: "document".to_string(),
-                entity_id: DOCUMENT_ID.to_string(),
-                created_at: Utc::now(),
-            }],
-        });
+    let message_id = Uuid::now_v7();
+    let event = MessageTopicEvent::AttachmentCreated(MessageAttachmentCreatedMetadata {
+        parent: MessageParent::Channel(channel_id),
+        message_id,
+        thread_id: None,
+        root_id: message_id,
+        actor: ChannelSender::new_from_user(user()),
+        attachments: vec![MessageEventAttachment {
+            attachment_id: Uuid::now_v7(),
+            entity_type: "document".to_string(),
+            entity_id: DOCUMENT_ID.to_string(),
+            created_at: Utc::now(),
+        }],
+    });
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 2);
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
     assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
@@ -608,23 +659,16 @@ fn attachment_events_update_referenced_documents_for_channel_members() {
 #[test]
 fn posted_message_mentions_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
-    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
-        channel_id,
-        message_id: Uuid::now_v7(),
-        thread_id: None,
-        sender: ChannelSender::new_from_user(user()),
-        triggered_by: None,
-        channel_type: ChannelType::Private,
-        content: "shared a document".to_string(),
-        mentions: vec![SimpleMention {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::Channel(channel_id),
+        Uuid::now_v7(),
+        vec![SimpleMention {
             entity_type: "document".to_string(),
             entity_id: DOCUMENT_ID.to_string(),
         }],
-        attachments: Vec::new(),
-        created_at: Utc::now(),
-    });
+    ));
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 3);
     assert_eq!(patch_entity(&patches[2]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[2]).entity_id, DOCUMENT_ID);
@@ -636,23 +680,16 @@ fn posted_message_mentions_update_referenced_documents_for_channel_members() {
 fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members() {
     let channel_id = Uuid::now_v7();
     let session_id = Uuid::now_v7().to_string();
-    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
-        channel_id,
-        message_id: Uuid::now_v7(),
-        thread_id: None,
-        sender: ChannelSender::new_from_user(user()),
-        triggered_by: None,
-        channel_type: ChannelType::Private,
-        content: "shared an agent session".to_string(),
-        mentions: vec![SimpleMention {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::Channel(channel_id),
+        Uuid::now_v7(),
+        vec![SimpleMention {
             entity_type: "agent_session".to_string(),
             entity_id: session_id.to_string(),
         }],
-        attachments: Vec::new(),
-        created_at: Utc::now(),
-    });
+    ));
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 3);
     assert_eq!(
         patch_entity(&patches[2]).entity_type,
@@ -664,18 +701,29 @@ fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members(
 }
 
 #[test]
+fn document_discussion_posts_patch_nothing() {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::parse("document", DOCUMENT_ID).unwrap(),
+        Uuid::now_v7(),
+        vec![],
+    ));
+    assert!(patches_from_message_event(&event).is_empty());
+}
+
+#[test]
 fn deleting_a_root_channel_message_deletes_its_thread_patch() {
     let channel_id = Uuid::now_v7();
     let message_id = Uuid::now_v7();
-    let event = ChannelTopicEvent::MessageDeleted(ChannelMessageDeletedMetadata {
-        channel_id,
+    let event = MessageTopicEvent::Deleted(MessageDeletedMetadata {
+        parent: MessageParent::Channel(channel_id),
         message_id,
         thread_id: None,
+        root_id: message_id,
         actor: ChannelSender::new_from_user(user()),
         deleted_at: None,
     });
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 2);
     assert!(matches!(patches[0].patch, Patch::Updated(_)));
     assert!(matches!(patches[1].patch, Patch::Deleted(_)));
@@ -973,33 +1021,45 @@ fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
 }
 
 #[test]
-fn moving_tasks_refreshes_both_initiatives_once_and_each_task() {
-    use initiative::domain::{
-        events::{InitiativeTasksChanged, TaskMembershipChange},
-        models::InitiativeId,
-    };
+fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
+    use models_properties::{service::property_value::PropertyValue, shared::EntityReference};
+    use system_properties::SystemPropertyKey;
 
-    let from = InitiativeId::from_uuid(Uuid::from_u128(42));
-    let to = InitiativeId::from_uuid(Uuid::from_u128(43));
-    let event = InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
-        attribution: None,
-        occurred_at: Utc::now(),
-        changes: ["task-1", "task-2"]
-            .into_iter()
-            .map(|task_id| TaskMembershipChange {
-                task_id: task_id.to_owned(),
-                from: Some(from),
-                to: Some(to),
-            })
-            .collect(),
+    let project = |id: &str| {
+        Some(PropertyValue::EntityRef(vec![EntityReference {
+            entity_id: id.to_owned(),
+            entity_type: PropertyEntityType::Initiative,
+            specific_message_id: None,
+        }]))
+    };
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        entity_property_id: Uuid::now_v7(),
+        entity_id: DOCUMENT_ID.to_string(),
+        entity_type: PropertyEntityType::Task,
+        property_definition_id: SystemPropertyKey::PROJECT_UUID,
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        value: project("project-to"),
+        previous_value: project("project-from"),
+        updated_at: Utc::now(),
     });
     assert_eq!(
-        patches_from_initiative_event(&event),
+        patches_from_property_event(&event),
         vec![
-            update(EntityType::Document, "task-1"),
-            update(EntityType::Initiative, from),
-            update(EntityType::Initiative, to),
-            update(EntityType::Document, "task-2"),
+            update(EntityType::Document, DOCUMENT_ID),
+            update(EntityType::Initiative, "project-from"),
+            update(EntityType::Initiative, "project-to"),
         ]
+    );
+    // A deleted project's internal cleanup refreshes only the task.
+    let PropertyTopicEvent::EntityPropertyUpdated(mut cleanup) = event else {
+        unreachable!()
+    };
+    cleanup.actor_user_id = None;
+    cleanup.value = None;
+    assert_eq!(
+        patches_from_property_event(&PropertyTopicEvent::EntityPropertyUpdated(cleanup)),
+        vec![update(EntityType::Document, DOCUMENT_ID)]
     );
 }

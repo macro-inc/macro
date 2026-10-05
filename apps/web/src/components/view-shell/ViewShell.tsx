@@ -12,9 +12,11 @@ import { TOKENS } from '@core/hotkey/tokens';
 import ListIcon from '@phosphor/list.svg';
 import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
+import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
+import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   batch,
@@ -32,6 +34,7 @@ import {
   useContext,
 } from 'solid-js';
 import { createSidebarMotion } from './create-sidebar-motion';
+import { VIEW_SHELL_TOUR } from './tour';
 import {
   type AsideLayout,
   type AsideMode,
@@ -377,6 +380,7 @@ function Aside(props: ViewShellAsideProps) {
     'onWidthChangeEnd',
   ]);
   const ws = useViewShellInternal();
+  const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
   const [resizedWidth, setResizedWidth] = createSignal<{
     configuredWidth: number;
     width: number;
@@ -460,6 +464,7 @@ function Aside(props: ViewShellAsideProps) {
         >
           <div
             {...rest}
+            ref={asideTarget}
             class={cn('size-full min-h-0 min-w-0', local.class)}
             data-view-shell-aside=""
             inert={ws.aside.isCollapsed()}
@@ -496,7 +501,10 @@ function Aside(props: ViewShellAsideProps) {
               'relative h-full max-w-full bg-panel shadow-menu',
               local.class
             )}
-            ref={overlayAside}
+            ref={(element) => {
+              overlayAside = element;
+              asideTarget(element);
+            }}
             style={{ width: `${overlayWidth()}px` }}
             data-view-shell-aside=""
           >
@@ -526,6 +534,9 @@ export function ViewSidebarCloseButton(
 /** Safe outside a shell so block preview headers can share this control. */
 export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
   const ws = useContext(ViewShellContext);
+  // A conditional expression as `ref` is dropped by the Solid compiler, so
+  // only the expand toggle registers, from inside the callback.
+  const toggleTarget = tourTarget(VIEW_SHELL_TOUR.sidebarToggle);
   const visible = () =>
     ws?.aside.canCollapse() &&
     (props.action === 'expand'
@@ -548,6 +559,9 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
         }
         hotkey={TOKENS.workspace.toggleNavigation}
         aria-expanded={props.action !== 'expand'}
+        ref={(element) => {
+          if (props.action === 'expand') toggleTarget(element);
+        }}
         data-view-sidebar-toggle={props.action}
         onClick={(event) => {
           const shell = event.currentTarget.closest('[data-view-shell]');
@@ -591,7 +605,7 @@ export function ViewNavigationControls() {
 }
 
 function Main(props: JSX.HTMLAttributes<HTMLElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
   const ws = useViewShellInternal();
   const layout = ws.main.layout;
   const target = () => {
@@ -612,6 +626,7 @@ function Main(props: JSX.HTMLAttributes<HTMLElement>) {
     >
       <main
         {...rest}
+        ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.main))}
         class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
         data-view-shell-main=""
       >
@@ -622,12 +637,13 @@ function Main(props: JSX.HTMLAttributes<HTMLElement>) {
 }
 
 function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
   return (
     <div
       {...rest}
+      ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:pl-[13px] touch:hidden',
+        '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:pl-[13px] touch:hidden',
         local.class
       )}
       data-view-shell-top-bar=""

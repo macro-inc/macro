@@ -52,7 +52,11 @@ export async function readRecordsByKeys<TResult>(
   keys: string[]
 ): Promise<{
   revision: CacheRevision;
-  records: Array<{ recordKey: string; record: TResult }>;
+  records: Array<{
+    recordKey: string;
+    record: TResult;
+    identity?: { mutationUuid: string | null; pending: boolean };
+  }>;
 }> {
   const result = await host.readRecordsByKeys({
     document: selection.document,
@@ -61,11 +65,11 @@ export async function readRecordsByKeys<TResult>(
   });
   return {
     revision: result.revision,
-    records: result.records.map(({ recordKey, record }) => {
+    records: result.records.map(({ recordKey, record, identity }) => {
       if (!recordKey || !isRecord(record)) {
         throw new Error('invalid cache selected record by key');
       }
-      return { recordKey, record: record as TResult };
+      return { recordKey, record: record as TResult, identity };
     }),
   };
 }

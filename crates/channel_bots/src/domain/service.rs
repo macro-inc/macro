@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
+use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
 use entity_access::domain::models::EntityAccessReceipt;
 use messages::domain::{
     api::MessageServiceApi,
@@ -269,6 +270,7 @@ pub struct MacroAiHandler<R, Z> {
     responder: Arc<R>,
     time_zones: Arc<Z>,
     marks: Arc<dyn CommentMarks>,
+    admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<R, Z> MacroAiHandler<R, Z>
@@ -290,7 +292,14 @@ where
             responder,
             time_zones,
             marks,
+            admission: Arc::new(DisabledAiAdmissionService),
         }
+    }
+
+    /// Configure admission for response generation on behalf of the invoking user.
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// What a mark covers in the document now. Called only after the thread
@@ -377,8 +386,8 @@ where
     ///
     /// The invoking user's current access to the parent gates every read, and
     /// the live trigger must still sit in the thread the event claims. When
-    /// the mention is a thread reply or a document discussion, the thread is
-    /// the primary context and nearby channel messages are demoted to a
+    /// the mention is a thread reply or belongs to a non-channel parent, its
+    /// thread is the primary context and nearby channel messages are demoted to a
     /// clearly labeled background block. For a top-level channel mention, the
     /// chronological channel slice is the primary context. In both cases the
     /// triggering message is marked inline rather than repeated at the end.
@@ -419,12 +428,12 @@ where
         );
 
         let mut prompt = format!("Conversation parent: {}\n", serde_json::to_string(parent)?);
-        // A document discussion is a thread from its root; a top-level channel
-        // message is the channel's own timeline.
+        // Entity discussions and call chat are threads from their roots;
+        // top-level channel messages use the channel's own timeline.
         let thread_root = event
             .message
             .thread_id
-            .or_else(|| parent.is_discussion().then_some(trigger_id));
+            .or_else(|| (!matches!(parent, MessageParent::Channel(_))).then_some(trigger_id));
         if let Some(root_id) = thread_root {
             let place = match parent {
                 MessageParent::Channel(_) => "a channel thread",
@@ -432,6 +441,7 @@ where
                 MessageParent::Initiative(_) => "a project discussion",
                 MessageParent::CrmCompany(_) => "a CRM company discussion",
                 MessageParent::CrmContact(_) => "a CRM contact discussion",
+                MessageParent::Call(_) => "a call chat",
             };
             let (intro, thread_instruction, marker) = match event.trigger {
                 BotTrigger::Mention => (
@@ -530,8 +540,31 @@ where
         //    conversation stops here: nothing is prompted from the event alone.
         let prompt = self.build_prompt(event).await?;
 
-        // 2. Post the immediate "thinking" message in the thread. The capability
-        //    carries the requesting user, so the message records who triggered it.
+        let admission = self
+            .admission
+            .admit(&event.requesting_user, AiFeature::ChannelBot)
+            .await;
+        if let Err(error) = admission {
+            tracing::info!(code = error.code(), "bot response admission rejected");
+            if event.trigger == BotTrigger::Inferred {
+                return Ok(());
+            }
+        }
+
+        // Explicit requests get a visible rejection, not a thinking placeholder
+        // or an error that could cause queued callers to redeliver the request.
+        let (content, notification_policy) = match admission {
+            Ok(()) => (
+                THINKING_MESSAGE.to_string(),
+                PostMessageNotificationPolicy::Silent,
+            ),
+            Err(error) => (
+                format!("{} ({})", error, error.code()),
+                PostMessageNotificationPolicy::Default,
+            ),
+        };
+
+        // 2. Post under the requesting user's current capability.
         let access = self
             .access
             .bot_write(&event.requesting_user, parent)
@@ -544,8 +577,8 @@ where
                 PostMessage {
                     id: None,
                     attribution: MessageAttribution::ActingUser,
-                    notification_policy: PostMessageNotificationPolicy::Silent,
-                    content: THINKING_MESSAGE.to_string(),
+                    notification_policy,
+                    content,
                     thread_id: Some(event.reply_thread_id),
                     anchor: None,
                     mentions: Vec::new(),
@@ -554,6 +587,9 @@ where
                 },
             )
             .await?;
+        if admission.is_err() {
+            return Ok(());
+        }
         let message_id = thinking.id;
 
         // 3. Run the agent loop to produce the reply.

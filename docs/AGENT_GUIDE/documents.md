@@ -4,6 +4,57 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+Snippet owners manage team sharing under **Share → Team access**. The details
+panel has no separate Sharing section. Choose **Edit** to grant the access the
+old snippet toggle provided, or **None** to remove team access.
+
+Hover or focus a document title in the header to see its owner, created time,
+and last-updated time. This details card is shared
+by documents, tasks, snippets, canvas, and file blocks; unavailable metadata is
+labeled rather than inferred.
+
+Editable documents show matching **Add tags** and **Add property** pills below
+the title. Once tags are applied, **Add tags** becomes the existing tag name or
+count pill; clicking it reopens the picker. **Add property** opens the shared
+property selector for that document.
+Adding or reselecting a property from the title row pins it there. Adding from
+the side panel leaves it unpinned. The side panel shows all assigned properties,
+including unpinned ones.
+Hover or focus an inline property pill to find **Unpin** (keeps its saved
+value) and **Delete from item** (removes the document's assignment, without
+deleting the shared property definition). Pins are saved with the document.
+
+Markdown code blocks have a **Copy Code** button in both editable and read-only
+views. Successful copies briefly animate the icon to a solid green check-circle;
+they do not show a success toast.
+## Markdown outline
+
+On desktop, Markdown documents with at least three headings show a tick rail in
+the left margin. Every section whose content overlaps the editor viewport is
+highlighted, including a section whose heading has already scrolled above it.
+Hover a tick (or Tab to its button) to expand it and nearby ticks and show a
+rounded preview with the section heading and up to three lines of body text.
+While a preview is open, only its tick is emphasized; visible-section highlights
+return when the preview closes.
+Click a tick or press Enter to jump immediately to its heading without closing its preview
+or collapsing the expanded ticks. Scrolling, resizing, and
+editor updates refresh the visible-section highlights.
+
+On a local HTTPS stack, document and image downloads use `/local-storage/`
+on the app's HTTPS origin. A request to HTTP localhost indicates a stale
+storage URL or stack configuration; hard-refresh after updating the stack.
+Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
+A 403 there indicates the sync origin check, which the local proxy handles for
+HTTPS machine hostnames; verify the proxy configuration before retrying.
+
+## Live database answers
+
+With Databases on, type `/database` and choose **Database** to insert a live answer
+to a question about a database. Answers run with each reader's database access and
+refresh when referenced tables change. See
+[Databases](databases.md#ai-questions-and-live-answers) for the question box, source
+picker, displays, and editing.
+
 ## Spreadsheets
 
 Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
@@ -253,18 +304,21 @@ commented range. Hover any cell in that range to read its threads; choose
 triangle also opens the card on touch devices. Interacting with a card keeps it
 open until dismissed so a reply is not lost when moving the pointer.
 
-**Comments** in the document header opens all workbook threads. Range labels
+**Comments** in the document header opens the workbook commenting sidebar. Range labels
 navigate to the corresponding sheet and cells; deleted-sheet threads remain
-readable. **Workbook discussion** contains comments about the whole workbook,
-with its own composer. The pinned composer at the bottom posts on the displayed
-range; **Use selection** changes that range. Both surfaces use the shared message
-controls for replies, edits, deletion, reactions, and attachments. Range threads
-also offer **Resolve** and **Reopen**. Mentions and replies use inbox notifications
-and message links. Older spreadsheet annotation comments are not displayed.
+readable. Range threads are filtered by **Open**, **Resolved**, or **All**;
+Open is the default. **Discussion** contains comments about the whole workbook
+and is the sidebar's new-comment composer. To start a cell comment,
+select the range and use the ribbon, keyboard shortcut, or cell context menu.
+Both surfaces use the shared message controls for replies, edits, deletion,
+reactions, and attachments. Range threads also offer **Resolve** and **Reopen**.
+Mentions and replies use inbox notifications and message links. Older spreadsheet
+annotation comments are not displayed.
 Opening an inbox notification opens the sidebar and targets its comment/range.
-Range links leave Workbook discussion on its normal timeline; workbook links
-open that discussion at the linked message, clear the previous range highlight
-or navigation error, and preserve an open range draft's attachment.
+Range links leave Discussion on its normal timeline; workbook links
+open that discussion at the linked message and clear the previous range highlight
+or navigation error. A resolved range link switches the filter to **Resolved** so
+the targeted thread remains visible.
 Comment-only access can post/reply; view-only access can read. Edit/delete applies
 to the author's own comments, and failures retain the input draft. Draft demos
 must be saved before persistent comments are available.
@@ -272,7 +326,7 @@ must be saved before persistent comments are available.
 ## Ask Macro about a spreadsheet
 
 **Ask Macro** sits immediately left of **Share**. Select the relevant cells, then
-click it to open a new chat in a split beside the workbook. The composer starts
+click it to open a new agent session in a split beside the workbook. The composer starts
 with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
@@ -298,6 +352,95 @@ check both source/formula and displayed result in the sheet and another connecte
 client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
+
+## Presentations (PowerPoint)
+
+Uploaded `.pptx` files open in the `pptx` block (`/app/pptx/<documentId>`).
+With the `enable-pptx-editor` PostHog flag (on by default in development
+builds; `ENABLE_PPTX_EDITOR` overrides it) the block is a full editor; with the
+flag off it offers the file for download, as before. The deck is parsed,
+rendered, and edited by the Rust `pptx_engine` compiled to WebAssembly in a
+lazily created module worker, so the first open of a session pays a
+one-time ~6 MB module download.
+
+Layout and test hooks:
+
+- **Slide rail** (`nav` "Slides", `data-testid="pptx-slide-rail"`): one
+  `pptx-thumbnail` button per slide, labelled `Slide N: <title>`, with
+  `aria-current="true"` on the current one. Hovering a thumbnail shows
+  **Duplicate slide**, **Hide slide**/**Show slide**, and **Delete slide**;
+  thumbnails reorder by dragging. **New slide** is at the bottom.
+- **Stage** (`pptx-stage`, focusable): click selects a shape
+  (`pptx-selection`, handles `pptx-handle-<nw|n|ne|e|se|s|sw|w>` and
+  `pptx-rotate-handle`); drag moves it; handles resize and rotate. The stage
+  covers exactly the slide, so slide point `(x, y)` is at
+  `stage.left + x × stage.width / slideWidth`.
+- **Text**: double-click (or Enter/F2 on a selected text shape) starts
+  editing; keystrokes go to a hidden textarea (`pptx-text-input`, "Slide
+  text"). The caret is `pptx-caret`, an SVG line of zero width, so assert it
+  with `toBeAttached()`, not `toBeVisible()`. Escape stops editing.
+- **Tables**: double-click a cell to edit it in `pptx-cell-input`; Enter
+  commits, Escape cancels.
+- **Toolbar** (`pptx-toolbar`): Undo, Redo, Text box (`pptx-insert-textbox`),
+  Insert shape (`pptx-insert-shape`, then `pptx-shape-<preset>`), Picture,
+  Table (`pptx-insert-table`), Bold (`pptx-bold`), Italic, Underline,
+  Smaller/Larger text (`pptx-font-size` shows the size), Text color, alignment,
+  Bullets, Shape fill, the save state, Save, and Download.
+- **Keyboard** on the stage: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (or Ctrl+Y),
+  Cmd/Ctrl+S saves now, Cmd/Ctrl+D duplicates, arrows nudge (Shift for 10 pt),
+  Delete removes, PageUp/PageDown change slides.
+- **Speaker notes** (`pptx-notes`) sit below the slide.
+
+Changes save automatically 1.5 s after the last edit, when the tab is hidden,
+and when the editor closes; `pptx-save-state` reads **Saved**, **Unsaved
+changes**, **Saving…**, or **Save failed**. Each save stores the whole file as a
+new document version through `PUT /documents/{id}/simple_save` (limit
+100 MB). Viewers without edit access get the same view with editing disabled.
+
+Everyone with the deck open edits it live. The deck is shared through the sync
+service as Loro maps (one entry per shape, slide position, relationship, and
+part; see `pptx_engine::collab`), seeded from the stored file the first time
+someone who can edit opens it. Others' edits appear within a second; edits to
+different shapes merge, and edits to the same shape resolve to the latest.
+Undo takes back only your own changes. Presence shows in the stage's top-right
+corner (`pptx-collaborators`, one `pptx-collaborator` avatar per person), as
+outlines with name tags around the shapes others selected
+(`pptx-peer-selection`, `data-peer="<name>"`, "… is typing" while they type),
+and as colored dots on the thumbnails of slides they are on. A viewer who opens
+a deck nobody has shared yet, or anyone when the sync service is unreachable,
+gets the stored file read-only.
+
+Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
+and every shape with its id, kind, placeholder role, position in points, text,
+and table cells; `ReadContent` returns the same description) and changes them
+with `EditPresentation`, an atomic batch of the editor's own operations saved
+as a new version. When an `EditPresentation` result arrives in chat, an open
+editor of that deck reloads in place and says **Updated with changes made
+elsewhere.** If it holds unsaved edits it keeps them and says the deck also
+changed elsewhere; saving those edits replaces the other version.
+
+To exercise the editor without a backend, run the browser fixture from
+`apps/web`:
+
+```sh
+bunx vite --config src/features/block-pptx/browser-test/vite.config.ts
+# http://127.0.0.1:3018/?deck=generated/kitchen-sink-financial.pptx
+```
+
+It mounts the real editor and worker over corpus decks (`?readonly` for a
+viewer, `?autosave=0` to save only on demand). `window.pptxFixture` exposes
+`saved()`, `saves()`, `engine()`, `errors()`, `notices()`, and
+`externalEdit(ops)`, which applies operations to the stored copy with a second
+engine instance and announces the change the way an AI edit does. With `document`, `user`, `worker`, `socket`, and `token` parameters the
+fixture is one collaborator on the real sync service
+(`browser-test/sync-server.ts` boots the compiled sync Worker in Miniflare;
+build it once with `\cd services/sync-service && just worker-build`), and
+`window.pptxFixture.collab` exposes the connection status, peers, and shared
+entries. Its Playwright suites run with
+`bunx playwright test --config src/features/block-pptx/browser-test/playwright.config.ts`
+(set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed); `collaboration.browser.e2e.ts` opens several people on one deck. The editor sections above were verified on this fixture; the
+`/app/pptx` route itself needs a backend with an uploaded deck.
 
 ## Create and type
 
@@ -327,6 +470,10 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+On Android, use the software keyboard to check `:` emoji, `/` commands, `;`
+snippets, and `#` tags where enabled. Each should open once and filter as you
+type. Tapping an emoji or command applies it; a second `#` closes the tags menu
+and leaves literal `##` for Markdown headings.
 
 AI text-writing operations require a paragraph/list-item or text-run ID. A
 table, row, cell, or list-container ID is rejected with guidance to choose a
@@ -336,6 +483,9 @@ table cells is preserved in paragraphs when the editor opens the document.
 `@` opens the mention menu wherever the caret starts a word, including directly
 in front of existing text — the menu opens empty there instead of searching for
 the word ahead of the caret. Typed inside a word (`he@llo`) it stays literal text.
+On Android, verify this with the software keyboard: tap `@`, type a name to
+filter, and tap a result to insert a single mention. The menu should remain
+visible above the keyboard while typing.
 
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
@@ -369,6 +519,45 @@ To verify, search for a cached company absent from that REST page, select it, an
 check that the inserted company mention points to the correct company. Also check
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.
+
+## Project mentions
+
+With Projects enabled, type `@` followed by a project name in an editor,
+composer or spreadsheet cell. Projects (not folders) come from Quick Access, so
+they appear alongside documents and tasks in the **Documents, Agents, & Tasks**
+section and in entity property pickers that accept projects. The command menu
+keeps its own project search. Selecting one inserts a document mention with the
+project's icon and current name, like a channel mention. Clicking it or
+pressing Enter on it opens the project the way a task mention opens a task:
+in Tasks, under **Projects** › the project (on touch devices, as the project
+view on its own). A project you cannot read shows **No Access**. Pasting
+`/app/initiative/<id>` or a Tasks project link inserts the same mention.
+
+The mention is stored as
+`<m-document-mention>{"documentId":"<initiative id>","blockName":"initiative",…}</m-document-mention>`
+(`project` is a folder). In a document it is tracked as a reference like other
+entity mentions. It is deliberately not a channel-message reference, so
+mentioning a project in a channel never shares the project with the channel's
+members.
+
+To verify, mention a project in a document and in a channel draft, check the
+mention opens the right project, rename the project and reload to see the name
+update, and delete the mention. Discard unsent test drafts rather than sending
+them.
+
+## CRM associations
+
+With CRM enabled, any task, document or call can point at CRM records through the
+`Companies` and `Contacts` system properties: side panel `Properties` →
+`Add property`. Both pickers list Quick Access records: the team's companies and
+its most recently interacted contacts, filtered by name, domain or email. CRM
+contacts have their own Quick Access bucket, apart from people, and are not
+offered in `@` mentions or the command menu. Values show the
+record's name and open the company or contact. An entity can carry the property
+without listing it (set at creation or through the API); adding that property
+pins the existing value rather than clearing it. Calls are linked automatically
+when they end, from their participants and the invitees of the calendar event
+carrying the meeting link; verify on a finished call's `Properties`.
 
 ## Native offline reopening
 
@@ -545,14 +734,11 @@ document should stay visible and the thread should open; loading the document
 with its badges still collapsed does not exercise thread rendering. Comment
 copy links should retain the document/task route and the selected comment.
 
-### Unified document discussions (`enable-unified-document-discussions`)
+### Document discussions
 
-With the PostHog flag `enable-unified-document-discussions` on (locally
-`VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS=true`), document comments are messages
-read and written through `/dss/messages/document/<id>`, and both comment
-surfaces reuse the channel message components. The legacy annotation comment
-endpoints are not called for that document. Channels are not gated and always
-use the message API.
+Document comments are messages read and written through
+`/dss/messages/document/<id>`, and both comment surfaces reuse the channel
+message components, as channels do.
 
 Below the editor, expand `Discussion` to see comments without a text anchor.
 Its `Leave a comment...` composer is the channel composer: `Attach files`,
@@ -562,6 +748,10 @@ retains the draft. The timeline initially loads a bounded page with up to three
 preview replies per thread. Expand a thread to load its replies;
 `Load earlier comments` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
+
+Discussion and comment headers include the date for older messages (for example,
+`Yesterday at 4:37 PM` or `09/24/26 at 4:37 PM`). Regular channel timelines retain
+their date dividers and time-only message headers.
 
 When verifying `@` mentions, compare the same person query in the document body
 and the Discussion composer: shared contacts use the same recent-interaction
@@ -601,27 +791,149 @@ editable view removes the retained mark when the document loads. Read-only
 viewers see plain text without a dead comment highlight; the stored document
 and overlapping live comments stay intact.
 
-PDFs follow the same flag. With it on, PDF comment threads in the right margin
-use the channel composer (`Leave a comment...`, Enter sends) and the message
+PDF comment threads in the right margin use the channel composer (`Leave a comment...`, Enter sends) and the message
 thread controls. Highlight comments come from selecting text and choosing the
 comment button in the selection menu; placeable comments come from the toolbar
 `Comment` tool and a click on the page. Discussions read and post through
 `/dss/messages/document/<id>`; anchor geometry still loads from
-`/dss/annotations/anchors/document/<id>`, and `/dss/annotations/comments/...`
-is not called. Deleting a highlight's discussion keeps the highlight as a plain
-highlight; deleting a placeable's discussion removes the placeable. With the
-flag off, PDFs use the legacy composer (`Add a comment...`). A PDF anchor
-created by the other path is hidden rather than shown as a bare highlight, so a
-comment written on one path does not appear on the other until the comment
-importer runs.
+`/dss/annotations/anchors/document/<id>`. Deleting a highlight's discussion keeps the highlight as a plain
+highlight; deleting a placeable's discussion removes the placeable. An anchor bound only
+to a legacy annotation thread that was never imported stays hidden rather than
+shown as a bare highlight.
 
-With the flag off, documents behave exactly as described above this section.
+## Word (DOCX) editor
+
+When `enable-docx-editor` is on, uploaded `.docx` files open at
+`/app/write/<id>` in an editor instead of the PDF preview. The flag is a
+PostHog flag that is on by default in dev mode; set `VITE_ENABLE_DOCX_EDITOR`
+to override it locally. The header label has a **Beta** badge. Pages are laid
+out and drawn by Macro's own DOCX engine (Rust compiled to wasm, in a worker)
+as `<canvas>` sheets with Word's pagination, so the document's text is not
+in the DOM. Edits sync through the sync service as you type: every open copy
+updates live and shows each collaborator's caret with their name
+(`[data-docx-peer]`).
+
+- Pages are `[data-docx-page="<index>"]` elements. Click a page to place the
+  caret, drag to select, double-click for a word and triple-click for a
+  paragraph. On a touch screen a swipe scrolls, a tap places the caret, and
+  a double tap or a held press selects a word. Keystrokes go to a hidden textarea, `[data-docx-input]`
+  (labelled `Document text`); it must have focus, which a click on a page
+  gives it. Read text back from another tab or after a download, not from
+  the page.
+- Editors get a toolbar labelled `Document formatting`: `Undo`, `Redo`, the
+  `Paragraph style`, `Font` and `Font size` selects, `Bold`, `Italic`,
+  `Underline`, `Strikethrough`, `Superscript`, `Subscript`, the `Text color`
+  and `Highlight` menus (`[data-docx-menu="color"]`,
+  `[data-docx-menu="highlight"]`), `Clear formatting`, `Bulleted list`,
+  `Numbered list`, the alignment buttons, `Decrease indent`, `Increase
+  indent`, the `Line spacing` menu, `Insert table` (inside a table also the
+  `Table rows and columns` menu, `[data-docx-menu="table"]`, to insert or
+  delete rows and columns or the table), the `Insert footnote or endnote`
+  menu (`[data-docx-menu="notes"]`, in the body), `Track changes`, `Hide tracked
+  changes` / `Show tracked changes`, `Comment on selection`, `Find and
+  replace` and `Download .docx` (viewers get `Find and replace` and
+  `Download .docx`).
+  While tracking is on (or the caret is on a tracked change) it also shows
+  `Accept change`, `Reject change`, `Accept all changes` and `Reject all
+  changes`.
+- The browser's own find cannot see canvas text, so Mod+F in the document
+  (or `Find and replace`) opens the editor's find bar (`[data-docx-find]`) in
+  the top right; Ctrl+H (Cmd+Shift+H on a Mac) opens it with the replace
+  field. The `Find in document` field (`[data-docx-find-query]`) searches as
+  you type and shows `<n> of <total>` (`[data-docx-find-status]`); matches
+  are highlighted on the pages (`[data-docx-find-match]`). Enter and
+  Shift+Enter (or the arrow buttons, or Mod+G) move between matches and
+  select them; `Match case` and `Whole words only` narrow the search. Straight
+  and curly quotes match each other. The `Replace` toggle shows `Replace
+  with` (`[data-docx-find-replacement]`) with `Replace`
+  (`[data-docx-replace]`) and `Replace all` (`[data-docx-replace-all]`);
+  replacements follow tracked changes and one undo takes back a replace all.
+  Escape closes the bar with the current match selected.
+- Arabic and Hebrew paragraphs lay out right to left as in Word (joined
+  Arabic letters, mixed-direction lines in visual order); the left and
+  right arrow keys move left and right on the page.
+- Mod+Z, Mod+Shift+Z and Ctrl+Y (or the toolbar buttons) undo and redo your
+  own edits only, never a collaborator's. Mod+B/I/U format, Tab and
+  Shift+Tab indent list items, Enter splits paragraphs and Shift+Enter
+  inserts a line break.
+- `Track changes` turns tracking on for the whole document (it is saved in
+  the file, as in Word): every editor's typing then shows as an underlined
+  insertion and deletions stay visible struck through, each under its
+  author's name. Formatting changes (bold, alignment, lists, indents) are
+  recorded too: the text looks formatted, and Accept and Reject appear when
+  the caret is in it. A thin bar in the left margin marks every line that
+  holds a change. Accept and reject act on the selection, the change at
+  the caret, or every change.
+- Double-click a page's header or footer area to edit it. The body dims, the
+  area gets a dashed edge and a `Header` (or `Footer`) label with a `Close`
+  button; Escape or a click on the body returns to the body. Header and
+  footer edits reach collaborators and the download like body edits.
+- Click a footnote or endnote at the bottom of the page (or after the body)
+  to type in it, as in Word; nothing dims. Escape or a click on the body
+  returns to the body. Comments stay with the body text.
+- To add a footnote or endnote at the caret, use the toolbar's asterisk
+  menu (`Insert footnote or endnote` → `Footnote` / `Endnote`) or Word's
+  shortcuts (Ctrl+Alt+F / Ctrl+Alt+D; Cmd+Option+F / Cmd+Option+E on a
+  Mac). The number appears in the text and the caret moves into the new
+  note at the foot of the page (endnotes go after the body).
+- Clicking a DOCX in the Home list opens the editor in the Home preview pane.
+  Viewers and commenters see the same paginated pages, read-only.
+- To comment on any text, including table cells: select it, then click the
+  floating `Comment` button beside the selection
+  (`[data-docx-comment-button]`). You can also use the toolbar `Comment on
+  selection` button or Mod+Alt+M. The draft opens a thread card in the right
+  margin. Posting creates a normal document discussion (`markdown` anchor
+  with `mark_id`), so it also appears in channels and notifications.
+  Commented text is highlighted by overlay elements
+  (`[data-docx-comment-highlight]`) above the canvas. Comments anchor in the
+  body only, not in headers or footers.
+- Comments written in Word (stored in the file) show in the same margin as
+  read-only cards (`[data-docx-word-comment="<id>"]`): author, date, text and
+  replies, marked `In the document` (and `Resolved` when done). Their text is
+  highlighted too (`[data-docx-comment-highlight="word:<id>"]`). They stay in
+  the file on download; reply with a Macro comment.
+- Threads whose text was deleted are listed under `Comments on text that has
+  changed`, above the `Discussion` composer.
+- AI `CommentOnDocument` works on DOCX by quote. The editor pins each quote to
+  the first matching text the next time someone opens the file.
+- `Download .docx` exports the current collaborative state with every edit,
+  including headers, footers and tracked changes. Comments stay in Macro
+  threads and are not written into the file.
+- The stored upload is not rewritten yet. Search, the PDF export and AI
+  `ReadContent` still see the original file.
+- AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
+  open editors patch agent edits in as they land. `ReadWordDocument` lists
+  every paragraph, table cell and content control with its id. `EditWordDocument`
+  applies an atomic batch of `replaceText`, `setText`, `formatText`,
+  `insertParagraph`, `setStyle` and `delete` operations to those ids. Both
+  refuse a DOCX nobody has opened in the editor yet: it has no live copy.
+  `EditDocument` still rejects DOCX.
+
+## Document history
+
+On desktop, open the title's file menu (**…**) and choose **History**. This
+opens an overlay filling the current document block, with a read-only version
+preview on the left and a timeline graph plus sessions on the right. History is
+no longer a side-panel section and its file-menu item is hidden on mobile.
+Scrub the graph to preview a point in time, or select a session to see its changes.
+**Current version** returns the preview to the live version; **Fork** copies the
+selected version into a separate document. **Close history** or Escape returns
+to the mounted editor without losing its scroll position. The two columns scroll
+independently, and other app splits remain available.
 
 ## Side panel
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):
 
-- `Actions` → `Ask Macro` (opens a doc-scoped AI chat, see ai-chat.md).
+- `Actions` → `Ask Macro` (opens a doc-scoped AI chat, see ai-chat.md), and on
+  desktop a `Copy as prompt` pill for documents and tasks. Its primary button
+  runs the last-used agent action; the `Agent options` caret lists `Copy as
+  prompt`, `MCP setup instructions`, and an `Open in` group (Claude Code Web,
+  Codex Desktop, Cursor, Zed). Tasks add `Copy branch name`. A document prompt
+  wraps the title and markdown in `<document>` / `<document-content>` tags with
+  no branch instructions; the toast reads `Prompt copied to clipboard`. The
+  Files-view title menu (three dots beside the breadcrumb) also lists `Copy as
+  prompt` directly above `Download` for plain documents.
 - `Details` → Owner, Created, Last updated.
 - `Tags` → `Add tags` (dialog). Click a tag's label to toggle and save; Shift-click
   keeps the picker open for multiple selections. Reopen it to remove a tag.
@@ -631,7 +943,7 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   This must also work after background backfills populate more than 128 cached
   Soup variants—tag saves must not scan all cached pages.
   `Properties` → `Add property`.
-- Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
+- `Activity` is collapsible; document statistics and ownership timestamps appear in the footer.
 - `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
   thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`
   times; consecutive edits fold into one `made 3 edits` line). Past four entries it shows the

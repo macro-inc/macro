@@ -7,8 +7,11 @@ use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_
 #[cfg(test)]
 mod test;
 
+pub mod ai_operations;
 mod build_context;
 mod display_results;
+mod import_channels;
+mod mcp_app_catalog;
 mod schemas;
 pub mod search;
 mod search_tools;
@@ -26,6 +29,8 @@ use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
 use crm::inbound::toolset::crm_toolset;
+use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
+use databases_sql::toolset::{QueryDatabase, databases_sql_toolset};
 use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
@@ -41,41 +46,67 @@ use self_knowledge::SelfKnowledge;
 use skills::inbound::toolset::skill_toolset;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
-use subagent::Subagent;
+use subagent::{Subagent, SubagentContext};
 use teams::inbound::toolset::team_toolset;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use build_context::build_anthropic_tool_context_test;
-pub use build_context::{build_anthropic_tool_context, build_tool_service_context_from_env};
+pub use build_context::{
+    build_anthropic_tool_context, build_image_generator_from_env,
+    build_tool_service_context_from_env,
+};
+pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
 pub use search::search_toolset;
-#[cfg(any(test, feature = "test-support"))]
-pub use tool_context::no_op_schedule_context;
 pub use tool_context::{
-    ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
-    NoOpNotificationService, NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext,
-    RoutineToolContext, TaskPropertiesAdapter, ToolActivityToolContext, ToolBotEventBroker,
+    ChannelSideEffectClients, MaybeToolEventBroker, NoOpCallRtcClient, NoOpConnectionService,
+    NoOpNotificationIngress, NoOpNotificationService, NoOpSnsEndpointManager, NoOpTaskProperties,
+    RequestContext, RoutineToolContext, TaskPropertiesAdapter, ToolActivityToolContext,
     ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
     ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
+    ToolDatabasesService, ToolDatabasesSqlToolContext, ToolDatabasesToolContext,
     ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
     ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
-    ToolForeignEntityService, ToolFrecencyService, ToolImportService, ToolImportToolContext,
+    ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService,
+    ToolImageGenerationToolContext, ToolImportService, ToolImportToolContext,
     ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
     ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolRemindersService,
     ToolRemindersToolContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
-    ToolSoupService, ToolSystemPropertiesService, ToolTeamService, ToolTeamToolContext,
-    ToolUserEmailService, build_activity_tool_context, build_bot_tool_context,
-    build_calendar_tool_context, build_channel_tool_context_with_dispatcher,
-    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
-    build_crm_tool_context, build_initiative_tool_context, build_message_service_with_side_effects,
-    build_message_service_without_side_effects, build_project_tool_context,
-    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
-    build_reminders_tool_context, build_routine_tool_context, build_skill_tool_context,
-    build_task_properties_adapter, build_team_repository, build_team_tool_context,
+    ToolSoupService, ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamService,
+    ToolTeamToolContext, ToolUserEmailService, ToolViewOnlyDatabasesSqlToolContext,
+    build_activity_tool_context, build_bot_tool_context, build_calendar_tool_context,
+    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
+    build_channel_tool_context_without_side_effects, build_crm_tool_context,
+    build_databases_sql_tool_context, build_databases_tool_context,
+    build_image_generation_tool_context, build_initiative_tool_context,
+    build_message_service_with_side_effects, build_message_service_without_side_effects,
+    build_project_tool_context, build_properties_service, build_properties_service_with_broker,
+    build_properties_tool_context, build_reminders_tool_context, build_routine_tool_context,
+    build_skill_tool_context, build_task_properties_adapter, build_team_repository,
+    build_team_tool_context,
 };
+#[cfg(any(test, feature = "test-support"))]
+pub use tool_context::{build_image_generation_tool_context_test, no_op_schedule_context};
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
+
+/// Database-only capabilities for the in-app database assistant. This excludes
+/// connectors and unrelated tools such as messaging and email.
+pub fn database_tools() -> AiToolSet {
+    AsyncToolCollection::new()
+        .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
+        .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
+}
+
+/// Discovery and QueryDatabase for live document answers. The SQL tool is
+/// the one every host gets; here it runs over access capped at view, so the
+/// access check refuses its writes even for a user who could edit.
+pub fn database_read_only_tools() -> AiToolSet {
+    AsyncToolCollection::new()
+        .add_subtoolset::<ToolDatabasesToolContext>(databases_read_only_toolset())
+        .add_tool::<QueryDatabase, ToolViewOnlyDatabasesSqlToolContext>()
+}
 
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
@@ -100,6 +131,9 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolActivityToolContext>(activity_toolset())
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
+        .add_subtoolset::<ToolImageGenerationToolContext>(
+            image_generation::inbound::toolset::image_generation_toolset(),
+        )
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())
         .add_subtoolset::<ToolInitiativeToolContext>(initiative_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
@@ -109,6 +143,8 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolBotToolContext>(bot_toolset())
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
         .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
+        .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
+        .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
 }
@@ -162,7 +198,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
-        .add_tool::<Subagent, ToolServiceContext>();
+        .add_tool::<Subagent, SubagentContext>();
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
             .add_tool::<SearchTools, ToolServiceContext>()

@@ -8,6 +8,7 @@ import CheckIcon from '@phosphor/check.svg';
 import CodeIcon from '@phosphor/code.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { cn, Dropdown } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentModelMenuItem } from '../../block-agent/component/AgentModelMenuItem';
 import type {
@@ -21,9 +22,11 @@ import {
   rosterForAgentPicker,
 } from '../core/roster';
 import { createComposerModels } from '../queries/composer-models';
+import { AGENTS_TOUR } from '../tour';
+import { MobileAgentPicker } from './MobileAgentPicker';
 
 /** Agent selection with a per-message model catalog in each submenu. */
-export function AgentPicker(props: {
+export type AgentPickerProps = {
   agents: RosterAgent[];
   selected?: RosterAgent;
   modelOverride?: string;
@@ -40,7 +43,17 @@ export function AgentPicker(props: {
   ) => void;
   onConnect: (agent: RosterAgent) => void;
   onCreate: () => void;
-}) {
+};
+
+export function AgentPicker(props: AgentPickerProps) {
+  return (
+    <Show when={isTouchDevice()} fallback={<DesktopAgentPicker {...props} />}>
+      <MobileAgentPicker {...props} />
+    </Show>
+  );
+}
+
+function DesktopAgentPicker(props: AgentPickerProps) {
   const [open, setOpen] = createSignal(false);
   const catalog = createComposerModels(() => props.selected);
   const macro = () =>
@@ -76,6 +89,7 @@ export function AgentPicker(props: {
       <Dropdown.Trigger
         variant="ghost"
         aria-label="Agent"
+        ref={tourTarget(AGENTS_TOUR.picker)}
         title={
           rawModel()
             ? label()

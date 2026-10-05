@@ -21,7 +21,7 @@ pub enum RoutineTarget {
     },
     /// An agent with its configured runtime, tools and default model.
     Agent {
-        /// Persona/bot UUID from ListBots. Use your own persona ID to schedule yourself.
+        /// Persona/bot UUID (`bot.botId`) from ListAgents. Use your own persona ID to schedule yourself.
         #[serde(rename = "agentId")]
         agent_id: Uuid,
     },

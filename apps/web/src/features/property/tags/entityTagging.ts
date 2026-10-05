@@ -43,7 +43,8 @@ export function tagEntityType(
         'routine',
         'reminder',
         'calendar_event',
-        'foreign'
+        'foreign',
+        'database'
       ),
       () => undefined
     )

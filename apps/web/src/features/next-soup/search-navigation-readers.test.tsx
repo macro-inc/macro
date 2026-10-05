@@ -1,21 +1,18 @@
 import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
 import { createMarkdownRouteNavigation } from '@app/features/block-md/primitives/create-markdown-route-navigation';
 import { createPdfRouteTarget } from '@app/features/block-pdf/primitives/create-pdf-route-target';
-import type {
-  SplitRouter as Router,
-  SplitRouterLayout,
-  SplitRouterLayoutEntry,
-} from '@app/lib/split-router';
 import {
-  createMemorySplitRouterLocation,
+  createMemoryHistory,
+  createMemoryPaneStore,
+  createSplitRouter,
   defineRoute,
+  replacePaneSearchParams,
+  type SplitPanePolicy,
   SplitRouter,
-  useSplitRouter,
 } from '@app/lib/split-router';
-import { replaceSplitSearchParams } from '@app/lib/split-router/search';
 import type { SearchLocation } from '@entity';
 import { cleanup, render } from '@solidjs/testing-library';
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   searchLocationTarget,
@@ -24,55 +21,53 @@ import {
 
 afterEach(cleanup);
 
+const policy: SplitPanePolicy = {
+  placeNewPane: ({ panes }) => ({ insertAt: panes.length }),
+  closeAction: () => ({ type: 'keep' }),
+  activate: () => {},
+};
+
 function setup(location: SearchLocation) {
-  let entry: SplitRouterLayoutEntry<string> | undefined;
-  const layout: SplitRouterLayout<string> = {
-    snapshot: () => ({ entries: entry ? [entry] : [] }),
-    reconcile: (locations) => {
-      entry = { splitId: 'pane', location: locations[0]! };
-    },
-    updateCurrentLocation: (_, update) => {
-      entry = { ...entry!, location: update(entry!) };
-    },
-    open: () => ({ status: 'unavailable' }),
-    activate: () => {},
-    subscribe: () => () => {},
-  };
   const target = searchLocationTarget('document', location);
   const query = new URLSearchParams();
-  replaceSplitSearchParams(query, [
-    { location: { search: { [target.namespace]: target.params } } },
-  ]);
+  replacePaneSearchParams(query, [{ [target.namespace]: target.params }]);
   const route = defineRoute({
     id: 'detail',
     path: 'detail',
     search: '*' as const,
   });
   const navigateMarkdown = vi.fn();
-  let router!: Router<string>;
+  let router!: ReturnType<typeof createSplitRouter>;
   let pdf!: ReturnType<typeof createPdfRouteTarget>;
   let agent!: ReturnType<typeof createAgentRouteTarget>;
   let setDocument!: (id: string) => void;
   let documentId!: Accessor<string>;
   function Reader() {
-    router = useSplitRouter<string>();
     [documentId, setDocument] = createSignal('document');
     createMarkdownRouteNavigation(documentId, navigateMarkdown);
     pdf = createPdfRouteTarget(documentId);
     agent = createAgentRouteTarget();
     return null;
   }
-  render(() => (
-    <SplitRouter.Root
-      layout={layout}
-      routes={{ definitions: [route] }}
-      location={createMemorySplitRouterLocation(`/detail?${query}`)}
-    >
-      <SplitRouter.Scope splitId="pane">
-        <Reader />
-      </SplitRouter.Scope>
-    </SplitRouter.Root>
-  ));
+  render(() => {
+    router = createSplitRouter({
+      routes: {
+        definitions: [route],
+        defaultRoute: () => ({ matches: [{ id: 'detail', params: {} }] }),
+      },
+      history: createMemoryHistory(`/detail?${query}`),
+      paneStore: createMemoryPaneStore(),
+      policy,
+    });
+    onCleanup(() => router.dispose());
+    return (
+      <SplitRouter.Root router={router}>
+        <SplitRouter.Scope pane={router.panes()[0]!}>
+          <Reader />
+        </SplitRouter.Scope>
+      </SplitRouter.Root>
+    );
+  });
   return {
     navigateMarkdown,
     pdf,
@@ -80,9 +75,13 @@ function setup(location: SearchLocation) {
     setDocument,
     router,
     replay: () =>
-      router.navigate('pane', route.to(), {
-        search: searchLocationUpdates('document', location),
-      }),
+      router.navigatePane(
+        router.panes()[0]!,
+        { route },
+        {
+          search: searchLocationUpdates('document', location),
+        }
+      ),
   };
 }
 

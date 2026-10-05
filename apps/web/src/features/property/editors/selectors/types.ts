@@ -18,9 +18,13 @@ export type EntitySelectorConfig = {
   placeholder: string;
   specificEntityType?: EntityType | null;
   selfFilter?: { entityType: EntityType; blockId?: string };
+  /** Entities already linked to the destination are not selectable again. */
+  excludedIds?: Accessor<ReadonlySet<string>>;
   /** Explicit pool for USER pickers (e.g. company owner → team members);
    * replaces the default quick-access people list. */
   users?: Accessor<IUser[]>;
+  /** Additional principals offered alongside the default people pool. */
+  additionalUsers?: Accessor<IUser[]>;
   /** When the query is a valid email that is not already in the pool,
    * offer it as an "Add {email}" row (calendar guests, share sheets). */
   allowCustomEmail?: boolean;

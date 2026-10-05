@@ -65,9 +65,11 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   image: 'bg-image/20 group/item',
   canvas: 'bg-canvas/20 group/item',
   spreadsheet: 'bg-success/20 group/item',
+  pptx: 'bg-orange/20 group/item',
   video: 'bg-video/20 group/item',
   call: defaultFileColor,
   calendar: defaultFileColor,
+  database: defaultFileColor,
   contact: defaultFileColor,
   company: defaultFileColor,
   default: defaultFileColor,
@@ -82,4 +84,5 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   routine: 'bg-chat/20 group/item',
   pr: defaultFileColor,
   agent: defaultFileColor,
+  initiative: defaultFileColor,
 };

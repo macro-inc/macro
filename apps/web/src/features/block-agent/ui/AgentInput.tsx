@@ -29,7 +29,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
-import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
+import ArrowUp from '@phosphor/arrow-up.svg';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 
@@ -44,6 +44,8 @@ export type QuoteInsert = (text: string) => void;
 
 export interface AgentInputProps {
   placeholder?: string;
+  /** Context to seed in the composer without sending it. */
+  initialInput?: string;
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
   /**
@@ -112,7 +114,7 @@ export interface AgentInputProps {
 }
 
 export function AgentInput(props: AgentInputProps) {
-  const [markdown, setMarkdown] = createSignal('');
+  const [markdown, setMarkdown] = createSignal(props.initialInput ?? '');
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
   let containerRef: HTMLDivElement | undefined;
   const [layout, setLayout] = createSignal<HTMLDivElement>();
@@ -218,6 +220,9 @@ export function AgentInput(props: AgentInputProps) {
       },
     })
     .onEnter(() => {
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
       if (canSend()) send();
       else sendNext();
       return true;
@@ -354,6 +359,7 @@ export function AgentInput(props: AgentInputProps) {
                 >
                   <ComposerEditor
                     config={editor}
+                    initialValue={props.initialInput}
                     disabled={props.readOnly}
                     placeholder={
                       props.placeholder ??
@@ -388,10 +394,14 @@ export function AgentInput(props: AgentInputProps) {
                       disabled={props.disabled || props.readOnly}
                     />
                     <Show
-                      when={canSendNext()}
+                      when={
+                        props.hasQueuedMessages &&
+                        markdown().trim().length === 0 &&
+                        attachments().length === 0
+                      }
                       fallback={
                         <Show
-                          when={props.busy && props.onStop}
+                          when={props.busy && props.onStop && !canSend()}
                           fallback={
                             <SendButton
                               appearance="composer"
@@ -424,8 +434,9 @@ export function AgentInput(props: AgentInputProps) {
                         tooltip="Send next queued message"
                         shortcut="Enter"
                         onClick={sendNext}
+                        disabled={!canSendNext()}
                       >
-                        <EnterIcon />
+                        <ArrowUp />
                       </SendButton>
                     </Show>
                   </div>

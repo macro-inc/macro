@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_outbox o SET attempts = o.attempts + 1,\n                   available_at = clock_timestamp() + interval '60 seconds'\n                   FROM slack_import_conversation c\n                   WHERE o.job_id = $1 AND o.slack_channel_id = $2 AND o.kind = 'import' AND o.generation = $3\n                     AND o.published_at IS NULL AND o.cancelled_at IS NULL AND o.available_at <= clock_timestamp()\n                     AND c.job_id = o.job_id AND c.slack_channel_id = o.slack_channel_id\n                     AND c.event_generation = o.generation AND c.status IN ('queued', 'importing')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0e1d0a9ad82ca80af62e6127b5e17fb5506136da70d6b576e0b6618057c0e5b0"
+}

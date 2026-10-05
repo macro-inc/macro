@@ -7,10 +7,12 @@ import {
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { EMAIL_TOUR } from '../tour';
 import { EmailControls } from './EmailControls';
 import { EmailInboxFilter, EmailInboxMenu } from './EmailInboxSelector';
 
@@ -63,6 +65,7 @@ export function EmailHeader(props: EmailHeaderProps) {
   const { state, setState } = useEmailView();
   const [filterOpen, setFilterOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
+  const searchTarget = tourTarget(EMAIL_TOUR.search);
   const selectedTabLabel = () =>
     EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
 
@@ -72,7 +75,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     enabled: panel.isPanelActive,
     search: {
       description: 'Search email',
-      condition: () => state.tab !== 'scheduled',
+      condition: () => state.tab !== 'scheduled' && state.tab !== 'reminders',
       run: () => {
         searchInput?.focus();
         searchInput?.select();
@@ -109,16 +112,21 @@ export function EmailHeader(props: EmailHeaderProps) {
 
       <Show when={state.tab !== 'scheduled'}>
         <div class="flex min-w-0 items-center justify-between gap-3">
-          <SearchBar
-            ref={(element) => (searchInput = element)}
-            label="Search email"
-            value={state.search}
-            hotkey="cmd+f"
-            onValueChange={(search) => setState('search', search)}
-            onEscape={props.onSearchEscape}
-            placeholder="Search email"
-            class="max-w-md flex-1"
-          />
+          <Show when={state.tab !== 'reminders'}>
+            <SearchBar
+              ref={(element) => {
+                searchInput = element;
+                searchTarget(element);
+              }}
+              label="Search email"
+              value={state.search}
+              hotkey="cmd+f"
+              onValueChange={(search) => setState('search', search)}
+              onEscape={props.onSearchEscape}
+              placeholder="Search email"
+              class="max-w-md flex-1"
+            />
+          </Show>
           <EmailControls
             filterOpen={filterOpen()}
             onFilterOpenChange={setFilterOpen}

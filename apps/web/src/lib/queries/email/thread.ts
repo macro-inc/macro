@@ -37,6 +37,7 @@ import {
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { updateEmailThreadLabel } from './cache-cleanup';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
@@ -157,22 +158,22 @@ export async function fetchFreshEmailThread(
 }
 
 /**
- * Whether a thread's done state can actually be reversed.
+ * Legacy REST eligibility preflight. GraphQL validates received-message history
+ * in the email domain instead of guessing from an inbox-sorting timestamp or a
+ * partial message page. Bulk callers must settle each email independently: one
+ * rejected unarchive must not roll back successful or durably queued siblings.
  *
- * Doneness is derived, not stored: `inbox_visible` is recomputed server-side
- * as "some message has INBOX and not SENT", and the inbox view additionally
- * requires an inbound message. A thread with only sent messages satisfies
- * neither, so it is permanently done — unarchiving it reverts on the next
- * recompute and meanwhile labels its own sent messages INBOX, in Gmail too.
- *
- * Soup rows carry no inbound-message field, so this resolves the thread
- * (served from cache when it is already loaded). A failed lookup resolves to
- * `true`: the unarchive that follows would fail the same way, and blocking on
- * a transient error would misreport ordinary threads as unreversible.
+ * Failed legacy lookups remain permissive, so a transient read error does not
+ * misreport an ordinary thread as permanently done.
  */
 export async function threadCanBeMarkedNotDone(
   threadId: string
 ): Promise<boolean> {
+  // GraphQL validates received-message history in the email domain. Its inbox
+  // sort timestamp can be null after archive, and a partial cached message page
+  // cannot prove a thread is sent-only. Let the mutation decide and roll back
+  // on rejection, without delaying the optimistic UI for another thread fetch.
+  if (isFeatureEnabled(enableGraphqlSoup)) return true;
   const result = await fetchAndCacheThread(threadId);
   if (result.isErr()) return true;
   return result.value.thread.latest_inbound_message_ts != null;
@@ -186,6 +187,8 @@ export type ThreadQueryData = {
 export type ThreadQueryTransport = 'rest' | 'graphql';
 
 export type ThreadQueryResult<TData> = {
+  /** Canonical identity for this route, including a resolved offline handle. */
+  readonly resolvedThreadId: string;
   readonly data: TData | undefined;
   readonly error: Error | null;
   readonly isLoading: boolean;
@@ -242,10 +245,11 @@ export function useThreadQuery<TData = ThreadQueryData>(
   const select = () =>
     options?.().select ?? (selectThreadQueryData as ThreadQuerySelector<TData>);
 
-  const graphqlQuery = createGraphqlEmailThreadQuery<TData>(threadId, () => ({
-    enabled: queryEnabled() && usesGraphql(),
-    select: select(),
-  }));
+  const { query: graphqlQuery, resolvedThreadId } =
+    createGraphqlEmailThreadQuery<TData>(threadId, () => ({
+      enabled: queryEnabled() && usesGraphql(),
+      select: select(),
+    }));
   const restQuery = useInfiniteQuery(() => ({
     ...threadQueryOptions(threadId()),
     ...options?.(),
@@ -254,6 +258,9 @@ export function useThreadQuery<TData = ThreadQueryData>(
   }));
 
   return {
+    get resolvedThreadId() {
+      return usesGraphql() ? resolvedThreadId() : threadId();
+    },
     get data() {
       return usesGraphql()
         ? graphqlQuery.data
@@ -432,7 +439,7 @@ export function useMarkThreadAsUnreadMutation(
       }
       const labelId = await fetchUnreadLabelId(params.linkId);
       await throwOnErr(() =>
-        emailClient.updateThreadLabel({
+        updateEmailThreadLabel({
           thread_id: params.threadId,
           label_id: labelId,
           value: true,

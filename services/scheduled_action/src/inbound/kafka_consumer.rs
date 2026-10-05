@@ -10,7 +10,7 @@ use std::time::Duration;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     EventBrokerError, EventConsumer, KafkaConsumerAdapter, MacroEvent as _,
     MacroEventCollection as _, MacroEventConsumerService, MessageWrapper,
@@ -37,6 +37,9 @@ struct ScheduledActionEventIngestionGroup;
 
 impl GroupName for ScheduledActionEventIngestionGroup {
     const GROUP_NAME: &'static str = "scheduled-action-event-ingestion";
+    // `macro.messages` joined this group's subscription with no committed
+    // offset; starting at its head avoids replaying the topic's retention.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 type ScheduledActionKafkaAdapter =

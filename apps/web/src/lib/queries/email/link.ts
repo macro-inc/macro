@@ -54,16 +54,31 @@ export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
  * Delegated inboxes are primary for their own account, hence the macro_id
  * guard. `undefined` until links load or if none match.
  */
+export function findPrimaryEmailLinkId(
+  links: readonly { id: string; is_primary: boolean; macro_id: string }[],
+  userId: string | undefined
+): string | undefined {
+  if (!userId) return undefined;
+  return links.find((link) => link.is_primary && link.macro_id === userId)?.id;
+}
+
 export function usePrimaryEmailLinkId() {
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
   return createMemo(() => {
-    const uid = userId();
-    if (!uid || !queryReadyGate(linksQuery)) return undefined;
-    return linksQuery.data.links.find(
-      (link) => link.is_primary && link.macro_id === uid
-    )?.id;
+    // Offline GraphQL mail can render before this REST lookup completes.
+    // Reading its pending resource would suspend the surrounding email view.
+    if (!queryReadyGate(linksQuery)) return undefined;
+    return findPrimaryEmailLinkId(linksQuery.data.links ?? [], userId());
   });
+}
+
+/** The `X-Email-Link-Id` value for a target inbox; see useNonPrimaryEmailLinkIdHeader. */
+export function nonPrimaryEmailLinkIdHeader(
+  linkId: string | undefined | null,
+  primaryLinkId: string | undefined
+): string | undefined {
+  return !linkId || linkId === primaryLinkId ? undefined : linkId;
 }
 
 /**
@@ -95,8 +110,8 @@ export function useEmailSignature(
  */
 export function useNonPrimaryEmailLinkIdHeader() {
   const primaryLinkId = usePrimaryEmailLinkId();
-  return (linkId: string | undefined | null): string | undefined =>
-    !linkId || linkId === primaryLinkId() ? undefined : linkId;
+  return (linkId: string | undefined | null) =>
+    nonPrimaryEmailLinkIdHeader(linkId, primaryLinkId());
 }
 
 export function invalidateEmailLinks() {

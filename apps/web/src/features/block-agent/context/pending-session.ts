@@ -44,6 +44,8 @@ export type PendingSession = {
    * opens rather than once the create has answered.
    */
   prompt: string | undefined;
+  /** Unsent composer context supplied by an Ask AI action. */
+  initialInput?: string;
 };
 
 const pending = new Map<string, PendingSession>();
@@ -54,6 +56,8 @@ const pending = new Map<string, PendingSession>();
 export type StartPendingSessionOptions = {
   /** Persisted managed persona to run; omitted for Macro Coder. */
   botId?: string;
+  /** Unsent composer context; never issued as a prompt. */
+  initialInput?: string;
   /** First prompt. */
   prompt?: string;
   /** Uploaded SFS files delivered with the first prompt. */
@@ -62,6 +66,11 @@ export type StartPendingSessionOptions = {
   userId?: string;
   /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
+  /**
+   * Context the surface opening the session gives the agent: its runtime reads it as
+   * instructions, so neither the composer nor the sent prompt shows it.
+   */
+  instructions?: string;
   /** Opaque harness setting confirmed before the first prompt. */
   effortOverride?: { configId: string; value: string };
   /**
@@ -90,6 +99,7 @@ export function startPendingSession(
     failed: () => error() !== undefined,
     error,
     prompt: options.prompt?.trim() || undefined,
+    initialInput: options.initialInput,
   });
 
   void agentHarnessServiceClient
@@ -97,6 +107,7 @@ export function startPendingSession(
       id,
       ...(options.botId ? { botId: options.botId } : {}),
       ...(options.modelOverride ? { model: options.modelOverride } : {}),
+      ...(options.instructions ? { instructions: options.instructions } : {}),
       ...(options.repoUrl
         ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
         : {}),
@@ -163,7 +174,7 @@ export function startPendingSession(
                   ? { attachments: options.attachments }
                   : {}),
               },
-              { userId: options.userId }
+              { userId: options.userId ?? result.value.session.ownerId }
             );
             if (delivered.isErr()) {
               setError(

@@ -1,9 +1,17 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { type Client, createRequest } from '@urql/core';
 
+/** An explicit mutation target; detail readers opt out of generic list refreshes. */
+export type GraphqlSoupRefreshTarget = {
+  kind: 'email-archive';
+  threadId: string;
+};
+
 type ActiveGraphqlSoupQuery = {
   isEnabled: () => boolean;
   refresh: () => Promise<void>;
+  /** Only refresh this reader for its matching mutation, never for broad Soup work. */
+  target?: () => GraphqlSoupRefreshTarget;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
@@ -44,17 +52,26 @@ export function registerActiveGraphqlSoupQuery(
   return () => activeQueries.delete(query);
 }
 
-/** Network-refreshes every mounted and enabled GraphQL Soup query.
- * Strict callers may only release optimistic state after every active reader
+/** Refresh enabled list readers and any explicitly targeted detail readers.
+ * Strict callers may only release optimistic state after every applicable reader
  * succeeded. Other callers retain the existing best-effort behavior.
  */
 export async function refreshActiveGraphqlSoupQueries(
-  options: { throwOnError?: boolean } = {}
+  options: { throwOnError?: boolean; target?: GraphqlSoupRefreshTarget } = {}
 ): Promise<void> {
+  const applicable = (query: ActiveGraphqlSoupQuery) => {
+    if (!query.isEnabled()) return false;
+    if (!query.target) return true;
+    const target = query.target();
+    return (
+      target.kind === options.target?.kind &&
+      target.threadId === options.target.threadId
+    );
+  };
   const refreshed = new Set<ActiveGraphqlSoupQuery>();
   await Promise.all(
     [...activeQueries].map(async (query) => {
-      if (!query.isEnabled()) return;
+      if (!applicable(query)) return;
       try {
         await query.refresh();
         refreshed.add(query);
@@ -68,7 +85,7 @@ export async function refreshActiveGraphqlSoupQueries(
   if (
     options.throwOnError &&
     [...activeQueries].some(
-      (query) => query.isEnabled() && !refreshed.has(query)
+      (query) => applicable(query) && !refreshed.has(query)
     )
   ) {
     throw new Error(

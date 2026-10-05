@@ -1,5 +1,6 @@
 //! Write path: response JSON → normalized records.
 
+use crate::deps::{DependencyTracker, QueryDependencies};
 use crate::document::{
     FieldNode, MissingVariable, Operation, OperationKind, Selection, resolve_args, resolve_args_key,
 };
@@ -7,7 +8,7 @@ use crate::entity_resolver::EntityResolverLookup;
 use crate::meta::{self, FieldKind, TypeKind};
 use crate::value::{CacheValue, EntityKey, Record, field_key};
 use serde_json::Value as Json;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -49,12 +50,12 @@ pub(crate) enum DependencyCompleteness {
 /// Normalized updates and dependencies captured without reading records back.
 pub(crate) struct NormalizeResult {
     pub updates: RecordUpdates,
-    pub dependencies: BTreeSet<EntityKey<'static>>,
+    pub dependencies: QueryDependencies,
     pub completeness: DependencyCompleteness,
 }
 
 struct DependencyCapture<'a> {
-    keys: BTreeSet<EntityKey<'static>>,
+    keys: QueryDependencies,
     completeness: DependencyCompleteness,
     entity_resolvers: &'a EntityResolverLookup,
 }
@@ -103,7 +104,7 @@ pub(crate) fn normalize_with_dependencies(
     let mut records = RecordUpdates::new();
     let mut root = Record::default();
     let mut dependencies = DependencyCapture {
-        keys: BTreeSet::new(),
+        keys: QueryDependencies::default(),
         completeness: DependencyCompleteness::Exact,
         entity_resolvers,
     };
@@ -295,7 +296,11 @@ fn write_object_fields(
         _ => type_name,
     };
     if let Some(owner) = owner {
-        context.dependencies.keys.insert(owner.clone());
+        context.dependencies.keys.record(owner);
+        context
+            .dependencies
+            .keys
+            .field(owner, concrete, "__typename");
     }
     target.insert(
         "__typename".to_string(),
@@ -316,6 +321,12 @@ fn write_object_fields(
             })?;
         let args = resolve_args_key(f, context.variables)?;
         let storage_key = field_key(&f.name, args.as_deref());
+        if let Some(owner) = owner {
+            context
+                .dependencies
+                .keys
+                .field(owner, concrete, &storage_key);
+        }
 
         // GraphQL guarantees selected fields are present in data. Missing
         // fields are still tolerated, but an exact dependency set cannot be
@@ -340,7 +351,7 @@ fn write_object_fields(
                 (Some(expected), Json::Object(_), CacheValue::Ref(actual))
                     if expected == *actual =>
                 {
-                    context.dependencies.keys.insert(expected);
+                    context.dependencies.keys.record(&expected);
                 }
                 _ => context.dependencies.mark_broad(),
             }

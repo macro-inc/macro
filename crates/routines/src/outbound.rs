@@ -82,7 +82,7 @@ impl RoutineClient {
                 serde_json::from_slice(&body).context("Invalid routine service response")
             }
             400 | 422 => bail!(
-                "Invalid routine configuration or unavailable model/agent. Check the schedule and select an accessible agent from ListBots."
+                "Invalid routine configuration or unavailable model/agent. Check the schedule and select an accessible agent from ListAgents using its bot.botId."
             ),
             401 | 403 | 404 => bail!("Routine or target is unavailable to this user."),
             409 => bail!("Routine is running or changed. Read it again before editing."),

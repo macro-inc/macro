@@ -13,6 +13,7 @@ use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::{RuntimeConnection, ServerChannel};
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use agent_session::domain::model::AgentSessionId;
+use ai_billing::domain::{AiAdmissionService, DisabledAiAdmissionService};
 use dashmap::DashMap;
 use model_owner::Owner;
 
@@ -67,6 +68,7 @@ impl Drop for LiveAgent {
 /// Provisions and tears down in-process agents, one per session.
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
+    admission: Arc<dyn AiAdmissionService>,
     frames: Arc<dyn FrameSource>,
     mcp: Arc<dyn DynMcpToolConnector>,
     enable_dev_commands: bool,
@@ -92,6 +94,7 @@ impl InMemAgentManager {
     ) -> Self {
         Self {
             engine,
+            admission: Arc::new(DisabledAiAdmissionService),
             frames,
             mcp,
             enable_dev_commands: false,
@@ -99,6 +102,14 @@ impl InMemAgentManager {
             live: DashMap::new(),
             tokens: DashMap::new(),
         }
+    }
+
+    /// Inject the host's configured admission capability for every new turn.
+    /// Production hosts must set this; the constructor defaults to disabled.
+    #[must_use]
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// The egress token `attach` was handed for `session`, if this process
@@ -164,6 +175,7 @@ impl InMemAgentManager {
             session_id: facts.id,
             owner: facts.owner,
             engine: Arc::clone(&self.engine),
+            admission: Arc::clone(&self.admission),
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),
             turn_lock: tokio::sync::Mutex::new(()),

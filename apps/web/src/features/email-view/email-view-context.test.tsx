@@ -11,8 +11,13 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   useRouteParams: vi.fn(),
   useEmailLinksQuery: vi.fn(),
+  reminders: (): boolean => true,
+  tab: (): string => 'important',
 }));
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.reminders() }),
+}));
 vi.mock('@app/components/list', () => ({
   createListController: () => ({}),
   listOwnedSlotName: (name: string) => name,
@@ -28,10 +33,27 @@ vi.mock('@app/features/soup/collection/list-navigation-source', () => ({
 vi.mock('@app/lib/persistence', () => ({
   makePersistedState: <T,>(store: T) => store,
 }));
-vi.mock('@app/lib/split-router', () => ({
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useNavigate: () => mocks.navigate,
   useRouteParams: () => mocks.useRouteParams(),
-  createSearchParams: () => [{ tab: 'important' }],
+  createSearchParams: () => [
+    {
+      get tab() {
+        return mocks.tab();
+      },
+    },
+  ],
+}));
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
 }));
 vi.mock('@components/app/createPreviewSelectionGuard', () => ({
   createPreviewSelectionGuard: () =>
@@ -67,6 +89,8 @@ vi.mock('./email-route', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mocks.reminders = () => true;
+  mocks.tab = () => 'important';
 });
 
 function mount() {
@@ -125,4 +149,27 @@ describe('email view inbox reconciliation', () => {
     expect(view.selectedThread()).toBeUndefined();
     expect(mocks.navigate).toHaveBeenCalledOnce();
   });
+});
+
+it('clears persisted text search when entering and leaving Email Reminders', () => {
+  const { view } = mount();
+  view.setState('search', 'prior inbox search');
+  view.setTab('reminders');
+  expect(view.state.search).toBe('');
+  view.setState('search', 'stale restored search');
+  view.setTab('all');
+  expect(view.state.search).toBe('');
+});
+
+it('normalizes restored and route-driven Reminders when the rollout is disabled', () => {
+  const [flag, setFlag] = createStore({ enabled: true });
+  mocks.reminders = () => flag.enabled;
+  mocks.tab = () => 'reminders';
+  const { view } = mount();
+  expect(view.state.tab).toBe('reminders');
+  setFlag('enabled', false);
+  expect(view.state.tab).toBe('important');
+  expect(view.state.search).toBe('');
+  view.setTab('reminders');
+  expect(view.state.tab).toBe('important');
 });

@@ -1,6 +1,6 @@
 use crate::{
     DocumentFilters,
-    ast::{ExpandErr, date::DateLiteral},
+    ast::{ExpandErr, date::DateLiteral, email::Email, properties::PropertiesLiteral},
 };
 use document_sub_type::DocumentSubType;
 use either::Either;
@@ -56,6 +56,15 @@ pub enum DocumentLiteral {
     /// this node value filters by document updatedAt timestamp
     #[serde(rename = "ua")]
     UpdatedAt(DateLiteral),
+    /// an entity-property condition on the document or task, e.g. its
+    /// Companies property referencing a CRM company. Unlike the top-level
+    /// properties filter, it composes with the other document literals.
+    #[serde(rename = "prop")]
+    Property(PropertiesLiteral),
+    /// the document was uploaded from an email attachment whose message was
+    /// sent by, or addressed to, a matching email address or domain
+    #[serde(rename = "eap")]
+    EmailAttachmentParticipant(Email),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {

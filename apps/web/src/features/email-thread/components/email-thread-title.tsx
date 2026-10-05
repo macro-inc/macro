@@ -10,7 +10,7 @@ function lastWordCluster(title: string): { lead: string; last: string } {
 
 export function EmailThreadTitle(props: {
   title: string;
-  onCopy?: (subject: string) => void;
+  onCopy?: (subject: string) => void | boolean | Promise<void | boolean>;
   copyReveal?: 'hover' | 'always';
   class?: string;
 }) {

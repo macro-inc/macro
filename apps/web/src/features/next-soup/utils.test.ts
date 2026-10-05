@@ -45,7 +45,11 @@ const operationMocks = vi.hoisted(() => {
     },
   });
   return {
+    graphql: false,
     archive: vi.fn(async (): Promise<'committed' | 'queued'> => 'committed'),
+    doneOverride: vi.fn((_ids: readonly string[], _done: boolean | undefined) =>
+      Object.assign(vi.fn(), { release: vi.fn() })
+    ),
     bulkMarkNotificationsAsDone: vi.fn(async () => {}),
     bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
     cancelQueries: vi.fn(async () => {}),
@@ -78,6 +82,10 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
 }));
+vi.mock('@notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@notifications')>()),
+  setDoneOverride: operationMocks.doneOverride,
+}));
 vi.mock('@queries/email/integration', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/email/integration')>()),
   archiveEmailThread: operationMocks.archive,
@@ -90,6 +98,7 @@ vi.mock('@queries/client', () => ({
   queryClient: {
     cancelQueries: operationMocks.cancelQueries,
     invalidateQueries: operationMocks.invalidateQueries,
+    getQueriesData: vi.fn(() => []),
   },
 }));
 vi.mock('@queries/notification/entity-mutations', () => ({
@@ -115,6 +124,12 @@ vi.mock('@queries/soup/cache', () => ({
     rollback: vi.fn(),
   })),
 }));
+const hideGraphqlSoupEntitiesAsDone = vi.hoisted(() =>
+  vi.fn(() => ({ release: vi.fn(), setDone: vi.fn(), settle: vi.fn() }))
+);
+vi.mock('@queries/soup/graphql/optimistic-done', () => ({
+  hideGraphqlSoupEntitiesAsDone,
+}));
 vi.mock('@service-email/client', () => ({
   emailClient: { flagArchived: operationMocks.flagArchived },
 }));
@@ -125,15 +140,19 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
     ...actual,
     enableCalendarUi: { key: 'enable-calendar-ui' },
     enableReminders: { key: 'enable-reminders' },
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      'key' in flag &&
-      (flag.key === 'enable-calendar-ui' || flag.key === 'enable-reminders')
+    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) => {
+      if ('key' in flag && flag.key === 'enable-graphql-soup')
+        return operationMocks.graphql;
+      return 'key' in flag &&
+        (flag.key === 'enable-calendar-ui' || flag.key === 'enable-reminders')
         ? true
-        : actual.isFeatureEnabled(flag),
+        : actual.isFeatureEnabled(flag);
+    },
   };
 });
 
 import type { SerializedSearchParams } from '@app/lib/split-router';
+import { paneRoute } from '@app/routes/app-route';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
   OpenWithSplitOptions,
@@ -143,6 +162,8 @@ import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import {
+  applyEntitiesDoneOptimistic,
+  applyEntitiesNotDoneOptimistic,
   type CalendarPreviewSelection,
   type ChannelPreviewSelection,
   channelIdForPreviewNavigation,
@@ -169,6 +190,7 @@ function targetSearch(
 }
 
 afterEach(() => {
+  operationMocks.graphql = false;
   setGlobalSplitManager(undefined);
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
@@ -206,6 +228,54 @@ describe('reminder navigation', () => {
       );
     }
   );
+
+  it('opens an attached task in its requested Drive route rather than reusing another document', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(
+      {
+        ...reminder,
+        referencedEntity: {
+          id: 'task-b',
+          type: 'document',
+          fileType: 'md',
+          subType: 'task',
+        },
+      } as EntityData,
+      {}
+    );
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'component',
+        id: 'documents',
+        entryMetadata: expect.objectContaining({
+          route: expect.objectContaining({
+            matches: expect.arrayContaining([
+              expect.objectContaining({
+                params: { documentId: 'task-b', documentType: 'task' },
+              }),
+            ]),
+          }),
+        }),
+      }),
+      expect.objectContaining({ allowDuplicate: true })
+    );
+  });
+
+  it('opens an attached email directly in a new tab', () => {
+    openEntityInNewTab({
+      entity: {
+        ...reminder,
+        referencedEntity: { id: 'email-1', type: 'email' },
+      } as EntityData,
+    });
+    expect(operationMocks.openExternalUrl).toHaveBeenCalledWith(
+      expect.stringMatching(/\/app\/email\/email-1$/)
+    );
+  });
 
   it('uses the same reminder component URL for a new browser tab', () => {
     openEntityInNewTab({ entity: reminder });
@@ -673,6 +743,129 @@ describe('mark-done orchestration', () => {
     });
   }
 
+  it.each([false, true])(
+    'GraphQL mixed rejection does not refetch accepted email state (per-thread=%s)',
+    async (perThread) => {
+      operationMocks.graphql = true;
+      const failure = new Error('cannot unarchive');
+      operationMocks.archive
+        .mockResolvedValueOnce('committed')
+        .mockRejectedValueOnce(failure);
+      const onEmailSettled = perThread ? vi.fn() : undefined;
+      await expect(
+        executeMarkEntitiesUndone({
+          emailIds: ['accepted', 'rejected'],
+          notificationIds: [],
+          onEmailSettled,
+        })
+      ).rejects.toBe(failure);
+      expect(invalidatedEmailList()).toBe(false);
+      expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
+      expect(operationMocks.cancelQueries).not.toHaveBeenCalledWith({
+        queryKey: queryKeys.all.email,
+      });
+      if (onEmailSettled)
+        expect(onEmailSettled).toHaveBeenCalledWith('accepted', {
+          status: 'fulfilled',
+          value: 'committed',
+        });
+    }
+  );
+
+  it('leaves GraphQL success reconciliation to the normalized writer', async () => {
+    operationMocks.graphql = true;
+    await expect(
+      executeMarkEntitiesUndone({ emailIds: ['accepted'], notificationIds: [] })
+    ).resolves.toBe('committed');
+    expect(invalidatedEmailList()).toBe(false);
+    expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
+    expect(operationMocks.invalidateQueries).toHaveBeenCalledTimes(1); // notifications only
+  });
+
+  it.each([false, true])(
+    'preserves REST notification-only cancellation and reconciliation (failure=%s)',
+    async (failure) => {
+      if (failure)
+        operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(
+          new Error('failed')
+        );
+      const write = executeMarkEntitiesUndone({
+        emailIds: [],
+        notificationIds: ['notification'],
+      });
+      if (failure) await expect(write).rejects.toThrow('failed');
+      else await write;
+      expect(operationMocks.cancelQueries).toHaveBeenCalledWith({
+        queryKey: queryKeys.all.email,
+      });
+      expect(invalidatedEmailList()).toBe(true);
+    }
+  );
+
+  it('reports every unarchive outcome without refreshing over a queued sibling', async () => {
+    operationMocks.graphql = true;
+    const failure = new Error('thread has no received messages');
+    operationMocks.archive
+      .mockResolvedValueOnce('committed')
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce('queued');
+    const onEmailSettled = vi.fn();
+    await expect(
+      executeMarkEntitiesUndone({
+        emailIds: ['received', 'sent-only', 'queued'],
+        notificationIds: [],
+        onEmailSettled,
+      })
+    ).rejects.toBe(failure);
+    expect(onEmailSettled.mock.calls).toEqual([
+      ['received', { status: 'fulfilled', value: 'committed' }],
+      ['sent-only', { status: 'rejected', reason: failure }],
+      ['queued', { status: 'fulfilled', value: 'queued' }],
+    ]);
+    expect(invalidatedEmailList()).toBe(false);
+    expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
+  });
+
+  it('reports committed email writes even when notification reversal fails', async () => {
+    operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(
+      new Error('notification failed')
+    );
+    const onEmailSettled = vi.fn();
+    await expect(
+      executeMarkEntitiesUndone({
+        emailIds: ['received'],
+        notificationIds: ['notification'],
+        onEmailSettled,
+      })
+    ).rejects.toThrow('notification failed');
+    expect(onEmailSettled).toHaveBeenCalledWith('received', {
+      status: 'fulfilled',
+      value: 'committed',
+    });
+  });
+
+  it.each([false, true])(
+    'GraphQL notification-only reversal never refreshes shared email lists (failure=%s)',
+    async (failure) => {
+      operationMocks.graphql = true;
+      if (failure)
+        operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(
+          new Error('notification failed')
+        );
+      const write = executeMarkEntitiesUndone({
+        emailIds: [],
+        notificationIds: ['notification'],
+      });
+      if (failure) await expect(write).rejects.toThrow('notification failed');
+      else await expect(write).resolves.toBe('committed');
+      expect(invalidatedEmailList()).toBe(false);
+      expect(operationMocks.cancelQueries).not.toHaveBeenCalledWith({
+        queryKey: queryKeys.all.email,
+      });
+      expect(operationMocks.archive).not.toHaveBeenCalled();
+    }
+  );
+
   it('executes entity notification writes directly and returns exact ids', async () => {
     operationMocks.updateNotificationsForEntities.mockResolvedValueOnce([
       { id: 'entity-notification' },
@@ -690,6 +883,74 @@ describe('mark-done orchestration', () => {
       entities: [{ type: 'document', id: 'document-1' }],
       operation: 'MARK_DONE',
     });
+  });
+});
+
+describe('mark-done optimism', () => {
+  it('keeps REST Done rollback behavior without creating GraphQL display intent', () => {
+    const context = applyEntitiesDoneOptimistic({
+      entityIds: ['document-1'],
+      emailIds: [],
+      notificationIds: ['notification-1'],
+    });
+    const lease = operationMocks.doneOverride.mock.results[0].value;
+    context.rollback();
+    context.releaseGraphql();
+    expect(hideGraphqlSoupEntitiesAsDone).not.toHaveBeenCalled();
+    expect(operationMocks.doneOverride).toHaveBeenLastCalledWith(
+      ['notification-1'],
+      undefined
+    );
+    expect(lease).not.toHaveBeenCalled();
+    expect(lease.release).not.toHaveBeenCalled();
+  });
+
+  it('keeps REST Not Done rollback behavior without creating GraphQL display intent', () => {
+    const context = applyEntitiesNotDoneOptimistic({
+      emailIds: ['email-1'],
+      notificationIds: ['notification-1'],
+    });
+    const lease = operationMocks.doneOverride.mock.results[0].value;
+    context.rollback();
+    context.settle();
+    expect(hideGraphqlSoupEntitiesAsDone).not.toHaveBeenCalled();
+    expect(operationMocks.doneOverride).toHaveBeenLastCalledWith(
+      ['notification-1'],
+      undefined
+    );
+    expect(lease).not.toHaveBeenCalled();
+  });
+
+  it('hides GraphQL rows until a rollback or undo releases them', () => {
+    operationMocks.graphql = true;
+    const context = applyEntitiesDoneOptimistic({
+      entityIds: ['document-1'],
+      emailIds: [],
+      notificationIds: ['notification-1'],
+    });
+    expect(hideGraphqlSoupEntitiesAsDone).toHaveBeenCalledWith({
+      entityIds: ['document-1'],
+      notificationIds: ['notification-1'],
+      scopeChannelThreads: undefined,
+    });
+    const applied = hideGraphqlSoupEntitiesAsDone.mock.results[0]?.value;
+
+    context.rollback();
+    expect(applied?.release).toHaveBeenCalledOnce();
+
+    context.reapply();
+    expect(applied?.setDone).toHaveBeenLastCalledWith(true);
+    expect(hideGraphqlSoupEntitiesAsDone).toHaveBeenCalledOnce();
+
+    context.applyUndone();
+    expect(applied?.setDone).toHaveBeenLastCalledWith(false);
+    context.settle(['notification-1', 'authoritative-id']);
+    expect(applied?.settle).toHaveBeenCalledWith([
+      'notification-1',
+      'authoritative-id',
+    ]);
+    context.releaseGraphql();
+    expect(applied?.release).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -736,13 +997,7 @@ describe('calendar view navigation', () => {
           }),
         }),
         entryMetadata: expect.objectContaining({
-          route: {
-            matches: [
-              expect.objectContaining({
-                id: 'view-calendar',
-              }),
-            ],
-          },
+          route: paneRoute(expect.objectContaining({ id: 'view-calendar' })),
           search: {
             calendar: expect.objectContaining({
               eventId: ['event-1'],
@@ -824,12 +1079,10 @@ describe('Hosted details and Drive document routing', () => {
         type: 'component',
         id: 'reviews',
         entryMetadata: {
-          route: {
-            matches: [
-              { id: 'view-reviews', params: {} },
-              { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
-            ],
-          },
+          route: paneRoute(
+            { id: 'view-reviews', params: {} },
+            { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } }
+          ),
         },
       },
       expect.objectContaining({
@@ -915,18 +1168,13 @@ describe('Hosted details and Drive document routing', () => {
           type: 'component',
           id: 'documents',
           entryMetadata: {
-            route: {
-              matches: [
-                { id: 'drive', params: {} },
-                {
-                  id: 'drive-document',
-                  params: {
-                    documentId: 'doc-1',
-                    documentType: fileType,
-                  },
-                },
-              ],
-            },
+            route: paneRoute(
+              { id: 'drive', params: {} },
+              {
+                id: 'drive-document',
+                params: { documentId: 'doc-1', documentType: fileType },
+              }
+            ),
           },
         },
         expect.objectContaining({
@@ -1625,6 +1873,61 @@ const documentRow = (notifications: UnifiedNotification[]) =>
   }) as unknown as EntityData;
 
 describe('getDocumentCommentTarget', () => {
+  it('opens the entity without replaying an older comment after own activity', async () => {
+    const notification = commentNotification('old', 'comment-old', {
+      created_at: '2026-09-24T20:39:45Z',
+    });
+    const entity = {
+      ...documentRow([notification]),
+      notificationDisplayCutoff: '2026-10-01T17:02:49Z',
+    };
+    expect(getDocumentCommentTarget(entity)).toBeUndefined();
+    expect(previewBlockTarget(entity as never).params).toBeUndefined();
+    expect(homePreviewNavigation(entity as never).search.drive).toBeUndefined();
+
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({})),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(entity, {});
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'documents',
+        entryMetadata: {
+          route: paneRoute(
+            { id: 'drive', params: {} },
+            {
+              id: 'drive-document',
+              params: { documentId: 'doc-1', documentType: 'md' },
+            }
+          ),
+        },
+      },
+      expect.objectContaining({ activate: true, search: undefined })
+    );
+    expect(notification.state).toBe('unseen');
+  });
+
+  it('does not borrow an older comment target for a newer unsupported event', () => {
+    const entity = documentRow([
+      commentNotification('old', 'comment-old', {
+        created_at: '2026-09-24T20:39:45Z',
+      }),
+      commentNotification('assigned', '', {
+        created_at: '2026-10-01T17:02:49Z',
+        notification_metadata: {
+          tag: 'task_assigned',
+          content: { taskId: 'doc-1', assignedBy: 'alice', taskName: 'Plan' },
+        },
+      }),
+    ]);
+    expect(getDocumentCommentTarget(entity)).toBeUndefined();
+  });
+
   it('targets the newest comment notification that is not done, read or not', () => {
     expect(
       getDocumentCommentTarget(
@@ -1796,12 +2099,10 @@ describe('call navigation', () => {
         type: 'component',
         id: 'documents',
         entryMetadata: {
-          route: {
-            matches: [
-              { id: 'drive', params: {} },
-              { id: 'drive-call', params: { callId: 'call-1' } },
-            ],
-          },
+          route: paneRoute(
+            { id: 'drive', params: {} },
+            { id: 'drive-call', params: { callId: 'call-1' } }
+          ),
         },
       },
       expect.objectContaining({ allowDuplicate: true })
@@ -1829,12 +2130,10 @@ describe('call navigation', () => {
       type: 'component',
       id: 'documents',
       entryMetadata: {
-        route: {
-          matches: [
-            { id: 'drive', params: {} },
-            { id: 'drive-call', params: { callId: 'call-1' } },
-          ],
-        },
+        route: paneRoute(
+          { id: 'drive', params: {} },
+          { id: 'drive-call', params: { callId: 'call-1' } }
+        ),
       },
     });
     expect(targetSearch(openWithSplit, 'call-detail')).toMatchObject({

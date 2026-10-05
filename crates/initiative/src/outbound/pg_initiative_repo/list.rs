@@ -1,7 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
-use super::{AdapterError, map_sqlx, parse_description_document_id};
+use super::{AdapterError, map_sqlx};
 use crate::domain::models::{InitiativeError, InitiativeId, InitiativeList, InitiativeSummary};
 
 pub(super) async fn list_accessible(
@@ -24,7 +24,6 @@ pub(super) async fn list_accessible(
         SELECT
             i.id,
             i.name,
-            i.description_document_id,
             i.updated_at
         FROM initiative i
         JOIN "SharePermission" sp ON sp.id = i.share_permission_id
@@ -55,18 +54,12 @@ pub(super) async fn list_accessible(
 
     let initiatives = rows
         .into_iter()
-        .map(|row| {
-            Ok(InitiativeSummary {
-                id: InitiativeId::from_uuid(row.id),
-                name: row.name,
-                description_document_id: parse_description_document_id(
-                    row.id,
-                    &row.description_document_id,
-                )?,
-                updated_at: row.updated_at,
-            })
+        .map(|row| InitiativeSummary {
+            id: InitiativeId::from_uuid(row.id),
+            name: row.name,
+            updated_at: row.updated_at,
         })
-        .collect::<Result<Vec<_>, InitiativeError>>()?;
+        .collect();
 
     Ok(InitiativeList { initiatives })
 }

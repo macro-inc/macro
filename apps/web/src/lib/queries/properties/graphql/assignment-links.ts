@@ -27,6 +27,7 @@ export function buildPropertyAssignmentLinks(
     .with('CHANNEL', () => 'GraphqlSoupChannel' as const)
     .with('CALL_RECORD', () => 'GraphqlSoupCall' as const)
     .with('COMPANY', () => 'GraphqlSoupCrmCompany' as const)
+    .with('DATABASE_ROW', () => 'GraphqlSoupDatabaseRow' as const)
     .with('USER', () => undefined)
     .exhaustive();
   if (!typename) return [];

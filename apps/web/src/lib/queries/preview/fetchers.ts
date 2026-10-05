@@ -1,3 +1,8 @@
+import {
+  fetchCrmCompanyPreviews,
+  fetchCrmContactPreviews,
+} from '@app/features/crm/preview-adapter';
+import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
   enableGraphqlSoup,
@@ -251,50 +256,39 @@ async function fetchProjectPreviews(
   });
 }
 
-/**
- * Fetches CRM company previews via `GET /crm/companies/{id}`. Mirrors the
- * email preview fetcher's shape — N parallel REST calls rather than a
- * batch endpoint, since the CRM REST surface is per-id today and
- * companies are a smaller cardinality than mentions in flight.
- *
- * The backend already gates hidden visibility by role (admin/owner sees
- * hidden, non-admin 404s), so the fetcher doesn't need to repeat that
- * logic.
- */
-async function fetchCrmCompanyPreviews(
-  companyIds: string[]
+/** Task projects through the authorized Soup list; absent ids have no access. */
+async function fetchInitiativePreviews(
+  initiativeIds: string[]
 ): Promise<PreviewItem[]> {
-  return await Promise.all(
-    companyIds.map(async (id) => {
-      const base = { id, type: 'crm_company' as const };
-      const result = await storageServiceClient.getCompany({ companyId: id });
+  const result = await storageServiceClient.getSoupItems({
+    params: {},
+    body: {
+      ...QUERY_FILTERS_BASE,
+      initiative_filters: { initiative_ids: initiativeIds },
+      limit: initiativeIds.length,
+    },
+  });
 
-      if (result.isErr()) {
-        // The backend returns 404 for every unreachable reason (wrong
-        // team, hidden+member, doesn't exist) — deliberate, so existence
-        // can't be probed across teams. Maps to "No Access" for parity
-        // with the email fetcher's per-id convention; "Deleted" would be
-        // misleading since we can't actually tell.
-        return {
-          ...base,
-          access: 'no_access' as const,
-          loading: false as const,
-        };
-      }
+  if (result.isErr()) {
+    console.error('Failed to fetch project previews');
+    return [];
+  }
 
-      const company = result.value;
-      const displayName =
-        company.name ?? company.domains[0]?.domain ?? 'Unknown Company';
-
-      return {
-        ...base,
-        access: 'access' as const,
-        loading: false as const,
-        rawName: displayName,
-        name: displayName,
-        updatedAt: company.updatedAt,
-      };
-    })
+  return result.value.items.flatMap((item): PreviewItem[] =>
+    item.tag === 'initiative'
+      ? [
+          {
+            id: item.data.id,
+            type: 'initiative',
+            access: 'access',
+            loading: false,
+            rawName: item.data.name,
+            name: item.data.name,
+            owner: item.data.ownerId,
+            updatedAt: item.data.updatedAt,
+          },
+        ]
+      : []
   );
 }
 
@@ -423,6 +417,38 @@ async function fetchCalendarEventPreviews(
   });
 }
 
+/**
+ * A database previews as the viewer's own read of it: an owner or anyone it
+ * is shared with gets its name; one deleted or trashed is gone.
+ */
+async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
+  return Promise.all(
+    ids.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'database', loading: false } as const;
+      const detail = await storageServiceClient.databases.get({ id });
+      if (detail.isErr())
+        return {
+          ...base,
+          access: detail.error.some(
+            (error) => error.code === 'NOT_FOUND' || error.code === 'GONE'
+          )
+            ? 'does_not_exist'
+            : 'no_access',
+        };
+      const { database } = detail.value;
+      if (database.trashed_at !== null)
+        return { ...base, access: 'does_not_exist' };
+      return {
+        ...base,
+        access: 'access',
+        rawName: database.name,
+        name: database.name,
+        owner: database.owner_id,
+      };
+    })
+  );
+}
+
 function filterMapToId(items: Array<ItemEntity>, type: ItemEntity['type']) {
   return items.filter((i) => i.type === type).map(({ id }) => id);
 }
@@ -445,9 +471,12 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchChannelPreviews, filterMapToId(items, 'channel')),
     doFetch(fetchDocumentPreviews, filterMapToId(items, 'document')),
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
+    doFetch(fetchInitiativePreviews, filterMapToId(items, 'initiative')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
     doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
+    doFetch(fetchCrmContactPreviews, filterMapToId(items, 'crm_contact')),
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
+    doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),
   ]);
   const resultMap = new Map<string, PreviewItem>();
   results.flat().forEach((result) => {

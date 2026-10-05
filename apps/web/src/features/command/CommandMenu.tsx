@@ -27,6 +27,7 @@ import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
+import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import {
   Badge,
   CommandMenuEmptyState,
@@ -165,6 +166,8 @@ export function CommandMenuInner(props: {
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
   const query = debouncedDependent(CommandState.query, 60);
+
+  useDatabaseDiscoverySync(() => !props.items && CommandState.isOpen());
 
   const defaultCommandItems = props.items
     ? undefined
@@ -372,8 +375,8 @@ export function CommandMenuInner(props: {
     }
 
     if (isAskAiItem(item)) {
-      // Opens a new chat split and sends the query immediately.
-      openChatWithMessage(item.query);
+      // Opens a new agent session and sends the query when ready.
+      void openChatWithMessage(item.query);
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -682,11 +685,6 @@ export function CommandMenuInner(props: {
       </Show>
 
       <CommandMenuShell.Body>
-        <Show when={isLoadingEntities() && filteredItems().length > 0}>
-          <div role="status" class="px-4 py-2 text-xs text-ink-muted">
-            Loading results…
-          </div>
-        </Show>
         <div
           class="overflow-hidden transition-[height] duration-60 ease-out p-2"
           style={{ height: `${resultsHeight()}px` }}
@@ -695,9 +693,7 @@ export function CommandMenuInner(props: {
             when={filteredItems().length > 0}
             fallback={
               <CommandMenuEmptyState>
-                <Show when={isLoadingEntities()} fallback="No results found">
-                  <span role="status">Loading results…</span>
-                </Show>
+                <Show when={!isLoadingEntities()}>No results found</Show>
               </CommandMenuEmptyState>
             }
           >

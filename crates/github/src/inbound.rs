@@ -2,6 +2,8 @@
 
 #[cfg(all(feature = "axum", feature = "sync"))]
 pub mod github_sync_router;
+#[cfg(all(feature = "axum", feature = "sync"))]
+pub mod pull_request_index_router;
 
 #[cfg(feature = "axum")]
 impl axum::response::IntoResponse for crate::domain::models::GithubError {

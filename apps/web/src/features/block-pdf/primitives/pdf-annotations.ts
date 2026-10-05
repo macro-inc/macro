@@ -1,17 +1,8 @@
-import {
-  enableUnifiedDocumentDiscussions,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { useMessageRootsQuery } from '@queries/messages/document-messages';
 import type { Anchor } from '@service-storage/generated/schemas/anchor';
-import type { Comment } from '@service-storage/generated/schemas/comment';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
-import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import type { CreateUnthreadedAnchorResponse } from '@service-storage/generated/schemas/createUnthreadedAnchorResponse';
-import type { DeleteCommentResponse } from '@service-storage/generated/schemas/deleteCommentResponse';
 import type { DeleteUnthreadedAnchorResponse } from '@service-storage/generated/schemas/deleteUnthreadedAnchorResponse';
 import type { EditAnchorResponse } from '@service-storage/generated/schemas/editAnchorResponse';
-import type { EditCommentResponse } from '@service-storage/generated/schemas/editCommentResponse';
 import type { MessageListItem } from '@service-storage/messages';
 import {
   type Accessor,
@@ -24,7 +15,7 @@ import {
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
 import type { IHighlight } from '../model/Highlight';
-import { getPdfAnchors, getPdfComments } from '../queries/annotations';
+import { getPdfAnchors } from '../queries/annotations';
 import type { ThreadPayload } from '../type/comments';
 
 export type HighlightUuidMap = Partial<Record<string, IHighlight>>;
@@ -49,51 +40,34 @@ export function messageThreadPayload(
 
 export type AnchorBinding =
   | { kind: 'unthreaded' }
-  | { kind: 'thread'; threadId: number | string }
-  | { kind: 'foreign' };
+  | { kind: 'thread'; threadId: number | string };
 
-/**
- * Which discussion an anchor carries for this client. Legacy clients join on
- * the annotation thread id and message clients on the root id; imported
- * anchors carry both. An anchor bound only to the other store's discussion is
- * foreign: it stays hidden, so this client can neither delete it nor thread a
- * second discussion onto it.
- */
-export function anchorBinding(
-  anchor: Pick<Anchor, 'threadId' | 'rootId'>,
-  unified: boolean
-): AnchorBinding {
-  const own = unified ? anchor.rootId : anchor.threadId;
-  if (own != null) return { kind: 'thread', threadId: own };
-  const other = unified ? anchor.threadId : anchor.rootId;
-  return other != null ? { kind: 'foreign' } : { kind: 'unthreaded' };
+/** Which discussion an anchor carries: the message root named by its `rootId`. */
+export function anchorBinding(anchor: Pick<Anchor, 'rootId'>): AnchorBinding {
+  return anchor.rootId != null
+    ? { kind: 'thread', threadId: anchor.rootId }
+    : { kind: 'unthreaded' };
 }
 
 /**
  * PDF annotation state: anchor geometry from the annotation endpoints joined
- * with the document's discussions. With unified document discussions on, the
- * discussions are message roots read through the shared message API and
- * anchors reference them by `rootId`; otherwise they are the legacy annotation
- * comment threads referenced by `threadId`.
+ * with the document's discussions, the message roots read through the shared
+ * message API that anchors reference by `rootId`.
  */
-export function createPdfAnnotations(
-  documentId: Accessor<string>,
-  unified = isFeatureEnabled(enableUnifiedDocumentDiscussions)
-) {
+export function createPdfAnnotations(documentId: Accessor<string>) {
   const [highlightsByPage, setHighlightsByPage] = createStore<HighlightPageMap>(
     {}
   );
   const [convertedHighlightDraftId, setConvertedHighlightDraftId] =
     createSignal<string>();
-  const [commentThreadsResource, { mutate: mutateCommentThreads }] =
-    createResource(() => !unified && documentId(), getPdfComments);
   const [anchorsResource, { mutate: mutateAnchors, refetch: refetchAnchors }] =
     createResource(documentId, getPdfAnchors);
-  const roots = unified
-    ? useMessageRootsQuery(() => ({ type: 'document', id: documentId() }))
-    : undefined;
+  const roots = useMessageRootsQuery(() => ({
+    type: 'document',
+    id: documentId(),
+  }));
   const messageThreads = createMemo(() =>
-    (roots?.data ?? []).filter((root) => !root.state.deleted_at)
+    (roots.data ?? []).filter((root) => !root.state.deleted_at)
   );
   const messageThreadsByRootId = createMemo(
     () => new Map(messageThreads().map((root) => [root.id, root]))
@@ -101,26 +75,10 @@ export function createPdfAnnotations(
 
   /** The discussion on an anchor, `null` when unthreaded, `undefined` while hidden. */
   const anchorThread = (anchor: Anchor): ThreadPayload | null | undefined => {
-    const binding = anchorBinding(anchor, unified);
+    const binding = anchorBinding(anchor);
     if (binding.kind === 'unthreaded') return null;
-    if (binding.kind === 'foreign') return undefined;
-    if (unified) {
-      const root = messageThreadsByRootId().get(String(binding.threadId));
-      return root && messageThreadPayload(root, anchor.uuid, anchor.page);
-    }
-    const commentThread = (commentThreadsResource() ?? []).find(
-      (thread) => thread.thread.threadId === binding.threadId
-    );
-    return (
-      commentThread && {
-        threadId: commentThread.thread.threadId,
-        rootId: commentThread.comments[0].commentId,
-        anchorId: anchor.uuid,
-        page: anchor.page,
-        comments: commentThread.comments,
-        isResolved: commentThread.thread.resolved,
-      }
-    );
+    const root = messageThreadsByRootId().get(String(binding.threadId));
+    return root && messageThreadPayload(root, anchor.uuid, anchor.page);
   };
 
   const highlightsByUuid = createMemo(() => {
@@ -215,92 +173,12 @@ export function createPdfAnnotations(
       mutateAnchors((previous) =>
         (previous ?? []).filter((anchor) => anchor.uuid !== response.uuid)
       );
-      if (response.threadId != null) {
-        mutateCommentThreads((previous) =>
-          (previous ?? []).filter(
-            (thread) => thread.thread.threadId !== response.threadId
-          )
-        );
-      }
     },
     applyEditedAnchor(response: EditAnchorResponse) {
       mutateAnchors((previous) => [
         ...(previous ?? []).filter((anchor) => anchor.uuid !== response.uuid),
         response,
       ]);
-    },
-    applyCreatedComment(response: CreateCommentResponse) {
-      const commentThread: CommentThread = {
-        thread: response.thread,
-        comments: response.comments,
-      };
-      const anchor = response.anchor;
-      batch(() => {
-        if (anchor) {
-          mutateAnchors((previous) => [...(previous ?? []), anchor]);
-        }
-
-        mutateCommentThreads((previous) => {
-          let replacedExistingThread = false;
-          const next = (previous ?? []).map((thread) => {
-            if (thread.thread.threadId !== commentThread.thread.threadId) {
-              return thread;
-            }
-            replacedExistingThread = true;
-            return commentThread;
-          });
-          if (!replacedExistingThread) next.push(commentThread);
-          return next;
-        });
-      });
-    },
-    applyEditedComment(response: EditCommentResponse) {
-      mutateCommentThreads((previous) =>
-        (previous ?? []).map((thread) => {
-          if (thread.thread.threadId !== response.threadId) return thread;
-          return {
-            thread: thread.thread,
-            comments: thread.comments.map((comment) => {
-              if (comment.commentId !== response.commentId) return comment;
-              const editedComment: Comment = response;
-              return editedComment;
-            }),
-          };
-        })
-      );
-    },
-    applyDeletedComment(response: DeleteCommentResponse) {
-      batch(() => {
-        if (response.thread.deleted) {
-          mutateCommentThreads((previous) =>
-            (previous ?? []).filter(
-              (thread) => thread.thread.threadId !== response.thread.threadId
-            )
-          );
-        } else {
-          mutateCommentThreads((previous) =>
-            (previous ?? []).map((thread) => {
-              if (thread.thread.threadId !== response.thread.threadId) {
-                return thread;
-              }
-              return {
-                thread: thread.thread,
-                comments: thread.comments.filter(
-                  (comment) => comment.commentId !== response.commentId
-                ),
-              };
-            })
-          );
-        }
-
-        if (response.anchor?.deleted) {
-          mutateAnchors((previous) =>
-            (previous ?? []).filter(
-              (anchor) => anchor.uuid !== response.anchor?.uuid
-            )
-          );
-        }
-      });
     },
     /** Bind an existing anchor to the message root just posted on it. */
     attachAnchorRoot(uuid: string, rootId: string) {
@@ -389,11 +267,8 @@ export function createPdfAnnotations(
   };
 
   return {
-    /** Whether discussions read and write through the shared message API. */
-    unified,
     anchors: () => anchorsResource(),
     anchorThread,
-    commentThreads: () => commentThreadsResource(),
     highlightsByPage,
     highlightsByUuid,
     hasHighlights,

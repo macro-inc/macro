@@ -1,9 +1,8 @@
-import { UserIcon } from '@core/component/UserIcon';
-import { getDisplayNameParts, tryMacroId } from '@core/user';
 import {
   Entity,
   isProjectContainedEntity,
   MultiSelectCheckbox,
+  OwnerLabel,
   ProjectBreadCrumb,
   type TaskEntityWithProperties,
   UnreadIndicator,
@@ -22,14 +21,14 @@ import {
 } from '@property/context/PropertiesContext';
 import { EntityRowTags } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
-import { useUserId } from '@queries/auth';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
+import { createMemo, For, Show, Suspense } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
+  TASK_PROJECT_COLUMN,
   type TaskGridColumn,
   taskGridTemplate,
 } from './task-grid-template';
@@ -61,20 +60,10 @@ function buildStubProperty(col: TaskGridColumn): Property {
 
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
-  projectSlot?: JSX.Element;
 };
 
 export function TaskGridLayout(props: TaskGridLayoutProps) {
-  const currentId = useUserId();
   const entity = () => props.entity;
-  const isShared = () => props.entity.ownerId !== currentId();
-
-  // Get owner's first name for the Created By column
-  const ownerDisplayName = () =>
-    isShared()
-      ? getDisplayNameParts(tryMacroId(props.entity.ownerId)).firstName ||
-        'Unknown'
-      : 'Me';
 
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();
@@ -129,7 +118,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
         )}
         style={taskGridTemplate({
           indicator: !props.hideCheckbox,
-          project: props.projectSlot !== undefined,
+          project: props.showProject === true,
         })}
       >
         <Show when={!props.hideCheckbox}>
@@ -176,13 +165,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
               </span>
             )}
           </Show>
-          {/* Show shared badges on narrow/medium containers, hide on wide (>1220px) */}
-          <Show when={isShared()}>
-            {/* Narrow: "shared this with you" tooltip */}
+          <Show when={props.isShared}>
             <span class="@min-[841px]/u-list:hidden">
               <SharedBadgeSmall ownerId={props.entity.ownerId} />
             </span>
-            {/* Medium (841px-1220px): "Created by" tooltip */}
             <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
               <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
             </span>
@@ -211,22 +197,26 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           )}
         </For>
 
-        <Show when={props.projectSlot !== undefined}>
+        <Show when={props.showProject}>
           <Entity.Slot
-            placement="initiative"
+            placement={TASK_PROJECT_COLUMN.id}
             class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
           >
-            {props.projectSlot}
+            <ListPropertyValue
+              entityId={props.entity.id}
+              property={
+                propertyMap().get(TASK_PROJECT_COLUMN.defId) ??
+                buildStubProperty(TASK_PROJECT_COLUMN)
+              }
+            />
           </Entity.Slot>
         </Show>
 
-        {/* Created By column - only shown on wide containers (>1220px) */}
         <Entity.Slot
           placement="createdBy"
-          class="hidden @min-[1221px]/u-list:flex items-center gap-1.5 min-w-0 overflow-hidden text-xs ph-no-capture"
+          class="hidden @min-[1221px]/u-list:flex items-center min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
         >
-          <UserIcon id={props.entity.ownerId} size="sm" showTooltip={true} />
-          <span class="truncate text-ink-muted">{ownerDisplayName()}</span>
+          <OwnerLabel ownerId={props.entity.ownerId} viewerLabel="Me" />
         </Entity.Slot>
 
         <Entity.Slot

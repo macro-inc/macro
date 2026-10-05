@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   MeetingCredentials,
@@ -76,23 +77,40 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     const previousSession = issuedSession;
     issuedSession = undefined;
     let issued: IssuedMeetingSession | undefined;
+    const joinTrace = Telemetry.span('meeting.join');
+    joinTrace.setAttr(
+      'meeting.join.kind',
+      capabilities.prepare ? 'create' : 'join'
+    );
+    joinTrace.setAttr('meeting.join.guest', displayName !== undefined);
+    joinTrace.setAttr('meeting.join.microphone', preferences.microphoneEnabled);
+    joinTrace.setAttr('meeting.join.camera', preferences.cameraEnabled);
+    joinTrace.setAttr('meeting.join.outcome', 'cancelled');
     try {
-      await attemptLifecycle.previous;
-      if (previousSession) await release(previousSession);
+      await joinTrace.span('meeting.join.previous_session', async () => {
+        await attemptLifecycle.previous;
+        if (previousSession) await release(previousSession);
+      });
       if (disposed || attempt !== generation) return;
       // A previous owner may still have been disconnecting when Join was
       // clicked. Check the shared call state after its cleanup has finished.
       if (capabilities.isInCall()) {
+        joinTrace.setAttr('meeting.join.outcome', 'already_in_call');
         setError('Leave your current call before joining this one.');
         return;
       }
-      if (capabilities.prepare) {
-        await capabilities.prepare(controller.signal);
+      const prepare = capabilities.prepare;
+      if (prepare) {
+        await joinTrace.span('meeting.join.create', () =>
+          prepare(controller.signal)
+        );
         if (disposed || attempt !== generation) return;
       }
       const shareToken = capabilities.shareToken();
       issued = {
-        credentials: await capabilities.join(displayName?.trim()),
+        credentials: await joinTrace.span('meeting.join.credentials', () =>
+          capabilities.join(displayName?.trim())
+        ),
         shareToken,
       };
       if (disposed || attempt !== generation) {
@@ -100,14 +118,24 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         return;
       }
       issuedSession = issued;
+      joinTrace.setAttr('call.id', issued.credentials.callId);
       const localTracks = claimLocalTracks();
-      await capabilities.connect(
-        issued.credentials,
-        localTracks ? { ...preferences, localTracks } : preferences
+      const credentials = issued.credentials;
+      await joinTrace.span('meeting.join.connect', () =>
+        capabilities.connect(
+          credentials,
+          localTracks ? { ...preferences, localTracks } : preferences
+        )
       );
       if (disposed || attempt !== generation) return;
       setJoinedCallId(issued.credentials.callId);
+      joinTrace.setAttr('meeting.join.outcome', 'connected');
     } catch (cause) {
+      // Provider errors may include credentials or a capability URL.
+      if (!disposed && attempt === generation) {
+        joinTrace.error('Meeting join failed');
+        joinTrace.setAttr('meeting.join.outcome', 'failed');
+      }
       if (issued && issuedSession === issued) {
         issuedSession = undefined;
         try {
@@ -128,6 +156,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
       setError('Could not join the call. Check your connection and try again.');
       console.error('Failed to join meeting', cause);
     } finally {
+      joinTrace.end();
       // Keep the signal abortable for connected actions such as retrying invites.
       // A failed attempt has no session left that can own those actions.
       if (
@@ -154,6 +183,9 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
       setJoinedCallId(undefined);
       setHasLeft(true);
     }
+    // Start the keepalive release before awaiting local RTC disconnection:
+    // navigation or tab closure must not strand server-side participation.
+    const releasing = session ? release(session) : undefined;
     try {
       // Cancellation must not wait for the token request it is cancelling.
       // The shared lifecycle still retains that attempt independently.
@@ -168,7 +200,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
       console.error('Failed to disconnect meeting', cause);
     } finally {
       try {
-        if (session) await release(session);
+        await releasing;
       } finally {
         cleanupLifecycle.complete();
       }

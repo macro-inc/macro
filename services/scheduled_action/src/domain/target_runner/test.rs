@@ -27,6 +27,86 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const USER: &str = "macro|routine@macro.com";
 
+struct NoModelAdmission;
+
+impl ai_billing::AiAdmissionService for NoModelAdmission {
+    fn admit<'a>(
+        &'a self,
+        _: &'a MacroUserIdStr<'_>,
+        _: ai_usage::AiFeature,
+    ) -> ai_billing::AdmissionFuture<'a> {
+        panic!("agent funding must be decided by the session/harness service")
+    }
+}
+
+#[tokio::test]
+async fn agent_targets_delegate_admission_and_never_apply_the_model_gate() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+
+    for admission_error in [
+        None,
+        Some(AiAdmissionError::Denied(DenyReason::AllowanceExhausted)),
+        Some(AiAdmissionError::Unavailable),
+    ] {
+        let runner = Arc::new(runner(Sessions {
+            prepare_error: admission_error.map(RoutineSessionError::Admission),
+            statuses: Mutex::new([Ok(RoutineActionStatus::Succeeded)].into()),
+            ..Default::default()
+        }));
+        let live = Arc::new(Live::default());
+        let executor = InProcessExecutor::new(
+            Arc::new(UnusedRepo),
+            runner.clone(),
+            live.clone(),
+            TaskTracker::new(),
+            CancellationToken::new(),
+        )
+        .with_admission(Arc::new(NoModelAdmission));
+        let run = event_run();
+        let result = executor.execute(&run, std::future::pending()).await;
+        let record = result.record.unwrap();
+        let preparations = runner.sessions.preparations.lock().unwrap();
+        assert_eq!(preparations.len(), 1);
+        assert_eq!(
+            &preparations[0].selection.owner,
+            run.action.owner_user().unwrap()
+        );
+        assert!(runner.sessions.stops.lock().unwrap().is_empty());
+        if let Some(error) = admission_error {
+            assert_eq!(result.outcome, EventRunOutcome::Failed);
+            assert!(!record.is_success);
+            assert!(record.resource_id.is_none());
+            assert_eq!(record.result["error"], error.to_string());
+            assert!(runner.sessions.prompts.lock().unwrap().is_empty());
+            assert!(runner.sessions.reads.lock().unwrap().is_empty());
+            assert!(live.0.lock().unwrap().is_empty());
+        } else {
+            assert_eq!(result.outcome, EventRunOutcome::Succeeded);
+            assert!(record.is_success);
+            assert_eq!(runner.sessions.prompts.lock().unwrap().len(), 1);
+        }
+    }
+}
+
+#[tokio::test]
+async fn agent_preparation_preserves_typed_admission_failures() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ] {
+        let runner = runner(Sessions {
+            prepare_error: Some(RoutineSessionError::Admission(error)),
+            ..Default::default()
+        });
+        let mut handle = ExecutionHandle::default();
+        let returned = runner.prepare(&action(), &mut handle).await.unwrap_err();
+        assert_eq!(returned.downcast_ref::<AiAdmissionError>(), Some(&error));
+        assert!(handle.resource.is_none());
+        assert!(runner.sessions.reads.lock().unwrap().is_empty());
+    }
+}
+
 #[derive(Default)]
 struct Sessions {
     preparations: Mutex<Vec<PrepareRoutineSession>>,
@@ -475,14 +555,13 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unimplemented!()
     }
-    async fn get_actions(&self, _: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
+    async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }
-    async fn get_action(
-        &self,
-        _: &Uuid,
-        _: MacroUserIdStr<'static>,
-    ) -> Result<Option<ScheduledAction>> {
+    async fn get_actions_by_ids(&self, _: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        unimplemented!()
+    }
+    async fn get_action(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
         unimplemented!()
     }
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
@@ -491,7 +570,7 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unimplemented!()
     }
-    async fn delete_action(&self, _: &Uuid, _: MacroUserIdStr<'static>) -> Result<()> {
+    async fn delete_action(&self, _: &Uuid) -> Result<()> {
         unimplemented!()
     }
     async fn claim_action(
@@ -636,6 +715,49 @@ async fn executor_failed_model_prompt_keeps_session_history_and_stops_once() {
         runner.sessions.stops.lock().unwrap()[0].bot_id,
         bot_id::MACRO_NEW_BOT_ID
     );
+}
+
+#[tokio::test]
+async fn executor_failed_prompt_finalizes_agent_history_and_stops_once() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        RoutineSessionError::PromptDeliveryUnknown,
+        RoutineSessionError::Admission(AiAdmissionError::Denied(DenyReason::AllowanceExhausted)),
+        RoutineSessionError::Admission(AiAdmissionError::Unavailable),
+    ] {
+        let runner = Arc::new(runner(Sessions {
+            prompt_error: Some(error),
+            ..Default::default()
+        }));
+        let live = Arc::new(Live::default());
+        let executor = InProcessExecutor::new(
+            Arc::new(UnusedRepo),
+            runner.clone(),
+            live.clone(),
+            TaskTracker::new(),
+            CancellationToken::new(),
+        );
+        let result = executor.execute(&event_run(), std::future::pending()).await;
+        assert_eq!(result.outcome, EventRunOutcome::Failed);
+        let record = result.record.unwrap();
+        let metadata: ExecutionResult = serde_json::from_value(record.result).unwrap();
+        let resource = metadata.resource.unwrap();
+        assert_eq!(resource.resource_type, ExecutionResourceType::Agent);
+        assert_eq!(record.resource_id, Some(resource.id));
+        assert_eq!(metadata.error, Some(error.to_string()));
+        assert_eq!(runner.sessions.prompts.lock().unwrap().len(), 1);
+        assert_eq!(runner.sessions.stops.lock().unwrap().len(), 1);
+        assert!(matches!(
+            live.0.lock().unwrap().as_slice(),
+            [
+                ScheduledActionUpdate::Started { .. },
+                ScheduledActionUpdate::Stopped {
+                    is_success: false,
+                    ..
+                },
+            ]
+        ));
+    }
 }
 
 #[tokio::test]

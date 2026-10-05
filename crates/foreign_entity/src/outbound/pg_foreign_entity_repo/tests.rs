@@ -626,15 +626,11 @@ fn includes_me_filter() -> LiteralTree<ForeignEntityLiteral> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn get_for_user_includes_me_filters_to_participant_metadata(pool: PgPool) {
+async fn get_for_user_includes_me_matches_nothing(pool: PgPool) {
     let repo = PgForeignEntityRepo::new(pool.clone());
     let macro_id = "macro|user@example.com";
     insert_github_link(&pool, macro_id, "42").await;
-
-    let involved =
-        insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["7", "42"])).await;
-    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
-    insert_pr_with_participants(&repo, "legacy-pr", macro_id, None).await;
+    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
 
     let entities = repo
         .get_foreign_entities_for_user(
@@ -646,99 +642,39 @@ async fn get_for_user_includes_me_filters_to_participant_metadata(pool: PgPool) 
         .await
         .expect("includes_me filter should be applied");
 
-    assert_eq!(entities, vec![involved]);
+    assert!(entities.is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn get_for_user_includes_me_without_github_link_returns_empty(pool: PgPool) {
+async fn get_for_user_rejects_negated_and_nested_includes_me(pool: PgPool) {
     let repo = PgForeignEntityRepo::new(pool);
     let macro_id = "macro|user@example.com";
     insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
 
-    let entities = repo
-        .get_foreign_entities_for_user(
-            Some(macro_id.to_string()),
-            vec![SourceId::user(macro_id)],
-            10,
-            filter_query(includes_me_filter()),
-        )
-        .await
-        .expect("includes_me without a github link should succeed");
-
-    assert!(entities.is_empty());
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn get_for_user_includes_me_without_requesting_user_returns_empty(pool: PgPool) {
-    let repo = PgForeignEntityRepo::new(pool.clone());
-    let macro_id = "macro|user@example.com";
-    insert_github_link(&pool, macro_id, "42").await;
-    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
-
-    let entities = repo
-        .get_foreign_entities_for_user(
-            None,
-            vec![SourceId::user(macro_id)],
-            10,
-            filter_query(includes_me_filter()),
-        )
-        .await
-        .expect("includes_me without a requesting user should succeed");
-
-    assert!(entities.is_empty());
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn get_for_user_includes_me_composes_with_other_filters(pool: PgPool) {
-    let repo = PgForeignEntityRepo::new(pool.clone());
-    let macro_id = "macro|user@example.com";
-    insert_github_link(&pool, macro_id, "42").await;
-
-    let involved = insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
-    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
-    insert_foreign_entity_for_source(&repo, "linear-issue", "linear_issue", macro_id, "user").await;
-
-    let filter = Some(Arc::new(Expr::and(
-        Expr::val(ForeignEntityLiteral::ForeignEntitySource(
-            "github_pull_request".to_string(),
-        )),
-        Expr::val(ForeignEntityLiteral::IncludesMe),
-    )));
-    let entities = repo
-        .get_foreign_entities_for_user(
-            Some(macro_id.to_string()),
-            vec![SourceId::user(macro_id)],
-            10,
-            filter_query(filter),
-        )
-        .await
-        .expect("includes_me composed with a source filter should be applied");
-
-    assert_eq!(entities, vec![involved]);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn get_for_user_includes_me_under_not_fails_closed(pool: PgPool) {
-    let repo = PgForeignEntityRepo::new(pool.clone());
-    let macro_id = "macro|user@example.com";
-    insert_github_link(&pool, macro_id, "42").await;
-    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
-    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
-
-    let filter = Some(Arc::new(Expr::is_not(Expr::val(
-        ForeignEntityLiteral::IncludesMe,
-    ))));
-    let entities = repo
-        .get_foreign_entities_for_user(
-            Some(macro_id.to_string()),
-            vec![SourceId::user(macro_id)],
-            10,
-            filter_query(filter),
-        )
-        .await
-        .expect("unsupported includes_me placement should fail closed");
-
-    assert!(entities.is_empty());
+    let filters = [
+        Expr::is_not(Expr::val(ForeignEntityLiteral::IncludesMe)),
+        Expr::and(
+            Expr::val(ForeignEntityLiteral::ForeignEntitySource(
+                "github_pull_request".to_string(),
+            )),
+            Expr::or(
+                Expr::val(ForeignEntityLiteral::Id(Uuid::now_v7())),
+                Expr::is_not(Expr::val(ForeignEntityLiteral::IncludesMe)),
+            ),
+        ),
+    ];
+    for filter in filters {
+        let entities = repo
+            .get_foreign_entities_for_user(
+                Some(macro_id.to_string()),
+                vec![SourceId::user(macro_id)],
+                10,
+                filter_query(Some(Arc::new(filter))),
+            )
+            .await
+            .expect("unsupported includes_me placement should fail closed");
+        assert!(entities.is_empty());
+    }
 }
 
 /// Insert a `foreign_entity`-scoped notification and the matching per-user row so the

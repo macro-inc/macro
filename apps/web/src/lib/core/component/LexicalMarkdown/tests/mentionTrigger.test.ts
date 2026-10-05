@@ -22,11 +22,24 @@ vi.mock('@core/signal/mention', () => ({
 vi.mock('@service-storage/client', () => ({
   blockNameToItemType: (name: string) => name,
 }));
+vi.mock('@core/constant/featureFlags', () => ({
+  enableSnippets: {},
+  isFeatureEnabled: () => true,
+}));
+vi.mock('../context/LexicalWrapperContext', async () => {
+  const { createEditor } = await import('lexical');
+  return {
+    createLexicalWrapper: () => ({ editor: createEditor(), cleanup: vi.fn() }),
+  };
+});
 vi.mock('../utils', async () => {
   const { $getNodeByKey } = await import('lexical');
   return {
     $collapseSelection: vi.fn(),
     $traverseNodes: vi.fn(),
+    editorStateAsMarkdown: vi.fn(),
+    initializeEditorWithState: vi.fn(),
+    setEditorStateFromMarkdown: vi.fn(),
     nodeByKey: (editorOrState: any, key: string) => {
       let node: any;
       editorOrState.read(() => {
@@ -52,17 +65,22 @@ import {
   type TextNode,
 } from 'lexical';
 import { createSignal } from 'solid-js';
+import { actionsPlugin } from '../plugins/actions/actionsPlugin';
+import { emojisPlugin } from '../plugins/emojis/emojisPlugin';
 import {
   INSERT_USER_MENTION_COMMAND,
   mentionsPlugin,
   REMOVE_INLINE_SEARCH_COMMAND,
 } from '../plugins/mentions/mentionsPlugin';
+import { skillsPlugin } from '../plugins/skills/skillsPlugin';
+import { snippetsPlugin } from '../plugins/snippets/snippetsPlugin';
+import { tagsPlugin } from '../plugins/tags/tagsPlugin';
 import type { MenuOperations } from '../shared/inlineMenu';
 
 type Harness = {
   editor: LexicalEditor;
-  /** Types `text` the way a keyboard would: keydown first, then the character. */
-  type: (text: string) => void;
+  /** Sends keydown and beforeinput, then inserts the character. */
+  type: (text: string, softwareKeyboard?: boolean) => void;
   /** `type:"text"` for every child of the first paragraph. */
   children: () => string[];
   searchTerms: string[];
@@ -79,7 +97,12 @@ beforeEach(() => {
   };
 });
 
-function setup(withParagraph: (text: typeof $createTextNode) => void): Harness {
+function setup(
+  withParagraph: (text: typeof $createTextNode) => void,
+  plugin: (props: {
+    menu: MenuOperations;
+  }) => (editor: LexicalEditor) => () => void = mentionsPlugin
+): Harness {
   const editor = createEditor({
     namespace: 'mention-trigger-test',
     nodes: [...SupportedNodeTypes],
@@ -112,15 +135,28 @@ function setup(withParagraph: (text: typeof $createTextNode) => void): Harness {
     setIsOpen,
   };
 
-  cleanups.push(mentionsPlugin({ menu })(editor));
+  cleanups.push(plugin({ menu })(editor));
 
   editor.update(() => withParagraph($createTextNode), { discrete: true });
   editor.read(() => {});
 
-  const type = (text: string) => {
+  const type = (text: string, softwareKeyboard = false) => {
     for (const character of text) {
       rootElement.dispatchEvent(
-        new KeyboardEvent('keydown', { key: character, bubbles: true })
+        new KeyboardEvent('keydown', {
+          key: softwareKeyboard ? 'Unidentified' : character,
+          keyCode: softwareKeyboard ? 229 : 0,
+          bubbles: true,
+        })
+      );
+      editor.read(() => {});
+      rootElement.dispatchEvent(
+        new InputEvent('beforeinput', {
+          inputType: 'insertText',
+          data: character,
+          bubbles: true,
+          cancelable: true,
+        })
       );
       editor.read(() => {});
       editor.update(
@@ -168,6 +204,59 @@ function paragraphWithCaret(text: string, offset: number) {
 }
 
 describe('@ trigger position', () => {
+  test('opens and filters from software-keyboard input without an @ keydown', () => {
+    const harness = setup(paragraphWithCaret('hello ', 6));
+
+    harness.type('@jo', true);
+
+    expect(harness.opened()).toBe(1);
+    expect(harness.searchTerms.at(-1)).toBe('jo');
+    expect(harness.children()).toEqual(['text:hello ', 'inline-search:@jo']);
+  });
+
+  test('keeps software-keyboard @ literal inside a word', () => {
+    const harness = setup(paragraphWithCaret('hello', 3));
+
+    harness.type('@', true);
+
+    expect(harness.opened()).toBe(0);
+    expect(harness.children()).toEqual(['text:hel@lo']);
+  });
+
+  test('opens from software input in an empty paragraph', () => {
+    const harness = setup(() => {
+      const paragraph = $createParagraphNode();
+      $getRoot().clear().append(paragraph);
+      paragraph.select();
+    });
+
+    harness.type('@', true);
+
+    expect(harness.opened()).toBe(1);
+    expect(harness.children()).toEqual(['inline-search:@']);
+  });
+
+  test.each([
+    { inputType: 'insertFromPaste', isComposing: false },
+    { inputType: 'insertCompositionText', isComposing: true },
+    { inputType: 'insertText', isComposing: true },
+  ])('does not intercept $inputType (composing: $isComposing)', (input) => {
+    const harness = setup(paragraphWithCaret('hello ', 6));
+
+    harness.editor.getRootElement()!.dispatchEvent(
+      new InputEvent('beforeinput', {
+        ...input,
+        data: '@',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    harness.editor.read(() => {});
+
+    expect(harness.opened()).toBe(0);
+    expect(harness.children()).toEqual(['text:hello ']);
+  });
+
   test('opens a blank menu at the start of a word, leaving the word alone', () => {
     const harness = setup(paragraphWithCaret('hello world', 6));
 
@@ -263,3 +352,48 @@ describe('@ trigger position', () => {
     expect(harness.children()).toEqual(['inline-search:@']);
   });
 });
+
+describe.each([
+  { name: 'emoji', symbol: ':', plugin: emojisPlugin },
+  { name: 'actions', symbol: '/', plugin: actionsPlugin },
+  { name: 'skills', symbol: '/', plugin: skillsPlugin },
+  { name: 'snippets', symbol: ';', plugin: snippetsPlugin },
+  { name: 'tags', symbol: '#', plugin: tagsPlugin },
+])('$name menu input', ({ symbol, plugin }) => {
+  test.each([true, false])(
+    'opens once and filters (software keyboard: %s)',
+    (softwareKeyboard) => {
+      const harness = setup(paragraphWithCaret('hello ', 6), plugin);
+
+      harness.type(`${symbol}test`, softwareKeyboard);
+
+      expect(harness.opened()).toBe(1);
+      expect(harness.searchTerms.at(-1)).toBe('test');
+      expect(harness.children()).toEqual([
+        'text:hello ',
+        `inline-search:${symbol}test`,
+      ]);
+    }
+  );
+
+  test('keeps the software-keyboard trigger literal inside a word', () => {
+    const harness = setup(paragraphWithCaret('hello', 3), plugin);
+
+    harness.type(symbol, true);
+
+    expect(harness.opened()).toBe(0);
+    expect(harness.children()).toEqual([`text:hel${symbol}lo`]);
+  });
+});
+
+test.each([true, false])(
+  'a second # closes the tags menu (software keyboard: %s)',
+  (softwareKeyboard) => {
+    const harness = setup(paragraphWithCaret('hello ', 6), tagsPlugin);
+
+    harness.type('##', softwareKeyboard);
+
+    expect(harness.opened()).toBe(1);
+    expect(harness.children()).toEqual(['text:hello ##']);
+  }
+);

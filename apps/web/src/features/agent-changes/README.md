@@ -22,9 +22,10 @@ path**, and review notes hang under their lines through `DiffView.Stack`'s
 annotation slot. Another host composes the same components its own way.
 
 The source owns fetching, cache identity, and conversion into the feature's core
-changeset types. A PR entity adapter should resolve its GitHub owner/repository/PR
-number and implement this same contract using shared queries. It does not need to
-construct an agent session. That adapter and its backend endpoint are not yet wired.
+changeset types. The PR page's adapter is `block-pr/data/pr-changes.ts`, over
+`GET /github_pull_requests/{id}/changes` and `/changes/patch` in the storage
+service; `block-pr/component/PrChanges.tsx` mounts it read-only under
+`pr:<foreign-entity-id>` without an agent session.
 
 Layout and diff style come from `createPaneViewState()` (`pane-view-state.ts`).
 Where the host's route lists `changesSearch.namespace` in its `search`, they live

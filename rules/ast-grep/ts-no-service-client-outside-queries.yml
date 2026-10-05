@@ -16,6 +16,11 @@ note: |-
 files:
   - apps/web/src/**
 ignores:
+  # FE-33 composition roots pass the client to CRM query adapters.
+  - apps/web/src/features/crm/crm-adapter.ts
+  - apps/web/src/features/crm/preview-adapter.ts
+  - apps/web/src/features/crm/record-adapter.ts
+  - apps/web/src/features/crm/stage-adapter.ts
   - '**/queries/**'
   - '**/queries.ts'
   - '**/service-clients/**'

@@ -42,7 +42,9 @@ afterEach(() => {
 const groups: SettingsTabGroup[] = [
   {
     label: 'Account',
-    items: [{ tab: 'Account', label: 'Account', icon: () => <svg /> }],
+    items: [
+      { tab: 'Account', label: 'Account', icon: () => <svg />, keywords: [] },
+    ],
   },
 ];
 

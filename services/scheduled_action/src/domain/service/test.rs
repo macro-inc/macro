@@ -1,3 +1,4 @@
+mod admission;
 mod user_cleanup;
 
 use super::*;
@@ -17,7 +18,16 @@ use crate::domain::{
     },
 };
 use agent_session::domain::routines::RoutineSessionError;
+use entity_access::domain::{
+    models::{
+        AccessError, EditAccessLevel, EntityAccessReceipt, EntityType, OwnerAccessLevel,
+        ViewAccessLevel,
+    },
+    ports::ScheduledActionGrants,
+};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use macro_uuid::generate_uuid_v7;
+use model_owner::{CreationPrincipal, Owner};
 use serde_json::json;
 use std::sync::Mutex;
 
@@ -36,16 +46,26 @@ impl ScheduledActionRepo for FakeRepo {
         Ok(action)
     }
 
-    async fn get_actions(&self, _user: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
-        // Deliberately return all owners to exercise the service's owner check.
+    async fn get_owned_actions(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<ScheduledAction>> {
+        // Return every stored owner so cleanup can reject a foreign row.
         Ok(self.actions.lock().unwrap().clone())
     }
 
-    async fn get_action(
-        &self,
-        id: &Uuid,
-        _user: MacroUserIdStr<'static>,
-    ) -> Result<Option<ScheduledAction>> {
+    async fn get_actions_by_ids(&self, ids: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        Ok(self
+            .actions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|action| action.id.is_some_and(|id| ids.contains(&id)))
+            .cloned()
+            .collect())
+    }
+
+    async fn get_action(&self, id: &Uuid) -> Result<Option<ScheduledAction>> {
         Ok(self
             .actions
             .lock()
@@ -65,7 +85,7 @@ impl ScheduledActionRepo for FakeRepo {
         Ok(action)
     }
 
-    async fn delete_action(&self, id: &Uuid, _user: MacroUserIdStr<'static>) -> Result<()> {
+    async fn delete_action(&self, id: &Uuid) -> Result<()> {
         self.actions.lock().unwrap().retain(|a| a.id != Some(*id));
         Ok(())
     }
@@ -102,12 +122,20 @@ impl ScheduledActionRepo for FakeRepo {
 #[derive(Default)]
 pub(crate) struct FakeExecutor {
     calls: Mutex<Vec<ScheduledAction>>,
+    admission_error: Mutex<Option<ai_billing::AiAdmissionError>>,
+}
+
+pub(crate) fn set_admission_error(service: &TestService, error: ai_billing::AiAdmissionError) {
+    *service.executor.admission_error.lock().unwrap() = Some(error);
 }
 
 impl ScheduledActionExecutor for FakeExecutor {
     async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
         let action_id = action.id.unwrap();
         self.calls.lock().unwrap().push(action);
+        if let Some(error) = *self.admission_error.lock().unwrap() {
+            return Err(error.into());
+        }
         Ok(InProgressExecution {
             action_id,
             chat_id: Some("manual-chat".into()),
@@ -119,18 +147,116 @@ impl ScheduledActionExecutor for FakeExecutor {
     }
 }
 
-pub(crate) type TestService = ScheduledActionServiceImpl<FakeRepo, FakeExecutor>;
+pub(crate) struct FakeGrants {
+    repo: Arc<FakeRepo>,
+    only: Mutex<Option<Vec<Uuid>>>,
+    granted: Mutex<std::collections::HashMap<String, Vec<Uuid>>>,
+}
+
+impl FakeGrants {
+    pub(crate) fn all(repo: Arc<FakeRepo>) -> Self {
+        Self {
+            repo,
+            only: Mutex::new(None),
+            granted: Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
+impl ScheduledActionGrants for FakeGrants {
+    async fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        if user_id.as_ref() != USER {
+            return Ok(self
+                .granted
+                .lock()
+                .unwrap()
+                .get(user_id.as_ref())
+                .cloned()
+                .unwrap_or_default());
+        }
+        if let Some(ids) = self.only.lock().unwrap().clone() {
+            return Ok(ids);
+        }
+        Ok(self
+            .repo
+            .actions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|action| action.id)
+            .collect())
+    }
+}
+
+pub(crate) fn set_stored_owner(service: &TestService, id: Uuid, owner: Owner) {
+    let mut actions = service.repo.actions.lock().unwrap();
+    let action = actions
+        .iter_mut()
+        .find(|action| action.id == Some(id))
+        .expect("stored action");
+    action.owner = owner;
+}
+
+pub(crate) fn grant_to(service: &TestService, user_id: &str, id: Uuid) {
+    service
+        .grants
+        .granted
+        .lock()
+        .unwrap()
+        .entry(user_id.to_owned())
+        .or_default()
+        .push(id);
+}
+
+pub(crate) type TestService = ScheduledActionServiceImpl<FakeRepo, FakeExecutor, FakeGrants>;
+
+fn grants(repo: &Arc<FakeRepo>) -> Arc<FakeGrants> {
+    Arc::new(FakeGrants::all(Arc::clone(repo)))
+}
 
 pub(crate) fn service(enabled: bool) -> Arc<TestService> {
+    let repo = Arc::new(FakeRepo::default());
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
     Arc::new(
         TestService::new(
-            Arc::new(FakeRepo::default()),
+            Arc::clone(&repo),
             Arc::new(FakeExecutor::default()),
             tx,
+            grants(&repo),
         )
         .with_event_management_enabled(enabled),
+    )
+}
+
+fn user_principal() -> CreationPrincipal {
+    CreationPrincipal::User(user())
+}
+
+fn edit_receipt(id: Uuid) -> EntityAccessReceipt<EditAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user(),
+        &id.to_string(),
+        EntityType::ScheduledAction,
+    )
+}
+
+fn owner_receipt(id: Uuid) -> EntityAccessReceipt<OwnerAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user(),
+        &id.to_string(),
+        EntityType::ScheduledAction,
+    )
+}
+
+fn view_receipt(id: Uuid) -> EntityAccessReceipt<ViewAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user(),
+        &id.to_string(),
+        EntityType::ScheduledAction,
     )
 }
 
@@ -172,13 +298,17 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
+        grants(&base.repo),
     )
     .with_target_validation(TargetValidation::new(sessions.clone(), true));
     let mut config = configuration(false);
     config.task = agent_task();
     let foreign = MacroUserIdStr::parse_from_str(FOREIGN_USER).unwrap();
     let error = svc
-        .create_action(CreateScheduledAction::Canonical(config.clone()), foreign)
+        .create_action(
+            &CreationPrincipal::User(foreign),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap_err();
     assert_eq!(error.downcast_ref(), Some(&RoutineSessionError::Forbidden));
@@ -186,7 +316,10 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
 
     config.task = json!({});
     let error = svc
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap_err();
     assert_eq!(
@@ -197,14 +330,17 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
 
     config.task = agent_task();
     let created = svc
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap();
     let original = created.task;
     *sessions.error.lock().unwrap() = Some(RoutineSessionError::Forbidden);
     config.task["user_prompt"] = json!("replacement");
     let error = svc
-        .update_action(&created.id.unwrap(), update(config), user())
+        .update_action(edit_receipt(created.id.unwrap()), update(config))
         .await
         .unwrap_err();
     assert_eq!(error.downcast_ref(), Some(&RoutineSessionError::Forbidden));
@@ -223,12 +359,16 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
+        grants(&base.repo),
     )
     .with_target_validation(TargetValidation::new(Arc::new(Sessions::default()), true));
     let mut config = configuration(false);
     config.task = agent_task();
     let error = base
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap_err();
     assert_eq!(
@@ -236,12 +376,15 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
         Some(&TargetValidationError::AgentsDisabled)
     );
     let created = svc
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap();
     let id = created.id.unwrap();
     let error = base
-        .update_action(&id, update(config), user())
+        .update_action(edit_receipt(id), update(config))
         .await
         .unwrap_err();
     assert_eq!(
@@ -254,7 +397,7 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
     for enabled in [false, true] {
         model.enabled = enabled;
         let error = base
-            .update_action(&id, update(model.clone()), user())
+            .update_action(edit_receipt(id), update(model.clone()))
             .await
             .unwrap_err();
         assert_eq!(
@@ -265,11 +408,11 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
     }
     model.task["agent"] = json!(null);
     let switched = base
-        .update_action(&id, update(model.clone()), user())
+        .update_action(edit_receipt(id), update(model.clone()))
         .await
         .unwrap();
     assert_eq!(switched.task, model.task);
-    base.create_action(CreateScheduledAction::Canonical(model), user())
+    base.create_action(&user_principal(), CreateScheduledAction::Canonical(model))
         .await
         .unwrap();
 }
@@ -283,12 +426,16 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
             base.repo.clone(),
             base.executor.clone(),
             base.dispatcher_tx.clone(),
+            grants(&base.repo),
         )
         .with_target_validation(TargetValidation::new(sessions.clone(), true));
         let mut config = configuration(false);
         config.task = agent_task();
         let created = svc
-            .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+            .create_action(
+                &user_principal(),
+                CreateScheduledAction::Canonical(config.clone()),
+            )
             .await
             .unwrap();
         let id = created.id.unwrap();
@@ -298,7 +445,7 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
         *sessions.error.lock().unwrap() = Some(RoutineSessionError::RuntimeUnavailable);
         if !claimed {
             let error = svc
-                .update_action(&id, update(config.clone()), user())
+                .update_action(edit_receipt(id), update(config.clone()))
                 .await
                 .unwrap_err();
             assert_eq!(
@@ -309,18 +456,18 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
         let validations = sessions.validations.lock().unwrap().len();
         config.enabled = false;
         let paused = svc
-            .update_action(&id, update(config.clone()), user())
+            .update_action(edit_receipt(id), update(config.clone()))
             .await
             .unwrap();
         assert!(!paused.enabled);
         assert_eq!(paused.task, created.task);
         assert_eq!(paused.claimed.is_some(), claimed);
         // Disabling still works if acceptance has since been turned off.
-        base.update_action(&id, update(config), user())
+        base.update_action(edit_receipt(id), update(config))
             .await
             .unwrap();
-        svc.get_execution_records(&id, user()).await.unwrap();
-        svc.delete_action(&id, user()).await.unwrap();
+        svc.get_execution_records(view_receipt(id)).await.unwrap();
+        svc.delete_action(owner_receipt(id)).await.unwrap();
         assert!(base.repo.actions.lock().unwrap().is_empty());
         assert_eq!(sessions.validations.lock().unwrap().len(), validations);
     }
@@ -338,12 +485,13 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
             base.repo.clone(),
             base.executor.clone(),
             base.dispatcher_tx.clone(),
+            grants(&base.repo),
         )
         .with_target_validation(TargetValidation::new(sessions.clone(), true));
         let mut config = configuration(false);
         config.task = agent_task();
         let created = svc
-            .create_action(CreateScheduledAction::Canonical(config), user())
+            .create_action(&user_principal(), CreateScheduledAction::Canonical(config))
             .await
             .unwrap();
         assert!(sessions.preparations.lock().unwrap().is_empty());
@@ -375,8 +523,8 @@ async fn creates_both_triggers_with_server_owned_state_and_legacy_input() {
         let before = Utc::now();
         let created = svc
             .create_action(
+                &user_principal(),
                 CreateScheduledAction::Canonical(configuration(events)),
-                user(),
             )
             .await
             .unwrap();
@@ -396,7 +544,7 @@ async fn creates_both_triggers_with_server_owned_state_and_legacy_input() {
     }))
     .unwrap();
     assert!(
-        svc.create_action(legacy, user())
+        svc.create_action(&user_principal(), legacy)
             .await
             .unwrap()
             .next_run_at
@@ -407,28 +555,30 @@ async fn creates_both_triggers_with_server_owned_state_and_legacy_input() {
 #[tokio::test]
 async fn default_gate_rejects_event_creation_and_transition_but_allows_cron() {
     let (tx, _rx) = tokio::sync::mpsc::channel(8);
+    let repo = Arc::new(FakeRepo::default());
     let svc = TestService::new(
-        Arc::new(FakeRepo::default()),
+        repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
+        grants(&repo),
     );
     assert_policy(
         svc.create_action(
+            &user_principal(),
             CreateScheduledAction::Canonical(configuration(true)),
-            user(),
         )
         .await,
         ActionPolicyError::EventManagementDisabled,
     );
     let cron = svc
         .create_action(
+            &user_principal(),
             CreateScheduledAction::Canonical(configuration(false)),
-            user(),
         )
         .await
         .unwrap();
     assert_policy(
-        svc.update_action(&cron.id.unwrap(), update(configuration(true)), user())
+        svc.update_action(edit_receipt(cron.id.unwrap()), update(configuration(true)))
             .await,
         ActionPolicyError::EventManagementDisabled,
     );
@@ -440,19 +590,23 @@ async fn gate_off_rejects_enabling_an_existing_event_action() {
     let mut config = configuration(true);
     config.enabled = false;
     let action = enabled
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap();
     let disabled = TestService::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
+        grants(&enabled.repo),
     )
     .with_event_management_enabled(false);
     config.enabled = true;
     assert_policy(
         disabled
-            .update_action(&action.id.unwrap(), update(config), user())
+            .update_action(edit_receipt(action.id.unwrap()), update(config))
             .await,
         ActionPolicyError::EventManagementDisabled,
     );
@@ -468,7 +622,7 @@ async fn cron_without_future_firings_is_bad_input() {
     )
     .unwrap();
     assert_policy(
-        svc.create_action(CreateScheduledAction::Canonical(input), user())
+        svc.create_action(&user_principal(), CreateScheduledAction::Canonical(input))
             .await,
         ActionPolicyError::NoFutureFirings,
     );
@@ -479,30 +633,32 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
     let svc = service(true);
     let cron = svc
         .create_action(
+            &user_principal(),
             CreateScheduledAction::Canonical(configuration(false)),
-            user(),
         )
         .await
         .unwrap();
     let event = svc
         .create_action(
+            &user_principal(),
             CreateScheduledAction::Canonical(configuration(true)),
-            user(),
         )
         .await
         .unwrap();
     assert_eq!(svc.get_actions(user(), false).await.unwrap()[0].id, cron.id);
     assert_eq!(svc.get_actions(user(), false).await.unwrap().len(), 1);
     assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 2);
-    svc.get_execution_records(&event.id.unwrap(), user())
+    svc.get_execution_records(view_receipt(event.id.unwrap()))
         .await
         .unwrap();
-    svc.delete_action(&event.id.unwrap(), user()).await.unwrap();
+    svc.delete_action(owner_receipt(event.id.unwrap()))
+        .await
+        .unwrap();
     assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 1);
 }
 
 #[tokio::test]
-async fn foreign_and_non_user_owners_cannot_be_managed_or_executed() {
+async fn grants_do_not_allow_access_to_another_owners_routine() {
     let svc = service(true);
     for owner in [
         Owner::from_principal_str(FOREIGN_USER).unwrap(),
@@ -511,54 +667,90 @@ async fn foreign_and_non_user_owners_cannot_be_managed_or_executed() {
     ] {
         let created = svc
             .create_action(
+                &user_principal(),
                 CreateScheduledAction::Canonical(configuration(true)),
-                user(),
             )
             .await
             .unwrap();
         let id = created.id.unwrap();
+        assert_eq!(svc.get_action(view_receipt(id)).await.unwrap().id, Some(id));
         svc.repo.actions.lock().unwrap().last_mut().unwrap().owner = owner;
         assert_policy(
-            svc.get_action(&id, user()).await,
+            svc.get_action(view_receipt(id)).await,
             ActionPolicyError::NotFound,
         );
         assert_policy(
-            svc.update_action(&id, update(configuration(true)), user())
+            svc.update_action(edit_receipt(id), update(configuration(true)))
                 .await,
             ActionPolicyError::NotFound,
         );
         assert_policy(
-            svc.set_enabled(&id, false, user()).await,
+            svc.set_enabled(edit_receipt(id), false).await,
             ActionPolicyError::NotFound,
         );
         assert_policy(
-            svc.delete_action(&id, user()).await,
+            svc.delete_action(owner_receipt(id)).await,
             ActionPolicyError::NotFound,
         );
         assert_policy(
-            svc.get_execution_records(&id, user()).await,
+            svc.get_execution_records(view_receipt(id)).await,
             ActionPolicyError::NotFound,
         );
         assert_policy(
-            svc.execute_action_now(&id, user()).await,
+            svc.execute_action_now(owner_receipt(id)).await,
             ActionPolicyError::NotFound,
         );
     }
     assert!(svc.get_actions(user(), true).await.unwrap().is_empty());
-    let enabled: Vec<bool> = svc
-        .repo
-        .actions
-        .lock()
-        .unwrap()
-        .iter()
-        .map(|a| a.enabled)
-        .collect();
-    assert_eq!(enabled, [true, true, true]);
+    assert!(
+        svc.repo
+            .actions
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|action| action.enabled)
+    );
     assert!(svc.executor.calls.lock().unwrap().is_empty());
     assert_policy(
-        svc.execute_action_now(&generate_uuid_v7(), user()).await,
+        svc.execute_action_now(owner_receipt(generate_uuid_v7()))
+            .await,
         ActionPolicyError::NotFound,
     );
+}
+
+#[tokio::test]
+async fn user_and_bot_for_user_record_a_user_and_team_bot_writes_nothing() {
+    let svc = service(true);
+    let input = CreateScheduledAction::Canonical(configuration(false));
+    let as_user = svc
+        .create_action(&CreationPrincipal::User(user()), input.clone())
+        .await
+        .unwrap();
+    assert_eq!(as_user.owner, Owner::User(user()));
+    let as_bot = svc
+        .create_action(
+            &CreationPrincipal::BotForUser {
+                bot: bot_id::BotId::TEST_A,
+                user: user(),
+            },
+            input.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(as_bot.owner, Owner::User(user()));
+    let before = svc.repo.actions.lock().unwrap().len();
+    let error = svc
+        .create_action(
+            &CreationPrincipal::TeamBot {
+                bot: bot_id::NonSystemBotId::new(bot_id::BotId::TEST_A).unwrap(),
+                team: Uuid::from_u128(7),
+            },
+            input,
+        )
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("owner is a bot"));
+    assert_eq!(svc.repo.actions.lock().unwrap().len(), before);
 }
 
 #[tokio::test]
@@ -568,17 +760,18 @@ async fn disabled_manual_runs_work_for_both_variants_even_with_gate_off() {
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
+        grants(&enabled.repo),
     );
     for events in [false, true] {
         let mut config = configuration(events);
         config.enabled = false;
         let action = enabled
-            .create_action(CreateScheduledAction::Canonical(config), user())
+            .create_action(&user_principal(), CreateScheduledAction::Canonical(config))
             .await
             .unwrap();
         let id = action.id.unwrap();
-        svc.execute_action_now(&id, user()).await.unwrap();
-        let after = svc.owned_action(&id, &user()).await.unwrap();
+        svc.execute_action_now(owner_receipt(id)).await.unwrap();
+        let after = svc.repo.get_action(&id).await.unwrap().unwrap();
         assert_eq!(after.configuration_revision, action.configuration_revision);
         assert_eq!(after.event_activated_at, action.event_activated_at);
         assert!(!after.enabled);
@@ -591,7 +784,10 @@ async fn updates_advance_revision_and_only_trigger_changes_or_enabling_reset_act
     let svc = service(true);
     let mut config = configuration(true);
     let action = svc
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap();
     let id = action.id.unwrap();
@@ -599,7 +795,7 @@ async fn updates_advance_revision_and_only_trigger_changes_or_enabling_reset_act
     svc.repo.actions.lock().unwrap()[0].event_activated_at = Some(past);
     config.task["prompt"] = json!("changed");
     let updated = svc
-        .update_action(&id, update(config.clone()), user())
+        .update_action(edit_receipt(id), update(config.clone()))
         .await
         .unwrap();
     assert_eq!(updated.configuration_revision.get(), 2);
@@ -607,14 +803,14 @@ async fn updates_advance_revision_and_only_trigger_changes_or_enabling_reset_act
     assert_eq!(updated.event_activated_at, Some(past));
     config.enabled = false;
     let disabled = svc
-        .update_action(&id, update(config.clone()), user())
+        .update_action(edit_receipt(id), update(config.clone()))
         .await
         .unwrap();
     assert_eq!(disabled.configuration_revision.get(), 3);
     assert_eq!(disabled.event_activated_at, Some(past));
     config.enabled = true;
     let enabled = svc
-        .update_action(&id, update(config.clone()), user())
+        .update_action(edit_receipt(id), update(config.clone()))
         .await
         .unwrap();
     assert_eq!(enabled.configuration_revision.get(), 4);
@@ -625,12 +821,12 @@ async fn updates_advance_revision_and_only_trigger_changes_or_enabling_reset_act
     )
     .unwrap();
     let changed = svc
-        .update_action(&id, update(config), user())
+        .update_action(edit_receipt(id), update(config))
         .await
         .unwrap();
     assert!(changed.event_activated_at.unwrap() > past);
     let cron = svc
-        .update_action(&id, update(configuration(false)), user())
+        .update_action(edit_receipt(id), update(configuration(false)))
         .await
         .unwrap();
     assert!(cron.event_activated_at.is_none());
@@ -642,7 +838,10 @@ async fn active_execution_blocks_replacement_but_allows_disabling_even_with_gate
     let enabled = service(true);
     let mut config = configuration(true);
     let action = enabled
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap();
     let id = action.id.unwrap();
@@ -651,7 +850,7 @@ async fn active_execution_blocks_replacement_but_allows_disabling_even_with_gate
     replacement.name = "new name".into();
     assert_policy(
         enabled
-            .update_action(&id, update(replacement), user())
+            .update_action(edit_receipt(id), update(replacement))
             .await,
         ActionPolicyError::UpdateConflict,
     );
@@ -659,14 +858,16 @@ async fn active_execution_blocks_replacement_but_allows_disabling_even_with_gate
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
+        grants(&enabled.repo),
     );
     assert_policy(
-        svc.update_action(&id, update(config.clone()), user()).await,
+        svc.update_action(edit_receipt(id), update(config.clone()))
+            .await,
         ActionPolicyError::EventManagementDisabled,
     );
     config.enabled = false;
     let disabled = svc
-        .update_action(&id, update(config), user())
+        .update_action(edit_receipt(id), update(config))
         .await
         .unwrap();
     assert!(!disabled.enabled);
@@ -718,7 +919,10 @@ async fn expired_claim_allows_configuration_replacement() {
     let svc = service(true);
     let mut config = configuration(false);
     let action = svc
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap();
     let id = action.id.unwrap();
@@ -726,7 +930,7 @@ async fn expired_claim_allows_configuration_replacement() {
         Some(Utc::now() - MAX_ACTION_TIME - chrono::Duration::seconds(1));
     config.name = "renamed".into();
     let updated = svc
-        .update_action(&id, update(config), user())
+        .update_action(edit_receipt(id), update(config))
         .await
         .unwrap();
     assert_eq!(updated.name, "renamed");
@@ -765,28 +969,30 @@ fn seeded(
 #[tokio::test]
 async fn activation_changes_are_idempotent_and_keep_configuration() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+    let repo = Arc::new(FakeRepo::default());
     let svc = TestService::new(
-        Arc::new(FakeRepo::default()),
+        repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
+        grants(&repo),
     );
     let created = svc
         .create_action(
+            &user_principal(),
             CreateScheduledAction::Canonical(configuration(false)),
-            user(),
         )
         .await
         .unwrap();
     let id = created.id.unwrap();
     assert!(matches!(rx.try_recv(), Ok(DispatchEvent::Create(_))));
 
-    let unchanged = svc.set_enabled(&id, true, user()).await.unwrap();
+    let unchanged = svc.set_enabled(edit_receipt(id), true).await.unwrap();
     assert_eq!(unchanged.configuration_revision.get(), 1);
     assert_eq!(unchanged.updated_at, created.updated_at);
     assert!(rx.try_recv().is_err());
 
-    let paused = svc.set_enabled(&id, false, user()).await.unwrap();
-    let repeated = svc.set_enabled(&id, false, user()).await.unwrap();
+    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
+    let repeated = svc.set_enabled(edit_receipt(id), false).await.unwrap();
     assert!(!repeated.enabled);
     assert_eq!(repeated.configuration_revision.get(), 2);
     assert_eq!(repeated.updated_at, paused.updated_at);
@@ -794,7 +1000,7 @@ async fn activation_changes_are_idempotent_and_keep_configuration() {
     assert!(rx.try_recv().is_err());
 
     svc.repo.actions.lock().unwrap()[0].next_run_at = Some(Utc::now() - chrono::Duration::days(1));
-    let resumed = svc.set_enabled(&id, true, user()).await.unwrap();
+    let resumed = svc.set_enabled(edit_receipt(id), true).await.unwrap();
     assert!(resumed.enabled);
     assert_eq!(resumed.configuration_revision.get(), 3);
     assert!(
@@ -831,27 +1037,41 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
             "foreign",
         ),
         seeded(4, Owner::User(user()), later, false, "first-equal"),
-        seeded(9, Owner::User(user()), early, false, "early-cron"),
+        seeded(2, Owner::User(user()), early, false, "early-cron"),
         seeded(
-            2,
+            6,
             Owner::from_principal_str(&format!("bot|{}", Uuid::from_u128(50))).unwrap(),
             early,
             false,
             "bot",
         ),
         seeded(
-            8,
+            7,
             Owner::from_principal_str(&Uuid::from_u128(77).hyphenated().to_string()).unwrap(),
             early,
             false,
             "team",
         ),
-        seeded(4, Owner::User(user()), later, false, "second-equal"),
+        seeded(5, Owner::User(user()), later, false, "second-equal"),
         seeded(3, Owner::User(user()), later, false, "low-id"),
     ];
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
-    let svc = TestService::new(repo.clone(), Arc::new(FakeExecutor::default()), tx);
-    let reader = ScheduledActionReadServiceImpl::new(repo);
+    let accessible = Arc::new(FakeGrants::all(repo.clone()));
+    *accessible.only.lock().unwrap() = Some(vec![
+        Uuid::from_u128(1),
+        Uuid::from_u128(2),
+        Uuid::from_u128(3),
+        Uuid::from_u128(4),
+        Uuid::from_u128(5),
+        Uuid::from_u128(9),
+    ]);
+    let svc = TestService::new(
+        repo.clone(),
+        Arc::new(FakeExecutor::default()),
+        tx,
+        accessible.clone(),
+    );
+    let reader = ScheduledActionReadServiceImpl::new(repo.clone(), accessible);
 
     let expected = vec![
         "early-cron",
@@ -860,7 +1080,7 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
         "second-equal",
         "event",
     ];
-    let read = reader.list_owned(user()).await.unwrap();
+    let read = reader.list_accessible(user()).await.unwrap();
     let names = |actions: &[ScheduledAction]| {
         actions
             .iter()
@@ -868,7 +1088,11 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
             .collect::<Vec<_>>()
     };
     assert_eq!(names(&read), expected);
-    assert!(read.iter().all(|action| action.owner.is_user(&user())));
+    assert!(read.iter().all(|action| action.name != "foreign"));
+    assert!(
+        read.iter()
+            .all(|action| action.name != "bot" && action.name != "team")
+    );
     assert!(
         read.iter()
             .any(|action| matches!(action.trigger, ActionTrigger::Cron { .. }))
@@ -892,8 +1116,8 @@ async fn gate_off_allows_pausing_an_event_action_but_not_resuming_it() {
     let enabled = service(true);
     let action = enabled
         .create_action(
+            &user_principal(),
             CreateScheduledAction::Canonical(configuration(true)),
-            user(),
         )
         .await
         .unwrap();
@@ -902,19 +1126,20 @@ async fn gate_off_allows_pausing_an_event_action_but_not_resuming_it() {
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
+        grants(&enabled.repo),
     );
-    let paused = gated.set_enabled(&id, false, user()).await.unwrap();
+    let paused = gated.set_enabled(edit_receipt(id), false).await.unwrap();
     assert!(!paused.enabled);
     assert_eq!(paused.event_activated_at, action.event_activated_at);
     assert_policy(
-        gated.set_enabled(&id, true, user()).await,
+        gated.set_enabled(edit_receipt(id), true).await,
         ActionPolicyError::EventManagementDisabled,
     );
     assert!(!enabled.repo.actions.lock().unwrap()[0].enabled);
 
     let past = Utc::now() - chrono::Duration::days(1);
     enabled.repo.actions.lock().unwrap()[0].event_activated_at = Some(past);
-    let resumed = enabled.set_enabled(&id, true, user()).await.unwrap();
+    let resumed = enabled.set_enabled(edit_receipt(id), true).await.unwrap();
     assert!(
         resumed.event_activated_at.unwrap() > past,
         "events published while paused must not be replayed"
@@ -926,18 +1151,18 @@ async fn running_actions_can_be_paused_but_not_resumed() {
     let svc = service(true);
     let created = svc
         .create_action(
+            &user_principal(),
             CreateScheduledAction::Canonical(configuration(false)),
-            user(),
         )
         .await
         .unwrap();
     let id = created.id.unwrap();
     svc.repo.actions.lock().unwrap()[0].claimed = Some(Utc::now());
-    let paused = svc.set_enabled(&id, false, user()).await.unwrap();
+    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
     assert!(!paused.enabled);
     assert!(paused.claimed.is_some());
     assert_policy(
-        svc.set_enabled(&id, true, user()).await,
+        svc.set_enabled(edit_receipt(id), true).await,
         ActionPolicyError::UpdateConflict,
     );
     assert!(!svc.repo.actions.lock().unwrap()[0].enabled);
@@ -951,29 +1176,30 @@ async fn resuming_revalidates_the_stored_agent_but_pausing_does_not() {
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
+        grants(&base.repo),
     )
     .with_target_validation(TargetValidation::new(sessions.clone(), true));
     let mut config = configuration(false);
     config.task = agent_task();
     let created = svc
-        .create_action(CreateScheduledAction::Canonical(config), user())
+        .create_action(&user_principal(), CreateScheduledAction::Canonical(config))
         .await
         .unwrap();
     let id = created.id.unwrap();
     *sessions.error.lock().unwrap() = Some(RoutineSessionError::RuntimeUnavailable);
     let validations = sessions.validations.lock().unwrap().len();
-    let paused = svc.set_enabled(&id, false, user()).await.unwrap();
+    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
     assert_eq!(paused.task, created.task);
     assert_eq!(sessions.validations.lock().unwrap().len(), validations);
 
-    let error = svc.set_enabled(&id, true, user()).await.unwrap_err();
+    let error = svc.set_enabled(edit_receipt(id), true).await.unwrap_err();
     assert_eq!(
         error.downcast_ref(),
         Some(&RoutineSessionError::RuntimeUnavailable)
     );
     assert!(!base.repo.actions.lock().unwrap()[0].enabled);
     *sessions.error.lock().unwrap() = None;
-    let resumed = svc.set_enabled(&id, true, user()).await.unwrap();
+    let resumed = svc.set_enabled(edit_receipt(id), true).await.unwrap();
     assert!(resumed.enabled);
     assert_eq!(resumed.task, created.task);
 }
@@ -983,15 +1209,15 @@ async fn configuration_updates_that_omit_activation_keep_it() {
     let svc = service(true);
     let id = svc
         .create_action(
+            &user_principal(),
             CreateScheduledAction::Canonical(configuration(false)),
-            user(),
         )
         .await
         .unwrap()
         .id
         .unwrap();
     for enabled in [false, true] {
-        svc.set_enabled(&id, enabled, user()).await.unwrap();
+        svc.set_enabled(edit_receipt(id), enabled).await.unwrap();
         let input = serde_json::from_value(json!({
             "name": format!("renamed while enabled={enabled}"),
             "kind": "Agent",
@@ -999,7 +1225,7 @@ async fn configuration_updates_that_omit_activation_keep_it() {
             "task": {"model": "model", "prompt": "summarize", "user_prompt": "task"},
         }))
         .unwrap();
-        let updated = svc.update_action(&id, input, user()).await.unwrap();
+        let updated = svc.update_action(edit_receipt(id), input).await.unwrap();
         assert_eq!(updated.enabled, enabled);
         assert_eq!(updated.name, format!("renamed while enabled={enabled}"));
     }
@@ -1010,7 +1236,10 @@ async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
     let svc = service(false);
     let mut config = configuration(false);
     let created = svc
-        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
         .await
         .unwrap();
     let id = created.id.unwrap();
@@ -1026,14 +1255,14 @@ async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
     }
     config.name = "Renamed while waiting for the worker".into();
     let updated = svc
-        .update_action(&id, update(config.clone()), user())
+        .update_action(edit_receipt(id), update(config.clone()))
         .await
         .unwrap();
     assert_eq!(updated.next_run_at, Some(firing));
     svc.repo.actions.lock().unwrap()[0].next_run_at = None;
     config.name = "Renamed after completion".into();
     let updated = svc
-        .update_action(&id, update(config), user())
+        .update_action(edit_receipt(id), update(config))
         .await
         .unwrap();
     assert_eq!(updated.next_run_at, None);

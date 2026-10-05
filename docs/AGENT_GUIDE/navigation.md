@@ -11,6 +11,45 @@ queued mutations should resume promptly, without waiting for the old poll or
 local retry timer; durable leases and server-retry deadlines still apply.
 Switching tabs or navigating an in-app route is not a back/forward-cache restore.
 
+## Android system navigation and sharing
+
+In the Android app, Back first hides the keyboard, then dismisses the active
+menu/drawer, then returns through mobile pane history. Root Back backgrounds the
+app. Check that a canceled predictive Back gesture leaves the current screen and
+draft untouched. After changing orientation or window size, focused inputs and
+sheet actions should stay above the keyboard without an extra blank keyboard-sized
+gap. Font-size and display-size changes should retain the active draft and update
+safe areas. Also change display size with the keyboard hidden: bottom composers
+must remain visible before the keyboard is opened again. Editors expose labeled
+multiline textboxes for TalkBack.
+
+With the keyboard closed, the Android dock sits above the measured system
+navigation inset with the usual 12px gutter. Check both gesture and three-button
+navigation, including after rotation and display-size changes. Opening the
+keyboard leaves only the usual gutter above it. iOS retains its existing 28px
+bottom padding with the keyboard closed and 12px with it open.
+
+Sharing text, links, images, or documents from another Android app opens Share to
+Macro after login. A second incoming share waits behind the current one. Back or
+outside dismissal asks **Discard this share?**; **Keep editing** preserves the
+message and attachments. Failed uploads show **Retry** and block Send until they
+succeed. Send stays disabled while posting and after success, including when
+native queue cleanup fails; retrying cleanup must not post the message again.
+Test rapid repeated taps with delayed cleanup and retry after a failed send.
+On Android and iOS, if a send finishes after its sheet is canceled, cleanup must
+leave any newer share pending with its attachments intact.
+**Cancel** explicitly discards the current share. Send
+is a real channel/DM mutation: do not use it in verification without authorization.
+Android attachment controls open the system picker. File downloads open Android's
+Save dialog; image share actions open its share chooser. Canceling either should
+return to the existing editor without changing its draft. Large exports show
+preparation progress and **Cancel**; a canceled save must not report success.
+
+The native share sheet is shared with iOS. When testing iOS email attachments,
+paste an image and select one from Photos: plugins without a native checksum
+must hash the staged image bytes, retain the real attachment size, and upload
+successfully rather than hashing the empty JavaScript placeholder.
+
 ## Direct URLs (all under the frontend origin)
 
 | Route | Surface |
@@ -48,6 +87,7 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
+| `/app/database/<uuid>` | A database with table and board views; stays at this URL rather than moving into Drive (requires the Databases flag) |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/routines` | Routines list in the Agents workspace |
@@ -59,6 +99,15 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
+
+Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
+pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
+`/app/task-slug/...`) render without the split layout and take one part only.
+`/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
+replaced with `/app`, which goes to Home or to login. An unknown split among app
+splits (`/app/mail/~/garbage`) shows the in-split 404 instead. A split that
+navigates to a page outside the app replaces every split; Back restores them.
 
 Search-result locations use pane-local namespaces: `channels` (message/thread),
 `email-detail` (message), `markdown-detail` (node), `pdf-detail` (page and highlight
@@ -89,6 +138,13 @@ channel message or thread target stays in its conversation. Document comment
 targets, spreadsheets, unknown items, and other unsupported block types retain
 the legacy inline preview so their navigation still works. The URL shape stays
 `/app/home/<block-type>/<uuid>` in either rendering mode.
+
+Desktop Home names a document comment event only when it is the latest
+outstanding notification and is at least as recent as the activity that placed
+the row there. Newer own activity, or an event without a supported comment
+description, shows the document/task title and opens the entity without a
+comment target. Older notifications retain their unread state and remain
+available to notification actions.
 
 On touch devices, documents (including tasks) open in legacy blocks rather than
 inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
@@ -144,6 +200,12 @@ headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
 only opens or closes its children. Selecting a Drive folder or tab closes an
 inline detail into that destination; it does not navigate back to Drive's root.
+Drive's **New** menu (sidebar, or the header in narrow layouts) is headed
+**Create in &lt;folder&gt;** and creates everything in the open folder; on a tab or
+the Drive root it reads **Create in Drive**. **Folder** opens a **New folder**
+dialog with `Untitled folder` preselected; creating keeps Drive where it is, adds
+the folder to the open folder's list, and shows a toast with **Open**. Other
+items open after creation. **Database** is offered only outside folders.
 Home, Email, Tasks, Channels, and Drive keep their workspace provider mounted
 while typed child routes own the accepted inline detail. Tasks and Email replace
 the list with detail, capturing its focus and scroll state before disposal. Their child
@@ -244,8 +306,10 @@ The outer sidebar is an icon rail; labels appear in tooltips.
 - Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Reminders`, `Calendar`,
   `Agents`, `Customers`. Reminders, Calendar, and Customers appear only when
   their features are enabled.
-- Bottom: button named after the user (their name, or email when unset) — menu
-  with `Command menu (Ctrl K)`, `Settings (Ctrl ;)`, `Log out`.
+- Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
+  photo as a badge in its corner. It opens Settings directly in the active
+  split (Shift-click for a new split); there is no account menu. Log out lives
+  at the bottom of the Settings sidebar, and the command menu is `Ctrl K`.
 
 Start a new AI chat from the Agents workspace; the rail has no separate
 new-chat-in-a-new-split button. Its tooltips
@@ -452,8 +516,8 @@ URL restores that routine; browser Back and Forward restore the list or detail.
 Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
 Saved split layouts and document/channel/spreadsheet mentions using the old
 block name also open routines; newly copied links use `/app/routines/<uuid>`.
-On the legacy
-or touch Agents screen, use the **Routines** button above the list. Routines use
+On the legacy Agents screen, use the **Routines** button above the list. On touch devices,
+`/app/routines` opens the routines list directly. Routines use
 full-width entity rows with **Created by**, **Status**, **Runs with**, and **Enabled**
 columns. The search field sits below the top bar, as in Projects; search by name,
 creator, or model/agent, or press **Cmd/Ctrl+F** to focus it. **Create Routine** sits
@@ -536,7 +600,7 @@ activation.
 
 MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 **ReadRoutine**, and **UpdateRoutine**. Select `target.type: "agent"` with the
-`botId` from **ListBots** as `agentId`, or `target.type: "model"` with a runtime
+`bot.botId` from **ListAgents** as `agentId`, or `target.type: "model"` with a runtime
 model ID. `schedule.type: "once"` accepts a future RFC3339 `at` timestamp;
 `"cron"` accepts a six-field `expression` and IANA `timezone`. Routine ownership
 comes from the authenticated caller, never a model-supplied user ID.
@@ -548,9 +612,23 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
+In `Change theme`, Up/Down previews the highlighted palette across the open app,
+including channels and spreadsheets. Moving between rows preserves the original
+palette for cancellation without briefly restoring it between previews. Esc
+restores that palette (including unsaved edits); Enter commits the highlighted
+theme. Browser and notification icons change only when a theme is committed.
+
 With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
 search cached entities without waiting for a server search. Background hydration
-updates an already-open menu. For an empty search, scroll toward the end (or use
+updates an already-open menu only when a bucket it uses changes. Email/body/tag-only
+hydration must not reread History or the cached channel list; a newly hydrated note
+refreshes History and matching menus, and a channel/DM refreshes channel consumers.
+Ordinary query responses use the same bucket scoping. A project-search response
+that only caches another viewer Soup page must not refresh History, channel lists,
+or unrelated active query pages. Renames, ownership/recency changes, and moves
+between buckets must still appear without retyping in every affected view.
+Older cache runtimes without bucket metadata, mutations, and identity resets
+refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
@@ -560,7 +638,10 @@ another pagination attempt. Missing items may still be uncached, but should appe
 after hydration without retyping, including channels outside the first cached
 page. Cmd+K's
 local search excludes unsupported email hits before limiting entity results;
-email mentions keep their separate search-service path.
+email mentions keep their separate search-service path. Text search loads only
+its requested cache buckets, so a document-only category must not read the email
+catalog. Switching categories still discovers previously unopened buckets;
+renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
@@ -570,10 +651,11 @@ the cache or reopening the menu with unchanged data does not reorder the results
 
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. When no entity rows
-are available yet, the menu shows **Loading results…** while keeping commands
-usable; a settled empty category shows **No results found**. Background history
-or channel refetches alone must not switch settled empty results back to loading,
+mounted and usable while the optional source loads or fails. The menu shows no
+loading text: while entity rows are still loading, an empty list stays blank and
+commands remain usable; a settled empty category shows **No results found**.
+Background history or channel refetches alone must not blank a settled empty
+category back to its loading state,
 including when the active category does not use that source. Cache-update bursts
 must let in-flight history, channel, and menu-search reads publish their results,
 then catch up with one coalesced refresh. Verify with cache reads slower than the
@@ -596,6 +678,9 @@ restart rules still apply.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
+- `#` — move email to Trash, with an Undo toast. Works on the selected or focused
+  rows in a mail list and on the thread open in an email detail or block. Email
+  only; other entity types keep Delete/Backspace and do not answer `#`.
 - `g` then `h` — Home; `g` then `i` remains an alias.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.

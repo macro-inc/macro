@@ -21,16 +21,22 @@ default = []
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
+ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
+ai_usage = { path = "../../crates/ai_usage" }
+bots = { path = "../../crates/bots", features = ["outbound"] }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
+teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 activity = { path = "../../crates/activity", default-features = false }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", default-features = false }
-agent_session = { path = "../../crates/agent_session", default-features = false }
+agent_session = { path = "../../crates/agent_session", default-features = false, features = ["admission"] }
 bot_id = { path = "../../crates/bot_id" }
 channel_sender = { path = "../../crates/channel_sender" }
 channels = { path = "../../crates/channels", default-features = false }
 documents = { path = "../../crates/documents", default-features = false }
 document_sub_type = { path = "../../crates/document_sub_type" }
 email = { path = "../../crates/email", default-features = false }
-entity_access = { path = "../../crates/entity_access", default-features = false, features = ["ports"] }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["inbound", "outbound"] }
+entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_event_topics = { path = "../../crates/macro_event_topics" }
@@ -70,6 +76,7 @@ macro_db_client = { path = "../../crates/macro_db_client" }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_owner = { path = "../../crates/model_owner" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", features = ["axum"] }
 entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true }
@@ -87,4 +94,5 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../../crates/bot_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }

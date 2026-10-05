@@ -21,9 +21,10 @@ use sqs_client::search::SearchQueueMessage;
 
 use super::models::{
     BackfillError, CalendarEventBackfillCursor, CalendarEventBackfillRequest, CallBackfillCursor,
-    CallBackfillRequest, ChannelBackfillRequest, ChatBackfillCursor, ChatBackfillRequest,
-    DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillCursor,
-    ProjectBackfillRequest, PropertiesBackfillRequest, PropertySourcePage, SourcePage,
+    CallBackfillRequest, ChannelBackfillCursor, ChannelBackfillRequest, ChatBackfillCursor,
+    ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest, EmailBackfillRequest,
+    ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest, PropertySourcePage,
+    SourcePage,
 };
 
 /// Publishes batches of search-event messages.
@@ -76,11 +77,14 @@ pub trait BackfillSource: Send + Sync + 'static {
         cursor: Option<ChatBackfillCursor>,
     ) -> impl Future<Output = Result<(SourcePage, Option<ChatBackfillCursor>), BackfillError>> + Send;
 
+    /// Enumerate only the requested channels with a stable creation-time/ID
+    /// cursor. Explicit scopes require primary-consistent reads; an empty scope
+    /// must never fall back to a global scan. An empty page ends the scan.
     fn fetch_channels(
         &self,
         req: &ChannelBackfillRequest,
-        offset: usize,
-    ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
+        cursor: Option<ChannelBackfillCursor>,
+    ) -> impl Future<Output = Result<(SourcePage, Option<ChannelBackfillCursor>), BackfillError>> + Send;
 
     /// Documents paginate by keyset cursor: each call passes the cursor
     /// of the last row from the previous page (or `None` for the first

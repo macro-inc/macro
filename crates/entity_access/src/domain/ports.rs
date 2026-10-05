@@ -4,9 +4,9 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, ChannelRoleResult,
-    CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission, TeamRole,
-    UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
+    ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission,
+    TeamRole, UserTeamInfo, ViewAccessLevel,
 };
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
@@ -81,12 +81,57 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         initiative_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
-    /// Document owning an agent session's still-live originating message thread.
+
+    /// Highest grant the caller's sources hold on one scheduled action.
+    ///
+    /// A non-uuid id is not a routine, so the lookup returns `None`.
+    fn get_scheduled_action_access(
+        &self,
+        scheduled_action_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Live scheduled action ids the caller's sources can manage.
+    fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
+    /// Supported parent owning an agent session's still-live originating message thread.
     /// This is a persisted relationship, not a caller-supplied grant.
-    fn get_agent_session_document(
+    fn get_agent_session_parent(
         &self,
         agent_session_id: &str,
-    ) -> impl Future<Output = Result<Option<String>, AccessError>> + Send;
+    ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
+
+    /// Get the highest access level a user has for a database.
+    fn get_database_access(
+        &self,
+        database_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// The highest access level a user has on every database they can reach,
+    /// ordered by database id.
+    fn list_database_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
+    /// Get the highest access level a user has for a database row, which is
+    /// their access to the row's database.
+    fn get_database_row_access(
+        &self,
+        row_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Highest grant on each requested row's database. Rows without grants are omitted.
+    fn get_database_rows_access(
+        &self,
+        row_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
 
     /// Get the access level a user has for a reminder.
     ///
@@ -241,6 +286,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
 
+    /// The database a row's table belongs to; `None` for a row that does not
+    /// exist.
+    fn get_database_row_database(
+        &self,
+        row_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
+
     /// Resolve a channel ID to the call's channel info and share permission ID.
     ///
     /// Checks both the `calls` table (active calls) and the `call_records` table
@@ -259,6 +311,16 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Option<UserTeamInfo>, AccessError>> + Send;
+}
+
+/// Scheduled actions the user can reach through any of their sources
+/// (user id, active channels, teams). Source resolution stays inside entity_access.
+pub trait ScheduledActionGrants: Send + Sync + 'static {
+    /// Ids of live scheduled actions `user_id` can manage.
+    fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
 }
 
 /// Repository that returns labeled grant paths instead of a collapsed level.
@@ -332,6 +394,34 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
                         user_org_id,
                         thread_id,
                         EntityType::EmailThread,
+                    )
+                    .await,
+                );
+            }
+            receipts
+        }
+    }
+
+    /// Mint view receipts for database rows. Implementations may share access
+    /// lookups; the default delegates to the single-entity authorization path.
+    fn generate_database_row_view_access_receipts<'a>(
+        &'a self,
+        user_id: &'a MacroUserId<Lowercase<'_>>,
+        row_ids: &'a [String],
+    ) -> impl Future<
+        Output = HashMap<String, Result<EntityAccessReceipt<ViewAccessLevel>, AccessError>>,
+    > + Send
+    + 'a {
+        async move {
+            let mut receipts = HashMap::with_capacity(row_ids.len());
+            for row_id in row_ids {
+                receipts.insert(
+                    row_id.clone(),
+                    self.generate_entity_access_receipt::<ViewAccessLevel>(
+                        user_id,
+                        None,
+                        row_id,
+                        EntityType::DatabaseRow,
                     )
                     .await,
                 );
@@ -460,6 +550,18 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Option<UserTeamInfo>, AccessError>> + Send;
+}
+
+/// Enumerates the databases a user can reach. Kept apart from
+/// [`EntityAccessService`], which answers for one entity at a time: only the
+/// databases catalog needs every grant at once.
+pub trait AccessibleDatabases: Clone + Send + Sync + 'static {
+    /// The highest access level the user has on every database they can
+    /// reach, ordered by database id. Trashed databases are still listed.
+    fn accessible_databases(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 }
 
 /// No-op [`EntityAccessService`] for binaries that need to satisfy the

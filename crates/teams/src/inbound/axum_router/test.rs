@@ -425,6 +425,13 @@ impl TeamService for FakeTeamService {
         panic!("unexpected toggle_allow_non_admin_invites call")
     }
 
+    async fn remove_user_from_all_teams(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), crate::domain::model::RemoveUserFromAllTeamsError> {
+        panic!("unexpected remove_user_from_all_teams call")
+    }
+
     async fn try_join_team_by_domain(
         &self,
         _user_id: &MacroUserIdStr<'_>,

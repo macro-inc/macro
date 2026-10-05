@@ -1,7 +1,9 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { CalendarView } from '@app/features/calendar-view/calendar-view';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
+import { homeCalendarRoute } from '@app/routes/routes';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewFrame, PreviewPanel } from '@components/app/PreviewPanel';
@@ -19,7 +21,7 @@ import { HomeListSkeleton } from './components/HomeListSkeleton';
 import { HomeReturnBreadcrumb } from './components/HomeReturnBreadcrumb';
 import { HomeTabs } from './components/HomeTabs';
 import { HomeViewProvider, useHomeView } from './home-view-context';
-import { homeCalendarRoute } from './route';
+import { homeTour } from './tour';
 import type { HomeViewStateOptions } from './types';
 
 export type HomeViewProps = {
@@ -60,6 +62,7 @@ function HomeListPane(props: {
         showContent();
       }}
     >
+      <ViewTour tour={homeTour} />
       <DebugSuspense name="HomeView.list" fallback={<HomeFallback />}>
         <HomeList
           hasPreview={props.hasPreview}

@@ -10,21 +10,41 @@ import {
   ViewShell,
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import {
+  getSoupMenuEntities,
+  getSoupRowEntities,
+} from '@app/features/soup/collection/rows';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
+import { toast } from '@core/component/Toast/Toast';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
 import CalendarIcon from '@phosphor/calendar.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { Property, PropertyApiValues } from '@property/types';
 import { Button, Dropdown, Input } from '@ui';
-import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  batch,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
+import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
 import { ProjectListHeader, ProjectRow } from '../components/project-row';
-import { useProjectsContext } from '../context/projects-context';
+import { ProjectRowMenu } from '../components/project-row-menu';
+import { RenameProjectDialog } from '../components/rename-project-dialog';
+import {
+  type ProjectRow as ProjectRowData,
+  useProjectsContext,
+} from '../context/projects-context';
 import type {
   createProjectCollection,
   ProjectListActivation,
+  ProjectListEntity,
 } from '../primitives/project-collection';
 
 type FilterGroup = 'status' | 'priority' | 'assignee';
@@ -35,6 +55,12 @@ export function ProjectsCollection(props: {
   scopeId: string;
   isActive: Accessor<boolean>;
   collection: ReturnType<typeof createProjectCollection>;
+  /** Whether the layout has room to open a project beside the list. */
+  canOpenInNewSplit: Accessor<boolean>;
+  onCopyLink(id: string): void;
+  onCopyId(id: string): void;
+  /** Omit where the host cannot show the project's Share menu. */
+  onShare?(id: string): void;
 }) {
   const context = useProjectsContext();
   const collection = props.collection;
@@ -44,37 +70,33 @@ export function ProjectsCollection(props: {
   let grid: HTMLDivElement | undefined;
   let searchInput: HTMLInputElement | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  const definition = (id: string) =>
+    definitions
+      .properties()
+      .find((property) => property.propertyDefinitionId === id);
   const filters = (): ListFilterGroup<FilterGroup, string>[] => [
     ...(['status', 'priority'] as const).map((id) => ({
       id,
       label: id === 'status' ? 'Status' : 'Priority',
       selectionMode: 'single' as const,
       options:
-        definitions
-          .properties()
-          .find(
-            (property) =>
-              property.propertyDefinitionId ===
-              (id === 'status'
-                ? SYSTEM_PROPERTY_IDS.STATUS
-                : SYSTEM_PROPERTY_IDS.PRIORITY)
-          )
-          ?.options?.flatMap((option) =>
-            option.value.type === 'string'
-              ? [
-                  {
-                    id: option.id,
-                    label: option.value.value,
-                    icon: () => (
-                      <PropertyValueIcon
-                        optionId={option.id}
-                        class="size-3.5"
-                      />
-                    ),
-                  },
-                ]
-              : []
-          ) ?? [],
+        definition(
+          id === 'status'
+            ? SYSTEM_PROPERTY_IDS.STATUS
+            : SYSTEM_PROPERTY_IDS.PRIORITY
+        )?.options?.flatMap((option) =>
+          option.value.type === 'string'
+            ? [
+                {
+                  id: option.id,
+                  label: option.value.value,
+                  icon: () => (
+                    <PropertyValueIcon optionId={option.id} class="size-3.5" />
+                  ),
+                },
+              ]
+            : []
+        ) ?? [],
     })),
     {
       id: 'assignee',
@@ -107,6 +129,7 @@ export function ProjectsCollection(props: {
       alternateDescription: 'Open project in new split',
     },
     disclosure: {
+      isHeader: (row) => row.kind === 'group-header',
       getKey: (row) =>
         row.kind === 'section-header' ? undefined : row.groupId,
       isExpanded: collection.disclosure.isExpanded,
@@ -130,6 +153,83 @@ export function ProjectsCollection(props: {
       },
     },
   });
+  const [renaming, setRenaming] = createSignal<ProjectRowData>();
+  const [deleting, setDeleting] = createSignal<{
+    rows: readonly ProjectRowData[];
+    error?: string;
+  }>();
+  const [deletePending, setDeletePending] = createSignal(false);
+  // The menu entry that opened a dialog no longer exists when it closes.
+  const returnFocusToList = (event: Event) => {
+    event.preventDefault();
+    grid?.focus();
+  };
+  const menuTargets = (entity: ProjectListEntity) =>
+    getSoupMenuEntities(entity, getSoupRowEntities(list.selection.items()));
+  const setOption = async (
+    rows: readonly ProjectRowData[],
+    property: Property,
+    optionId: string
+  ) => {
+    const value: PropertyApiValues = {
+      valueType: 'SELECT_STRING',
+      values: [optionId],
+    };
+    try {
+      await commands.saveProperties(
+        rows.map((row) => ({
+          id: row.project.id,
+          // A row's own value saves exactly like editing its cell.
+          property:
+            row.properties.find(
+              (current) =>
+                current.propertyDefinitionId === property.propertyDefinitionId
+            ) ?? property,
+          value,
+        }))
+      );
+    } catch (error) {
+      console.error('Failed to update projects', error);
+      const name = property.displayName.toLowerCase();
+      toast.failure(
+        rows.length === 1
+          ? `Could not update ${name}`
+          : `Could not update ${name} for every project`
+      );
+    }
+  };
+  const deleteProjects = async (rows: readonly ProjectRowData[]) => {
+    setDeletePending(true);
+    let failedIds: readonly string[];
+    try {
+      failedIds = await commands.deleteMany(rows.map((row) => row.project.id));
+    } catch (error) {
+      console.error('Failed to delete projects', error);
+      failedIds = rows.map((row) => row.project.id);
+    } finally {
+      setDeletePending(false);
+    }
+    const failed = rows.filter((row) => failedIds.includes(row.project.id));
+    batch(() => {
+      for (const row of rows)
+        if (!failed.includes(row)) list.selection.deselectKey(row.project.id);
+    });
+    if (failed.length === 0) {
+      setDeleting(undefined);
+      toast.success(
+        rows.length > 1 ? `Deleted ${rows.length} projects` : 'Project deleted'
+      );
+      return;
+    }
+    // Only the failures remain for a retry.
+    setDeleting({
+      rows: failed,
+      error:
+        failed.length === rows.length
+          ? 'Could not delete. Please try again.'
+          : `Deleted ${rows.length - failed.length} of ${rows.length}. The rest could not be deleted.`,
+    });
+  };
   useViewControlHotkeys({
     scopeId: props.scopeId,
     enabled: props.isActive,
@@ -381,36 +481,70 @@ export function ProjectsCollection(props: {
                     </Match>
                     <Match when={row.kind === 'entity' ? row : undefined}>
                       {(item) => (
-                        <ProjectRow
-                          rowId={item().id}
-                          row={item().entity}
-                          highlighted={list.focus.key() === item().id}
-                          checked={list.selection.isSelected(item().id)}
-                          onFocus={() =>
-                            list.focus.set(item().id, { reason: 'hover' })
+                        <ProjectRowMenu
+                          targets={() => menuTargets(item().entity)}
+                          status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
+                          priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
+                          canOpenInNewSplit={props.canOpenInNewSplit()}
+                          onOpenInNewSplit={(row) =>
+                            props.onOpen(row.project.id, { newSplit: true })
                           }
-                          onChecked={(selected, range) =>
-                            interaction.selection.set(item().id, selected, {
-                              range,
-                            })
+                          onRename={(row) => setRenaming(row)}
+                          onSetOption={(rows, property, optionId) =>
+                            void setOption(rows, property, optionId)
                           }
-                          onOpen={(event) => {
-                            if (event.ctrlKey || event.metaKey)
-                              interaction.selection.toggle(item().id);
-                            else
-                              list.activate.key(item().id, {
-                                reason: 'pointer',
-                                metadata: { event, newSplit: event.shiftKey },
-                              });
+                          onCopyLink={(row) => props.onCopyLink(row.project.id)}
+                          onCopyId={(row) => props.onCopyId(row.project.id)}
+                          onShare={
+                            props.onShare &&
+                            ((row) => props.onShare?.(row.project.id))
+                          }
+                          onDelete={(rows) => setDeleting({ rows })}
+                          onOpenChange={(open) => {
+                            if (!open) return;
+                            list.focus.set(item().id, {
+                              reason: 'pointer',
+                              force: true,
+                            });
+                            list.selection.setAnchor(item().id);
                           }}
-                          onSave={(property, value) =>
-                            commands.saveProperty(
-                              item().entity.id,
-                              property,
-                              value
-                            )
-                          }
-                        />
+                          onCloseAutoFocus={(event) => {
+                            // Leave focus with a dialog the entry just opened.
+                            if (renaming() || deleting())
+                              event.preventDefault();
+                          }}
+                        >
+                          <ProjectRow
+                            rowId={item().id}
+                            row={item().entity}
+                            highlighted={list.focus.key() === item().id}
+                            checked={list.selection.isSelected(item().id)}
+                            onFocus={() =>
+                              list.focus.set(item().id, { reason: 'hover' })
+                            }
+                            onChecked={(selected, range) =>
+                              interaction.selection.set(item().id, selected, {
+                                range,
+                              })
+                            }
+                            onOpen={(event) => {
+                              if (event.ctrlKey || event.metaKey)
+                                interaction.selection.toggle(item().id);
+                              else
+                                list.activate.key(item().id, {
+                                  reason: 'pointer',
+                                  metadata: { event, newSplit: event.shiftKey },
+                                });
+                            }}
+                            onSave={(property, value) =>
+                              commands.saveProperty(
+                                item().entity.id,
+                                property,
+                                value
+                              )
+                            }
+                          />
+                        </ProjectRowMenu>
                       )}
                     </Match>
                     <Match when={row.kind === 'load-more' ? row : undefined}>
@@ -447,6 +581,32 @@ export function ProjectsCollection(props: {
               selectedCount={list.selection.count()}
               onClose={interaction.selection.clear}
             />
+          </Show>
+          <Show when={renaming()} keyed>
+            {(row) => (
+              <RenameProjectDialog
+                name={row.project.name}
+                onOpenChange={(open) => {
+                  if (!open) setRenaming(undefined);
+                }}
+                onRename={(name) => commands.rename(row.project.id, name)}
+                onCloseAutoFocus={returnFocusToList}
+              />
+            )}
+          </Show>
+          <Show when={deleting()}>
+            {(request) => (
+              <DeleteProjectsDialog
+                count={request().rows.length}
+                pending={deletePending()}
+                error={request().error}
+                onOpenChange={(open) => {
+                  if (!open) setDeleting(undefined);
+                }}
+                onDelete={() => void deleteProjects(request().rows)}
+                onCloseAutoFocus={returnFocusToList}
+              />
+            )}
           </Show>
         </div>
       </ViewShell.Content>

@@ -15,7 +15,7 @@ import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
@@ -192,7 +192,7 @@ export function AgentSplitHeader(props: {
           <Show when={props.session?.pullRequestUrl}>
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>
-          <Show when={!isMobile()}>
+          <Show when={!isTouchDevice()}>
             <ChangesToggle />
             <For each={tools}>
               {(tool) => (

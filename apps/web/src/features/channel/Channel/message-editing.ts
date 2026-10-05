@@ -4,7 +4,7 @@ import {
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { MessageAttachment } from '@service-storage/generated/schemas/messageAttachment';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import { attachmentEntityType } from '../Input/message-payload';
 import type { InputAttachmentData, InputSnapshot } from '../Input/types';
@@ -19,7 +19,7 @@ function toInputAttachmentKind(
 }
 
 export function messageAttachmentToInputAttachment(
-  attachment: ApiMessageAttachment
+  attachment: MessageAttachment
 ): InputAttachmentData | undefined {
   const kind = toInputAttachmentKind(attachment.entity_type);
   if (!kind) return;
@@ -46,7 +46,7 @@ export function buildMessageEditSnapshot(message: MessageData): InputSnapshot {
 }
 
 export function getAttachmentIdsToDelete(args: {
-  currentAttachments: ApiMessageAttachment[];
+  currentAttachments: MessageAttachment[];
   nextSnapshot: InputSnapshot;
 }) {
   const nextAttachmentIds = new Set(
@@ -59,7 +59,7 @@ export function getAttachmentIdsToDelete(args: {
 }
 
 export function getAttachmentsToAdd(args: {
-  currentAttachments: ApiMessageAttachment[];
+  currentAttachments: MessageAttachment[];
   nextSnapshot: InputSnapshot;
 }): NewAttachment[] {
   const currentIds = new Set(

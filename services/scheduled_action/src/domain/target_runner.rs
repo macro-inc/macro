@@ -61,6 +61,9 @@ impl<Sessions: RoutineSessions> ScheduledAgentRunner for TargetRunner<Sessions> 
                 Ok(())
             }
             Ok(_) => Err(RoutineSessionError::SessionMismatch.into()),
+            // A definitive admission refusal created no session. Preserve the
+            // shared type for HTTP mapping and resource-free executor cleanup.
+            Err(RoutineSessionError::Admission(error)) => Err(error.into()),
             Err(error) => {
                 // ModelMismatch proves the requested owner/session was established.
                 // Other ambiguous failures may have persisted it too; a safe,

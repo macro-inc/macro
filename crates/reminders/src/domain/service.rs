@@ -198,7 +198,7 @@ fn resolve_entity(
 /// holding proof for another. The repo stays user-scoped on top of this: the
 /// receipt says who proved what, the `WHERE user_id` says what the query may
 /// touch.
-fn receipt_owner_and_id(
+pub(crate) fn receipt_owner_and_id(
     receipt: &EntityAccessReceipt<OwnerAccessLevel>,
 ) -> Result<(MacroUserIdStr<'static>, Uuid), ReminderError> {
     let user_id = receipt
@@ -289,6 +289,59 @@ where
     R: RemindersRepo,
     C: Clock,
 {
+    #[tracing::instrument(err, skip_all)]
+    async fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: super::collection::CollectionQuery,
+    ) -> Result<super::collection::ReminderCollectionPage, ReminderError> {
+        use super::collection::{CollectionCursor, ReminderCollectionPage, is_history};
+        let limit = query.limit.unwrap_or(100).clamp(1, 500);
+        let as_of = query
+            .cursor
+            .map(|cursor| cursor.as_of)
+            .unwrap_or_else(|| self.clock.now());
+        let mut items = Vec::new();
+        let mut cursor = query.cursor;
+        let mut next_cursor = None;
+        // Match the ordinary reminder list's bounded recovery from malformed rows.
+        for _ in 0..MAX_LIST_BATCHES {
+            let probe = super::collection::CollectionQuery {
+                cursor,
+                ..query.clone()
+            };
+            let batch = self
+                .repo
+                .list_collection(user, &probe, as_of, i64::from(limit) + 1)
+                .await
+                .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
+            let exhausted = batch.examined <= limit as usize;
+            items.extend(batch.items);
+            if items.len() > limit as usize {
+                items.truncate(limit as usize);
+                next_cursor = items.last().map(|row| CollectionCursor {
+                    as_of,
+                    history: is_history(&row.reminder, as_of),
+                    position: super::models::ReminderCursor::after(&row.reminder),
+                });
+                break;
+            }
+            if exhausted {
+                next_cursor = None;
+                break;
+            }
+            cursor = batch.last_examined;
+            next_cursor = cursor;
+            if items.len() == limit as usize {
+                break;
+            }
+        }
+        Ok(ReminderCollectionPage {
+            items,
+            next_cursor: next_cursor.map(CollectionCursor::encode),
+        })
+    }
+
     // `user_id` is the auth-provider composite id (it embeds the user's email)
     // and `request`/`patch` carry the user-authored description, so neither is
     // recorded as a span field.
@@ -508,6 +561,17 @@ where
 pub struct NoOpRemindersService;
 
 impl RemindersService for NoOpRemindersService {
+    async fn list_collection(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _query: super::collection::CollectionQuery,
+    ) -> Result<super::collection::ReminderCollectionPage, ReminderError> {
+        Ok(super::collection::ReminderCollectionPage {
+            items: vec![],
+            next_cursor: None,
+        })
+    }
+
     async fn create_reminder(
         &self,
         _user_id: &MacroUserIdStr<'_>,

@@ -11,7 +11,7 @@ use std::sync::Arc;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn cleanup_batches_remove_all_session_rows_without_a_user_cascade(pool: PgPool) {
     const OTHER: &str = "macro|cleanup-other@example.com";
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     insert_user(&pool, OTHER).await;
     for _ in 0..101 {

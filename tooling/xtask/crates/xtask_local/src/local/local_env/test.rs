@@ -15,6 +15,31 @@ fn local_env() -> BTreeMap<String, String> {
 /// Every key a local service relies on must be present — this is the test that
 /// replaces "someone remembers to update defaults.env".
 #[test]
+fn slack_import_worker_uses_local_resources_and_starts_paused() {
+    let env = local_env();
+    assert_eq!(
+        env["OVERRIDE_SLACK_IMPORT_QUEUE"],
+        resources::queue_url(macro_queues::SlackImportQueue::LOCAL)
+    );
+    assert_eq!(
+        env["OVERRIDE_SLACK_IMPORT_DLQ"],
+        resources::queue_url(macro_queues::SlackImportDlq::LOCAL)
+    );
+    assert_eq!(env["UPLOAD_STAGING_BUCKET"], "bulk-upload-staging");
+    assert_eq!(
+        env["OVERRIDE_SEARCH_PROCESSING_SERVICE_URL"],
+        "http://search-processing-service:8080"
+    );
+    assert_eq!(
+        env["OVERRIDE_CONNECTION_GATEWAY_URL"],
+        "http://connection-gateway:8080"
+    );
+    assert_eq!(env["INTERNAL_API_KEY"], env["INTERNAL_API_SECRET_KEY"]);
+    assert_eq!(env["SLACK_IMPORT_ENABLED"], "false");
+    assert_eq!(env["SLACK_IMPORT_CONCURRENCY"], "1");
+}
+
+#[test]
 fn emits_required_keys() {
     let env = local_env();
     for key in [
@@ -510,7 +535,11 @@ fn named_instance_separates_browser_and_container_aws_endpoints() {
     assert_eq!(env["LOCAL_AWS_URL"], "http://localstack:4566");
     assert_eq!(
         env["LOCAL_AWS_PUBLIC_URL"],
-        format!("http://localhost:{}", instance.port(Port::LocalStack))
+        format!("{}/local-storage", env["FRONTEND_ORIGIN"])
+    );
+    assert_eq!(
+        env["DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL"],
+        format!("{}/local-storage/doc-storage", env["FRONTEND_ORIGIN"])
     );
 }
 

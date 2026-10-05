@@ -9,6 +9,9 @@ name = "agent_trigger_service"
 path = "src/main.rs"
 
 [dependencies]
+ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
+teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 agent_session = { path = "../../crates/agent_session" }
@@ -17,8 +20,12 @@ ai_usage = { path = "../../crates/ai_usage" }
 anyhow = { workspace = true }
 bots = { path = "../../crates/bots", default-features = false, features = ["outbound", "ports"] }
 channels = { path = "../../crates/channels", default-features = false, features = ["outbound", "ports"] }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 database_env_vars = { path = "../../crates/database_env_vars" }
+document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 entity_access = { path = "../../crates/entity_access" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 kafka_util = { path = "../../crates/kafka_util" }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_config = { path = "../../crates/macro_config" }
@@ -26,8 +33,11 @@ macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
-messages = { path = "../../crates/messages", features = ["broker", "outbound"] }
+messages = { path = "../../crates/messages", features = ["broker", "delivery", "outbound"] }
+properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 rdkafka = { workspace = true }
+rootcause = { workspace = true }
+system_properties = { path = "../../crates/system_properties" }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 static_file = { path = "../../crates/static_file" }

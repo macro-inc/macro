@@ -28,11 +28,17 @@ export function openAgentComposer(
   }
   // Scope focus to this split and the new-chat input, never an existing session
   // or Home's shared composer. Wait for asynchronous route/query mounting.
-  triggerFocusInput(() =>
-    Array.from(
-      document.querySelectorAll<HTMLElement>('[data-agents-workspace]')
-    )
-      .find((element) => element.dataset.agentsWorkspace === split.id)
-      ?.querySelector<HTMLElement>('.newchat [contenteditable="true"]')
+  triggerFocusInput(
+    () =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>('[data-agent-new-composer]')
+      )
+        .find((element) => element.dataset.agentNewComposer === split.id)
+        ?.querySelector<HTMLElement>('[contenteditable="true"]') ??
+      Array.from(
+        document.querySelectorAll<HTMLElement>('[data-agents-workspace]')
+      )
+        .find((element) => element.dataset.agentsWorkspace === split.id)
+        ?.querySelector<HTMLElement>('.newchat [contenteditable="true"]')
   );
 }

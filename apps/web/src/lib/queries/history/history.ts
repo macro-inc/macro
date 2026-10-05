@@ -2,7 +2,11 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import {
+  type HistoryItemType,
+  type ItemType,
+  storageServiceClient,
+} from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import {
   type QueryClient,
@@ -15,7 +19,10 @@ import {
 import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
-import { readCachedGraphqlHistoryItems } from './graphql';
+import {
+  HISTORY_SEARCH_BUCKETS,
+  readCachedGraphqlHistoryItems,
+} from './graphql';
 import { historyKeys } from './keys';
 import { transformHistoryItem, transformHistoryResponse } from './transforms';
 import type { HistoryItem } from './types';
@@ -104,11 +111,14 @@ export function useHistoryQuery() {
     const host = graphqlCacheHost();
     if (!host) return;
     onCleanup(
-      subscribeToVisibleCacheChanges(host, () =>
-        activeQueryClient.invalidateQueries(
-          { queryKey: historyKeys.graphqlList.queryKey },
-          { cancelRefetch: false }
-        )
+      subscribeToVisibleCacheChanges(
+        host,
+        () =>
+          activeQueryClient.invalidateQueries(
+            { queryKey: historyKeys.graphqlList.queryKey },
+            { cancelRefetch: false }
+          ),
+        { searchBuckets: () => HISTORY_SEARCH_BUCKETS }
       )
     );
   });
@@ -161,7 +171,7 @@ export async function refetchHistory(): Promise<void> {
 
 type UpsertToHistoryParams = {
   itemId: string;
-  itemType: ItemType;
+  itemType: HistoryItemType;
 };
 
 type UpsertToHistoryContext = {
@@ -227,7 +237,7 @@ export function useUpsertToHistoryMutation(
  * Prefer `useUpsertToHistoryMutation` when inside a component.
  */
 export async function postNewHistoryItem(
-  itemType: ItemType,
+  itemType: HistoryItemType,
   itemId: string
 ): Promise<boolean> {
   const maybeAdded = await storageServiceClient.upsertItemToUserHistory({

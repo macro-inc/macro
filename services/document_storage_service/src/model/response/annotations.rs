@@ -1,12 +1,6 @@
-use model::annotations::{Anchor, CommentThread};
+use model::annotations::Anchor;
 use serde::Serialize;
 use utoipa::ToSchema;
-
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ThreadResponse {
-    pub data: Vec<CommentThread>,
-}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

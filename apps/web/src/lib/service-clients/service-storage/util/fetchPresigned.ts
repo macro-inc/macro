@@ -3,8 +3,9 @@ import { platformFetch } from '@core/util/platformFetch';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import { err, ok, type Result } from 'neverthrow';
 
+/** Keyed by the `Response` method that reads each body type. */
 type ResultMap = {
-  arraybuffer: ArrayBuffer;
+  arrayBuffer: ArrayBuffer;
   blob: Blob;
   text: string & {};
   json: ObjectLike;
@@ -58,8 +59,7 @@ export async function fetchPresigned<K extends keyof ResultMap>(
       return httpStatusToError(response.status);
     }
 
-    const data =
-      await response[responseType as keyof Response & keyof ResultMap]();
+    const data = (await response[responseType]()) as ResultMap[K];
     return ok(data);
   } catch (error) {
     return fetchExceptionToError(error);

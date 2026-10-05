@@ -21,12 +21,22 @@ import {
 } from '@queries/soup/cache';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import { Button } from '@ui';
-import { createMemo, Match, onCleanup, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  type JSX,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { ReminderForm, type ReminderFormValues } from './ReminderForm';
 import {
+  describeReminderConfirmation,
   reminderEditPatch,
   resolveEditedDescription,
 } from './reminder-schedule';
+import { EmailReminderDetails } from './views/email-reminder-details';
 
 /** The display type an inline mention takes for the referenced entity. */
 type MentionType = NonNullable<ReminderEntity['referencedEntity']>['type'];
@@ -70,6 +80,7 @@ function referenceMention(
  */
 export type ReminderDetailsProps = {
   reminderId: string | undefined;
+  isEmailFollowup?: boolean;
   onClose: VoidFunction;
 };
 
@@ -97,7 +108,11 @@ export function ReminderDetails(props: ReminderDetailsProps) {
   return (
     <Show when={props.reminderId} keyed fallback={<ReminderUnavailable />}>
       {(reminderId) => (
-        <ReminderDetailsForId reminderId={reminderId} onClose={props.onClose} />
+        <ReminderDetailsForId
+          reminderId={reminderId}
+          onClose={props.onClose}
+          isEmailFollowup={props.isEmailFollowup}
+        />
       )}
     </Show>
   );
@@ -105,6 +120,7 @@ export function ReminderDetails(props: ReminderDetailsProps) {
 
 /** One keyed editor lifecycle, recreated whenever the selected reminder changes. */
 function ReminderDetailsForId(props: {
+  isEmailFollowup?: boolean;
   reminderId: string;
   onClose: VoidFunction;
 }) {
@@ -115,6 +131,8 @@ function ReminderDetailsForId(props: {
 
   const calendarUiEnabled = useCalendarUiFlag();
   const query = useReminderQuery(() => props.reminderId);
+  const [updateError, setUpdateError] = createSignal<string>();
+  let focusBeforeSave: HTMLElement | undefined;
 
   // Soup rows come from the normalized soup cache, not the reminders queries, so
   // the mutation's own invalidation leaves the row reading its old description
@@ -144,6 +162,12 @@ function ReminderDetailsForId(props: {
     query.isError || (query.isSuccess && query.data === undefined);
 
   const save = async (values: ReminderFormValues, reminder: Reminder) => {
+    if (updateReminder.isPending) return;
+    focusBeforeSave =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setUpdateError(undefined);
     const patch = reminderEditPatch(
       {
         description: reminder.description,
@@ -171,13 +195,29 @@ function ReminderDetailsForId(props: {
     }
     const submittedReminderId = reminder.id;
     try {
-      await updateReminder.mutateAsync({ id: reminder.id, patch });
+      const updated = await updateReminder.mutateAsync({
+        id: reminder.id,
+        patch,
+      });
       if (!active || props.reminderId !== submittedReminderId) return;
-      toast.success('Reminder updated');
+      toast.success(
+        `Reminder updated · ${describeReminderConfirmation(updated.schedule, updated.nextRunAt)}`
+      );
       props.onClose();
     } catch {
       if (!active || props.reminderId !== submittedReminderId) return;
-      toast.failure('Failed to update reminder');
+      setUpdateError(
+        'We couldn’t save these changes. Your edits are still here—try again.'
+      );
+      queueMicrotask(() => {
+        if (
+          active &&
+          props.reminderId === submittedReminderId &&
+          focusBeforeSave?.isConnected
+        ) {
+          focusBeforeSave.focus();
+        }
+      });
     }
   };
 
@@ -187,62 +227,72 @@ function ReminderDetailsForId(props: {
         <Switch>
           <Match when={query.isSuccess ? query.data : undefined}>
             {(reminder) => (
-              <ReminderForm
-                initialDescription={reminder().description}
-                initialSchedule={reminder().schedule}
-                initialRemindAt={reminder().nextRunAt}
-                placeholder="Reminder description"
-                submitLabel="Save"
-                pending={updateReminder.isPending}
-                reference={
-                  <>
-                    <Show when={reference()}>
-                      {(ref) => (
-                        <div class="flex flex-col gap-1">
-                          <span class="text-xs font-medium text-ink-muted">
-                            Original item
-                          </span>
-                          <div class="flex">
-                            <ItemPreview id={ref().id} type={ref().type} />
+              <EmailDetailsGate
+                reminder={reminder()}
+                onClose={props.onClose}
+                isEmailFollowup={props.isEmailFollowup}
+              >
+                <ReminderForm
+                  initialDescription={reminder().description}
+                  initialSchedule={reminder().schedule}
+                  initialRemindAt={reminder().nextRunAt}
+                  placeholder="Reminder description"
+                  submitLabel="Save"
+                  pending={updateReminder.isPending}
+                  error={updateError()}
+                  reference={
+                    <>
+                      <Show when={reference()}>
+                        {(ref) => (
+                          <div class="flex flex-col gap-1">
+                            <span class="text-xs font-medium text-ink-muted">
+                              Original item
+                            </span>
+                            <div class="flex">
+                              <ItemPreview id={ref().id} type={ref().type} />
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </Show>
-                    <Show
-                      when={calendarUiEnabled() ? calendarEventId() : undefined}
-                    >
-                      {(eventId) => (
-                        <div class="flex flex-col gap-1">
-                          <span class="text-xs font-medium text-ink-muted">
-                            Original item
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            class="self-start"
-                            onClick={() =>
-                              void openCalendarEventSplit({
-                                eventId: eventId(),
-                              })
-                            }
-                          >
-                            <CalendarBlankIcon class="size-4" />
-                            Open calendar event
-                          </Button>
-                        </div>
-                      )}
-                    </Show>
-                  </>
-                }
-                revertOnCancel
-                onCancel={(wasDirty) => {
-                  // Reverting an edit keeps the panel open; a clean cancel
-                  // dismisses the preview.
-                  if (!wasDirty) props.onClose();
-                }}
-                onSubmit={(values) => void save(values, reminder())}
-              />
+                        )}
+                      </Show>
+                      <Show
+                        when={
+                          calendarUiEnabled() ? calendarEventId() : undefined
+                        }
+                      >
+                        {(eventId) => (
+                          <div class="flex flex-col gap-1">
+                            <span class="text-xs font-medium text-ink-muted">
+                              Original item
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              class="self-start"
+                              onClick={() =>
+                                void openCalendarEventSplit({
+                                  eventId: eventId(),
+                                })
+                              }
+                            >
+                              <CalendarBlankIcon class="size-4" />
+                              Open calendar event
+                            </Button>
+                          </div>
+                        )}
+                      </Show>
+                    </>
+                  }
+                  revertOnCancel
+                  onCancel={(wasDirty) => {
+                    setUpdateError(undefined);
+                    // Reverting an edit keeps the panel open; a clean cancel
+                    // dismisses the preview.
+                    if (!wasDirty) props.onClose();
+                  }}
+                  onSubmit={(values) => void save(values, reminder())}
+                />
+              </EmailDetailsGate>
             )}
           </Match>
           <Match when={query.isPending}>
@@ -269,5 +319,35 @@ export function ReminderEditorSplit(props: { reminderId: string | undefined }) {
       reminderId={props.reminderId}
       onClose={() => panel.handle.close()}
     />
+  );
+}
+
+function EmailDetailsGate(props: {
+  isEmailFollowup?: boolean;
+  reminder: Reminder;
+  onClose: () => void;
+  children: JSX.Element;
+}) {
+  return (
+    <Show
+      when={
+        props.isEmailFollowup !== false &&
+        props.reminder.entityType === 'email_thread'
+          ? props.reminder.entityId
+          : undefined
+      }
+      fallback={props.children}
+    >
+      {(threadId) => (
+        <EmailReminderDetails
+          reminder={props.reminder}
+          isEmailFollowup={props.isEmailFollowup}
+          threadId={threadId()}
+          onClose={props.onClose}
+        >
+          {props.children}
+        </EmailReminderDetails>
+      )}
+    </Show>
   );
 }

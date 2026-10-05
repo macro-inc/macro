@@ -3,6 +3,7 @@ import {
   type Facet,
   type FacetClause,
   type FacetOption,
+  NIL_UUID,
   TAG_FACET_ID,
   type TagFacetContext,
   tagFacetOption,
@@ -32,6 +33,7 @@ export type DriveFacetEntity = EntityWithProperties<EntityData>;
 type DriveFacetOption = FacetOption<DriveFacetEntity, DriveFacetContext>;
 
 type DocumentTypeOptionId =
+  | 'database'
   | 'doc-markdown'
   | 'doc-canvas'
   | 'doc-spreadsheet'
@@ -59,6 +61,11 @@ const namedDocumentSubtype = clause.or(
 );
 
 const TYPE_OPTIONS: DriveFacetOption[] = [
+  typeOption(
+    'database',
+    clause.eq('id', NIL_UUID),
+    (entity) => entity.type === 'database'
+  ),
   typeOption(
     'doc-markdown',
     clause.and(clause.eq('fileType', 'md'), clause.not(namedDocumentSubtype)),

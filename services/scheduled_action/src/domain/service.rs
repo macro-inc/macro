@@ -2,16 +2,23 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
+use entity_access::domain::{
+    models::{
+        EditAccessLevel, EntityAccessReceipt, EntityType, OwnerAccessLevel, RequiredPermission,
+        ViewAccessLevel,
+    },
+    ports::ScheduledActionGrants,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::Owner;
+use model_owner::CreationPrincipal;
 use tokio::sync::mpsc::Sender;
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionExecutionRecord, ActionPolicyError, CreateScheduledAction,
-    DispatchEvent, InProgressExecution, ScheduledAction, UpdateScheduledAction,
+    DispatchEvent, InProgressExecution, OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
 };
 use super::ports::{
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
@@ -21,20 +28,27 @@ use super::target_validation::{ModelOnlyTargets, require_explicit_agent};
 #[cfg(test)]
 pub(crate) mod test;
 
-pub struct ScheduledActionServiceImpl<Rpo, Exe, Targets = ModelOnlyTargets> {
+pub struct ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets = ModelOnlyTargets> {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
+    grants: Arc<Grants>,
     dispatcher_tx: Sender<DispatchEvent>,
     event_management_enabled: bool,
     targets: Targets,
 }
 
-impl<Rpo: ScheduledActionRepo, Exe> ScheduledActionServiceImpl<Rpo, Exe> {
+impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe, Grants> {
     /// Event management defaults off until explicitly enabled by composition.
-    pub fn new(repo: Arc<Rpo>, executor: Arc<Exe>, dispatcher_tx: Sender<DispatchEvent>) -> Self {
+    pub fn new(
+        repo: Arc<Rpo>,
+        executor: Arc<Exe>,
+        dispatcher_tx: Sender<DispatchEvent>,
+        grants: Arc<Grants>,
+    ) -> Self {
         Self {
             repo,
             executor,
+            grants,
             dispatcher_tx,
             event_management_enabled: false,
             targets: ModelOnlyTargets,
@@ -42,14 +56,17 @@ impl<Rpo: ScheduledActionRepo, Exe> ScheduledActionServiceImpl<Rpo, Exe> {
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe, Targets> {
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets>
+{
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, T> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
+            grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
             event_management_enabled: self.event_management_enabled,
             targets,
@@ -61,13 +78,24 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
         self
     }
 
-    async fn owned_action(
+    async fn load_granted<T: RequiredPermission>(
         &self,
-        id: &Uuid,
-        caller: &MacroUserIdStr<'static>,
+        receipt: &EntityAccessReceipt<T>,
     ) -> Result<ScheduledAction> {
-        match self.repo.get_action(id, caller.clone()).await? {
-            Some(action) if action.owner.is_user(caller) => Ok(action),
+        if receipt.entity().entity_type != EntityType::ScheduledAction {
+            bail!("scheduled action receipt has the wrong entity type");
+        }
+        let Ok(id) = receipt.entity().entity_id.parse::<Uuid>() else {
+            bail!("scheduled action receipt id is not a uuid");
+        };
+        match self.repo.get_action(&id).await? {
+            Some(action)
+                if receipt
+                    .acting_user_id()
+                    .is_some_and(|user| action.owner.is_user(user)) =>
+            {
+                Ok(action)
+            }
             _ => Err(ActionPolicyError::NotFound.into()),
         }
     }
@@ -83,7 +111,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
         &self,
         mut action: ScheduledAction,
         input: ActionConfiguration,
-        caller: &MacroUserIdStr<'static>,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
@@ -106,7 +133,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
             return Err(ActionPolicyError::UpdateConflict.into());
         }
         if !disable_only {
-            self.targets.validate_task(&input.task, caller).await?;
+            self.targets
+                .validate_task(&input.task, action.owner_user()?)
+                .await?;
             if trigger_changed || (!action.enabled && input.enabled) {
                 action.next_run_at = next_run(&input.trigger)?;
             }
@@ -145,16 +174,24 @@ fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
     Ok(next)
 }
 
-pub(crate) async fn list_owned_actions<R: ScheduledActionRepo>(
+pub(crate) async fn list_accessible_actions<R, G>(
     repo: &R,
+    grants: &G,
     user_id: &MacroUserIdStr<'static>,
-) -> Result<Vec<ScheduledAction>> {
-    let mut actions = repo
-        .get_actions(user_id.clone())
-        .await?
-        .into_iter()
-        .filter(|action| action.owner.is_user(user_id))
-        .collect::<Vec<_>>();
+) -> Result<Vec<ScheduledAction>>
+where
+    R: ScheduledActionRepo,
+    G: ScheduledActionGrants,
+{
+    let ids = grants
+        .accessible_scheduled_action_ids(user_id)
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to list accessible scheduled actions: {error}"))?;
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut actions = repo.get_actions_by_ids(&ids).await?;
+    actions.retain(|action| action.owner.is_user(user_id));
     actions.sort_by(|left, right| {
         left.created_at
             .cmp(&right.created_at)
@@ -173,24 +210,25 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Targets> ScheduledActionService for ScheduledActionServiceImpl<Rpo, Exe, Targets>
+impl<Rpo, Exe, Grants, Targets> ScheduledActionService
+    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets>
 where
     Rpo: ScheduledActionRepo,
+    Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
     async fn get_action(
         &self,
-        id: &Uuid,
-        user_id: MacroUserIdStr<'static>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<ScheduledAction> {
-        self.owned_action(id, &user_id).await
+        self.load_granted(&receipt).await
     }
 
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
         // Use the repository list, not the legacy cron-only service list, so
         // event-triggered actions are also removed regardless of rollout gates.
-        for action in self.repo.get_actions(user_id.clone()).await? {
+        for action in self.repo.get_owned_actions(&user_id).await? {
             if !action.owner.is_user(&user_id) {
                 bail!("account cleanup returned an action owned by another principal");
             }
@@ -200,7 +238,7 @@ where
             // Reserve before deleting: a stopped dispatcher must not leave us
             // reporting failure after losing the row needed to retry its event.
             let permit = self.dispatcher_tx.reserve().await?;
-            self.repo.delete_action(&id, user_id.clone()).await?;
+            self.repo.delete_action(&id).await?;
             permit.send(DispatchEvent::Delete(action));
         }
         Ok(())
@@ -208,12 +246,16 @@ where
 
     async fn create_action(
         &self,
+        principal: &CreationPrincipal,
         input: CreateScheduledAction,
-        user_id: MacroUserIdStr<'static>,
     ) -> Result<ScheduledAction> {
+        let owner = principal.owner();
+        let owner_user = owner.as_user().ok_or(OwnerNotUserError {
+            owner_type: owner.owner_type(),
+        })?;
         let input = ActionConfiguration::from(input);
         self.check_event_management(&input.trigger)?;
-        self.targets.validate_task(&input.task, &user_id).await?;
+        self.targets.validate_task(&input.task, owner_user).await?;
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
@@ -221,7 +263,7 @@ where
             .repo
             .create_action(ScheduledAction {
                 id: None,
-                owner: Owner::User(user_id),
+                owner,
                 name: input.name,
                 trigger: input.trigger,
                 kind: input.kind,
@@ -247,32 +289,33 @@ where
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
     ) -> Result<Vec<ScheduledAction>> {
-        Ok(list_owned_actions(self.repo.as_ref(), &user_id)
-            .await?
-            .into_iter()
-            .filter(|action| include_events || matches!(action.trigger, ActionTrigger::Cron { .. }))
-            .collect())
+        Ok(
+            list_accessible_actions(self.repo.as_ref(), self.grants.as_ref(), &user_id)
+                .await?
+                .into_iter()
+                .filter(|action| {
+                    include_events || matches!(action.trigger, ActionTrigger::Cron { .. })
+                })
+                .collect(),
+        )
     }
 
     async fn update_action(
         &self,
-        id: &Uuid,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
         input: UpdateScheduledAction,
-        macro_user_id: MacroUserIdStr<'static>,
     ) -> Result<ScheduledAction> {
-        let action = self.owned_action(id, &macro_user_id).await?;
+        let action = self.load_granted(&receipt).await?;
         let input = input.into_configuration(action.enabled);
-        self.replace_configuration(action, input, &macro_user_id)
-            .await
+        self.replace_configuration(action, input).await
     }
 
     async fn set_enabled(
         &self,
-        id: &Uuid,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
         enabled: bool,
-        macro_user_id: MacroUserIdStr<'static>,
     ) -> Result<ScheduledAction> {
-        let action = self.owned_action(id, &macro_user_id).await?;
+        let action = self.load_granted(&receipt).await?;
         if action.enabled == enabled {
             return Ok(action);
         }
@@ -283,13 +326,15 @@ where
             task: action.task.clone(),
             enabled,
         };
-        self.replace_configuration(action, input, &macro_user_id)
-            .await
+        self.replace_configuration(action, input).await
     }
 
-    async fn delete_action(&self, id: &Uuid, macro_user_id: MacroUserIdStr<'static>) -> Result<()> {
-        let action = self.owned_action(id, &macro_user_id).await?;
-        self.repo.delete_action(id, macro_user_id).await?;
+    async fn delete_action(&self, receipt: EntityAccessReceipt<OwnerAccessLevel>) -> Result<()> {
+        let action = self.load_granted(&receipt).await?;
+        let Some(id) = action.id else {
+            bail!("cannot delete action without id");
+        };
+        self.repo.delete_action(&id).await?;
         self.dispatcher_tx
             .send(DispatchEvent::Delete(action))
             .await
@@ -299,10 +344,9 @@ where
 
     async fn execute_action_now(
         &self,
-        id: &Uuid,
-        macro_user_id: MacroUserIdStr<'static>,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<InProgressExecution> {
-        let action = self.owned_action(id, &macro_user_id).await?;
+        let action = self.load_granted(&receipt).await?;
         action.owner_user()?;
         // Manual execution deliberately has no event reference or event-run ID.
         self.executor.execute_action(action).await
@@ -310,10 +354,12 @@ where
 
     async fn get_execution_records(
         &self,
-        id: &Uuid,
-        macro_user_id: MacroUserIdStr<'static>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<Vec<ActionExecutionRecord>> {
-        self.owned_action(id, &macro_user_id).await?;
-        self.repo.get_execution_records(id).await
+        let action = self.load_granted(&receipt).await?;
+        let Some(id) = action.id else {
+            bail!("cannot read execution history without id");
+        };
+        self.repo.get_execution_records(&id).await
     }
 }

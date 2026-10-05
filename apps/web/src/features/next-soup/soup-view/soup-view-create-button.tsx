@@ -5,7 +5,7 @@ import {
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
-import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
+import { openCreateCompanyModal } from '@app/features/crm/crm-create';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';

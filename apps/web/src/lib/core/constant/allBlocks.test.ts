@@ -1,4 +1,4 @@
-import { ConcreteBlockRegistry } from '@core/block';
+import { BlockRegistry } from '@core/block';
 import { createHeadlessEditor } from '@lexical/headless';
 import { DocumentMentionNode } from '@macro-inc/lexical-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -22,12 +22,12 @@ const definitionFiles = import.meta.glob('../../../features/*/definition.ts', {
 });
 
 describe('block definition discovery', () => {
-  it('has one definition file for every concrete block', () => {
+  it('has one definition file for every block', () => {
     const discoveredNames = Object.values(definitionFiles).map(
       (source) => String(source).match(/\bname:\s*['"]([^'"]+)['"]/)?.[1]
     );
 
-    expect(discoveredNames.sort()).toEqual([...ConcreteBlockRegistry].sort());
+    expect(discoveredNames.sort()).toEqual([...BlockRegistry].sort());
   });
 });
 
