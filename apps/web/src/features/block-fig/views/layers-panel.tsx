@@ -304,8 +304,28 @@ export function LayersPanel(props: {
     );
     if (!e.shiftKey) anchor = row.id;
     tree?.focus({ preventScroll: true });
-    if (click.kind === 'toggle') void viewer.selectIds([click.id], true);
-    else void viewer.selectIds(click.ids);
+    if (click.kind === 'select') {
+      selectRows(click.ids);
+      return;
+    }
+    const current = viewer.selected();
+    if (current.some((s) => s.id === click.id))
+      viewer.select(current.filter((s) => s.id !== click.id));
+    else selectRows([...current.map((s) => s.id), click.id]);
+  };
+
+  /** Selects rows shown in the tree at once (their parents are known). */
+  const selectRows = (ids: string[]) => {
+    const byId = new Map(rows().map((r) => [r.row.id, r]));
+    const known = viewer.selected();
+    viewer.select(
+      ids.flatMap((id) => {
+        const r = byId.get(id);
+        if (r) return [{ id, parent: r.depth > 0 ? r.parent : null }];
+        const s = known.find((k) => k.id === id);
+        return s ? [s] : [];
+      })
+    );
   };
 
   /** Arrow keys move through the rows shown, and expand or collapse. */
@@ -336,7 +356,7 @@ export function LayersPanel(props: {
     if (!move) return;
     if (move.kind === 'select') {
       anchor = move.id;
-      void viewer.selectIds([move.id]);
+      selectRows([move.id]);
       return;
     }
     const row = shown.find((r) => r.row.id === move.id)?.row;

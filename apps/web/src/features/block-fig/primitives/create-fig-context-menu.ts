@@ -92,38 +92,44 @@ export function createFigContextMenu(options: {
     setMenu({ at, page, entries, facts });
   };
 
+  /** Selects what was right-clicked on the canvas, then opens the menu. */
+  const openOnCanvas = async (e: MouseEvent, canvas: HTMLElement) => {
+    const request = ++opening;
+    const r = canvas.getBoundingClientRect();
+    const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+    await viewer.pressAt(p, {
+      deep: options.mac ? e.metaKey : e.ctrlKey,
+      additive: false,
+    });
+    await show(e, request);
+  };
+
   /** A right-click in the canvas area. */
-  const onCanvas = (e: MouseEvent & { currentTarget: HTMLElement }) => {
+  const onCanvas = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest(NATIVE)) return;
     e.preventDefault();
     if (target.closest(NO_MENU)) return;
     const canvas = target.closest<HTMLElement>('[data-testid="fig-canvas"]');
-    if (!canvas) return;
+    if (canvas) void openOnCanvas(e, canvas);
+  };
+
+  /** Selects a right-clicked row (unless selected), then opens the menu. */
+  const openOnRow = async (e: MouseEvent, id: string) => {
     const request = ++opening;
-    const r = canvas.getBoundingClientRect();
-    const p = { x: e.clientX - r.left, y: e.clientY - r.top };
-    void viewer
-      .pressAt(p, {
-        deep: options.mac ? e.metaKey : e.ctrlKey,
-        additive: false,
-      })
-      .then(() => show(e, request));
+    if (!viewer.selected().some((s) => s.id === id))
+      await viewer.selectIds([id]);
+    await show(e, request);
   };
 
   /** A right-click on a row of the layers panel. */
   const onLayers = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest(NATIVE)) return;
-    const row = target.closest<HTMLElement>('[data-layer-id]');
-    const id = row?.dataset.layerId;
+    const id = target.closest<HTMLElement>('[data-layer-id]')?.dataset.layerId;
     if (!id) return;
     e.preventDefault();
-    const request = ++opening;
-    const selected = viewer.selected().some((s) => s.id === id);
-    void (selected ? Promise.resolve() : viewer.selectIds([id])).then(() =>
-      show(e, request)
-    );
+    void openOnRow(e, id);
   };
 
   const choose = (action: MenuAction) => {

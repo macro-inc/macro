@@ -88,144 +88,121 @@ function tidy(entries: (MenuEntry | false | undefined)[]): MenuEntry[] {
   return out;
 }
 
-/** The menu for a right-click on selected layers. */
-export function layerMenu(f: SelectionFacts): MenuEntry[] {
-  const edit = f.canEdit;
-  const move = edit && f.structural;
-  const single = f.count === 1;
-  const instance = f.types.includes('INSTANCE');
-  const ungroupable = f.types.some((t) => UNGROUPABLE.includes(t));
-  return tidy([
-    { action: 'copy', label: 'Copy', shortcut: '⌘C', disabled: !move },
-    edit && {
-      action: 'paste-here',
-      label: 'Paste here',
-      disabled: !f.canPaste,
-    },
-    edit && {
+/** Clipboard actions: copy, paste here or to replace, copy as PNG. */
+function clipboardItems(f: SelectionFacts, move: boolean): MenuItem[] {
+  const copy: MenuItem = {
+    action: 'copy',
+    label: 'Copy',
+    shortcut: '⌘C',
+    disabled: !move,
+  };
+  const png: MenuItem = {
+    action: 'copy-png',
+    label: 'Copy as PNG',
+    shortcut: '⇧⌘C',
+  };
+  if (!f.canEdit) return [copy, png];
+  return [
+    copy,
+    { action: 'paste-here', label: 'Paste here', disabled: !f.canPaste },
+    {
       action: 'paste-replace',
       label: 'Paste to replace',
       disabled: !f.canPaste || !f.structural,
     },
-    { action: 'copy-png', label: 'Copy as PNG', shortcut: '⇧⌘C' },
-    'separator',
-    edit && {
-      action: 'bring-to-front',
-      label: 'Bring to front',
-      shortcut: '⌥⌘]',
-      disabled: !move,
-    },
-    edit && {
-      action: 'bring-forward',
-      label: 'Bring forward',
-      shortcut: '⌘]',
-      disabled: !move,
-    },
-    edit && {
-      action: 'send-backward',
-      label: 'Send backward',
-      shortcut: '⌘[',
-      disabled: !move,
-    },
-    edit && {
-      action: 'send-to-back',
-      label: 'Send to back',
-      shortcut: '⌥⌘[',
-      disabled: !move,
-    },
-    'separator',
-    edit && {
-      action: 'group',
-      label: 'Group selection',
-      shortcut: '⌘G',
-      disabled: !move,
-    },
-    edit &&
-      ungroupable && {
-        action: 'ungroup',
-        label: 'Ungroup',
-        shortcut: '⇧⌘G',
-        disabled: !move,
-      },
-    edit && {
+    png,
+  ];
+}
+
+/** Grouping, auto layout, and component actions. */
+function structureItems(f: SelectionFacts): MenuEntry[] {
+  const ungroupable = f.types.some((t) => UNGROUPABLE.includes(t));
+  const component = f.count === 1 && f.types[0] === 'SYMBOL';
+  return tidy([
+    { action: 'group', label: 'Group selection', shortcut: '⌘G' },
+    ungroupable && { action: 'ungroup', label: 'Ungroup', shortcut: '⇧⌘G' },
+    {
       action: 'frame-selection',
       label: 'Frame selection',
       shortcut: '⌥⌘G',
-      disabled: !move,
     },
     'separator',
-    edit &&
-      (f.hasAutoLayout
-        ? {
-            action: 'remove-auto-layout',
-            label: 'Remove auto layout',
-            shortcut: '⌥⇧A',
-            disabled: !move,
-          }
-        : {
-            action: 'add-auto-layout',
-            label: 'Add auto layout',
-            shortcut: '⇧A',
-            disabled: !move,
-          }),
-    edit &&
-      !(single && f.types[0] === 'SYMBOL') && {
-        action: 'create-component',
-        label: 'Create component',
-        shortcut: '⌥⌘K',
-        disabled: !move,
-      },
-    edit &&
-      instance && {
-        action: 'detach-instance',
-        label: 'Detach instance',
-        shortcut: '⌥⌘B',
-        disabled: !move,
-      },
+    f.hasAutoLayout
+      ? {
+          action: 'remove-auto-layout',
+          label: 'Remove auto layout',
+          shortcut: '⌥⇧A',
+        }
+      : { action: 'add-auto-layout', label: 'Add auto layout', shortcut: '⇧A' },
+    !component && {
+      action: 'create-component',
+      label: 'Create component',
+      shortcut: '⌥⌘K',
+    },
+    f.types.includes('INSTANCE') && {
+      action: 'detach-instance',
+      label: 'Detach instance',
+      shortcut: '⌥⌘B',
+    },
+  ]);
+}
+
+/** Items that move layers, disabled for layers inside instances. */
+const movable = (entries: MenuEntry[], move: boolean): MenuEntry[] =>
+  entries.map((e) =>
+    e === 'separator' || move ? e : { ...e, disabled: true }
+  );
+
+/** The menu for a right-click on selected layers. */
+export function layerMenu(f: SelectionFacts): MenuEntry[] {
+  const move = f.canEdit && f.structural;
+  if (!f.canEdit)
+    return [
+      ...clipboardItems(f, move),
+      'separator',
+      { action: 'zoom-selection', label: 'Zoom to selection', shortcut: '⇧2' },
+    ];
+  return tidy([
+    ...clipboardItems(f, move),
     'separator',
-    edit && {
+    ...movable(
+      [
+        { action: 'bring-to-front', label: 'Bring to front', shortcut: '⌥⌘]' },
+        { action: 'bring-forward', label: 'Bring forward', shortcut: '⌘]' },
+        { action: 'send-backward', label: 'Send backward', shortcut: '⌘[' },
+        { action: 'send-to-back', label: 'Send to back', shortcut: '⌥⌘[' },
+        'separator',
+        ...structureItems(f),
+      ],
+      move
+    ),
+    'separator',
+    {
       action: 'toggle-visible',
       label: f.anyVisible ? 'Hide' : 'Show',
       shortcut: '⇧⌘H',
     },
-    edit && {
+    {
       action: 'toggle-locked',
       label: f.anyUnlocked ? 'Lock' : 'Unlock',
       shortcut: '⇧⌘L',
     },
     'separator',
-    edit && {
-      action: 'flip-horizontal',
-      label: 'Flip horizontal',
-      shortcut: '⇧H',
-      disabled: !move,
-    },
-    edit && {
-      action: 'flip-vertical',
-      label: 'Flip vertical',
-      shortcut: '⇧V',
-      disabled: !move,
-    },
+    ...movable(
+      [
+        { action: 'flip-horizontal', label: 'Flip horizontal', shortcut: '⇧H' },
+        { action: 'flip-vertical', label: 'Flip vertical', shortcut: '⇧V' },
+      ],
+      move
+    ),
     'separator',
-    edit &&
-      single && {
-        action: 'rename',
-        label: 'Rename',
-        shortcut: '⌘R',
-        disabled: !f.structural,
-      },
-    edit && {
-      action: 'delete',
-      label: 'Delete',
-      shortcut: '⌫',
-      disabled: !move,
+    f.count === 1 && {
+      action: 'rename',
+      label: 'Rename',
+      shortcut: '⌘R',
+      disabled: !f.structural,
     },
-    !edit && 'separator',
-    !edit && {
-      action: 'zoom-selection',
-      label: 'Zoom to selection',
-      shortcut: '⇧2',
-    },
+    { action: 'delete', label: 'Delete', shortcut: '⌫', disabled: !move },
   ]);
 }
 
