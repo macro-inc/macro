@@ -154,6 +154,91 @@ that production handling is implemented by this documentation-only task.
    the size budget, document sampling separately from upstream truncation.
    Update the evidence tables, exact tool schemas, and canonical-slug decision.
 
+## Verified behaviour
+
+### Automated integration verification (2026-10-05)
+
+These results validate the integrated code, **not the live Pipedream contract**.
+Tests used synthetic MCP fixtures, fake domain ports, and the existing local
+Postgres database, which already included the manual-initiator migration. No
+hosted database was queried or reset. Rust commands used the installed toolchain
+and cached dependencies (`CARGO_NET_OFFLINE=true`); Nix was unavailable.
+`SQLX_OFFLINE` was unset for every test command. Database tests used the local URL
+from `tooling/just/database.just` via `DATABASE_URL`.
+
+| Check | Result |
+| --- | --- |
+| `cargo test -p import -p mcp_select -p onboarding -p ai_tools -p channels -p pipedream_mcp` | Passed: 455 tests (114 import, 5 mcp_select, 6 onboarding, 47 ai_tools, 267 channels, 16 pipedream_mcp). Initial attempt lacked `DATABASE_URL`; rerun against local Postgres passed. |
+| `cargo test -p slack_integration --features ledger` | Passed: 100 tests, including the archive adapter's new fail-closed error-mapping regression. |
+| `just rust-check` | Passed after fixing the archive ledger's exhaustive match for the new `UnsupportedDiscovery` error. Archive import policy is unchanged. |
+| `just check full` / `just check` | Wrapper cannot discover changes in this non-colocated jj workspace: its Git commands fail and it exits 0 having checked nothing. Not counted as a pass. Component checks below were run directly. |
+| `cargo fmt --check`; `just clippy` | Passed; Clippy covers the workspace and the separate sync-service invocation. |
+| Biome CI, oxlint, ast-grep on files changed since the task base, selected with `jj diff` | Passed (exit 0). Warnings: picker metadata-parser complexity; pre-existing domain-to-inbound toolset import in `import/src/domain/service.rs`. Neither was expanded by the integration fix. |
+| `bun run check` in `apps/web` | Passed with `NODE_OPTIONS=--max-old-space-size=12288`; the default 4 GB Node heap exhausted memory. Includes schema checks, TypeScript, and Biome. |
+| `bun run test` in `apps/web` | Passed with `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 TZ=UTC`: 1,408 files, 12,539 tests, 1 todo, 168.53 s. Initial host-locale run had 32 failures in reminder/date/calendar tests; locale/timezone normalization required no code changes. |
+| Focused Slack connection, slug, picker-model, and picker-component tests | Passed: 4 files, 38 tests, 1.39 s. |
+| `bun run gen-api --check` | All 14 services generated successfully; final Git diff step failed in the jj-only workspace (script exit 1). Independent `jj diff` confirmed no generated-file changes, including cognition OpenAPI, client, metadata, and tool schemas. |
+
+The automated coverage exercises public-only discovery, onboarding top-15
+selection, manual discovery including archived candidates, bounded pagination,
+100-channel enrichment, roster matching, retry/fallback behavior, manual-run
+concurrency, canonical target reuse, import-time member refresh, endpoint
+validation, both Slack slug aliases, picker selection, and progress rendering.
+It does not prove that a real Pipedream action has the fixture's schema or returns
+complete data.
+
+The inherited ancestry contains exactly one nonempty commit for each task
+T01–T12, without conflicts. The requested bookmark is absent locally, and this
+jj version uses `bookmarks(...)`, not `bookmark(...)`; verification used
+`jj log -r 'c55d9ccc::@'` instead. Bookmark placement and integration remain owned
+by the planner runner; no rebase, merge, or bookmark mutation was performed here.
+
+### Browser and latency evidence: still blocked
+
+Nix is not installed, so the prescribed local-stack preflight could not run.
+The DCS dev Doppler credential probe still exits 1 (secret output suppressed).
+No authenticated dev Slack workspace or full local app stack was available for
+this verification. Browser E2E was **not performed**. The following remain release
+gates, not successful observations:
+
+1. Connect Slack through Pipedream development; verify the live slug, tool
+   schemas, email availability, and pagination using the procedure above.
+2. Settings → Connections → Slack → Import channels → Find channels: compare
+   displayed match counts with the team roster, select two channels, import,
+   then open both links and verify names, Team kind, and matched participants.
+3. Find channels again: verify no duplicate rows, refreshed counts on staged
+   rows, and already-imported rows remaining nonselectable. Check archived
+   filtering, empty/error states, and exclusion of private/DM conversations.
+4. Onboard a fresh user with Slack connected: verify auto-imported channels
+   include matched teammates, without changing onboarding to manual selection.
+5. Record channel-list, directory, per-channel member, complete discovery, and
+   two-channel import latency with workspace/channel sizes. **No live latency
+   was measured**; test durations above are not service latency measurements.
+
+### Known limitations
+
+- `/import/state` returns staged channel metadata together; payload size grows
+  with staged channel count. There is no paginated picker-state endpoint.
+- Manual discovery enriches members for at most 100 channels, preferring larger
+  channels. The remainder stays unresolved until selected for import. Import
+  batches attempt fresh resolution with one shared session/directory; failures
+  fall back to staged participants, potentially leaving only the importer.
+- Stored matched participants are capped at 100; `member_count` is separate.
+  After enrichment it counts known, non-bot, non-deleted directory members, not
+  necessarily Slack's displayed total. Unmatched people are not invited.
+- Listing/directory/member reads stop at 10/10/5 pages respectively. Exhausting
+  those bounds can leave partial data; current service code does not surface
+  cursor exhaustion as an explicit incomplete-result state. Repeated cursors
+  are bounded by those same limits, not diagnosed separately. Large-workspace
+  completeness needs follow-up in discovery/adapter work before broad rollout.
+- Private channels (including private `C` IDs), DMs, and group DMs are unsupported.
+  Public Slack channels become Macro Team channels, not public Macro channels.
+  Any connected team member may import; the importer owns the new channel.
+- This is channel shape only: no messages, files, ongoing membership sync, or
+  invitation flow. The ZIP-archive feature's authorization and behavior remain
+  separate. MCP compatibility and canonical new-connection slug remain
+  provisional until the live checks above succeed.
+
 ## Fixture checks
 
 ```sh
