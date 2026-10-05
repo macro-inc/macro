@@ -34,6 +34,7 @@ function lunchPoll(access: FormDetail['access']): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          bookingTarget: null,
           questions: [
             {
               id: 'question',

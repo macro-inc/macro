@@ -7,10 +7,10 @@
 import type { LayoutProblemOneOfNineKind } from './layoutProblemOneOfNineKind';
 
 /**
- * A gate tests a column no earlier section asks.
+ * Two sections or questions share an id.
  */
 export type LayoutProblemOneOfNine = {
-  /** The column. */
-  column: string;
+  /** The id. */
+  id: string;
   kind: LayoutProblemOneOfNineKind;
 };

@@ -27,6 +27,7 @@ const lunch: FormDetail = {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        bookingTarget: null,
         questions: [
           {
             id: 'question',

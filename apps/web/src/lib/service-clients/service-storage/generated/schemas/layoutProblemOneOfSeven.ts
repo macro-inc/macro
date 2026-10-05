@@ -7,10 +7,10 @@
 import type { LayoutProblemOneOfSevenKind } from './layoutProblemOneOfSevenKind';
 
 /**
- * Two sections or questions share an id.
+ * Two questions name one column.
  */
 export type LayoutProblemOneOfSeven = {
-  /** The id. */
-  id: string;
+  /** The column. */
+  column: string;
   kind: LayoutProblemOneOfSevenKind;
 };

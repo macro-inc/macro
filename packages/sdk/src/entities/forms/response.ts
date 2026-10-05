@@ -1,10 +1,11 @@
 import type { ResponseStatus } from '../../../generated/storage/types.gen';
 import { Lazy, MacroNotFoundError } from '../../utils';
 import type { DatabaseRow } from '../databases/row';
-import type { Form, FormAnswer } from './form';
+import type { Form, FormAnswer, FormBookingStep } from './form';
 
 type ResponseSnapshot = {
   status: ResponseStatus;
+  booking?: FormBookingStep;
   row?: DatabaseRow;
   answers: FormAnswer[];
 };
@@ -54,6 +55,11 @@ export class FormResponse {
   /** Answers as submitted or last read. Refresh to include later changes to the row. */
   async answers(): Promise<FormAnswer[]> {
     return (await this.detail.get()).answers;
+  }
+
+  /** The booking step unlocked by this saved response, if any. */
+  async booking(): Promise<FormBookingStep | undefined> {
+    return (await this.detail.get()).booking;
   }
 
   /** Reload the caller's current receipt; requires a signed-in respondent. */

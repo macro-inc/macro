@@ -89,7 +89,8 @@ pub struct Form {
     /// The form.
     #[schema(value_type = Uuid)]
     pub id: FormId,
-    /// Its name, independent of its database's.
+    /// Its display name. A standalone form follows the database it created;
+    /// a form attached to an existing table has its own name.
     pub name: String,
     /// What respondents read under the name.
     pub description: String,

@@ -1,5 +1,6 @@
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
+import CalendarCheck from '@phosphor/calendar-check.svg';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { Button, cn } from '@ui';
@@ -9,6 +10,7 @@ import {
   For,
   type JSX,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -27,6 +29,7 @@ import type { FormCellValue, FormDetail } from '../core/form-model';
 import { formAvailability, shortDate } from '../core/form-status';
 import { resolvedWidget } from '../core/question-types';
 import { createRespond } from '../primitives/create-respond';
+import { BookingStepView } from './booking-step-view';
 
 /**
  * The respond page (RFC 02 §4), shared by the app split, the public route
@@ -36,6 +39,8 @@ import { createRespond } from '../primitives/create-respond';
 export function RespondView(props: {
   detail: FormDetail;
   compact: boolean;
+  /** Author preview: answers and selected files stay in this tab. */
+  preview?: boolean;
   /** Who is answering, as the page's own header says it. */
   header?: JSX.Element;
   /** Where the page scrolls, to bring each new section to the top. */
@@ -47,9 +52,12 @@ export function RespondView(props: {
   // One per mount: a form can show as a page and a card at once.
   const scope = createUniqueId();
   const signedIn = () => !!context.viewer.userId();
-  const mine = context.responses.createMine(() => props.detail.form.id);
+  const mine = context.responses.createMine(() =>
+    props.preview ? undefined : props.detail.form.id
+  );
   const respond = createRespond({
     detail: () => props.detail,
+    preview: props.preview,
     mine: () => (signedIn() ? mine.response() : null),
     mineFailed: () => signedIn() && !!mine.failure(),
     reloadMine: mine.refetch,
@@ -73,6 +81,7 @@ export function RespondView(props: {
     formAvailability(form(), props.detail.tableGone, new Date()).kind ===
     'open';
   const note = () => {
+    if (props.preview) return '* required';
     if (!signedIn() || !open()) return '* required';
     const closesAt = form().closesAt;
     return closesAt
@@ -117,7 +126,16 @@ export function RespondView(props: {
     respond.checkAnswers();
   }
 
+  const previewFiles = new Set<string>();
+  onCleanup(() => {
+    for (const url of previewFiles) URL.revokeObjectURL(url);
+  });
   const upload = async (file: File) => {
+    if (props.preview) {
+      const url = URL.createObjectURL(file);
+      previewFiles.add(url);
+      return url;
+    }
     const finished = respond.beginUpload();
     const uploaded = await context.uploadFile(file);
     finished();
@@ -164,6 +182,69 @@ export function RespondView(props: {
         />
       </Show>
       <Switch>
+        <Match
+          when={(() => {
+            const view = respond.view();
+            return view.kind === 'preview-complete' ? view : undefined;
+          })()}
+        >
+          {(completed) => (
+            <Confirmation
+              message={form().confirmationMessage || 'Preview complete.'}
+              fresh
+              submittedAt={undefined}
+              receipt={receipt(completed().answers)}
+              canEdit={false}
+              compact={props.compact}
+              renderEntityLabel={context.ui.renderEntityLabel}
+              onEdit={respond.restartPreview}
+              notice={
+                <p class="text-sm text-ink-muted">
+                  Preview complete. No response was saved.
+                </p>
+              }
+              footer={
+                <Button
+                  variant="outline"
+                  class="self-start"
+                  onClick={() => {
+                    respond.restartPreview();
+                    revealTop();
+                  }}
+                >
+                  Try again
+                </Button>
+              }
+            />
+          )}
+        </Match>
+        <Match
+          when={(() => {
+            const view = respond.view();
+            return view.kind === 'booking' ? view : undefined;
+          })()}
+        >
+          {(step) => (
+            <>
+              <BookingStepView
+                booking={step().booking}
+                preview={step().preview}
+              />
+              <Show when={step().preview}>
+                <Button
+                  variant="outline"
+                  class="self-start"
+                  onClick={() => {
+                    respond.restartPreview();
+                    revealTop();
+                  }}
+                >
+                  Try again
+                </Button>
+              </Show>
+            </>
+          )}
+        </Match>
         <Match when={respond.view().kind === 'loading'}>
           <div
             class="flex flex-col gap-3"
@@ -267,10 +348,25 @@ export function RespondView(props: {
                 </>
               }
               footer={
-                <p class="px-1 text-xs text-ink-muted">
-                  Stored as a row in a database the form owner controls. Your
-                  answers are visible to the form’s editors.
-                </p>
+                <>
+                  <Show when={confirmation().booking}>
+                    <Button
+                      variant="cta"
+                      class="self-start"
+                      onClick={() => {
+                        respond.openBooking();
+                        revealTop();
+                      }}
+                    >
+                      <CalendarCheck class="size-3.5" />
+                      Book a time
+                    </Button>
+                  </Show>
+                  <p class="px-1 text-xs text-ink-muted">
+                    Stored as a row in a database the form owner controls. Your
+                    answers are visible to the form’s editors.
+                  </p>
+                </>
               }
             />
           )}
@@ -405,7 +501,7 @@ export function RespondView(props: {
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="md"
                     disabled={answering().submitting}
                     onClick={() => {
                       respond.back();
@@ -419,7 +515,7 @@ export function RespondView(props: {
                 <Button
                   type="submit"
                   variant="cta"
-                  size="sm"
+                  size="md"
                   disabled={answering().submitting || answering().uploading}
                   aria-busy={answering().submitting}
                 >
@@ -442,7 +538,11 @@ export function RespondView(props: {
                       >
                         <Spinner class="size-3.5 animate-spin" />
                       </Show>
-                      {respond.editing() ? 'Update response' : 'Submit'}
+                      {respond.editing()
+                        ? 'Update response'
+                        : answering().continuesToBooking
+                          ? 'Continue to booking'
+                          : 'Submit'}
                     </Show>
                   </Show>
                 </Button>

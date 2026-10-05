@@ -7,13 +7,10 @@
 import type { LayoutProblemOneOfOnethreeKind } from './layoutProblemOneOfOnethreeKind';
 
 /**
- * A text is longer than allowed.
+ * A gate's rule does not fit its column.
  */
 export type LayoutProblemOneOfOnethree = {
   kind: LayoutProblemOneOfOnethreeKind;
-  /**
-   * The longest allowed.
-   * @minimum 0
-   */
-  max: number;
+  /** Why. */
+  reason: string;
 };

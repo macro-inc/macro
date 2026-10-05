@@ -6,10 +6,13 @@
  * redirect (`routes/focused-shell.ts`). The form itself is the shared
  * `RespondView`.
  */
+import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import ClipboardText from '@phosphor/clipboard-text.svg';
-import { A, useNavigate } from '@solidjs/router';
+import Eye from '@phosphor/eye.svg';
+import { A, useNavigate, useSearchParams } from '@solidjs/router';
+import { Button } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { FormProvider } from './context/form-context';
 import { createAppFormContext } from './form-context-production';
@@ -82,10 +85,14 @@ function RespondFooter() {
 
 function FormRespondContent(props: { formId: string }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preview = () => searchParams.preview === 'true';
   const context = createAppFormContext({
     openRelated: (destination) =>
       navigate(`/database/${destination.databaseId}`),
     openChannel: (channelId) => navigate(`/channel/${channelId}`),
+    openCalendarSettings: () =>
+      navigate(`/settings/${settingsTabToSlug('Calendar')}`),
   });
   const source = context.createFormSource(() => props.formId);
   return (
@@ -112,23 +119,63 @@ function FormRespondContent(props: { formId: string }) {
           }
         >
           {(detail) => (
-            <>
-              <RespondView
-                detail={detail()}
-                refetch={source.refetch}
-                compact={false}
-                header={
-                  <RespondHeader
-                    name={detail().form.name}
-                    formId={props.formId}
-                    isPublic={detail().form.audience === 'public'}
+            <Show
+              when={!preview() || detail().access !== 'view'}
+              fallback={
+                <div class="mx-auto max-w-[680px] px-4 py-16">
+                  <FormLoadFailureView
+                    failure={{ kind: 'forbidden' }}
+                    onRetry={() => void source.refetch()}
+                  />
+                </div>
+              }
+            >
+              {/* A preview answers nothing for real: switching to or from it
+                  in this mounted route starts the form again. */}
+              <Show
+                when={preview()}
+                fallback={
+                  <RespondView
+                    detail={detail()}
+                    refetch={source.refetch}
+                    compact={false}
+                    header={
+                      <RespondHeader
+                        name={detail().form.name}
+                        formId={props.formId}
+                        isPublic={detail().form.audience === 'public'}
+                      />
+                    }
                   />
                 }
-              />
-              <Show when={detail().form.audience === 'public'}>
+              >
+                <RespondView
+                  detail={detail()}
+                  refetch={source.refetch}
+                  compact={false}
+                  preview
+                  header={
+                    <header class="flex flex-wrap items-center justify-between gap-2 text-sm text-ink-muted">
+                      <span class="flex items-center gap-2">
+                        <Eye class="size-4" />
+                        Preview · responses won’t be saved
+                      </span>
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          navigate(`/form/${encodeURIComponent(props.formId)}`)
+                        }
+                      >
+                        Back to builder
+                      </Button>
+                    </header>
+                  }
+                />
+              </Show>
+              <Show when={!preview() && detail().form.audience === 'public'}>
                 <RespondFooter />
               </Show>
-            </>
+            </Show>
           )}
         </Show>
       </main>

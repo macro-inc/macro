@@ -1,6 +1,8 @@
 //! In-memory fakes for every port, over one shared world the tests inspect.
 
 pub(crate) mod databases;
+mod drafts;
+pub(crate) use drafts::FakeDrafts;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -24,6 +26,7 @@ use crate::domain::sharing::FormSharingRepo;
 
 pub(crate) use self::databases::{
     FakeColumn, FakeDatabase, FakeDatabases, FakeTable, GridChange, RecordedBatch,
+    RecordedDatabaseRename,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -42,6 +45,10 @@ pub(crate) struct World {
     pub(crate) now: DateTime<Utc>,
     pub(crate) forms: Vec<StoredForm>,
     pub(crate) layouts: HashMap<FormId, FormLayout>,
+    pub(crate) drafts: HashMap<FormId, Vec<u8>>,
+    pub(crate) draft_states: HashMap<FormId, crate::domain::drafts::LayoutDraftState>,
+    pub(crate) retired_drafts: Vec<FormId>,
+    pub(crate) fail_drafts: bool,
     /// Owner grants the repository wrote with each new form.
     pub(crate) owner_grants: Vec<(FormId, String)>,
     pub(crate) ledger: Vec<LedgerEntry>,
@@ -76,6 +83,14 @@ pub(crate) struct World {
     pub(crate) grid_change_before_next_cell_read: Option<GridChange>,
     /// Refuse the next batch with this error.
     pub(crate) refuse_next_batch: Option<::databases::domain::models::DatabaseError>,
+    /// Every database rename the service asked for, refused ones included.
+    pub(crate) database_renames: Vec<RecordedDatabaseRename>,
+    /// Refuse the next database rename with this error.
+    pub(crate) refuse_next_database_rename: Option<::databases::domain::models::DatabaseError>,
+    /// Fail every read of a database's own facts.
+    pub(crate) fail_database_metadata_reads: bool,
+    /// How many times the service read a database's own facts.
+    pub(crate) database_metadata_reads: usize,
     /// Every `macro.forms` envelope the service handed the broker.
     pub(crate) events: Vec<serde_json::Value>,
 }
@@ -86,6 +101,10 @@ impl World {
             now,
             forms: vec![],
             layouts: HashMap::new(),
+            drafts: HashMap::new(),
+            draft_states: HashMap::new(),
+            retired_drafts: vec![],
+            fail_drafts: false,
             owner_grants: vec![],
             ledger: vec![],
             channel_grants: HashMap::new(),
@@ -103,6 +122,10 @@ impl World {
             competing_submission: None,
             grid_change_before_next_cell_read: None,
             refuse_next_batch: None,
+            database_renames: vec![],
+            refuse_next_database_rename: None,
+            fail_database_metadata_reads: false,
+            database_metadata_reads: 0,
             events: vec![],
         }
     }
@@ -213,7 +236,7 @@ fn layout_ids(layout: &FormLayout) -> Vec<uuid::Uuid> {
                     .iter()
                     .map(|question| question.id.into_uuid())
                     .collect(),
-                FormSection::Gate { .. } => vec![],
+                FormSection::Gate { .. } | FormSection::Booking { .. } => vec![],
             };
             std::iter::once(section.id().into_uuid()).chain(questions)
         })
@@ -230,7 +253,7 @@ fn layout_widgets(layout: &FormLayout) -> Vec<(ColumnId, Widget)> {
                 .iter()
                 .filter_map(|question| question.widget.map(|widget| (question.column, widget)))
                 .collect(),
-            FormSection::Gate { .. } => vec![],
+            FormSection::Gate { .. } | FormSection::Booking { .. } => vec![],
         })
         .collect()
 }
@@ -250,14 +273,53 @@ fn ledger_write(world: &mut World) -> Result<(), FakeError> {
     Ok(())
 }
 
+fn replace_layout_locked(
+    world: &mut World,
+    id: FormId,
+    layout: &FormLayout,
+    updated_at: DateTime<Utc>,
+    required_audience: Option<Audience>,
+) -> Result<LayoutReplacement, FakeError> {
+    let Some(position) = live(world, id) else {
+        return Ok(LayoutReplacement::FormGone);
+    };
+    if let Some(audience) = world.audience_before_next_layout_write.take() {
+        world.forms[position].form.audience = audience;
+    }
+    let others: Vec<uuid::Uuid> = world
+        .layouts
+        .iter()
+        .filter(|(form, _)| **form != id)
+        .flat_map(|(_, layout)| layout_ids(layout))
+        .collect();
+    if let Some(taken) = layout_ids(layout)
+        .into_iter()
+        .find(|id| others.contains(id))
+    {
+        return Ok(LayoutReplacement::IdTaken(taken));
+    }
+    if required_audience.is_some_and(|audience| world.forms[position].form.audience != audience) {
+        return Ok(LayoutReplacement::AudienceChanged);
+    }
+    world.forms[position].form.updated_at = updated_at;
+    world.layouts.insert(id, layout.clone());
+    Ok(LayoutReplacement::Replaced)
+}
+
 impl FormsRepo for FakeRepo {
     type Error = FakeError;
 
-    async fn create_form(&self, form: &Form, layout: &FormLayout) -> Result<(), FakeError> {
+    async fn create_form(
+        &self,
+        form: &Form,
+        layout: &FormLayout,
+        name_follows_database: bool,
+    ) -> Result<(), FakeError> {
         let mut world = self.0.lock().unwrap();
         world.forms.push(StoredForm {
             form: form.clone(),
             trashed_at: None,
+            name_follows_database,
         });
         world.layouts.insert(form.id, layout.clone());
         world.owner_grants.push((form.id, form.owner_id.clone()));
@@ -280,6 +342,16 @@ impl FormsRepo for FakeRepo {
             .iter()
             .filter(|stored| ids.contains(&stored.form.id) && stored.trashed_at.is_none())
             .map(|stored| stored.form.clone())
+            .collect())
+    }
+
+    async fn forms_with_database_names(&self, ids: &[FormId]) -> Result<Vec<FormId>, FakeError> {
+        let world = self.0.lock().unwrap();
+        Ok(world
+            .forms
+            .iter()
+            .filter(|stored| ids.contains(&stored.form.id) && stored.name_follows_database)
+            .map(|stored| stored.form.id)
             .collect())
     }
 
@@ -310,31 +382,14 @@ impl FormsRepo for FakeRepo {
         required_audience: Option<Audience>,
     ) -> Result<LayoutReplacement, FakeError> {
         let mut world = self.0.lock().unwrap();
-        let Some(position) = live(&world, id) else {
-            return Ok(LayoutReplacement::FormGone);
-        };
-        if let Some(audience) = world.audience_before_next_layout_write.take() {
-            world.forms[position].form.audience = audience;
-        }
-        let others: Vec<uuid::Uuid> = world
-            .layouts
-            .iter()
-            .filter(|(form, _)| **form != id)
-            .flat_map(|(_, layout)| layout_ids(layout))
-            .collect();
-        if let Some(taken) = layout_ids(layout)
-            .into_iter()
-            .find(|id| others.contains(id))
+        if world
+            .draft_states
+            .get(&id)
+            .is_some_and(|state| state.enabled)
         {
-            return Ok(LayoutReplacement::IdTaken(taken));
+            return Ok(LayoutReplacement::DraftRequired);
         }
-        if required_audience.is_some_and(|audience| world.forms[position].form.audience != audience)
-        {
-            return Ok(LayoutReplacement::AudienceChanged);
-        }
-        world.forms[position].form.updated_at = updated_at;
-        world.layouts.insert(id, layout.clone());
-        Ok(LayoutReplacement::Replaced)
+        replace_layout_locked(&mut world, id, layout, updated_at, required_audience)
     }
 
     async fn update_form(
@@ -395,6 +450,20 @@ impl FormsRepo for FakeRepo {
         };
         let form = &mut world.forms[position].form;
         form.name = name.to_string();
+        form.updated_at = updated_at;
+        Ok(Some(form.clone()))
+    }
+
+    async fn touch_form(
+        &self,
+        id: FormId,
+        updated_at: DateTime<Utc>,
+    ) -> Result<Option<Form>, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        let Some(position) = live(&world, id) else {
+            return Ok(None);
+        };
+        let form = &mut world.forms[position].form;
         form.updated_at = updated_at;
         Ok(Some(form.clone()))
     }

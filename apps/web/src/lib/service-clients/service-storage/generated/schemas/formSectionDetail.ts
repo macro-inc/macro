@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FormSectionDetailOneOf } from './formSectionDetailOneOf';
+import type { FormSectionDetailOneOfFive } from './formSectionDetailOneOfFive';
 import type { FormSectionDetailOneOfThree } from './formSectionDetailOneOfThree';
 
 /**
@@ -12,4 +13,5 @@ import type { FormSectionDetailOneOfThree } from './formSectionDetailOneOfThree'
  */
 export type FormSectionDetail =
   | FormSectionDetailOneOf
-  | FormSectionDetailOneOfThree;
+  | FormSectionDetailOneOfThree
+  | FormSectionDetailOneOfFive;

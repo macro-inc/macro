@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   answerProblem,
   answersOf,
+  endsWithBooking,
   isAnswered,
   nextStep,
   previousSectionIndex,
@@ -9,7 +10,12 @@ import {
   sectionProblems,
   submissionAnswers,
 } from './answers';
-import type { FormColumn, FormLayout } from './form-model';
+import type {
+  FormCellValue,
+  FormColumn,
+  FormLayout,
+  FormQuestion,
+} from './form-model';
 
 const NAME = 'column-name';
 const TEAM = 'column-team';
@@ -26,6 +32,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [
         {
           id: 'q-name',
@@ -63,6 +70,7 @@ const layout: FormLayout = {
         ],
       },
       gateMessage: 'The offsite is for employees.',
+      bookingTarget: null,
       questions: [],
     },
     {
@@ -72,6 +80,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [
         {
           id: 'q-diet',
@@ -185,6 +194,33 @@ describe('nextStep', () => {
 });
 
 describe('validation', () => {
+  it('allows a local file URL only for a file question in author preview', () => {
+    const question: FormQuestion = {
+      id: 'attachment',
+      columnId: 'files',
+      helpText: '',
+      required: true,
+      widget: 'file',
+    };
+    const column: FormColumn = {
+      id: 'files',
+      name: 'Attachment',
+      kind: { type: 'link' },
+      options: [],
+    };
+    const value: FormCellValue = {
+      type: 'link',
+      value: ['blob:https://macro.com/preview-file'],
+    };
+    expect(answerProblem(question, column, value, 'preview')).toBeUndefined();
+    expect(answerProblem(question, column, value)).toBe(
+      'Enter a full link starting with https://'
+    );
+    expect(
+      answerProblem({ ...question, widget: 'url' }, column, value, 'preview')
+    ).toBe('Enter a full link starting with https://');
+  });
+
   it('reports required and malformed answers of a section', () => {
     expect(
       sectionProblems(layout.sections[0], columns, {
@@ -286,5 +322,31 @@ describe('submissionAnswers', () => {
         { question: 'q-diet', value: { type: 'clear' } },
       ])
     ).toEqual({ 'q-name': { type: 'text', value: 'Ada' } });
+  });
+});
+
+describe('a booking step', () => {
+  const booked: FormLayout = {
+    sections: [
+      ...layout.sections,
+      {
+        id: 'call',
+        title: 'Book a call',
+        description: '',
+        kind: 'booking',
+        gateRules: null,
+        gateMessage: '',
+        // A respondent's detail never carries the target.
+        bookingTarget: null,
+        questions: [],
+      },
+    ],
+  };
+
+  it('is not a screen before submitting: the last questions section submits', () => {
+    expect(nextStep(booked, 2, {})).toEqual({ kind: 'submit' });
+    expect(questionSectionIndices(booked)).toEqual([0, 2]);
+    expect(endsWithBooking(booked)).toBe(true);
+    expect(endsWithBooking(layout)).toBe(false);
   });
 });

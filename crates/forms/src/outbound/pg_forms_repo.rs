@@ -2,6 +2,7 @@
 //! A form's grants are `entity_access` rows written through the owning
 //! access crate's helpers.
 
+mod drafts;
 mod layout;
 mod ledger;
 mod sharing;
@@ -92,6 +93,7 @@ struct FormRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     trashed_at: Option<DateTime<Utc>>,
+    name_follows_database: bool,
 }
 
 impl TryFrom<FormRow> for StoredForm {
@@ -117,6 +119,7 @@ impl TryFrom<FormRow> for StoredForm {
                 updated_at: row.updated_at,
             },
             trashed_at: row.trashed_at,
+            name_follows_database: row.name_follows_database,
         })
     }
 }
@@ -147,16 +150,22 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
     type Error = PgFormsRepoError;
 
     #[tracing::instrument(err, skip(self, form, layout), fields(form_id = %form.id))]
-    async fn create_form(&self, form: &Form, layout: &FormLayout) -> Result<(), Self::Error> {
+    async fn create_form(
+        &self,
+        form: &Form,
+        layout: &FormLayout,
+        name_follows_database: bool,
+    ) -> Result<(), Self::Error> {
         let mut transaction = self.pool.begin().await?;
         sqlx::query!(
             r#"
             INSERT INTO forms (
                 id, name, description, owner_id, database_id, table_id,
                 submitted_column_id, respondent_column_id, audience, tally_visible,
-                status, closes_at, confirmation_message, created_at, updated_at
+                status, closes_at, confirmation_message, created_at, updated_at,
+                name_follows_database
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             "#,
             form.id.into_uuid(),
             form.name,
@@ -173,6 +182,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             form.confirmation_message,
             form.created_at,
             form.updated_at,
+            name_follows_database,
         )
         .execute(&mut *transaction)
         .await?;
@@ -197,7 +207,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             r#"
             SELECT id, name, description, owner_id, database_id, table_id,
                    submitted_column_id, respondent_column_id, audience, tally_visible,
-                   status, closes_at, confirmation_message, created_at, updated_at, trashed_at
+                   status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                   name_follows_database
             FROM forms WHERE id = $1
             "#,
             id.into_uuid(),
@@ -216,7 +227,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 r#"
                 SELECT id, name, description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
-                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at
+                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                   name_follows_database
                 FROM forms WHERE id = ANY($1) AND trashed_at IS NULL
                 ORDER BY id
                 "#,
@@ -227,6 +239,19 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         )
     }
 
+    #[tracing::instrument(err, skip(self, ids), fields(ids = ids.len()))]
+    async fn forms_with_database_names(&self, ids: &[FormId]) -> Result<Vec<FormId>, Self::Error> {
+        Ok(sqlx::query_scalar!(
+            "SELECT id FROM forms WHERE id = ANY($1) AND name_follows_database ORDER BY id",
+            &uuids(ids),
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(FormId::from_uuid)
+        .collect())
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn forms_for_database(&self, database_id: DatabaseId) -> Result<Vec<Form>, Self::Error> {
         live_forms(
@@ -235,7 +260,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 r#"
                 SELECT id, name, description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
-                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at
+                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                   name_follows_database
                 FROM forms WHERE database_id = $1 AND trashed_at IS NULL
                 ORDER BY created_at, id
                 "#,
@@ -259,49 +285,18 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         updated_at: DateTime<Utc>,
         required_audience: Option<Audience>,
     ) -> Result<LayoutReplacement, Self::Error> {
-        let mut transaction = self.pool.begin().await?;
-        // The form's row lock serializes this with a change of its facts, so
-        // the audience read here is the one the layout commits under.
-        let Some(audience) = locked_audience(&mut transaction, id).await? else {
-            transaction.rollback().await?;
-            return Ok(LayoutReplacement::FormGone);
-        };
-        if required_audience.is_some_and(|required| required != audience) {
-            transaction.rollback().await?;
-            return Ok(LayoutReplacement::AudienceChanged);
-        }
-        if let Some(taken) = layout::id_of_another_form(&mut *transaction, id, layout).await? {
-            transaction.rollback().await?;
-            return Ok(LayoutReplacement::IdTaken(taken));
-        }
-        sqlx::query!(
-            "UPDATE forms SET updated_at = $2 WHERE id = $1",
-            id.into_uuid(),
-            updated_at,
-        )
-        .execute(&mut *transaction)
-        .await?;
-        sqlx::query!(
-            "DELETE FROM form_sections WHERE form_id = $1",
-            id.into_uuid()
-        )
-        .execute(&mut *transaction)
-        .await?;
-        match layout::insert(&mut transaction, id, layout).await {
-            Ok(()) => {}
-            // Another form took one of the ids after the lookup above and
-            // committed first: name it now that it is visible.
-            Err(PgFormsRepoError::Sqlx(error)) if layout::is_layout_key_taken(&error) => {
-                transaction.rollback().await?;
-                return match layout::id_of_another_form(&self.pool, id, layout).await? {
-                    Some(taken) => Ok(LayoutReplacement::IdTaken(taken)),
-                    None => Err(PgFormsRepoError::Sqlx(error)),
-                };
+        match self
+            .write_layout(id, layout, updated_at, required_audience, None)
+            .await?
+        {
+            crate::domain::drafts::LayoutProjection::Written(result) => Ok(result),
+            crate::domain::drafts::LayoutProjection::RevisionChanged => {
+                Err(PgFormsRepoError::Corrupt {
+                    kind: "layout replacement",
+                    value: "unexpected revision check for an ordinary write".into(),
+                })
             }
-            Err(error) => return Err(error),
         }
-        transaction.commit().await?;
-        Ok(LayoutReplacement::Replaced)
     }
 
     #[tracing::instrument(err, skip(self, changes))]
@@ -352,7 +347,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             WHERE id = $1
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
-                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at
+                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                   name_follows_database
             "#,
             id.into_uuid(),
             changes.description.as_deref(),
@@ -385,10 +381,36 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             WHERE id = $1 AND trashed_at IS NULL
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
-                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at
+                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                   name_follows_database
             "#,
             id.into_uuid(),
             name,
+            updated_at,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .map(|row| StoredForm::try_from(row).map(|stored| stored.form))
+        .transpose()
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn touch_form(
+        &self,
+        id: FormId,
+        updated_at: DateTime<Utc>,
+    ) -> Result<Option<Form>, Self::Error> {
+        sqlx::query_as!(
+            FormRow,
+            r#"
+            UPDATE forms SET updated_at = $2
+            WHERE id = $1 AND trashed_at IS NULL
+            RETURNING id, name, description, owner_id, database_id, table_id,
+                      submitted_column_id, respondent_column_id, audience, tally_visible,
+                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                      name_follows_database
+            "#,
+            id.into_uuid(),
             updated_at,
         )
         .fetch_optional(&self.pool)

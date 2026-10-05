@@ -35,7 +35,8 @@ function isWebUrl(text: string) {
 export function answerProblem(
   question: FormQuestion,
   column: FormColumn,
-  value: FormCellValue | undefined
+  value: FormCellValue | undefined,
+  mode: 'response' | 'preview' = 'response'
 ): string | undefined {
   if (!isAnswered(value)) {
     return question.required ? 'This question is required.' : undefined;
@@ -67,7 +68,13 @@ export function answerProblem(
     )
     .with({ type: 'link' }, ({ value: links }) => {
       if (single && links.length > 1) return 'Give one link.';
-      return links.every(isWebUrl)
+      return links.every(
+        (link) =>
+          isWebUrl(link) ||
+          (mode === 'preview' &&
+            question.widget === 'file' &&
+            link.startsWith('blob:'))
+      )
         ? undefined
         : 'Enter a full link starting with https://';
     })
@@ -97,12 +104,13 @@ export function answerProblem(
 export function sectionProblems(
   section: FormSection,
   columns: ReadonlyMap<string, FormColumn>,
-  answers: FormAnswers
+  answers: FormAnswers,
+  mode: 'response' | 'preview' = 'response'
 ): AnswerProblem[] {
   return section.questions.flatMap((question) => {
     const column = columns.get(question.columnId);
     if (!column) return [];
-    const message = answerProblem(question, column, answers[question.id]);
+    const message = answerProblem(question, column, answers[question.id], mode);
     return message ? [{ questionId: question.id, message }] : [];
   });
 }
@@ -143,17 +151,31 @@ export function nextStep(
   const byColumn = answersByColumn(layout, answers);
   for (let index = from + 1; index < layout.sections.length; index++) {
     const section = layout.sections[index];
-    if (section.kind === 'questions') return { kind: 'section', index };
-    if (brokenGateColumns(layout, section.id).length > 0)
-      return { kind: 'updating' };
-    if (section.gateRules && !gatePasses(section.gateRules, byColumn))
-      return {
-        kind: 'stop',
-        sectionId: section.id,
-        message: section.gateMessage,
-      };
+    const step = match(section.kind)
+      .returnType<FormStep | undefined>()
+      .with('questions', () => ({ kind: 'section', index }))
+      .with('gate', () => {
+        if (brokenGateColumns(layout, section.id).length > 0)
+          return { kind: 'updating' };
+        if (section.gateRules && !gatePasses(section.gateRules, byColumn))
+          return {
+            kind: 'stop',
+            sectionId: section.id,
+            message: section.gateMessage,
+          };
+        return undefined;
+      })
+      // Unlocked by the server once the response is saved, never before.
+      .with('booking', () => ({ kind: 'submit' }))
+      .exhaustive();
+    if (step) return step;
   }
   return { kind: 'submit' };
+}
+
+/** Whether submitting leads on to a booking step. */
+export function endsWithBooking(layout: FormLayout): boolean {
+  return layout.sections.some((section) => section.kind === 'booking');
 }
 
 /** The questions section before `from`, if any. */

@@ -30,14 +30,16 @@ function TypeItems(props: {
           <span class="flex-1 truncate">{choice.label}</span>
         </Dropdown.SubTrigger>
         <Dropdown.SubContent>
-          <Dropdown.GroupLabel>Rows of</Dropdown.GroupLabel>
-          <For each={props.tables}>
-            {(table) => (
-              <Dropdown.Item onSelect={() => props.onChoose(choice, table)}>
-                <span class="flex-1 truncate">{table.name}</span>
-              </Dropdown.Item>
-            )}
-          </For>
+          <Dropdown.Group>
+            <Dropdown.GroupLabel>Rows of</Dropdown.GroupLabel>
+            <For each={props.tables}>
+              {(table) => (
+                <Dropdown.Item onSelect={() => props.onChoose(choice, table)}>
+                  <span class="flex-1 truncate">{table.name}</span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
         </Dropdown.SubContent>
       </Dropdown.Sub>
     ) : (
@@ -64,7 +66,7 @@ function TypeItems(props: {
   );
 }
 
-/** A question's type chip: opens the Google Forms list with a Macro group. */
+/** A question's type selector. */
 export function TypeMenu(props: {
   current: QuestionTypeId;
   label: string;
@@ -108,10 +110,11 @@ export function AddQuestionMenu(props: {
     <Dropdown>
       <Dropdown.Trigger
         variant="outline"
-        size="sm"
+        size="md"
         class="w-full justify-start gap-2"
       >
         {props.trigger}
+        <CaretDown class="ml-auto size-3.5" aria-hidden="true" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60">
         <TypeItems tables={props.tables} onChoose={props.onChoose} />

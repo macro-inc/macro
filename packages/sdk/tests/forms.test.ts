@@ -458,3 +458,33 @@ describe('Forms', () => {
     expect(paths).toEqual(['/forms/accessible']);
   });
 });
+
+test('an accepted form response exposes its unlocked booking step', async () => {
+  globalThis.fetch = (async (input) => {
+    const request = input instanceof Request ? input : new Request(input);
+    if (new URL(request.url).pathname.endsWith('/responses/mine')) return Response.json({
+      response: { id: responseId, form: formId, row: rowId, status: 'submitted', stoppedAtSection: null,
+        submittedAt: '2026-10-05T00:00:00Z', updatedAt: '2026-10-05T00:00:00Z' },
+      answers: [],
+      booking: { section: '0198a4cc-e138-7670-a308-a6b766603709', title: 'Book a conversation', description: 'Choose a time that works.',
+        target: { profileId: '0198a4cc-e138-7670-a308-a6b76660370a', eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b' } },
+    });
+    if (request.method === 'POST') return Response.json({
+      outcome: 'submitted', response: responseId, row: rowId,
+      booking: {
+        section: '0198a4cc-e138-7670-a308-a6b766603709',
+        title: 'Book a conversation', description: 'Choose a time that works.',
+        target: { profileId: '0198a4cc-e138-7670-a308-a6b76660370a', eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b' },
+      },
+    });
+    return Response.json(registration);
+  }) as typeof fetch;
+  const macro = new Macro({ token: 'user-token', hosts: { storage: host } });
+  const outcome = await macro.forms.byId(formId).submit([]);
+  if (outcome.outcome !== 'submitted') throw new Error('Expected acceptance');
+  expect(outcome.booking?.section.id).toBe('0198a4cc-e138-7670-a308-a6b766603709');
+  expect(outcome.booking?.target).toEqual({ profileId: '0198a4cc-e138-7670-a308-a6b76660370a', eventTypeId: '0198a4cc-e138-7670-a308-a6b76660370b' });
+  expect((await outcome.response.booking())?.title).toBe('Book a conversation');
+  await outcome.response.refresh();
+  expect((await outcome.response.booking())?.section.id).toBe('0198a4cc-e138-7670-a308-a6b766603709');
+});

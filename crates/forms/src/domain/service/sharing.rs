@@ -1,9 +1,11 @@
 //! Owners share a form with channels, as a database is shared; link and
 //! team sharing are refused, since a form's public audience is its own.
 
+use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
+
 use std::collections::HashSet;
 
-use databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
 use macro_event_broker::MacroEventBroker;
 use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
@@ -20,15 +22,16 @@ use crate::domain::sharing::{FormSharingRepo, FormSharingService};
 /// Most channel grants one request may change.
 const MAX_CHANNEL_GRANTS_PER_UPDATE: usize = 100;
 
-impl<Repository, Databases, Access, Events, Now, Broker> FormSharingService
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts> FormSharingService
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo + FormSharingRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormSharingRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     #[tracing::instrument(skip(self, receipt), err)]
     async fn share_permissions(

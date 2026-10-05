@@ -4,6 +4,7 @@
 mod casts;
 mod column_types;
 mod infer_column_type;
+mod metadata;
 mod ops;
 mod reads;
 mod saved_queries;

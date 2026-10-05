@@ -5,10 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FormSectionOneOf } from './formSectionOneOf';
+import type { FormSectionOneOfFive } from './formSectionOneOfFive';
 import type { FormSectionOneOfThree } from './formSectionOneOfThree';
 
 /**
  * One section of a layout: questions on one screen, or a gate the answers
 so far must pass.
  */
-export type FormSection = FormSectionOneOf | FormSectionOneOfThree;
+export type FormSection =
+  | FormSectionOneOf
+  | FormSectionOneOfThree
+  | FormSectionOneOfFive;

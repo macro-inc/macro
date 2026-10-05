@@ -5,7 +5,7 @@ use models_databases::ColumnId;
 use models_databases::views::FilterGroup;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{FormQuestionId, FormSectionId};
+use crate::ids::{BookingEventTypeId, BookingProfileId, FormQuestionId, FormSectionId};
 use crate::widget::Widget;
 
 /// Every section of a form, in order.
@@ -16,9 +16,34 @@ pub struct FormLayout {
     pub sections: Vec<FormSection>,
 }
 
+/// An existing native Macro scheduling event offered after an accepted response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookingTarget {
+    /// The scheduling profile that owns the event.
+    #[schema(value_type = Uuid)]
+    pub profile_id: BookingProfileId,
+    /// The event type to book.
+    #[schema(value_type = Uuid)]
+    pub event_type_id: BookingEventTypeId,
+}
+
 /// One section of a layout: questions on one screen, or a gate the answers
 /// so far must pass.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    utoipa::ToSchema,
+    specta::Type,
+    strum::EnumDiscriminants,
+)]
+#[strum_discriminants(name(FormSectionKind))]
+#[strum_discriminants(derive(strum::AsRefStr, strum::EnumString))]
+#[strum_discriminants(strum(serialize_all = "camelCase"))]
+#[strum_discriminants(doc = "The kind of a form section, including its stable storage name.")]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
@@ -52,13 +77,27 @@ pub enum FormSection {
         /// What a stopped respondent reads.
         message: String,
     },
+    /// The final step, revealed only after the server accepts the response.
+    Booking {
+        /// The section, under an id the client mints.
+        #[schema(value_type = Uuid)]
+        id: FormSectionId,
+        /// Its title.
+        title: String,
+        /// What respondents read before choosing a time.
+        description: String,
+        /// The native booking event. Respondent layouts never include this target.
+        target: BookingTarget,
+    },
 }
 
 impl FormSection {
     /// The section's id.
     pub fn id(&self) -> FormSectionId {
         match self {
-            FormSection::Questions { id, .. } | FormSection::Gate { id, .. } => *id,
+            FormSection::Questions { id, .. }
+            | FormSection::Gate { id, .. }
+            | FormSection::Booking { id, .. } => *id,
         }
     }
 }

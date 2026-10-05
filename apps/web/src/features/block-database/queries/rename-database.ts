@@ -1,6 +1,6 @@
 import { queryClient } from '@queries/client';
 import { invalidateDatabase } from '@queries/storage/databases';
-import { databasesKeys } from '@queries/storage/keys';
+import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import {
   RenameDatabaseDocument,
@@ -62,6 +62,15 @@ export function renameDatabase(
         // Qualified SQL names include the database name; open reads rerun
         // against the reloaded catalog.
         await invalidateDatabase(databaseId);
+        // Standalone forms read their name from this database. Refetch the
+        // server's names: forms attached to existing tables stay independent.
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: formsKeys.detail._def }),
+          queryClient.invalidateQueries({
+            queryKey: formsKeys.forDatabase(databaseId).queryKey,
+          }),
+          queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey }),
+        ]);
         return ok(undefined);
       })
       .exhaustive();

@@ -4,7 +4,7 @@ import ArrowUp from '@phosphor/arrow-up.svg';
 import DotsThree from '@phosphor/dots-three.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
 import Trash from '@phosphor/trash.svg';
-import { cn, Dropdown } from '@ui';
+import { Button, cn, Dropdown } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
 /** The menu every section and gate has: move it, or delete it. */
@@ -44,16 +44,12 @@ export function SectionMenu(props: {
   );
 }
 
-/** "After section 1 → Continue to section 2": linear in this pass, kept for branching. */
-export function RoutingFooter(props: { after: string; next: string }) {
+/** A read-only summary of what follows this section. */
+export function RoutingFooter(props: { next: string }) {
   return (
     <div class="flex items-center gap-2 border-t border-edge-divider px-4 py-2 text-xs text-ink-muted">
       <ArrowBendDownRight class="size-3.5" aria-hidden="true" />
-      <span>After {props.after}</span>
-      <span aria-hidden="true">→</span>
-      <span class="rounded-full border border-edge-muted px-2 py-0.5 text-ink">
-        {props.next}
-      </span>
+      <span>{props.next}</span>
     </div>
   );
 }
@@ -76,6 +72,8 @@ export function SectionCard(props: {
   addQuestion: JSX.Element;
   handle: JSX.Element;
   menu: JSX.Element;
+  /** The other editors who selected this section. */
+  editors: JSX.Element;
   routing: JSX.Element;
   children: JSX.Element;
   empty: boolean;
@@ -128,7 +126,10 @@ export function SectionCard(props: {
             onInput={(event) => props.onDescription(event.currentTarget.value)}
           />
         </div>
-        {props.menu}
+        <div class="flex shrink-0 items-center gap-1 pt-0.5">
+          {props.editors}
+          {props.menu}
+        </div>
       </header>
       <div
         data-form-section-list={props.sectionId}
@@ -193,8 +194,8 @@ export function GateCard(props: {
             <span>{props.eyebrow}</span>
           </div>
           <input
-            aria-label="Gate title"
-            placeholder="Untitled gate"
+            aria-label="Screener title"
+            placeholder="Untitled screener"
             value={props.title}
             maxlength={200}
             class="h-8 w-full rounded-md border border-transparent bg-transparent px-1.5 text-base font-semibold text-ink outline-none placeholder:text-ink-placeholder hover:border-edge-muted focus:border-edge-focus focus:bg-input"
@@ -211,24 +212,20 @@ export function GateCard(props: {
           >
             <span class="flex-1">
               {props.brokenRules === 1
-                ? 'A rule checks a question that is no longer before this gate. Responses are refused until it is fixed.'
-                : `${props.brokenRules} rules check questions that are no longer before this gate. Responses are refused until they are fixed.`}
+                ? 'A rule checks a question that is no longer before this screener. Responses are refused until it is fixed.'
+                : `${props.brokenRules} rules check questions that are no longer before this screener. Responses are refused until they are fixed.`}
             </span>
-            <button
-              type="button"
-              class="rounded-md px-1 font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-edge-focus"
-              onClick={props.onRepair}
-            >
+            <Button variant="outline" size="sm" onClick={props.onRepair}>
               Remove broken rules
-            </button>
+            </Button>
           </div>
         </Show>
         <Show
           when={!props.noQuestionsBefore}
           fallback={
             <p class="rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs text-ink-muted">
-              A gate checks answers from the sections before it. Move it below a
-              section with questions to add rules.
+              A screener checks answers from the sections before it. Move it
+              below a section with questions to add rules.
             </p>
           }
         >
@@ -249,13 +246,14 @@ export function GateCard(props: {
           <Show
             when={props.editingRules}
             fallback={
-              <button
-                type="button"
-                class="self-start rounded-md px-1 text-xs font-medium text-accent-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-edge-focus"
+              <Button
+                variant="outline"
+                size="md"
+                class="self-start"
                 onClick={props.onEditRules}
               >
                 {props.sentence ? 'Edit rules' : 'Add rule'}
-              </button>
+              </Button>
             }
           >
             {props.ruleEditor}

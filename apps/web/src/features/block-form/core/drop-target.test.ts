@@ -117,6 +117,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: ['q1', 'q2'].map((id) => ({
         id,
         columnId: `column-${id}`,
@@ -132,6 +133,7 @@ const layout: FormLayout = {
       kind: 'gate',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [],
     },
     {
@@ -141,6 +143,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [
         {
           id: 'q3',

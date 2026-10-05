@@ -6,6 +6,7 @@ use models_databases::{CellValue, OptionId, RowId};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{FormId, FormQuestionId, FormResponseId, FormSectionId};
+use crate::layout::BookingTarget;
 
 /// A whole set of answers, sent at once.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
@@ -43,6 +44,11 @@ pub enum SubmissionOutcome {
         /// The row holding the answers.
         #[schema(value_type = Uuid)]
         row: RowId,
+        /// The form's booking step, unlocked by this accepted response.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schema(nullable = false)]
+        #[specta(optional)]
+        booking: Option<UnlockedBooking>,
     },
     /// A gate stopped the response; nothing was written to the table.
     Stopped {
@@ -114,6 +120,27 @@ pub struct MyResponse {
     /// The row's cells for the form's current questions, the empty ones
     /// left out; none when the row is gone.
     pub answers: Vec<Answer>,
+    /// The form's booking step, while the saved row still passes the form's
+    /// current required questions and gates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    #[specta(optional)]
+    pub booking: Option<UnlockedBooking>,
+}
+
+/// A booking step a passing response has unlocked, with its destination.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UnlockedBooking {
+    /// The booking section.
+    #[schema(value_type = Uuid)]
+    pub section: FormSectionId,
+    /// Its title.
+    pub title: String,
+    /// What respondents read before choosing a time.
+    pub description: String,
+    /// The native booking event to open.
+    pub target: BookingTarget,
 }
 
 /// A form's response counts, for its editors.

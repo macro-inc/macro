@@ -45,6 +45,7 @@ function offsite(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          bookingTarget: null,
           questions: [
             {
               id: 'q-name',
@@ -82,6 +83,7 @@ function offsite(): FormDetail {
             ],
           },
           gateMessage: 'The offsite is for employees.',
+          bookingTarget: null,
           questions: [],
         },
         {
@@ -91,6 +93,7 @@ function offsite(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          bookingTarget: null,
           questions: [
             {
               id: 'q-diet',
@@ -276,6 +279,7 @@ describe('RespondView', () => {
       detail,
       mine: {
         status: 'submitted',
+        booking: null,
         submittedAt: '2026-10-01T09:00:00Z',
         answers: [
           { question: 'q-name', value: { type: 'text', value: 'Ada' } },
@@ -308,6 +312,7 @@ describe('RespondView', () => {
       detail,
       mine: {
         status: 'submitted',
+        booking: null,
         submittedAt: '2026-10-01T09:00:00Z',
         answers: [
           { question: 'q-name', value: { type: 'text', value: 'Ada' } },
@@ -414,5 +419,218 @@ describe('RespondView', () => {
       </FormProvider>
     ));
     expect(screen.getByText('This form is closed.')).toBeTruthy();
+  });
+
+  describe('a booking step', () => {
+    const INTRO_CALL = { profileId: 'profile-1', eventTypeId: 'intro-call' };
+    const UNLOCKED = {
+      sectionId: 'call',
+      title: 'Book a call',
+      description: 'Thirty minutes with the team.',
+      target: INTRO_CALL,
+    };
+    const events = {
+      'intro-call': {
+        profile: {
+          id: 'profile-1',
+          name: 'Ada Lovelace',
+          description: '',
+          eventTypes: [],
+        },
+        event: {
+          id: 'intro-call',
+          title: 'Intro call',
+          slug: 'intro',
+          description: 'A short hello.',
+          durationMinutes: 30,
+          location: '',
+          googleMeet: true,
+          questions: [],
+          requiresConfirmation: false,
+          mode: 'individual' as const,
+        },
+      },
+    };
+
+    /** The offsite form, one section, then the booking step. */
+    function booked(target: typeof INTRO_CALL | null = null): FormDetail {
+      const detail = offsite();
+      detail.layout.sections = [
+        detail.layout.sections[0],
+        {
+          id: 'call',
+          title: 'Book a call',
+          description: 'Thirty minutes with the team.',
+          kind: 'booking',
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: target,
+          questions: [],
+        },
+      ];
+      return detail;
+    }
+
+    function answer(team: 'Employee' | 'Contractor') {
+      fireEvent.input(screen.getByLabelText(/^Name/), {
+        target: { value: 'Ada Lovelace' },
+      });
+      fireEvent.click(screen.getByLabelText(team));
+    }
+
+    it('reads the booking link only after the server accepts the response, then shows the native calendar', async () => {
+      const { context, calls } = createMockFormContext({
+        detail: booked(),
+        viewerId: undefined,
+        submitOutcome: {
+          kind: 'submitted',
+          responseId: 'response-1',
+          booking: UNLOCKED,
+        },
+        booking: { events },
+      });
+      render(() => (
+        <FormProvider value={context}>
+          <RespondView
+            detail={booked()}
+            compact={false}
+            refetch={async () => true}
+          />
+        </FormProvider>
+      ));
+      answer('Employee');
+      expect(calls.bookingEventsRead).toEqual([]);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Continue to booking' })
+      );
+      expect(
+        await screen.findByRole('heading', { name: 'Book a call' })
+      ).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Intro call' })).toBeTruthy();
+      expect(screen.getByText('Select a date & time')).toBeTruthy();
+      expect(calls.submitted).toHaveLength(1);
+      expect(calls.bookingEventsRead).toContainEqual(INTRO_CALL);
+    });
+
+    it('shows the stop screen when the server stops the response, never reading a booking link', async () => {
+      const { context, calls } = createMockFormContext({
+        detail: booked(),
+        submitOutcome: {
+          kind: 'stopped',
+          sectionId: 'gate',
+          message: 'Not a fit yet.',
+        },
+        booking: { events },
+      });
+      render(() => (
+        <FormProvider value={context}>
+          <RespondView
+            detail={booked()}
+            compact={false}
+            refetch={async () => true}
+          />
+        </FormProvider>
+      ));
+      answer('Employee');
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Continue to booking' })
+      );
+      expect(await screen.findByText('Not a fit yet.')).toBeTruthy();
+      expect(screen.queryByText('Select a date & time')).toBeNull();
+      expect(calls.bookingEventsRead).toEqual([]);
+    });
+
+    it('offers a returning respondent the booking step their saved response still unlocks', async () => {
+      const { context } = createMockFormContext({
+        detail: booked(),
+        mine: {
+          status: 'submitted',
+          submittedAt: '2026-10-01T09:00:00Z',
+          answers: [
+            { question: 'q-name', value: { type: 'text', value: 'Ada' } },
+          ],
+          booking: UNLOCKED,
+        },
+        booking: { events },
+      });
+      render(() => (
+        <FormProvider value={context}>
+          <RespondView
+            detail={booked()}
+            compact={false}
+            refetch={async () => true}
+          />
+        </FormProvider>
+      ));
+      fireEvent.click(screen.getByRole('button', { name: 'Book a time' }));
+      expect(
+        await screen.findByRole('heading', { name: 'Intro call' })
+      ).toBeTruthy();
+    });
+
+    it('says when the booking link was turned off, keeping the saved response', async () => {
+      const { context } = createMockFormContext({
+        detail: booked(),
+        viewerId: undefined,
+        submitOutcome: {
+          kind: 'submitted',
+          responseId: 'response-1',
+          booking: UNLOCKED,
+        },
+        booking: { events: {} },
+      });
+      render(() => (
+        <FormProvider value={context}>
+          <RespondView
+            detail={booked()}
+            compact={false}
+            refetch={async () => true}
+          />
+        </FormProvider>
+      ));
+      answer('Employee');
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Continue to booking' })
+      );
+      expect(
+        await screen.findByText(/This booking link is no longer available/)
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/Your response is saved/).getAttribute('role')
+      ).toBe('status');
+    });
+
+    it('previews the editor’s calendar after the answers pass locally, saving and booking nothing', async () => {
+      const { context, calls } = createMockFormContext({
+        detail: booked(INTRO_CALL),
+        booking: { events },
+      });
+      render(() => (
+        <FormProvider value={context}>
+          <RespondView
+            detail={booked(INTRO_CALL)}
+            compact={false}
+            preview
+            refetch={async () => true}
+          />
+        </FormProvider>
+      ));
+      answer('Employee');
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Continue to booking' })
+      );
+      expect(
+        await screen.findByRole('heading', { name: 'Intro call' })
+      ).toBeTruthy();
+      expect(
+        screen.getByText(
+          'Preview: browse the real availability. Nothing is booked.'
+        )
+      ).toBeTruthy();
+      expect(calls.submitted).toEqual([]);
+      expect(calls.booked).toEqual([]);
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(screen.getByLabelText(/^Name/)).toBeTruthy();
+    });
   });
 });

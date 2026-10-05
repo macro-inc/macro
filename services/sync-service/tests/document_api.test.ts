@@ -84,7 +84,7 @@ describe("document api tests", async () => {
       },
     );
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(409);
 
     let user = await createTestUser(mf, "test-doc");
 

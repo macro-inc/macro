@@ -1241,6 +1241,35 @@ it('database sharing reads its block permissions and disables public links', () 
 });
 
 describe('form share roles', () => {
+  it.each([false, true])(
+    'shows form link sharing in the native link area (mobile: %s)',
+    async (mobile) => {
+      mocks.mobile = mobile;
+      mocks.blockPermissionsRead.mockReturnValue({
+        isErr: () => false,
+        value: { id: 'form-id', owner: ME, channelSharePermissions: [] },
+      });
+      render(() => (
+        <ShareModal
+          id="form-id"
+          itemType="form"
+          blockAlias="form"
+          owner={ME}
+          name="RSVP"
+          userPermissions={Permissions.OWNER}
+          open
+          onOpenChange={() => {}}
+          linkSharing={() => <div>Form link controls</div>}
+        />
+      ));
+      if (mobile) {
+        expect(screen.queryByText('Form link controls')).toBeNull();
+        fireEvent.click(screen.getByRole('tab', { name: 'Link' }));
+      }
+      expect(await screen.findByText('Form link controls')).toBeTruthy();
+    }
+  );
+
   it('offers View and Edit on a form, which has no comments, and every level elsewhere', () => {
     expect(shareLevelsFor('form')).toEqual(['view', 'edit']);
     expect(shareLevelsFor('document')).toBeUndefined();

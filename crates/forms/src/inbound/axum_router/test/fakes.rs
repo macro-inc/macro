@@ -267,6 +267,20 @@ impl RecordingForms {
 }
 
 impl FormsService for RecordingForms {
+    async fn collaborate_form(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<models_forms::FormCollaboration, FormError> {
+        let detail = self.detail(FormAccess::Edit);
+        self.answer(
+            handed("collaborate_form", &receipt),
+            models_forms::FormCollaboration {
+                detail,
+                publication_error: None,
+            },
+        )
+    }
+
     async fn create_form(
         &self,
         creator: databases::domain::models::Viewer,
@@ -347,6 +361,7 @@ impl FormsService for RecordingForms {
             SubmissionOutcome::Submitted {
                 response: crate::domain::models::FormResponseId::from_uuid(Uuid::from_u128(0xe1)),
                 row: ROW,
+                booking: None,
             },
         )
     }

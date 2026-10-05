@@ -1,7 +1,9 @@
 //! The entity-mutation lifecycle capabilities for forms: rename, trash,
 //! restore and permanent delete. None of them touch the form's database.
 
-use databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
+
+use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel};
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
@@ -37,21 +39,23 @@ impl From<FormError> for EntityMutationErrorCode {
             | FormError::TallyHidden) => Self::invalid(rootcause::report!(error)),
             error @ (FormError::Database(_)
             | FormError::Repository(_)
+            | FormError::Collaboration(_)
             | FormError::AccessDirectory(_)
             | FormError::DatabaseContract(_)) => Self::internal(rootcause::report!(error)),
         }
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker> RenameEntity
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts> RenameEntity
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     type Receipt = EditAccessLevel;
 
@@ -66,15 +70,16 @@ where
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker> TrashEntity
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts> TrashEntity
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     type Receipt = OwnerAccessLevel;
 
@@ -88,15 +93,16 @@ where
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker> RestoreEntity
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts> RestoreEntity
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     type Receipt = OwnerAccessLevel;
 
@@ -110,15 +116,16 @@ where
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker> DeleteEntityPermanently
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts> DeleteEntityPermanently
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     type Receipt = OwnerAccessLevel;
 

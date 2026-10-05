@@ -1,4 +1,4 @@
-import { databasesKeys } from '@queries/storage/keys';
+import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import { CombinedError } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,6 +40,15 @@ describe('rename database', () => {
     });
     expect(cache.invalidateQueries).toHaveBeenCalledWith({
       queryKey: databasesKeys.detail('db').queryKey,
+    });
+    expect(cache.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: formsKeys.detail._def,
+    });
+    expect(cache.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: formsKeys.forDatabase('db').queryKey,
+    });
+    expect(cache.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: formsKeys.list.queryKey,
     });
   });
 

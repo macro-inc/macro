@@ -1,10 +1,12 @@
 import { createRoot } from 'solid-js';
+import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
 import { afterEach, expect, it, vi } from 'vitest';
 import { renameForm } from '../../../features/block-form/queries/form-entity';
 import { queryClient } from '../client';
 import { previewKeys } from '../preview/keys';
 import type { PreviewItem } from '../preview/types';
 import { useFormChangedSync } from './forms-sync';
+import { databasesKeys, formsKeys } from './keys';
 
 const messages = vi.hoisted(
   () => [] as ((message: { type: string; data: unknown }) => void)[]
@@ -42,6 +44,30 @@ afterEach(() => {
 });
 
 it('updates an already cached card title after renaming a form', async () => {
+  const databaseKey = databasesKeys.detail('workshop-database').queryKey;
+  queryClient.setQueryData(databaseKey, { name: 'Untitled form' });
+  queryClient.setQueryData<FormDetail>(formsKeys.detail('workshop').queryKey, {
+    access: 'owner',
+    tableGone: false,
+    sections: [],
+    form: {
+      id: 'workshop',
+      name: 'Untitled form',
+      description: '',
+      ownerId: 'macro|owner@example.com',
+      databaseId: 'workshop-database',
+      tableId: 'responses',
+      submittedColumnId: null,
+      respondentColumnId: null,
+      audience: 'members',
+      tallyVisible: false,
+      status: 'open',
+      closesAt: null,
+      confirmationMessage: '',
+      createdAt: '2026-10-05T00:00:00Z',
+      updatedAt: '2026-10-05T00:00:00Z',
+    },
+  });
   const key = previewKeys.item('workshop').queryKey;
   queryClient.setQueryData<PreviewItem>(key, {
     id: 'workshop',
@@ -73,6 +99,7 @@ it('updates an already cached card title after renaming a form', async () => {
     name: 'Workshop ideas',
     rawName: 'Workshop ideas',
   });
+  expect(queryClient.getQueryState(databaseKey)?.isInvalidated).toBe(true);
 });
 
 it('refreshes only this form’s card preview when its shared facts change', () => {

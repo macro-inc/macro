@@ -3,19 +3,23 @@
 
 mod answers;
 mod create;
+mod drafts;
 mod layout;
 mod lifecycle;
 mod managed;
+mod names;
 mod responses;
 mod sharing;
 mod submit;
 #[cfg(test)]
 mod test;
 
+use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
+
 use std::sync::Arc;
 
 use databases::domain::models::{DatabaseError, TableDetail, Viewer};
-use databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
     EntityType, OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
@@ -37,13 +41,14 @@ use crate::domain::ports::{
 /// lists the forms a user holds grants on; `Events` pings a form's open
 /// pages after it changes.
 #[derive(Debug, Clone)]
-pub struct FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker> {
+pub struct FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts> {
     repository: Repository,
     databases: Arc<Databases>,
     access: Access,
     events: Events,
     clock: Now,
     broker: Broker,
+    drafts: Drafts,
 }
 
 fn repository_error<Error: std::error::Error + Send + Sync + 'static>(error: Error) -> FormError {
@@ -144,15 +149,16 @@ fn internal_receipt<Level: RequiredPermission>(
     )
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     /// Create a forms service from its ports.
     pub fn new(
@@ -162,6 +168,7 @@ where
         events: Events,
         clock: Now,
         broker: Broker,
+        drafts: Drafts,
     ) -> Self {
         Self {
             repository,
@@ -170,6 +177,7 @@ where
             events,
             clock,
             broker,
+            drafts,
         }
     }
 
@@ -207,13 +215,20 @@ where
             .ok_or(FormError::NotFound)
     }
 
-    /// A form that is not in the trash; a trashed one reads as missing.
-    async fn live_form(&self, id: FormId) -> Result<Form, FormError> {
+    /// A form that is not in the trash, as stored; a trashed one reads as
+    /// missing.
+    async fn live_stored_form(&self, id: FormId) -> Result<StoredForm, FormError> {
         let stored = self.stored_form(id).await?;
         if stored.trashed_at.is_some() {
             return Err(FormError::NotFound);
         }
-        Ok(stored.form)
+        Ok(stored)
+    }
+
+    /// A form that is not in the trash, under the name it goes by.
+    async fn live_form(&self, id: FormId) -> Result<Form, FormError> {
+        let stored = self.live_stored_form(id).await?;
+        self.named(stored.form, stored.name_follows_database).await
     }
 
     /// The form's table, read under the form's internal receipt; `None` when
@@ -262,16 +277,24 @@ fn within(text: &str, max: usize) -> Result<(), FormError> {
     Ok(())
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker> FormsService
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts> FormsService
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
+    async fn collaborate_form(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<models_forms::FormCollaboration, FormError> {
+        self.collaborate(&receipt).await
+    }
+
     #[tracing::instrument(skip(self, creator, command), err)]
     async fn create_form(
         &self,
@@ -292,10 +315,12 @@ where
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<Vec<Form>, FormError> {
         let database_id = receipt_database_id(&receipt)?;
-        self.repository
+        let forms = self
+            .repository
             .forms_for_database(database_id)
             .await
-            .map_err(repository_error)
+            .map_err(repository_error)?;
+        self.named_forms(forms).await
     }
 
     #[tracing::instrument(skip(self, receipt), err)]

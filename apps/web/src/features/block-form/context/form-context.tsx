@@ -1,8 +1,15 @@
+import type {
+  BookingReceipt,
+  PublicEvent,
+  PublicProfile,
+} from '@app/features/scheduling/core/types';
+import type { BookingSource } from '@app/features/scheduling/primitives/booking-flow';
 import type { ResultAsync } from 'neverthrow';
 import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 import type { SubmittedAnswer } from '../core/answers';
 import type {
   FormAudience,
+  FormBookingTarget,
   FormCellValue,
   FormColumn,
   FormColumnKind,
@@ -12,7 +19,9 @@ import type {
   FormLayout,
   FormStatus,
   GateRules,
+  UnlockedBooking,
 } from '../core/form-model';
+import type { FormSelection } from '../core/form-presence';
 import type { ResponseCounts } from '../core/response-stats';
 
 /** Why a form could not be read. */
@@ -75,6 +84,53 @@ export type FormTableSource = {
   refetch: () => Promise<void>;
 };
 
+/** Whether the shared layout is open for editing. */
+export type FormLayoutStatus =
+  | { kind: 'loading' }
+  | { kind: 'ready' }
+  | { kind: 'error'; message: string };
+
+/**
+ * Whether the server holds every local layout edit. `unsaved` edits wait on
+ * this device and go once the server takes them; `unstored` ones could not
+ * be stored on it and live only in this tab until they go.
+ */
+export type FormLayoutSave = 'saved' | 'saving' | 'unsaved' | 'unstored';
+
+export type FormLayoutConnection = 'connected' | 'connecting' | 'offline';
+
+/** Another editor of the form and what they selected. */
+export type FormEditorPeer = {
+  peerId: string;
+  userId: string | undefined;
+  /** A palette color name, the one their cursor has everywhere. */
+  color: string;
+  selection: FormSelection;
+};
+
+/**
+ * The layout every editor of one form edits at once. Each edit is written
+ * as the change from `previous` to `next`, so concurrent edits to other
+ * sections and questions survive. The form's facts and the table's columns
+ * are not in it.
+ */
+export type FormLayoutCollaboration = {
+  status: Accessor<FormLayoutStatus>;
+  /** The shared layout; undefined until it opened. */
+  layout: Accessor<FormLayout | undefined>;
+  save: Accessor<FormLayoutSave>;
+  connection: Accessor<FormLayoutConnection>;
+  /** Write the edits from `previous` to `next`. Throws unless open. */
+  apply: (previous: FormLayout, next: FormLayout) => void;
+  /** Resolves once the server holds every local edit and published them. */
+  flush: () => ResultAsync<void, FormWriteFailure>;
+  /** Why respondents still see the last valid layout, until it is fixed. */
+  publicationError: Accessor<string | undefined>;
+  peers: Accessor<FormEditorPeer[]>;
+  /** Show the other editors what this one selected; `undefined` clears it. */
+  select: (selection: FormSelection | undefined) => void;
+};
+
 export type OptionChange = { label?: string; color?: string | null };
 
 /** Column facts, written through the database's own ops (RFC 02 §3). */
@@ -126,7 +182,12 @@ export type FormMetadataPatch = {
 };
 
 export type SubmitOutcome =
-  | { kind: 'submitted'; responseId: string }
+  | {
+      kind: 'submitted';
+      responseId: string;
+      /** The booking step this response unlocked, if the form has one. */
+      booking: UnlockedBooking | null;
+    }
   | { kind: 'stopped'; sectionId: string; message: string };
 
 /** The viewer's own response: `null` before they respond. */
@@ -134,6 +195,8 @@ export type MyResponse = {
   status: 'submitted' | 'stopped';
   submittedAt: string;
   answers: SubmittedAnswer[];
+  /** The booking step, while the saved answers still pass the form's screeners. */
+  booking: UnlockedBooking | null;
 };
 
 export type MyResponseSource = {
@@ -182,6 +245,42 @@ export type ConditionEditorProps = {
   onChange: (rules: GateRules | null) => void;
 };
 
+/** A native booking event, as anyone with its link reads it. */
+export type FormBookingEvent = { profile: PublicProfile; event: PublicEvent };
+
+/** One of the editor's own booking links, offered for a booking step. */
+export type FormBookingLink = {
+  target: FormBookingTarget;
+  title: string;
+  durationMinutes: number;
+  /** Whose link it is: "Personal" or a team's name. */
+  owner: string;
+};
+
+/** Native Macro scheduling, as forms use it for a booking step. */
+export type FormBooking = {
+  /** Whether the viewer can create and pick booking links. */
+  available: Accessor<boolean>;
+  /** The editor's own booking links; `[]` when they have none. */
+  createLinks: (enabled: Accessor<boolean>) => ReadSource<FormBookingLink[]>;
+  /** The event a target books; `null` once it is turned off or deleted. */
+  createEvent: (
+    target: Accessor<FormBookingTarget | undefined>
+  ) => ReadSource<FormBookingEvent | null>;
+  /** Availability and booking, the public booking page's own. */
+  createSource: () => BookingSource;
+  /** Show the native receipt for a booking just made. */
+  openReceipt: (receipt: BookingReceipt) => void;
+  /** Where booking links are created: Calendar settings. */
+  openSettings: () => void;
+};
+
+export type EditorsProps = {
+  peers: FormEditorPeer[];
+  /** What they selected, for the accessible name: “this question”. */
+  selected: string;
+};
+
 export type ResponsesGridProps = {
   databaseId: string;
   tableId: string;
@@ -203,10 +302,8 @@ export type FormContext = {
     databaseId: Accessor<string | undefined>,
     onChange: () => void
   ) => void;
-  saveLayout: (
-    formId: string,
-    layout: FormLayout
-  ) => ResultAsync<FormDetail, FormWriteFailure>;
+  /** Open the form's shared layout for editing, under the current owner. */
+  createLayoutCollaboration: (formId: string) => FormLayoutCollaboration;
   updateMetadata: (
     formId: string,
     patch: FormMetadataPatch
@@ -235,7 +332,7 @@ export type FormContext = {
       formId: string,
       answers: SubmittedAnswer[]
     ) => ResultAsync<SubmitOutcome, FormWriteFailure>;
-    createMine: (formId: Accessor<string>) => MyResponseSource;
+    createMine: (formId: Accessor<string | undefined>) => MyResponseSource;
     createSummary: (
       formId: Accessor<string>,
       enabled: Accessor<boolean>
@@ -258,6 +355,7 @@ export type FormContext = {
   };
   /** Upload a file for a file question; answers the link the cell stores. */
   uploadFile: (file: File) => ResultAsync<string, FormWriteFailure>;
+  booking: FormBooking;
   /** Open a direct conversation with the form's owner (stop screen, RFC 02 §4). */
   messageOwner: (ownerId: string) => ResultAsync<void, FormWriteFailure>;
   notify: {
@@ -271,6 +369,8 @@ export type FormContext = {
     renderResponsesGrid: (props: ResponsesGridProps) => JSX.Element;
     /** A person's or entity's name, as mentions show it. */
     renderEntityLabel: (entity: FormEntityReference) => JSX.Element;
+    /** The other editors who selected something, as the app shows people. */
+    renderEditors: (props: EditorsProps) => JSX.Element;
   };
 };
 

@@ -1,8 +1,10 @@
 //! Creating a form: over a new database whose one table holds only the
 //! form's own columns, or over an existing table with a question per column.
 
+use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
+
 use databases::domain::models::{CreateDatabase, DatabaseError, OpBatch, TableDetail, Viewer};
-use databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
@@ -104,15 +106,16 @@ fn create_op(table: &TableDetail, column: &ManagedColumn, kind: ColumnKind) -> O
     })
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     pub(super) async fn create(
         &self,
@@ -147,7 +150,7 @@ where
             .await
             .map_err(database_error)?;
         match self
-            .attach_to_new_database(&creator, name, database.id)
+            .attach_to_new_database(&creator, database.name, database.id)
             .await
         {
             Ok(detail) => Ok(detail),
@@ -226,6 +229,7 @@ where
             (submitted.id(), respondent.id()),
             layout,
             &table,
+            true,
         )
         .await
     }
@@ -319,12 +323,14 @@ where
             (submitted.id(), respondent.id()),
             layout,
             &table,
+            false,
         )
         .await
     }
 
     /// Store a new form over `table`, owned by its creator, writing its two
-    /// managed columns.
+    /// managed columns. A form over a database it created goes by that
+    /// database's name, which `name` is at creation.
     async fn store_new_form(
         &self,
         creator: &Viewer,
@@ -332,6 +338,7 @@ where
         (submitted, respondent): (ColumnId, ColumnId),
         layout: FormLayout,
         table: &TableDetail,
+        name_follows_database: bool,
     ) -> Result<FormDetail, FormError> {
         let now = self.now();
         let database_id = table.table.database_id;
@@ -353,7 +360,7 @@ where
             updated_at: now,
         };
         self.repository
-            .create_form(&form, &layout)
+            .create_form(&form, &layout, name_follows_database)
             .await
             .map_err(repository_error)?;
         self.emit(FormTopicEvent::Created(FormCreatedMetadata {

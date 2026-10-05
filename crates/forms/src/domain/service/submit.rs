@@ -2,11 +2,13 @@
 //! one's own response back. The forms service decides; the databases
 //! service writes the row under the form's internal receipt.
 
+use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
+
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use databases::domain::models::{DatabaseError, OpBatch, TableDetail, Viewer};
-use databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -14,6 +16,7 @@ use models_databases::{
     CellValue, CellWrite, DatabaseOp, EntityKind, EntityRef, OpResult, RowChange, RowChanges,
     RowsChange, RowsResult,
 };
+use models_forms::UnlockedBooking;
 
 use super::answers::{AnsweredQuestion, Evaluation, evaluate};
 use super::layout::{QuestionColumn, gates_fit_table, question_columns};
@@ -116,7 +119,7 @@ fn answers_of(layout: &FormLayout, cells: &[CellWrite]) -> Vec<Answer> {
         .iter()
         .flat_map(|section| match section {
             FormSection::Questions { questions, .. } => questions.as_slice(),
-            FormSection::Gate { .. } => &[],
+            FormSection::Gate { .. } | FormSection::Booking { .. } => &[],
         })
         .filter_map(|question| {
             by_column.get(&question.column).map(|value| Answer {
@@ -127,15 +130,49 @@ fn answers_of(layout: &FormLayout, cells: &[CellWrite]) -> Vec<Answer> {
         .collect()
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+/// The layout's booking step with its destination, for a response that has
+/// passed every gate and been saved.
+fn unlocked_booking(layout: &FormLayout) -> Option<UnlockedBooking> {
+    layout.sections.iter().find_map(|section| match section {
+        FormSection::Booking {
+            id,
+            title,
+            description,
+            target,
+        } => Some(UnlockedBooking {
+            section: *id,
+            title: title.clone(),
+            description: description.clone(),
+            target: target.clone(),
+        }),
+        FormSection::Questions { .. } | FormSection::Gate { .. } => None,
+    })
+}
+
+/// Whether a saved row's answers pass the form as it is now: every required
+/// question answered and every gate passed.
+fn still_passes(
+    layout: &FormLayout,
+    columns: &HashMap<ColumnId, QuestionColumn>,
+    answers: &[Answer],
+) -> bool {
+    gates_fit_table(layout, columns).is_ok()
+        && matches!(
+            evaluate(layout, columns, answers),
+            Ok(Evaluation::Passed(_))
+        )
+}
+
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     /// The form, its table and layout for a respondent about to write:
     /// refused when it is closed, its table is gone, or it takes signed-in
@@ -154,11 +191,7 @@ where
             return Err(FormError::SignInRequired);
         }
         let table = self.live_table_of(&form).await?;
-        let layout = self
-            .repository
-            .layout(form.id)
-            .await
-            .map_err(repository_error)?;
+        let layout = self.refresh_layout(&form, Some(&table)).await?.layout;
         Ok((form, respondent, table, layout))
     }
 
@@ -266,7 +299,11 @@ where
                 submitted_at: now,
             },
         ));
-        Ok(SubmissionOutcome::Submitted { response, row })
+        Ok(SubmissionOutcome::Submitted {
+            response,
+            row,
+            booking: unlocked_booking(&layout),
+        })
     }
 
     pub(super) async fn edit(
@@ -313,6 +350,7 @@ where
         Ok(SubmissionOutcome::Submitted {
             response: entry.id,
             row,
+            booking: unlocked_booking(&layout),
         })
     }
 
@@ -421,6 +459,7 @@ where
             return Ok(MyResponse {
                 response,
                 answers: vec![],
+                booking: None,
             });
         };
         // A table gone, or its database in the trash, leaves the receipt
@@ -439,16 +478,30 @@ where
                 return Ok(MyResponse {
                     response,
                     answers: vec![],
+                    booking: None,
                 });
             }
             Err(other) => return Err(database_error(other)),
         };
-        let layout = self
-            .repository
-            .layout(form.id)
-            .await
-            .map_err(repository_error)?;
-        let answers = answers_of(&layout, &cells.remove(&row).unwrap_or_default());
-        Ok(MyResponse { response, answers })
+        let table = self.table_of(&form).await?;
+        let layout = self.refresh_layout(&form, table.as_ref()).await?.layout;
+        let Some(cells) = cells.remove(&row) else {
+            return Ok(MyResponse {
+                response,
+                answers: vec![],
+                booking: None,
+            });
+        };
+        let answers = answers_of(&layout, &cells);
+        let passes = response.status == ResponseStatus::Submitted
+            && match table {
+                Some(table) => still_passes(&layout, &question_columns(&table), &answers),
+                None => false,
+            };
+        Ok(MyResponse {
+            response,
+            answers,
+            booking: passes.then(|| unlocked_booking(&layout)).flatten(),
+        })
     }
 }

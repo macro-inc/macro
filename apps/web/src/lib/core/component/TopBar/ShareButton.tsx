@@ -1,3 +1,4 @@
+import { respondLink } from '@app/features/block-form/core/respond-link';
 import { projectRouteId } from '@app/features/projects/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -31,6 +32,7 @@ import { useIsDocumentOwner } from '@core/signal/permissions';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import IconShared from '@icon/share.svg';
 import { Dialog } from '@kobalte/core/dialog';
@@ -95,10 +97,12 @@ import {
   createResource,
   createSignal,
   For,
+  lazy,
   Match,
   onCleanup,
   onMount,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -128,6 +132,10 @@ import {
   teamShareScopeOptionsForItem,
 } from './linkShare';
 
+const FormLinkSharing = lazy(
+  () => import('@app/features/block-form/form-link-sharing')
+);
+
 false && clickOutside;
 
 const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
@@ -141,6 +149,7 @@ const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
 type ShareBlockType = BlockName | BlockAlias | 'initiative';
 
 function shareUrl(type: ShareBlockType, id: string): string {
+  if (type === 'form') return respondLink(`${getWebOrigin()}/app/`, id);
   if (type !== 'initiative') return buildSimpleEntityUrl({ type, id });
   return buildSimpleEntityUrl({
     type: 'component',
@@ -287,8 +296,8 @@ interface ShareModalProps extends ManagedDialogProps {
   copyLink?: () => void;
   /** Rows for access the host grants outside channels, e.g. collaborators. */
   people?: Component;
-  /** A panel above the people list, e.g. a form's "Who can respond". */
-  audience?: Component;
+  /** Entity-owned controls in the standard link-sharing area. */
+  linkSharing?: Component;
   /** Whether `people` lists anyone, for the link-sharing status. */
   hasDirectShares?: boolean;
 }
@@ -513,7 +522,7 @@ interface MobileShareDrawerProps {
   itemType: ShareItemType;
   owner?: string;
   people?: Component;
-  audience?: Component;
+  linkSharing?: Component;
   hasDirectShares?: boolean;
   userPermissions: Permissions;
   recipients: SharePermissionV2ChannelSharePermissions | undefined;
@@ -545,8 +554,9 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
     if ((props.recipients?.length ?? 0) > 0 || props.owner)
       tabs.push({ value: 'people', label: 'People' });
     if (
-      props.userPermissions === Permissions.OWNER &&
-      !isLinkSharingDisabledForItem(props.itemType)
+      props.linkSharing ||
+      (props.userPermissions === Permissions.OWNER &&
+        !isLinkSharingDisabledForItem(props.itemType))
     )
       tabs.push({ value: 'link', label: 'Link' });
     if (teamShareOnOwnCard(props.itemType, props.teamShare))
@@ -655,11 +665,6 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             </Show>
           </div>
           <Show when={effectiveActiveTab() === 'people'}>
-            <Show when={props.audience}>
-              <div class="border-b border-edge-divider px-4 py-3">
-                <Dynamic component={props.audience} />
-              </div>
-            </Show>
             <div class="grid gap-3 text-ink text-sm select-none py-3 px-4">
               <Show when={props.owner}>
                 <div class="flex justify-between">
@@ -746,18 +751,28 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             </div>
           </Show>
           <Show when={effectiveActiveTab() === 'link'}>
-            <LinkSharingControls
-              editPermissionEnabled={props.editPermissionEnabled}
-              linkShare={props.linkShare}
-              linkShareAccessLevel={props.linkShareAccessLevel}
-              hasExplicitShares={
-                (props.recipients?.length ?? 0) > 0 || !!props.hasDirectShares
+            <Show
+              when={props.linkSharing}
+              fallback={
+                <LinkSharingControls
+                  editPermissionEnabled={props.editPermissionEnabled}
+                  linkShare={props.linkShare}
+                  linkShareAccessLevel={props.linkShareAccessLevel}
+                  hasExplicitShares={
+                    (props.recipients?.length ?? 0) > 0 ||
+                    !!props.hasDirectShares
+                  }
+                  setLinkShareScope={props.setLinkShareScope}
+                  setLinkShareAccessLevel={props.setLinkShareAccessLevel}
+                  copyLink={props.copyLink}
+                  teamShare={props.teamShare}
+                />
               }
-              setLinkShareScope={props.setLinkShareScope}
-              setLinkShareAccessLevel={props.setLinkShareAccessLevel}
-              copyLink={props.copyLink}
-              teamShare={props.teamShare}
-            />
+            >
+              <div class="p-4">
+                <Dynamic component={props.linkSharing} />
+              </div>
+            </Show>
           </Show>
           <Show
             when={
@@ -779,6 +794,15 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 }
 
 export function ShareModal(props: ShareModalProps) {
+  const FormLinks = () => (
+    <Suspense
+      fallback={<p class="text-sm text-ink-muted">Loading form sharing…</p>}
+    >
+      <FormLinkSharing formId={props.id} />
+    </Suspense>
+  );
+  const customLinkSharing = () =>
+    props.linkSharing ?? (props.itemType === 'form' ? FormLinks : undefined);
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const currentTeamQuery = useCurrentTeamQuery();
@@ -1363,7 +1387,7 @@ export function ShareModal(props: ShareModalProps) {
           itemType={props.itemType}
           owner={props.owner}
           people={props.people}
-          audience={props.audience}
+          linkSharing={customLinkSharing()}
           hasDirectShares={props.hasDirectShares}
           userPermissions={userPermissions()}
           recipients={recipients()}
@@ -1481,11 +1505,6 @@ export function ShareModal(props: ShareModalProps) {
                               </div>
                             </div>
                           </Show>
-                          <Show when={props.audience}>
-                            <div class="border-b border-edge-divider pb-3">
-                              <Dynamic component={props.audience} />
-                            </div>
-                          </Show>
                           <Dynamic component={props.people} />
                           <For each={recipients() || []}>
                             {(recipient) => (
@@ -1588,25 +1607,35 @@ export function ShareModal(props: ShareModalProps) {
               {/* Card 3: Link sharing — plain border */}
               <Show
                 when={
-                  userPermissions() === Permissions.OWNER &&
-                  !isLinkSharingDisabledForItem(props.itemType)
+                  customLinkSharing() ||
+                  (userPermissions() === Permissions.OWNER &&
+                    !isLinkSharingDisabledForItem(props.itemType))
                 }
               >
                 <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Body>
-                    <LinkSharingControls
-                      editPermissionEnabled={editPermissionEnabled()}
-                      linkShare={linkShare()}
-                      linkShareAccessLevel={linkShareAccessLevel()}
-                      hasExplicitShares={
-                        (recipients()?.length ?? 0) > 0 ||
-                        !!props.hasDirectShares
+                    <Show
+                      when={customLinkSharing()}
+                      fallback={
+                        <LinkSharingControls
+                          editPermissionEnabled={editPermissionEnabled()}
+                          linkShare={linkShare()}
+                          linkShareAccessLevel={linkShareAccessLevel()}
+                          hasExplicitShares={
+                            (recipients()?.length ?? 0) > 0 ||
+                            !!props.hasDirectShares
+                          }
+                          setLinkShareScope={setLinkShareScope}
+                          setLinkShareAccessLevel={setLinkShareAccessLevel}
+                          copyLink={copyLink}
+                          teamShare={teamShareControls()}
+                        />
                       }
-                      setLinkShareScope={setLinkShareScope}
-                      setLinkShareAccessLevel={setLinkShareAccessLevel}
-                      copyLink={copyLink}
-                      teamShare={teamShareControls()}
-                    />
+                    >
+                      <div class="p-4">
+                        <Dynamic component={customLinkSharing()} />
+                      </div>
+                    </Show>
                   </Panel.Body>
                 </Panel>
               </Show>

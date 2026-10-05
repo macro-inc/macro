@@ -1,11 +1,13 @@
 //! A form's layout against its table: the column facts each question joins,
 //! the detail a page reads, and the one validation every layout put passes.
 
+use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
+
 use std::collections::{HashMap, HashSet};
 
 use databases::domain::catalog::{self, PropertyType};
 use databases::domain::models::TableDetail;
-use databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_event_broker::MacroEventBroker;
 use models_databases::ColumnKind;
@@ -13,10 +15,10 @@ use models_databases::views::{FilterGroup, SchemaColumn, ViewLayout, ViewQuery, 
 use models_forms::{MAX_TEXT_LENGTH, MAX_TITLE_LENGTH};
 use uuid::Uuid;
 
-use super::{FormsServiceImpl, receipt_access, receipt_form_id, repository_error, within};
+use super::{FormsServiceImpl, receipt_access, receipt_form_id, within};
 use crate::domain::models::{
     Audience, ColumnId, Form, FormAccess, FormDetail, FormError, FormLayout, FormQuestionDetail,
-    FormSection, FormSectionDetail, LayoutProblem, LayoutReplacement, QuestionOption, Widget,
+    FormSection, FormSectionDetail, LayoutProblem, QuestionOption, Widget,
 };
 use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
 
@@ -86,6 +88,17 @@ pub(super) fn form_detail(
         .sections
         .into_iter()
         .map(|section| match section {
+            FormSection::Booking {
+                id,
+                title,
+                description,
+                target,
+            } => FormSectionDetail::Booking {
+                id,
+                title,
+                description,
+                target: (access >= FormAccess::Edit).then_some(target),
+            },
             FormSection::Questions {
                 id,
                 title,
@@ -159,8 +172,21 @@ pub(super) fn validate_layout(
         }
     };
     let mut asked: HashSet<ColumnId> = HashSet::new();
-    for section in &layout.sections {
+    for (position, section) in layout.sections.iter().enumerate() {
         match section {
+            FormSection::Booking {
+                id,
+                title,
+                description,
+                ..
+            } => {
+                unique(*id.as_uuid())?;
+                within(title, MAX_TITLE_LENGTH)?;
+                within(description, MAX_TEXT_LENGTH)?;
+                if position + 1 != layout.sections.len() {
+                    return Err(LayoutProblem::BookingMustBeLast.into());
+                }
+            }
             FormSection::Questions {
                 id,
                 title,
@@ -291,6 +317,7 @@ pub(super) fn gates_fit_table(
     let mut asked: HashSet<ColumnId> = HashSet::new();
     for section in &layout.sections {
         match section {
+            FormSection::Booking { .. } => {}
             FormSection::Questions { questions, .. } => asked.extend(
                 questions
                     .iter()
@@ -309,31 +336,28 @@ pub(super) fn asks_for_a_file(layout: &FormLayout) -> bool {
         FormSection::Questions { questions, .. } => questions
             .iter()
             .any(|question| question.widget == Some(Widget::File)),
-        FormSection::Gate { .. } => false,
+        FormSection::Gate { .. } | FormSection::Booking { .. } => false,
     })
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     pub(super) async fn read_detail(
         &self,
         receipt: &EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<FormDetail, FormError> {
         let form = self.live_form(receipt_form_id(receipt)?).await?;
-        let layout = self
-            .repository
-            .layout(form.id)
-            .await
-            .map_err(repository_error)?;
         let table = self.table_of(&form).await?;
+        let layout = self.refresh_layout(&form, table.as_ref()).await?.layout;
         Ok(form_detail(
             form,
             receipt_access(receipt),
@@ -349,24 +373,8 @@ where
     ) -> Result<FormDetail, FormError> {
         let form = self.live_form(receipt_form_id(receipt)?).await?;
         let table = self.live_table_of(&form).await?;
-        validate_layout(&layout, &form, &table)?;
+        let layout = self.replace_draft(&form, &table, &layout).await?;
         let now = self.now();
-        // A file question was checked against the audience read above; the
-        // write holds only if the form is still members-only when it commits.
-        let required_audience = asks_for_a_file(&layout).then_some(Audience::Members);
-        match self
-            .repository
-            .replace_layout(form.id, &layout, now, required_audience)
-            .await
-            .map_err(repository_error)?
-        {
-            LayoutReplacement::Replaced => self.announce(form.id).await,
-            LayoutReplacement::FormGone => return Err(FormError::NotFound),
-            LayoutReplacement::AudienceChanged => return Err(FormError::FileUploadNeedsSignIn),
-            LayoutReplacement::IdTaken(id) => {
-                return Err(LayoutProblem::RepeatedId { id }.into());
-            }
-        }
         Ok(form_detail(
             Form {
                 updated_at: now,

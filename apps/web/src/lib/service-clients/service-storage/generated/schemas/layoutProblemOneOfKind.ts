@@ -10,5 +10,5 @@ export type LayoutProblemOneOfKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LayoutProblemOneOfKind = {
-  unknownColumn: 'unknownColumn',
+  bookingMustBeLast: 'bookingMustBeLast',
 } as const;

@@ -53,7 +53,7 @@ pub(super) fn evaluate(
         .iter()
         .flat_map(|section| match section {
             FormSection::Questions { questions, .. } => questions.as_slice(),
-            FormSection::Gate { .. } => &[],
+            FormSection::Gate { .. } | FormSection::Booking { .. } => &[],
         })
         .filter_map(|question| {
             columns
@@ -80,6 +80,7 @@ pub(super) fn evaluate(
     let mut cells: HashMap<ColumnId, CellValue> = HashMap::new();
     for section in &layout.sections {
         match section {
+            FormSection::Booking { .. } => {}
             FormSection::Questions { questions, .. } => {
                 for question in questions {
                     if !asked.contains_key(&question.id) {

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { okAsync } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -36,6 +36,34 @@ beforeEach(() => {
 });
 
 describe('DatabaseFormsEntry', () => {
+  it('opens the forms menu and navigates to an existing form', async () => {
+    forms.listed = [
+      { id: 'form-1', name: 'RSVP', tableId: 'table-1', status: 'open' },
+    ];
+    render(() => (
+      <DatabaseFormsEntry
+        databaseId="database-1"
+        tableId="table-1"
+        tableName="Guests"
+        canCreate
+        enabled
+      />
+    ));
+    const trigger = screen.getByRole('button', { name: 'Forms over Guests' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const form = await screen.findByRole('menuitem', { name: 'RSVP Open' });
+    expect(
+      screen.getByRole('group', { name: 'Forms writing to Guests' })
+    ).toBeTruthy();
+    form.focus();
+    fireEvent.keyDown(form, { key: 'Enter' });
+    expect(replaceOrInsertSplit).toHaveBeenCalledWith({
+      type: 'form',
+      id: 'form-1',
+    });
+  });
+
   it('offers + Form to the database owner when no form writes to the table', () => {
     render(() => (
       <DatabaseFormsEntry

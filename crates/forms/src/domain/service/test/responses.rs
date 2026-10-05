@@ -47,7 +47,7 @@ async fn respond(forms: &Service, user: &'static str, answers: Vec<Answer>) -> S
 }
 
 fn submitted(outcome: SubmissionOutcome) -> (crate::domain::models::FormResponseId, RowId) {
-    let SubmissionOutcome::Submitted { response, row } = outcome else {
+    let SubmissionOutcome::Submitted { response, row, .. } = outcome else {
         panic!("saved, not {outcome:?}");
     };
     (response, row)
@@ -100,6 +100,7 @@ async fn a_respondent_reads_their_response_back_from_the_row_as_it_is_now() {
                     value: CellValue::Text("Vegetarian".into()),
                 },
             ],
+            booking: None,
         }
     );
 }
@@ -178,7 +179,14 @@ async fn an_edit_rewrites_every_question_of_the_row_and_clears_dropped_answers()
         )
         .await
         .unwrap();
-    assert_eq!(edited, SubmissionOutcome::Submitted { response, row });
+    assert_eq!(
+        edited,
+        SubmissionOutcome::Submitted {
+            response,
+            row,
+            booking: None,
+        }
+    );
 
     let world = world.lock().unwrap();
     assert_eq!(
@@ -262,6 +270,7 @@ async fn an_edit_of_a_response_whose_row_was_deleted_writes_a_new_row_and_repoin
     let SubmissionOutcome::Submitted {
         response: edited_response,
         row,
+        ..
     } = edited
     else {
         panic!("saved");
@@ -552,6 +561,7 @@ async fn rewriting_a_lost_row_skips_managed_columns_retyped_in_the_grid() {
     let SubmissionOutcome::Submitted {
         response: edited_response,
         row,
+        ..
     } = edited
     else {
         panic!("saved, not {edited:?}");

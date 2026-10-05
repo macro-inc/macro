@@ -11,6 +11,7 @@ it('keeps two panels on screen at once as separate choices', () => {
         audience="members"
         canChange
         respondLink="https://macro.com/app/form/form-1/respond"
+        onCopyFailure={() => {}}
         pending={false}
         onChange={() => {}}
       />
@@ -18,13 +19,14 @@ it('keeps two panels on screen at once as separate choices', () => {
         audience="public"
         canChange
         respondLink="https://macro.com/app/form/form-1/respond"
+        onCopyFailure={() => {}}
         pending={false}
         onChange={() => {}}
       />
     </>
   ));
   const members = screen.getAllByRole<HTMLInputElement>('radio', {
-    name: /Workspace members/,
+    name: /Invited people/,
   });
   expect(members[0].name).not.toBe(members[1].name);
   expect(members[0].checked).toBe(true);
@@ -42,6 +44,7 @@ it('stays on the saved audience when a change is refused, claiming nothing it di
       audience="members"
       canChange
       respondLink="https://macro.com/app/form/form-1/respond"
+      onCopyFailure={() => {}}
       pending={false}
       onChange={(audience) => asked.push(audience)}
     />
@@ -54,7 +57,7 @@ it('stays on the saved audience when a change is refused, claiming nothing it di
   // Refused (or not saved yet): the saved audience is still what shows.
   expect(anyone.checked).toBe(false);
   expect(
-    screen.getByRole<HTMLInputElement>('radio', { name: /Workspace members/ })
+    screen.getByRole<HTMLInputElement>('radio', { name: /Invited people/ })
       .checked
   ).toBe(true);
 });

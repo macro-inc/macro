@@ -1,4 +1,11 @@
-import { errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow';
+import {
+  err,
+  errAsync,
+  ok,
+  okAsync,
+  type Result,
+  ResultAsync,
+} from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -7,6 +14,10 @@ import type {
 } from '../context/form-context';
 import type { FormColumn, FormDetail, FormLayout } from '../core/form-model';
 import { QUESTION_TYPE_CHOICES } from '../core/question-types';
+import {
+  createFakeCollaboration,
+  type FakeCollaboration,
+} from '../tests/fake-collaboration';
 import { createBuilder, uniqueColumnName } from './create-builder';
 
 const NAME_COLUMN = 'column-name';
@@ -70,6 +81,7 @@ const startingLayout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [
         {
           id: 'q-name',
@@ -107,6 +119,7 @@ const startingLayout: FormLayout = {
         ],
       },
       gateMessage: 'Employees only.',
+      bookingTarget: null,
       questions: [],
     },
     {
@@ -116,6 +129,7 @@ const startingLayout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [],
     },
   ],
@@ -170,12 +184,12 @@ function fakeWrites(overrides: Partial<FormColumnWrites> = {}) {
 
 function setup(options: {
   writes: FormColumnWrites;
-  save?: (layout: FormLayout) => ResultAsync<FormDetail, FormWriteFailure>;
+  shared?: FakeCollaboration;
 }) {
   const [server, setServer] = createSignal<FormDetail | undefined>(
     detail(startingLayout)
   );
-  const saved: FormLayout[] = [];
+  const shared = options.shared ?? createFakeCollaboration(startingLayout);
   const notices: string[] = [];
   let ids = 0;
   const refetch = vi.fn(async () => {});
@@ -183,23 +197,22 @@ function setup(options: {
     detail: server,
     refetch,
     tableColumns: () => tableColumns,
-    saveLayout:
-      options.save ??
-      ((layout) => {
-        saved.push(layout);
-        const answered = detail(layout);
-        setServer(answered);
-        return okAsync(answered);
-      }),
+    collaboration: shared.collaboration,
     columnWrites: () => options.writes,
     notify: {
       success: (message) => notices.push(`✓ ${message}`),
       failure: (message) => notices.push(`✗ ${message}`),
     },
     mintId: () => `minted-${++ids}`,
-    delayMs: 400,
   });
-  return { builder, saved, notices, refetch, setServer };
+  return {
+    builder,
+    shared,
+    saved: shared.written,
+    notices,
+    refetch,
+    setServer,
+  };
 }
 
 const shortAnswer = QUESTION_TYPE_CHOICES.find(
@@ -219,7 +232,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('createBuilder', () => {
-  it('adds a question by creating its column first, then saving the layout that places it after the selected question', async () => {
+  it('adds a question by creating its column first, then writing the shared layout that places it after the selected question', async () => {
     const creation = pending<void>();
     const { writes, calls } = fakeWrites({
       create: (column) => {
@@ -253,7 +266,7 @@ describe('createBuilder', () => {
     });
   });
 
-  it('takes the question away again when its column is refused, saving nothing', async () => {
+  it('takes the question away again when its column is refused, writing nothing', async () => {
     const { writes } = fakeWrites({
       create: () => errAsync({ message: 'Name taken' }),
     });
@@ -276,23 +289,56 @@ describe('createBuilder', () => {
     });
   });
 
-  it('rolls back to the server layout and reads it again when a save fails', async () => {
+  it('accepts no edit until the shared layout opens, nor while it is unreadable', async () => {
+    const { writes, calls } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const shared = createFakeCollaboration(startingLayout, {
+        status: { kind: 'loading' },
+      });
+      const { builder, saved } = setup({ writes, shared });
+      expect(builder.layout()).toBeUndefined();
+      expect(builder.editable()).toBe(false);
+      expect(builder.updateQuestion('q-name', { required: false })).toBe(false);
+      await builder.addQuestion(shortAnswer);
+      expect(calls).toEqual([]);
+      shared.setStatus({ kind: 'ready' });
+      expect(builder.editable()).toBe(true);
+      expect(builder.updateQuestion('q-name', { required: false })).toBe(true);
+      shared.setStatus({
+        kind: 'error',
+        message: 'This form was edited by a newer version of Macro.',
+      });
+      expect(builder.layout()?.sections[0].questions[0].required).toBe(false);
+      expect(builder.updateQuestion('q-name', { helpText: 'Lost' })).toBe(
+        false
+      );
+      expect(saved).toHaveLength(1);
+      dispose();
+    });
+  });
+
+  it('tells an edit the shared document refused and shows what it holds', async () => {
     const { writes } = fakeWrites();
     await createRoot(async (dispose) => {
-      const { builder, notices, refetch } = setup({
+      const shared = createFakeCollaboration(startingLayout);
+      const { builder, notices } = setup({
         writes,
-        save: () => errAsync({ message: 'The table changed.' }),
+        shared: {
+          ...shared,
+          collaboration: {
+            ...shared.collaboration,
+            apply: () => {
+              throw new Error('The form layout is not open for editing.');
+            },
+          },
+        },
       });
-      builder.updateQuestion('q-name', { helpText: 'First and last' });
-      expect(builder.layout()?.sections[0].questions[0].helpText).toBe(
-        'First and last'
+      expect(builder.updateQuestion('q-name', { helpText: 'Lost' })).toBe(
+        false
       );
-      await vi.advanceTimersByTimeAsync(400);
       expect(builder.layout()?.sections[0].questions[0].helpText).toBe('');
-      expect(builder.saveState()).toBe('failed');
-      expect(refetch).toHaveBeenCalled();
       expect(notices).toEqual([
-        '✗ Your last change to the form wasn’t saved: The table changed.',
+        '✗ The change wasn’t made: The form layout is not open for editing.',
       ]);
       dispose();
     });
@@ -410,7 +456,7 @@ describe('createBuilder', () => {
       builder.removeQuestion('q-team');
       expect(builder.selectedId()).toBe('q-name');
       expect(builder.layout()?.sections[1].gateRules?.conditions).toEqual([]);
-      expect(notices).toEqual(['✓ Removed 1 gate rule that checked it.']);
+      expect(notices).toEqual(['✓ Removed 1 screener rule that checked it.']);
       expect(calls).toEqual([]);
       expect(builder.hiddenColumns().map((column) => column.name)).toEqual([
         'Team',
@@ -420,7 +466,7 @@ describe('createBuilder', () => {
     });
   });
 
-  it('takes the question and the gate rules naming its column off the form before deleting the column', async () => {
+  it('takes the question and the gate rules naming its column off the published form before deleting the column', async () => {
     const order: string[] = [];
     const { writes } = fakeWrites({
       remove: (columnId) => {
@@ -429,48 +475,56 @@ describe('createBuilder', () => {
       },
     });
     await createRoot(async (dispose) => {
-      const { builder } = setup({
-        writes,
-        save: (layout) => {
-          order.push(
-            `save gate=${JSON.stringify(layout.sections[1].gateRules?.conditions)} questions=${layout.sections[0].questions.map((question) => question.id).join(',')}`
-          );
-          return okAsync(detail(layout));
-        },
+      const shared = createFakeCollaboration(startingLayout);
+      shared.answerFlushes(() => {
+        const layout = shared.theirs();
+        order.push(
+          `publish gate=${JSON.stringify(layout.sections[1].gateRules?.conditions)} questions=${layout.sections[0].questions.map((question) => question.id).join(',')}`
+        );
+        return okAsync(undefined);
       });
+      const { builder } = setup({ writes, shared });
       expect(await builder.deleteColumn('q-team')).toBe(true);
       expect(order).toEqual([
-        'save gate=[] questions=q-name',
+        'publish gate=[] questions=q-name',
         `remove ${TEAM_COLUMN}`,
       ]);
       dispose();
     });
   });
 
-  it('deletes nothing when the layout without the question is refused', async () => {
+  it('deletes nothing when the layout without the question could not be published', async () => {
     const { writes, calls } = fakeWrites();
     await createRoot(async (dispose) => {
-      const { builder, notices } = setup({
-        writes,
-        save: () => errAsync({ message: 'The table changed.' }),
-      });
+      const shared = createFakeCollaboration(startingLayout);
+      shared.answerFlushes(() => errAsync({ message: 'You’re offline.' }));
+      const { builder, notices } = setup({ writes, shared });
       expect(await builder.deleteColumn('q-team')).toBe(false);
       expect(calls).toEqual([]);
       expect(notices).toContain(
-        '✗ The column wasn’t deleted: the form couldn’t drop its question first.'
+        '✗ The column wasn’t deleted: the form couldn’t drop its question first. You’re offline.'
       );
       dispose();
     });
   });
 
-  it('sends pending layout edits before deleting a column, then reads the form back', async () => {
+  it('publishes layout edits made before deleting a column, then reads the form back', async () => {
     const { writes, calls } = fakeWrites();
     await createRoot(async (dispose) => {
-      const { builder, saved, refetch } = setup({ writes });
+      const { builder, shared, refetch } = setup({ writes });
       builder.updateQuestion('q-name', { required: false });
       const deleted = await builder.deleteColumn('q-team');
       expect(deleted).toBe(true);
-      expect(saved).toHaveLength(1);
+      expect(shared.flushes()).toBe(1);
+      expect(shared.theirs().sections[0].questions).toEqual([
+        {
+          id: 'q-name',
+          columnId: NAME_COLUMN,
+          helpText: '',
+          required: false,
+          widget: 'short',
+        },
+      ]);
       expect(calls).toEqual([`remove ${TEAM_COLUMN}`]);
       expect(refetch).toHaveBeenCalled();
       dispose();
@@ -544,6 +598,267 @@ describe('createBuilder', () => {
       expect(builder.layout()?.sections[0].questions[1].id).toBe(
         builder.selectedId()
       );
+      dispose();
+    });
+  });
+});
+
+describe('with another editor', () => {
+  const renameSection =
+    (sectionId: string, title: string) => (layout: FormLayout) => ({
+      sections: layout.sections.map((section) =>
+        section.id === sectionId ? { ...section, title } : section
+      ),
+    });
+  const dropSection = (sectionId: string) => (layout: FormLayout) => ({
+    sections: layout.sections.filter((section) => section.id !== sectionId),
+  });
+  const questionIds = (layout: FormLayout | undefined) =>
+    layout?.sections.map((section) => ({
+      [section.id]: section.questions.map((question) => question.id),
+    }));
+
+  it('merges an edit to another section with this editor’s own, on both sides', async () => {
+    const { writes } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder, shared } = setup({ writes });
+      builder.updateQuestion('q-name', { helpText: 'First and last' });
+      shared.remote(renameSection('details', 'Travel'));
+      builder.updateSection('about', { title: 'You' });
+      for (const layout of [builder.layout(), shared.theirs()]) {
+        expect(layout?.sections.map((section) => section.title)).toEqual([
+          'You',
+          'Eligibility',
+          'Travel',
+        ]);
+        expect(layout?.sections[0].questions[0].helpText).toBe(
+          'First and last'
+        );
+      }
+      dispose();
+    });
+  });
+
+  it('merges edits made offline with edits made meanwhile elsewhere, never bringing back a question deleted there', async () => {
+    const { writes } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder, shared } = setup({ writes });
+      shared.goOffline();
+      builder.updateQuestion('q-team', { required: true });
+      builder.updateQuestion('q-name', { helpText: 'First and last' });
+      expect(shared.collaboration.save()).toBe('unsaved');
+      expect(builder.layout()?.sections[0].questions[1].required).toBe(true);
+      shared.remote((layout) => ({
+        sections: layout.sections.map((section) =>
+          section.id === 'about'
+            ? {
+                ...section,
+                questions: section.questions.filter(
+                  (question) => question.id !== 'q-team'
+                ),
+              }
+            : section
+        ),
+      }));
+      shared.reconnect();
+      for (const layout of [builder.layout(), shared.theirs()])
+        expect(layout?.sections[0].questions).toEqual([
+          {
+            id: 'q-name',
+            columnId: NAME_COLUMN,
+            helpText: 'First and last',
+            required: true,
+            widget: 'short',
+          },
+        ]);
+      dispose();
+    });
+  });
+
+  it('shows a question whose column is still being created without sharing it, keeping edits made elsewhere meanwhile', async () => {
+    const creation = pending<void>();
+    const { writes } = fakeWrites({ create: () => creation.result });
+    await createRoot(async (dispose) => {
+      const { builder, shared } = setup({ writes });
+      builder.select('q-name');
+      const adding = builder.addQuestion(shortAnswer);
+      const questionId = builder.selectedId();
+      builder.updateQuestion(questionId ?? '', { required: true });
+      shared.remote(renameSection('details', 'Travel'));
+      expect(questionIds(shared.theirs())).toEqual([
+        { about: ['q-name', 'q-team'] },
+        { gate: [] },
+        { details: [] },
+      ]);
+      expect(questionIds(builder.layout())).toEqual([
+        { about: ['q-name', questionId, 'q-team'] },
+        { gate: [] },
+        { details: [] },
+      ]);
+      expect(builder.layout()?.sections[2].title).toBe('Travel');
+      creation.settle(ok(undefined));
+      await adding;
+      for (const layout of [builder.layout(), shared.theirs()]) {
+        expect(questionIds(layout)).toEqual([
+          { about: ['q-name', questionId, 'q-team'] },
+          { gate: [] },
+          { details: [] },
+        ]);
+        expect(layout?.sections[0].questions[1].required).toBe(true);
+        expect(layout?.sections[2].title).toBe('Travel');
+      }
+      dispose();
+    });
+  });
+
+  it('keeps edits made elsewhere when a new question’s column is refused', async () => {
+    const creation = pending<void>();
+    const { writes } = fakeWrites({ create: () => creation.result });
+    await createRoot(async (dispose) => {
+      const { builder, shared, saved } = setup({ writes });
+      const adding = builder.addQuestion(shortAnswer);
+      shared.remote(renameSection('about', 'Who you are'));
+      creation.settle(err({ message: 'Name taken' }));
+      await adding;
+      expect(builder.layout()).toEqual(shared.theirs());
+      expect(builder.layout()?.sections[0].title).toBe('Who you are');
+      expect(questionIds(builder.layout())).toEqual([
+        { about: ['q-name', 'q-team'] },
+        { gate: [] },
+        { details: [] },
+      ]);
+      expect(saved).toEqual([]);
+      dispose();
+    });
+  });
+
+  it('never brings back a section deleted elsewhere while a question was being added to it', async () => {
+    const creation = pending<void>();
+    const { writes } = fakeWrites({ create: () => creation.result });
+    await createRoot(async (dispose) => {
+      const { builder, shared } = setup({ writes });
+      builder.focusSection('details');
+      const adding = builder.addQuestion(shortAnswer);
+      expect(builder.layout()?.sections[2].questions).toHaveLength(1);
+      shared.remote(dropSection('details'));
+      expect(builder.layout()?.sections.map((section) => section.id)).toEqual([
+        'about',
+        'gate',
+      ]);
+      creation.settle(ok(undefined));
+      await adding;
+      for (const layout of [builder.layout(), shared.theirs()])
+        expect(questionIds(layout)).toEqual([
+          { about: ['q-name', 'q-team'] },
+          { gate: [] },
+        ]);
+      dispose();
+    });
+  });
+
+  it('shows the other editors what is selected, and clears it when away or gone', () => {
+    const { writes } = fakeWrites();
+    const { builder, shared, dispose } = createRoot((dispose) => ({
+      ...setup({ writes }),
+      dispose,
+    }));
+    builder.select('q-team');
+    builder.focusSection('details');
+    builder.setPresent(false);
+    builder.setPresent(true);
+    builder.select(undefined);
+    builder.select('q-name');
+    dispose();
+    expect(shared.selections).toEqual([
+      { sectionId: 'about', questionId: 'q-team' },
+      { sectionId: 'details', questionId: null },
+      undefined,
+      { sectionId: 'details', questionId: null },
+      undefined,
+      { sectionId: 'about', questionId: 'q-name' },
+      undefined,
+    ]);
+  });
+});
+
+describe('the booking step', () => {
+  const INTRO_CALL = { profileId: 'profile-1', eventTypeId: 'intro-call' };
+  const REVIEW_CALL = { profileId: 'profile-1', eventTypeId: 'review-call' };
+
+  it('adds one booking step last, selects it again instead of adding a second, and writes a new link', async () => {
+    const { writes } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder, saved } = setup({ writes });
+      builder.select('q-name');
+      expect(builder.addBooking(INTRO_CALL)).toEqual({
+        sectionId: 'minted-1',
+        added: true,
+      });
+      expect(builder.layout()?.sections.at(-1)).toEqual({
+        id: 'minted-1',
+        title: 'Book a time',
+        description: '',
+        kind: 'booking',
+        gateRules: null,
+        gateMessage: '',
+        bookingTarget: INTRO_CALL,
+        questions: [],
+      });
+      expect(builder.addBooking(REVIEW_CALL)).toEqual({
+        sectionId: 'minted-1',
+        added: false,
+      });
+      expect(
+        builder
+          .layout()
+          ?.sections.filter((section) => section.kind === 'booking')
+      ).toHaveLength(1);
+      expect(builder.changeBookingTarget('minted-1', REVIEW_CALL)).toBe(true);
+      expect(saved).toHaveLength(2);
+      expect(saved[1].sections.at(-1)?.bookingTarget).toEqual(REVIEW_CALL);
+      dispose();
+    });
+  });
+
+  it('puts new sections and screeners before the booking step and keeps it last when reordering', async () => {
+    const { writes } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder, notices } = setup({ writes });
+      const { sectionId } = builder.addBooking(INTRO_CALL) ?? {};
+      builder.focusSection('details');
+      const travel = builder.addSection('questions');
+      const screener = builder.addSection('gate');
+      expect(builder.layout()?.sections.map((section) => section.id)).toEqual([
+        'about',
+        'gate',
+        'details',
+        travel,
+        screener,
+        sectionId,
+      ]);
+      expect(builder.sectionMoveRefusal('details', 5)).toBe(
+        'The booking step comes last, after every question and screener. Move “Book a time” to the end.'
+      );
+      expect(builder.moveSection(sectionId ?? '', 0)).toBe(false);
+      expect(notices).toEqual([
+        '✗ The booking step comes last, after every question and screener. Move “Book a time” to the end.',
+      ]);
+      dispose();
+    });
+  });
+
+  it('removes the booking step and nothing else', async () => {
+    const { writes, calls } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder } = setup({ writes });
+      const { sectionId } = builder.addBooking(INTRO_CALL) ?? {};
+      builder.removeSection(sectionId ?? '');
+      expect(builder.layout()?.sections.map((section) => section.id)).toEqual([
+        'about',
+        'gate',
+        'details',
+      ]);
+      expect(calls).toEqual([]);
       dispose();
     });
   });

@@ -206,24 +206,26 @@ function DatabaseFormsMenu(props: {
           {onTable().length === 1 ? '1 form' : `${onTable().length} forms`}
         </Dropdown.Trigger>
         <Dropdown.Content class="w-64">
-          <Dropdown.GroupLabel>
-            Forms writing to {props.tableName}
-          </Dropdown.GroupLabel>
-          <For each={onTable()}>
-            {(form) => (
-              <Dropdown.Item
-                onSelect={() =>
-                  replaceOrInsertSplit({ type: 'form', id: form.id })
-                }
-              >
-                <ClipboardText class="size-4 text-violet" />
-                <span class="flex-1 truncate">{form.name}</span>
-                <span class="text-xs text-ink-muted">
-                  {form.status === 'closed' ? 'Closed' : 'Open'}
-                </span>
-              </Dropdown.Item>
-            )}
-          </For>
+          <Dropdown.Group>
+            <Dropdown.GroupLabel>
+              Forms writing to {props.tableName}
+            </Dropdown.GroupLabel>
+            <For each={onTable()}>
+              {(form) => (
+                <Dropdown.Item
+                  onSelect={() =>
+                    replaceOrInsertSplit({ type: 'form', id: form.id })
+                  }
+                >
+                  <ClipboardText class="size-4 text-violet" />
+                  <span class="flex-1 truncate">{form.name}</span>
+                  <span class="text-xs text-ink-muted">
+                    {form.status === 'closed' ? 'Closed' : 'Open'}
+                  </span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
           <Show when={props.canCreate}>
             <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
             <Dropdown.Item onSelect={() => void createFromTable()}>

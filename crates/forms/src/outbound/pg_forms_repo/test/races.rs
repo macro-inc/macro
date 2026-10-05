@@ -43,7 +43,7 @@ async fn a_layout_needing_members_is_refused_once_the_stored_form_is_public(pool
     let repo = PgFormsRepo::new(pool);
     let form = form_over(&table);
     let layout = layout_over(&table);
-    repo.create_form(&form, &layout).await.unwrap();
+    repo.create_form(&form, &layout, false).await.unwrap();
     assert!(matches!(
         repo.update_form(form.id, &going_public(), at(10), None)
             .await
@@ -81,7 +81,7 @@ async fn a_facts_change_forbidding_a_widget_is_refused_while_a_question_uses_it(
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool);
     let form = form_over(&table);
-    repo.create_form(&form, &file_question(&table))
+    repo.create_form(&form, &file_question(&table), false)
         .await
         .unwrap();
 
@@ -122,7 +122,7 @@ async fn a_layout_write_started_while_a_switch_to_public_holds_the_form_is_refus
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
     let layout = layout_over(&table);
-    repo.create_form(&form, &layout).await.unwrap();
+    repo.create_form(&form, &layout, false).await.unwrap();
 
     // The switch to public holds the form's row while it commits. The
     // signal only says the write has started: it either waits on the row
@@ -171,7 +171,9 @@ async fn a_switch_to_public_started_while_a_file_question_is_put_is_refused(pool
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
-    repo.create_form(&form, &layout_over(&table)).await.unwrap();
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
 
     // The layout put holds the form's row while it writes a file question.
     // As above, the signal only says the switch has started; it either waits
@@ -220,10 +222,14 @@ async fn a_layout_reusing_another_forms_ids_is_refused_by_id_and_both_layouts_st
     let repo = PgFormsRepo::new(pool);
     let first = form_over(&table);
     let first_layout = layout_over(&table);
-    repo.create_form(&first, &first_layout).await.unwrap();
+    repo.create_form(&first, &first_layout, false)
+        .await
+        .unwrap();
     let second = form_over(&table);
     let second_layout = layout_over(&table);
-    repo.create_form(&second, &second_layout).await.unwrap();
+    repo.create_form(&second, &second_layout, false)
+        .await
+        .unwrap();
 
     let FormSection::Questions {
         id: taken_section,
@@ -287,11 +293,11 @@ async fn two_forms_putting_one_new_id_at_once_leave_it_with_exactly_one(pool: Pg
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool);
     let first = form_over(&table);
-    repo.create_form(&first, &layout_over(&table))
+    repo.create_form(&first, &layout_over(&table), false)
         .await
         .unwrap();
     let second = form_over(&table);
-    repo.create_form(&second, &layout_over(&table))
+    repo.create_form(&second, &layout_over(&table), false)
         .await
         .unwrap();
     let shared = FormSectionId::new();
@@ -334,7 +340,7 @@ async fn a_widget_left_on_a_column_it_no_longer_applies_to_does_not_block_the_ch
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool);
     let form = form_over(&table);
-    repo.create_form(&form, &file_question(&table))
+    repo.create_form(&form, &file_question(&table), false)
         .await
         .unwrap();
 

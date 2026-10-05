@@ -3,7 +3,6 @@ import { ThrownResultError } from '@core/util/result';
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import {
   editMyResponse,
-  putFormLayout,
   submitResponse,
   updateForm,
   useFormDetailQuery,
@@ -19,10 +18,8 @@ import {
 } from '@queries/storage/forms-sync';
 import type { FormsError } from '@service-storage/forms';
 import type { FormErrorCode } from '@service-storage/generated/schemas/formErrorCode';
-import type { MyResponse as WireMyResponse } from '@service-storage/generated/schemas/myResponse';
-import type { SubmissionOutcome } from '@service-storage/generated/schemas/submissionOutcome';
 import type { ResultAsync } from 'neverthrow';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
   FormDetailSource,
@@ -37,9 +34,9 @@ import type {
   SubmitOutcome,
 } from '../context/form-context';
 import type { SubmittedAnswer } from '../core/answers';
-import type { FormDetail, FormLayout } from '../core/form-model';
+
 import type { ResponseCounts } from '../core/response-stats';
-import { toFormDetail, toLayoutDocument } from './form-detail';
+import { toFormDetail, toMyResponse, toSubmitOutcome } from './form-detail';
 import { toFormColumn } from './table-columns';
 
 function isFormsError(error: unknown): error is FormsError {
@@ -126,12 +123,27 @@ export function createFormDetailSource(
   // Once per mounted form: everyone hears form pings; only editors track the
   // database, whose events carry other viewers' positions.
   const databaseId = () => detail()?.form.databaseId;
-  useFormChangedSync(formId);
-  useFormDatabaseSync(databaseId, () => {
+  const isEditor = () => {
     const access = detail()?.access;
     return access === 'edit' || access === 'owner';
-  });
+  };
+  useFormChangedSync(formId);
+  useFormDatabaseSync(databaseId, isEditor);
   useFormResponsesSync(formId, databaseId);
+  // A form named after its database is renamed with it: read it again when
+  // the database's name changes under an editor.
+  const database = useDatabaseDetailQuery(() =>
+    isEditor() ? databaseId() : undefined
+  );
+  createEffect(
+    on(
+      () => (database.isSuccess ? database.data.database.name : undefined),
+      (name, previous) => {
+        if (name !== undefined && previous !== undefined && name !== previous)
+          void query.refetch();
+      }
+    )
+  );
   return {
     detail,
     failure: () => (query.isError ? loadFailureOf(query.error) : undefined),
@@ -178,15 +190,6 @@ export function createFormTableSource(
   };
 }
 
-export function saveFormLayout(
-  formId: string,
-  layout: FormLayout
-): ResultAsync<FormDetail, FormWriteFailure> {
-  return putFormLayout(formId, toLayoutDocument(layout))
-    .map(toFormDetail)
-    .mapErr(writeFailureOf);
-}
-
 export function updateFormMetadata(
   formId: string,
   patch: FormMetadataPatch
@@ -194,21 +197,6 @@ export function updateFormMetadata(
   return updateForm(formId, patch)
     .map(() => undefined)
     .mapErr(writeFailureOf);
-}
-
-function toSubmitOutcome(outcome: SubmissionOutcome): SubmitOutcome {
-  return match(outcome)
-    .returnType<SubmitOutcome>()
-    .with({ outcome: 'submitted' }, ({ response }) => ({
-      kind: 'submitted',
-      responseId: response,
-    }))
-    .with({ outcome: 'stopped' }, ({ section, message }) => ({
-      kind: 'stopped',
-      sectionId: section,
-      message,
-    }))
-    .exhaustive();
 }
 
 export function submitFormResponse(
@@ -229,16 +217,8 @@ export function editMyFormResponse(
     .mapErr(writeFailureOf);
 }
 
-function toMyResponse(mine: WireMyResponse) {
-  return {
-    status: mine.response.status,
-    submittedAt: mine.response.submittedAt,
-    answers: mine.answers,
-  };
-}
-
 export function createMyResponseSource(
-  formId: Accessor<string>,
+  formId: Accessor<string | undefined>,
   userId: Accessor<string | undefined>
 ): MyResponseSource {
   const query = useMyResponseQuery(formId, userId);

@@ -1,23 +1,27 @@
-import { err, type Result, type ResultAsync } from 'neverthrow';
+import { err, type Result } from 'neverthrow';
 import {
   type Accessor,
   batch,
+  createEffect,
   createMemo,
   createSignal,
   onCleanup,
 } from 'solid-js';
 import type {
   FormColumnWrites,
+  FormLayoutCollaboration,
   FormWriteFailure,
   OptionChange,
 } from '../context/form-context';
 import {
   addQuestion as addLayoutQuestion,
   addSection as addLayoutSection,
+  bookingStep,
   type LayoutRefusal,
   hiddenColumns as layoutHiddenColumns,
   moveQuestion as moveLayoutQuestion,
   moveSection as moveLayoutSection,
+  type PendingQuestion,
   type PrunedLayout,
   pruneBrokenRules,
   type QuestionPatch,
@@ -26,10 +30,13 @@ import {
   removeSection as removeLayoutSection,
   type SectionPatch,
   swapQuestionColumn,
+  takePendingQuestions,
   updateQuestion as updateLayoutQuestion,
   updateSection as updateLayoutSection,
+  withPendingQuestions,
 } from '../core/form-layout';
 import type {
+  FormBookingTarget,
   FormColumn,
   FormColumnKind,
   FormDetail,
@@ -39,6 +46,7 @@ import type {
   QuestionWidget,
   SectionKind,
 } from '../core/form-model';
+import type { FormSelection } from '../core/form-presence';
 import { layoutRefusalMessage, sectionName } from '../core/layout-messages';
 import {
   hasOptions,
@@ -47,7 +55,6 @@ import {
   sameColumnKind,
   widgetFits,
 } from '../core/question-types';
-import { createLayoutSaver } from './create-layout-saver';
 
 /** A type change the column refused because some answers do not fit. */
 export type PendingConversion = {
@@ -64,15 +71,17 @@ export type BuilderOptions = {
   refetch: () => Promise<void>;
   /** Every column of the linked table, for editors. */
   tableColumns: Accessor<FormColumn[] | undefined>;
-  saveLayout: (layout: FormLayout) => ResultAsync<FormDetail, FormWriteFailure>;
+  /** The layout every editor edits at once: what the builder shows. */
+  collaboration: Pick<
+    FormLayoutCollaboration,
+    'status' | 'layout' | 'apply' | 'flush' | 'select'
+  >;
   columnWrites: Accessor<FormColumnWrites | undefined>;
   notify: {
     success: (message: string) => void;
     failure: (message: string) => void;
   };
   mintId: () => string;
-  /** Layout saves wait this long for edits to pause. */
-  delayMs: number;
 };
 
 /**
@@ -89,6 +98,11 @@ type PendingColumnWrite = {
 
 const DEFAULT_GATE_MESSAGE =
   'Thanks for your interest. This form can’t take your response.';
+
+const DEFAULT_BOOKING_TITLE = 'Book a time';
+
+/** Sections the Add rail makes empty; a booking step needs its link first. */
+export type NewSectionKind = Exclude<SectionKind, 'booking'>;
 
 /** A write's answer; one that throws is a failure of that write, so the queue goes on. */
 async function sendColumnWrite<Value>(
@@ -128,14 +142,20 @@ export function uniqueColumnName(base: string, taken: readonly string[]) {
   return candidate;
 }
 
+const sameSelection = (
+  left: FormSelection | undefined,
+  right: FormSelection | undefined
+) =>
+  left?.sectionId === right?.sectionId &&
+  left?.questionId === right?.questionId;
+
 /**
- * The builder's state: the layout as edited (optimistic, saved debounced and
- * serialized), column facts with pending edits shown, and the edits
- * themselves. Column facts go to the database's ops at once; presentation
- * goes to the form's layout.
+ * The builder's state: the shared layout every editor edits, column facts
+ * with pending edits shown, and the edits themselves. Column facts go to the
+ * database's ops at once; presentation goes to the shared layout as the
+ * change from what it holds, so other editors' edits stay.
  */
 export function createBuilder(options: BuilderOptions) {
-  const [local, setLocal] = createSignal<FormLayout>();
   const [selectedId, setSelectedIdSignal] = createSignal<string>();
   // A questions section the person just added or focused: new questions go
   // to its end until a question is selected again.
@@ -157,32 +177,45 @@ export function createBuilder(options: BuilderOptions) {
     readonly PendingColumnWrite[]
   >([]);
 
-  const saver = createLayoutSaver({
-    save: options.saveLayout,
-    delayMs: options.delayMs,
-    onSaved: (_detail, idle) => {
-      if (idle) setLocal(undefined);
-    },
-    onFailed: (failure, newerPending) => {
-      if (newerPending) {
-        // The newer layout carries every edit since: it is being saved.
-        options.notify.failure(
-          `An earlier change to the form wasn’t saved: ${failure.message} Saving your latest changes.`
-        );
-        return;
-      }
-      setLocal(undefined);
-      options.notify.failure(
-        `Your last change to the form wasn’t saved: ${failure.message}`
-      );
-      void options.refetch();
-    },
-  });
-  // Leaving the builder sends what is waiting rather than dropping it.
-  onCleanup(() => void saver.flush());
+  // New questions whose columns are still being created: shown here, kept
+  // out of the shared layout so it never names a column the table lacks.
+  const [pendingQuestions, setPendingQuestions] = createSignal<
+    readonly PendingQuestion[]
+  >([]);
+  const [present, setPresent] = createSignal(true);
 
-  const layout = (): FormLayout | undefined =>
-    local() ?? options.detail()?.layout;
+  const editable = () => options.collaboration.status().kind === 'ready';
+
+  const layout = createMemo((): FormLayout | undefined => {
+    const shared = options.collaboration.layout();
+    return shared && withPendingQuestions(shared, pendingQuestions());
+  });
+
+  const selection = createMemo(
+    (): FormSelection | undefined => {
+      if (!present()) return undefined;
+      const questionId = selectedId();
+      const sectionId = targetSectionId();
+      if (questionId) {
+        const section = layout()?.sections.find((item) =>
+          item.questions.some((question) => question.id === questionId)
+        );
+        return section && { sectionId: section.id, questionId };
+      }
+      return sectionId ? { sectionId, questionId: null } : undefined;
+    },
+    undefined,
+    { equals: sameSelection }
+  );
+  // What is selected goes to the other editors, who see it there.
+  let published: FormSelection | undefined;
+  const publish = (next: FormSelection | undefined) => {
+    if (sameSelection(published, next)) return;
+    published = next;
+    options.collaboration.select(next);
+  };
+  createEffect(() => publish(selection()));
+  onCleanup(() => publish(undefined));
 
   /** Column facts as the server last answered: the table's, else the form's. */
   const serverColumns = () => {
@@ -243,22 +276,45 @@ export function createBuilder(options: BuilderOptions) {
     });
   };
 
-  /** Show and schedule an edited layout; a refusal is told and nothing changes. */
+  /**
+   * Write `next`, a change to the layout as shown, as the change it makes to
+   * the shared layout. The questions `pendingIds` names stay out of it.
+   */
+  function write(next: FormLayout, pendingIds: readonly string[]): boolean {
+    const shared = options.collaboration.layout();
+    if (!shared || !editable()) return false;
+    const split = takePendingQuestions(next, pendingIds);
+    // An edit that changes nothing (empty rules saved as empty) writes nothing.
+    const changed = JSON.stringify(split.layout) !== JSON.stringify(shared);
+    try {
+      batch(() => {
+        if (changed) options.collaboration.apply(shared, split.layout);
+        setPendingQuestions(split.pending);
+      });
+    } catch (error) {
+      options.notify.failure(
+        `The change wasn’t made: ${error instanceof Error ? error.message : 'the form couldn’t be edited.'}`
+      );
+      return false;
+    }
+    return true;
+  }
+
+  const pendingIds = () =>
+    pendingQuestions().map((pending) => pending.question.id);
+
+  /** Show and write an edited layout; a refusal is told and nothing changes. */
   function commit(
     edit: (current: FormLayout) => Result<FormLayout, LayoutRefusal>
   ): boolean {
     const current = layout();
-    if (!current) return false;
+    if (!current || !editable()) return false;
     const result = edit(current);
     if (result.isErr()) {
       options.notify.failure(refusalMessage(result.error));
       return false;
     }
-    // An edit that changes nothing (empty rules saved as empty) writes nothing.
-    if (JSON.stringify(result.value) === JSON.stringify(current)) return true;
-    setLocal(result.value);
-    saver.schedule(result.value);
-    return true;
+    return write(result.value, pendingIds());
   }
 
   function commitPruned(
@@ -274,8 +330,8 @@ export function createBuilder(options: BuilderOptions) {
     if (committed && pruned > 0)
       options.notify.success(
         pruned === 1
-          ? 'Removed 1 gate rule that checked it.'
-          : `Removed ${pruned} gate rules that checked it.`
+          ? 'Removed 1 screener rule that checked it.'
+          : `Removed ${pruned} screener rules that checked it.`
       );
     return committed;
   }
@@ -329,10 +385,12 @@ export function createBuilder(options: BuilderOptions) {
   function enqueueColumnWrite<Value>(
     columnId: string,
     patch: PendingColumnWrite['patch'],
-    write: (
+    send: (
       writes: FormColumnWrites,
       before: FormColumn | undefined
-    ) => PromiseLike<Result<Value, FormWriteFailure>>
+    ) => PromiseLike<Result<Value, FormWriteFailure>>,
+    /** Runs as the write answers, before the queue counts it done. */
+    landed?: (result: Result<Value, FormWriteFailure>) => void
   ): Promise<Result<Value, FormWriteFailure>> | undefined {
     const writes = options.columnWrites();
     if (!writes) return undefined;
@@ -350,7 +408,8 @@ export function createBuilder(options: BuilderOptions) {
         (pending) => pending.sequence < entry.sequence
       );
       const before = withPending(serverColumns(), earlier).get(columnId);
-      const result = await sendColumnWrite(() => write(writes, before));
+      const result = await sendColumnWrite(() => send(writes, before));
+      landed?.(result);
       if (result.isErr())
         setPendingWrites((current) =>
           current.filter((pending) => pending.sequence !== entry.sequence)
@@ -400,7 +459,7 @@ export function createBuilder(options: BuilderOptions) {
     return last && { sectionId: last.id, index: last.questions.length };
   }
 
-  function newSection(kind: SectionKind): FormSection {
+  function newSection(kind: NewSectionKind): FormSection {
     return {
       id: options.mintId(),
       title: '',
@@ -409,6 +468,7 @@ export function createBuilder(options: BuilderOptions) {
       gateRules:
         kind === 'gate' ? { conjunction: 'and', conditions: [] } : null,
       gateMessage: kind === 'gate' ? DEFAULT_GATE_MESSAGE : '',
+      bookingTarget: null,
       questions: [],
     };
   }
@@ -421,10 +481,10 @@ export function createBuilder(options: BuilderOptions) {
   }
 
   /**
-   * Two writes, in order: the column, then the layout naming it. The question
-   * shows at once; the layout waits for the column. If the column is refused
-   * the question goes again; if the layout is refused, the column stays and
-   * lists under hidden columns.
+   * Two writes, in order: the column, then the shared layout naming it. The
+   * question shows at once; the shared layout gets it once the column
+   * exists. If the column is refused the question goes again; whatever
+   * other editors did meanwhile stays.
    */
   async function addNewColumnQuestion(input: {
     name: string;
@@ -434,7 +494,7 @@ export function createBuilder(options: BuilderOptions) {
     placement?: QuestionPlacement;
   }) {
     const current = layout();
-    if (!options.columnWrites() || !current) return;
+    if (!options.columnWrites() || !current || !editable()) return;
     const columnId = options.mintId();
     const questionId = options.mintId();
     const prepared = withQuestionsSection(current);
@@ -449,7 +509,7 @@ export function createBuilder(options: BuilderOptions) {
       options.notify.failure(refusalMessage(added.error));
       return;
     }
-    const release = saver.hold();
+    if (!write(added.value, [...pendingIds(), questionId])) return;
     const column: FormColumn = {
       id: columnId,
       name: input.name,
@@ -467,33 +527,31 @@ export function createBuilder(options: BuilderOptions) {
             name: input.name,
             kind: input.kind,
             options: input.options,
-          })
+          }),
+        (created) => {
+          if (created.isErr()) {
+            setPendingQuestions((pending) =>
+              pending.filter((entry) => entry.question.id !== questionId)
+            );
+            return;
+          }
+          // Shared where it shows now, among whatever other editors did.
+          const shown = layout();
+          if (shown)
+            write(
+              shown,
+              pendingIds().filter((id) => id !== questionId)
+            );
+        }
       );
-      setLocal(added.value);
-      saver.schedule(added.value);
       setSelectedId(questionId);
     });
-    if (!creating) {
-      release();
-      return;
-    }
     const created = await creating;
-    if (created.isErr()) {
-      const now = layout();
-      const removed = now && removeLayoutQuestion(now, questionId);
-      if (removed?.isOk()) {
-        setLocal(removed.value.layout);
-        saver.schedule(removed.value.layout);
-      }
-      release();
-      if (selectedId() === questionId) setSelectedId(undefined);
-      options.notify.failure(
-        `The question couldn’t be added: ${created.error.message}`
-      );
-      return;
-    }
-    release();
-    await saver.flush();
+    if (!created?.isErr()) return;
+    if (selectedId() === questionId) setSelectedId(undefined);
+    options.notify.failure(
+      `The question couldn’t be added: ${created.error.message}`
+    );
   }
 
   /** A file question on a public form is refused, and said so. */
@@ -506,6 +564,13 @@ export function createBuilder(options: BuilderOptions) {
     return true;
   }
 
+  function settled() {
+    return new Promise<void>((resolve) => {
+      idleWaiters.push(resolve);
+      settleIdle();
+    });
+  }
+
   function takenNames() {
     return [...columns().values()].map((column) => column.name);
   }
@@ -515,9 +580,12 @@ export function createBuilder(options: BuilderOptions) {
     columns,
     column: (columnId: string) => columns().get(columnId),
     hiddenColumns: hidden,
-    saveState: saver.state,
+    /** Whether edits are taken: the shared layout is open. */
+    editable,
     selectedId,
     select: setSelectedId,
+    /** Whether this editor is here; away, the others see nothing selected. */
+    setPresent,
     /** Aim the next added question at the end of this section. */
     focusSection,
     targetSectionId,
@@ -526,11 +594,7 @@ export function createBuilder(options: BuilderOptions) {
     isColumnBusy: (columnId: string) =>
       pendingWrites().some((write) => write.columnId === columnId),
     /** Resolves once every queued column write landed and was read back. */
-    settled: () =>
-      new Promise<void>((resolve) => {
-        idleWaiters.push(resolve);
-        settleIdle();
-      }),
+    settled,
 
     /** Why moving a question there is refused, if it is. */
     questionMoveRefusal(questionId: string, placement: QuestionPlacement) {
@@ -691,9 +755,7 @@ export function createBuilder(options: BuilderOptions) {
         );
         return;
       }
-      // The stored widget may not fit the new kind: no layout goes out until
-      // it is, and none is in flight when the type changes.
-      const release = saver.hold();
+      // The widget follows once the column took the new kind.
       const result = await enqueueColumnWrite(
         column.id,
         (known) =>
@@ -702,13 +764,9 @@ export function createBuilder(options: BuilderOptions) {
             kind: to,
             options: hasOptions(to) ? known.options : [],
           },
-        async (writes) => {
-          await saver.settled();
-          return await writes.changeType(column.id, to);
-        }
+        (writes) => writes.changeType(column.id, to)
       );
       if (!result || result.isErr()) {
-        release();
         if (result?.isErr())
           setConversion({
             questionId,
@@ -726,7 +784,6 @@ export function createBuilder(options: BuilderOptions) {
             : resolvedWidget(to, null),
         })
       );
-      release();
     },
 
     /** The refused type change, as a new column of that type holding what converts. */
@@ -736,8 +793,6 @@ export function createBuilder(options: BuilderOptions) {
       const column = found && columns().get(found.question.columnId);
       if (!pending || !found || !column || !options.columnWrites()) return;
       setConversion(undefined);
-      await saver.flush();
-      const release = saver.hold();
       const name = uniqueColumnName(
         `${column.name} (${pending.label})`,
         takenNames()
@@ -747,12 +802,8 @@ export function createBuilder(options: BuilderOptions) {
         (known) => known,
         (columnWrites) => columnWrites.convert(column.id, pending.to, name)
       );
-      if (!converted) {
-        release();
-        return;
-      }
+      if (!converted) return;
       if (converted.isErr()) {
-        release();
         options.notify.failure(
           `The question couldn’t be converted: ${converted.error.message}`
         );
@@ -767,8 +818,6 @@ export function createBuilder(options: BuilderOptions) {
             }).map((layoutNow) => ({ ...swapped, layout: layoutNow }))
         )
       );
-      release();
-      await saver.flush();
       options.notify.success(
         `Converted. “${column.name}” keeps its original answers and is listed under columns not on this form.`
       );
@@ -881,15 +930,16 @@ export function createBuilder(options: BuilderOptions) {
       const found = findQuestion(questionId);
       if (!found || !options.columnWrites()) return false;
       const columnId = found.question.columnId;
-      // The question and the rules naming its column go first: a stored gate
-      // naming a deleted column would refuse every submission and save.
-      commitPruned((current) => removeLayoutQuestion(current, questionId));
+      // The question and the rules naming its column are published first: a
+      // published gate naming a deleted column would refuse every submission.
+      if (!commitPruned((current) => removeLayoutQuestion(current, questionId)))
+        return false;
       if (selectedId() === questionId) setSelectedId(undefined);
-      await saver.flush();
-      // Refused, the stored gate may still name the column: keep it.
-      if (saver.state() === 'failed') {
+      const published = await options.collaboration.flush();
+      // Unpublished, the respondents' gate may still name the column: keep it.
+      if (published.isErr()) {
         options.notify.failure(
-          'The column wasn’t deleted: the form couldn’t drop its question first.'
+          `The column wasn’t deleted: the form couldn’t drop its question first. ${published.error.message}`
         );
         return false;
       }
@@ -905,12 +955,11 @@ export function createBuilder(options: BuilderOptions) {
         );
         return false;
       }
-      setLocal(undefined);
       await options.refetch();
       return true;
     },
 
-    addSection(kind: SectionKind, index?: number) {
+    addSection(kind: NewSectionKind, index?: number) {
       const current = layout();
       if (!current) return undefined;
       const section = newSection(kind);
@@ -929,6 +978,43 @@ export function createBuilder(options: BuilderOptions) {
         return undefined;
       if (kind === 'questions') focusSection(section.id);
       return section.id;
+    },
+
+    /**
+     * Add the booking step, last, booking `target`. A form has one: when it
+     * already has it, nothing changes and its id comes back to be selected.
+     */
+    addBooking(
+      target: FormBookingTarget
+    ): { sectionId: string; added: boolean } | undefined {
+      const current = layout();
+      if (!current) return undefined;
+      const existing = bookingStep(current);
+      if (existing) return { sectionId: existing.id, added: false };
+      const section: FormSection = {
+        id: options.mintId(),
+        title: DEFAULT_BOOKING_TITLE,
+        description: '',
+        kind: 'booking',
+        gateRules: null,
+        gateMessage: '',
+        bookingTarget: target,
+        questions: [],
+      };
+      if (
+        !commit(() =>
+          addLayoutSection(current, section, current.sections.length)
+        )
+      )
+        return undefined;
+      return { sectionId: section.id, added: true };
+    },
+
+    /** Point the booking step at another booking link. */
+    changeBookingTarget(sectionId: string, target: FormBookingTarget) {
+      return commit((current) =>
+        updateLayoutSection(current, sectionId, { bookingTarget: target })
+      );
     },
 
     moveSection(sectionId: string, index: number) {

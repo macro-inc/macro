@@ -4,6 +4,12 @@ pub mod activity;
 pub mod events;
 pub mod models;
 
+#[cfg(feature = "ports")]
+pub mod collaboration;
+
+#[cfg(feature = "ports")]
+pub mod drafts;
+
 #[cfg(feature = "entity_mutation")]
 pub mod entity_mutation;
 

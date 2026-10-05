@@ -7,7 +7,7 @@
 import type { LayoutProblemOneOfThreeKind } from './layoutProblemOneOfThreeKind';
 
 /**
- * A question names a column the form writes itself.
+ * A question names a column the form's table does not have.
  */
 export type LayoutProblemOneOfThree = {
   /** The column. */

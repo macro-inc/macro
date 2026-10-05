@@ -10,5 +10,5 @@ export type LayoutProblemOneOfFiveKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LayoutProblemOneOfFiveKind = {
-  repeatedColumn: 'repeatedColumn',
+  managedColumn: 'managedColumn',
 } as const;

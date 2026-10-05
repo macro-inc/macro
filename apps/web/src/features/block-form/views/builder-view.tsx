@@ -1,28 +1,38 @@
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import CalendarCheck from '@phosphor/calendar-check.svg';
 import Database from '@phosphor/database.svg';
 import Plus from '@phosphor/plus.svg';
 import Rows from '@phosphor/rows.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
 import Warning from '@phosphor/warning.svg';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import { Button, Dropdown } from '@ui';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import {
+  type Accessor,
   createMemo,
   createSignal,
   createUniqueId,
   For,
+  type JSX,
   Match,
   Show,
   Switch,
   untrack,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
+import {
+  BookingCard,
+  BookingLinkMenu,
+  type BookingLinkState,
+} from '../components/builder/booking-card';
 import {
   BuilderRail,
   ConversionNotice,
   DropIndicator,
   HiddenColumns,
   OutlineSection,
-  SaveIndicator,
   TitleCard,
 } from '../components/builder/builder-chrome';
 import {
@@ -45,15 +55,29 @@ import {
   TypeMenu,
 } from '../components/builder/type-menu';
 import { QuestionTypeIcon } from '../components/question-type-icon';
-import { type FormDetailSource, useFormContext } from '../context/form-context';
+import {
+  type FormDetailSource,
+  type FormLayoutCollaboration,
+  type FormTableSource,
+  type FormWriteFailure,
+  useFormContext,
+} from '../context/form-context';
 import type { Box, MeasuredSection } from '../core/drop-target';
 import { placementOf, stepPlacement } from '../core/drop-target';
 import {
+  bookingStep,
   brokenGateColumns,
   gateColumns,
   questionNumbers,
 } from '../core/form-layout';
-import type { FormColumn, FormDetail, FormSection } from '../core/form-model';
+import type {
+  FormBookingTarget,
+  FormColumn,
+  FormDetail,
+  FormLayout,
+  FormSection,
+  SectionKind,
+} from '../core/form-model';
 import {
   placementDescription,
   routingLine,
@@ -66,32 +90,41 @@ import {
   questionTypeOf,
 } from '../core/question-types';
 import { rulesSentence } from '../core/rule-sentence';
-import { createBuilder } from '../primitives/create-builder';
+import {
+  type Builder,
+  createBuilder,
+  type NewSectionKind,
+} from '../primitives/create-builder';
 import {
   createBuilderDrag,
   type DragTarget,
 } from '../primitives/create-builder-drag';
-
-const LAYOUT_SAVE_DELAY_MS = 400;
 
 function boxOf(element: Element): Box {
   const { top, bottom, left, right } = element.getBoundingClientRect();
   return { top, bottom, left, right };
 }
 
+type TrackWrites = (flush: () => ResultAsync<void, FormWriteFailure>) => void;
+
+type BuilderViewProps = {
+  source: FormDetailSource;
+  detail: FormDetail;
+  /** The layout every editor of the form edits at once. */
+  collaboration: FormLayoutCollaboration;
+  /** Registers writes a preview waits for, while the builder is open. */
+  trackWrites: TrackWrites;
+  onOpenResponses: () => void;
+  onOpenDatabase: (databaseId: string) => void;
+};
+
 /**
  * The Build tab (RFC 02 §3): sections and questions on a centered column,
  * the rail beside it. Column facts go to the database's ops, presentation to
- * the form's layout.
+ * the layout every editor shares. Nothing is editable until it opened.
  */
-export function BuilderView(props: {
-  source: FormDetailSource;
-  detail: FormDetail;
-  onOpenResponses: () => void;
-  onOpenDatabase: (databaseId: string) => void;
-}) {
+export function BuilderView(props: BuilderViewProps) {
   const context = useFormContext();
-  const form = () => props.detail.form;
   const table = context.createTableSource(
     () => props.detail.form.databaseId,
     () => props.detail.form.tableId
@@ -99,10 +132,6 @@ export function BuilderView(props: {
   context.followTable(
     () => props.detail.form.databaseId,
     () => void props.source.refetch()
-  );
-  const summary = context.responses.createSummary(
-    () => props.detail.form.id,
-    () => props.detail.access !== 'view'
   );
   const columnWrites = createMemo(() =>
     context.columns(props.detail.form.databaseId, props.detail.form.tableId)
@@ -114,19 +143,132 @@ export function BuilderView(props: {
       await Promise.all([props.source.refetch(), table.refetch()]);
     },
     tableColumns: table.columns,
-    saveLayout: (layout) => context.saveLayout(props.detail.form.id, layout),
+    collaboration: props.collaboration,
     columnWrites,
     notify: context.notify,
     mintId: uuidv7,
-    delayMs: LAYOUT_SAVE_DELAY_MS,
   });
+  // A preview waits for new columns, and the questions naming them.
+  props.trackWrites(() => ResultAsync.fromSafePromise(builder.settled()));
+  // Away from this window, the other editors see nothing selected here.
+  makeEventListener(window, 'blur', () => builder.setPresent(false));
+  makeEventListener(window, 'focus', () => builder.setPresent(true));
+  const failure = () => {
+    const status = props.collaboration.status();
+    return status.kind === 'error' ? status.message : undefined;
+  };
+  return (
+    <Show
+      when={builder.layout()}
+      fallback={
+        <div class="mx-auto flex w-full max-w-[680px] flex-col gap-4 px-4 py-6">
+          <Show
+            when={failure()}
+            fallback={
+              <p role="status" class="text-sm text-ink-muted">
+                Opening the form for editing…
+              </p>
+            }
+          >
+            {(message) => <LayoutFailure message={message()} />}
+          </Show>
+        </div>
+      }
+    >
+      {(layout) => (
+        <BuilderCanvas
+          {...props}
+          builder={builder}
+          layout={layout}
+          table={table}
+          failure={failure()}
+        />
+      )}
+    </Show>
+  );
+}
+
+function LayoutFailure(props: { message: string }) {
+  return (
+    <div
+      role="alert"
+      class="flex items-start gap-2 rounded-lg border border-failure bg-failure-bg px-3 py-2.5 text-sm text-failure-ink"
+    >
+      <Warning class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      {props.message}
+    </div>
+  );
+}
+
+/** Where edits stand when the server doesn't hold them all; nothing when it does. */
+function saveNotice(collaboration: FormLayoutCollaboration) {
+  if (collaboration.save() === 'unstored')
+    return 'Your changes couldn’t be stored on this device. Keep this tab open until they’re saved.';
+  if (collaboration.connection() === 'offline')
+    return 'You’re offline. Your changes are kept on this device and sync when you reconnect.';
+  if (collaboration.save() === 'unsaved')
+    return 'Some changes haven’t reached the server yet. They’re kept on this device and sent again when it answers.';
+  return undefined;
+}
+
+function BuilderCanvas(
+  props: BuilderViewProps & {
+    builder: Builder;
+    layout: Accessor<FormLayout>;
+    table: FormTableSource;
+    /** Why the layout can't be edited now, while it shows what it last read. */
+    failure: string | undefined;
+  }
+) {
+  const context = useFormContext();
+  const builder = props.builder;
+  const table = props.table;
+  const form = () => props.detail.form;
+  const summary = context.responses.createSummary(
+    () => props.detail.form.id,
+    () => props.detail.access !== 'view'
+  );
+  // The form's name and description: a preview waits for them too.
+  const metadataWrites = new Set<Promise<boolean>>();
+  const writeMetadata = (written: PromiseLike<boolean>) => {
+    const pending = Promise.resolve(written);
+    metadataWrites.add(pending);
+    const forget = () => metadataWrites.delete(pending);
+    void pending.then(forget, forget);
+    return pending;
+  };
+  props.trackWrites(() =>
+    ResultAsync.fromSafePromise(Promise.all(metadataWrites)).andThen((saved) =>
+      saved.every(Boolean)
+        ? okAsync(undefined)
+        : errAsync({ message: 'The form’s name or description wasn’t saved.' })
+    )
+  );
+  const editorsOn = (sectionId: string, questionId: string | null) =>
+    props.collaboration
+      .peers()
+      .filter(
+        (peer) =>
+          peer.selection.sectionId === sectionId &&
+          peer.selection.questionId === questionId
+      );
+  const editors = (sectionId: string, questionId: string | null) => (
+    <Show when={editorsOn(sectionId, questionId).length > 0}>
+      {context.ui.renderEditors({
+        get peers() {
+          return editorsOn(sectionId, questionId);
+        },
+        selected: questionId ? 'this question' : 'this section',
+      })}
+    </Show>
+  );
   const [editingRules, setEditingRules] = createSignal<string>();
   // One per mount: the same form can be built in two splits.
   const instructionsId = createUniqueId();
   let viewport: HTMLDivElement | undefined;
   let column: HTMLDivElement | undefined;
 
-  const layout = () => builder.layout() ?? props.detail.layout;
+  const layout = props.layout;
   const sectionIds = () => layout().sections.map((section) => section.id);
   const sectionById = (sectionId: string) =>
     layout().sections.find((section) => section.id === sectionId);
@@ -160,7 +302,11 @@ export function BuilderView(props: {
       const list = section.querySelector(`[data-form-section-list="${id}"]`);
       return {
         id,
-        kind: section.dataset.sectionKind === 'gate' ? 'gate' : 'questions',
+        kind: match(section.dataset.sectionKind)
+          .returnType<SectionKind>()
+          .with('gate', () => 'gate')
+          .with('booking', () => 'booking')
+          .otherwise(() => 'questions'),
         box: boxOf(section),
         list: boxOf(list ?? section),
         questions: [
@@ -175,12 +321,16 @@ export function BuilderView(props: {
   }
 
   const describe = (target: DragTarget) =>
-    target.kind === 'question'
-      ? `question “${questionTitle(target.id)}”`
-      : `“${sectionName(layout(), target.id)}”`;
+    match(target)
+      .with({ kind: 'question' }, ({ id }) => `question “${questionTitle(id)}”`)
+      .with({ kind: 'section' }, ({ id }) => `“${sectionName(layout(), id)}”`)
+      .with({ kind: 'new-section' }, ({ id }) =>
+        id === 'gate' ? 'screener' : 'section'
+      )
+      .exhaustive();
 
   /** Focus a question's or section's drag handle, wherever it now renders. */
-  const focusHandle = (target: { kind: 'question' | 'section'; id: string }) =>
+  const focusHandle = (target: DragTarget) =>
     viewport
       ?.querySelector<HTMLElement>(
         `[data-drag-handle="${target.kind}:${target.id}"]`
@@ -190,6 +340,7 @@ export function BuilderView(props: {
   const drag = createBuilderDrag({
     layout,
     viewport: () => viewport,
+    canvas: () => column,
     measureQuestions,
     measureSections: () =>
       measureQuestions().map(({ id, box }) => ({ id, box })),
@@ -200,6 +351,11 @@ export function BuilderView(props: {
       builder.select(questionId);
     },
     dropSection: builder.moveSection,
+    dropNewSection: (kind, index) => {
+      const id = builder.addSection(kind, index);
+      if (id && kind === 'gate') setEditingRules(id);
+      return id;
+    },
     describe,
     describePlacement: (questionId, placement) =>
       placementDescription(layout(), questionId, placement),
@@ -257,6 +413,65 @@ export function BuilderView(props: {
   const gateCount = () =>
     layout().sections.filter((section) => section.kind === 'gate').length;
 
+  const booking = () => bookingStep(layout());
+  const bookingLinks = context.booking.createLinks(
+    () => !props.detail.tableGone
+  );
+  const bookingEvent = context.booking.createEvent(
+    () => booking()?.bookingTarget ?? undefined
+  );
+  const bookingLinkState = (): BookingLinkState => {
+    const read = bookingEvent.value();
+    if (read === undefined)
+      return bookingEvent.failure()
+        ? { kind: 'unavailable' }
+        : { kind: 'loading' };
+    if (read === null) return { kind: 'unavailable' };
+    return {
+      kind: 'ready',
+      title: read.event.title,
+      durationMinutes: read.event.durationMinutes,
+      host: read.profile.name,
+    };
+  };
+
+  /** Bring the booking step into view and focus it. */
+  const revealBooking = (sectionId: string) =>
+    queueMicrotask(() => {
+      const card = viewport?.querySelector<HTMLElement>(
+        `[data-form-section="${sectionId}"]`
+      );
+      card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      card?.focus({ preventScroll: true });
+    });
+
+  const addBooking = (target: FormBookingTarget) => {
+    const result = builder.addBooking(target);
+    if (result) revealBooking(result.sectionId);
+  };
+
+  const bookingMenu = (menuProps: {
+    trigger: JSX.Element;
+    triggerLabel?: string;
+    triggerClass: string;
+    triggerVariant: 'outline' | 'ghost';
+    selected?: FormBookingTarget;
+    onChoose: (target: FormBookingTarget) => void;
+  }) => (
+    <BookingLinkMenu
+      links={bookingLinks.value()}
+      failed={!!bookingLinks.failure()}
+      selected={menuProps.selected}
+      trigger={menuProps.trigger}
+      triggerLabel={menuProps.triggerLabel}
+      triggerClass={menuProps.triggerClass}
+      triggerVariant={menuProps.triggerVariant}
+      disabled={props.detail.tableGone}
+      onChoose={menuProps.onChoose}
+      onCreate={context.booking.openSettings}
+    />
+  );
+
   const hiddenColumnRows = () =>
     builder.hiddenColumns().map((hidden) => ({
       id: hidden.id,
@@ -281,9 +496,6 @@ export function BuilderView(props: {
       </div>
       <div class="mx-auto flex w-full max-w-[1040px] flex-col gap-6 px-4 py-6 @4xl/builder:flex-row @4xl/builder:items-start @4xl/builder:px-8">
         <div class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col gap-4">
-          <div class="flex items-center justify-end">
-            <SaveIndicator state={builder.saveState()} />
-          </div>
           <Show when={props.detail.tableGone}>
             <div
               role="alert"
@@ -294,29 +506,53 @@ export function BuilderView(props: {
               can’t take responses until the database is restored.
             </div>
           </Show>
+          <Show when={props.failure}>
+            {(message) => <LayoutFailure message={message()} />}
+          </Show>
+          <Show when={props.collaboration.publicationError()}>
+            {(problem) => (
+              <LayoutFailure
+                message={`Respondents still see the last valid version of this form. ${problem()}`}
+              />
+            )}
+          </Show>
+          <Show when={saveNotice(props.collaboration)}>
+            {(notice) => (
+              <p
+                role="status"
+                class="rounded-lg border border-edge-muted bg-panel px-3 py-2 text-sm text-ink-muted"
+              >
+                {notice()}
+              </p>
+            )}
+          </Show>
           <TitleCard
             name={form().name}
             description={form().description}
             onName={(name) =>
-              context.renameForm(form().id, name).match(
-                () => true,
-                (failure) => {
-                  context.notify.failure(
-                    `The form couldn’t be renamed: ${failure.message}`
-                  );
-                  return false;
-                }
+              writeMetadata(
+                context.renameForm(form().id, name).match(
+                  () => true,
+                  (failure) => {
+                    context.notify.failure(
+                      `The form couldn’t be renamed: ${failure.message}`
+                    );
+                    return false;
+                  }
+                )
               )
             }
             onDescription={(description) =>
-              context.updateMetadata(form().id, { description }).match(
-                () => true,
-                (failure) => {
-                  context.notify.failure(
-                    `The description wasn’t saved: ${failure.message}`
-                  );
-                  return false;
-                }
+              writeMetadata(
+                context.updateMetadata(form().id, { description }).match(
+                  () => true,
+                  (failure) => {
+                    context.notify.failure(
+                      `The description wasn’t saved: ${failure.message}`
+                    );
+                    return false;
+                  }
+                )
               )
             }
             meta={
@@ -336,7 +572,7 @@ export function BuilderView(props: {
                 <li>
                   {form().audience === 'public'
                     ? 'Anyone with the link'
-                    : 'Workspace members'}
+                    : 'Invited people'}
                 </li>
                 <li>
                   {questionSections().length === 1
@@ -345,8 +581,13 @@ export function BuilderView(props: {
                 </li>
                 <Show when={gateCount() > 0}>
                   <li>
-                    {gateCount() === 1 ? '1 gate' : `${gateCount()} gates`}
+                    {gateCount() === 1
+                      ? '1 screener'
+                      : `${gateCount()} screeners`}
                   </li>
+                </Show>
+                <Show when={booking()}>
+                  <li>Ends with booking</li>
                 </Show>
               </>
             }
@@ -361,7 +602,7 @@ export function BuilderView(props: {
               />
             )}
           </Show>
-          <div ref={column} class="relative flex flex-col gap-4">
+          <div ref={column} class="relative flex min-h-24 flex-col gap-4">
             <For each={sectionIds()}>
               {(sectionId) => {
                 const section = () => sectionById(sectionId);
@@ -394,7 +635,7 @@ export function BuilderView(props: {
                     }
                     deleteLabel={
                       section()?.kind === 'gate'
-                        ? 'Delete gate'
+                        ? 'Delete screener'
                         : 'Delete section'
                     }
                     onMoveUp={() => builder.moveSection(sectionId, index() - 1)}
@@ -414,7 +655,7 @@ export function BuilderView(props: {
                         <Match when={current().kind === 'gate'}>
                           <GateCard
                             sectionId={sectionId}
-                            eyebrow={`Gate ${sectionPosition(layout(), sectionId)}`}
+                            eyebrow={`Screener ${sectionPosition(layout(), sectionId)}`}
                             title={current().title}
                             sentence={rulesSentence(
                               current().gateRules,
@@ -482,6 +723,42 @@ export function BuilderView(props: {
                             }
                           />
                         </Match>
+                        <Match when={current().kind === 'booking'}>
+                          <BookingCard
+                            sectionId={sectionId}
+                            title={current().title}
+                            description={current().description}
+                            link={bookingLinkState()}
+                            menu={
+                              <SectionMenu
+                                label={`${sectionName(layout(), sectionId)} actions`}
+                                canMoveUp={false}
+                                canMoveDown={false}
+                                deleteLabel="Remove booking step"
+                                onMoveUp={() => {}}
+                                onMoveDown={() => {}}
+                                onDelete={() =>
+                                  builder.removeSection(sectionId)
+                                }
+                              />
+                            }
+                            change={bookingMenu({
+                              trigger: 'Change',
+                              triggerLabel: 'Change booking link',
+                              triggerClass: 'shrink-0',
+                              triggerVariant: 'outline',
+                              selected: current().bookingTarget ?? undefined,
+                              onChoose: (target) =>
+                                builder.changeBookingTarget(sectionId, target),
+                            })}
+                            onTitle={(title) =>
+                              builder.updateSection(sectionId, { title })
+                            }
+                            onDescription={(description) =>
+                              builder.updateSection(sectionId, { description })
+                            }
+                          />
+                        </Match>
                         <Match when={current().kind === 'questions'}>
                           <SectionCard
                             sectionId={sectionId}
@@ -519,6 +796,7 @@ export function BuilderView(props: {
                             }
                             handle={handle()}
                             menu={menu()}
+                            editors={editors(sectionId, null)}
                             onTitle={(title) =>
                               builder.updateSection(sectionId, { title })
                             }
@@ -527,7 +805,6 @@ export function BuilderView(props: {
                             }
                             routing={
                               <RoutingFooter
-                                after={`section ${sectionPosition(layout(), sectionId)}`}
                                 next={routingLine(layout(), sectionId)}
                               />
                             }
@@ -571,7 +848,7 @@ export function BuilderView(props: {
                 trigger={
                   <>
                     <Plus class="size-3.5" />
-                    Question
+                    Add question
                   </>
                 }
                 tables={relationTables()}
@@ -581,31 +858,48 @@ export function BuilderView(props: {
                 }
                 onAddColumn={(columnId) => builder.addExistingColumn(columnId)}
               />
-              <Button
-                variant="outline"
-                size="sm"
-                class="w-full justify-start gap-2"
-                onClick={() => builder.addSection('questions')}
-              >
+              <AddSectionButton kind="questions">
                 <Rows class="size-3.5" />
                 Section
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                class="w-full justify-start gap-2"
-                onClick={() => {
-                  const id = builder.addSection('gate');
-                  if (id) setEditingRules(id);
-                }}
-              >
+              </AddSectionButton>
+              <AddSectionButton kind="gate">
                 <ShieldCheck class="size-3.5" />
-                Gate section
-              </Button>
+                Screener
+              </AddSectionButton>
+              <Show
+                when={booking()}
+                fallback={
+                  <Show when={context.booking.available()}>
+                    {bookingMenu({
+                      trigger: (
+                        <>
+                          <CalendarCheck class="size-3.5" />
+                          Booking
+                        </>
+                      ),
+                      triggerClass: 'w-full justify-start gap-2',
+                      triggerVariant: 'outline',
+                      onChoose: addBooking,
+                    })}
+                  </Show>
+                }
+              >
+                {(existing) => (
+                  <Button
+                    variant="outline"
+                    size="md"
+                    class="w-full justify-start gap-2"
+                    onClick={() => revealBooking(existing().id)}
+                  >
+                    <CalendarCheck class="size-3.5" />
+                    Booking
+                  </Button>
+                )}
+              </Show>
               <Dropdown>
                 <Dropdown.Trigger
                   variant="outline"
-                  size="sm"
+                  size="md"
                   class="w-full justify-start gap-2"
                   disabled={hiddenColumnRows().length === 0}
                 >
@@ -640,7 +934,7 @@ export function BuilderView(props: {
                 {(section) => (
                   <OutlineSection
                     name={sectionName(layout(), section.id)}
-                    gate={section.kind === 'gate'}
+                    kind={section.kind}
                     questions={section.questions.map((question) => ({
                       id: question.id,
                       title: columnTitle(question.columnId),
@@ -684,16 +978,46 @@ export function BuilderView(props: {
                   aria-hidden="true"
                 />
               </button>
-              <p class="text-xs leading-relaxed text-ink-muted">
-                Every question is a column. Adding a question adds a column.
-                Removing a question keeps the column.
-              </p>
             </div>
           }
         />
       </div>
     </div>
   );
+
+  function AddSectionButton(buttonProps: {
+    kind: NewSectionKind;
+    children: JSX.Element;
+  }) {
+    const target = (): DragTarget => ({
+      kind: 'new-section',
+      id: buttonProps.kind,
+    });
+    const handle = drag.handleProps(target);
+    return (
+      <Button
+        variant="outline"
+        size="md"
+        class="w-full touch-none justify-start gap-2"
+        data-drag-source
+        data-drag-handle={`new-section:${buttonProps.kind}`}
+        disabled={props.detail.tableGone}
+        onPointerDown={handle.onPointerDown}
+        onKeyDown={handle.onKeyDown}
+        onBlur={handle.onBlur}
+        onClick={(event) => {
+          handle.onClick(event);
+          if (event.defaultPrevented) return;
+          const id = builder.addSection(buttonProps.kind);
+          if (!id) return;
+          if (buttonProps.kind === 'gate') setEditingRules(id);
+          drag.refocus({ kind: 'section', id });
+        }}
+      >
+        {buttonProps.children}
+      </Button>
+    );
+  }
 
   function QuestionItem(itemProps: { questionId: string; sectionId: string }) {
     const question = () =>
@@ -710,8 +1034,7 @@ export function BuilderView(props: {
               when={columnOf()}
               fallback={
                 <div class="px-4 py-3 text-xs text-ink-muted">
-                  This question’s column is gone. It leaves the form when the
-                  layout saves.
+                  This question’s column was deleted.
                 </div>
               }
             >
@@ -746,6 +1069,7 @@ export function BuilderView(props: {
                     selected={selected()}
                     dragging={drag.isDragging(target)}
                     busy={builder.isColumnBusy(columnFacts().id)}
+                    editors={editors(itemProps.sectionId, current().id)}
                     onSelect={() => builder.select(current().id)}
                     onRename={(name) =>
                       void builder.renameQuestion(current().id, name)

@@ -1,6 +1,12 @@
-import { errAsync, okAsync } from 'neverthrow';
+import type {
+  BookingReceipt,
+  BookingRequest,
+} from '@app/features/scheduling/core/types';
+import { okAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import type {
+  FormBookingEvent,
+  FormBookingLink,
   FormColumnWrites,
   FormContext,
   FormDetailSource,
@@ -8,7 +14,16 @@ import type {
   SubmitOutcome,
 } from '../context/form-context';
 import type { SubmittedAnswer } from '../core/answers';
-import type { FormColumn, FormDetail, FormLayout } from '../core/form-model';
+import type {
+  FormBookingTarget,
+  FormColumn,
+  FormDetail,
+  FormLayout,
+} from '../core/form-model';
+import {
+  createFakeCollaboration,
+  type FakeCollaboration,
+} from './fake-collaboration';
 
 export const MOCK_VIEWER_ID = 'macro|respondent@example.com';
 
@@ -16,15 +31,34 @@ export const MOCK_VIEWER_ID = 'macro|respondent@example.com';
 export type MockFormCalls = {
   submitted: SubmittedAnswer[][];
   edited: SubmittedAnswer[][];
+  /** Every shared layout this editor wrote. */
   layouts: FormLayout[];
   notices: string[];
   messagedOwners: string[];
+  /** Booking targets whose event was read. */
+  bookingEventsRead: FormBookingTarget[];
+  slotsRead: { profile: string; event: string; date: string }[];
+  booked: { profile: string; event: string; request: BookingRequest }[];
+  receiptsOpened: BookingReceipt[];
+  settingsOpened: number;
+};
+
+/** Native scheduling as a mocked context answers it. */
+export type MockBooking = {
+  available?: boolean;
+  /** The editor's own booking links. */
+  links?: FormBookingLink[];
+  /** Each event type's event, by event type id; missing reads as deleted. */
+  events?: Record<string, FormBookingEvent>;
+  slots?: { startsAt: string; endsAt: string }[];
+  receipt?: BookingReceipt;
 };
 
 /**
  * In-memory capabilities for views. The form detail is a signal the test
- * can replace; submissions answer `submitOutcome`; layout saves echo back.
- * Pickers and the grid render labelled placeholders.
+ * can replace; submissions answer `submitOutcome`; the shared layout is a
+ * fake two-editor document seeded with the detail's layout. Pickers and the
+ * grid render labelled placeholders.
  */
 export function createMockFormContext(options: {
   detail: FormDetail;
@@ -32,22 +66,38 @@ export function createMockFormContext(options: {
   viewerId?: string | undefined;
   mine?: MyResponse | null;
   submitOutcome?: SubmitOutcome;
+  booking?: MockBooking;
   overrides?: Partial<FormContext>;
 }) {
   const [detail, setDetail] = createSignal<FormDetail | undefined>(
     options.detail
   );
+  // Only editors open the shared layout; a respondent's detail can't seed it.
+  let opened: FakeCollaboration | undefined;
+  const shared = () => {
+    opened ??= createFakeCollaboration(options.detail.layout);
+    return opened;
+  };
   const calls: MockFormCalls = {
     submitted: [],
     edited: [],
-    layouts: [],
+    get layouts() {
+      return shared().written;
+    },
     notices: [],
     messagedOwners: [],
+    bookingEventsRead: [],
+    slotsRead: [],
+    booked: [],
+    receiptsOpened: [],
+    settingsOpened: 0,
   };
   const outcome: SubmitOutcome = options.submitOutcome ?? {
     kind: 'submitted',
     responseId: 'response-1',
+    booking: null,
   };
+  const booking = options.booking ?? {};
   const source: FormDetailSource = {
     detail,
     failure: () => undefined,
@@ -76,14 +126,7 @@ export function createMockFormContext(options: {
       refetch: async () => {},
     }),
     followTable: () => {},
-    saveLayout: (_, layout) => {
-      calls.layouts.push(layout);
-      const current = detail();
-      if (!current) return errAsync({ message: 'gone' });
-      const saved = { ...current, layout };
-      setDetail(saved);
-      return okAsync(saved);
-    },
+    createLayoutCollaboration: () => shared().collaboration,
     updateMetadata: () => okAsync(undefined),
     renameForm: () => okAsync(undefined),
     trashForm: () => okAsync(undefined),
@@ -117,6 +160,37 @@ export function createMockFormContext(options: {
       exportCsv: () => okAsync(undefined),
     },
     uploadFile: () => okAsync('https://static.example.com/file/1'),
+    booking: {
+      available: () => booking.available ?? true,
+      createLinks: () => ({
+        value: () => booking.links ?? [],
+        failure: () => undefined,
+      }),
+      createEvent: (target) => ({
+        value: () => {
+          const current = target();
+          if (!current) return undefined;
+          calls.bookingEventsRead.push(current);
+          return booking.events?.[current.eventTypeId] ?? null;
+        },
+        failure: () => undefined,
+      }),
+      createSource: () => ({
+        slots: async (profile, event, date) => {
+          calls.slotsRead.push({ profile, event, date });
+          return booking.slots ?? [];
+        },
+        book: async (profile, event, request) => {
+          calls.booked.push({ profile, event, request });
+          if (!booking.receipt) throw new Error('No receipt in this test');
+          return booking.receipt;
+        },
+      }),
+      openReceipt: (receipt) => calls.receiptsOpened.push(receipt),
+      openSettings: () => {
+        calls.settingsOpened += 1;
+      },
+    },
     messageOwner: (ownerId) => {
       calls.messagedOwners.push(ownerId);
       return okAsync(undefined);
@@ -131,8 +205,18 @@ export function createMockFormContext(options: {
       renderConditionEditor: () => null,
       renderResponsesGrid: () => null,
       renderEntityLabel: (entity) => entity.entityId,
+      renderEditors: (props) =>
+        `${props.peers.map((peer) => peer.userId).join(', ')} on ${props.selected}`,
     },
     ...options.overrides,
   };
-  return { context, calls, setDetail, source };
+  return {
+    context,
+    calls,
+    setDetail,
+    source,
+    get shared() {
+      return shared();
+    },
+  };
 }

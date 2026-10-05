@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::form::{Form, FormAccess};
 use crate::ids::{FormQuestionId, FormSectionId};
+use crate::layout::BookingTarget;
 use crate::widget::Widget;
 
 /// A form with its layout, as the caller may see it.
@@ -60,13 +61,31 @@ pub enum FormSectionDetail {
         /// What a stopped respondent reads.
         message: String,
     },
+    /// A booking step. Its destination is withheld from respondents until
+    /// their response has passed every screener and been accepted.
+    Booking {
+        /// The section.
+        #[schema(value_type = Uuid)]
+        id: FormSectionId,
+        /// Its title.
+        title: String,
+        /// Its description.
+        description: String,
+        /// Editors can configure the destination; respondent layouts omit it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schema(nullable = false)]
+        #[specta(optional)]
+        target: Option<BookingTarget>,
+    },
 }
 
 impl FormSectionDetail {
     /// The section's id.
     pub fn id(&self) -> FormSectionId {
         match self {
-            FormSectionDetail::Questions { id, .. } | FormSectionDetail::Gate { id, .. } => *id,
+            FormSectionDetail::Questions { id, .. }
+            | FormSectionDetail::Gate { id, .. }
+            | FormSectionDetail::Booking { id, .. } => *id,
         }
     }
 }

@@ -7,10 +7,10 @@
 import type { LayoutProblemOneOfOneoneKind } from './layoutProblemOneOfOneoneKind';
 
 /**
- * A gate's rule does not fit its column.
+ * A gate tests a column no earlier section asks.
  */
 export type LayoutProblemOneOfOneone = {
+  /** The column. */
+  column: string;
   kind: LayoutProblemOneOfOneoneKind;
-  /** Why. */
-  reason: string;
 };

@@ -12,7 +12,7 @@ use ::databases::domain::models::{
     InferColumnType, InferColumnTypeOutcome, ListedDatabase, OpBatch, OpRefusal, QueryDefinition,
     QueryId, SavedQuery, SavedQueryError, Table, TableDetail, TableVersion, ViewId, Viewer,
 };
-use ::databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use ::databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use chrono::{TimeZone, Utc};
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel,
@@ -58,6 +58,17 @@ pub(crate) struct FakeDatabase {
     pub(crate) owner: String,
     pub(crate) trashed: bool,
     pub(crate) tables: Vec<FakeTable>,
+}
+
+/// A database rename the service asked for, as the fake received it.
+#[derive(Debug, Clone)]
+pub(crate) struct RecordedDatabaseRename {
+    pub(crate) database: DatabaseId,
+    /// Who the receipt says is acting.
+    pub(crate) auth: EntityAccessAuth,
+    /// The level the receipt proves on the database.
+    pub(crate) level: Option<AccessLevel>,
+    pub(crate) name: String,
 }
 
 /// A batch the service applied, as the fake received it.
@@ -564,10 +575,38 @@ impl DatabasesService for FakeDatabases {
 
     async fn rename_database(
         &self,
-        _receipt: EntityAccessReceipt<EditAccessLevel>,
-        _name: String,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        name: String,
     ) -> Result<Database, DatabaseError> {
-        unimplemented!("a form never renames its database")
+        let database_id = receipt_database(&receipt)?;
+        let mut world = self.0.lock().unwrap();
+        world.database_renames.push(RecordedDatabaseRename {
+            database: database_id,
+            auth: receipt.auth().clone(),
+            level: match receipt.entity_permission() {
+                entity_access::domain::models::EntityPermission::AccessLevel { access_level } => {
+                    Some(*access_level)
+                }
+                _ => None,
+            },
+            name: name.clone(),
+        });
+        if let Some(refused) = world.refuse_next_database_rename.take() {
+            return Err(refused);
+        }
+        let database = world
+            .databases
+            .iter_mut()
+            .find(|database| database.id == database_id && !database.trashed)
+            .ok_or(DatabaseError::NotFound)?;
+        database.name = name;
+        Ok(Database {
+            id: database.id,
+            name: database.name.clone(),
+            owner_id: database.owner.clone(),
+            created_at: the_epoch(),
+            trashed_at: None,
+        })
     }
 
     async fn trash_database(
@@ -740,6 +779,34 @@ impl DatabasesService for FakeDatabases {
         _id: QueryId,
     ) -> Result<SavedQuery, SavedQueryError> {
         unimplemented!("forms reads no queries")
+    }
+}
+
+impl DatabaseMetadataReads for FakeDatabases {
+    async fn database_metadata(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Database, DatabaseError> {
+        let database_id = receipt_database(&receipt)?;
+        let mut world = self.0.lock().unwrap();
+        world.database_metadata_reads += 1;
+        if world.fail_database_metadata_reads {
+            return Err(DatabaseError::Repo(rootcause::report!(
+                "database metadata read failed"
+            )));
+        }
+        world
+            .databases
+            .iter()
+            .find(|database| database.id == database_id)
+            .map(|database| Database {
+                id: database.id,
+                name: database.name.clone(),
+                owner_id: database.owner.clone(),
+                created_at: the_epoch(),
+                trashed_at: database.trashed.then(the_epoch),
+            })
+            .ok_or(DatabaseError::NotFound)
     }
 }
 

@@ -1,10 +1,13 @@
 //! A form's facts and lifecycle: metadata changes, rename, trash, restore
-//! and permanent deletion. None of them touch the form's database.
+//! and permanent deletion. Only renaming a form that goes by its database's
+//! name touches the database.
+
+use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
 
 use std::collections::HashMap;
 
 use databases::domain::models::Viewer;
-use databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel,
 };
@@ -25,15 +28,16 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
 
-impl<Repository, Databases, Access, Events, Now, Broker>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     /// The live forms the viewer holds a grant on, newest first, each with
     /// the viewer's level as the grants answer it.
@@ -48,11 +52,12 @@ where
             .into_iter()
             .collect();
         let ids: Vec<FormId> = grants.keys().copied().collect();
-        let mut forms = self
+        let forms = self
             .repository
             .forms_by_ids(&ids)
             .await
             .map_err(repository_error)?;
+        let mut forms = self.named_forms(forms).await?;
         forms.sort_by(|left, right| right.created_at.cmp(&left.created_at));
         Ok(forms
             .into_iter()
@@ -68,7 +73,8 @@ where
         receipt: &EntityAccessReceipt<EditAccessLevel>,
         update: UpdateForm,
     ) -> Result<Form, FormError> {
-        let form = self.live_form(receipt_form_id(receipt)?).await?;
+        let stored = self.live_stored_form(receipt_form_id(receipt)?).await?;
+        let form = stored.form;
         if update.needs_owner() && receipt_access(receipt) < FormAccess::Owner {
             return Err(FormError::OwnerOnly);
         }
@@ -103,26 +109,40 @@ where
         {
             FormUpdate::Updated(form) => {
                 self.announce(form.id).await;
-                Ok(*form)
+                self.named(*form, stored.name_follows_database).await
             }
             FormUpdate::FormGone => Err(FormError::NotFound),
             FormUpdate::WidgetInUse => Err(FormError::FileUploadNeedsSignIn),
         }
     }
 
+    /// Rename a form: the database it goes by, when it follows one, then a
+    /// stamp of the form itself; otherwise the form's own name.
     pub(super) async fn rename(
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
         name: &str,
     ) -> Result<Form, FormError> {
-        let form = self.live_form(receipt_form_id(receipt)?).await?;
+        let stored = self.live_stored_form(receipt_form_id(receipt)?).await?;
+        let form = stored.form;
         let name = validated_name(name)?;
-        let renamed = self
-            .repository
-            .rename_form(form.id, &name, self.now())
-            .await
-            .map_err(repository_error)?
-            .ok_or(FormError::NotFound)?;
+        let renamed = if stored.name_follows_database {
+            let name = self.rename_database_of(receipt, &form, name).await?;
+            let touched = self
+                .repository
+                .touch_form(form.id, self.now())
+                .await
+                .map_err(repository_error)?
+                .ok_or(FormError::NotFound)?;
+            Form { name, ..touched }
+        } else {
+            self.repository
+                .rename_form(form.id, &name, self.now())
+                .await
+                .map_err(repository_error)?
+                .ok_or(FormError::NotFound)?
+        };
+        let name = renamed.name.clone();
         self.announce(form.id).await;
         self.emit(FormTopicEvent::Renamed(FormRenamedMetadata {
             form_id: form.id,
@@ -185,6 +205,10 @@ where
         receipt: &EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), FormError> {
         let stored = self.stored_form(receipt_form_id(receipt)?).await?;
+        self.drafts
+            .retire(stored.form.id)
+            .await
+            .map_err(super::drafts::draft_error)?;
         self.repository
             .delete_form(stored.form.id)
             .await

@@ -9,6 +9,7 @@ import type {
 import {
   type AnswerProblem,
   answersOf,
+  endsWithBooking,
   type FormStep,
   nextStep,
   previousSectionIndex,
@@ -23,12 +24,14 @@ import type {
   FormColumn,
   FormDetail,
   FormSection,
+  UnlockedBooking,
 } from '../core/form-model';
 import { formAvailability } from '../core/form-status';
 
 /** What the respondent sees. */
 export type RespondView =
   | { kind: 'loading' }
+  | { kind: 'preview-complete'; answers: FormAnswers }
   | { kind: 'closed'; reason: 'closed' | 'deadline' | 'table-gone' }
   /** The form is being changed under the respondent: try again shortly. */
   | { kind: 'updating' }
@@ -43,8 +46,15 @@ export type RespondView =
       submitting: boolean;
       /** A file is still uploading: Next and Submit wait. */
       uploading: boolean;
+      /** Submitting leads on to a booking step. */
+      continuesToBooking: boolean;
     }
   | { kind: 'stopped'; message: string }
+  /**
+   * The booking step, opened with the target the server returned for an
+   * accepted response, or in preview with the editor's own.
+   */
+  | { kind: 'booking'; booking: UnlockedBooking; preview: boolean }
   | {
       kind: 'confirmation';
       answers: FormAnswers;
@@ -55,10 +65,14 @@ export type RespondView =
       /** Signed in (either audience) and the form still open. */
       canEdit: boolean;
       submittedAt: string | undefined;
+      /** The booking step this response unlocked, offered again. */
+      booking: UnlockedBooking | null;
     };
 
 export type RespondOptions = {
   detail: Accessor<FormDetail>;
+  /** Exercise the respondent flow locally, including closed drafts. */
+  preview?: boolean;
   /** The viewer's own response: undefined while loading, null when none. */
   mine: Accessor<MyResponse | null | undefined>;
   /** Reading it failed: the respondent answers, and the server decides. */
@@ -82,9 +96,16 @@ type Phase =
   | { kind: 'stopped'; message: string }
   | { kind: 'closed'; reason: 'closed' | 'table-gone' }
   | { kind: 'updating' }
+  | { kind: 'preview-complete'; answers: FormAnswers }
   /** Answers were refused because a response exists: show that one. */
   | { kind: 'already-responded' }
-  | { kind: 'confirmation'; answers: FormAnswers; submittedAt: string };
+  | {
+      kind: 'confirmation';
+      answers: FormAnswers;
+      submittedAt: string;
+      booking: UnlockedBooking | null;
+    }
+  | { kind: 'booking'; booking: UnlockedBooking; preview: boolean };
 
 /** Refusals that mean the form changed since it was read. */
 const CHANGED_FORM: readonly FormRefusal[] = [
@@ -148,19 +169,17 @@ export function createRespond(options: RespondOptions) {
   };
 
   const stored = () => {
+    if (options.preview) return undefined;
     const mine = options.mine();
     return mine?.status === 'submitted' ? mine : undefined;
   };
 
   const view = createMemo((): RespondView => {
-    if (
-      options.signedIn() &&
-      options.mine() === undefined &&
-      !options.mineFailed()
-    )
-      return { kind: 'loading' };
     const current = phase();
-    const open = availability();
+    // What this visit just did comes first: reading the response again
+    // never unmounts a booking in progress or the fresh receipt.
+    if (current?.kind === 'booking' || current?.kind === 'preview-complete')
+      return current;
     if (current?.kind === 'confirmation')
       return {
         kind: 'confirmation',
@@ -169,7 +188,16 @@ export function createRespond(options: RespondOptions) {
         alreadyResponded: false,
         canEdit: canEdit(),
         submittedAt: current.submittedAt,
+        booking: current.booking,
       };
+    if (
+      !options.preview &&
+      options.signedIn() &&
+      options.mine() === undefined &&
+      !options.mineFailed()
+    )
+      return { kind: 'loading' };
+    const open = availability();
     const previous = stored();
     if ((!current || current.kind === 'already-responded') && previous)
       return {
@@ -179,12 +207,14 @@ export function createRespond(options: RespondOptions) {
         alreadyResponded: current?.kind === 'already-responded',
         canEdit: canEdit(),
         submittedAt: previous.submittedAt,
+        booking: previous.booking,
       };
     if (current?.kind === 'closed')
       return { kind: 'closed', reason: current.reason };
     if (open.kind === 'table-gone')
       return { kind: 'closed', reason: 'table-gone' };
-    if (open.kind === 'closed') return { kind: 'closed', reason: open.reason };
+    if (open.kind === 'closed' && !options.preview)
+      return { kind: 'closed', reason: open.reason };
     if (current?.kind === 'updating') return { kind: 'updating' };
     if (current?.kind === 'stopped')
       return { kind: 'stopped', message: current.message };
@@ -205,6 +235,7 @@ export function createRespond(options: RespondOptions) {
       isLast: position === indices.length,
       submitting: submitting(),
       uploading: uploads() > 0,
+      continuesToBooking: endsWithBooking(layout()),
     };
   });
 
@@ -223,7 +254,8 @@ export function createRespond(options: RespondOptions) {
     const found: AnswerProblem[] = sectionProblems(
       section,
       columns(),
-      answers()
+      answers(),
+      options.preview ? 'preview' : 'response'
     );
     setProblems(
       Object.fromEntries(
@@ -289,12 +321,19 @@ export function createRespond(options: RespondOptions) {
         setPhase({ kind: 'stopped', message: outcome.message });
         return;
       }
-      setPhase({
-        kind: 'confirmation',
-        answers: { ...answers() },
-        submittedAt: options.now().toISOString(),
+      batch(() => {
+        setPhase(
+          outcome.booking
+            ? { kind: 'booking', booking: outcome.booking, preview: false }
+            : {
+                kind: 'confirmation',
+                answers: { ...answers() },
+                submittedAt: options.now().toISOString(),
+                booking: null,
+              }
+        );
+        setEditing(false);
       });
-      setEditing(false);
       return;
     }
     const refused = result.error;
@@ -326,6 +365,18 @@ export function createRespond(options: RespondOptions) {
     setFailure(refused.message);
   }
 
+  /** In preview, the editor's own booking step stands in for the server's. */
+  function previewBooking(): UnlockedBooking | undefined {
+    const section = layout().sections.find((item) => item.kind === 'booking');
+    if (!section?.bookingTarget) return undefined;
+    return {
+      sectionId: section.id,
+      title: section.title,
+      description: section.description,
+      target: section.bookingTarget,
+    };
+  }
+
   async function submit() {
     const index = currentIndex();
     if (
@@ -338,6 +389,15 @@ export function createRespond(options: RespondOptions) {
     const step = nextStep(layout(), index, answers());
     if (step.kind !== 'submit') {
       follow(step);
+      return;
+    }
+    if (options.preview) {
+      const booking = previewBooking();
+      setPhase(
+        booking
+          ? { kind: 'booking', booking, preview: true }
+          : { kind: 'preview-complete', answers: { ...answers() } }
+      );
       return;
     }
     setSubmitting(true);
@@ -360,6 +420,15 @@ export function createRespond(options: RespondOptions) {
     next,
     back,
     submit,
+    restartPreview() {
+      if (!options.preview) return;
+      batch(() => {
+        setAnswers({});
+        setProblems({});
+        setFailure(undefined);
+        setPhase(undefined);
+      });
+    },
     /** A file started uploading; call the answer when it is done. */
     beginUpload() {
       setUploads((count) => count + 1);
@@ -375,6 +444,12 @@ export function createRespond(options: RespondOptions) {
       const first = firstSectionIndex();
       setProblems({});
       if (first !== undefined) showSection(first);
+    },
+    /** From the receipt, open the booking step the response unlocked. */
+    openBooking() {
+      const current = view();
+      if (current.kind !== 'confirmation' || !current.booking) return;
+      setPhase({ kind: 'booking', booking: current.booking, preview: false });
     },
     /** From the receipt, edit the stored response in place. */
     editResponse() {

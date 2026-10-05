@@ -41,6 +41,7 @@ mod discovery;
 mod domain_events;
 mod fakes;
 mod infer_column_type;
+mod metadata;
 mod ops;
 mod options;
 mod reads;

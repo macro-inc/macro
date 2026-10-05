@@ -10,5 +10,5 @@ export type LayoutProblemOneOfOneoneKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LayoutProblemOneOfOneoneKind = {
-  gateRule: 'gateRule',
+  gateNamesLaterColumn: 'gateNamesLaterColumn',
 } as const;

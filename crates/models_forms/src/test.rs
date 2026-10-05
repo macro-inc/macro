@@ -8,6 +8,28 @@ use uuid::Uuid;
 
 use super::*;
 
+#[test]
+fn booking_step_round_trips_an_existing_native_booking_target() {
+    let wire = serde_json::json!({
+        "sections": [
+            {
+                "kind": "questions", "id": "019ce700-0000-7000-8000-000000000001",
+                "title": "About you", "description": "", "questions": []
+            },
+            {
+                "kind": "booking", "id": "019ce700-0000-7000-8000-000000000002",
+                "title": "Book a time", "description": "Meet with our team.",
+                "target": {
+                    "profileId": "019ce700-0000-7000-8000-000000000003",
+                    "eventTypeId": "019ce700-0000-7000-8000-000000000004"
+                }
+            }
+        ]
+    });
+    let layout: FormLayout = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(layout).unwrap(), wire);
+}
+
 const FORM: FormId = FormId::from_uuid(Uuid::from_u128(0xf0));
 const DATABASE: DatabaseId = DatabaseId::from_uuid(Uuid::from_u128(0xdb));
 const TABLE: TableId = TableId::from_uuid(Uuid::from_u128(0x7a));
@@ -271,7 +293,12 @@ fn a_submission_and_its_outcomes_read_as_tagged_objects() {
     let response = FormResponseId::from_uuid(Uuid::from_u128(0xe1));
     let row = RowId::from_uuid(Uuid::from_u128(0x40));
     assert_eq!(
-        serde_json::to_value(SubmissionOutcome::Submitted { response, row }).unwrap(),
+        serde_json::to_value(SubmissionOutcome::Submitted {
+            response,
+            row,
+            booking: None,
+        })
+        .unwrap(),
         json!({
             "outcome": "submitted",
             "response": "00000000-0000-0000-0000-0000000000e1",

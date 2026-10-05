@@ -539,6 +539,7 @@ pub(crate) type FormsServiceType = forms::wiring::PgFormsService<
     EntityAccessService,
     forms::outbound::gateway_event_publisher::GatewayFormEventPublisher,
     DssEventBroker,
+    CollabSurfaceServiceType,
 >;
 
 /// Forms use the same authentication and entity-access services as databases.

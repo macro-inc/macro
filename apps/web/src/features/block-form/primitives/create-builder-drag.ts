@@ -13,10 +13,12 @@ import {
 } from '../core/drop-target';
 import type { QuestionPlacement } from '../core/form-layout';
 import type { FormLayout } from '../core/form-model';
+import type { NewSectionKind } from './create-builder';
 
 export type DragTarget =
   | { kind: 'question'; id: string }
-  | { kind: 'section'; id: string };
+  | { kind: 'section'; id: string }
+  | { kind: 'new-section'; id: NewSectionKind };
 
 /** A drag in progress: what moves, where it would land, and whether it may. */
 export type DragSession = {
@@ -47,6 +49,7 @@ const AUTO_SCROLL_MAX_STEP = 18;
 export type BuilderDragOptions = {
   layout: Accessor<FormLayout | undefined>;
   viewport: Accessor<HTMLElement | undefined>;
+  canvas: Accessor<HTMLElement | undefined>;
   measureQuestions: () => MeasuredSection[];
   measureSections: () => { id: string; box: Box }[];
   refusalForQuestion: (
@@ -56,6 +59,8 @@ export type BuilderDragOptions = {
   refusalForSection: (sectionId: string, index: number) => string | undefined;
   dropQuestion: (questionId: string, placement: QuestionPlacement) => void;
   dropSection: (sectionId: string, index: number) => void;
+  /** Create only on drop; return the new section so focus follows it. */
+  dropNewSection: (kind: NewSectionKind, index: number) => string | undefined;
   /** What the announcement calls a target, e.g. "question “Team”". */
   describe: (target: DragTarget) => string;
   /** Where a placement is, read aloud. */
@@ -87,6 +92,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
   const [announcement, setAnnouncement] = createSignal('');
   const [pointer, setPointer] = createSignal({ x: 0, y: 0 });
   let press: Press | undefined;
+  let draggedClickTarget: HTMLElement | undefined;
   let preview:
     | { element: HTMLElement; originX: number; originY: number }
     | undefined;
@@ -134,13 +140,14 @@ export function createBuilderDrag(options: BuilderDragOptions) {
   }
 
   function sectionSession(
-    target: DragTarget & { kind: 'section' },
+    target: Exclude<DragTarget, { kind: 'question' }>,
     mode: DragSession['mode'],
     index: number | undefined,
     lineY: number | undefined
   ): DragSession {
     const unchanged =
-      index === undefined || index === currentSectionIndex(target.id);
+      index === undefined ||
+      (target.kind === 'section' && index === currentSectionIndex(target.id));
     return {
       target,
       mode,
@@ -148,7 +155,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       sectionIndex: index,
       lineY,
       refusal:
-        index !== undefined && !unchanged
+        target.kind === 'section' && index !== undefined && !unchanged
           ? options.refusalForSection(target.id, index)
           : undefined,
       unchanged,
@@ -159,7 +166,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
   function locate() {
     const active = session();
     if (!active || active.mode !== 'pointer') return;
-    const { y } = pointer();
+    const { x, y } = pointer();
     if (active.target.kind === 'question') {
       const drop = questionDropAt(
         y,
@@ -176,7 +183,28 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       );
       return;
     }
-    const drop = sectionDropAt(y, options.measureSections(), active.target.id);
+    const sections = options.measureSections();
+    const canvas = options.canvas()?.getBoundingClientRect();
+    if (active.target.kind === 'new-section') {
+      const viewport = options.viewport()?.getBoundingClientRect();
+      if (
+        !canvas ||
+        !viewport ||
+        x < canvas.left ||
+        x > canvas.right ||
+        y < viewport.top ||
+        y > viewport.bottom
+      ) {
+        setSession(
+          sectionSession(active.target, 'pointer', undefined, undefined)
+        );
+        return;
+      }
+    }
+    const drop =
+      sections.length === 0 && active.target.kind === 'new-section' && canvas
+        ? { index: 0, lineY: canvas.top + 8 }
+        : sectionDropAt(y, sections, active.target.id);
     setSession(
       sectionSession(active.target, 'pointer', drop?.index, drop?.lineY)
     );
@@ -266,6 +294,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
   function activatePointer() {
     if (!press) return;
     const target = press.target;
+    draggedClickTarget = press.handle;
     previousUserSelect = document.body.style.userSelect;
     document.body.style.userSelect = 'none';
     document.addEventListener('keydown', onDocumentKeyDown, true);
@@ -295,6 +324,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     const active = session();
     if (!active) return;
     const { target } = active;
+    let focusTarget = target;
     const described = options.describe(target);
     if (active.refusal) {
       announce(`${active.refusal} ${described} is back in place.`);
@@ -305,12 +335,21 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       announce(
         `Moved ${described} to ${options.describePlacement(target.id, active.placement)}.`
       );
+    } else if (
+      target.kind === 'new-section' &&
+      active.sectionIndex !== undefined
+    ) {
+      const sectionId = options.dropNewSection(target.id, active.sectionIndex);
+      if (sectionId) {
+        focusTarget = { kind: 'section', id: sectionId };
+        announce(`Added ${described} at position ${active.sectionIndex + 1}.`);
+      }
     } else if (target.kind === 'section' && active.sectionIndex !== undefined) {
       options.dropSection(target.id, active.sectionIndex);
       announce(`Moved ${described} to position ${active.sectionIndex + 1}.`);
     }
     end();
-    refocus(target);
+    refocus(focusTarget);
   }
 
   /**
@@ -392,6 +431,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
   }
 
   function startKeyboard(target: DragTarget) {
+    if (target.kind === 'new-section') return;
     if (target.kind === 'question') {
       const placement = currentPlacement(target.id);
       if (!placement) return;
@@ -476,6 +516,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     return {
       onPointerDown: (event: PointerEvent) => {
         if (event.button !== 0 || session() || press) return;
+        draggedClickTarget = undefined;
         const handle = event.currentTarget;
         if (!(handle instanceof HTMLElement)) return;
         // Keep the press from selecting text or starting a native drag.
@@ -505,6 +546,9 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       onKeyDown: (event: KeyboardEvent) => {
         const active = session();
         if (!active) {
+          // The rail's normal button adds on Enter/Space. The created
+          // section then has the same keyboard move controls as every section.
+          if (target().kind === 'new-section') return;
           if (event.key === ' ' || event.key === 'Enter') {
             event.preventDefault();
             startKeyboard(target());
@@ -528,6 +572,13 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       },
       onBlur: () => {
         if (session()?.mode === 'keyboard') cancel('leave');
+      },
+      onClick: (event: MouseEvent) => {
+        if (event.detail > 0 && event.currentTarget === draggedClickTarget) {
+          event.preventDefault();
+          event.stopPropagation();
+          draggedClickTarget = undefined;
+        }
       },
     };
   }

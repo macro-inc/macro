@@ -7,10 +7,8 @@
 import type { LayoutProblemOneOfKind } from './layoutProblemOneOfKind';
 
 /**
- * A question names a column the form's table does not have.
+ * A booking step must be unique and follow all questions and screeners.
  */
 export type LayoutProblemOneOf = {
-  /** The column. */
-  column: string;
   kind: LayoutProblemOneOfKind;
 };

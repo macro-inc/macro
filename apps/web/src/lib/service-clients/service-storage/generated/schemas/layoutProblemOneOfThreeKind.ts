@@ -10,5 +10,5 @@ export type LayoutProblemOneOfThreeKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LayoutProblemOneOfThreeKind = {
-  managedColumn: 'managedColumn',
+  unknownColumn: 'unknownColumn',
 } as const;

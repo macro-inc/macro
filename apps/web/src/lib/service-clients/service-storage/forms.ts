@@ -12,6 +12,7 @@ import { match } from 'ts-pattern';
 import { errorBody } from './databases';
 import type { CreateForm } from './generated/schemas/createForm';
 import type { Form } from './generated/schemas/form';
+import type { FormCollaboration } from './generated/schemas/formCollaboration';
 import type { FormDetail } from './generated/schemas/formDetail';
 import { FormErrorCode } from './generated/schemas/formErrorCode';
 import type { FormErrorResponse } from './generated/schemas/formErrorResponse';
@@ -132,6 +133,13 @@ export const formsClient = {
 
   get({ id }: { id: string }) {
     return formsFetch<FormDetail>(`/forms/${id}`);
+  },
+
+  /** Open the shared layout, or publish its latest valid durable revision. */
+  collaborate({ id }: { id: string }) {
+    return formsFetch<FormCollaboration>(`/forms/${id}/collaboration`, {
+      method: 'POST',
+    });
   },
 
   update({ id, request }: { id: string; request: UpdateForm }) {

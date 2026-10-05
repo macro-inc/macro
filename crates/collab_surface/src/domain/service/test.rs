@@ -970,3 +970,720 @@ async fn the_public_api_mints_tokens_for_an_owned_surface() {
     assert_eq!(claims.document_id, id.to_string());
     assert_eq!(claims.access_level, AccessLevel::Edit);
 }
+
+#[tokio::test]
+async fn a_form_surface_is_created_ready_from_its_snapshot() {
+    let repo = Arc::new(MemRepo::default());
+    let form_id = uuid::Uuid::parse_str("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90").unwrap();
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_session_exists()
+        .withf(|session| session == "0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90")
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(false) }));
+    init.expect_initialize_from_snapshot()
+        .withf(|session, snapshot| {
+            session == "0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90"
+                && snapshot == [0x6c, 0x6f, 0x72, 0x6f]
+        })
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    init.expect_initialize().never();
+    let svc = service_with(repo.clone(), init);
+
+    let surface = svc
+        .ensure_owned_surface_from_snapshot(
+            EntityType::Form.with_entity_string("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90".to_string()),
+            form_id,
+            vec![0x6c, 0x6f, 0x72, 0x6f],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(surface.id, form_id);
+    assert_eq!(
+        surface.parent,
+        EntityType::Form.with_entity_string("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90".to_string())
+    );
+    assert_eq!(surface.state, SurfaceState::Ready);
+    assert_eq!(repo.stored().unwrap().state, SurfaceState::Ready);
+}
+
+fn form_parent(id: Uuid) -> Entity<'static> {
+    EntityType::Form.with_entity_string(id.to_string())
+}
+
+fn form_receipt(id: Uuid, access_level: AccessLevel) -> EntityAccessReceipt<AnyEntityPermission> {
+    receipt_for(
+        "macro|a@b.c",
+        EntityType::Form,
+        &id.to_string(),
+        EntityPermission::AccessLevel { access_level },
+    )
+}
+
+/// A ready surface its parent form's domain owns, with the form's id.
+fn ready_form_surface(id: Uuid) -> CollabSurface {
+    let now = chrono::Utc::now();
+    CollabSurface {
+        id,
+        parent: form_parent(id),
+        state: SurfaceState::Ready,
+        created_at: now,
+        updated_at: now,
+    }
+}
+
+#[test]
+fn forms_own_their_surfaces() {
+    assert_eq!(
+        surface_ownership(EntityType::Form),
+        Some(SurfaceOwnership::ParentDomain)
+    );
+}
+
+#[tokio::test]
+async fn a_ready_snapshot_surface_keeps_its_content() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    // A ready surface never reaches the initializer: the seed is ignored.
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+
+    let surface = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, vec![9, 9, 9])
+        .await
+        .unwrap();
+
+    assert_eq!(surface.state, SurfaceState::Ready);
+    assert_eq!(repo.document_lookups.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_snapshot_ensure_is_idempotent() {
+    let repo = Arc::new(MemRepo::default());
+    let id = surface_id();
+    let mut init = no_sessions();
+    init.expect_initialize_from_snapshot()
+        .withf(|_, snapshot| snapshot == [1, 2, 3])
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+
+    let first = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, vec![1, 2, 3])
+        .await
+        .unwrap();
+    let second = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, vec![4, 5, 6])
+        .await
+        .unwrap();
+
+    assert_eq!(first.state, SurfaceState::Ready);
+    assert_eq!(second.state, SurfaceState::Ready);
+    assert_eq!(second.parent, form_parent(id));
+}
+
+#[tokio::test]
+async fn a_snapshot_ensure_refuses_a_surface_bound_to_another_parent() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+
+    let err = svc
+        .ensure_owned_surface_from_snapshot(form_parent(surface_id()), id, vec![1])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+    assert_eq!(repo.stored().unwrap().parent, form_parent(id));
+}
+
+#[tokio::test]
+async fn a_snapshot_ensure_refuses_an_empty_snapshot() {
+    let repo = Arc::new(MemRepo::default());
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+    let id = surface_id();
+
+    let err = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, Vec::new())
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, CollabSurfaceError::BadRequest(_)));
+    assert!(repo.stored().is_none());
+}
+
+#[tokio::test]
+async fn a_snapshot_ensure_follows_the_shared_id_rules() {
+    let repo = Arc::new(MemRepo::default());
+    repo.document_ids.store(true, Ordering::SeqCst);
+    let svc = service_with(repo.clone(), no_sessions());
+    let id = surface_id();
+
+    let err = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, vec![1])
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::IdReserved));
+    assert!(repo.stored().is_none());
+
+    let not_random = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, b"form");
+    let err = svc
+        .ensure_owned_surface_from_snapshot(form_parent(not_random), not_random, vec![1])
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::BadRequest(_)));
+}
+
+#[tokio::test]
+async fn a_retired_snapshot_surface_is_gone() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    repo.soft_deleted.store(true, Ordering::SeqCst);
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_session_exists()
+        .returning(|_| Box::pin(async { Ok(true) }));
+    let svc = service_with(repo, init);
+
+    let err = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, vec![1])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, CollabSurfaceError::Gone));
+}
+
+#[tokio::test]
+async fn a_failed_snapshot_init_stays_pending_until_a_retry_succeeds() {
+    let repo = Arc::new(MemRepo::default());
+    let id = surface_id();
+    let mut init = MockSurfaceInitializer::new();
+    // Only the fresh ensure checks for a session; the retry trusts its row.
+    init.expect_session_exists()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(false) }));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let calls_in_mock = calls.clone();
+    init.expect_initialize_from_snapshot()
+        .withf(|_, snapshot| snapshot == [7, 7])
+        .times(2)
+        .returning(move |_, _| {
+            let call = calls_in_mock.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async move {
+                if call == 0 {
+                    Err(CollabSurfaceError::Internal(
+                        rootcause::Report::new(MemErr).into_dynamic(),
+                    ))
+                } else {
+                    Ok(())
+                }
+            })
+        });
+    let svc = service_with(repo.clone(), init);
+
+    let err = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, vec![7, 7])
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::Internal(_)));
+    assert_eq!(repo.stored().unwrap().state, SurfaceState::Pending);
+    assert!(
+        svc.owned_surface_markdown(id).await.unwrap().is_none(),
+        "a pending surface is not readable"
+    );
+
+    let surface = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, vec![7, 7])
+        .await
+        .unwrap();
+    assert_eq!(surface.state, SurfaceState::Ready);
+    assert_eq!(repo.stored().unwrap().state, SurfaceState::Ready);
+}
+
+#[tokio::test]
+async fn a_snapshot_init_whose_mark_ready_failed_heals_on_retry() {
+    let repo = Arc::new(MemRepo::default());
+    repo.mark_ready_failures.store(1, Ordering::SeqCst);
+    let id = surface_id();
+    let mut init = no_sessions();
+    // The retry finds the session the first ensure created, which the
+    // initializer reports as success.
+    init.expect_initialize_from_snapshot()
+        .times(2)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+
+    svc.ensure_owned_surface_from_snapshot(form_parent(id), id, vec![1])
+        .await
+        .unwrap_err();
+    assert_eq!(repo.stored().unwrap().state, SurfaceState::Pending);
+
+    let surface = svc
+        .ensure_owned_surface_from_snapshot(form_parent(id), id, vec![1])
+        .await
+        .unwrap();
+    assert_eq!(surface.state, SurfaceState::Ready);
+}
+
+#[tokio::test]
+async fn concurrent_snapshot_ensures_of_a_new_form_both_end_ready() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = MockSurfaceInitializer::new();
+    // Both ensures pass the pre-insert checks before either inserts.
+    let both_checked = Arc::new(tokio::sync::Barrier::new(2));
+    init.expect_session_exists().times(2).returning(move |_| {
+        let both_checked = both_checked.clone();
+        Box::pin(async move {
+            both_checked.wait().await;
+            Ok(false)
+        })
+    });
+    init.expect_initialize_from_snapshot()
+        .times(1..=2)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+    let id = surface_id();
+
+    let (first, second) = tokio::join!(
+        svc.ensure_owned_surface_from_snapshot(form_parent(id), id, vec![1]),
+        svc.ensure_owned_surface_from_snapshot(form_parent(id), id, vec![2]),
+    );
+
+    assert_eq!(first.unwrap().state, SurfaceState::Ready);
+    assert_eq!(second.unwrap().state, SurfaceState::Ready);
+    assert_eq!(repo.stored().unwrap().state, SurfaceState::Ready);
+}
+
+#[tokio::test]
+async fn the_public_api_never_ensures_or_deletes_a_form_surface() {
+    let id = surface_id();
+
+    let empty = Arc::new(MemRepo::default());
+    let svc = service_with(empty.clone(), MockSurfaceInitializer::new());
+    let err = svc
+        .ensure_surface(
+            &user("macro|a@b.c"),
+            form_receipt(id, AccessLevel::Owner),
+            id,
+            String::new(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+    assert!(empty.stored().is_none());
+
+    let repo = MemRepo::holding(ready_form_surface(id));
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+    let err = svc
+        .delete_surface(
+            &user("macro|a@b.c"),
+            form_receipt(id, AccessLevel::Owner),
+            id,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+    assert!(!repo.soft_deleted.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn a_form_surface_token_requires_edit_on_the_form() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+
+    // Respondents hold View; the draft is not theirs to read.
+    for denied in [AccessLevel::View, AccessLevel::Comment] {
+        let err = svc
+            .mint_token(&user("macro|a@b.c"), form_receipt(id, denied), id)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, CollabSurfaceError::AccessDenied),
+            "{denied:?}"
+        );
+    }
+
+    for allowed in [AccessLevel::Edit, AccessLevel::Owner] {
+        let token = svc
+            .mint_token(&user("macro|a@b.c"), form_receipt(id, allowed), id)
+            .await
+            .unwrap();
+        let claims: model::document::DocumentPermissionsToken =
+            macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+        assert_eq!(claims.document_id, id.to_string());
+        assert_eq!(claims.access_level, allowed);
+    }
+}
+
+#[tokio::test]
+async fn an_anonymous_visitor_never_gets_a_form_surface_token() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+    // A public form resolves View for an anonymous visitor.
+    let anonymous = EntityAccessReceipt::try_new(
+        entity_access::domain::models::EntityAccessAuth::Unauthenticated,
+        entity_access::domain::models::Entity {
+            entity_id: id.to_string(),
+            entity_type: EntityType::Form,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        },
+    )
+    .unwrap();
+
+    let err = svc
+        .mint_token(&user("macro|a@b.c"), anonymous, id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+}
+
+#[tokio::test]
+async fn other_parents_keep_view_tokens() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_initiative_surface(id));
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+    let receipt = receipt_for(
+        "macro|a@b.c",
+        EntityType::Initiative,
+        &id.to_string(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        },
+    );
+
+    let token = svc
+        .mint_token(&user("macro|a@b.c"), receipt, id)
+        .await
+        .unwrap();
+    let claims: model::document::DocumentPermissionsToken =
+        macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+    assert_eq!(claims.access_level, AccessLevel::View);
+}
+
+/// The current unix time in seconds, for checking a token's expiry window.
+fn unix_now() -> usize {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as usize
+}
+
+#[tokio::test]
+async fn an_owned_surface_snapshot_is_read_with_a_short_lived_view_service_token() {
+    let form_id = uuid::Uuid::parse_str("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90").unwrap();
+    let now = chrono::Utc::now();
+    let repo = MemRepo::holding(CollabSurface {
+        id: form_id,
+        parent: EntityType::Form
+            .with_entity_string("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90".to_string()),
+        state: SurfaceState::Ready,
+        created_at: now,
+        updated_at: now,
+    });
+    let presented_token = Arc::new(std::sync::Mutex::new(None));
+    let presented_token_in_mock = presented_token.clone();
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_snapshot()
+        .withf(|session, _| session == "0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90")
+        .times(1)
+        .returning(move |_, token| {
+            *presented_token_in_mock.lock().unwrap() = Some(token.clone());
+            Box::pin(async {
+                Ok(SurfaceSnapshot {
+                    snapshot: vec![0x6c, 0x6f, 0x72, 0x6f],
+                    revision: vec![1, 2],
+                })
+            })
+        });
+    let svc = service_with(repo, init);
+    let before = unix_now();
+
+    let snapshot = svc
+        .owned_surface_snapshot(
+            EntityType::Form.with_entity_string("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90".to_string()),
+            form_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        snapshot,
+        SurfaceSnapshot {
+            snapshot: vec![0x6c, 0x6f, 0x72, 0x6f],
+            revision: vec![1, 2],
+        }
+    );
+    let token = presented_token.lock().unwrap().clone().unwrap();
+    let claims: serde_json::Value = macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+    let expires_at = claims["exp"].as_u64().unwrap() as usize;
+    assert!(
+        expires_at > before && expires_at <= unix_now() + 60,
+        "{expires_at} outside ({before}, now + 60]"
+    );
+    assert_eq!(
+        claims,
+        serde_json::json!({
+            "document_id": "0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90",
+            "access_level": "view",
+            "exp": expires_at,
+            "iss": "document_storage_service",
+        }),
+        "a service token impersonates no user"
+    );
+}
+
+#[tokio::test]
+async fn an_owned_surface_update_is_applied_with_a_short_lived_edit_service_token() {
+    let form_id = uuid::Uuid::parse_str("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90").unwrap();
+    let now = chrono::Utc::now();
+    let repo = MemRepo::holding(CollabSurface {
+        id: form_id,
+        parent: EntityType::Form
+            .with_entity_string("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90".to_string()),
+        state: SurfaceState::Ready,
+        created_at: now,
+        updated_at: now,
+    });
+    let presented_token = Arc::new(std::sync::Mutex::new(None));
+    let presented_token_in_mock = presented_token.clone();
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_update()
+        .withf(|session, _, expected_revision, update| {
+            session == "0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90"
+                && expected_revision == [1, 2]
+                && update == [3, 4, 5]
+        })
+        .times(1)
+        .returning(move |_, token, _, _| {
+            *presented_token_in_mock.lock().unwrap() = Some(token.clone());
+            Box::pin(async {
+                Ok(SurfaceUpdate::Applied {
+                    revision: vec![1, 3],
+                })
+            })
+        });
+    let svc = service_with(repo, init);
+    let before = unix_now();
+
+    let outcome = svc
+        .update_owned_surface(
+            EntityType::Form.with_entity_string("0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90".to_string()),
+            form_id,
+            vec![1, 2],
+            vec![3, 4, 5],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome,
+        SurfaceUpdate::Applied {
+            revision: vec![1, 3]
+        }
+    );
+    let token = presented_token.lock().unwrap().clone().unwrap();
+    let claims: serde_json::Value = macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+    let expires_at = claims["exp"].as_u64().unwrap() as usize;
+    assert!(
+        expires_at > before && expires_at <= unix_now() + 60,
+        "{expires_at} outside ({before}, now + 60]"
+    );
+    assert_eq!(
+        claims,
+        serde_json::json!({
+            "document_id": "0199b4a2-7c1e-7d3a-9f2b-4c5d6e7f8a90",
+            "access_level": "edit",
+            "exp": expires_at,
+            "iss": "document_storage_service",
+        }),
+        "a service token impersonates no user"
+    );
+}
+
+#[tokio::test]
+async fn a_stale_owned_surface_update_is_a_conflict() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_update()
+        .times(1)
+        .returning(|_, _, _, _| Box::pin(async { Ok(SurfaceUpdate::Conflict) }));
+    let svc = service_with(repo, init);
+
+    let outcome = svc
+        .update_owned_surface(form_parent(id), id, vec![1], vec![2])
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, SurfaceUpdate::Conflict);
+}
+
+#[tokio::test]
+async fn an_initiative_owns_its_surface_state_too() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_initiative_surface(id));
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_snapshot().times(1).returning(|_, _| {
+        Box::pin(async {
+            Ok(SurfaceSnapshot {
+                snapshot: vec![7],
+                revision: vec![8],
+            })
+        })
+    });
+    let svc = service_with(repo, init);
+
+    let snapshot = svc
+        .owned_surface_snapshot(initiative_parent(id), id)
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.snapshot, vec![7]);
+}
+
+/// Every refusal below happens before sync-service is reached: the bare
+/// mock panics on any call.
+#[tokio::test]
+async fn owned_surface_state_refuses_a_surface_bound_to_another_parent() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+    let other_form = form_parent(surface_id());
+
+    let read = svc
+        .owned_surface_snapshot(other_form.clone(), id)
+        .await
+        .unwrap_err();
+    let write = svc
+        .update_owned_surface(other_form, id, vec![1], vec![2])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(read, CollabSurfaceError::AccessDenied), "{read:?}");
+    assert!(
+        matches!(write, CollabSurfaceError::AccessDenied),
+        "{write:?}"
+    );
+}
+
+#[tokio::test]
+async fn owned_surface_state_refuses_a_parent_type_whose_domain_does_not_own_it() {
+    let id = surface_id();
+    // A caller-owned channel surface, named by its real parent.
+    let now = chrono::Utc::now();
+    let repo = MemRepo::holding(CollabSurface {
+        id,
+        parent: EntityType::Channel.with_entity_string("chan-1".to_string()),
+        state: SurfaceState::Ready,
+        created_at: now,
+        updated_at: now,
+    });
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+    let channel = EntityType::Channel.with_entity_string("chan-1".to_string());
+
+    let read = svc
+        .owned_surface_snapshot(channel.clone(), id)
+        .await
+        .unwrap_err();
+    let write = svc
+        .update_owned_surface(channel, id, vec![1], vec![2])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(read, CollabSurfaceError::AccessDenied), "{read:?}");
+    assert!(
+        matches!(write, CollabSurfaceError::AccessDenied),
+        "{write:?}"
+    );
+}
+
+#[tokio::test]
+async fn owned_surface_state_refuses_a_pending_surface_without_seeding_it() {
+    let id = surface_id();
+    let now = chrono::Utc::now();
+    let repo = MemRepo::holding(CollabSurface {
+        id,
+        parent: form_parent(id),
+        state: SurfaceState::Pending,
+        created_at: now,
+        updated_at: now,
+    });
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+
+    let read = svc
+        .owned_surface_snapshot(form_parent(id), id)
+        .await
+        .unwrap_err();
+    let write = svc
+        .update_owned_surface(form_parent(id), id, vec![1], vec![2])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(read, CollabSurfaceError::NotReady), "{read:?}");
+    assert!(matches!(write, CollabSurfaceError::NotReady), "{write:?}");
+    assert_eq!(repo.stored().unwrap().state, SurfaceState::Pending);
+}
+
+#[tokio::test]
+async fn owned_surface_state_refuses_a_missing_surface_without_creating_it() {
+    let repo = Arc::new(MemRepo::default());
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+    let id = surface_id();
+
+    let read = svc
+        .owned_surface_snapshot(form_parent(id), id)
+        .await
+        .unwrap_err();
+    let write = svc
+        .update_owned_surface(form_parent(id), id, vec![1], vec![2])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(read, CollabSurfaceError::NotFound), "{read:?}");
+    assert!(matches!(write, CollabSurfaceError::NotFound), "{write:?}");
+    assert!(repo.stored().is_none());
+}
+
+#[tokio::test]
+async fn owned_surface_state_refuses_a_retired_surface() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    repo.soft_deleted.store(true, Ordering::SeqCst);
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+
+    let read = svc
+        .owned_surface_snapshot(form_parent(id), id)
+        .await
+        .unwrap_err();
+    let write = svc
+        .update_owned_surface(form_parent(id), id, vec![1], vec![2])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(read, CollabSurfaceError::NotFound), "{read:?}");
+    assert!(matches!(write, CollabSurfaceError::NotFound), "{write:?}");
+}
+
+#[tokio::test]
+async fn owned_surface_state_refuses_an_id_that_names_a_document() {
+    let id = surface_id();
+    let repo = MemRepo::holding(ready_form_surface(id));
+    repo.document_ids.store(true, Ordering::SeqCst);
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+
+    let read = svc
+        .owned_surface_snapshot(form_parent(id), id)
+        .await
+        .unwrap_err();
+    let write = svc
+        .update_owned_surface(form_parent(id), id, vec![1], vec![2])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(read, CollabSurfaceError::IdReserved), "{read:?}");
+    assert!(matches!(write, CollabSurfaceError::IdReserved), "{write:?}");
+}

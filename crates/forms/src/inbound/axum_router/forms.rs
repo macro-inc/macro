@@ -9,7 +9,8 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::MacroAuthorizationService;
 use models_databases::DatabaseId;
 use models_forms::{
-    CreateForm, Form, FormDetail, FormErrorResponse, FormLayout, FormSource, ListedForm, UpdateForm,
+    CreateForm, Form, FormCollaboration, FormDetail, FormErrorResponse, FormLayout, FormSource,
+    ListedForm, UpdateForm,
 };
 use serde::Deserialize;
 
@@ -186,4 +187,24 @@ where
     Ok(Json(
         state.service.put_layout(access.receipt, layout).await?,
     ))
+}
+
+/// Open the editor-only collaborative layout, or publish its latest valid
+/// revision. Content stays in the existing collaboration surface.
+#[utoipa::path(post, tag = "forms", operation_id = "collaborate_form", path = "/forms/{id}/collaboration",
+    params(("id" = Uuid, Path, description = "Form id")),
+    responses((status = 200, body = FormCollaboration), (status = 401, body = FormErrorResponse),
+        (status = 403, body = FormErrorResponse), (status = 404, body = FormErrorResponse),
+        (status = 409, body = FormErrorResponse), (status = 500, body = FormErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn collaborate_form_handler<Service, EntityAccess, Authorization>(
+    access: FormReceipt<EditAccessLevel, EntityAccess, Authorization>,
+    State(state): State<FormsRouterState<Service, EntityAccess, Authorization>>,
+) -> Result<Json<FormCollaboration>, FormsApiError>
+where
+    Service: FormsService,
+    EntityAccess: EntityAccessService,
+    Authorization: MacroAuthorizationService,
+{
+    Ok(Json(state.service.collaborate_form(access.receipt).await?))
 }

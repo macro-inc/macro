@@ -1,6 +1,8 @@
 import { match, P } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import type {
+  BookingTarget,
+  UnlockedBooking,
   CellValue,
   EntityKind,
   FilterGroup,
@@ -102,15 +104,23 @@ export type FormSectionPlacement = {
 } & (
   | { kind: 'questions'; questions: FormQuestionPlacement[] }
   | { kind: 'gate'; rules: FormRules; message: string }
+  | { kind: 'booking'; target: BookingTarget }
 );
+
+/** The public Macro booking destination selected by a form editor. */
+export type FormBookingTarget = BookingTarget;
+
+/** A booking step released after the form accepts the caller's answers. */
+export type FormBookingStep = Omit<UnlockedBooking, 'section'> & { section: FormSection };
 
 /** The result of submitting or editing a response. A stopped submission has no row. */
 export type FormSubmissionOutcome =
-  | { outcome: 'submitted'; response: FormResponse; row: DatabaseRow }
+  | { outcome: 'submitted'; response: FormResponse; row: DatabaseRow; booking?: FormBookingStep }
   | { outcome: 'stopped'; section: FormSection; message: string };
 
 /** The caller's receipt and current answers, read without access to other responses. */
 export type MyFormResponse = {
+  booking?: FormBookingStep;
   response: FormResponse;
   status: ResponseStatus;
   stoppedAtSection?: FormSection;
@@ -321,6 +331,11 @@ export class Form extends MacroEntity<FormDetail> {
           description: section.description ?? '',
         };
         return match(section)
+          .with({ kind: 'booking' }, (booking) => ({
+            ...common,
+            kind: 'booking' as const,
+            target: booking.target,
+          }))
           .with({ kind: 'gate' }, (gate) => ({
             ...common,
             kind: 'gate' as const,
@@ -392,6 +407,10 @@ export class Form extends MacroEntity<FormDetail> {
     });
   }
 
+  private unlockedBooking(booking: UnlockedBooking | undefined): FormBookingStep | undefined {
+    return booking ? { ...booking, section: FormSection.byId(this, booking.section) } : undefined;
+  }
+
   private async outcome(
     result: SubmissionOutcome,
     answers: FormAnswer[],
@@ -403,14 +422,17 @@ export class Form extends MacroEntity<FormDetail> {
       }))
       .with({ outcome: 'submitted' }, async (submitted) => {
         const row = DatabaseRow.byId(await this.table(), submitted.row);
+        const booking = this.unlockedBooking(submitted.booking);
         return {
           outcome: 'submitted' as const,
           response: FormResponse.byId(this, submitted.response, {
             status: 'submitted',
             row,
             answers,
+            booking,
           }),
           row,
+          ...(booking ? { booking } : {}),
         };
       })
       .exhaustive();
@@ -504,11 +526,14 @@ export class Form extends MacroEntity<FormDetail> {
     const row = mine.response.row
       ? DatabaseRow.byId(table, mine.response.row)
       : undefined;
+    const booking = this.unlockedBooking(mine.booking);
     return {
+      ...(booking ? { booking } : {}),
       response: FormResponse.byId(this, mine.response.id, {
         status: mine.response.status,
         row,
         answers,
+        booking,
       }),
       status: mine.response.status,
       stoppedAtSection: mine.response.stoppedAtSection

@@ -25,20 +25,23 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
+import { openExternalUrl } from '@core/util/url';
 import { getWebOrigin } from '@core/util/webOrigin';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import Eye from '@phosphor/eye.svg';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import { useFormSharePermissionsQuery } from '@queries/storage/forms';
 import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import type { FormTab } from './components/form-tabs';
-import { AudiencePanel } from './components/share/audience-panel';
 import { FormProvider } from './context/form-context';
 import { primaryAction } from './core/form-status';
 import { respondLink } from './core/respond-link';
 import { createAppFormContext } from './form-context-production';
-import { createAudienceChange } from './primitives/create-audience-change';
+import { reservePreviewTab } from './form-preview-tab';
+import { createPreview } from './primitives/create-preview';
 import { FormCardView } from './views/form-card-view';
 import { FormPageView } from './views/form-page-view';
 import { RespondView } from './views/respond-view';
@@ -49,11 +52,13 @@ function FormBlockContent(props: {
 }) {
   const formId = useBlockId();
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
+  const settings = useSettingsState();
   const panel = useSplitPanelOrThrow();
   const context = createAppFormContext({
     openRelated: (destination) =>
       replaceOrInsertSplit({ type: 'database', id: destination.databaseId }),
     openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
+    openCalendarSettings: () => settings.openSettingsInSplit('Calendar'),
   });
   const source = context.createFormSource(() => formId);
   const summary = context.responses.createSummary(
@@ -69,25 +74,6 @@ function FormBlockContent(props: {
   // Shared links open on the web, even from the desktop app (whose own
   // router base is `/`), so the base is the web app's.
   const link = () => respondLink(`${getWebOrigin()}/app/`, formId);
-  const audience = createAudienceChange({
-    detail: source.detail,
-    updateMetadata: context.updateMetadata,
-    notify: context.notify,
-  });
-  // The share dialog mounts outside this block, so the panel takes plain props.
-  const AudienceForShare = () => (
-    <Show when={source.detail()}>
-      {(detail) => (
-        <AudiencePanel
-          audience={detail().form.audience}
-          canChange={detail().access === 'owner'}
-          respondLink={link()}
-          pending={audience.pending()}
-          onChange={(next) => void audience.change(next)}
-        />
-      )}
-    </Show>
-  );
   const openShare = useShareModal(() => {
     const detail = source.detail();
     if (!detail) return;
@@ -99,11 +85,15 @@ function FormBlockContent(props: {
       owner: detail.form.ownerId,
       // The form's own access, as the service answered it: owners manage sharing.
       userPermissions: getPermissions(detail.access),
-      audience: AudienceForShare,
     };
   });
-  const openRespond = () =>
-    insertSplit({ type: 'form', id: formId, params: { view: 'respond' } });
+  const openRespond = () => openExternalUrl(link());
+  // The preview reads the form, so it waits for every edit to reach it.
+  const preview = createPreview({
+    reserveTab: reservePreviewTab,
+    url: () => `${link()}?preview=true`,
+    notify: context.notify,
+  });
   const shares = useFormSharePermissionsQuery(
     () => formId,
     () => source.detail()?.access === 'owner'
@@ -160,6 +150,15 @@ function FormBlockContent(props: {
               source.detail()?.access !== 'view'
             }
           >
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={preview.opening()}
+              onClick={() => void preview.open()}
+            >
+              <Eye class="size-3.5" />
+              Preview
+            </Button>
             {primary()}
           </Show>
           <ShareTrigger onClick={openShare} />
@@ -173,6 +172,7 @@ function FormBlockContent(props: {
             source={source}
             tab={tab()}
             respondLink={link()}
+            preview={preview}
             onTabChange={changeTab}
             onOpenDatabase={(databaseId) =>
               replaceOrInsertSplit({ type: 'database', id: databaseId })
@@ -206,10 +206,12 @@ function FormBlockContent(props: {
 function FormCardContent() {
   const formId = useBlockId();
   const { insertSplit } = useSplitLayout();
+  const settings = useSettingsState();
   const context = createAppFormContext({
     openRelated: (destination) =>
       insertSplit({ type: 'database', id: destination.databaseId }),
     openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
+    openCalendarSettings: () => settings.openSettingsInSplit('Calendar'),
   });
   const source = context.createFormSource(() => formId);
   const open = () => {
@@ -261,16 +263,18 @@ export default function FormBlock(props: { view?: unknown }) {
   return (
     <Show when={!nested} fallback={<FormCardContent />}>
       <DocumentBlockContainer>
-        <FormBlockContent
-          respondOnly={
-            props.view === 'respond' || (!flag().enabled && !flag().loading)
-          }
-          initialTab={
-            props.view === 'responses' || props.view === 'share'
-              ? props.view
-              : undefined
-          }
-        />
+        <div class="size-full">
+          <FormBlockContent
+            respondOnly={
+              props.view === 'respond' || (!flag().enabled && !flag().loading)
+            }
+            initialTab={
+              props.view === 'responses' || props.view === 'share'
+                ? props.view
+                : undefined
+            }
+          />
+        </div>
       </DocumentBlockContainer>
     </Show>
   );

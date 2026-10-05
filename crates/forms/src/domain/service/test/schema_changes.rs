@@ -78,6 +78,17 @@ fn layout_of(detail: &FormDetail) -> FormLayout {
                         })
                         .collect(),
                 },
+                FormSectionDetail::Booking {
+                    id,
+                    title,
+                    description,
+                    target,
+                } => FormSection::Booking {
+                    id: *id,
+                    title: title.clone(),
+                    description: description.clone(),
+                    target: target.clone().expect("editor sees the booking target"),
+                },
                 FormSectionDetail::Gate {
                     id,
                     title,

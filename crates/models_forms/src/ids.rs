@@ -104,3 +104,11 @@ form_id!(
     /// Identifier of one entry of a form's submission ledger.
     FormResponseId
 );
+form_id!(
+    /// Identifier of the native scheduling profile selected by a form.
+    BookingProfileId
+);
+form_id!(
+    /// Identifier of the native scheduling event type selected by a form.
+    BookingEventTypeId
+);

@@ -8,6 +8,68 @@ use super::*;
 use crate::domain::models::{FormAccess, FormError, FormSectionDetail, LayoutProblem};
 use crate::domain::ports::FormsService;
 
+#[test]
+fn respondent_details_withhold_the_booking_destination() {
+    let form = Form {
+        id: FormId::from_uuid(Uuid::from_u128(1)),
+        name: "Interview".into(),
+        description: "".into(),
+        owner_id: OWNER.into(),
+        database_id: DatabaseId::from_uuid(Uuid::from_u128(2)),
+        table_id: TableId::from_uuid(Uuid::from_u128(3)),
+        submitted_column_id: None,
+        respondent_column_id: None,
+        audience: Audience::Public,
+        tally_visible: false,
+        status: FormStatus::Open,
+        closes_at: None,
+        confirmation_message: "Thank you".into(),
+        created_at: start_of_tests(),
+        updated_at: start_of_tests(),
+    };
+    let layout = FormLayout {
+        sections: vec![FormSection::Booking {
+            id: FormSectionId::from_uuid(Uuid::from_u128(4)),
+            title: "Book a time".into(),
+            description: "Meet with us".into(),
+            target: models_forms::BookingTarget {
+                profile_id: models_forms::BookingProfileId::from_uuid(Uuid::from_u128(5)),
+                event_type_id: models_forms::BookingEventTypeId::from_uuid(Uuid::from_u128(6)),
+            },
+        }],
+    };
+    for access in [FormAccess::View, FormAccess::Edit, FormAccess::Owner] {
+        let detail = super::super::layout::form_detail(form.clone(), access, layout.clone(), None);
+        let wire = serde_json::to_value(detail).unwrap();
+        assert_eq!(
+            wire["sections"][0].get("target").is_some(),
+            access != FormAccess::View
+        );
+        assert_eq!(wire["sections"][0]["title"], "Book a time");
+    }
+}
+
+#[tokio::test]
+async fn booking_must_follow_every_question_and_screener() {
+    let world = world();
+    seed_rsvp(&world, Audience::Public);
+    let booking = FormSection::Booking {
+        id: FormSectionId::from_uuid(Uuid::from_u128(0xb00)),
+        title: "Book a time".into(),
+        description: "".into(),
+        target: models_forms::BookingTarget {
+            profile_id: models_forms::BookingProfileId::from_uuid(Uuid::from_u128(5)),
+            event_type_id: models_forms::BookingEventTypeId::from_uuid(Uuid::from_u128(6)),
+        },
+    };
+    let mut layout = rsvp_layout();
+    layout.sections.insert(1, booking);
+    assert!(matches!(
+        put(&world, layout).await,
+        Err(FormError::InvalidLayout(LayoutProblem::BookingMustBeLast))
+    ));
+}
+
 async fn put(
     world: &Shared,
     layout: FormLayout,

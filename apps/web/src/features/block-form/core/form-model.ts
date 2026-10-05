@@ -4,9 +4,11 @@
  * (sections, order, help text, required, widget, gate rules).
  *
  * The shapes follow the service's wire types, but core never imports them.
- * Sections are an editor projection: the wire's questions-or-gate union is
- * flattened into one shape (a questions section has no rules; a gate has no
- * questions), converted both ways in `queries/form-detail.ts`.
+ * Sections are an editor projection: the wire's questions, gate or booking
+ * union is flattened into one shape (a questions section has no rules; a
+ * gate has no questions; only a booking step has a target), converted both
+ * ways in `queries/form-detail.ts`. A form has at most one booking step, and
+ * it comes last.
  */
 
 /** Who may respond: signed-in Macro users, or anyone with the link. */
@@ -17,7 +19,21 @@ export type FormStatus = 'open' | 'closed';
 /** What the viewer may do: view = respond; edit = build, and edit responses (edit on the linked database). */
 export type FormAccess = 'view' | 'edit' | 'owner';
 
-export type SectionKind = 'questions' | 'gate';
+export type SectionKind = 'questions' | 'gate' | 'booking';
+
+/** A native Macro booking link: one event type of a scheduling profile. */
+export type FormBookingTarget = { profileId: string; eventTypeId: string };
+
+/**
+ * The booking step a response unlocked: only the server hands out its
+ * target, once the response is saved and has passed every screener.
+ */
+export type UnlockedBooking = {
+  sectionId: string;
+  title: string;
+  description: string;
+  target: FormBookingTarget;
+};
 
 /** How a column is asked; only narrows presentation (RFC 01 §4). */
 export type QuestionWidget =
@@ -156,6 +172,11 @@ export type FormSection = {
   /** Only a gate has rules; they name columns of earlier sections' questions. */
   gateRules: GateRules | null;
   gateMessage: string;
+  /**
+   * Only a booking step has a target, and only editors read it: respondents
+   * get it from an accepted submission (`UnlockedBooking`).
+   */
+  bookingTarget: FormBookingTarget | null;
   questions: FormQuestion[];
 };
 
@@ -188,9 +209,6 @@ export type FormDetail = {
   /** The linked table is gone or its database trashed; submissions are refused. */
   tableGone: boolean;
 };
-
-/** Where the builder's layout saves stand. */
-export type SaveState = 'saved' | 'pending' | 'saving' | 'failed';
 
 /** Answers kept in memory until submit, by question id. */
 export type FormAnswers = Record<string, FormCellValue>;

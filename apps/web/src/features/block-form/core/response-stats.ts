@@ -34,7 +34,7 @@ export function responseTiles(
   const tiles: ResponseTile[] = [
     { label: 'Responses', value: count(counts.submitted) },
     {
-      label: 'Stopped at a gate',
+      label: 'Stopped by a screener',
       value: count(counts.stopped),
       hint: byGate.length > 0 ? byGate.join(' · ') : undefined,
     },

@@ -1,5 +1,10 @@
 # Implementation prompt: Macro Forms, first pass
 
+The subsequent user review supersedes this prompt's delivery and preview
+instructions: combine the implementation into one PR against main and enable
+its preview. Production deployment remains out of scope. Product additions are
+recorded in [RFC 04](04-collaboration-and-booking.md).
+
 You are implementing Macro Forms in this repository, worktree branch
 `wolf/macro-forms`, already fast-forwarded to `main` after the databases
 merge (#7353). Read, in this order, before writing any code:

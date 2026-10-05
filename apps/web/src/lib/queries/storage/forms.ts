@@ -12,6 +12,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { FormsError } from '@service-storage/forms';
 import type { CreateForm } from '@service-storage/generated/schemas/createForm';
 import type { Form } from '@service-storage/generated/schemas/form';
+import type { FormCollaboration } from '@service-storage/generated/schemas/formCollaboration';
 import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
 import type { FormLayout } from '@service-storage/generated/schemas/formLayout';
 import type { Submission } from '@service-storage/generated/schemas/submission';
@@ -123,6 +124,18 @@ export function onFormFirstQuestion(
 /** Seed the detail cache with what a write answered. */
 export function setFormDetail(detail: FormDetail) {
   queryClient.setQueryData(formsKeys.detail(detail.form.id).queryKey, detail);
+}
+
+/** Open or publish the shared layout and cache its validated projection. */
+export function collaborateOnForm(
+  formId: string
+): ResultAsync<FormCollaboration, FormsError[]> {
+  return storageServiceClient.forms
+    .collaborate({ id: formId })
+    .map((result) => {
+      setFormDetail(result.detail);
+      return result;
+    });
 }
 
 /** After a form's metadata or existence changed, its lists read again. */

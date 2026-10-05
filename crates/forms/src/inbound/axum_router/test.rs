@@ -494,6 +494,7 @@ fn the_openapi_document_names_every_operation_the_sdk_wraps() {
     assert_eq!(
         operations,
         vec![
+            "collaborate_form",
             "create_form",
             "edit_my_form_response",
             "get_form",
@@ -550,4 +551,55 @@ async fn a_bad_token_and_a_stranger_get_typed_refusals() {
     assert_eq!(stranger.status(), StatusCode::FORBIDDEN);
     assert_eq!(json_of(stranger).await["code"], "forbidden");
     assert!(service.handed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn collaboration_requires_edit_and_passes_the_receipt_to_the_service() {
+    let (router, service) = router(Grants {
+        users: [
+            (OWNER.to_string(), AccessLevel::Edit),
+            (RESPONDENT.to_string(), AccessLevel::View),
+        ]
+        .into(),
+        public: Some(AccessLevel::View),
+    });
+    let path = "/00000000-0000-0000-0000-0000000000f0/collaboration";
+    let editor = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(path)
+                .header(header::AUTHORIZATION, "Bearer owner")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(editor.status(), StatusCode::OK);
+    assert_eq!(
+        json_of(editor).await["detail"]["form"]["id"],
+        FORM.to_string()
+    );
+    assert_eq!(
+        *service.handed.lock().unwrap(),
+        vec![Handed {
+            call: "collaborate_form",
+            entity_id: FORM.to_string(),
+            user: Some(OWNER.into())
+        }]
+    );
+
+    for (token, status) in [
+        (None, StatusCode::UNAUTHORIZED),
+        (Some("respondent"), StatusCode::FORBIDDEN),
+    ] {
+        let response = router
+            .clone()
+            .oneshot(request(Method::POST, path, token, None))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status);
+    }
+    assert_eq!(service.handed.lock().unwrap().len(), 1);
 }

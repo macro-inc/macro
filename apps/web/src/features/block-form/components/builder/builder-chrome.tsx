@@ -1,13 +1,11 @@
+import CalendarCheck from '@phosphor/calendar-check.svg';
 import CaretDown from '@phosphor/caret-down.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
 import Database from '@phosphor/database.svg';
 import Plus from '@phosphor/plus.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
-import Spinner from '@phosphor/spinner.svg';
-import Warning from '@phosphor/warning.svg';
 import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
-import type { SaveState } from '../../core/form-model';
+import type { SectionKind } from '../../core/form-model';
 import type { QuestionTypeId } from '../../core/question-types';
 import { QuestionTypeIcon } from '../question-type-icon';
 import { DraftInput, DraftTextarea } from './draft-input';
@@ -43,31 +41,6 @@ export function DropIndicator(props: { top: number; refusal?: string }) {
   );
 }
 
-/** "Saving…", "Saved", or "Not saved" beside the tabs. */
-export function SaveIndicator(props: { state: SaveState }) {
-  return (
-    <span
-      role="status"
-      class="inline-flex items-center gap-1 text-xs text-ink-muted"
-    >
-      <Switch>
-        <Match when={props.state === 'pending' || props.state === 'saving'}>
-          <Spinner class="size-3 animate-spin" aria-hidden="true" />
-          Saving…
-        </Match>
-        <Match when={props.state === 'saved'}>
-          <CheckCircle class="size-3" aria-hidden="true" />
-          Saved
-        </Match>
-        <Match when={props.state === 'failed'}>
-          <Warning class="size-3 text-failure-ink" aria-hidden="true" />
-          Not saved
-        </Match>
-      </Switch>
-    </span>
-  );
-}
-
 /**
  * The form's own card: its name, description and where its answers go. Both
  * fields keep what is being typed while the form is read again underneath.
@@ -82,7 +55,6 @@ export function TitleCard(props: {
 }) {
   return (
     <div class="overflow-hidden rounded-xl border border-edge bg-surface shadow-xs">
-      <div class="h-1.5 bg-violet" aria-hidden="true" />
       <div class="flex flex-col gap-1 px-4 pt-4 pb-3">
         <DraftInput
           aria-label="Form name"
@@ -204,19 +176,24 @@ export function BuilderRail(props: {
   );
 }
 
-/** One line of the outline: a section or gate with its questions. */
+/** One line of the outline: a section, gate or booking step with its questions. */
 export function OutlineSection(props: {
   name: string;
-  gate: boolean;
+  kind: SectionKind;
   questions: readonly { id: string; title: string; selected: boolean }[];
   onSelectQuestion: (questionId: string) => void;
 }) {
   return (
     <li class="flex flex-col gap-0.5">
       <span class="flex items-center gap-1.5 truncate text-xs font-medium text-ink">
-        <Show when={props.gate}>
-          <ShieldCheck class="size-3.5 text-amber-ink" aria-hidden="true" />
-        </Show>
+        <Switch>
+          <Match when={props.kind === 'gate'}>
+            <ShieldCheck class="size-3.5 text-amber-ink" aria-hidden="true" />
+          </Match>
+          <Match when={props.kind === 'booking'}>
+            <CalendarCheck class="size-3.5 text-ink-muted" aria-hidden="true" />
+          </Match>
+        </Switch>
         {props.name}
       </span>
       <ul class="flex flex-col border-l border-edge-divider pl-2">

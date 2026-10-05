@@ -10,6 +10,7 @@ it builds on.
 | [01 Domain and storage](01-domain-and-storage.md) | The `forms` crate, its tables, access, how a submission becomes a database row, HTTP routes, events. |
 | [02 Web](02-web.md) | Entity registration, the builder, the respond page, the Responses tab, sharing, how it all stays "one table". |
 | [03 Channels and polls](03-channels-and-polls.md) | Mentioning a form, posting it with view access, filling it inline, `/poll`. |
+| [04 Collaboration and booking](04-collaboration-and-booking.md) | The approved follow-up: Loro editing, Preview, native sharing, linked names and a screened booking step. |
 
 The mockups these RFCs describe:
 
@@ -33,7 +34,7 @@ linked table's grid, embedded.
 
 Decided, not forgotten:
 
-- Calendar integration (free/busy slot questions, booking). Later pass.
+- Free/busy slot questions. A final booking step is covered by RFC 04.
 - Branching ("after section 2 go to section 4 if…"). Sections are linear; a
   gate section can stop a submission.
 - Drafts saved server-side. A response is one submit; the client keeps unsent

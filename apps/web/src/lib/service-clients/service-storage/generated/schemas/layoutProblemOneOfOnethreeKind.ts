@@ -10,5 +10,5 @@ export type LayoutProblemOneOfOnethreeKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LayoutProblemOneOfOnethreeKind = {
-  textTooLong: 'textTooLong',
+  gateRule: 'gateRule',
 } as const;

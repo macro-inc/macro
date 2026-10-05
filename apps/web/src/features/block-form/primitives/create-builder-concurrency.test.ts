@@ -7,6 +7,7 @@ import type {
 } from '../context/form-context';
 import type { FormColumn, FormDetail, FormLayout } from '../core/form-model';
 import { QUESTION_TYPE_CHOICES } from '../core/question-types';
+import { createFakeCollaboration } from '../tests/fake-collaboration';
 import { createBuilder } from './create-builder';
 
 const NAME_COLUMN = 'column-name';
@@ -20,6 +21,7 @@ const startingLayout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [
         {
           id: 'q-name',
@@ -218,7 +220,7 @@ describe('createBuilder column writes under concurrent edits', () => {
   it('keeps every edit made while earlier writes and reads are in flight, sending column writes one at a time in the order they were made', async () => {
     const server = fakeServer();
     await createRoot(async (dispose) => {
-      const [form, setForm] = createSignal<FormDetail | undefined>(
+      const [form] = createSignal<FormDetail | undefined>(
         detail(startingLayout)
       );
       let ids = 0;
@@ -227,18 +229,13 @@ describe('createBuilder column writes under concurrent edits', () => {
         detail: form,
         refetch: server.refetch,
         tableColumns: server.table,
-        saveLayout: (layout) => {
-          const answered = detail(layout);
-          setForm(answered);
-          return new ResultAsync(Promise.resolve(ok(answered)));
-        },
+        collaboration: createFakeCollaboration(startingLayout).collaboration,
         columnWrites: () => server.writes,
         notify: {
           success: (message) => notices.push(`✓ ${message}`),
           failure: (message) => notices.push(`✗ ${message}`),
         },
         mintId: () => `minted-${++ids}`,
-        delayMs: 400,
       });
 
       // Add a multiple-choice question; its column is still being created.
@@ -331,22 +328,17 @@ describe('createBuilder column writes under concurrent edits', () => {
   it('shows a type change at once and sends it after the rename made before it', async () => {
     const server = fakeServer();
     await createRoot(async (dispose) => {
-      const [form, setForm] = createSignal<FormDetail | undefined>(
+      const [form] = createSignal<FormDetail | undefined>(
         detail(startingLayout)
       );
       const builder = createBuilder({
         detail: form,
         refetch: server.refetch,
         tableColumns: server.table,
-        saveLayout: (layout) => {
-          const answered = detail(layout);
-          setForm(answered);
-          return new ResultAsync(Promise.resolve(ok(answered)));
-        },
+        collaboration: createFakeCollaboration(startingLayout).collaboration,
         columnWrites: () => server.writes,
         notify: { success: () => {}, failure: () => {} },
         mintId: () => 'minted',
-        delayMs: 400,
       });
       void builder.renameQuestion('q-name', 'Attending');
       void builder.changeType('q-name', multipleChoice);
@@ -385,15 +377,13 @@ describe('createBuilder column writes under concurrent edits', () => {
         detail: form,
         refetch: server.refetch,
         tableColumns: server.table,
-        saveLayout: (layout) =>
-          new ResultAsync(Promise.resolve(ok(detail(layout)))),
+        collaboration: createFakeCollaboration(startingLayout).collaboration,
         columnWrites: () => server.writes,
         notify: {
           success: () => {},
           failure: (message) => notices.push(message),
         },
         mintId: () => 'minted',
-        delayMs: 400,
       });
       void builder.changeType('q-name', shortAnswer);
       const renamed = builder.renameQuestion('q-name', 'Full name');
@@ -429,8 +419,7 @@ describe('createBuilder column writes under concurrent edits', () => {
           throw new Error('offline');
         },
         tableColumns: server.table,
-        saveLayout: (layout) =>
-          new ResultAsync(Promise.resolve(ok(detail(layout)))),
+        collaboration: createFakeCollaboration(startingLayout).collaboration,
         columnWrites: () => ({
           ...server.writes,
           rename: () =>
@@ -441,7 +430,6 @@ describe('createBuilder column writes under concurrent edits', () => {
           failure: (message) => notices.push(message),
         },
         mintId: () => 'minted',
-        delayMs: 400,
       });
       const renamed = builder.renameQuestion('q-name', 'Full name');
       const typed = builder.changeType('q-name', multipleChoice);

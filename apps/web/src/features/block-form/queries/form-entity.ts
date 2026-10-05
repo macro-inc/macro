@@ -1,7 +1,7 @@
 /** Renaming and trashing a form: the unified entity mutation router, as for databases. */
 import { queryClient } from '@queries/client';
 import { setPreviewName } from '@queries/preview';
-import { formsKeys } from '@queries/storage/keys';
+import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
 import {
   RenameFormDocument,
@@ -73,7 +73,25 @@ export function renameForm(
             form: { ...previous.form, name: displayName },
           }
       );
-      void queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
+      const detail = queryClient.getQueryData<FormDetail>(
+        formsKeys.detail(formId).queryKey
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey }),
+        queryClient.invalidateQueries({
+          queryKey: detail
+            ? databasesKeys.detail(detail.form.databaseId).queryKey
+            : databasesKeys.detail._def,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: databasesKeys.list.queryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: detail
+            ? formsKeys.forDatabase(detail.form.databaseId).queryKey
+            : formsKeys.forDatabase._def,
+        }),
+      ]);
     }
     return outcome;
   };

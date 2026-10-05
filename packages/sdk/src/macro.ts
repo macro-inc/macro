@@ -39,6 +39,8 @@ export {
   Form,
   type FormAnswer,
   type FormAnswerValue,
+  type FormBookingStep,
+  type FormBookingTarget,
   type FormEntityHandle,
   type FormQuestionPlacement,
   type FormQuestionTally,

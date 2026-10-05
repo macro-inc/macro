@@ -17,10 +17,13 @@ pub use models_forms::{
 /// A form as stored, with its trash state, which lifecycle operations read.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StoredForm {
-    /// The form's facts.
+    /// The form's facts. Its name is what it was called at creation when
+    /// `name_follows_database`; the database's name is the form's then.
     pub form: Form,
     /// When it was trashed, if it is in the trash.
     pub trashed_at: Option<DateTime<Utc>>,
+    /// Whether the form created its own database and goes by its name.
+    pub name_follows_database: bool,
 }
 
 /// Who is responding.
@@ -46,6 +49,8 @@ pub enum RecordedResponse {
 /// What replacing a form's layout came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LayoutReplacement {
+    /// This form's layout is now owned by its collaborative document.
+    DraftRequired,
     /// The layout is the form's now.
     Replaced,
     /// The form is gone or in the trash; nothing was written.
@@ -200,6 +205,9 @@ pub enum FormError {
     /// explain.
     #[error("databases error: {0}")]
     Database(DatabaseError),
+    /// The durable collaborative draft could not be read or saved.
+    #[error("collaboration error: {0}")]
+    Collaboration(rootcause::Report),
     /// Persistence failure.
     #[error("repository error: {0}")]
     Repository(rootcause::Report),

@@ -8,6 +8,7 @@ import {
 } from '../context/form-context';
 import type { FormDetail } from '../core/form-model';
 import { availabilityLine, formAvailability } from '../core/form-status';
+import type { Preview } from '../primitives/create-preview';
 import { BuilderView } from './builder-view';
 import { RespondView } from './respond-view';
 import { ResponsesView } from './responses-view';
@@ -96,15 +97,74 @@ function EditorTabs(props: {
  * The form page (RFC 02 §2): editors get Build, Responses and Share with the
  * status at the right; viewers land on the respond page.
  */
-export function FormPageView(props: {
+type FormPageProps = {
   source: FormDetailSource;
   tab: FormTab;
   respondLink: string;
+  /** What a preview waits for before it reads the form. */
+  preview: Pick<Preview, 'trackWrites' | 'trackLayout'>;
   onTabChange: (tab: FormTab) => void;
   onOpenDatabase: (databaseId: string) => void;
   onOpenShare: () => void;
   onTrashed: () => void;
-}) {
+};
+
+/**
+ * An editor's tabs. The shared layout stays open across them, so edits keep
+ * syncing and a preview publishes them from any tab.
+ */
+function EditorPanels(
+  props: FormPageProps & { detail: FormDetail; tabsId: string }
+) {
+  const context = useFormContext();
+  const collaboration = context.createLayoutCollaboration(props.detail.form.id);
+  props.preview.trackLayout(collaboration.flush);
+  return (
+    <>
+      <EditorTabs
+        detail={props.detail}
+        idPrefix={props.tabsId}
+        tab={props.tab}
+        onTabChange={props.onTabChange}
+      />
+      <div
+        id={`${props.tabsId}-panel-${props.tab}`}
+        role="tabpanel"
+        aria-labelledby={`${props.tabsId}-tab-${props.tab}`}
+        class="min-h-0 flex-1"
+      >
+        <Switch>
+          <Match when={props.tab === 'build'}>
+            <BuilderView
+              source={props.source}
+              detail={props.detail}
+              collaboration={collaboration}
+              trackWrites={props.preview.trackWrites}
+              onOpenResponses={() => props.onTabChange('responses')}
+              onOpenDatabase={props.onOpenDatabase}
+            />
+          </Match>
+          <Match when={props.tab === 'responses'}>
+            <ResponsesView
+              detail={props.detail}
+              onOpenDatabase={props.onOpenDatabase}
+            />
+          </Match>
+          <Match when={props.tab === 'share'}>
+            <ShareTabView
+              detail={props.detail}
+              respondLink={props.respondLink}
+              onOpenShare={props.onOpenShare}
+              onTrashed={props.onTrashed}
+            />
+          </Match>
+        </Switch>
+      </div>
+    </>
+  );
+}
+
+export function FormPageView(props: FormPageProps) {
   let respondScroll: HTMLDivElement | undefined;
   // One per mount: the same form can be open in two splits.
   const tabsId = createUniqueId();
@@ -140,43 +200,7 @@ export function FormPageView(props: {
               </div>
             }
           >
-            <EditorTabs
-              detail={detail()}
-              idPrefix={tabsId}
-              tab={props.tab}
-              onTabChange={props.onTabChange}
-            />
-            <div
-              id={`${tabsId}-panel-${props.tab}`}
-              role="tabpanel"
-              aria-labelledby={`${tabsId}-tab-${props.tab}`}
-              class="min-h-0 flex-1"
-            >
-              <Switch>
-                <Match when={props.tab === 'build'}>
-                  <BuilderView
-                    source={props.source}
-                    detail={detail()}
-                    onOpenResponses={() => props.onTabChange('responses')}
-                    onOpenDatabase={props.onOpenDatabase}
-                  />
-                </Match>
-                <Match when={props.tab === 'responses'}>
-                  <ResponsesView
-                    detail={detail()}
-                    onOpenDatabase={props.onOpenDatabase}
-                  />
-                </Match>
-                <Match when={props.tab === 'share'}>
-                  <ShareTabView
-                    detail={detail()}
-                    respondLink={props.respondLink}
-                    onOpenShare={props.onOpenShare}
-                    onTrashed={props.onTrashed}
-                  />
-                </Match>
-              </Switch>
-            </div>
+            <EditorPanels {...props} detail={detail()} tabsId={tabsId} />
           </Show>
         )}
       </Show>

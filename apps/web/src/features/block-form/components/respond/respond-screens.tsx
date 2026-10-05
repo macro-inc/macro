@@ -30,7 +30,7 @@ export function ProgressStrip(props: { position: number; total: number }) {
         class="h-1 overflow-hidden rounded-full bg-active"
       >
         <div
-          class="h-full rounded-full bg-violet transition-[width] duration-200 motion-reduce:transition-none"
+          class="h-full rounded-full bg-accent transition-[width] duration-200 motion-reduce:transition-none"
           style={{
             width: `${(props.position / Math.max(props.total, 1)) * 100}%`,
           }}
@@ -49,7 +49,6 @@ export function RespondTitleCard(props: {
 }) {
   return (
     <div class="overflow-hidden rounded-xl border border-edge bg-surface">
-      <div class="h-1.5 bg-violet" aria-hidden="true" />
       <div class={cn('flex flex-col gap-1.5', props.compact ? 'p-3' : 'p-5')}>
         <h1
           class={cn(

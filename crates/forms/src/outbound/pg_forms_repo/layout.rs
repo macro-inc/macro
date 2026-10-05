@@ -13,11 +13,9 @@ use crate::domain::models::{
     ColumnId, FormId, FormLayout, FormQuestionId, FormSection, FormSectionId, QuestionLayout,
     Widget,
 };
+use models_forms::BookingTarget;
 
-/// How a section's kind is stored.
-const QUESTIONS: &str = "questions";
-/// How a gate section's kind is stored.
-const GATE: &str = "gate";
+use models_forms::FormSectionKind;
 
 /// The primary keys a layout's client-minted ids are stored under.
 const LAYOUT_KEYS: [&str; 2] = ["form_sections_pkey", "form_questions_pkey"];
@@ -33,7 +31,7 @@ fn layout_ids(layout: &FormLayout) -> Vec<Uuid> {
                     .iter()
                     .map(|question| question.id.into_uuid())
                     .collect(),
-                FormSection::Gate { .. } => vec![],
+                FormSection::Gate { .. } | FormSection::Booking { .. } => vec![],
             };
             std::iter::once(section.id().into_uuid()).chain(questions)
         })
@@ -88,6 +86,7 @@ pub(super) async fn insert(
     let mut kinds = Vec::new();
     let mut rules: Vec<Option<String>> = Vec::new();
     let mut messages = Vec::new();
+    let mut booking_targets: Vec<Option<String>> = Vec::new();
     let mut question_ids = Vec::new();
     let mut question_sections = Vec::new();
     let mut question_columns = Vec::new();
@@ -107,9 +106,10 @@ pub(super) async fn insert(
             } => {
                 titles.push(title.clone());
                 descriptions.push(description.clone());
-                kinds.push(QUESTIONS.to_string());
+                kinds.push(FormSectionKind::Questions.as_ref().to_string());
                 rules.push(None);
                 messages.push(String::new());
+                booking_targets.push(None);
                 for (question, position) in
                     questions
                         .iter()
@@ -133,19 +133,33 @@ pub(super) async fn insert(
             } => {
                 titles.push(title.clone());
                 descriptions.push(description.clone());
-                kinds.push(GATE.to_string());
+                kinds.push(FormSectionKind::Gate.as_ref().to_string());
                 rules.push(Some(serde_json::to_string(gate_rules)?));
                 messages.push(message.clone());
+                booking_targets.push(None);
+            }
+            FormSection::Booking {
+                title,
+                description,
+                target,
+                ..
+            } => {
+                titles.push(title.clone());
+                descriptions.push(description.clone());
+                kinds.push(FormSectionKind::Booking.as_ref().to_string());
+                rules.push(None);
+                messages.push(String::new());
+                booking_targets.push(Some(serde_json::to_string(target)?));
             }
         }
     }
     sqlx::query!(
         r#"
-        INSERT INTO form_sections (id, form_id, position, title, description, kind, gate_rules, gate_message)
+        INSERT INTO form_sections (id, form_id, position, title, description, kind, gate_rules, gate_message, booking_target)
         SELECT section.id, $1, section.position, section.title, section.description,
-               section.kind, section.rules::jsonb, section.message
-        FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[])
-            AS section(id, position, title, description, kind, rules, message)
+               section.kind, section.rules::jsonb, section.message, section.booking_target::jsonb
+        FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
+            AS section(id, position, title, description, kind, rules, message, booking_target)
         "#,
         form.into_uuid(),
         &section_ids,
@@ -155,6 +169,7 @@ pub(super) async fn insert(
         &kinds,
         &rules as &[Option<String>],
         &messages,
+        &booking_targets as &[Option<String>],
     )
     .execute(&mut **transaction)
     .await?;
@@ -180,6 +195,18 @@ pub(super) async fn insert(
     Ok(())
 }
 
+/// A booking section's stored destination; missing or misshapen is corrupt.
+fn booking_target(stored: Option<serde_json::Value>) -> Result<BookingTarget, PgFormsRepoError> {
+    let stored = stored.ok_or(PgFormsRepoError::Corrupt {
+        kind: "booking target",
+        value: "null".to_string(),
+    })?;
+    serde_json::from_value(stored.clone()).map_err(|_| PgFormsRepoError::Corrupt {
+        kind: "booking target",
+        value: stored.to_string(),
+    })
+}
+
 /// The isolation a layout read runs at: both of its statements see one
 /// snapshot, so a layout put committing between them cannot pair old
 /// sections with new questions. Read only, so it never blocks a writer.
@@ -190,7 +217,7 @@ pub(super) async fn read(pool: &PgPool, form: FormId) -> Result<FormLayout, PgFo
     let mut snapshot = pool.begin_with(SNAPSHOT).await?;
     let sections = sqlx::query!(
         r#"
-        SELECT id, title, description, kind, gate_rules, gate_message
+        SELECT id, title, description, kind, gate_rules, gate_message, booking_target
         FROM form_sections WHERE form_id = $1
         ORDER BY position, id
         "#,
@@ -230,14 +257,14 @@ pub(super) async fn read(pool: &PgPool, form: FormId) -> Result<FormLayout, PgFo
         .into_iter()
         .map(|section| {
             let id = FormSectionId::from_uuid(section.id);
-            match section.kind.as_str() {
-                QUESTIONS => Ok(FormSection::Questions {
+            match parsed::<FormSectionKind>("section kind", &section.kind)? {
+                FormSectionKind::Questions => Ok(FormSection::Questions {
                     id,
                     title: section.title,
                     description: section.description,
                     questions: by_section.remove(&section.id).unwrap_or_default(),
                 }),
-                GATE => {
+                FormSectionKind::Gate => {
                     let rules = section.gate_rules.ok_or(PgFormsRepoError::Corrupt {
                         kind: "gate rules",
                         value: "null".to_string(),
@@ -250,12 +277,14 @@ pub(super) async fn read(pool: &PgPool, form: FormId) -> Result<FormLayout, PgFo
                         message: section.gate_message,
                     })
                 }
-                other => Err(PgFormsRepoError::Corrupt {
-                    kind: "section kind",
-                    value: other.to_string(),
+                FormSectionKind::Booking => Ok(FormSection::Booking {
+                    id,
+                    title: section.title,
+                    description: section.description,
+                    target: booking_target(section.booking_target)?,
                 }),
             }
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, PgFormsRepoError>>()?;
     Ok(FormLayout { sections })
 }

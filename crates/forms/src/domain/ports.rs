@@ -78,11 +78,14 @@ pub trait FormsRepo: Send + Sync + 'static {
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Store a new form with its layout, granting its owner owner access,
-    /// all or nothing.
+    /// all or nothing. `name_follows_database` records, for good, that the
+    /// form created its own database and goes by that database's name; the
+    /// stored name is then only what it was called at creation.
     fn create_form(
         &self,
         form: &Form,
         layout: &FormLayout,
+        name_follows_database: bool,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// A form, trashed or not, if it exists.
@@ -97,6 +100,12 @@ pub trait FormsRepo: Send + Sync + 'static {
         &self,
         ids: &[FormId],
     ) -> impl Future<Output = Result<Vec<Form>, Self::Error>> + Send;
+
+    /// Those of `ids` that go by their database's name, trashed or not.
+    fn forms_with_database_names(
+        &self,
+        ids: &[FormId],
+    ) -> impl Future<Output = Result<Vec<FormId>, Self::Error>> + Send;
 
     /// The forms over a database that are not in the trash, oldest first.
     fn forms_for_database(
@@ -138,6 +147,15 @@ pub trait FormsRepo: Send + Sync + 'static {
         &self,
         id: FormId,
         name: &str,
+        updated_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<Form>, Self::Error>> + Send;
+
+    /// Stamp a live form's `updated_at` and nothing else, for a change of
+    /// the form kept elsewhere (its database's name); `None` when it is
+    /// gone or trashed.
+    fn touch_form(
+        &self,
+        id: FormId,
         updated_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<Form>, Self::Error>> + Send;
 
@@ -210,6 +228,13 @@ pub trait FormsRepo: Send + Sync + 'static {
 
 /// The forms domain service.
 pub trait FormsService: Send + Sync + 'static {
+    /// Initialize the editor-only Loro surface and publish its latest valid
+    /// layout. Invalid drafts remain editable and return a publication error.
+    fn collaborate_form(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<models_forms::FormCollaboration, FormError>> + Send;
+
     /// Create a form over a new database or an existing table.
     fn create_form(
         &self,
@@ -284,7 +309,9 @@ pub trait FormsService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<FormTally, FormError>> + Send;
 
-    /// Rename a form. Its database keeps its own name.
+    /// Rename a form. A form that created its own database goes by that
+    /// database's name, so renaming it renames the database; a form over an
+    /// existing table keeps a name of its own.
     fn rename_form(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,

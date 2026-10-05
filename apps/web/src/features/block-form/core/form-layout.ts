@@ -1,4 +1,5 @@
 import { err, ok, type Result } from 'neverthrow';
+import { match } from 'ts-pattern';
 import type {
   FormColumn,
   FormLayout,
@@ -16,6 +17,9 @@ export type LayoutRefusal =
   | { kind: 'unknown-question'; questionId: string }
   | { kind: 'unknown-section'; sectionId: string }
   | { kind: 'gate-section'; sectionId: string }
+  | { kind: 'booking-section'; sectionId: string }
+  /** The booking step is unique and comes after every question and screener. */
+  | { kind: 'booking-must-be-last'; sectionId: string }
   | { kind: 'column-on-form'; columnId: string }
   | {
       kind: 'gate-before-question';
@@ -28,7 +32,10 @@ export type QuestionPatch = Partial<
 >;
 
 export type SectionPatch = Partial<
-  Pick<FormSection, 'title' | 'description' | 'gateRules' | 'gateMessage'>
+  Pick<
+    FormSection,
+    'title' | 'description' | 'gateRules' | 'gateMessage' | 'bookingTarget'
+  >
 >;
 
 /** A layout edit that also dropped gate conditions naming columns it took off the form. */
@@ -58,8 +65,12 @@ function questionsSection(
 ): Result<FormSection, LayoutRefusal> {
   const section = layout.sections.find((item) => item.id === sectionId);
   if (!section) return err({ kind: 'unknown-section', sectionId });
-  if (section.kind === 'gate') return err({ kind: 'gate-section', sectionId });
-  return ok(section);
+  return match(section.kind)
+    .returnType<Result<FormSection, LayoutRefusal>>()
+    .with('questions', () => ok(section))
+    .with('gate', () => err({ kind: 'gate-section', sectionId }))
+    .with('booking', () => err({ kind: 'booking-section', sectionId }))
+    .exhaustive();
 }
 
 function columnOnForm(layout: FormLayout, columnId: string) {
@@ -80,8 +91,17 @@ function replaceSection(
   };
 }
 
-/** The layout, or the first gate that names a column not asked before it. */
-function checkedGates(layout: FormLayout): Result<FormLayout, LayoutRefusal> {
+/**
+ * The layout, or why it does not hold: a booking step not last (a second one
+ * is never last), or the first gate naming a column not asked before it.
+ */
+function checkedLayout(layout: FormLayout): Result<FormLayout, LayoutRefusal> {
+  const misplaced = layout.sections.find(
+    (section, index) =>
+      section.kind === 'booking' && index !== layout.sections.length - 1
+  );
+  if (misplaced)
+    return err({ kind: 'booking-must-be-last', sectionId: misplaced.id });
   for (const section of layout.sections) {
     if (section.kind !== 'gate' || !section.gateRules) continue;
     const allowed = new Set(gateColumns(layout, section.id));
@@ -170,7 +190,7 @@ export function moveQuestion(
         ? section
         : { ...section, questions: others };
     });
-    return checkedGates({ sections });
+    return checkedLayout({ sections });
   });
 }
 
@@ -222,14 +242,31 @@ export function swapQuestionColumn(
   return ok(pruneGates(swapped, new Set([found.question.columnId])));
 }
 
+/**
+ * A booking step goes last; anything else goes at `index` but before the
+ * booking step, so adding never pushes the booking step off the end.
+ */
 export function addSection(
   layout: FormLayout,
   section: FormSection,
   index: number
 ): Result<FormLayout, LayoutRefusal> {
-  return checkedGates({
-    sections: insertAt(layout.sections, index, section),
+  const booking = bookingStep(layout);
+  const at =
+    section.kind === 'booking'
+      ? layout.sections.length
+      : Math.min(
+          index,
+          booking ? layout.sections.indexOf(booking) : layout.sections.length
+        );
+  return checkedLayout({
+    sections: insertAt(layout.sections, at, section),
   });
+}
+
+/** The form's booking step, if it has one. */
+export function bookingStep(layout: FormLayout): FormSection | undefined {
+  return layout.sections.find((section) => section.kind === 'booking');
 }
 
 export function moveSection(
@@ -240,7 +277,7 @@ export function moveSection(
   const section = layout.sections.find((item) => item.id === sectionId);
   if (!section) return err({ kind: 'unknown-section', sectionId });
   const others = layout.sections.filter((item) => item.id !== sectionId);
-  return checkedGates({ sections: insertAt(others, index, section) });
+  return checkedLayout({ sections: insertAt(others, index, section) });
 }
 
 export function removeSection(
@@ -264,7 +301,7 @@ export function updateSection(
 ): Result<FormLayout, LayoutRefusal> {
   if (!layout.sections.some((item) => item.id === sectionId))
     return err({ kind: 'unknown-section', sectionId });
-  return checkedGates(
+  return checkedLayout(
     replaceSection(layout, sectionId, (section) => ({ ...section, ...patch }))
   );
 }
@@ -343,4 +380,83 @@ export function hiddenColumns(
   return columns.filter(
     (column) => !managed.has(column.id) && !columnOnForm(layout, column.id)
   );
+}
+
+/**
+ * A question shown before its column exists: it stays out of the shared
+ * layout until the column does. It follows the question before it.
+ */
+export type PendingQuestion = {
+  question: FormQuestion;
+  sectionId: string;
+  /** The question it follows; `null` at the section's start. */
+  after: string | null;
+};
+
+/**
+ * `layout` with the pending questions shown where they were put. One whose
+ * section is gone is not shown; one whose neighbour is gone ends its section.
+ */
+export function withPendingQuestions(
+  layout: FormLayout,
+  pending: readonly PendingQuestion[]
+): FormLayout {
+  if (pending.length === 0) return layout;
+  const sections = layout.sections.map((section) => ({
+    ...section,
+    questions: [...section.questions],
+  }));
+  let waiting = pending.filter((entry) =>
+    sections.some(
+      (section) =>
+        section.id === entry.sectionId && section.kind === 'questions'
+    )
+  );
+  // A question may follow another pending one: place those after it.
+  while (waiting.length > 0) {
+    const placed = waiting.filter((entry) => {
+      const section = sections.find((item) => item.id === entry.sectionId);
+      if (!section) return false;
+      const index =
+        entry.after === null
+          ? 0
+          : section.questions.findIndex((item) => item.id === entry.after) + 1;
+      if (index === 0 && entry.after !== null) return false;
+      section.questions.splice(index, 0, entry.question);
+      return true;
+    });
+    if (placed.length === 0) {
+      for (const entry of waiting)
+        sections
+          .find((item) => item.id === entry.sectionId)
+          ?.questions.push(entry.question);
+      break;
+    }
+    waiting = waiting.filter((entry) => !placed.includes(entry));
+  }
+  return { sections };
+}
+
+/**
+ * Splits the questions named `pendingIds` out of `layout`, remembering
+ * where each was. A pending question no longer in `layout` was removed.
+ */
+export function takePendingQuestions(
+  layout: FormLayout,
+  pendingIds: readonly string[]
+): { layout: FormLayout; pending: PendingQuestion[] } {
+  const pending: PendingQuestion[] = [];
+  const sections = layout.sections.map((section) => ({
+    ...section,
+    questions: section.questions.filter((question, index) => {
+      if (!pendingIds.includes(question.id)) return true;
+      pending.push({
+        question,
+        sectionId: section.id,
+        after: section.questions[index - 1]?.id ?? null,
+      });
+      return false;
+    }),
+  }));
+  return { layout: { sections }, pending };
 }

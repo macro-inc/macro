@@ -48,11 +48,19 @@ describe('createPollVoting', () => {
         tally: () => tally,
         submit: (answers) => {
           calls.push(['POST', answers]);
-          return okAsync({ kind: 'submitted', responseId: 'response' });
+          return okAsync({
+            kind: 'submitted',
+            responseId: 'response',
+            booking: null,
+          });
         },
         editMine: (answers) => {
           calls.push(['PUT', answers]);
-          return okAsync({ kind: 'submitted', responseId: 'response' });
+          return okAsync({
+            kind: 'submitted',
+            responseId: 'response',
+            booking: null,
+          });
         },
         notify: () => {},
       });
@@ -62,6 +70,7 @@ describe('createPollVoting', () => {
       expect(voting.myVote()).toEqual(['tacos']);
       setMine({
         status: 'submitted',
+        booking: null,
         submittedAt: '2026-10-05T00:00:00Z',
         answers: [
           {

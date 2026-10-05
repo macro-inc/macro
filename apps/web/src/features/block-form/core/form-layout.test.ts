@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addQuestion,
   addSection,
+  bookingStep,
   brokenGateColumns,
   columnsNamed,
   gateColumns,
@@ -39,6 +40,7 @@ function offsite(): FormLayout {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        bookingTarget: null,
         questions: [
           {
             id: NAME_QUESTION,
@@ -76,6 +78,7 @@ function offsite(): FormLayout {
           ],
         },
         gateMessage: 'The offsite is for employees.',
+        bookingTarget: null,
         questions: [],
       },
       {
@@ -85,6 +88,7 @@ function offsite(): FormLayout {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        bookingTarget: null,
         questions: [
           {
             id: DIET_QUESTION,
@@ -129,6 +133,7 @@ describe('addQuestion', () => {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          bookingTarget: null,
           questions: [
             {
               id: NAME_QUESTION,
@@ -440,6 +445,7 @@ describe('sections', () => {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        bookingTarget: null,
         questions: [],
       },
       3
@@ -582,5 +588,146 @@ describe('reads', () => {
         ['submitted', 'respondent', null]
       ).map((hidden) => hidden.name)
     ).toEqual(['Notes']);
+  });
+});
+
+describe('booking step', () => {
+  const BOOKING = '0192aaaa-0000-7000-8000-000000000009';
+  const INTRO_CALL = {
+    profileId: '0192eeee-0000-7000-8000-000000000001',
+    eventTypeId: '0192eeee-0000-7000-8000-000000000002',
+  };
+  const REVIEW_CALL = {
+    profileId: '0192eeee-0000-7000-8000-000000000001',
+    eventTypeId: '0192eeee-0000-7000-8000-000000000003',
+  };
+
+  /** About you → gate on Team → Details → Book a call. */
+  function withBooking(): FormLayout {
+    return addSection(
+      offsite(),
+      {
+        id: BOOKING,
+        title: 'Book a call',
+        description: 'Pick a time that suits you.',
+        kind: 'booking',
+        gateRules: null,
+        gateMessage: '',
+        bookingTarget: INTRO_CALL,
+        questions: [],
+      },
+      3
+    )._unsafeUnwrap();
+  }
+
+  it('adds a booking step after every question and screener, whatever index it was given', () => {
+    const layout = addSection(
+      offsite(),
+      {
+        id: BOOKING,
+        title: 'Book a call',
+        description: 'Pick a time that suits you.',
+        kind: 'booking',
+        gateRules: null,
+        gateMessage: '',
+        bookingTarget: INTRO_CALL,
+        questions: [],
+      },
+      0
+    )._unsafeUnwrap();
+    expect(layout.sections.at(-1)).toEqual({
+      id: BOOKING,
+      title: 'Book a call',
+      description: 'Pick a time that suits you.',
+      kind: 'booking',
+      gateRules: null,
+      gateMessage: '',
+      bookingTarget: INTRO_CALL,
+      questions: [],
+    });
+    expect(layout.sections.map((section) => section.title)).toEqual([
+      'About you',
+      'Eligibility',
+      'Details',
+      'Book a call',
+    ]);
+  });
+
+  it('inserts new sections and screeners before the booking step', () => {
+    const layout = addSection(
+      withBooking(),
+      {
+        id: 'travel',
+        title: 'Travel',
+        description: '',
+        kind: 'questions',
+        gateRules: null,
+        gateMessage: '',
+        bookingTarget: null,
+        questions: [],
+      },
+      4
+    )._unsafeUnwrap();
+    expect(layout.sections.map((section) => section.title)).toEqual([
+      'About you',
+      'Eligibility',
+      'Details',
+      'Travel',
+      'Book a call',
+    ]);
+  });
+
+  it('refuses a second booking step', () => {
+    expect(
+      addSection(
+        withBooking(),
+        {
+          id: 'second',
+          title: '',
+          description: '',
+          kind: 'booking',
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: REVIEW_CALL,
+          questions: [],
+        },
+        4
+      )._unsafeUnwrapErr()
+    ).toEqual({ kind: 'booking-must-be-last', sectionId: BOOKING });
+  });
+
+  it('refuses moving the booking step ahead of a screener, or a section after it', () => {
+    expect(moveSection(withBooking(), BOOKING, 1)._unsafeUnwrapErr()).toEqual({
+      kind: 'booking-must-be-last',
+      sectionId: BOOKING,
+    });
+    expect(moveSection(withBooking(), DETAILS, 3)._unsafeUnwrapErr()).toEqual({
+      kind: 'booking-must-be-last',
+      sectionId: BOOKING,
+    });
+    expect(
+      moveSection(withBooking(), DETAILS, 0)
+        ._unsafeUnwrap()
+        .sections.map((section) => section.title)
+    ).toEqual(['Details', 'About you', 'Eligibility', 'Book a call']);
+  });
+
+  it('takes no questions', () => {
+    expect(
+      moveQuestion(withBooking(), DIET_QUESTION, {
+        sectionId: BOOKING,
+        index: 0,
+      })._unsafeUnwrapErr()
+    ).toEqual({ kind: 'booking-section', sectionId: BOOKING });
+  });
+
+  it('changes its booking link and leaves the step when removed', () => {
+    const changed = updateSection(withBooking(), BOOKING, {
+      bookingTarget: REVIEW_CALL,
+    })._unsafeUnwrap();
+    expect(bookingStep(changed)?.bookingTarget).toEqual(REVIEW_CALL);
+    const removed = removeSection(changed, BOOKING)._unsafeUnwrap();
+    expect(bookingStep(removed.layout)).toBeUndefined();
+    expect(removed.prunedConditions).toBe(0);
   });
 });

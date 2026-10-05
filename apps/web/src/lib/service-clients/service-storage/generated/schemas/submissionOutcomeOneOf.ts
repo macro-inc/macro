@@ -4,12 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { SubmissionOutcomeOneOfOutcome } from './submissionOutcomeOneOfOutcome';
+import type { UnlockedBooking } from './unlockedBooking';
 
 /**
  * The answers are saved as a row of the form's table.
  */
 export type SubmissionOutcomeOneOf = {
+  /** The form's booking step, unlocked by this accepted response. */
+  booking?: UnlockedBooking;
   outcome: SubmissionOutcomeOneOfOutcome;
   /** The ledger entry. */
   response: string;

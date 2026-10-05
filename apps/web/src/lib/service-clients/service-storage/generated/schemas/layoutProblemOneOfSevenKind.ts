@@ -10,5 +10,5 @@ export type LayoutProblemOneOfSevenKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LayoutProblemOneOfSevenKind = {
-  repeatedId: 'repeatedId',
+  repeatedColumn: 'repeatedColumn',
 } as const;

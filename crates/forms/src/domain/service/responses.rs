@@ -1,10 +1,12 @@
 //! What editors and poll voters read of the responses: the ledger's counts
 //! and, for choice questions, how the table's rows answer them.
 
+use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
+
 use std::collections::HashMap;
 
 use databases::domain::models::DatabaseError;
-use databases::domain::ports::{DatabaseRowReads, DatabasesService};
+use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_event_broker::MacroEventBroker;
 use models_databases::{CellValue, ColumnKind, OptionRef, RowId};
@@ -73,15 +75,16 @@ fn tallied(kind: ColumnKind) -> bool {
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo,
-    Databases: DatabasesService + DatabaseRowReads,
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
     Now: Clock,
     Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
 {
     pub(super) async fn summary(
         &self,
@@ -105,11 +108,7 @@ where
                 DatabaseError::NotFound => FormError::TableGone,
                 other => database_error(other),
             })?;
-        let layout = self
-            .repository
-            .layout(form.id)
-            .await
-            .map_err(repository_error)?;
+        let layout = self.refresh_layout(&form, Some(&table)).await?.layout;
         let order: Vec<FormSectionId> = layout.sections.iter().map(FormSection::id).collect();
         let mut stopped_by_section: Vec<SectionCount> = counts
             .stopped_by_section
@@ -147,15 +146,11 @@ where
         }
         let table = self.live_table_of(&form).await?;
         let columns = question_columns(&table);
-        let layout = self
-            .repository
-            .layout(form.id)
-            .await
-            .map_err(repository_error)?;
+        let layout = self.refresh_layout(&form, Some(&table)).await?.layout;
         let mut questions = Vec::new();
         for question in layout.sections.iter().flat_map(|section| match section {
             FormSection::Questions { questions, .. } => questions.as_slice(),
-            FormSection::Gate { .. } => &[],
+            FormSection::Gate { .. } | FormSection::Booking { .. } => &[],
         }) {
             let Some(column) = columns.get(&question.column) else {
                 continue;

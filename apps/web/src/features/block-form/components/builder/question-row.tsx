@@ -17,6 +17,8 @@ export function QuestionRow(props: {
   selected: boolean;
   dragging: boolean;
   busy: boolean;
+  /** The other editors who selected this question. */
+  editors: JSX.Element;
   handle: JSX.Element;
   typeChip: JSX.Element;
   preview: JSX.Element;
@@ -99,6 +101,7 @@ export function QuestionRow(props: {
             </Show>
           </div>
           <div class="flex shrink-0 items-center gap-1.5">
+            {props.editors}
             <Show when={props.busy}>
               <Spinner
                 class="size-3.5 animate-spin text-ink-muted"

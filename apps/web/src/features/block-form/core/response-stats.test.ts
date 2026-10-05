@@ -22,7 +22,7 @@ it('reads the ledger, the table and the channel reach as tiles', () => {
   ).toEqual([
     { label: 'Responses', value: '19' },
     {
-      label: 'Stopped at a gate',
+      label: 'Stopped by a screener',
       value: '3',
       hint: 'Eligibility 2 · Travel 1',
     },
@@ -45,7 +45,7 @@ it('reads the ledger, the table and the channel reach as tiles', () => {
     )
   ).toEqual([
     { label: 'Responses', value: '2' },
-    { label: 'Stopped at a gate', value: '0' },
+    { label: 'Stopped by a screener', value: '0' },
     { label: 'Rows in the table', value: '2' },
   ]);
 });

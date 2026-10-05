@@ -113,6 +113,10 @@ where
                 .patch(forms::update_form_handler::<Service, EntityAccess, Authorization>),
         )
         .route(
+            "/{id}/collaboration",
+            post(forms::collaborate_form_handler::<Service, EntityAccess, Authorization>),
+        )
+        .route(
             "/{id}/layout",
             put(forms::put_form_layout_handler::<Service, EntityAccess, Authorization>),
         )
@@ -159,6 +163,7 @@ pub(crate) fn viewer_of<Authorization>(signed_in: &SignedIn<Authorization>) -> V
         forms::get_form_handler,
         forms::update_form_handler,
         forms::put_form_layout_handler,
+        forms::collaborate_form_handler,
         responses::submit_form_response_handler,
         responses::get_my_form_response_handler,
         responses::edit_my_form_response_handler,
@@ -181,6 +186,9 @@ pub(crate) fn viewer_of<Authorization>(signed_in: &SignedIn<Authorization>) -> V
         models_forms::FormSection,
         models_forms::QuestionLayout,
         models_forms::FormDetail,
+        models_forms::FormCollaboration,
+        models_forms::BookingTarget,
+        models_forms::UnlockedBooking,
         models_forms::FormSectionDetail,
         models_forms::FormQuestionDetail,
         models_forms::QuestionOption,

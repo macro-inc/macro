@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 #[cfg(doc)]
 use crate::domain::models::SurfaceOwnership;
-use crate::domain::models::{CollabSurface, CollabSurfaceError};
+use crate::domain::models::{CollabSurface, CollabSurfaceError, SurfaceSnapshot, SurfaceUpdate};
 
 /// Outbound persistence port for collab surfaces.
 pub trait CollabSurfaceRepo: Send + Sync + 'static {
@@ -58,12 +58,13 @@ pub trait DocumentIds: Send + Sync + 'static {
 }
 
 /// Outbound port for a surface's sync-service session: boots it from markdown
-/// and checks whether it exists.
+/// or a Loro snapshot, checks whether it exists, and reads and writes its Loro
+/// state under a signed grant.
 ///
-/// Implementations convert the markdown to a Loro snapshot (an empty string
-/// maps to the canonical blank-document snapshot) and store it as the
-/// session's initial state. Initialization is one-shot per id on the
-/// sync-service side.
+/// Implementations convert markdown to a Loro snapshot (an empty string maps
+/// to the canonical blank-document snapshot) and store it as the session's
+/// initial state. Initialization is one-shot per id on the sync-service side,
+/// so both methods treat an already-initialized session as success.
 #[cfg_attr(test, mockall::automock)]
 pub trait SurfaceInitializer: Send + Sync + 'static {
     /// Initialize the sync-service session for `surface_id` with `markdown`.
@@ -71,6 +72,14 @@ pub trait SurfaceInitializer: Send + Sync + 'static {
         &self,
         surface_id: &str,
         markdown: &str,
+    ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
+
+    /// Initialize the sync-service session for `surface_id` with an opaque
+    /// Loro `snapshot`, stored as-is as the session's initial state.
+    fn initialize_from_snapshot(
+        &self,
+        surface_id: &str,
+        snapshot: &[u8],
     ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
 
     /// Whether a session for `surface_id` exists. Only asked for a new id,
@@ -87,6 +96,26 @@ pub trait SurfaceInitializer: Send + Sync + 'static {
         &self,
         surface_id: &str,
     ) -> impl Future<Output = Result<String, CollabSurfaceError>> + Send;
+
+    /// The session's full Loro state, read through sync-service's signed
+    /// `GET /document/{surface_id}/state` with `token` as the bearer grant.
+    fn snapshot(
+        &self,
+        surface_id: &str,
+        token: &DocumentPermissionToken,
+    ) -> impl Future<Output = Result<SurfaceSnapshot, CollabSurfaceError>> + Send;
+
+    /// Apply a Loro `update` to the session through sync-service's signed
+    /// `POST /document/{surface_id}/update`, only while the state is still at
+    /// `expected_revision` (otherwise [`SurfaceUpdate::Conflict`]). `token`
+    /// must grant Edit.
+    fn update(
+        &self,
+        surface_id: &str,
+        token: &DocumentPermissionToken,
+        expected_revision: &[u8],
+        update: &[u8],
+    ) -> impl Future<Output = Result<SurfaceUpdate, CollabSurfaceError>> + Send;
 }
 
 /// The collab-surface use-cases, generic over the outbound ports.
@@ -137,6 +166,7 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
 
     /// Mint a sync-service connection token for a `ready` surface, at the
     /// access level implied by the caller's permission on the parent entity.
+    /// A form's surface needs Edit on the form.
     /// A surface whose id names a document is refused
     /// ([`CollabSurfaceError::IdReserved`]), whenever it was bound.
     fn mint_token(
@@ -175,12 +205,43 @@ pub trait OwnedSurfaceService: Send + Sync + 'static {
         initial_markdown: String,
     ) -> impl Future<Output = Result<CollabSurface, CollabSurfaceError>> + Send;
 
+    /// [`OwnedSurfaceService::ensure_owned_surface`] for a surface whose
+    /// content is not markdown: a new surface starts from `snapshot`, opaque
+    /// Loro bytes the parent's domain built; an existing one keeps its content.
+    fn ensure_owned_surface_from_snapshot(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+        snapshot: Vec<u8>,
+    ) -> impl Future<Output = Result<CollabSurface, CollabSurfaceError>> + Send;
+
     /// A ready surface's content as GitHub-flavored markdown; `None` while the
     /// surface does not exist or is not ready.
     fn owned_surface_markdown(
         &self,
         id: Uuid,
     ) -> impl Future<Output = Result<Option<String>, CollabSurfaceError>> + Send;
+
+    /// A ready surface's full Loro state and revision. `parent` must be the
+    /// surface's parent and of a type whose domain owns its surfaces;
+    /// a missing, retired or pending surface, or one whose id names a
+    /// document, is refused and never seeded.
+    fn owned_surface_snapshot(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<SurfaceSnapshot, CollabSurfaceError>> + Send;
+
+    /// Apply a Loro `update` to a ready surface's state if it is still at
+    /// `expected_revision`, under the same rules as
+    /// [`OwnedSurfaceService::owned_surface_snapshot`].
+    fn update_owned_surface(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+        expected_revision: Vec<u8>,
+        update: Vec<u8>,
+    ) -> impl Future<Output = Result<SurfaceUpdate, CollabSurfaceError>> + Send;
 
     /// Soft-delete a surface for the domain that owns it. Idempotent.
     fn retire_surface(

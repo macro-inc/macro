@@ -95,7 +95,7 @@ async fn an_anonymous_response_to_a_public_form_is_written_as_the_owner_with_no_
         )
         .await
         .unwrap();
-    let SubmissionOutcome::Submitted { response, row } = outcome else {
+    let SubmissionOutcome::Submitted { response, row, .. } = outcome else {
         panic!("saved, not {outcome:?}");
     };
     let world = world.lock().unwrap();
@@ -256,7 +256,7 @@ async fn a_stopped_respondent_writes_no_row_and_may_try_again() {
     );
 
     let passed = submit_as(&forms, VIEWER, employee_answers()).await.unwrap();
-    let SubmissionOutcome::Submitted { response, row } = passed else {
+    let SubmissionOutcome::Submitted { response, row, .. } = passed else {
         panic!("saved, not {passed:?}");
     };
     let world = world.lock().unwrap();

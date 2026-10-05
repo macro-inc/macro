@@ -24,13 +24,16 @@ use crate::domain::models::{
     FormStatus, QuestionLayout, StoredForm, Widget,
 };
 
+mod booking;
 mod catalog;
 mod create;
+mod drafts;
 mod end_to_end;
 mod fakes;
 mod layout;
 mod lifecycle;
 mod liveness;
+mod names;
 mod races;
 mod responses;
 mod schema_changes;
@@ -51,6 +54,7 @@ type Service = FormsServiceImpl<
     RecordingFormEvents,
     FixedClock,
     RecordingBroker,
+    FakeDrafts,
 >;
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
@@ -81,6 +85,7 @@ fn service(world: &Shared) -> Service {
         RecordingFormEvents(world.clone()),
         FixedClock(world.clone()),
         RecordingBroker(world.clone()),
+        FakeDrafts(world.clone()),
     )
 }
 
@@ -291,6 +296,7 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
             updated_at: now,
         },
         trashed_at: None,
+        name_follows_database: false,
     });
     world.layouts.insert(RSVP_FORM, rsvp_layout());
     world.owner_grants.push((RSVP_FORM, OWNER.into()));

@@ -417,7 +417,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
         )
         .await
         .unwrap();
-    let SubmissionOutcome::Submitted { response, row } = passing else {
+    let SubmissionOutcome::Submitted { response, row, .. } = passing else {
         panic!("the employee's response is saved, not {passing:?}");
     };
 

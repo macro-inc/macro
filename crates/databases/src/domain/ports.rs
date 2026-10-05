@@ -531,3 +531,16 @@ pub trait DatabaseRowReads: Send + Sync + 'static {
         table_id: TableId,
     ) -> impl Future<Output = Result<u64, DatabaseError>> + Send;
 }
+
+/// A database's own facts, for a domain that decides access itself and
+/// names something after a database (forms, for a form that created its own
+/// database). A port of its own, like [`DatabaseRowReads`], so the many
+/// `DatabasesService` stand-ins need not grow it.
+pub trait DatabaseMetadataReads: Send + Sync + 'static {
+    /// The receipt's database, in the trash or not: what it is called
+    /// outlives its tables being readable.
+    fn database_metadata(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
+}

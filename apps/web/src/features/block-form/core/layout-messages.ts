@@ -28,7 +28,11 @@ export function sectionName(layout: FormLayout, sectionId: string): string {
   if (!section) return 'This section';
   if (section.title.trim()) return section.title.trim();
   const position = sectionPosition(layout, sectionId);
-  return section.kind === 'gate' ? `Gate ${position}` : `Section ${position}`;
+  return match(section.kind)
+    .with('questions', () => `Section ${position}`)
+    .with('gate', () => `Screener ${position}`)
+    .with('booking', () => 'Booking')
+    .exhaustive();
 }
 
 /** Where a questions section leads: the gates checked, then the next section or submit. */
@@ -39,8 +43,15 @@ export function routingLine(layout: FormLayout, sectionId: string): string {
   const gates = (nextAt < 0 ? later : later.slice(0, nextAt)).filter(
     (item) => item.kind === 'gate'
   ).length;
-  const check = gates === 1 ? 'Check gate' : `Check ${gates} gates`;
-  if (nextAt < 0) return gates > 0 ? `${check}, then submit` : 'Submit form';
+  const check = gates === 1 ? 'Check screener' : `Check ${gates} screeners`;
+  if (nextAt < 0) {
+    const booking = later.some((item) => item.kind === 'booking');
+    if (gates > 0)
+      return booking
+        ? `${check}, then submit and book a time`
+        : `${check}, then submit`;
+    return booking ? 'Submit, then book a time' : 'Submit form';
+  }
   const target = `section ${sectionPosition(layout, later[nextAt].id)}`;
   return gates > 0
     ? `${check}, then continue to ${target}`
@@ -60,7 +71,17 @@ export function layoutRefusalMessage(
     )
     .with(
       { kind: 'gate-section' },
-      () => 'A gate holds rules, not questions. Drop it in a section.'
+      () => 'A screener holds rules, not questions. Drop it in a section.'
+    )
+    .with(
+      { kind: 'booking-section' },
+      () =>
+        'The booking step shows a calendar, not questions. Drop it in a section.'
+    )
+    .with(
+      { kind: 'booking-must-be-last' },
+      ({ sectionId }) =>
+        `The booking step comes last, after every question and screener. Move “${names.section(sectionId)}” to the end.`
     )
     .with(
       { kind: 'column-on-form' },

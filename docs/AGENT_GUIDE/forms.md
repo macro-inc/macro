@@ -64,13 +64,27 @@ A centered column of sections, each a card of question rows, with the rail
   Rules are sent to respondents' browsers, so keep confidential criteria out.
   A gate whose rule tests a question that is gone shows **Remove broken
   rules**.
+- The rail's **Section** and **Screener** controls can also be dragged directly
+  into the canvas. The insertion line shows where the new section will go;
+  dropping outside the canvas or pressing Escape leaves the form unchanged.
 - "N columns not on this form" at the bottom lists table columns that are not
   questions; **Add** puts one on the form.
-- The **Saved / Saving… / Not saved** label tracks layout saves (400 ms
-  after the last edit). A refused save shows a toast and reloads the form.
+- Layout edits collaborate live through Loro. Other editors' selections appear
+  in the builder. Connection and save failures are visible; there is no
+  persistent saved badge. Invalid screener drafts remain editable while the
+  public form keeps its last valid layout.
 - A type change that existing answers do not fit shows **Convert into a new
   question**: a new column gets the answers that convert and the question
   moves to it; the old column stays (listed under columns not on the form).
+- **Preview** opens a new tab with the respondent experience after pending
+  edits are saved. Fill it, try the screeners, and return to the builder. Preview
+  creates no response rows, file uploads or bookings.
+- **Booking** in the rail selects an existing booking link from Calendar
+  settings. It is always the last step. **Change** selects another link;
+  **Remove booking step** leaves the link itself intact. A form's screeners
+  control when its respondents see the link; the native link still works directly.
+- New standalone forms share their name with the database they create. Rename
+  either to change both. Forms added to existing tables have independent names.
 
 ### Responses
 
@@ -82,7 +96,7 @@ including rows added in the grid.
 
 ### Share
 
-**Who can respond**: Workspace members (sign in, one response each, editable
+**Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
 respond link with Copy, Accepting responses, Close automatically, Show results
 to respondents, Confirmation message, and **Manage access** (the share dialog,
@@ -119,6 +133,13 @@ confirmation with a receipt; signed-in respondents (either audience) get
 **Edit my response** while it is open and land on their receipt when they
 return. A closed form says "This form is closed"; a returning respondent
 sees their saved answers with that reason.
+
+When the form ends with a booking step, the last action reads **Continue to
+booking**. After the server accepts the response and its screeners, Macro's
+time picker appears. Booking opens `/app/booking/<id>#<private-token>`; retain
+that private link for cancellation or rescheduling. A returning signed-in
+respondent can use **Book a time** on their receipt if their saved answers still
+pass. Preview can show real slots, but its booking button is disabled.
 
 In a message or document, a form card fills in place; a poll card shows one
 bar per option, your vote marked, and "N votes · one vote each". Click an

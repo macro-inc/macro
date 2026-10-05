@@ -11,6 +11,9 @@ use models_permissions::share_permission::channel_share_permission::{
 
 use super::*;
 
+mod booking;
+mod drafts;
+mod names;
 mod races;
 use crate::domain::models::{
     FormQuestionId, FormResponse, FormSection, FormSectionId, QuestionLayout, RecordedResponse,
@@ -199,13 +202,14 @@ async fn a_created_form_reads_back_with_its_layout_and_owner_grant(pool: PgPool)
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
     let layout = layout_over(&table);
-    repo.create_form(&form, &layout).await.unwrap();
+    repo.create_form(&form, &layout, false).await.unwrap();
 
     assert_eq!(
         repo.form(form.id).await.unwrap(),
         Some(StoredForm {
             form: form.clone(),
             trashed_at: None,
+            name_follows_database: false,
         })
     );
     assert_eq!(repo.layout(form.id).await.unwrap(), layout);
@@ -233,7 +237,9 @@ async fn a_layout_is_replaced_whole_and_a_trashed_forms_is_not(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool);
     let form = form_over(&table);
-    repo.create_form(&form, &layout_over(&table)).await.unwrap();
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
     let reordered = FormLayout {
         sections: vec![FormSection::Questions {
             id: FormSectionId::new(),
@@ -293,7 +299,9 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool);
     let form = form_over(&table);
-    repo.create_form(&form, &layout_over(&table)).await.unwrap();
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
     let changed = repo
         .update_form(
             form.id,
@@ -357,7 +365,7 @@ async fn a_signed_in_stop_gives_way_to_a_response_which_then_holds_the_key(pool:
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
     let layout = layout_over(&table);
-    repo.create_form(&form, &layout).await.unwrap();
+    repo.create_form(&form, &layout, false).await.unwrap();
     let gate = layout.sections[1].id();
     let respondent = user(RESPONDENT);
 
@@ -435,7 +443,7 @@ async fn anonymous_responses_are_unbounded_and_counted(pool: PgPool) {
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
     let layout = layout_over(&table);
-    repo.create_form(&form, &layout).await.unwrap();
+    repo.create_form(&form, &layout, false).await.unwrap();
     for position in ["a0", "a1"] {
         let row = insert_row(&pool, table.table, position).await;
         assert!(matches!(
@@ -463,7 +471,9 @@ async fn concurrent_responses_by_one_person_record_exactly_one(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
-    repo.create_form(&form, &layout_over(&table)).await.unwrap();
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
     let respondent = user(RESPONDENT);
     let first_row = insert_row(&pool, table.table, "a0").await;
     let second_row = insert_row(&pool, table.table, "a1").await;
@@ -503,7 +513,9 @@ async fn a_deleted_row_leaves_its_entry_without_a_row(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
-    repo.create_form(&form, &layout_over(&table)).await.unwrap();
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
     let row = insert_row(&pool, table.table, "a0").await;
     repo.record_submission(form.id, Some(&user(RESPONDENT)), row, at(10))
         .await
@@ -526,7 +538,9 @@ async fn channel_grants_change_only_on_a_live_form_and_go_with_it(pool: PgPool) 
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
-    repo.create_form(&form, &layout_over(&table)).await.unwrap();
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
     let channel = Uuid::now_v7().to_string();
     let grant = UpdateChannelSharePermission {
         operation: UpdateOperation::Add,

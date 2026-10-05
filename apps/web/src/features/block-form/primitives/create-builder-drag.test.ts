@@ -80,6 +80,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [question('q1'), question('q2'), question('q3')],
     },
     {
@@ -89,6 +90,7 @@ const layout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      bookingTarget: null,
       questions: [],
     },
   ],
@@ -142,6 +144,7 @@ function setup() {
   const drag = createBuilderDrag({
     layout: () => layout,
     viewport: () => viewport,
+    canvas: () => viewport,
     measureQuestions,
     measureSections: () =>
       measureQuestions().map(({ id, box: sectionBox }) => ({
@@ -153,6 +156,7 @@ function setup() {
     dropQuestion: (questionId, placement) =>
       drops.push([questionId, placement]),
     dropSection: () => {},
+    dropNewSection: () => undefined,
     describe: (target) => target.id,
     describePlacement: (_, placement) =>
       `${placement.sectionId} ${placement.index + 1}`,
@@ -168,6 +172,120 @@ function setup() {
     );
   return { drag, handle, other, drops, focused, key, viewport };
 }
+
+it('drags a new section from the sidebar into the form and creates it only on a valid drop', () => {
+  createRoot((dispose) => {
+    const formLayout: FormLayout = {
+      sections: [
+        {
+          id: 'first',
+          kind: 'questions',
+          title: 'First',
+          description: '',
+          questions: [],
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: null,
+        },
+        {
+          id: 'second',
+          kind: 'questions',
+          title: 'Second',
+          description: '',
+          questions: [],
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: null,
+        },
+      ],
+    };
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => new DOMRect(0, 0, 650, 400);
+    const canvas = document.createElement('div');
+    canvas.getBoundingClientRect = () => new DOMRect(0, 0, 480, 300);
+    const handle = document.createElement('button');
+    document.body.append(viewport, canvas, handle);
+    const created: { kind: string; index: number }[] = [];
+    const focused: DragTarget[] = [];
+    const drag = createBuilderDrag({
+      layout: () => formLayout,
+      viewport: () => viewport,
+      canvas: () => canvas,
+      measureQuestions: () => [],
+      measureSections: () => [
+        { id: 'first', box: { left: 0, right: 480, top: 20, bottom: 100 } },
+        { id: 'second', box: { left: 0, right: 480, top: 150, bottom: 250 } },
+      ],
+      refusalForQuestion: () => undefined,
+      refusalForSection: () => undefined,
+      dropQuestion: () => {
+        throw new Error('A new section is not a question move');
+      },
+      dropSection: () => {
+        throw new Error('A new section is not an existing section move');
+      },
+      dropNewSection: (kind, index) => {
+        created.push({ kind, index });
+        return 'created';
+      },
+      describe: () => 'new section',
+      describePlacement: () => '',
+      focusHandle: (target) => focused.push(target),
+    });
+    const handlers = drag.handleProps(() => ({
+      kind: 'new-section',
+      id: 'questions',
+    }));
+    handle.addEventListener('pointerdown', handlers.onPointerDown);
+    handle.addEventListener('click', handlers.onClick);
+    handle.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: 1,
+        button: 0,
+        clientX: 550,
+        clientY: 40,
+      })
+    );
+    handle.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerId: 1,
+        clientX: 450,
+        clientY: 125,
+      })
+    );
+    expect(drag.session()?.sectionIndex).toBe(1);
+    expect(created).toEqual([]);
+    handle.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerId: 1,
+        clientX: 550,
+        clientY: 125,
+      })
+    );
+    expect(drag.session()?.sectionIndex).toBeUndefined();
+    handle.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerId: 1,
+        clientX: 450,
+        clientY: 125,
+      })
+    );
+    handle.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerId: 1,
+        clientX: 450,
+        clientY: 125,
+      })
+    );
+    expect(created).toEqual([{ kind: 'questions', index: 1 }]);
+    const click = new MouseEvent('click', { detail: 1, cancelable: true });
+    handle.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    vi.runAllTimers();
+    expect(focused).toEqual([{ kind: 'section', id: 'created' }]);
+    dispose();
+  });
+});
 
 describe('createBuilderDrag keyboard', () => {
   it('picks up with Space, moves with ArrowDown, drops with Space, writes once and keeps focus on the handle', () => {

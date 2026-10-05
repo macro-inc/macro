@@ -72,6 +72,9 @@ export function ShareTabView(props: {
             audience={form().audience}
             canChange={isOwner()}
             respondLink={props.respondLink}
+            onCopyFailure={() =>
+              context.notify.failure('Could not copy form link.')
+            }
             pending={pending() || audience.pending()}
             onChange={(next) => void audience.change(next)}
           />

@@ -4,10 +4,13 @@
  * the app-facing entry points import this; views and primitives read the
  * contract from `context/form-context`.
  */
+import { createPublicBookingSource } from '@app/features/scheduling/queries/public';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { DatabaseRelatedDestination } from '@block-database/core/database-relations';
 import { DatabaseMentionValue } from '@block-database/database-mentions';
 import { exportDatabaseTableCsv } from '@block-database/queries/transfer';
 import { toast } from '@core/component/Toast/Toast';
+import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
@@ -16,15 +19,22 @@ import { queryClient } from '@queries/client';
 import { databaseDetailQueryOptions } from '@queries/storage/databases';
 import { useDatabaseTableChanges } from '@queries/storage/databases-sync';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
+import { useNavigate } from '@solidjs/router';
 import { confirmDialog } from '@ui';
 import { errAsync, ResultAsync } from 'neverthrow';
 import type { FormContext, FormWriteFailure } from './context/form-context';
 import { FormConditionEditor } from './form-condition-editor';
+import { FormEditors } from './form-editors';
 import { FormEntityPicker, FormRelationPicker } from './form-pickers';
 import { FormResponsesGrid } from './form-responses-grid';
+import {
+  createBookingEventSource,
+  createBookingLinksSource,
+} from './queries/booking-sources';
 import { createColumnWrites } from './queries/column-writes';
 import { directMessageWith } from './queries/direct-message';
 import { renameForm, trashForm } from './queries/form-entity';
+import { createFormLayoutCollaboration } from './queries/form-layout-collaboration';
 import {
   createFormDetailSource,
   createFormTableSource,
@@ -33,7 +43,6 @@ import {
   createSummarySource,
   createTallySource,
   editMyFormResponse,
-  saveFormLayout,
   submitFormResponse,
   updateFormMetadata,
 } from './queries/form-sources';
@@ -86,11 +95,15 @@ export type FormHostActions = {
   openRelated: (destination: DatabaseRelatedDestination) => void;
   /** Show a channel, e.g. the direct conversation with a form's owner. */
   openChannel: (channelId: string) => void;
+  /** Open Calendar settings, where booking links are made. */
+  openCalendarSettings: () => void;
 };
 
 /** The production capabilities, built under the mounting owner. */
 export function createAppFormContext(host: FormHostActions): FormContext {
   const userId = useUserId();
+  const navigate = useNavigate();
+  const scheduling = useFeatureFlag(enableCalendarScheduling);
   return {
     viewer: { userId },
     createFormSource: createFormDetailSource,
@@ -99,7 +112,8 @@ export function createAppFormContext(host: FormHostActions): FormContext {
       useDatabaseTableChanges((change) => {
         if (change.databaseId === databaseId()) onChange();
       }),
-    saveLayout: saveFormLayout,
+    createLayoutCollaboration: (formId) =>
+      createFormLayoutCollaboration(formId, userId()),
     updateMetadata: updateFormMetadata,
     renameForm: (formId, name) =>
       renameForm(getEntityGraphqlClient(), formId, name),
@@ -122,6 +136,20 @@ export function createAppFormContext(host: FormHostActions): FormContext {
       exportCsv: exportTableCsv,
     },
     uploadFile: uploadStaticFile,
+    booking: {
+      available: () => scheduling().enabled,
+      createLinks: (enabled) =>
+        createBookingLinksSource(
+          userId,
+          () => enabled() && scheduling().enabled
+        ),
+      createEvent: createBookingEventSource,
+      createSource: createPublicBookingSource,
+      // The public booking page's own receipt, reached the way it reaches it.
+      openReceipt: (receipt) =>
+        navigate(`/booking/${receipt.booking.id}#${receipt.token}`),
+      openSettings: host.openCalendarSettings,
+    },
     messageOwner: (ownerId) => directMessageWith(ownerId).map(host.openChannel),
     notify: {
       success: (message) => toast.success(message),
@@ -144,6 +172,7 @@ export function createAppFormContext(host: FormHostActions): FormContext {
           entityType={entity.entityType}
         />
       ),
+      renderEditors: (props) => <FormEditors {...props} />,
     },
   };
 }
