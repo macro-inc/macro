@@ -10,6 +10,7 @@ use uuid::Uuid;
 const SUBSCRIPTION_PERIOD_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SettleAiBillingRequest<'a> {
     user_id: &'a str,
 }
