@@ -674,6 +674,42 @@ async fn recorded_new_policy_never_enters_legacy_analytics_settlement() {
 }
 
 #[tokio::test]
+async fn unlimited_payers_are_never_charged_overage_or_gated() {
+    let payer = user("unlimited@x.com");
+    let entitlements = FakeEntitlements::default()
+        .with(Entitlement {
+            unlimited: true,
+            ..Entitlement::personal(payer.clone(), PlanTier::Premium)
+        })
+        .with_customer(&payer, "cus_unlimited");
+    let usage = FakeUsage {
+        cents: Arc::new(Mutex::new(50_000)),
+        entries: Default::default(),
+    };
+    let repo = FakeRepo::default();
+    let payments = FakePayments::default();
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.balance = 10_000;
+        state.settings.overage_enabled = true;
+        state.settings.overage_limit_cents = 10_000;
+    }
+    let svc = BillingServiceImpl::new(entitlements, usage, repo.clone(), payments.clone())
+        .with_enforcement(AiUsageEnforcement::Enabled)
+        .with_billing(AiUsageBilling::Enabled);
+
+    assert_eq!(
+        svc.check_allowance(&payer).await.unwrap(),
+        AllowanceDecision::Allow
+    );
+    svc.settle(&payer).await.unwrap();
+    assert!(repo.state.lock().unwrap().consumed.is_empty());
+    assert!(repo.charges().is_empty());
+    assert!(payments.opened().is_empty());
+    assert_eq!(repo.state.lock().unwrap().balance, 10_000);
+}
+
+#[tokio::test]
 async fn policy_activation_during_analytics_read_cannot_double_bill() {
     struct ActivatingUsage(FakeRepo);
     impl UsageReader for ActivatingUsage {
