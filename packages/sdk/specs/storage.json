@@ -23405,6 +23405,17 @@
           "project_id": {
             "type": ["string", "null"],
             "description": "Project the document belonged to, when any."
+          },
+          "sub_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "Subtype captured before deletion, so consumers can distinguish tasks."
+              }
+            ]
           }
         }
       },

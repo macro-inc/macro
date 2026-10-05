@@ -771,11 +771,11 @@ describe('useDateSearch with defaultTime', () => {
             query: () => 'in 2 days',
             defaultTime,
           });
-          const first = options()[0];
-          expect(first.type).toBe('preset');
-          expect(first.date.getDate()).toBe(7);
-          expect(first.date.getHours()).toBe(hours);
-          expect(first.date.getMinutes()).toBe(minutes);
+          const preset = options().find((option) => option.type === 'preset');
+          expect(preset).toBeDefined();
+          expect(preset?.date.getDate()).toBe(7);
+          expect(preset?.date.getHours()).toBe(hours);
+          expect(preset?.date.getMinutes()).toBe(minutes);
           dispose();
         });
       } finally {

@@ -15780,6 +15780,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
