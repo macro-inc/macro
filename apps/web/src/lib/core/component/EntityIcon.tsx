@@ -47,6 +47,7 @@ import GlobeIcon from '@phosphor/globe.svg';
 import HashStraight from '@phosphor/hash-straight.svg';
 import FileImage from '@phosphor/image.svg';
 import ListChecks from '@phosphor/list-checks.svg';
+import PaintBrushBroad from '@phosphor/paint-brush-broad.svg';
 import PhoneCall from '@phosphor/phone-call.svg';
 import Shapes from '@phosphor/shapes.svg';
 import Sparkle from '@phosphor/sparkle.svg';
@@ -84,6 +85,7 @@ import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
 import HashStraightBold from '@phosphor-icons/core/bold/hash-straight-bold.svg';
 import FileImageBold from '@phosphor-icons/core/bold/image-bold.svg';
 import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
+import PaintBrushBroadBold from '@phosphor-icons/core/bold/paint-brush-broad-bold.svg';
 import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
 import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
 import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
@@ -176,6 +178,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-orange',
     background: 'bg-orange/20',
     prettyName: 'Presentation',
+  },
+  psd: {
+    icon: PaintBrushBroad,
+    boldIcon: PaintBrushBroadBold,
+    foreground: 'text-blue',
+    background: 'bg-blue/20',
+    prettyName: 'Photoshop file',
   },
   fig: {
     icon: FigmaLogo,
