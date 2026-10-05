@@ -262,7 +262,9 @@ cargo run -p fig_engine --features cli --release --bin fig_render -- prototype F
 cargo run -p fig_engine --features cli --release --bin fig_render -- text --fonts DIR --verbose FILE.fig…
 ```
 
-`info` prints decode statistics, `render` writes one PNG per page, and
+`info` prints decode statistics, `bench` times opening (with the heap it
+takes; `--open` stops there), scene builds, and page and tile renders,
+`render` writes one PNG per page, and
 `compare` renders the region of Figma's own embedded thumbnail and reports a
 similarity score (a fidelity check that needs no Figma account). Run it over
 any local collection of `.fig` files after rendering changes; third-party
