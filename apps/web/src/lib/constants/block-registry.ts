@@ -15,6 +15,8 @@ export const BlockRegistry = [
   'pptx',
   // Figma files, viewed in the browser.
   'fig',
+  // Illustrator files, edited in the browser.
+  'ai',
   'channel',
   'project',
   'unknown',

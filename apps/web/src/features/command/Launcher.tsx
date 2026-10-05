@@ -1,6 +1,7 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
@@ -21,6 +22,7 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableAiEditor,
   enableChatV3Agents,
   enableDatabases,
   enableFigViewer,
@@ -317,6 +319,16 @@ export function runCreateAction(
         loading: true,
         createFn: () =>
           createFigDocument({ projectId: options.projectId, source }),
+        shouldInsert,
+      });
+      return;
+    case 'ai':
+      if (!isFeatureEnabled(enableAiEditor)) return;
+      createBlock({
+        blockName: 'ai',
+        loading: true,
+        createFn: () =>
+          createAiDocument({ projectId: options.projectId, source }),
         shouldInsert,
       });
       return;
@@ -748,6 +760,30 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    label: 'Illustrator file',
+    enabled: () => isFeatureEnabled(enableAiEditor),
+    icon: getIconConfig('ai').icon,
+    description: 'Create Illustrator file',
+    launcherHint: 'Vector artwork on artboards, saved as .ai',
+    keywords: [
+      'new',
+      'make',
+      'add',
+      'illustrator',
+      'illustration',
+      'vector',
+      'artboard',
+    ],
+    blockName: 'ai',
+    hotkeyToken: TOKENS.create.illustration,
+    altHotkeyToken: TOKENS.create.illustrationNewSplit,
+    hotkey: 'v',
+    keyDownHandler: () => {
+      runCreateAction('ai', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
     label: 'Spreadsheet',
     enabled: isSpreadsheetEnabledForCurrentUser,
     icon: getIconConfig('spreadsheet').icon,
@@ -830,11 +866,13 @@ export function useCreateMenuBlocks(
   const projectsFlag = useFeatureFlag(enableProjects);
   const databasesFlag = useFeatureFlag(enableDatabases);
   const figFlag = useFeatureFlag(enableFigViewer);
+  const aiFlag = useFeatureFlag(enableAiEditor);
   return createMemo(() => {
     remindersFlag();
     agentsFlag();
     databasesFlag();
     figFlag();
+    aiFlag();
     return (source() ?? commands).filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;

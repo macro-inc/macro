@@ -47,6 +47,7 @@ import GlobeIcon from '@phosphor/globe.svg';
 import HashStraight from '@phosphor/hash-straight.svg';
 import FileImage from '@phosphor/image.svg';
 import ListChecks from '@phosphor/list-checks.svg';
+import PenNib from '@phosphor/pen-nib.svg';
 import PhoneCall from '@phosphor/phone-call.svg';
 import Shapes from '@phosphor/shapes.svg';
 import Sparkle from '@phosphor/sparkle.svg';
@@ -84,6 +85,7 @@ import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
 import HashStraightBold from '@phosphor-icons/core/bold/hash-straight-bold.svg';
 import FileImageBold from '@phosphor-icons/core/bold/image-bold.svg';
 import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
+import PenNibBold from '@phosphor-icons/core/bold/pen-nib-bold.svg';
 import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
 import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
 import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
@@ -183,6 +185,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-violet',
     background: 'bg-violet/20',
     prettyName: 'Figma file',
+  },
+  ai: {
+    icon: PenNib,
+    boldIcon: PenNibBold,
+    foreground: 'text-amber',
+    background: 'bg-amber/20',
+    prettyName: 'Illustrator file',
   },
   database: {
     icon: Database,

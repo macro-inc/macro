@@ -51,7 +51,8 @@ interface Entry {
 }
 
 export interface TileCompositorOptions {
-  engine: FigEngine;
+  /** What rasterizes tiles (the Illustrator editor's engine fits too). */
+  engine: Pick<FigEngine, 'render' | 'cancel'>;
   /** Called when a tile arrives (the canvas should redraw). */
   onTile: () => void;
   /** Tiles kept besides the overview (each is TILE² × 4 bytes). */

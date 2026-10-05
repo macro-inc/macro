@@ -110,6 +110,7 @@ export function buildEntityData(
         'spreadsheet',
         'pptx',
         'fig',
+        'ai',
         'video',
         'unknown',
         'csv',

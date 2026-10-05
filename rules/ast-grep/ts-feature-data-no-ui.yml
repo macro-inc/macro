@@ -31,6 +31,8 @@ files:
   - apps/web/src/features/channel/Call/chat/primitives/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
+  - apps/web/src/features/block-ai/queries/**
+  - apps/web/src/features/block-ai/primitives/**
   - apps/web/src/features/meetings/queries/**
   - apps/web/src/features/meetings/primitives/**
   - apps/web/src/features/block-spreadsheet/queries/**

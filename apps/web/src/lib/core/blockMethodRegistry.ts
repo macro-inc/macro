@@ -31,6 +31,7 @@ export interface BlockMethodRegistry {
   spreadsheet: EmptySpec;
   pptx: EmptySpec;
   fig: EmptySpec;
+  ai: EmptySpec;
   project: EmptySpec;
   start: EmptySpec;
   unknown: EmptySpec;

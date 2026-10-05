@@ -1,3 +1,4 @@
+import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
@@ -7,6 +8,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableAiEditor,
   enableChatV3Agents,
   enableFigViewer,
   isFeatureEnabled,
@@ -173,6 +175,22 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     },
   },
   {
+    label: 'Illustrator file',
+    blockName: 'ai' as BlockName,
+    hotkeyToken: TOKENS.create.illustration,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="ai" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createAiDocument({ projectId, source: 'project' });
+      if (!id) throw new Error('Failed to create Illustrator file');
+      return id;
+    },
+  },
+  {
     label: 'Folder',
     blockName: 'project' as BlockName,
     hotkeyToken: TOKENS.create.project,
@@ -264,6 +282,7 @@ function ProjectCreateDialog(props: {
   const offered = (spec: CreateBlockSpec) => {
     if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
     if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
+    if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
     return true;
   };
 
@@ -332,6 +351,7 @@ function MenuContent(props: { projectId: string; name: string }) {
   const offered = (spec: CreateBlockSpec) => {
     if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
     if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
+    if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
     return true;
   };
 

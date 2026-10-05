@@ -765,6 +765,17 @@ export const enableFigViewer = defineFlag({
   default: onInDev,
 });
 
+/**
+ * The in-browser Illustrator editor (`block-ai`) and creating `.ai`
+ * documents. Off shows uploaded `.ai` files as before: download only. On in
+ * dev; deployed environments follow PostHog.
+ */
+export const enableAiEditor = defineFlag({
+  key: 'enable-ai-editor',
+  env: 'ENABLE_AI_EDITOR',
+  default: onInDev,
+});
+
 // PostHog controls the internal pilot and team targeting in every environment.
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
