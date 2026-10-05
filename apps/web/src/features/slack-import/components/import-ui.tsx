@@ -71,7 +71,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 export function StatusBadge(props: {
   tone: StatusTone;
   label: string;
-  role?: string;
+  role?: JSX.HTMLAttributes<HTMLSpanElement>['role'];
   class?: string;
 }): JSX.Element {
   return (

@@ -1,7 +1,12 @@
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import { InputGroup } from '@ui';
 import { createUniqueId, For, type JSX, onMount, Show } from 'solid-js';
-import type { ArchiveDiscovery, ConversationKind } from '../core/export';
+import type {
+  ArchiveDiscovery,
+  ConversationKind,
+  ConversationMetadata,
+  ExportUser,
+} from '../core/export';
 import {
   ConversationKindIcon,
   DialogSectionTitle,
@@ -38,12 +43,40 @@ const GROUPS: { kind: ConversationKind; label: string; target: string }[] = [
   },
 ];
 
+/** Slack exports name DMs by id and group DMs `mpdm-a--b-1`; members read better. */
+function displayName(
+  conversation: ConversationMetadata,
+  users: ReadonlyMap<string, ExportUser>
+): string {
+  const isDm =
+    conversation.kind === 'direct_message' ||
+    conversation.kind === 'group_direct_message';
+  const generated =
+    conversation.name === conversation.slackChannelId ||
+    (isDm && conversation.name.startsWith('mpdm-'));
+  if (conversation.name && !generated) return conversation.name;
+  const members = conversation.memberIds
+    .map((id) => {
+      const user = users.get(id);
+      return user?.real_name || user?.profile?.display_name || user?.name || id;
+    })
+    .join(', ');
+  return members || conversation.slackChannelId;
+}
+
 export function ConversationPicker(props: Props): JSX.Element {
   let search: HTMLInputElement | undefined;
   // Discovery replaces the disabled file input inside an already-open dialog.
   onMount(() => search?.focus());
+  const users = () =>
+    new Map(props.discovery.users.map((user) => [user.id, user]));
+  const named = () =>
+    props.discovery.conversations.map((conversation) => ({
+      ...conversation,
+      name: displayName(conversation, users()),
+    }));
   const visible = () =>
-    props.discovery.conversations.filter(
+    named().filter(
       (conversation) =>
         (props.showArchived || !conversation.archived) &&
         `${conversation.name} ${conversation.slackChannelId}`

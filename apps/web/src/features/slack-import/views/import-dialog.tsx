@@ -396,7 +396,7 @@ export function ImportDialog(props: Props): JSX.Element {
         open={open()}
         onOpenChange={changeOpen}
         position="center"
-        class="w-160"
+        class="w-180"
         visibleScrim
         onCloseAutoFocus={(event) => {
           // The card is outside Dialog's trigger context; retain its focus owner.
@@ -559,27 +559,29 @@ export function ImportDialog(props: Props): JSX.Element {
             />
           </ActionDialogShell.Body>
           <ActionDialogShell.Footer class="justify-between">
-            <Button
-              variant="ghost"
-              depth={2}
-              disabled={busy()}
-              onClick={() => void runAction(() => source.refresh())}
-            >
-              <ArrowsClockwiseIcon aria-hidden="true" class="size-4" />
-              Refresh progress
-            </Button>
-            <div class="flex flex-wrap items-center justify-end gap-2">
+            <div class="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon-md"
+                depth={2}
+                label="Refresh progress"
+                disabled={busy()}
+                onClick={() => void runAction(() => source.refresh())}
+              >
+                <ArrowsClockwiseIcon />
+              </Button>
               <Show when={canCancel()}>
                 <Button
                   variant="ghost"
                   depth={2}
-                  class="text-failure hover:text-failure"
                   disabled={cancelPending()}
                   onClick={() => void cancel()}
                 >
                   Cancel import
                 </Button>
               </Show>
+            </div>
+            <div class="flex items-center gap-2">
               <Show when={canChooseAnother()}>
                 <Button
                   variant="ghost"
