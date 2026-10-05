@@ -21,6 +21,7 @@ struct FakeEntitlements {
     by_user: Arc<Mutex<HashMap<String, Entitlement>>>,
     customers: Arc<Mutex<HashMap<String, String>>>,
     payers: Arc<Mutex<HashMap<Uuid, MacroUserIdStr<'static>>>>,
+    fail_entitlement: Arc<Mutex<bool>>,
 }
 
 impl FakeEntitlements {
@@ -61,6 +62,11 @@ impl FakeEntitlements {
 
 impl EntitlementSource for FakeEntitlements {
     async fn entitlement(&self, user: &MacroUserIdStr<'_>) -> Result<Entitlement> {
+        if *self.fail_entitlement.lock().unwrap() {
+            return Err(BillingError::Entitlement(anyhow::anyhow!(
+                "roles unavailable"
+            )));
+        }
         Ok(self
             .by_user
             .lock()
@@ -2218,6 +2224,80 @@ async fn release_uses_the_subscription_period() {
         vec![(
             "macro|owner@x.com".to_string(),
             d(2026, 3, 20),
+            "macro|member@x.com".to_string()
+        )]
+    );
+}
+
+#[tokio::test]
+async fn release_with_a_covering_anchor_never_reads_the_entitlement() {
+    let owner = user("owner@x.com");
+    let member = user("member@x.com");
+    let team_id = Uuid::from_u128(7);
+    let repo = FakeRepo::default();
+    repo.set_period(&owner, d(2026, 4, 10), d(2026, 5, 10))
+        .await
+        .unwrap();
+    let payments = FakePayments::default();
+    let entitlements = FakeEntitlements::default()
+        .with(premium_team(&owner, &member, team_id))
+        .with_customer(&owner, "cus_owner")
+        .payer_for_team(team_id, owner.clone());
+    *entitlements.fail_entitlement.lock().unwrap() = true;
+    let svc = BillingServiceImpl::new(
+        entitlements,
+        FakeUsage::default(),
+        repo.clone(),
+        payments.clone(),
+    )
+    .with_billing(AiUsageBilling::Enabled);
+
+    svc.release_at(team_id, &member, apr_18_noon())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.releases(),
+        vec![(
+            "macro|owner@x.com".to_string(),
+            d(2026, 4, 10),
+            "macro|member@x.com".to_string()
+        )]
+    );
+    assert!(payments.period_requests().is_empty());
+}
+
+#[tokio::test]
+async fn release_rolls_an_ended_anchor_when_the_entitlement_read_fails() {
+    let owner = user("owner@x.com");
+    let member = user("member@x.com");
+    let team_id = Uuid::from_u128(7);
+    let repo = FakeRepo::default();
+    repo.set_period(&owner, d(2026, 1, 15), d(2026, 2, 15))
+        .await
+        .unwrap();
+    let entitlements = FakeEntitlements::default()
+        .with(premium_team(&owner, &member, team_id))
+        .with_customer(&owner, "cus_owner")
+        .payer_for_team(team_id, owner.clone());
+    *entitlements.fail_entitlement.lock().unwrap() = true;
+    let svc = BillingServiceImpl::new(
+        entitlements,
+        FakeUsage::default(),
+        repo.clone(),
+        FakePayments::default(),
+    )
+    .with_billing(AiUsageBilling::Enabled);
+
+    svc.release_at(team_id, &member, apr_18_noon())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.releases(),
+        vec![(
+            "macro|owner@x.com".to_string(),
+            d(2026, 4, 15),
             "macro|member@x.com".to_string()
         )]
     );

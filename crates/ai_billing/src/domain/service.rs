@@ -262,11 +262,21 @@ where
         if payer.as_ref() == member.as_ref() {
             return Ok(());
         }
-        let entitlement = self.entitlements.entitlement(&payer).await?;
         let settings = self.repo.settings(&payer).await?;
-        let period = self
-            .usage_period(&entitlement, settings.period_anchor, now)
-            .await;
+        let anchor = settings.period_anchor;
+        let period = match BillingPeriod::covering(anchor, now) {
+            Some(period) => period,
+            None => match self.entitlements.entitlement(&payer).await {
+                Ok(entitlement) => self.usage_period(&entitlement, anchor, now).await,
+                Err(e) => {
+                    tracing::warn!(
+                        error = ?e,
+                        "reading the payer entitlement failed; releasing in the fallback period"
+                    );
+                    BillingPeriod::current(anchor, now)
+                }
+            },
+        };
         let Some(open) = period.open_start(now) else {
             return Ok(());
         };
