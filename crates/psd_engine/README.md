@@ -245,6 +245,9 @@ cargo test -p psd_engine --release -- --ignored
 - CMYK, Lab, and other non-RGB documents display and save. Changing their
   canvas size needs a conversion to RGB first.
 - Noise gradients are approximated.
+- Pattern fill layers tile from the canvas origin. A file whose canvas
+  changed after the fill was made can have Photoshop's tiling offset from
+  it, with no record of the offset in the file.
 - Text that has been edited is laid out by the engine. Until a text layer
   is edited, it shows the pixels Photoshop stored for it.
 - Smart objects show their stored pixels, and transforming one transforms
