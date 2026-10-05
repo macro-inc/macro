@@ -271,7 +271,7 @@ impl<'a> Painter<'a> {
                 margin = margin.max(reach * node.world.scale_factor() * self.scale);
             }
         }
-        for &c in &node.children {
+        for c in node.below() {
             margin = margin.max(self.effect_margin(c));
         }
         margin
@@ -501,7 +501,7 @@ impl<'a> Painter<'a> {
                 .children
                 .iter()
                 .any(|&c| self.props(c).visible());
-        if drawn_children {
+        if drawn_children || !self.scene.node(i).generated.is_empty() {
             return false;
         }
         let fills = props.fills().iter().filter(|p| p.is_visible()).count();
@@ -510,7 +510,7 @@ impl<'a> Painter<'a> {
         } else {
             0
         };
-        if props.node_type() == NodeType::Text {
+        if props.node_type().is_text() {
             // Glyphs do not overlap, so one paint per glyph folds safely.
             return fills <= 1 && strokes == 0;
         }
@@ -541,8 +541,10 @@ impl<'a> Painter<'a> {
         let ts = self.node_transform(i, surface);
         let size = props.size();
 
-        if node_type == NodeType::Text {
+        if node_type.is_text() {
             self.draw_text(i, props, &ts, surface, clip, opacity);
+        } else if props.vector_styles.is_some() {
+            self.fill_regions(props, &ts, surface, clip, opacity);
         } else if props.has_visible_fills() {
             let shapes = self.fill_shapes(i);
             for paint in props.fills().iter().filter(|p| p.is_visible()) {
@@ -560,6 +562,13 @@ impl<'a> Painter<'a> {
             .collect();
         if !inner.is_empty() {
             self.inner_shadows(i, &inner, surface, clip);
+        }
+
+        let generated = &self.scene.node(i).generated;
+        if !generated.is_empty() {
+            for g in generated.clone() {
+                self.draw_node(g, surface, clip);
+            }
         }
 
         if node_type.draws_children() {
@@ -583,7 +592,7 @@ impl<'a> Painter<'a> {
         }
 
         // Text draws its own strokes, clipped to its glyphs.
-        if props.has_visible_strokes() && node_type != NodeType::Text {
+        if props.has_visible_strokes() && !node_type.is_text() {
             self.draw_strokes(i, props, &ts, surface, clip, opacity);
         }
     }
@@ -604,11 +613,7 @@ impl<'a> Painter<'a> {
             .collect();
         if shapes.is_empty() {
             let size = props.size();
-            let boxy = props.node_type().is_frame_like()
-                || matches!(
-                    props.node_type(),
-                    NodeType::Rectangle | NodeType::RoundedRectangle
-                );
+            let boxy = props.node_type().is_frame_like() || is_box(props.node_type());
             if props.node_type() == NodeType::Ellipse
                 && let Some(rect) =
                     tiny_skia::Rect::from_xywh(0.0, 0.0, size.x as f32, size.y as f32)
@@ -745,6 +750,10 @@ impl<'a> Painter<'a> {
             .iter()
             .map(|s| s.path().clone())
             .collect();
+        if outlines.is_empty() && !props.node_type().is_frame_like() && !is_box(props.node_type()) {
+            // A path without geometry (an empty vector) draws nothing.
+            return Vec::new();
+        }
         if outlines.is_empty() {
             let size = props.size();
             outlines.extend(geometry::rounded_rect(
@@ -771,15 +780,13 @@ impl<'a> Painter<'a> {
             ..Default::default()
         };
         let node_type = props.node_type();
-        if node_type == NodeType::Text {
+        if node_type.is_text() {
             if let Some(layout) = &props.text_layout {
                 for g in layout.glyphs.iter() {
                     let Some(path) = g.blob.and_then(|b| self.doc.blobs.path(b)) else {
                         continue;
                     };
-                    let gts = ts
-                        .pre_translate(g.x, g.y)
-                        .pre_scale(g.font_size, -g.font_size);
+                    let gts = ts.pre_concat(g.to_node().to_skia());
                     surface
                         .pixmap
                         .fill_path(&path.path, &paint, FillRule::Winding, gts, clip);
@@ -796,11 +803,13 @@ impl<'a> Painter<'a> {
                     .stroke_path(s.path(), &paint, &hairline, ts, clip);
             }
         }
-        if node_type.draws_children() {
-            let children = self.scene.node(i).children.clone();
-            for c in children {
-                self.draw_node(c, surface, clip);
-            }
+        let below: Vec<SceneIdx> = if node_type.draws_children() {
+            self.scene.node(i).below().collect()
+        } else {
+            self.scene.node(i).generated.clone()
+        };
+        for c in below {
+            self.draw_node(c, surface, clip);
         }
     }
 
@@ -920,6 +929,11 @@ fn stroke_dash(props: &Props) -> Option<tiny_skia::StrokeDash> {
         dashes.extend_from_within(..);
     }
     tiny_skia::StrokeDash::new(dashes, 0.0)
+}
+
+/// Rectangles, whose shape is their box when they have no stored geometry.
+fn is_box(t: NodeType) -> bool {
+    matches!(t, NodeType::Rectangle | NodeType::RoundedRectangle)
 }
 
 /// Whether a node's geometry is an open path (lines and open vectors have

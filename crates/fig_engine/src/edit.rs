@@ -735,10 +735,7 @@ impl<'a> Txn<'a> {
                 let path = self.doc.blobs.path(r.blob)?;
                 let scaled = path.path.clone().transform(t.to_skia())?;
                 let blob = self.doc.blobs.push(&geometry::encode_blob(&scaled));
-                Some(PathRef {
-                    winding: r.winding,
-                    blob,
-                })
+                Some(PathRef { blob, ..*r })
             })
             .collect()
     }

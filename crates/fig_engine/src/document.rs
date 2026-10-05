@@ -118,7 +118,10 @@ impl Document {
         let mut schema = Schema::decode(&container.schema)?;
         decode::restrict_schema(&mut schema);
         let mut table = NodeTable::default();
-        let ranges = read_message(&schema, &container.message, &mut table)?;
+        let MessageParts {
+            blobs: ranges,
+            images: embedded,
+        } = read_message(&schema, &container.message, &mut table)?;
         let NodeTable {
             mut nodes,
             by_guid,
@@ -156,6 +159,7 @@ impl Document {
                 nodes[i].children = children;
             }
         }
+        resolve_styles(&mut nodes, &by_guid);
         let root = root
             .or_else(|| {
                 nodes
@@ -198,6 +202,14 @@ impl Document {
                 (at, bytes.len() as u32)
             })
             .collect();
+        let mut images = container.images;
+        for (hash, blob) in embedded {
+            if let Some(&(start, len)) = ranges.get(blob as usize) {
+                images.entry(hash).or_insert_with(|| {
+                    Encoded::Owned(data[start as usize..(start + len) as usize].to_vec())
+                });
+            }
+        }
         drop(container.message);
         let original_blobs = ranges.len();
         let next_guid = Guid {
@@ -223,7 +235,7 @@ impl Document {
                 ranges,
                 paths,
             },
-            images: container.images,
+            images,
             thumbnail: container.thumbnail,
             file_name,
             original_blobs,
@@ -322,6 +334,36 @@ impl Document {
     }
 }
 
+/// Nodes that use shared styles show the styles' paints and effects, which
+/// is what Figma draws: a node's own copy can be stale or empty (when the
+/// style's paints came from a library).
+fn resolve_styles(nodes: &mut [Node], by_guid: &HashMap<Guid, NodeIdx>) {
+    let style = |g: Option<Guid>| by_guid.get(&g?).copied();
+    for i in 0..nodes.len() {
+        let p = &nodes[i].props;
+        let (fill, stroke, effect) = (
+            style(p.fill_style),
+            style(p.stroke_style),
+            style(p.effect_style),
+        );
+        if let Some(s) = fill
+            && let Some(fills) = nodes[s as usize].props.fills.clone()
+        {
+            nodes[i].props.fills = Some(fills);
+        }
+        if let Some(s) = stroke
+            && let Some(fills) = nodes[s as usize].props.fills.clone()
+        {
+            nodes[i].props.strokes = Some(fills);
+        }
+        if let Some(s) = effect
+            && let Some(effects) = nodes[s as usize].props.effects.clone()
+        {
+            nodes[i].props.effects = Some(effects);
+        }
+    }
+}
+
 /// The nodes of a file as its node changes stream in, so each decoded node is
 /// moved once rather than staged in a second list of the whole file.
 #[derive(Default)]
@@ -360,16 +402,25 @@ impl NodeTable {
     }
 }
 
+/// What [`read_message`] returns besides the nodes.
+struct MessageParts {
+    /// The blobs, as ranges of the message.
+    blobs: Vec<(u32, u32)>,
+    /// Image files carried in blobs: hash and blob index.
+    images: Vec<(String, u32)>,
+}
+
 /// Reads the top-level `Message`, converting node changes one at a time so
 /// the generic decoded form of the whole file never exists at once. Returns
-/// the blobs as ranges of `data`.
-fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<Vec<(u32, u32)>> {
+/// the blobs as ranges of `data`, and the image files carried in blobs.
+fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<MessageParts> {
     let root = schema
         .def_index("Message")
         .ok_or_else(|| corrupt("the schema has no Message type"))?;
     let decoder = Decoder::new(schema);
     let mut r = Reader::new(data);
     let mut ranges = Vec::new();
+    let mut images = Vec::new();
     let def = schema.def(root);
     loop {
         let id = r.var_uint()?;
@@ -387,6 +438,7 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<V
                     let msg = decoder.decode(&mut r, node_def)?;
                     let m = MsgRef::new(schema, &msg);
                     if !decode::is_removed(&m) {
+                        decode::embedded_images(&m, &mut images);
                         table.add(decode::props(m));
                     }
                 }
@@ -401,7 +453,10 @@ fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<V
             _ => decoder.skip_field(&mut r, field, 0)?,
         }
     }
-    Ok(ranges)
+    Ok(MessageParts {
+        blobs: ranges,
+        images,
+    })
 }
 
 fn read_blob(

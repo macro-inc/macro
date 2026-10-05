@@ -7,7 +7,7 @@
 //! through the legacy connection fields, back to the start. `Unlinked` is
 //! a frame no flow reaches.
 
-use super::{SCHEMA, V, color, fig_file_in, guid, node, size, solid, translate};
+use super::{SCHEMA, V, color, fig_file_with, guid, node, size, solid, translate};
 
 /// [`SCHEMA`] with Figma's prototype types and fields (and one field the
 /// engine does not model, `extraScrollOffset`, to check saving keeps it).
@@ -94,7 +94,7 @@ fn button(local: u32, parent: u32, position: &str, name: &str, at: (f32, f32), i
 }
 
 pub fn prototype_file() -> Vec<u8> {
-    fig_file_in(
+    fig_file_with(
         &prototype_schema(),
         vec![
             node(0, None, "DOCUMENT", "Document", vec![]),
