@@ -49,6 +49,10 @@ import {
 } from './DatabaseToolHandlers';
 import { deleteTagHandler } from './DeleteTag';
 import { readDesignHandler } from './Design';
+import {
+  readIllustratorDocumentHandler,
+  readPhotoshopDocumentHandler,
+} from './DesignDocument';
 import { displayResultsHandler } from './DisplayResults';
 import {
   commentOnDocumentHandler,
@@ -154,6 +158,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadPresentation: readPresentationHandler,
   EditPresentation: editPresentationHandler,
   ReadDesign: readDesignHandler,
+  ReadPhotoshopDocument: readPhotoshopDocumentHandler,
+  ReadIllustratorDocument: readIllustratorDocumentHandler,
   ReadWordDocument: readWordDocumentHandler,
   EditWordDocument: editWordDocumentHandler,
   ConfigureAgent: configureAgentHandler,
