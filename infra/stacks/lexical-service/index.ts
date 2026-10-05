@@ -44,4 +44,4 @@ const lexicalService = new LexicalService(`lexical-service-${stack}`, {
 });
 
 export const lexicalServiceSgId = lexicalService.serviceSg.id;
-export const lexicalServiceUrl = getServiceUrl(ServiceUrl.LEXICAL_GATEWAY_URL);
+export const lexicalServiceUrl = getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL);
