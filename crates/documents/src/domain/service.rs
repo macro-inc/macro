@@ -1153,6 +1153,25 @@ impl<
             .map_err(|error| map_basic_document_error(document_id, error.into()))
     }
 
+    async fn internal_get_user_display_name(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
+        let (first, last) = self
+            .repo
+            .get_user_name(user_id)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?;
+        let name = [first, last]
+            .into_iter()
+            .flatten()
+            .map(|part| part.trim().to_owned())
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        Ok((!name.is_empty()).then_some(name))
+    }
+
     async fn get_document_text(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,

@@ -166,6 +166,13 @@ export class SlackImportWorker extends pulumi.ComponentResource {
                   name: 'OVERRIDE_SEARCH_PROCESSING_SERVICE_URL',
                   value: args.searchProcessingUrl,
                 },
+                {
+                  name: 'SLACK_IMPORT_JOIN_EMAIL_ENABLED',
+                  value: String(
+                    config.getBoolean('slack_import_join_email_enabled') ??
+                      false
+                  ),
+                },
                 { name: 'DD_SERVICE', value: SERVICE_NAME },
                 { name: 'DD_ENV', value: stack },
               ],

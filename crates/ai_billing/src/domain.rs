@@ -1,5 +1,5 @@
-//! Domain layer: plans and pricing constants, the settlement ledger, ports, and
-//! the billing service.
+//! Domain layer: plans and the configured pricing, the settlement ledger, ports,
+//! and the billing service.
 
 pub mod admission;
 pub mod financial;
@@ -29,7 +29,6 @@ pub use ports::{
     PaymentGateway, PendingCharge, SettlementOutcome, SettlementTrigger, UsageReader,
 };
 pub use pricing::{
-    INCLUDED_ALLOWANCE_CENTS, OVERAGE_MARKUP_PERCENT, cost_cents, cost_cents_covered_by,
-    extra_customer_cents,
+    AiPricing, IncludedAllowanceCents, OverageMarkupPercent, PricingError, cost_cents,
 };
 pub use service::BillingServiceImpl;

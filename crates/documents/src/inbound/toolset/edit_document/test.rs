@@ -139,6 +139,13 @@ impl DocumentService for FakeDocumentService {
         Ok(document_with_file_type(self.file_type.as_deref()))
     }
 
+    async fn internal_get_user_display_name(
+        &self,
+        _user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
+        Ok(None)
+    }
+
     // The guard reads the file type, which the basic document already carries.
     // Resolving the content location would be a second read of the same row --
     // and a racy one while an upload is still being finalized into sync-service.

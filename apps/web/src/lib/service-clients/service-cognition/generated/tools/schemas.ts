@@ -5086,6 +5086,15 @@ export const EditWordDocument = z.object({
             type: z.literal('setStyle'),
           })
           .strict(),
+        z
+          .object({
+            paragraph: z.string(),
+            find: z.union([z.string(), z.null()]).optional(),
+            occurrence: z.union([z.number().int().gte(0), z.null()]).optional(),
+            text: z.string(),
+            type: z.literal('addComment'),
+          })
+          .strict(),
       ];
       const errors = schemas.reduce<z.ZodError[]>(
         (errors, schema) =>
@@ -5104,6 +5113,8 @@ export const EditWordDocument = z.object({
       }
     })
   ),
+  trackChanges: z.union([z.boolean(), z.null()]).optional(),
+  author: z.union([z.string(), z.null()]).optional(),
 });
 
 export const WordDocumentResponse = z.object({ content: z.string() });

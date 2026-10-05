@@ -6,6 +6,7 @@ version = "0.1.0"
 
 
 [dependencies]
+ai_billing = { path = "../ai_billing" }
 rootcause = { workspace = true }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }

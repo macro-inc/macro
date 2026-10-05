@@ -75,7 +75,7 @@ fn should_run_includes_fold_wasm_inputs() {
         .next()
         .expect("should_run block");
     assert!(
-        should_run.contains("crates/agent_fold/**"),
+        should_run.contains("crates/folds/agent_fold/**"),
         "fold wasm source must rebuild the web artifact: {should_run}"
     );
     assert!(

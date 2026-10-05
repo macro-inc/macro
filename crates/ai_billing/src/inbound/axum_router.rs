@@ -2,7 +2,7 @@
 //! purchases, the plan catalog, and the internal settle hook.
 
 use crate::domain::{
-    BillingError, BillingService, CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS,
+    AiPricing, BillingError, BillingService, CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS,
     OVERAGE_LIMIT_MIN_CENTS, PlanTier, UsageSnapshot,
 };
 use axum::{
@@ -167,11 +167,13 @@ pub struct SettleRequest {
     pub user_id: String,
 }
 
-/// Router state: the billing service plus the authorization state the
-/// extractors need.
+/// Router state: the billing service, the configured pricing the catalog
+/// publishes, and the authorization state the extractors need.
 pub struct AiBillingRouterState<B, Auth> {
     /// The billing service.
     pub service: Arc<B>,
+    /// The pricing the host composed the billing service with.
+    pub pricing: AiPricing,
     /// Authorization state for the request extractors.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
@@ -180,8 +182,15 @@ impl<B, Auth> Clone for AiBillingRouterState<B, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            pricing: self.pricing,
             authorization_state: self.authorization_state.clone(),
         }
+    }
+}
+
+impl<B, Auth> FromRef<AiBillingRouterState<B, Auth>> for AiPricing {
+    fn from_ref(state: &AiBillingRouterState<B, Auth>) -> Self {
+        state.pricing
     }
 }
 
@@ -283,14 +292,14 @@ pub async fn get_summary_handler<B: BillingService, Auth: MacroAuthorizationServ
     ),
     tag = "ai_billing"
 )]
-pub async fn get_plans_handler() -> Json<PlanCatalogResponse> {
+pub async fn get_plans_handler(State(pricing): State<AiPricing>) -> Json<PlanCatalogResponse> {
     Json(PlanCatalogResponse {
         plans: [PlanTier::Free, PlanTier::Premium, PlanTier::Max]
             .into_iter()
             .map(|tier| PlanCatalogEntry {
                 tier,
                 monthly_price_cents: tier.monthly_price_cents(),
-                included_ai_cents_per_seat: tier.included_ai_cents_per_seat(),
+                included_ai_cents_per_seat: tier.included_ai_cents_per_seat(pricing),
                 purchasable: SeatPlan::PURCHASABLE
                     .into_iter()
                     .any(|plan| PlanTier::from(plan) == tier),

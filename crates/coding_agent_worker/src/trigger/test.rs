@@ -11,6 +11,22 @@ use messages::domain::events::MessagePostedMetadata;
 use messages::domain::models::MessageParent;
 use std::sync::Mutex;
 
+#[test]
+fn repository_selection_survives_dispatch_and_older_events_still_decode() {
+    let mut wire = serde_json::json!({"bot_id": bot_id::BotId::TEST_A, "session_id": test_session(), "owner": sender().to_string()});
+    let old: AgentSessionRequestedEvent = serde_json::from_value(wire.clone()).unwrap();
+    assert!(old.repo_url.is_none());
+    wire["repo_url"] = serde_json::json!("https://github.com/org/project");
+    let event: AgentSessionRequestedEvent = serde_json::from_value(wire).unwrap();
+    let work = trigger_to_work(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::Requested(event),
+    ))
+    .unwrap();
+    assert!(
+        matches!(work, TriggerWork::OpenRequested { repo_url: Some(url), .. } if url == "https://github.com/org/project")
+    );
+}
+
 fn test_session() -> AgentSessionId {
     AgentSessionId::new_from_uuid(Uuid::from_u128(0xA))
 }

@@ -1394,6 +1394,7 @@ fn agent_trigger_requested_event()
 
     Event::new(AgentTriggerTopicEvent::New(
         NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
+            repo_url: None,
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             session_id: agent_session::domain::model::AgentSessionId::new_from_uuid(
                 uuid::Uuid::from_u128(0x5E55),

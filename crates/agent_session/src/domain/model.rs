@@ -18,6 +18,10 @@ pub use agent_fold::domain::model::{
     Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
 };
 
+/// The `_meta` key on `session/new`, `session/load` and `session/resume`
+/// whose string value is the [`AgentSessionId`] the ACP session serves.
+pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
+
 /// Identity of one harness participant, minted fresh at construction.
 ///
 /// A restarted process is a new replica: whatever the old identity claimed is

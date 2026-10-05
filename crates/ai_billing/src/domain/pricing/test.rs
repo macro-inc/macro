@@ -14,58 +14,124 @@ fn cost_cents_rounds_fractions_up_and_ignores_junk() {
 }
 
 #[test]
+fn allowance_must_be_non_negative() {
+    assert_eq!(IncludedAllowanceCents::new(0).unwrap().cents(), 0);
+    assert_eq!(IncludedAllowanceCents::new(2_000).unwrap().cents(), 2_000);
+    assert_eq!(
+        IncludedAllowanceCents::new(-1),
+        Err(PricingError::NegativeAllowance(-1))
+    );
+}
+
+#[test]
+fn markup_must_be_a_whole_percent_below_one_hundred() {
+    assert_eq!(OverageMarkupPercent::new(0).unwrap().percent(), 0);
+    assert_eq!(OverageMarkupPercent::new(5).unwrap().percent(), 5);
+    assert_eq!(OverageMarkupPercent::new(99).unwrap().percent(), 99);
+    assert_eq!(
+        OverageMarkupPercent::new(100),
+        Err(PricingError::MarkupOutOfRange(100))
+    );
+    assert_eq!(
+        OverageMarkupPercent::new(-5),
+        Err(PricingError::MarkupOutOfRange(-5))
+    );
+}
+
+#[test]
+fn pricing_exposes_both_configured_values() {
+    let pricing = AiPricing::new(
+        IncludedAllowanceCents::new(3_500).unwrap(),
+        OverageMarkupPercent::new(12).unwrap(),
+    );
+    assert_eq!(pricing.included_allowance_cents(), 3_500);
+    assert_eq!(pricing.overage_markup_percent(), 12);
+    // A different markup prices the same cost differently.
+    assert_eq!(pricing.extra_customer_cents(1_000), 1_120);
+    assert_eq!(AiPricing::testing().extra_customer_cents(1_000), 1_050);
+}
+
+#[test]
 fn markup_rounds_up_on_the_cumulative_total() {
-    assert_eq!(extra_customer_cents(0), 0);
-    assert_eq!(extra_customer_cents(1), 2);
-    assert_eq!(extra_customer_cents(19), 20);
-    assert_eq!(extra_customer_cents(20), 21);
-    assert_eq!(extra_customer_cents(1_000), 1_050);
-    assert_eq!(extra_customer_cents(1_500), 1_575);
-    assert_eq!(extra_customer_cents(-5), 0);
+    let pricing = AiPricing::testing();
+    assert_eq!(pricing.extra_customer_cents(0), 0);
+    assert_eq!(pricing.extra_customer_cents(1), 2);
+    assert_eq!(pricing.extra_customer_cents(19), 20);
+    assert_eq!(pricing.extra_customer_cents(20), 21);
+    assert_eq!(pricing.extra_customer_cents(1_000), 1_050);
+    assert_eq!(pricing.extra_customer_cents(1_500), 1_575);
+    assert_eq!(pricing.extra_customer_cents(-5), 0);
+}
+
+#[test]
+fn zero_markup_charges_cost_exactly() {
+    let pricing = AiPricing::new(
+        IncludedAllowanceCents::new(0).unwrap(),
+        OverageMarkupPercent::new(0).unwrap(),
+    );
+    for cost in [0, 1, 7, 1_000, 123_456] {
+        assert_eq!(pricing.extra_customer_cents(cost), cost);
+        assert_eq!(pricing.cost_cents_covered_by(cost), cost);
+    }
 }
 
 #[test]
 fn cumulative_conversion_books_exact_increments() {
+    let pricing = AiPricing::testing();
     // Settle at cost 1_000, then again at 1_500: the increments sum to extra(1_500).
-    let first = extra_customer_cents(1_000);
-    let second = extra_customer_cents(1_500) - first;
+    let first = pricing.extra_customer_cents(1_000);
+    let second = pricing.extra_customer_cents(1_500) - first;
     assert_eq!((first, second), (1_050, 525));
-    assert_eq!(first + second, extra_customer_cents(1_500));
+    assert_eq!(first + second, pricing.extra_customer_cents(1_500));
     // Converting each increment on its own would overcharge.
-    assert_eq!(extra_customer_cents(1) + extra_customer_cents(1), 4);
-    assert_eq!(extra_customer_cents(2), 3);
+    assert_eq!(
+        pricing.extra_customer_cents(1) + pricing.extra_customer_cents(1),
+        4
+    );
+    assert_eq!(pricing.extra_customer_cents(2), 3);
 }
 
 #[test]
 fn covered_cost_is_the_exact_inverse_of_the_markup() {
-    assert_eq!(cost_cents_covered_by(0), 0);
-    assert_eq!(cost_cents_covered_by(1), 0);
-    assert_eq!(cost_cents_covered_by(2), 1);
-    assert_eq!(cost_cents_covered_by(104), 99);
-    assert_eq!(cost_cents_covered_by(105), 100);
-    assert_eq!(cost_cents_covered_by(-1), 0);
-    for cost in 0..10_000 {
-        assert_eq!(cost_cents_covered_by(extra_customer_cents(cost)), cost);
+    for markup in [0, 5, 17, 99] {
+        let pricing = AiPricing::new(
+            IncludedAllowanceCents::new(2_000).unwrap(),
+            OverageMarkupPercent::new(markup).unwrap(),
+        );
+        assert_eq!(pricing.cost_cents_covered_by(0), 0);
+        assert_eq!(pricing.cost_cents_covered_by(-1), 0);
+        for cost in 0..10_000 {
+            assert_eq!(
+                pricing.cost_cents_covered_by(pricing.extra_customer_cents(cost)),
+                cost
+            );
+        }
+        for customer in 0..10_000 {
+            let covered = pricing.cost_cents_covered_by(customer);
+            assert!(pricing.extra_customer_cents(covered) <= customer);
+            assert!(customer < pricing.extra_customer_cents(covered + 1));
+        }
     }
-    for customer in 0..10_000 {
-        let covered = cost_cents_covered_by(customer);
-        assert!(extra_customer_cents(covered) <= customer);
-        assert!(customer < extra_customer_cents(covered + 1));
-    }
+    let pricing = AiPricing::testing();
+    assert_eq!(pricing.cost_cents_covered_by(1), 0);
+    assert_eq!(pricing.cost_cents_covered_by(2), 1);
+    assert_eq!(pricing.cost_cents_covered_by(104), 99);
+    assert_eq!(pricing.cost_cents_covered_by(105), 100);
 }
 
 #[test]
-fn constants_feed_the_exact_money_policy() {
-    use crate::domain::policy::INCLUDED_PUBLIC_USAGE;
+fn pricing_feeds_the_exact_money_policy() {
+    use crate::domain::policy::included_public_usage;
     use ai_usage::domain::financial::{CustomerMoney, PublicUsage};
 
+    let pricing = AiPricing::testing();
     let public_units_per_cent = CustomerMoney::UNITS_PER_CENT / 100;
     assert_eq!(
-        INCLUDED_PUBLIC_USAGE.units(),
-        INCLUDED_ALLOWANCE_CENTS as u64 * public_units_per_cent
+        included_public_usage(pricing).units(),
+        pricing.included_allowance_cents() as u64 * public_units_per_cent
     );
     // A whole-percent markup over a denominator of 100 prices every public unit exactly.
-    let numerator = (PERCENT + OVERAGE_MARKUP_PERCENT) as u64;
+    let numerator = (PERCENT + pricing.overage_markup_percent()) as u64;
     let money =
         CustomerMoney::from_public_ratio(PublicUsage::from_units(1), numerator, 100).unwrap();
     assert_eq!(money.units(), numerator);
