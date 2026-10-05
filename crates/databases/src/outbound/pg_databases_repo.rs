@@ -360,16 +360,13 @@ where
 
     #[tracing::instrument(err, skip(self))]
     async fn rename_database(&self, id: DatabaseId, name: &str) -> Result<bool, Self::Error> {
-        let mut transaction = self.pool.begin().await?;
-        rows::lock_legacy_database(&mut transaction, id, true).await?;
         let renamed = sqlx::query!(
             r#"UPDATE database_entity SET name = $2, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
             name,
         )
-        .execute(&mut *transaction)
+        .execute(&self.pool)
         .await?;
-        transaction.commit().await?;
         Ok(renamed.rows_affected() == 1)
     }
 
@@ -379,73 +376,37 @@ where
         id: DatabaseId,
         trashed_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, Self::Error> {
-        let mut transaction = self.pool.begin().await?;
-        rows::lock_legacy_database(&mut transaction, id, true).await?;
         let trashed = sqlx::query!(
             r#"UPDATE database_entity SET trashed_at = $2, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
             trashed_at,
         )
-        .execute(&mut *transaction)
+        .execute(&self.pool)
         .await?;
-        transaction.commit().await?;
         Ok(trashed.rows_affected() == 1)
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn restore_database(&self, id: DatabaseId) -> Result<bool, Self::Error> {
-        let mut transaction = self.pool.begin().await?;
-        rows::lock_legacy_database(&mut transaction, id, true).await?;
         let restored = sqlx::query!(
             r#"UPDATE database_entity SET trashed_at = NULL, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
         )
-        .execute(&mut *transaction)
+        .execute(&self.pool)
         .await?;
-        transaction.commit().await?;
         Ok(restored.rows_affected() == 1)
     }
 
-    /// Tables, columns, rows, views and database-owned property definitions
-    /// go with the database through `ON DELETE CASCADE`, and the rows' cells
-    /// by trigger; `entity_access` rows are a generic side table with no
-    /// foreign key to `database_entity`, and the change journal outlives what it
-    /// describes by design, so both are purged explicitly in the same
-    /// transaction.
+    /// Deleting the app entity cleans up its owned storage, grants and journal,
+    /// including the same cleanup used when its owner is deleted.
     #[tracing::instrument(err, skip(self))]
     async fn delete_database(&self, id: DatabaseId) -> Result<(), Self::Error> {
-        let mut transaction = self.pool.begin().await?;
-
-        rows::lock_legacy_database(&mut transaction, id, true).await?;
-        let entity = sqlx::query_scalar!(
-            "SELECT database_id FROM database_entity WHERE database_id = $1 FOR UPDATE",
-            id.into_uuid(),
-        )
-        .fetch_optional(&mut *transaction)
-        .await?;
-        if entity.is_none() {
-            return Ok(());
-        }
-        schema::lock_database(&mut transaction, id, true).await?;
-        entity_access_db_utils::delete_entity_access_rows(
-            &mut transaction,
-            id.as_uuid(),
-            EntityType::Database,
-        )
-        .await?;
-        journal::purge(&mut *transaction, id).await?;
-
         sqlx::query!(
             r#"DELETE FROM database_entity WHERE database_id = $1"#,
             id.into_uuid()
         )
-        .execute(&mut *transaction)
+        .execute(&self.pool)
         .await?;
-
-        sqlx::query!("DELETE FROM database WHERE id = $1", id.into_uuid())
-            .execute(&mut *transaction)
-            .await?;
-        transaction.commit().await?;
         Ok(())
     }
 
@@ -458,7 +419,7 @@ where
         actor: &crate::domain::journal::JournalActor,
     ) -> Result<Option<TableVersion>, Self::Error> {
         let mut transaction = self.pool.begin().await?;
-        if !rows::lock_live_database(&mut transaction, table.database_id, false).await? {
+        if !rows::lock_live_database(&mut transaction, table.database_id).await? {
             return Ok(None);
         }
         // Row writers take this same lock before checking versions and cells.

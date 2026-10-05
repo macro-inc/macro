@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH storage AS (INSERT INTO database (id) VALUES ($1) RETURNING id)\n           INSERT INTO database_entity (database_id, name, user_id) SELECT id, 'db', $2 FROM storage",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "295aa73a0f8dc8bd962224e873ff0f4a9a70610cecd9aa663f8c2d8ca9ab109e"
+}

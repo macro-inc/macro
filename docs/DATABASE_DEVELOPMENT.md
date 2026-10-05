@@ -47,9 +47,9 @@ storage must be usable without creating the app entity or its access grants.
 This convention starts with `database_entity`; it is new for databases and is
 the convention for new entities going forward. It does not require renaming
 existing entity tables. `database_entity.database_id` is both the entity's key
-and a reference to `database.id`, preserving existing database URLs and grants.
-See the [database backend](../crates/databases/README.md) for the storage boundary
-and rollout compatibility.
+and a reference to `database.id`. See the
+[database backend](../crates/databases/README.md) for the storage boundary and
+the explicitly destructive database cutover.
 
 ### Compatible migrations
 

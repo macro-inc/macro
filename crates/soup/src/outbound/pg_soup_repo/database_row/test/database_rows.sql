@@ -9,7 +9,10 @@ INSERT INTO "User" (id, email, macro_user_id) VALUES
 ('macro|viewer@databases.test', 'viewer@databases.test', 'd0000000-0000-0000-0000-000000000002'),
 ('macro|stranger@databases.test', 'stranger@databases.test', 'd0000000-0000-0000-0000-000000000003');
 
-INSERT INTO databases (id, name, owner_id) VALUES
+INSERT INTO database (id) VALUES
+('db000000-0000-0000-0000-000000000001'),
+('db000000-0000-0000-0000-000000000002');
+INSERT INTO database_entity (database_id, name, user_id) VALUES
 ('db000000-0000-0000-0000-000000000001', 'CRM', 'macro|owner@databases.test'),
 ('db000000-0000-0000-0000-000000000002', 'Private', 'macro|stranger@databases.test');
 INSERT INTO database_tables (id, database_id, name, position) VALUES

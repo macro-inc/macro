@@ -58,9 +58,7 @@ impl<Properties> PgDatabasesRepo<Properties> {
         let Some(database) = database else {
             return Ok(None);
         };
-        if !rows::lock_live_database(&mut transaction, DatabaseId::from_uuid(database), false)
-            .await?
-        {
+        if !rows::lock_live_database(&mut transaction, DatabaseId::from_uuid(database)).await? {
             return Ok(None);
         }
         let rows = rows::append_rows(&mut transaction, table_id, created_by, count).await?;

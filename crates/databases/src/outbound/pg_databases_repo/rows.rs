@@ -12,13 +12,10 @@ use crate::domain::models::{
 };
 
 /// Hold the app entity live while a batch writes its core storage.
-/// During rollout the legacy row is locked first, matching old writers.
 pub(crate) async fn lock_live_database(
     connection: &mut PgConnection,
     database_id: DatabaseId,
-    exclusive: bool,
 ) -> Result<bool, sqlx::Error> {
-    lock_legacy_database(connection, database_id, exclusive).await?;
     let live = sqlx::query_scalar!(
         "SELECT database_id FROM database_entity WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE",
         database_id.into_uuid()
@@ -26,31 +23,6 @@ pub(crate) async fn lock_live_database(
     .fetch_optional(connection)
     .await?;
     Ok(live.is_some())
-}
-
-/// Keep old and new app writers in the same lock order until the legacy
-/// projection is retired. This compatibility lock is not used by core storage.
-pub(crate) async fn lock_legacy_database(
-    connection: &mut PgConnection,
-    database_id: DatabaseId,
-    exclusive: bool,
-) -> Result<(), sqlx::Error> {
-    if exclusive {
-        sqlx::query_scalar!(
-            "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
-            database_id.into_uuid()
-        )
-        .fetch_optional(connection)
-        .await?;
-    } else {
-        sqlx::query_scalar!(
-            "SELECT id FROM databases WHERE id = $1 FOR SHARE",
-            database_id.into_uuid()
-        )
-        .fetch_optional(connection)
-        .await?;
-    }
-    Ok(())
 }
 
 /// Append `count` empty rows to a live table, in order; `None` when the

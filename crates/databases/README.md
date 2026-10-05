@@ -13,7 +13,7 @@ app name, owner, or trash state and can exist without any Macro entity.
 
 `database_entity` is the optional app entity: `name`, `user_id` (the owner),
 `created_at`, `updated_at`, and `trashed_at`. Its `database_id` is both its primary
-key and a foreign key to `database.id`. The shared identity preserves existing
+key and a foreign key to `database.id`. The app uses that shared identity for
 routes, grants, references and API responses. `Database` remains the app-facing
 Rust model. Soup discovery and database/row access require this entity; merely
 creating core storage does not make it a shareable Macro database.
@@ -34,15 +34,14 @@ the entity/owner grant when needed and holds its lifecycle lock during writes.
 Both paths use the same transaction engine, table versions, cells and journal.
 An app entity's foreign key prevents deleting its storage through the core port.
 
-During rollout, `databases` remains a compatibility projection synchronized with
-`database_entity` in both directions by triggers. Existing metadata is backfilled
-without changing IDs. App writers lock the legacy row before the entity and core,
-matching deployed binaries' lock order; core-only consumers have no legacy row.
-The legacy table, triggers and compatibility locks must be removed in a separate
-migration after all old consumers have deployed. Rollback refuses to discard
-core databases that have no app entity. Deleting an app database still deletes
-its owned storage; deleting a core database cascades its tables, definitions and
-cells, and the storage adapter purges its journal in the same transaction.
+The migration is a destructive cutover: it discards existing database content,
+grants, saved queries, journal entries, and starter markers, then removes the
+plural `databases` table. Deploy it with the updated service; old binaries are
+not supported. Rollback also discards database content.
+
+Deleting an app entity (including through owner deletion) cleans up its owned
+storage, journal, and grants. Storage deletion cascades to tables, definitions,
+and cells. The core storage adapter purges its journal in the same transaction.
 
 ## Reads and writes
 

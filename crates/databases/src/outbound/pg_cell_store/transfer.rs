@@ -87,7 +87,7 @@ where
     ) -> Result<ImportOutcome, Self::Error> {
         let fingerprint = fingerprint.0.as_str();
         let mut transaction = self.pool.begin().await?;
-        if !rows::lock_live_database(&mut transaction, database_id, true).await?
+        if !rows::lock_live_database(&mut transaction, database_id).await?
             || !schema::lock_database(&mut transaction, database_id, true).await?
         {
             return Ok(ImportOutcome::NotFound);

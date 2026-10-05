@@ -42,18 +42,14 @@ async fn insert_user(pool: &PgPool, id: &str) {
     .expect("user should insert");
 }
 
-/// A database owned by [`USER`], which every database-scoped definition needs.
+/// A core database resource for database-scoped definitions.
 async fn insert_database(pool: &PgPool) -> DatabaseId {
     insert_user(pool, USER).await;
     let id = macro_uuid::generate_uuid_v7();
-    sqlx::query!(
-        "INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Guests', $2)",
-        id,
-        USER,
-    )
-    .execute(pool)
-    .await
-    .expect("database should insert");
+    sqlx::query!("INSERT INTO database (id) VALUES ($1)", id,)
+        .execute(pool)
+        .await
+        .expect("database should insert");
     DatabaseId::from_uuid(id)
 }
 

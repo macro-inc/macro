@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH storage AS (INSERT INTO database (id) VALUES ($1) RETURNING id)\n           INSERT INTO database_entity (database_id, name, user_id) SELECT id, 'db', 'macro|owner@team.com' FROM storage",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fbf72cc752bf803503631a6f6ec8039302985623cdc9ae4fa81fefdeeb2ceb5c"
+}

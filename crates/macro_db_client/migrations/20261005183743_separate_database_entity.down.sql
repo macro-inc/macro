@@ -1,24 +1,20 @@
--- A core-only database has no representation in the previous schema. Refuse
--- rollback before changing anything rather than discarding its data.
--- Match app writers' legacy-first ordering and block core allocations before
--- examining the guard, holding these locks until rollback finishes.
-LOCK TABLE databases, database, database_entity IN ACCESS EXCLUSIVE MODE;
+-- Rollback also discards database content; no data is migrated back.
+DELETE FROM database_entity;
+DELETE FROM database;
+DELETE FROM database_changes;
+DELETE FROM database_queries;
+DELETE FROM database_starter_seeds;
+DELETE FROM entity_access WHERE entity_type = 'database';
 
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM database d
-        WHERE NOT EXISTS (SELECT 1 FROM databases legacy WHERE legacy.id = d.id)
-    ) THEN
-        RAISE EXCEPTION 'cannot revert database/entity separation while core-only databases exist';
-    END IF;
-END;
-$$;
-
-DROP TRIGGER database_entity_legacy_compatibility ON database_entity;
-DROP TRIGGER databases_entity_compatibility ON databases;
-DROP FUNCTION sync_database_entity_legacy();
-DROP FUNCTION sync_legacy_database_entity();
+CREATE TABLE databases (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    owner_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    trashed_at TIMESTAMPTZ
+);
+CREATE INDEX idx_databases_owner ON databases(owner_id);
 
 ALTER TABLE database_tables DROP CONSTRAINT database_tables_database_id_fkey;
 ALTER TABLE database_tables ADD CONSTRAINT database_tables_database_id_fkey
@@ -41,5 +37,5 @@ ALTER TABLE database_starter_seeds ADD CONSTRAINT database_starter_seeds_databas
     FOREIGN KEY (database_id) REFERENCES databases(id) ON DELETE SET NULL;
 
 DROP TABLE database_entity;
+DROP FUNCTION delete_database_entity_storage();
 DROP TABLE database;
-COMMENT ON TABLE databases IS NULL;

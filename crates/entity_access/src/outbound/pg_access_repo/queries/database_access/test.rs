@@ -61,7 +61,8 @@ async fn core_storage_does_not_become_an_entity_through_a_stray_grant(pool: PgPo
 async fn insert_database(pool: &PgPool) -> Uuid {
     let database_id = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO databases (id, name, owner_id) VALUES ($1, 'db', $2)"#,
+        r#"WITH storage AS (INSERT INTO database (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entity (database_id, name, user_id) SELECT id, 'db', $2 FROM storage"#,
         database_id,
         OWNER,
     )

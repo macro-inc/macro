@@ -218,13 +218,7 @@ where
             }
         }
 
-        if !rows::lock_live_database(
-            &mut transaction,
-            writes.database_id,
-            writes.changes_tables(),
-        )
-        .await?
-        {
+        if !rows::lock_live_database(&mut transaction, writes.database_id).await? {
             return Ok(missing_database(writes));
         }
         self.apply_in(transaction, writes).await

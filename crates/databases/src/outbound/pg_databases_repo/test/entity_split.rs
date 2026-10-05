@@ -1,4 +1,4 @@
-//! Storage without app metadata, and compatibility with deployed writers.
+//! Storage without app metadata, app cleanup, and the destructive schema cutover.
 
 use super::*;
 use crate::domain::journal::JournalPlan;
@@ -36,7 +36,6 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
     assert!(repo.get_database(database).await.unwrap().is_none());
     let app_rows = sqlx::query_scalar!(
         r#"SELECT (SELECT COUNT(*) FROM database_entity)
-                 + (SELECT COUNT(*) FROM databases)
                  + (SELECT COUNT(*) FROM entity_access) AS "count!""#
     )
     .fetch_one(&pool)
@@ -157,176 +156,6 @@ async fn attached_storage_cannot_be_deleted_through_the_core_port(pool: PgPool) 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn legacy_and_entity_writers_preserve_identity_and_lifecycle(pool: PgPool) {
-    insert_user(&pool).await;
-    let database = DatabaseId::new();
-    sqlx::query!(
-        "INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Legacy', $2)",
-        database.into_uuid(),
-        USER
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
-    assert_eq!(
-        repo.get_database(database).await.unwrap().unwrap().0.name,
-        "Legacy"
-    );
-    repo.rename_database(database, "Entity").await.unwrap();
-    let name = sqlx::query_scalar!(
-        "SELECT name FROM databases WHERE id = $1",
-        database.into_uuid()
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(name, "Entity");
-    sqlx::query!(
-        "UPDATE databases SET trashed_at = now() WHERE id = $1",
-        database.into_uuid()
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert!(
-        repo.get_database(database)
-            .await
-            .unwrap()
-            .unwrap()
-            .0
-            .trashed_at
-            .is_some()
-    );
-    repo.restore_database(database).await.unwrap();
-    let trashed = sqlx::query_scalar!(
-        "SELECT trashed_at FROM databases WHERE id = $1",
-        database.into_uuid()
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert!(trashed.is_none());
-    sqlx::query!("DELETE FROM databases WHERE id = $1", database.into_uuid())
-        .execute(&pool)
-        .await
-        .unwrap();
-    assert!(repo.get_database(database).await.unwrap().is_none());
-    let core = sqlx::query_scalar!(
-        "SELECT id FROM database WHERE id = $1",
-        database.into_uuid()
-    )
-    .fetch_optional(&pool)
-    .await
-    .unwrap();
-    assert!(core.is_none());
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn migration_preserves_existing_metadata_tables_and_grants(pool: PgPool) {
-    let (_, table, _) = fixture(&pool).await;
-    let mut transaction = pool.begin().await.unwrap();
-    sqlx::raw_sql(SPLIT_DOWN)
-        .execute(&mut *transaction)
-        .await
-        .unwrap();
-    sqlx::query!(
-        "UPDATE databases SET name = 'Before split', trashed_at = now() WHERE id = $1",
-        table.database_id.into_uuid()
-    )
-    .execute(&mut *transaction)
-    .await
-    .unwrap();
-    sqlx::raw_sql(SPLIT_UP)
-        .execute(&mut *transaction)
-        .await
-        .unwrap();
-    let migrated = sqlx::query!(
-        "SELECT e.name, e.user_id, e.trashed_at, t.id FROM database_entity e
-         JOIN database d ON d.id = e.database_id
-         JOIN database_tables t ON t.database_id = d.id WHERE e.database_id = $1 AND t.id = $2",
-        table.database_id.into_uuid(),
-        table.id.into_uuid()
-    )
-    .fetch_one(&mut *transaction)
-    .await
-    .unwrap();
-    assert_eq!(migrated.name, "Before split");
-    assert_eq!(migrated.user_id, USER);
-    assert!(migrated.trashed_at.is_some());
-    assert_eq!(migrated.id, table.id.into_uuid());
-    let grants = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND entity_type = 'database'",
-        table.database_id.into_uuid()
-    )
-    .fetch_one(&mut *transaction)
-    .await
-    .unwrap();
-    assert_eq!(grants, Some(1));
-    transaction.rollback().await.unwrap();
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn rollback_refuses_to_discard_storage_without_an_entity(pool: PgPool) {
-    let store = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
-    let database = store.create_storage().await.unwrap();
-    let mut transaction = pool.begin().await.unwrap();
-    assert!(
-        sqlx::raw_sql(SPLIT_DOWN)
-            .execute(&mut *transaction)
-            .await
-            .is_err()
-    );
-    transaction.rollback().await.unwrap();
-    let core = sqlx::query_scalar!(
-        "SELECT id FROM database WHERE id = $1",
-        database.into_uuid()
-    )
-    .fetch_optional(&pool)
-    .await
-    .unwrap();
-    assert_eq!(core, Some(database.into_uuid()));
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn rollback_waits_for_in_flight_core_allocation_before_checking_its_guard(pool: PgPool) {
-    let database = DatabaseId::new();
-    let mut allocation = pool.begin().await.unwrap();
-    sqlx::query!(
-        "INSERT INTO database (id) VALUES ($1)",
-        database.into_uuid()
-    )
-    .execute(&mut *allocation)
-    .await
-    .unwrap();
-    let mut rollback = pool.begin().await.unwrap();
-    let error = {
-        let mut pending = std::pin::pin!(sqlx::raw_sql(SPLIT_DOWN).execute(&mut *rollback));
-        assert!(
-            tokio::time::timeout(std::time::Duration::from_millis(50), &mut pending)
-                .await
-                .is_err()
-        );
-        allocation.commit().await.unwrap();
-        pending.await.unwrap_err()
-    };
-    assert!(
-        error
-            .to_string()
-            .contains("cannot revert database/entity separation")
-    );
-    rollback.rollback().await.unwrap();
-    let core = sqlx::query_scalar!(
-        "SELECT id FROM database WHERE id = $1",
-        database.into_uuid()
-    )
-    .fetch_optional(&pool)
-    .await
-    .unwrap();
-    assert_eq!(core, Some(database.into_uuid()));
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn removing_an_owner_deletes_their_app_storage_but_leaves_unowned_storage(pool: PgPool) {
     let (repo, table, _) = fixture(&pool).await;
     let store = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
@@ -349,73 +178,82 @@ async fn removing_an_owner_deletes_their_app_storage_but_leaves_unowned_storage(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn new_metadata_writers_follow_the_legacy_lock_order(pool: PgPool) {
-    let (repo, table, _) = fixture(&pool).await;
-    let mut legacy = pool.begin().await.unwrap();
-    sqlx::query!(
-        "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
-        table.database_id.into_uuid()
-    )
-    .fetch_one(&mut *legacy)
-    .await
-    .unwrap();
-    let mut trash = std::pin::pin!(repo.trash_database(table.database_id, chrono::Utc::now()));
-    assert!(
-        tokio::time::timeout(std::time::Duration::from_millis(50), &mut trash)
-            .await
-            .is_err()
-    );
-    // This update must not deadlock against a new writer holding the entity.
-    sqlx::query!(
-        "UPDATE databases SET name = 'Old writer' WHERE id = $1",
-        table.database_id.into_uuid()
-    )
-    .execute(&mut *legacy)
-    .await
-    .unwrap();
-    legacy.commit().await.unwrap();
-    assert!(trash.await.unwrap());
-    let database = repo
-        .get_database(table.database_id)
-        .await
-        .unwrap()
-        .unwrap()
-        .0;
-    assert_eq!(database.name, "Old writer");
-    assert!(database.trashed_at.is_some());
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn new_schema_batches_wait_for_legacy_table_writers(pool: PgPool) {
-    let (_, table, _) = fixture(&pool).await;
+async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool: PgPool) {
+    let (repo, _, shared_definition) = fixture(&pool).await;
     let store = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
-    let mut legacy = pool.begin().await.unwrap();
-    sqlx::query!(
-        "SELECT id FROM databases WHERE id = $1 FOR UPDATE",
-        table.database_id.into_uuid()
+    store.create_storage().await.unwrap();
+    let mut transaction = pool.begin().await.unwrap();
+    // Down also resets populated app and core storage, without a preservation guard.
+    sqlx::raw_sql(SPLIT_DOWN)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    sqlx::raw_sql(include_str!("entity_split/before_split.sql"))
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    sqlx::raw_sql(SPLIT_UP)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    let remaining = sqlx::query_scalar!(
+        r#"SELECT (SELECT COUNT(*) FROM database)
+                 + (SELECT COUNT(*) FROM database_entity)
+                 + (SELECT COUNT(*) FROM database_tables)
+                 + (SELECT COUNT(*) FROM database_columns)
+                 + (SELECT COUNT(*) FROM database_rows)
+                 + (SELECT COUNT(*) FROM database_views)
+                 + (SELECT COUNT(*) FROM database_view_positions)
+                 + (SELECT COUNT(*) FROM property_definitions WHERE database_id IS NOT NULL)
+                 + (SELECT COUNT(*) FROM entity_properties WHERE entity_type = 'DATABASE_ROW')
+                 + (SELECT COUNT(*) FROM entity_access WHERE entity_type = 'database')
+                 + (SELECT COUNT(*) FROM database_changes)
+                 + (SELECT COUNT(*) FROM database_change_rows)
+                 + (SELECT COUNT(*) FROM database_change_columns)
+                 + (SELECT COUNT(*) FROM database_queries)
+                 + (SELECT COUNT(*) FROM database_starter_seeds) AS "count!""#
     )
-    .fetch_one(&mut *legacy)
+    .fetch_one(&mut *transaction)
     .await
     .unwrap();
-    let writes = batch(
-        table.database_id,
-        vec![Write::CreateTable {
-            table_id: TableId::new(),
-            name: "Contacts".into(),
-        }],
-    );
-    let mut pending = std::pin::pin!(store.apply_writes(&writes, None));
-    assert!(
-        tokio::time::timeout(std::time::Duration::from_millis(50), &mut pending)
-            .await
-            .is_err()
-    );
-    let position = models_databases::position::key_between(Some(&table.position), None).unwrap();
-    sqlx::query!("INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'Contacts', $3)", TableId::new().into_uuid(), table.database_id.into_uuid(), position.as_str())
-        .execute(&mut *legacy).await.unwrap();
-    legacy.commit().await.unwrap();
+    assert_eq!(remaining, 0);
+    let old_table = sqlx::query_scalar!("SELECT to_regclass('databases')::text")
+        .fetch_one(&mut *transaction)
+        .await
+        .unwrap();
+    assert!(old_table.is_none());
+    let shared = sqlx::query_scalar!(
+        "SELECT id FROM property_definitions WHERE id = $1",
+        shared_definition
+    )
+    .fetch_optional(&mut *transaction)
+    .await
+    .unwrap();
+    assert_eq!(shared, Some(shared_definition));
+    transaction.commit().await.unwrap();
+    // The owner remains and can immediately create and write a fresh app database.
+    let database = repo
+        .create_database(
+            &CreateDatabase {
+                name: "Fresh start".into(),
+                owner_id: user(),
+                acting_bot: None,
+                template: None,
+            },
+            FirstTable {
+                name: "Contacts",
+                title_column: "Name",
+            },
+        )
+        .await
+        .unwrap();
     assert_eq!(
-        pending.await.unwrap(),
-        WritesOutcome::TableNameTaken { write: 0 }
+        repo.get_database(database.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .0
+            .name,
+        "Fresh start"
     );
 }
