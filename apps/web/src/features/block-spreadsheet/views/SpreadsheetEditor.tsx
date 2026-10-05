@@ -574,7 +574,7 @@ export function SpreadsheetEditor(props: {
   return (
     <section
       ref={editorElement}
-      class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface text-ink"
+      class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-panel text-ink"
       aria-label={`${props.name} spreadsheet`}
       onKeyDown={(event) => {
         if (
@@ -918,7 +918,7 @@ export function SpreadsheetEditor(props: {
           }}
         />
       </Show>
-      <div class="flex min-h-9 min-w-0 shrink-0 items-center gap-2 border-t border-edge-muted bg-surface px-2 text-[11px] text-ink-muted max-sm:flex-wrap max-sm:gap-x-1 max-sm:gap-y-0 max-sm:px-1 touch:min-h-[48px]">
+      <div class="flex min-h-9 min-w-0 shrink-0 items-center gap-2 border-t border-edge-muted bg-panel px-2 text-[11px] text-ink-muted max-sm:flex-wrap max-sm:gap-x-1 max-sm:gap-y-0 max-sm:px-1 touch:min-h-[48px]">
         <SpreadsheetSheetTabs
           sheets={props.store.sheets()}
           activeSheetId={props.store.activeSheetId()}

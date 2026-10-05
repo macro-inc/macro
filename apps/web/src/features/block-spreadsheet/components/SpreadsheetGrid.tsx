@@ -1065,7 +1065,7 @@ export function SpreadsheetGrid(props: {
           aria-readonly={props.readonly}
           aria-activedescendant={`${id}-${cellAddress(props.selection.anchor)}`}
           tabIndex={0}
-          class="relative min-h-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y touch-pinch-zoom outline-none bg-surface selection:bg-accent/20"
+          class="relative min-h-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y touch-pinch-zoom outline-none bg-panel selection:bg-accent/20"
           style={{
             '--spreadsheet-cell-padding': `${CELL_PADDING_X * scale()}px`,
             '--spreadsheet-cell-padding-y': `${CELL_PADDING_Y * scale()}px`,
@@ -1196,7 +1196,7 @@ export function SpreadsheetGrid(props: {
             <div
               role="row"
               aria-rowindex={1}
-              class="sticky top-0 z-20 flex bg-surface text-ink-muted font-medium select-none"
+              class="sticky top-0 z-20 flex bg-panel text-ink-muted font-medium select-none"
               style={{
                 height: `${headerHeight()}px`,
                 width: `${totalWidth()}px`,
@@ -1206,7 +1206,7 @@ export function SpreadsheetGrid(props: {
               <div
                 role="columnheader"
                 aria-label="Select all cells"
-                class="sticky left-0 z-30 shrink-0 border-b border-r border-edge bg-surface"
+                class="sticky left-0 z-30 shrink-0 border-b border-r border-edge bg-panel"
                 style={{ width: `${headerWidth()}px` }}
               >
                 <button
@@ -1358,7 +1358,7 @@ export function SpreadsheetGrid(props: {
                 >
                   <div
                     role="rowheader"
-                    class="sticky left-0 z-10 shrink-0 border-b border-r border-edge-muted bg-surface text-center text-ink-muted select-none"
+                    class="sticky left-0 z-10 shrink-0 border-b border-r border-edge-muted bg-panel text-center text-ink-muted select-none"
                     style={{
                       width: `${headerWidth()}px`,
                       'font-size': `${11 * scale()}px`,
@@ -1631,7 +1631,7 @@ export function SpreadsheetGrid(props: {
                               'var(--spreadsheet-cell-padding-y)',
                             'line-height': CELL_LINE_HEIGHT,
                           }}
-                          class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-surface text-ink select-none"
+                          class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-panel text-ink select-none"
                           classList={{
                             'font-semibold': look()?.bold ?? cell()?.bold,
                             'tabular-nums': numeric(),
@@ -1771,7 +1771,7 @@ export function SpreadsheetGrid(props: {
                                 (isTouchDevice() && !!props.referenceSelection)
                               }
                               onSelectionChange={props.onTextSelection}
-                              class="absolute inset-0 size-full resize-none overflow-hidden bg-surface px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
+                              class="absolute inset-0 size-full resize-none overflow-hidden bg-panel px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
                               value={props.draft}
                               onInput={props.onDraft}
                               onKeyDown={editKeyDown}

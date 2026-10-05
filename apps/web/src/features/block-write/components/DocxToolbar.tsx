@@ -293,7 +293,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
       <Toolbar
         size="icon-sm"
         aria-label="Document formatting"
-        class="flex h-10 w-full min-w-0 gap-0.5 overflow-x-auto overscroll-x-contain rounded-none border-0 bg-transparent px-3 py-0 touch:h-[48px] touch:touch-pan-x touch:px-1"
+        class="flex h-10 w-full min-w-0 gap-0.5 overflow-x-auto overscroll-x-contain rounded-none border-0 bg-transparent px-3 py-0 touch:h-[48px] touch:touch-pan-x touch:px-1 [&_[data-button]]:size-7 [&_[data-button]>svg]:size-[18px]! [&_select]:h-7"
       >
         <Show when={props.canEdit}>
           <Toolbar.Group>

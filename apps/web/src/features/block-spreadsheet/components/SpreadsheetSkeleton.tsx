@@ -29,11 +29,11 @@ export function SpreadsheetSkeleton(props: { label?: string }) {
       role="status"
       aria-busy="true"
       aria-label={label()}
-      class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface opacity-100 transition-opacity duration-300 starting:opacity-0"
+      class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel opacity-100 transition-opacity duration-300 starting:opacity-0"
     >
       <span class="sr-only">{label()}…</span>
       <div
-        class="flex shrink-0 bg-surface text-ink-muted select-none"
+        class="flex shrink-0 bg-panel text-ink-muted select-none"
         style={{ height: `${COLUMN_HEADER_HEIGHT}px` }}
         aria-hidden="true"
       >
@@ -57,7 +57,7 @@ export function SpreadsheetSkeleton(props: { label?: string }) {
           {(row) => (
             <div class="flex" style={{ height: `${ROW_HEIGHT}px` }}>
               <div
-                class="flex shrink-0 items-center justify-center border-b border-r border-edge-muted bg-surface text-[11px] text-ink-muted opacity-60 select-none"
+                class="flex shrink-0 items-center justify-center border-b border-r border-edge-muted bg-panel text-[11px] text-ink-muted opacity-60 select-none"
                 style={{ width: `${ROW_HEADER_WIDTH}px` }}
               >
                 {row + 1}

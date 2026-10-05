@@ -216,7 +216,7 @@ interface TableRange {
 /** A pointer gesture inside a table. */
 type TableGesture =
   | { kind: 'cells'; shape: number; from: CellRef; at: Point; moved: boolean }
-  /** Pressed on a table not being edited: a drag moves it, a click edits the cell. */
+  /** Pressed on an unselected table: a drag moves it, a click edits the cell. */
   | { kind: 'frame'; shape: number; from: CellRef; at: Point }
   | {
       kind: 'border';
@@ -896,12 +896,9 @@ export function PptxEditor() {
         };
         return;
       }
-      // Outside its cells (no caret or cell range in this table), a press
-      // grabs the table: dragging moves it, a click puts the caret in the cell.
-      const inCells =
-        (edit?.shape === t.shape.id && !!edit.cell) ||
-        tableRange()?.shape === t.shape.id;
-      if (!inCells) {
+      // A table that isn't selected yet is grabbed whole: dragging moves it,
+      // a click puts the caret in the cell. Once selected, drags pick cells.
+      if (!editor.selectedIds().includes(t.shape.id)) {
         if (edit) editor.stopEditing();
         setTableRange(null);
         editor.pointerDown(at, { shift: false, detail: e.detail });

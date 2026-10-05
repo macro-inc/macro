@@ -8,7 +8,7 @@ function isPaper(fill?: string): boolean {
 /** The CSS background of a cell fill. */
 export function cellBackground(fill?: string): string | undefined {
   if (!fill) return undefined;
-  return isPaper(fill) ? 'var(--color-surface)' : fill;
+  return isPaper(fill) ? 'var(--color-panel)' : fill;
 }
 
 /** Excel's default black follows the app foreground on an unfilled cell, and so

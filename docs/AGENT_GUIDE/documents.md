@@ -564,9 +564,9 @@ Layout and test hooks:
   caret lies across the rotated line, and arrow keys follow the screen (in
   text rotated 90°, Down is the next character and Left the next line).
   Turning a text box that resizes to fit its text swaps its width and height.
-- **Tables**: press a table that has no caret or cell range in it and drag to
-  move it, or release without dragging to type in the clicked cell in place
-  (same caret); Tab and
+- **Tables**: press a table that isn't selected and drag to move it, or
+  release without dragging to type in the clicked cell in place (same
+  caret); Tab and
   Shift+Tab move between cells (Tab in the last cell adds a row); drag across
   cells to select a range (`pptx-cell-range`), which the Table Design/Layout
   tabs and the table menu act on (merge/split, shading `pptx-cell-shading`,
@@ -574,8 +574,8 @@ Layout and test hooks:
   and columns, distribute, alignment, and Text Direction
   `pptx-cell-text-direction`, items `pptx-cell-text-direction-<value>`; a
   vertical cell's row grows to its text). Drag a column or row border of a
-  selected table to resize it. While a cell is being edited, drag near the
-  frame's edge (or click outside the table first) to move it.
+  selected table to resize it. To move a table that is already selected,
+  drag near the frame's edge, or click outside it first.
 - **Charts**: double-click a chart, or **Edit data** (`pptx-chart-edit-data`)
   on Chart Design, opens the data grid (`pptx-chart-data`, cells
   `pptx-chart-cell-<row>-<col>`, **Apply** `pptx-chart-apply`); Chart Design

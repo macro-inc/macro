@@ -142,7 +142,7 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
   }
 
   return (
-    <div class="flex h-9 min-w-0 max-w-[40%] shrink-0 items-center gap-1 bg-surface px-1 max-sm:max-w-none max-sm:flex-1 touch:h-[48px] lg:max-w-[min(50%,42rem)]">
+    <div class="flex h-9 min-w-0 max-w-[40%] shrink-0 items-center gap-1 bg-panel px-1 max-sm:max-w-none max-sm:flex-1 touch:h-[48px] lg:max-w-[min(50%,42rem)]">
       <Button
         label="Add sheet"
         size="icon-sm"
