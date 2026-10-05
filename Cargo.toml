@@ -444,3 +444,10 @@ strip = "none"
 inherits = "release"
 lto = true
 opt-level = "s"
+
+# The fig engine's browser build (apps/web `build-fig-engine-wasm`): one
+# codegen unit and full LTO, so its rasterizing loops inline across crates.
+[profile.fig-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
