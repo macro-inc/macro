@@ -467,9 +467,7 @@ impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
     }
 
     fn searchable_catalog(&self) -> Vec<SearchableTool> {
-        let mut catalog = self.static_tools.searchable_catalog();
-        catalog.extend(self.mcp_tools.catalog());
-        catalog
+        self.mcp_tools.catalog()
     }
 
     fn searchable_toolset_names(&self) -> Vec<String> {

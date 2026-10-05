@@ -23,8 +23,8 @@ fn lists_each_tool_by_name_with_its_first_sentence() {
          These tools are available too, but their parameters are not loaded yet. \
          To use one, call `LoadTools` with its exact name (load several at once if \
          the task needs them), then call it on your next step. `SearchTools` also \
-         finds them by keyword. Once loaded, a tool stays loaded for the rest of \
-         the conversation.\n\
+         finds them by keyword. Once you have called a tool, it stays loaded for \
+         the rest of the conversation.\n\
          - EditPresentation: Edit a PowerPoint (.pptx) presentation: an ordered batch of operations.\n\
          - ListReminders: List the user's reminders\n"
     );

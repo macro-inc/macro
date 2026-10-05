@@ -338,18 +338,15 @@ impl<T: Send + Sync + 'static, Mcp: ToolSet<T>> ToolSet<T> for CombinedToolSet<T
     }
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
-        // Only the eager static (first-party) tools are sent on every request.
-        // Deferred static tools and every MCP tool are loaded on demand via
-        // `LoadTools` / `SearchTools` — they are surfaced through
-        // `searchable_catalog`, not here — so a large or growing catalog never
-        // bloats the request.
+        // Only the static (first-party) tools are sent on every request. MCP
+        // tools are loaded on demand via the `SearchTools` tool — they are
+        // surfaced through `searchable_catalog`, not here — so a large or
+        // growing MCP catalog never bloats the request.
         self.static_tools.request_schemas()
     }
 
     fn searchable_catalog(&self) -> Vec<SearchableTool> {
-        let mut catalog = self.static_tools.searchable_catalog();
-        catalog.extend(ToolSet::<T>::searchable_catalog(&self.mcp_tools));
-        catalog
+        ToolSet::<T>::searchable_catalog(&self.mcp_tools)
     }
 
     fn searchable_toolset_names(&self) -> Vec<String> {

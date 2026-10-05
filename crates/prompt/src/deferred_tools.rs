@@ -32,8 +32,8 @@ pub fn render(tools: &[(&str, &str)]) -> Option<String> {
          These tools are available too, but their parameters are not loaded \
          yet. To use one, call `LoadTools` with its exact name (load several \
          at once if the task needs them), then call it on your next step. \
-         `SearchTools` also finds them by keyword. Once loaded, a tool stays \
-         loaded for the rest of the conversation.\n\
+         `SearchTools` also finds them by keyword. Once you have called a \
+         tool, it stays loaded for the rest of the conversation.\n\
          {list}\n"
     ))
 }

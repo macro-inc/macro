@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
 use ai_tools::user_tool_review::user_tool_finisher;
-use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
+use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, ToolSetWithPrompt, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::StreamExt as _;
@@ -294,6 +294,9 @@ async fn drive_turn(
         Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(toolset, mcp)),
         None => toolset,
     };
+    // Most of Macro's tools go out by name only; the model loads the rest.
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> =
+        Arc::new(DeferredToolSet::new(toolset, tools.deferred));
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(GatedToolSet {
         tools: toolset,
         gate,
@@ -388,6 +391,7 @@ async fn fetch_user_memory(
     let tools = ToolSetWithPrompt {
         toolset: tools.toolset,
         prompt: tools.prompt,
+        deferred: tools.deferred,
     };
     let memory_service =
         MemoryServiceImpl::new(PgMemoryRepo::new(db.clone()), tool_context.clone(), tools);

@@ -340,15 +340,14 @@ fn every_host_exposes_skill_discovery_and_reading() {
 fn hosts_with_tool_search_defer_all_but_the_core_tools() {
     for host in [AiHost::Chat, AiHost::AgentSession, AiHost::ChannelBot] {
         let tools = tools_for(host);
-        let sent: Vec<String> = tools
-            .toolset
+        let lazy = DeferredToolSet::new(tools.toolset.clone(), tools.deferred.clone());
+        let sent: Vec<String> = lazy
             .request_schemas()
             .unwrap_or_default()
             .into_iter()
             .map(|schema| schema.name)
             .collect();
-        let catalog: Vec<String> = tools
-            .toolset
+        let catalog: Vec<String> = lazy
             .searchable_catalog()
             .into_iter()
             .map(|tool| tool.name)
@@ -381,11 +380,7 @@ fn hosts_with_tool_search_defer_all_but_the_core_tools() {
 fn the_mcp_host_defers_nothing() {
     let tools = tools_for(AiHost::Mcp);
 
-    assert!(tools.toolset.searchable_catalog().is_empty());
-    assert_eq!(
-        tools.toolset.request_schemas().unwrap_or_default().len(),
-        tools.toolset.tools.len()
-    );
+    assert!(tools.deferred.is_empty());
     assert!(!tools.prompt.to_string().contains("LoadTools"));
 }
 
