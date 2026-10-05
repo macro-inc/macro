@@ -556,8 +556,11 @@ fn legacy_free_enterprise_and_exempt_features_keep_their_paths() {
         AccountingRoute::Unmetered
     );
     assert_eq!(PlanTier::Premium.monthly_price_cents(), 4_000);
-    assert_eq!(PlanTier::Max.included_ai_cents_per_seat(), 20_000);
-    assert_eq!(super::super::models::list_rate_cents(1.0), 250);
+    // Both accounting paths read the same allowance constant.
+    let allowance = super::super::pricing::INCLUDED_ALLOWANCE_CENTS;
+    assert_eq!(PlanTier::Premium.included_ai_cents_per_seat(), allowance);
+    assert_eq!(PlanTier::Max.included_ai_cents_per_seat(), allowance);
+    assert_eq!(INCLUDED_PUBLIC_USAGE, public_cents(allowance as u64));
     let mut auth = authorization(true);
     auth.policy = UsagePolicy::Legacy;
     assert!(matches!(

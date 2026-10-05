@@ -1,6 +1,7 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
@@ -22,6 +23,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   enableChatV3Agents,
   enableDatabases,
+  enableFigViewer,
   enableProjects,
   enableReminders,
   enableSnippets,
@@ -305,6 +307,16 @@ export function runCreateAction(
             projectId: options.projectId,
             source,
           }),
+        shouldInsert,
+      });
+      return;
+    case 'fig':
+      if (!isFeatureEnabled(enableFigViewer)) return;
+      createBlock({
+        blockName: 'fig',
+        loading: true,
+        createFn: () =>
+          createFigDocument({ projectId: options.projectId, source }),
         shouldInsert,
       });
       return;
@@ -720,6 +732,22 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    label: 'Design',
+    enabled: () => isFeatureEnabled(enableFigViewer),
+    icon: getIconConfig('fig').icon,
+    description: 'Create design',
+    launcherHint: 'Figma-compatible canvas for UI and graphics',
+    keywords: ['new', 'make', 'add', 'design', 'figma', 'mockup', 'ui'],
+    blockName: 'fig',
+    hotkeyToken: TOKENS.create.design,
+    altHotkeyToken: TOKENS.create.designNewSplit,
+    hotkey: 'i',
+    keyDownHandler: () => {
+      runCreateAction('fig', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
     label: 'Spreadsheet',
     enabled: isSpreadsheetEnabledForCurrentUser,
     icon: getIconConfig('spreadsheet').icon,
@@ -801,10 +829,12 @@ export function useCreateMenuBlocks(
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
   const projectsFlag = useFeatureFlag(enableProjects);
   const databasesFlag = useFeatureFlag(enableDatabases);
+  const figFlag = useFeatureFlag(enableFigViewer);
   return createMemo(() => {
     remindersFlag();
     agentsFlag();
     databasesFlag();
+    figFlag();
     return (source() ?? commands).filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;

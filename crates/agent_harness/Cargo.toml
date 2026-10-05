@@ -43,6 +43,8 @@ github = { path = "../github", default-features = false, features = [
 ] }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
+# The owner's custom MCP server rows, listed so a sandbox can be told they exist.
+mcp_client = { path = "../mcp_client" }
 pipedream_mcp = { path = "../pipedream_mcp" }
 macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }

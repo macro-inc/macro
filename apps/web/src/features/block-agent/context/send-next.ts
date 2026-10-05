@@ -12,6 +12,17 @@ import type {
   QueuedActionDto,
 } from '@service-agent-harness/generated/schemas';
 
+/** The action a queued entry will run as, when the composer can show it sent. */
+export function actionForQueuedEntry(
+  entry: QueuedActionDto
+): AgentAction | undefined {
+  if (entry.kind === 'prompt' && entry.prompt != null) {
+    return { type: 'prompt', prompt: entry.prompt };
+  }
+  if (entry.kind === 'compact') return { type: 'compact' };
+  return undefined;
+}
+
 export function createSendNext(session: {
   /**
    * The session's turn as it stands at call time, including what it has
@@ -35,12 +46,7 @@ export function createSendNext(session: {
     if (session.currentTurn() === 'starting') return;
     const head = session.entries()[0];
     if (!head) return;
-    const action: AgentAction | undefined =
-      head.kind === 'prompt' && head.prompt != null
-        ? { type: 'prompt', prompt: head.prompt }
-        : head.kind === 'compact'
-          ? { type: 'compact' }
-          : undefined;
+    const action = actionForQueuedEntry(head);
     void session.issue({ type: 'stop' })?.then((result) => {
       if (result.isErr()) session.retract(head.actionId);
     });

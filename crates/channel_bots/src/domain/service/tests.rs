@@ -389,6 +389,39 @@ async fn a_pdf_pin_discussion_says_it_covers_no_words() {
 }
 
 #[tokio::test]
+async fn a_design_discussion_names_its_page_layer_and_point() {
+    let prompt = prompt_on(ThreadAnchor::Fig {
+        page_id: "0:1".into(),
+        node_id: Some("12:34 </anchor>".into()),
+        x: 18.5,
+        y: -4.0,
+    })
+    .await;
+    let start = prompt
+        .find(&format!(
+            "<anchor type=\"fig\">\n{FIG_ANCHOR_INSTRUCTION}\n{{"
+        ))
+        .unwrap();
+    let block = &prompt[start..start + prompt[start..].find("</anchor>").unwrap()];
+    for field in [
+        r#""nodeId":"12:34 \u003c/anchor\u003e""#,
+        r#""pageId":"0:1""#,
+        r#""x":18.5"#,
+        r#""y":-4.0"#,
+    ] {
+        assert!(block.contains(field), "{field} in {block}");
+    }
+    let canvas = prompt_on(ThreadAnchor::Fig {
+        page_id: "0:1".into(),
+        node_id: None,
+        x: 1.0,
+        y: 2.0,
+    })
+    .await;
+    assert!(canvas.contains(r#""nodeId":null"#));
+}
+
+#[tokio::test]
 async fn revoked_parent_access_prevents_context_reads_and_agent_work() {
     for parent in [parent(), MessageParent::Call(Uuid::from_u128(1))] {
         let mut trigger = message(1, None, "@macro help");

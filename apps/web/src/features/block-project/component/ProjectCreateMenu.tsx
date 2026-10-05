@@ -1,3 +1,4 @@
+import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
@@ -7,6 +8,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableChatV3Agents,
+  enableFigViewer,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
@@ -155,6 +157,22 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     },
   },
   {
+    label: 'Design',
+    blockName: 'fig' as BlockName,
+    hotkeyToken: TOKENS.create.design,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="fig" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createFigDocument({ projectId, source: 'project' });
+      if (!id) throw new Error('Failed to create design');
+      return id;
+    },
+  },
+  {
     label: 'Folder',
     blockName: 'project' as BlockName,
     hotkeyToken: TOKENS.create.project,
@@ -243,6 +261,11 @@ function ProjectCreateDialog(props: {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
   const spreadsheetAccess = useSpreadsheetAccess();
+  const offered = (spec: CreateBlockSpec) => {
+    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+    if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
+    return true;
+  };
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
@@ -252,12 +275,7 @@ function ProjectCreateDialog(props: {
             <Dialog.Title class="text-base font-semibold text-ink pb-3">
               Create in {props.name}
             </Dialog.Title>
-            <For
-              each={BLOCK_CREATE_SPECS.filter(
-                (spec) =>
-                  spec.blockName !== 'spreadsheet' || spreadsheetAccess()
-              )}
-            >
+            <For each={BLOCK_CREATE_SPECS.filter(offered)}>
               {(spec) => (
                 <button
                   class="flex items-center gap-2 py-1 text-sm hover:bg-hover w-full text-left min-h-11"
@@ -311,11 +329,14 @@ function MenuContent(props: { projectId: string; name: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
   const spreadsheetAccess = useSpreadsheetAccess();
+  const offered = (spec: CreateBlockSpec) => {
+    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+    if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
+    return true;
+  };
 
   const items = (): MenuItemProps[] =>
-    BLOCK_CREATE_SPECS.filter(
-      (spec) => spec.blockName !== 'spreadsheet' || spreadsheetAccess()
-    ).map((spec) => ({
+    BLOCK_CREATE_SPECS.filter(offered).map((spec) => ({
       label: spec.label,
       Icon: spec.icon,
       action: () => {

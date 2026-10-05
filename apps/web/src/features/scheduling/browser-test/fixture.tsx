@@ -2,11 +2,22 @@ import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { themeCssVars } from '../../theme/utils/themeColorTokens';
 import { BookingReceiptView } from '../views/booking-receipt-view';
+import { FixtureCalendars } from './calendars';
 import '@fontsource-variable/inter';
 import '../../../index.css';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { ViewShell } from '@app/components/view-shell';
+import type { SettingsTab } from '@core/constant/SettingsState';
+import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
+import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { render } from 'solid-js/web';
+import { SettingsSearchTarget } from '../../settings/components/settings-search-target';
+import { SettingsSidebar } from '../../settings/components/settings-sidebar';
+import {
+  type SettingsSearchResult,
+  searchSettings,
+} from '../../settings/core/settings-search';
+import { SettingsPage } from '../../settings/primitives';
 import {
   type SchedulingCapabilities,
   SchedulingProvider,
@@ -23,6 +34,20 @@ import { PublicBookingView } from '../views/public-booking-view';
 import { SchedulingSettingsView } from '../views/settings-view';
 
 function Fixture() {
+  const [settingsTab, setSettingsTab] =
+    createSignal<SettingsTab>('Booking links');
+  const [settingsSearch, setSettingsSearch] = createSignal('');
+  const [selectedResult, setSelectedResult] =
+    createSignal<SettingsSearchResult>();
+  const settingsGroups = SETTINGS_TAB_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter(
+      (item) => item.tab === 'Calendar' || item.tab === 'Booking links'
+    ),
+  })).filter((group) => group.items.length > 0);
+  const settingsResults = createMemo(() =>
+    searchSettings(settingsGroups, settingsSearch())
+  );
   const [loseNextResponse, setLoseNextResponse] = createSignal(false);
   const receipts = new Map<string, BookingReceipt>();
   const [narrow, setNarrow] = createSignal(false);
@@ -176,17 +201,16 @@ function Fixture() {
     window.addEventListener('hashchange', followPreview);
     onCleanup(() => window.removeEventListener('hashchange', followPreview));
   });
-  let selectedScope = () => 'me';
+  const [readOnlyTeam, setReadOnlyTeam] = createSignal(false);
   const capabilities: SchedulingCapabilities = {
     userId: () => 'macro|alex@example.com',
     scopes: () => [
       { id: 'me', name: 'Personal', canEdit: true },
-      { id: 'team', teamId: 'team', name: 'Design team', canEdit: true },
       {
-        id: 'readonly',
+        id: 'team',
         teamId: 'team',
-        name: 'Team member (read only)',
-        canEdit: false,
+        name: 'Design team',
+        canEdit: !readOnlyTeam(),
       },
     ],
     members: () => [
@@ -216,28 +240,21 @@ function Fixture() {
         setScreen('receipt');
       }
     },
-    openConnections: () => setNotice('Calendar connection shortcut selected'),
     openTeamSettings: () => setNotice('Macro team settings shortcut selected'),
     createSource: (scope, range) => {
-      selectedScope = () => (scope().id === 'readonly' ? 'team' : scope().id);
       return {
-        profile: () =>
-          profiles()[scope().id === 'readonly' ? 'team' : scope().id],
+        profile: () => profiles()[scope().id],
         bookings: () =>
           bookings().filter(
             (b) =>
-              b.profileId ===
-                profiles()[scope().id === 'readonly' ? 'team' : scope().id]
-                  .id &&
+              b.profileId === profiles()[scope().id].id &&
               b.startsAt >= range().from &&
               b.startsAt < range().to
           ),
         loadInsights: async (from, to) =>
           bookings().filter(
             (b) =>
-              b.profileId ===
-                profiles()[scope().id === 'readonly' ? 'team' : scope().id]
-                  .id &&
+              b.profileId === profiles()[scope().id].id &&
               b.startsAt >= from &&
               b.startsAt < to
           ),
@@ -300,12 +317,14 @@ function Fixture() {
         <button
           type="button"
           onClick={() => {
-            setActive(selectedScope());
             setSlug(undefined);
             setScreen('public');
           }}
         >
           Public booking page
+        </button>
+        <button type="button" onClick={() => setReadOnlyTeam(!readOnlyTeam())}>
+          {readOnlyTeam() ? 'Enable team editing' : 'Read-only team'}
         </button>
         <button type="button" onClick={() => applyTheme(!dark())}>
           {dark() ? 'Light preview' : 'Dark preview'}
@@ -326,7 +345,43 @@ function Fixture() {
       >
         <Show when={screen() === 'settings'}>
           <SchedulingProvider value={capabilities}>
-            <SchedulingSettingsView />
+            <ViewShell.Root asidePreferenceKey="scheduling-preview" resizable>
+              <ViewShell.Aside>
+                <SettingsSidebar
+                  groups={settingsGroups}
+                  results={settingsResults()}
+                  selectedResultId={selectedResult()?.id}
+                  searchQuery={settingsSearch()}
+                  onSearchQueryChange={setSettingsSearch}
+                  isItemActive={(tab) => settingsTab() === tab}
+                  onSelect={(tab) => {
+                    setSettingsTab(tab);
+                    setSelectedResult(undefined);
+                  }}
+                  onSelectResult={(result) => {
+                    setSettingsTab(result.tab);
+                    setSelectedResult({ ...result });
+                  }}
+                  onLogout={() => setNotice('Preview only')}
+                />
+              </ViewShell.Aside>
+              <ViewShell.Main>
+                <ViewShell.TopBar />
+                <SettingsSearchTarget result={selectedResult()}>
+                  <Show
+                    when={settingsTab() === 'Calendar'}
+                    fallback={<SchedulingSettingsView />}
+                  >
+                    <SettingsPage
+                      title="Calendar"
+                      description="Manage your connected accounts, calendar visibility, and colors."
+                    >
+                      <FixtureCalendars notify={setNotice} />
+                    </SettingsPage>
+                  </Show>
+                </SettingsSearchTarget>
+              </ViewShell.Main>
+            </ViewShell.Root>
           </SchedulingProvider>
         </Show>
         <Show when={screen() === 'public'}>

@@ -1,7 +1,10 @@
 import CaretLeftIcon from '@phosphor/caret-left.svg';
-import { cn, Layer } from '@ui';
+import { cn } from '@ui';
 import { type JSX, Show, useContext } from 'solid-js';
-import { SettingsSheetContext } from '../primitives';
+import {
+  SettingsSheetContext,
+  SettingsCard as SharedSettingsCard,
+} from '../primitives';
 
 /*
  * Connections presentation adapted from #6151. Kept local to the Connections
@@ -39,18 +42,19 @@ export function SettingsPage(props: {
   const inSheet = useContext(SettingsSheetContext);
   return (
     <div
+      data-settings-page
       data-drawer-scroll-body={inSheet ? true : undefined}
-      class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]"
+      class="h-full min-h-0 overflow-y-auto [overflow-anchor:none] bg-[color-mix(in_srgb,var(--color-panel)_99%,var(--color-ink))] [&_[data-variant=cta]]:bg-ink [&_[data-variant=cta]]:text-panel [&_[data-variant=cta]]:focus-visible:ring-panel/70 [&_:has(>input[type=checkbox])]:[--color-accent:var(--color-ink)] [&_input[type=checkbox]]:accent-ink"
     >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
           the floating header and bottom rows like every other block. */}
       <div
         class={cn(
-          'mx-auto w-full max-w-[710px]',
+          'mx-auto w-full max-w-[960px]',
           inSheet
             ? 'px-3 pt-2 pb-[max(24px,var(--mobile-sheet-safe-padding))]'
-            : 'px-10 pt-4 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
+            : 'px-12 pt-8 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
         )}
       >
         <Show when={props.onBack}>
@@ -72,7 +76,7 @@ export function SettingsPage(props: {
                     {props.icon}
                   </div>
                 </Show>
-                <h1 class="min-w-0 text-2xl/tight font-semibold text-ink">
+                <h1 class="min-w-0 text-[26px]/tight font-medium tracking-[-0.025em] text-ink">
                   {props.title}
                 </h1>
               </div>
@@ -89,7 +93,7 @@ export function SettingsPage(props: {
           <Show when={props.signpost}>{props.signpost}</Show>
         </header>
         <div
-          class={cn('flex flex-col', inSheet ? 'mt-3 gap-6' : 'mt-9 gap-10')}
+          class={cn('flex flex-col', inSheet ? 'mt-3 gap-6' : 'mt-12 gap-12')}
         >
           {props.children}
         </div>
@@ -98,41 +102,7 @@ export function SettingsPage(props: {
   );
 }
 
-/**
- * A titled group within a page. The heading/description are optional so a page
- * can also drop a bare card straight under the title.
- */
-export function SettingsSection(props: {
-  title?: JSX.Element;
-  description?: string;
-  /** Right-aligned controls beside the section heading. */
-  actions?: JSX.Element;
-  class?: string;
-  children: JSX.Element;
-}) {
-  return (
-    <section class={cn('flex flex-col gap-3', props.class)}>
-      <Show when={props.title || props.actions}>
-        <div class="flex items-end justify-between gap-4">
-          <div class="flex flex-col gap-0.5 min-w-0">
-            <Show when={props.title}>
-              <h2 class="text-[15px] font-semibold text-ink">{props.title}</h2>
-            </Show>
-            <Show when={props.description}>
-              <p class="text-sm text-ink-muted text-balance">
-                {props.description}
-              </p>
-            </Show>
-          </div>
-          <Show when={props.actions}>
-            <div class="shrink-0">{props.actions}</div>
-          </Show>
-        </div>
-      </Show>
-      {props.children}
-    </section>
-  );
-}
+export { SettingsSection } from '../primitives';
 
 /**
  * A quiet outlined card. Direct children are treated as rows and get a divider
@@ -141,20 +111,10 @@ export function SettingsSection(props: {
  * `border-1` is 1px. The default `border` utility is a 0.5px hairline.
  */
 export function SettingsCard(props: { class?: string; children: JSX.Element }) {
-  // Raised a level above the content panel so the card reads as a subtly
-  // lighter surface (theme-safe via the depth system) rather than just an
-  // outline on the same fill.
   return (
-    <Layer depth={2}>
-      <div
-        class={cn(
-          '@container rounded-xl border-1 border-ink/[0.05] bg-surface overflow-hidden settings-row-dividers',
-          props.class
-        )}
-      >
-        {props.children}
-      </div>
-    </Layer>
+    <SharedSettingsCard class={cn('@container', props.class)}>
+      {props.children}
+    </SharedSettingsCard>
   );
 }
 
@@ -182,7 +142,7 @@ export function SettingsRow(props: {
   return (
     <div
       class={cn(
-        'flex gap-4 px-6 py-3.5 min-h-[60px]',
+        'flex gap-4 px-4 py-3.5 min-h-[60px]',
         props.stackOnNarrow
           ? 'flex-col gap-3 @[460px]:flex-row @[460px]:justify-between @[460px]:gap-4'
           : 'justify-between',
@@ -210,7 +170,7 @@ export function SettingsRow(props: {
         <Show when={props.description}>
           <div
             class={cn(
-              'text-xs text-ink-extra-muted text-balance mobile:text-[11px]',
+              'text-sm text-ink-muted text-balance',
               props.hideDescriptionOnMobile && 'mobile:hidden'
             )}
           >
@@ -255,7 +215,7 @@ export function IntegrationRow(props: {
   class?: string;
 }) {
   return (
-    <div class={cn('flex items-start gap-4 px-6 py-5 touch:px-4', props.class)}>
+    <div class={cn('flex items-start gap-4 px-4 py-5', props.class)}>
       <Show when={props.icon}>
         <div
           class={cn(

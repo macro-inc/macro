@@ -47,7 +47,7 @@ for both `record()` and `record_now()`, before the
 [repository insert](../crates/ai_usage/src/outbound/pg_usage_repo.rs). Clients cannot
 supply it. The [billing reader](../crates/ai_billing/src/outbound/pg_usage_reader.rs)
 uses the persisted literal `count_usage = TRUE`, not a mutable feature exclusion
-list. User/team-seat scoping, `[start, end)` periods, list-rate arithmetic, and
+list. User/team-seat scoping, `[start, end)` periods, at-cost arithmetic, and
 fallback pricing for null totals are retained. Admin analytics still includes
 uncounted rows; repricing can change totals, never eligibility.
 
@@ -69,6 +69,19 @@ independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
 there is no longer an `Environment::Develop` safeguard, so a true value settles
 in production.
 
+Pricing is two constants in
+[`pricing.rs`](../crates/ai_billing/src/domain/pricing.rs): each paid seat includes
+`INCLUDED_ALLOWANCE_CENTS` ($20) of usage per period measured at provider cost, and
+usage beyond that is converted to customer money at `OVERAGE_MARKUP_PERCENT` (5%)
+over cost before credits are consumed or overage is charged. The markup is applied
+to the period's cumulative chargeable cost, so settling in chunks books the same
+money as settling once. Change a constant and redeploy to change pricing. The
+plan catalog (`GET /ai-billing/plans`) publishes `included_ai_cents_per_seat`
+for every tier, and the frontend reads allowances from it
+(`useIncludedAiCentsByTier`) rather than hard-coding them. Frozen per-period
+rosters keep their cost amounts in `ai_billing_period_allowance.included_cost_cents_by_user`;
+rows written before that column existed are priced at the current allowance.
+
 Only two hosts participate:
 
 | Host | Gate | When disabled |
@@ -86,9 +99,12 @@ together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
 The frontend is not tied to this flag. The usage meter, credit packs,
-usage-billing controls, the out-of-credits dialog, and model usage multipliers
-keep their existing development-mode gate (`DEV_MODE_ENV`), so they show on
-`dev.macro.com` and local dev builds regardless of backend settlement.
+usage-billing controls, the out-of-credits dialog, the "$N of AI usage" plan
+copy, and model usage multipliers are gated by the frontend's
+`enable-ai-usage-billing` PostHog flag (`enableAiUsageBilling` in
+`apps/web/src/lib/core/constant/featureFlags.ts`). It defaults on in
+development builds and follows PostHog elsewhere, independent of backend
+settlement; `VITE_ENABLE_AI_USAGE_BILLING` overrides it locally.
 
 ## Public failure contracts
 

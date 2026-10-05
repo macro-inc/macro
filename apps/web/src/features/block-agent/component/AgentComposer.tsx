@@ -7,7 +7,7 @@ import { Button } from '@ui';
  * combined model-and-effort change waits for runtime confirmation.
  */
 
-import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
+import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import {
   createInputAttachmentTracker,
   type InputAttachmentData,
@@ -65,11 +65,12 @@ export function AgentComposer(props: {
     pending,
     queue,
     sendNext,
+    steer,
     turn,
     registerQuoteInsert,
     initialInput,
   } = useAgentSession();
-  const changes = useOptionalAgentChanges();
+  const changes = useOptionalChanges();
   const readOnly = () => session()?.canEdit === false;
 
   // The fold speculates the action the moment it is issued, so success is
@@ -225,6 +226,14 @@ export function AgentComposer(props: {
               onRemove={(actionId) => {
                 if (!readOnly()) void queue.remove(actionId);
               }}
+              onSteer={
+                busy() &&
+                !readOnly() &&
+                turn() !== 'stopping' &&
+                turn() !== 'starting'
+                  ? (actionId) => steer(actionId)
+                  : undefined
+              }
               onNavigateBelow={() => focusInput?.()}
               registerFocusFromBelow={(focus) => {
                 focusQueueBottom = focus;

@@ -71,6 +71,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     claude_auth: Router,
     sharing: Router,
     routine_sessions: Router,
+    coding_agents: Router,
     capabilities: Router,
     pull_requests: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
@@ -99,6 +100,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             claude_auth: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
+            coding_agents: Router::new(),
             capabilities: Router::new(),
             pull_requests: Router::new(),
             changes,
@@ -120,6 +122,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach internal-only routine routes with their independent domain service.
     pub fn with_routine_sessions(mut self, router: Router) -> Self {
         self.routine_sessions = router;
+        self
+    }
+
+    /// Attach internal coding agent discovery and dispatch routes.
+    pub fn with_coding_agents(mut self, router: Router) -> Self {
+        self.coding_agents = router;
         self
     }
 
@@ -234,6 +242,7 @@ where
         .merge(agent_repositories_router(states.repositories))
         .merge(states.claude_auth)
         .merge(states.routine_sessions)
+        .merge(states.coding_agents)
         .merge(states.capabilities)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }

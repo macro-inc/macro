@@ -1,3 +1,4 @@
+import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
@@ -111,6 +112,19 @@ export default function DocxBlock(props: { share?: string }) {
         </SplitHeaderLeft>
         <SplitHeaderRight>
           <BlockLiveIndicators />
+        </SplitHeaderRight>
+        <SplitHeaderRight>
+          <div class="order-[999] flex items-center">
+            <ChatWithAgentButton
+              label="Ask Macro"
+              entity={{
+                type: 'document',
+                id: documentId,
+                name: name(),
+                fileType: 'docx',
+              }}
+            />
+          </div>
         </SplitHeaderRight>
         <ResponsivePermissionsBadge />
         <ResponsiveBlockToolbar

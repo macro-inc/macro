@@ -15,6 +15,7 @@ ai_tools = [
   "dep:ai_billing",
   "dep:ai_toolset",
   "dep:ai_usage",
+  "dep:fig_engine",
   "dep:async-trait",
   "dep:macro_tower_layers",
   "dep:messages",
@@ -180,6 +181,7 @@ lexical_client = { path = "../lexical_client", optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 messages = { path = "../messages", optional = true, features = ["ports"] }
 model_file_type = { path = "../model_file_type", optional = true }
+fig_engine = { path = "../fig_engine", optional = true }
 pptx_engine = { path = "../pptx_engine", optional = true, features = ["embedded-fonts", "schema"] }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }

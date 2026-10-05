@@ -5,8 +5,8 @@ import { useMutation } from '@tanstack/solid-query';
  * Mutation that asks auth-service for the Google OAuth authorization URL for
  * adding a Gmail inbox to the already-authenticated user. Callers consume the
  * `authorization_url` and navigate the browser to it. `scopes` selects which
- * permissions the consent screen asks for; only calendar entry points may
- * request calendar access.
+ * permissions the consent screen asks for. Calendar entry points and reconnects
+ * of inboxes that already used calendar request calendar access.
  */
 export function useInitGmailLink() {
   return useMutation(() => ({

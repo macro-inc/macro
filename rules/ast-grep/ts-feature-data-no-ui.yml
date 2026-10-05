@@ -48,8 +48,8 @@ files:
   - apps/web/src/features/email-thread/primitives/**
   - apps/web/src/features/email-compose/queries/**
   - apps/web/src/features/email-compose/primitives/**
-  - apps/web/src/features/agent-changes/queries/**
-  - apps/web/src/features/agent-changes/primitives/**
+  - apps/web/src/features/changes/queries/**
+  - apps/web/src/features/changes/primitives/**
   - apps/web/src/features/block-write/queries/**
   - apps/web/src/features/block-write/primitives/**
 rule:

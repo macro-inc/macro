@@ -265,17 +265,21 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
+ "futures",
  "github",
  "http 1.4.0",
+ "http-body 1.0.1",
  "http-body-util",
  "lru 0.16.4",
  "macro_auth",
  "macro_db_client",
  "macro_user_id",
+ "mcp_client",
  "model_owner",
  "pipedream_mcp",
  "rand 0.9.4",
  "reqwest 0.13.4",
+ "rmcp",
  "rootcause",
  "serde",
  "serde_json",
@@ -286,6 +290,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "url",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -357,6 +362,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mcp_client",
  "messages",
  "mockall",
  "model-entity",
@@ -449,6 +455,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mcp_client",
  "messages",
  "notification",
  "pipedream_mcp",
@@ -630,6 +637,7 @@ dependencies = [
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
+ "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -857,6 +865,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_session",
  "ai_billing",
  "ai_toolset",
  "ai_usage",
@@ -1027,6 +1036,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc890384c8602f339876ded803c97ad529f3842aba97f6392b3dba0dd171769b"
 dependencies = [
  "equator",
+]
+
+[[package]]
+name = "alloc-no-stdlib"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc7bb162ec39d46ab1ca8c77bf72e890535becd1751bb45f64c597edb4c8c6b3"
+
+[[package]]
+name = "alloc-stdlib"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e76a019e91224d279006ff972f1e984179a6e9feb050adba6ce8274aef23195"
+dependencies = [
+ "alloc-no-stdlib",
 ]
 
 [[package]]
@@ -3219,6 +3243,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "brotli-decompressor"
+version = "5.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a32acac15fe1967bc3986b2a6347dffc965602354ea6f450ad07e8bfd253583"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5163,6 +5197,7 @@ dependencies = [
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
+ "base64 0.22.1",
  "bytes",
  "futures",
  "insta",
@@ -6332,6 +6367,7 @@ dependencies = [
  "entity_mutation",
  "entity_registry",
  "entity_registry_db_utils",
+ "fig_engine",
  "foreign_entity",
  "futures",
  "github_pull_requests",
@@ -7548,6 +7584,29 @@ name = "fiat-crypto"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64cd1e32ddd350061ae6edb1b082d7c54915b5c672c389143b9a63403a109f24"
+
+[[package]]
+name = "fig_engine"
+version = "0.1.0"
+dependencies = [
+ "brotli-decompressor",
+ "clap",
+ "console_error_panic_hook",
+ "gif",
+ "image-webp",
+ "js-sys",
+ "miniz_oxide",
+ "png",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "skrifa",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "wasm-bindgen",
+ "zune-core",
+ "zune-jpeg",
+]
 
 [[package]]
 name = "filter_ast"
@@ -11265,17 +11324,8 @@ dependencies = [
 name = "macro_db_migrator"
 version = "0.1.0"
 dependencies = [
- "chrono",
- "clap",
- "database_env_vars",
- "macro_entrypoint",
- "macro_env",
- "macro_uuid",
- "rootcause",
- "serde_json",
  "sqlx",
  "tokio",
- "tracing",
  "workspace-hack",
 ]
 
@@ -16137,6 +16187,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
+name = "ruzstd"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7c1c839d570d835527c9a5e4db7cb2198683a988cb9d7293fc8674e6bd58fc8"
+
+[[package]]
 name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16423,6 +16479,7 @@ dependencies = [
  "ensure_exists",
  "entity_registry",
  "entity_registry_db_utils",
+ "fig_engine",
  "futures",
  "http-body-util",
  "kafka_util",

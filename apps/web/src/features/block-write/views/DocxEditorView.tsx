@@ -314,7 +314,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
   );
 
   return (
-    <div class="flex size-full min-h-0 min-w-0 flex-col">
+    <div class="flex size-full min-h-0 min-w-0 flex-col bg-panel">
       {/* A DOCX is authored for paper: the engine draws white sheets with the
           document's own colours whatever the app theme is. */}
       <style>{`.docx-sheet { background: #fff; }

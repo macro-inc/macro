@@ -85,7 +85,13 @@ export function SetupStatus() {
   // alone. Connecting and reconnecting need the mailbox scopes alongside it.
   const startSetup = () => {
     const state = setupState();
+    const links = linksQuery.isSuccess ? linksQuery.data.links : [];
+    const link =
+      state === 'reauth'
+        ? links.find((link) => link.needs_reauth)
+        : links.find((link) => link.needs_calendar_permission);
     void startAddInbox({
+      emailAddress: link?.email_address,
       scopes:
         state === 'permission' || state === 'disabled'
           ? 'calendar'

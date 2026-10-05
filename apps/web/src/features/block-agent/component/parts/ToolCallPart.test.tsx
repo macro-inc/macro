@@ -1329,3 +1329,48 @@ describe('generated image dispatch', () => {
     }
   );
 });
+
+describe('coding agent dispatch', () => {
+  it.each(['native', 'mcp'] as const)(
+    'uses the session result renderer for %s calls outside group chrome',
+    (kind) => {
+      const input = {
+        agent_id: '0195d721-1730-7cda-a72e-855bec53411f',
+        prompt: 'Fix the editor layout',
+      };
+      const output = {
+        agent_session_id: '0195d721-1730-7cda-a72e-855bec53411e',
+        agent_id: input.agent_id,
+        agent_name: 'Frontend coder',
+      };
+      const part: ToolUsePart = {
+        kind: 'tool_use',
+        id: 'dispatch-call',
+        status: 'completed',
+        name:
+          kind === 'native'
+            ? { kind, name: 'DispatchCodingAgent' }
+            : { kind, server: 'macro', tool: 'DispatchCodingAgent' },
+        detail:
+          kind === 'native'
+            ? { kind: 'macro', input, output, error: null }
+            : {
+                kind: 'other',
+                acpKind: 'other',
+                input,
+                output: null,
+                result: output,
+                error: null,
+              },
+      };
+      const view = render(() => (
+        <ToolCallPart part={part} context={context(false)} />
+      ));
+      const dispatched = view.getByTestId('macro-tool');
+      expect(dispatched.textContent).toBe('DispatchCodingAgent');
+      expect(dispatched.dataset.grouped).toBe('false');
+      expect(JSON.parse(dispatched.dataset.response ?? '')).toEqual(output);
+      expect(view.queryByTestId('tool-card')).toBeNull();
+    }
+  );
+});

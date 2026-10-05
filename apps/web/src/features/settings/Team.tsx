@@ -1,5 +1,13 @@
-import { PLAN_BY_TIER, PLANS } from '@app/features/paywall/plans';
+import {
+  formatIncludedAi,
+  type IncludedAiCentsByTier,
+  PLAN_BY_TIER,
+  PLANS,
+  type Plan,
+  type PlanTier,
+} from '@app/features/paywall/plans';
 import { SlackImport } from '@app/features/slack-import/slack-import';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -8,6 +16,7 @@ import {
   NO_LINK_SHARE,
 } from '@core/component/TopBar/linkShare';
 import { UserIcon } from '@core/component/UserIcon';
+import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
@@ -33,6 +42,7 @@ import XIcon from '@phosphor/x.svg';
 import {
   useAiBillingSummaryQuery,
   useGithubLinkStatusQuery,
+  useIncludedAiCentsByTier,
 } from '@queries/auth';
 import {
   useJoinTeamMutation,
@@ -165,30 +175,30 @@ function RoleSelect(props: {
 
 type PlanOption = { value: PaidPlan; label: string; description: string };
 
-const maxPlan = PLAN_BY_TIER.max;
-const MAX_PLAN_OPTION: PlanOption = {
-  value: 'max',
-  label: maxPlan.name,
-  description: `$${maxPlan.price} · $${maxPlan.aiIncluded} of AI`,
-};
-const purchasablePlanOptions: PlanOption[] = [
-  ...PLANS.flatMap((plan) =>
-    plan.tier === 'free'
-      ? []
-      : [
-          {
-            value: plan.tier,
-            label: plan.name,
-            description: `$${plan.price} · $${plan.aiIncluded} of AI`,
-          },
-        ]
-  ),
-];
+/** "$40 · $20 of AI" once the catalog has the allowance, otherwise "$40". */
+function planOption(plan: Plan, includedAi: string | undefined): PlanOption {
+  return {
+    value: plan.tier as PaidPlan,
+    label: plan.name,
+    description: includedAi
+      ? `$${plan.price} · ${includedAi} of AI`
+      : `$${plan.price}`,
+  };
+}
 
-function planOptionsFor(currentPlan: PaidPlan): PlanOption[] {
+function planOptionsFor(
+  currentPlan: PaidPlan,
+  includedAi: IncludedAiCentsByTier,
+  aiUsageBilling: boolean
+): PlanOption[] {
+  const allowance = (tier: PlanTier) =>
+    aiUsageBilling ? formatIncludedAi(includedAi[tier]) : undefined;
+  const purchasable = PLANS.flatMap((plan) =>
+    plan.tier === 'free' ? [] : [planOption(plan, allowance(plan.tier))]
+  );
   return currentPlan === 'max'
-    ? [...purchasablePlanOptions, MAX_PLAN_OPTION]
-    : purchasablePlanOptions;
+    ? [...purchasable, planOption(PLAN_BY_TIER.max, allowance('max'))]
+    : purchasable;
 }
 
 /**
@@ -205,7 +215,10 @@ function PlanSelect(props: {
   onChange: (plan: PaidPlan) => void;
   disabled?: boolean;
 }) {
-  const options = () => planOptionsFor(props.value);
+  const includedAi = useIncludedAiCentsByTier();
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const options = () =>
+    planOptionsFor(props.value, includedAi(), aiUsageBilling().enabled);
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];
 
@@ -442,7 +455,7 @@ function MemberRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-2 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
@@ -548,7 +561,7 @@ function InviteRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-2 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
@@ -604,7 +617,7 @@ function UserInviteRow(props: {
   isDeclining: boolean;
 }) {
   return (
-    <div class="flex items-center justify-between gap-3 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-3 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />

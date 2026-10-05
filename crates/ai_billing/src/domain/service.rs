@@ -16,6 +16,7 @@ use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
     PaymentGateway, PendingCharge, UsageReader,
 };
+use super::pricing::extra_customer_cents;
 use ai_usage::AiUsageEnforcement;
 use chrono::{DateTime, Utc};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -86,7 +87,8 @@ fn usage_for(user: &MacroUserIdStr<'_>, usage: &[SeatUsage]) -> i64 {
         .unwrap_or(0)
 }
 
-fn chargeable_usage_cents(seats: &[SeatAllowance], usage: &[SeatUsage]) -> i64 {
+/// Cost cents of usage beyond each seat's own allowance, summed for the payer.
+fn chargeable_cost_cents(seats: &[SeatAllowance], usage: &[SeatUsage]) -> i64 {
     seats
         .iter()
         .map(|seat| (usage_for(&seat.user, usage) - seat.included_cents).max(0))
@@ -293,14 +295,11 @@ where
             settings,
             period,
         } = position;
-        let (used_cents, chargeable_cents, ledger, credit_balance_cents) =
+        let (used_cents, chargeable_customer_cents, ledger, credit_balance_cents) =
             if entitlement.tier.is_paid() {
                 let seats = entitlement.seat_allowances();
                 let users: Vec<_> = seats.iter().map(|seat| seat.user.clone()).collect();
-                let usage = self
-                    .usage
-                    .list_rate_usage_cents_by_user(&users, *period)
-                    .await?;
+                let usage = self.usage.usage_cost_cents_by_user(&users, *period).await?;
                 let seats = self
                     .repo
                     .legacy_seats(&entitlement.payer, *period, seats)
@@ -310,7 +309,7 @@ where
                 } else {
                     0
                 };
-                let chargeable = chargeable_usage_cents(&seats, &usage);
+                let chargeable = extra_customer_cents(chargeable_cost_cents(&seats, &usage));
                 let ledger = self
                     .repo
                     .period_ledger(&entitlement.payer, period.start)
@@ -327,7 +326,7 @@ where
             settings,
             *period,
             used_cents,
-            chargeable_cents,
+            chargeable_customer_cents,
             ledger,
             credit_balance_cents,
         ))
@@ -373,10 +372,7 @@ where
     ) -> Result<()> {
         let seats = self.allowance_for_period(entitlement, period, now).await?;
         let users: Vec<_> = seats.iter().map(|seat| seat.user.clone()).collect();
-        let usage = self
-            .usage
-            .list_rate_usage_cents_by_user(&users, period)
-            .await?;
+        let usage = self.usage.usage_cost_cents_by_user(&users, period).await?;
         // Read policy AFTER analytics. V1 execution requires a committed binding,
         // so any V1 analytics just observed must now be excluded. Filtering before
         // the usage read would race renewal activation and could double bill.
@@ -384,17 +380,20 @@ where
             .repo
             .legacy_seats(&entitlement.payer, period, seats)
             .await?;
-        let chargeable_cents = chargeable_usage_cents(&seats, &usage);
-        if chargeable_cents == 0 {
+        let chargeable_cost = chargeable_cost_cents(&seats, &usage);
+        if chargeable_cost == 0 {
             return Ok(());
         }
+        // Mark up the cumulative total, never an increment: the repository
+        // books the difference from what earlier settlements already covered.
+        let chargeable_customer_cents = extra_customer_cents(chargeable_cost);
 
         let outcome = self
             .repo
             .apply_settlement(
                 &entitlement.payer,
                 period.start,
-                chargeable_cents,
+                chargeable_customer_cents,
                 SettlementPolicy {
                     // The repo reads the live overage settings under its lock;
                     // these two are the caller's contribution.

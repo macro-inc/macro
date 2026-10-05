@@ -213,7 +213,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
-    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+    let document_files = documents::outbound::s3_document_files::S3DocumentFiles::new(
         db.clone(),
         s3_client.clone(),
         config.document_storage_bucket.as_ref(),
@@ -308,7 +308,8 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             &side_effect_clients,
         ),
     )
-    .with_presentation_files(Arc::new(presentation_files));
+    .with_presentation_files(Arc::new(document_files.clone()))
+    .with_design_files(Arc::new(document_files));
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
         properties_service.clone(),
@@ -469,6 +470,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             dss_url,
             ai_tools::pipedream_client_from_env()?,
         ),
+        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+            macro_service_urls::AgentHarnessServiceUrl::new()?,
+            config.internal_api_key.to_string(),
+        )?,
         project_tool_context,
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),

@@ -1,8 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
-import {
-  AgentChangesSplit,
-  ChangesToggle,
-} from '@app/features/agent-changes/agent-changes';
+import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
+import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanel } from '@components/app/split-panel';
@@ -10,7 +8,6 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { openExternalUrl } from '@core/util/url';
 import { GithubLabelPills } from '@entity/components/GithubLabelPill';
 import { DebouncedNotificationReadMarker } from '@notifications';
 import {
@@ -57,6 +54,12 @@ export function usePrDetail(foreignEntityId: Accessor<string>) {
   const discussionSource = createPrDiscussionSource();
   const data = (): PrForeignEntityData | undefined =>
     query.isPending ? undefined : query.data;
+  const changeCounts = () => {
+    const pullRequest = data()?.pullRequest;
+    return pullRequest?.additions != null && pullRequest.deletions != null
+      ? { additions: pullRequest.additions, deletions: pullRequest.deletions }
+      : undefined;
+  };
   const invalidateRefreshedPullRequest = async () => {
     const id = foreignEntityId();
     await Promise.all([
@@ -81,7 +84,7 @@ export function usePrDetail(foreignEntityId: Accessor<string>) {
     },
     () => void invalidateRefreshedPullRequest()
   );
-  return { query, data, discussionSource };
+  return { query, data, discussionSource, changeCounts };
 }
 
 type PrDetailBodyProps = {
@@ -152,10 +155,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
   );
 }
 
-/**
- * Native hosts own their header and place this content below it, both inside
- * `PrChangesProvider`.
- */
+/** Native hosts place this content below their header inside `PrChangesProvider`. */
 export function PrDetailContent(props: PrDetailBodyProps) {
   return (
     <div class="relative min-h-0 min-w-0 flex-1">
@@ -174,15 +174,13 @@ export function PrDetailContent(props: PrDetailBodyProps) {
             status={props.status}
           />
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <AgentChangesSplit>
-              <PrDetailBody
-                foreignEntityId={props.foreignEntityId}
-                data={props.data}
-                status={props.status}
-                onRetry={props.onRetry}
-                discussionSource={props.discussionSource}
-              />
-            </AgentChangesSplit>
+            <PrDetailBody
+              foreignEntityId={props.foreignEntityId}
+              data={props.data}
+              status={props.status}
+              onRetry={props.onRetry}
+              discussionSource={props.discussionSource}
+            />
           </div>
         </SidePanel.Layout>
       </Suspense>
@@ -190,21 +188,10 @@ export function PrDetailContent(props: PrDetailBodyProps) {
   );
 }
 
-export function PrDetailActions(props: { url?: string }) {
+export function PrDetailActions() {
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
       <ChangesToggle />
-      <Show when={props.url}>
-        {(url) => (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => openExternalUrl(url())}
-          >
-            Open on GitHub
-          </Button>
-        )}
-      </Show>
       <SidePanel.Toggle />
     </div>
   );
@@ -228,24 +215,30 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
       <PrChangesProvider
         foreignEntityId={props.foreignEntityId}
         pullRequestUrl={githubUrl()}
+        pullRequestTitle={detail.data()?.pullRequest.name ?? undefined}
+        pullRequestChangeCounts={detail.changeCounts()}
       >
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-          <ViewShell.TopBar class="touch:flex">
-            <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-            <Show when={detail.data()?.pullRequest.status}>
-              {(status) => <PrStatusIcon status={status()} />}
-            </Show>
-            <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
-            <PrDetailActions url={githubUrl()} />
-          </ViewShell.TopBar>
-          <PrDetailContent
-            foreignEntityId={props.foreignEntityId}
-            data={detail.data()}
-            status={detail.query.status}
-            discussionSource={detail.discussionSource}
-            onRetry={() => void detail.query.refetch()}
-          />
-        </div>
+        <ChangesSplit>
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+            <ViewShell.TopBar class="touch:flex">
+              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+              <Show when={detail.data()?.pullRequest.status}>
+                {(status) => <PrStatusIcon status={status()} />}
+              </Show>
+              <span class="min-w-0 truncate text-sm font-semibold">
+                {name()}
+              </span>
+              <PrDetailActions />
+            </ViewShell.TopBar>
+            <PrDetailContent
+              foreignEntityId={props.foreignEntityId}
+              data={detail.data()}
+              status={detail.query.status}
+              discussionSource={detail.discussionSource}
+              onRetry={() => void detail.query.refetch()}
+            />
+          </div>
+        </ChangesSplit>
       </PrChangesProvider>
     </SidePanel.Root>
   );
@@ -266,6 +259,7 @@ function PrMetadata(props: {
   prRef: PrRef;
   pullRequest?: GithubPullRequestWithDetails;
 }) {
+  const changes = useOptionalChanges();
   return (
     <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
       <Show when={props.pullRequest?.status}>
@@ -308,14 +302,34 @@ function PrMetadata(props: {
         }
       >
         <Layer depth={2}>
-          <span class={PR_PILL_CLASS}>
-            <span class="text-success">
-              +{props.pullRequest?.additions ?? 0}
-            </span>
-            <span class="text-failure">
-              −{props.pullRequest?.deletions ?? 0}
-            </span>
-          </span>
+          <Show
+            when={changes?.available()}
+            fallback={
+              <span class={PR_PILL_CLASS}>
+                <span class="text-success">
+                  +{props.pullRequest?.additions ?? 0}
+                </span>
+                <span class="text-failure">
+                  −{props.pullRequest?.deletions ?? 0}
+                </span>
+              </span>
+            }
+          >
+            <button
+              type="button"
+              class={PR_PILL_CLASS}
+              aria-label="Open Changes pane"
+              aria-expanded={changes?.layout.changesVisible()}
+              onClick={() => changes?.layout.open()}
+            >
+              <span class="text-success">
+                +{props.pullRequest?.additions ?? 0}
+              </span>
+              <span class="text-failure">
+                −{props.pullRequest?.deletions ?? 0}
+              </span>
+            </button>
+          </Show>
         </Layer>
       </Show>
       <GithubLabelPills

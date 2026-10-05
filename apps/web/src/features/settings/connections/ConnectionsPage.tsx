@@ -61,7 +61,7 @@ function ConnectionsContent(props: { onOpenMacroMcp: () => void }) {
       when={!error()}
       fallback={
         <SettingsPage
-          title="Connections"
+          title="Agent connections"
           description={description}
           onBack={view.provider() ? view.closeProvider : undefined}
         >
@@ -79,7 +79,7 @@ function ConnectionsContent(props: { onOpenMacroMcp: () => void }) {
         keyed
         fallback={
           <SettingsPage
-            title="Connections"
+            title="Agent connections"
             description={description}
             signpost={<MacroMcpSignpost onOpen={props.onOpenMacroMcp} />}
           >

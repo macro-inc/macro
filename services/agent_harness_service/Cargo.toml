@@ -61,6 +61,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "s3",
   "service",
 ] }
+mcp_client = { path = "../../crates/mcp_client" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
@@ -118,3 +119,4 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }

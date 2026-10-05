@@ -6,9 +6,12 @@
  * host puts them inside `Root`.
  */
 
+import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import ArrowsInIcon from '@phosphor/arrows-in.svg';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { debounce } from '@solid-primitives/scheduled';
 import { Button, Card, cn, SegmentedControl } from '@ui';
 import {
   type Accessor,
@@ -25,6 +28,7 @@ import {
   useContext,
 } from 'solid-js';
 import { createDiffCollapse, type DiffCollapse } from './collapse';
+import { createDiffReveal } from './create-diff-reveal';
 import { DiffCounts } from './DiffCounts';
 import { type DiffFile, type DiffStyle, splitPath } from './model/diff-file';
 import type { LineAnnotation, LineRange } from './model/lines';
@@ -35,6 +39,7 @@ import { StatusLetter } from './StatusLetter';
 
 type DiffViewContextValue = {
   entries: Accessor<DiffEntry[]>;
+  ready: Accessor<boolean>;
   diffStyle: Accessor<DiffStyle>;
   themeType: Accessor<ThemeType>;
   collapse: DiffCollapse;
@@ -68,10 +73,31 @@ function Root(
     active?: string;
   }>
 ) {
-  const diffs = createMemo(() => parsePatch(props.patch));
-  const entries = createMemo(() => matchFilesToDiffs(props.files, diffs()));
+  const queue = createRenderQueue();
+  // Hosts can invalidate their patch accessor without changing its text (for
+  // example, spotlighting the pane). Do not reparse or remount those diffs.
+  const patch = createMemo(() => props.patch);
+  const [parsed, setParsed] = createSignal<{
+    patch: string;
+    diffs: ReturnType<typeof parsePatch>;
+  }>();
+  // Parsing a cached patch must not block the click that opens the pane.
+  createEffect(
+    on(patch, (patch) => {
+      queue.enqueue('patch', () =>
+        setParsed({ patch, diffs: parsePatch(patch) })
+      );
+    })
+  );
+  const entries = createMemo(() => {
+    const current = parsed();
+    return current?.patch === patch()
+      ? matchFilesToDiffs(props.files, current.diffs)
+      : [];
+  });
   const view: DiffViewContextValue = {
     entries,
+    ready: () => parsed()?.patch === patch(),
     diffStyle: () => props.diffStyle,
     themeType: createThemeType(),
     collapse:
@@ -131,19 +157,90 @@ function DiffNote(props: { children: JSX.Element }) {
 /** Every file as its own card, each rendered by its own Pierre instance. */
 function Stack(props: DiffListProps) {
   const view = useDiffView();
-  const cards = new Map<string, HTMLElement>();
+  const activePath = createMemo(view.active);
   const [flashing, setFlashing] = createSignal<string>();
+  let scroller!: HTMLDivElement;
+  const diffReveal = createDiffReveal(() => scroller);
+  let anchoredPath: string | undefined;
+  let pendingSelection = activePath();
+  let scrollingToAnchor = false;
+  let resizePending = false;
+  const alignAnchor = () => {
+    const card = anchoredPath ? diffReveal.card(anchoredPath) : undefined;
+    if (!card?.isConnected) return;
+    const margin =
+      Number.parseFloat(getComputedStyle(card).scrollMarginTop) || 0;
+    const offset =
+      card.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top -
+      scroller.clientTop -
+      margin;
+    if (Math.abs(offset) > 1) {
+      card.scrollIntoView({ block: 'start', behavior: 'instant' });
+    }
+  };
+  // Wait for a quiet scroll interval so resize corrections do not interrupt
+  // the initial smooth jump. Scroll events extend the interval on every frame.
+  const settleAnchor = debounce(() => {
+    scrollingToAnchor = false;
+    if (resizePending) {
+      resizePending = false;
+      alignAnchor();
+    }
+  }, 120);
+  const releaseAnchor = () => {
+    anchoredPath = undefined;
+    pendingSelection = undefined;
+    scrollingToAnchor = false;
+    resizePending = false;
+    settleAnchor.clear();
+  };
+  onCleanup(() => settleAnchor.clear());
+  const clearFlash = debounce(() => setFlashing(undefined), FLASH_MS);
+  onCleanup(() => clearFlash.clear());
+
+  // Queued bodies and Pierre's later highlighting can resize cards above the
+  // selected file. Keep its header aligned until the user takes over scrolling.
+  if (typeof ResizeObserver !== 'undefined') {
+    createResizeObserver(
+      () => {
+        view.entries();
+        return diffReveal.cards();
+      },
+      () => {
+        if (scrollingToAnchor) {
+          resizePending = true;
+          return;
+        }
+        alignAnchor();
+      }
+    );
+  }
 
   // Jumping to a file is a DOM concern: scroll the card in and flash it.
   createEffect(
     on(
-      view.active,
-      (path) => {
-        if (!path) return;
-        cards.get(path)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      [activePath, view.entries],
+      ([path], previous) => {
+        if (path !== previous?.[0]) {
+          releaseAnchor();
+          clearFlash.clear();
+          setFlashing(undefined);
+          pendingSelection = path;
+        }
+        // Entry refreshes must not reselect an unchanged path after the user
+        // takes over scrolling. A pending selection still waits for its card.
+        if (!path || pendingSelection !== path) return;
+        diffReveal.reveal(path);
+        const card = diffReveal.card(path);
+        if (!card) return;
+        pendingSelection = undefined;
+        anchoredPath = path;
+        scrollingToAnchor = true;
+        card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        settleAnchor();
         setFlashing(path);
-        const timer = setTimeout(() => setFlashing(undefined), FLASH_MS);
-        onCleanup(() => clearTimeout(timer));
+        clearFlash();
       },
       { defer: true }
     )
@@ -153,11 +250,24 @@ function Stack(props: DiffListProps) {
   // sticky headers, leaving a band above them where lines scroll into view.
   return (
     <div
+      ref={scroller}
       class={cn(
         'min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth motion-reduce:scroll-auto',
         props.class
       )}
+      aria-busy={!view.ready()}
+      onWheel={releaseAnchor}
+      onPointerDown={releaseAnchor}
+      onKeyDown={releaseAnchor}
+      onScroll={() => {
+        if (scrollingToAnchor) settleAnchor();
+      }}
     >
+      <Show when={!view.ready()}>
+        <div class="flex h-40 items-center justify-center text-xs text-ink-placeholder">
+          Loading the diff…
+        </div>
+      </Show>
       <div class="flex min-w-0 flex-col gap-3 p-3 pb-24">
         <For each={view.entries()}>
           {(entry) => {
@@ -170,10 +280,9 @@ function Stack(props: DiffListProps) {
             return (
               <FileContext.Provider value={entry}>
                 <Card
-                  ref={(element: HTMLDivElement) => {
-                    cards.set(path(), element);
-                    onCleanup(() => cards.delete(path()));
-                  }}
+                  ref={(element: HTMLDivElement) =>
+                    diffReveal.register(path(), element)
+                  }
                   class={cn(
                     'shrink-0 scroll-mt-3 overflow-clip transition',
                     flashing() === path() &&
@@ -183,7 +292,7 @@ function Stack(props: DiffListProps) {
                 >
                   <header
                     class={cn(
-                      'sticky top-0 z-5 flex h-10 items-center gap-1 bg-surface px-1.5',
+                      'sticky top-0 z-5 flex h-10 items-center gap-1 bg-surface px-1.5 transition-colors duration-150 hover:overlay-hover motion-reduce:transition-none',
                       !collapsed() && 'border-b border-edge-muted'
                     )}
                   >
@@ -191,25 +300,37 @@ function Stack(props: DiffListProps) {
                   </header>
                   <Show when={!collapsed()}>
                     <Show
-                      when={!entry.note}
-                      fallback={<DiffNote>{entry.note}</DiffNote>}
+                      when={diffReveal.visible(path())}
+                      fallback={
+                        <div
+                          class="flex h-40 items-center justify-center text-xs text-ink-placeholder"
+                          aria-label={`Loading diff for ${path()}`}
+                        >
+                          Loading the diff…
+                        </div>
+                      }
                     >
-                      <Show when={entry.diff}>
-                        {(diff) => (
-                          <PierreFileDiff
-                            path={path()}
-                            diff={diff()}
-                            diffStyle={view.diffStyle()}
-                            themeType={view.themeType()}
-                            annotations={props.annotations?.(entry) ?? []}
-                            renderAnnotation={(key) =>
-                              props.renderAnnotation?.(entry, key)
-                            }
-                            selection={selection()}
-                            onSelectLines={props.onSelectLines}
-                            unsafeCSS={props.unsafeCSS}
-                          />
-                        )}
+                      <Show
+                        when={!entry.note}
+                        fallback={<DiffNote>{entry.note}</DiffNote>}
+                      >
+                        <Show when={entry.diff}>
+                          {(diff) => (
+                            <PierreFileDiff
+                              path={path()}
+                              diff={diff()}
+                              diffStyle={view.diffStyle()}
+                              themeType={view.themeType()}
+                              annotations={props.annotations?.(entry) ?? []}
+                              renderAnnotation={(key) =>
+                                props.renderAnnotation?.(entry, key)
+                              }
+                              selection={selection()}
+                              onSelectLines={props.onSelectLines}
+                              unsafeCSS={props.unsafeCSS}
+                            />
+                          )}
+                        </Show>
                       </Show>
                     </Show>
                   </Show>
@@ -297,12 +418,13 @@ function FileCounts() {
 }
 
 /** Collapses every diff to its header, or opens them all again. */
-function CollapseAll() {
+function CollapseAll(props: { iconOnly?: boolean }) {
   const { collapse } = useDiffView();
   return (
     <Button
       variant="ghost"
-      size="sm"
+      size={props.iconOnly ? 'icon-sm' : 'sm'}
+      label={collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}
       tooltip={
         collapse.anyExpanded()
           ? 'Hide every diff, keeping just the file headers'
@@ -311,7 +433,9 @@ function CollapseAll() {
       onClick={() => collapse.toggleAll()}
     >
       {collapse.anyExpanded() ? <ArrowsInIcon /> : <ArrowsOutIcon />}
-      <span>{collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}</span>
+      <Show when={!props.iconOnly}>
+        <span>{collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}</span>
+      </Show>
     </Button>
   );
 }

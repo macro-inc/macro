@@ -28,6 +28,7 @@ import Code from '@phosphor/code.svg';
 import Database from '@phosphor/database.svg';
 import Email from '@phosphor/envelope.svg';
 import EmailRead from '@phosphor/envelope-open.svg';
+import FigmaLogo from '@phosphor/figma-logo.svg';
 import File from '@phosphor/file.svg';
 import FileArchive from '@phosphor/file-archive.svg';
 import FileCsv from '@phosphor/file-csv.svg';
@@ -64,6 +65,7 @@ import CodeBold from '@phosphor-icons/core/bold/code-bold.svg';
 import DatabaseBold from '@phosphor-icons/core/bold/database-bold.svg';
 import EmailBold from '@phosphor-icons/core/bold/envelope-bold.svg';
 import EmailReadBold from '@phosphor-icons/core/bold/envelope-open-bold.svg';
+import FigmaLogoBold from '@phosphor-icons/core/bold/figma-logo-bold.svg';
 import FileArchiveBold from '@phosphor-icons/core/bold/file-archive-bold.svg';
 import FileBold from '@phosphor-icons/core/bold/file-bold.svg';
 import FileCsvBold from '@phosphor-icons/core/bold/file-csv-bold.svg';
@@ -174,6 +176,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-orange',
     background: 'bg-orange/20',
     prettyName: 'Presentation',
+  },
+  fig: {
+    icon: FigmaLogo,
+    boldIcon: FigmaLogoBold,
+    foreground: 'text-violet',
+    background: 'bg-violet/20',
+    prettyName: 'Figma file',
   },
   database: {
     icon: Database,

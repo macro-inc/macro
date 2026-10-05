@@ -17,6 +17,7 @@ vi.mock(
   '@app/features/block-spreadsheet/queries/create-spreadsheet',
   () => ({})
 );
+vi.mock('@app/features/block-fig/queries/create-fig', () => ({}));
 vi.mock('@app/features/block-spreadsheet/queries/spreadsheet-access', () => ({
   isSpreadsheetEnabledForCurrentUser: () => true,
 }));
@@ -33,6 +34,7 @@ vi.mock('@core/component/EntityIcon', () => ({
 vi.mock('@core/constant/featureFlags', () => ({
   enableChatV3Agents: 'agents',
   enableDatabases: 'databases',
+  enableFigViewer: 'fig',
   enableProjects: 'projects',
   enableReminders: 'reminders',
   enableSnippets: 'snippets',

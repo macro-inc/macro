@@ -56,7 +56,7 @@ export function AiUsageLimitDialog() {
           <div class="flex flex-col gap-1">
             <h2 class="text-xl font-semibold text-ink">{title()}</h2>
             <p class="text-sm text-ink-extra-muted">
-              Your plan includes AI each month at Macro's usage rates. Add
+              Your plan includes AI each month, measured at provider cost. Add
               credits or turn on usage billing to keep going.
             </p>
           </div>

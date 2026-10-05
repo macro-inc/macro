@@ -1,5 +1,5 @@
 import type { LoroDoc } from 'loro-crdt';
-import { formulaReferencesSheet } from './sheet-references';
+import { formulaSheetReferences } from './sheet-references';
 
 export const DEFAULT_SHEET_ID = 'sheet1';
 export type SpreadsheetSheet = { id: string; name: string };
@@ -155,11 +155,20 @@ export function retainSpreadsheetSheets(
   const retentions = doc.getMap('spreadsheetSheetRetentions');
   const identities = readRetainedIdentities(doc);
   const order = doc.getMap('spreadsheetSheetOrder');
+  // Scan each formula once; imports can contain many formulas and sheets.
+  const referenced = new Set<string>();
+  let anySheet = false;
+  for (const formula of formulas) {
+    const references = formulaSheetReferences(formula);
+    anySheet ||= references.any;
+    for (const name of references.names) referenced.add(name);
+  }
   for (const sheet of readSpreadsheetSheets(doc)) {
     if (sheet.id === DEFAULT_SHEET_ID) continue;
     if (
       sheet.id !== sheetId &&
-      !formulas.some((formula) => formulaReferencesSheet(formula, sheet.name))
+      !anySheet &&
+      !referenced.has(sheet.name.toLowerCase())
     )
       continue;
     const storedOrder = order.get(sheet.id);

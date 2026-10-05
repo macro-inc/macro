@@ -179,7 +179,7 @@ describe('deterministic spreadsheet worker runtime', () => {
             {
               type: 'set_cells',
               sheetId: 'sheet1',
-              cells: [{ address: 'AA1', value: '5' }],
+              cells: [{ address: 'XFE1', value: '5' }],
             },
           ],
         },

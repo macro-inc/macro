@@ -87,6 +87,7 @@ macro_uuid = { path = "../../crates/macro_uuid" }
 mention_utils = { path = "../../crates/mention_utils" }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", default-features = false, optional = true }
+fig_engine = { path = "../../crates/fig_engine" }
 doppler-config = { workspace = true }
 model = { path = "../../crates/model" }
 model_owner = { path = "../../crates/model_owner" }

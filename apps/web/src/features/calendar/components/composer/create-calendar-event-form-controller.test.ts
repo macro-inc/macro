@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   type CreateCalendarEventFormControllerOptions,
@@ -45,7 +45,10 @@ afterEach(() => {
 function controllerFor(
   initialValue: Partial<EventEditorInitialValues>,
   options?: Partial<
-    Pick<CreateCalendarEventFormControllerOptions, 'isEdit' | 'calendarOptions'>
+    Pick<
+      CreateCalendarEventFormControllerOptions,
+      'isEdit' | 'calendarOptions' | 'defaultCalendarId'
+    >
   >
 ) {
   return createRoot((dispose) => {
@@ -63,6 +66,48 @@ function controllerFor(
     });
   });
 }
+
+describe('calendar account selection', () => {
+  it('waits for the primary account instead of silently using another inbox', () => {
+    const [primary, setPrimary] = createSignal<string>();
+    const controller = controllerFor(
+      { title: 'Customer demo', ...timedRange(24) },
+      { defaultCalendarId: primary }
+    );
+    expect(controller.effectiveCalendarId()).toBeUndefined();
+    expect(controller.selectedCalendarOption()).toBeUndefined();
+    expect(controller.canSave()).toBe(false);
+    expect(controller.submitValues()).toBeUndefined();
+    setPrimary('calendar-1');
+    expect(controller.canSave()).toBe(true);
+    expect(controller.submitValues()?.calendarId).toBe('calendar-1');
+  });
+
+  it('allows an explicitly selected alternate calendar while primary is unavailable', () => {
+    const controller = controllerFor(
+      { title: 'Customer demo', ...timedRange(24) },
+      { defaultCalendarId: () => undefined }
+    );
+    controller.setField('calendarId', 'calendar-1');
+    expect(controller.canSave()).toBe(true);
+    expect(controller.submitValues()?.calendarId).toBe('calendar-1');
+  });
+
+  it('does not switch to another account when the proposed calendar disappears', () => {
+    const controller = controllerFor(
+      {
+        title: 'Customer demo',
+        ...timedRange(24),
+        calendarId: 'missing-work-calendar',
+      },
+      { defaultCalendarId: () => 'calendar-1' }
+    );
+    expect(controller.effectiveCalendarId()).toBe('missing-work-calendar');
+    expect(controller.selectedCalendarOption()).toBeUndefined();
+    expect(controller.canSave()).toBe(false);
+    expect(controller.submitValues()).toBeUndefined();
+  });
+});
 
 describe('recurrence submission', () => {
   const originalRule =

@@ -44,8 +44,8 @@ vi.mock('../data/queries', () => ({
   usePrForeignEntityQuery: () => ({ isPending: true }),
   prForeignEntityQueryKey: (id: string) => ['pr-foreign-entity', id],
 }));
-vi.mock('@app/features/agent-changes/agent-changes', () => ({
-  AgentChangesSplit: () => null,
+vi.mock('@app/features/changes/changes', () => ({
+  ChangesSplit: () => null,
   ChangesToggle: () => null,
 }));
 vi.mock('../component/PrChanges', () => ({ PrChangesProvider: () => null }));

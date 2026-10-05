@@ -106,6 +106,10 @@ workspace-members = [
     # document editor's worker) on top of pptx_engine, so it must stay
     # wasm-safe too.
     "docx_engine",
+    # fig_engine: the .fig design viewer's parser and rasterizer runs in the
+    # browser (a wasm32 module in the viewer's workers), so it must stay
+    # wasm-safe.
+    "fig_engine",
     # soup-filter-projection is intentionally absent: its wasm-facing adapter
     # disables the native-only default `models` feature, so the crate itself
     # does not pull workspace-hack into wasm dependency traversal.

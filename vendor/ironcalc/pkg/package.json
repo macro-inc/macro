@@ -1,0 +1,23 @@
+{
+  "name": "@ironcalc/wasm",
+  "type": "module",
+  "description": "IronCalc Web bindings, vendored from IronCalc 4deab8f with Macro patches",
+  "version": "0.8.4-macro.1",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ironcalc/IronCalc"
+  },
+  "files": [
+    "wasm_bg.wasm",
+    "wasm.js",
+    "wasm.d.ts",
+    "wasm_bg.wasm.d.ts",
+    "snippets"
+  ],
+  "main": "wasm.js",
+  "types": "wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
