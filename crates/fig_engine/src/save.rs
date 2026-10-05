@@ -1140,6 +1140,35 @@ fn scan_guid(
     }
 }
 
+/// The record of a node an edit created: its source's record (a copy), or
+/// the record it was pasted with, patched with its edits; otherwise one
+/// written from its properties.
+fn created_record(
+    b: &Build,
+    decoder: &Decoder,
+    node_def: u32,
+    node: &Node,
+    doc: &Document,
+    source: Option<Msg>,
+) -> Msg {
+    let Some(guid) = node.props.guid else {
+        return b.create(node_def, node, doc);
+    };
+    let base = source.or_else(|| {
+        let bytes = doc.foreign.get(&guid)?;
+        decoder.decode(&mut Reader::new(bytes), node_def).ok()
+    });
+    match base {
+        Some(mut base) => {
+            b.guid_field(&mut base, "guid", guid);
+            base.remove(b.schema, "overrideKey");
+            b.patch(&mut base, node, doc, node.edits);
+            base
+        }
+        None => b.create(node_def, node, doc),
+    }
+}
+
 /// Writes the edited document as a `.fig` file. `original` is the file it
 /// was opened from. Records of unedited nodes are copied byte for byte;
 /// only edited ones are decoded and re-encoded.
@@ -1262,18 +1291,11 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
                 if node.edits & flags::CREATED == 0 || node.removed {
                     continue;
                 }
-                let Some(guid) = node.props.guid else {
+                if node.props.guid.is_none() {
                     continue;
-                };
-                let record = match node.source.and_then(|s| sources.get(&s).cloned().flatten()) {
-                    Some(mut base) => {
-                        b.guid_field(&mut base, "guid", guid);
-                        base.remove(&schema, "overrideKey");
-                        b.patch(&mut base, node, doc, node.edits);
-                        base
-                    }
-                    None => b.create(node_def, node, doc),
-                };
+                }
+                let source = node.source.and_then(|s| sources.get(&s).cloned().flatten());
+                let record = created_record(&b, &decoder, node_def, node, doc, source);
                 schema.encode(&record, &mut records);
                 written += 1;
             }
@@ -1549,6 +1571,10 @@ pub fn blank(name: &str) -> Vec<u8> {
     let meta_bytes = serde_json::to_vec(&meta).unwrap_or_default();
     crate::zip::write_stored(&[("canvas.fig", &canvas), ("meta.json", &meta_bytes)])
 }
+
+mod clipboard;
+pub(crate) use clipboard::remap_blobs;
+pub use clipboard::{Copied, copy};
 
 #[cfg(test)]
 mod test;

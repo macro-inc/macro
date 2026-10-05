@@ -456,8 +456,10 @@ struct Txn<'a> {
 mod components;
 mod instance_layout;
 mod overrides;
+mod paste;
 pub mod shapes;
 pub(crate) use overrides::guid_of;
+pub use paste::{PasteSpec, View};
 pub(crate) mod layout;
 
 impl<'a> Txn<'a> {
@@ -1448,6 +1450,21 @@ impl History {
         ops: &[Op],
         coalesce: Option<&str>,
     ) -> Result<Applied> {
+        self.run(doc, coalesce, |txn| {
+            for op in ops {
+                txn.apply(op)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Runs `step` as one undoable step (see [`History::apply`]).
+    fn run(
+        &mut self,
+        doc: &mut Document,
+        coalesce: Option<&str>,
+        step: impl FnOnce(&mut Txn) -> Result<()>,
+    ) -> Result<Applied> {
         let blobs_before = doc.blobs.len();
         let next_guid = doc.next_guid;
         let mut txn = Txn {
@@ -1458,14 +1475,12 @@ impl History {
             floating: HashSet::new(),
             relayout: Vec::new(),
         };
-        for op in ops {
-            if let Err(e) = txn.apply(op) {
-                let Txn { doc, before, .. } = txn;
-                restore(doc, &before);
-                doc.next_guid = next_guid;
-                let _ = blobs_before;
-                return Err(e);
-            }
+        if let Err(e) = step(&mut txn) {
+            let Txn { doc, before, .. } = txn;
+            restore(doc, &before);
+            doc.next_guid = next_guid;
+            let _ = blobs_before;
+            return Err(e);
         }
         // Boolean layers follow their operands.
         txn.refit_booleans(0);
