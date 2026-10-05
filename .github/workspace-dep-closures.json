@@ -6103,7 +6103,6 @@
     "forms": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -6125,6 +6124,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/folds/agent_fold",
       "crates/forms",
       "crates/genai_telemetry",
       "crates/harness_id",

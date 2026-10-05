@@ -574,6 +574,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 </Show>
                 <ShareOptions
                   editPermissionEnabled={props.editPermissionEnabled}
+                  allowedAccessLevels={props.allowedAccessLevels}
                   setPermissions={(accessLevel) =>
                     setSubmitAccessLevel(accessLevel)
                   }
