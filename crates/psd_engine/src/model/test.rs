@@ -49,6 +49,39 @@ fn gradient_samples_follow_stops_and_midpoints() {
 }
 
 #[test]
+fn gradient_methods_mix_in_their_spaces() {
+    let mut g = Gradient {
+        smoothness: 0.0,
+        ..Default::default()
+    };
+    let mid = |g: &Gradient| (g.sample(0.5)[0] * 255.0).round();
+    assert_eq!(mid(&g), 128.0, "classic: the stored values");
+    g.method = GradientMethod::Linear;
+    assert_eq!(mid(&g), 188.0, "linear: half the light");
+    g.method = GradientMethod::Perceptual;
+    assert_eq!(mid(&g), 99.0, "perceptual: half the Oklab lightness");
+    // Smooth mixes evenly whatever the smoothness; perceptual eases.
+    g.smoothness = 1.0;
+    g.method = GradientMethod::Smooth;
+    let smooth = g.sample(0.25)[0];
+    g.method = GradientMethod::Perceptual;
+    assert!(g.sample(0.25)[0] < smooth);
+    for method in [
+        GradientMethod::Classic,
+        GradientMethod::Perceptual,
+        GradientMethod::Linear,
+        GradientMethod::Smooth,
+    ] {
+        g.method = method;
+        assert_eq!(g.sample(0.0), [0.0, 0.0, 0.0, 1.0], "{method:?}");
+        assert!(
+            g.sample(1.0).iter().all(|v| (v - 1.0).abs() < 1e-4),
+            "{method:?}"
+        );
+    }
+}
+
+#[test]
 fn contours_interpolate() {
     let c = Contour::default();
     assert_eq!(c.apply(0.25), 0.25);
@@ -64,7 +97,10 @@ fn sample_document() -> Document {
     let mut doc = Document::new(100, 50);
     let bg = doc.push_layer(Layer::new(1, "Background"));
     let mut group = Layer::new(2, "Group");
-    group.kind = LayerKind::Group { open: true };
+    group.kind = LayerKind::Group {
+        open: true,
+        artboard: None,
+    };
     let group = doc.push_layer(group);
     let inner = doc.push_layer(Layer::new(3, "Inner"));
     doc.layer_mut(inner).parent = Some(group);

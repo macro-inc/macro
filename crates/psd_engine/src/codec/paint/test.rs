@@ -120,6 +120,7 @@ fn sample_gradient() -> Gradient {
         align_with_layer: false,
         offset: (0.1, -0.2),
         smoothness: 0.5,
+        method: GradientMethod::Perceptual,
         colors: vec![
             ColorStop {
                 location: 0.0,
@@ -149,11 +150,51 @@ fn gradients_round_trip_through_descriptors() {
     let grad = d.object("Grad").expect("object");
     assert_eq!(grad.number("Intr"), Some(2048.0));
     assert_eq!(grad.enumeration("GrdF"), Some("CstS"));
+    assert_eq!(d.enumeration("gradientsInterpolationMethod"), Some("Perc"));
 
     // Unchanged stops keep the stored object.
     let before = d.clone();
     put_gradient(&mut d, &g);
     assert_eq!(d, before);
+}
+
+#[test]
+fn interpolation_methods_in_effects_and_fill_layers() {
+    let method = |key: &str, id: &str| {
+        let mut d = Descriptor::new("GrFl");
+        d.set(key, enum_value(METHOD_TYPE, id));
+        gradient_method(&d)
+    };
+    assert_eq!(method("gs99", "Lnr "), GradientMethod::Linear);
+    assert_eq!(
+        method("gradientsInterpolationMethod", "Smoo"),
+        GradientMethod::Smooth
+    );
+    assert_eq!(method("gs99", "Perc"), GradientMethod::Perceptual);
+    assert_eq!(method("gs99", "Gcls"), GradientMethod::Classic);
+
+    // A method the engine doesn't know reads as classic and stays.
+    let mut d = Descriptor::new("GrFl");
+    d.set("gs99", enum_value(METHOD_TYPE, "Stps"));
+    put_gradient_method(&mut d, GradientMethod::Classic);
+    assert_eq!(d.enumeration("gs99"), Some("Stps"));
+    put_gradient_method(&mut d, GradientMethod::Smooth);
+    assert_eq!(d.enumeration("gs99"), Some("Smoo"));
+
+    // Descriptors from before the methods get one only when it isn't
+    // classic: `gs99` in effects, the long key in fill layers.
+    let mut effect = Descriptor::new("GrFl").with("enab", Value::Bool(true));
+    put_gradient_method(&mut effect, GradientMethod::Classic);
+    assert!(!effect.has("gs99"));
+    put_gradient_method(&mut effect, GradientMethod::Linear);
+    assert_eq!(effect.enumeration("gs99"), Some("Lnr "));
+    let mut fill = Descriptor::new("null");
+    put_gradient_method(&mut fill, GradientMethod::Smooth);
+    assert_eq!(
+        fill.enumeration("gradientsInterpolationMethod"),
+        Some("Smoo")
+    );
+    assert!(!fill.has("gs99"));
 }
 
 #[test]

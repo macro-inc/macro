@@ -9,6 +9,7 @@
 //! (curves, gradient maps).
 
 pub mod adjustment;
+pub mod artboard;
 pub mod descriptor;
 pub mod effects;
 pub mod engine_data;

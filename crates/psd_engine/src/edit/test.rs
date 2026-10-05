@@ -1,4 +1,5 @@
 use super::*;
+use crate::model::BlendMode;
 
 #[test]
 fn ops_read_as_the_editor_sends_them() {

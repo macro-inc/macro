@@ -36,6 +36,36 @@ impl Canvas {
         }
     }
 
+    /// Paints the part of `rect` (level pixels) on the canvas with a
+    /// premultiplied color.
+    fn fill(&mut self, rect: IRect, color: [f32; 4]) {
+        let r = rect.intersect(&self.rect);
+        if r.is_empty() {
+            return;
+        }
+        let w = self.rect.w as usize;
+        let (from, to) = (
+            (r.x - self.rect.x) as usize,
+            (r.right() - self.rect.x) as usize,
+        );
+        for y in r.y..r.bottom() {
+            let row = (y - self.rect.y) as usize * w;
+            self.px[row + from..row + to].fill(color);
+        }
+    }
+
+    /// Clears everything outside `rect` (level pixels).
+    fn keep(&mut self, rect: IRect) {
+        let w = self.rect.w.max(1) as usize;
+        let (x0, y0) = (self.rect.x, self.rect.y);
+        for (i, p) in self.px.iter_mut().enumerate() {
+            let (x, y) = (x0 + (i % w) as i32, y0 + (i / w) as i32);
+            if x < rect.x || x >= rect.right() || y < rect.y || y >= rect.bottom() {
+                *p = [0.0; 4];
+            }
+        }
+    }
+
     /// The canvas as straight paint.
     fn content(&self) -> Content {
         Content {
@@ -137,7 +167,16 @@ fn paint_rect(cx: &Cx, idx: LayerIdx, target: IRect) -> Option<IRect> {
 fn group(cx: &mut Cx, canvas: &mut Canvas, idx: LayerIdx, clip: Option<&Plane>) {
     let l = cx.doc.layer(idx);
     let ranges = l.blend_ranges.as_ref().is_some_and(|r| !r.is_default());
-    let pass_through = l.blend == BlendMode::PassThrough && !has_effects(cx, l) && !ranges;
+    // Artboards composite alone, on their backgrounds.
+    let artboard = matches!(
+        l.kind,
+        LayerKind::Group {
+            artboard: Some(_),
+            ..
+        }
+    );
+    let pass_through =
+        l.blend == BlendMode::PassThrough && !has_effects(cx, l) && !ranges && !artboard;
     if pass_through {
         if layer::extent(cx.doc, idx, cx.level, false).is_none_or(|e| !e.intersects(&canvas.rect)) {
             return;
@@ -172,11 +211,23 @@ fn group(cx: &mut Cx, canvas: &mut Canvas, idx: LayerIdx, clip: Option<&Plane>) 
     paint(cx, canvas, idx, content, fill, clip);
 }
 
-/// A group's layers composited alone over `rect`, with the group's masks.
+/// A group's layers composited alone over `rect`, with the group's masks:
+/// an artboard's on its background and cut to its rectangle.
 fn group_content(cx: &mut Cx, idx: LayerIdx, rect: IRect) -> Content {
     let l = cx.doc.layer(idx);
     let mut sub = Canvas::new(rect);
+    let artboard = match &l.kind {
+        LayerKind::Group { artboard, .. } => *artboard,
+        _ => None,
+    };
+    if let Some(color) = artboard.and_then(|a| a.background.color()) {
+        let board = artboard.map_or(rect, |a| a.rect.at_level(cx.level));
+        sub.fill(board, [color.r, color.g, color.b, 1.0]);
+    }
     children(cx, idx, &mut sub);
+    if let Some(a) = artboard {
+        sub.keep(a.rect.at_level(cx.level));
+    }
     let mut content = sub.content();
     let effects = has_effects(cx, l);
     let (hide_pixel, hide_vector) = (
