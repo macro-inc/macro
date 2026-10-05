@@ -1,6 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ErrorResponseHandler } from '@core/util/safeFetch';
+import { AI_USAGE_LIMIT_ERROR, readAiUsageLimitError } from '../ai-usage-limit';
 import type {
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
@@ -44,6 +45,11 @@ const sessionError: ErrorResponseHandler<never> = async (response) => {
   };
 };
 
+const sessionAiError: ErrorResponseHandler<
+  typeof AI_USAGE_LIMIT_ERROR
+> = async (response) =>
+  (await readAiUsageLimitError(response)) ?? (await sessionError(response));
+
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
   preview(sessionIds: string[]) {
@@ -85,15 +91,15 @@ export const agentHarnessServiceClient = {
   },
 
   create(request: CreateAgentSessionRequest) {
-    return fetchWithToken<CreateAgentSessionResponse>(
-      `${agentHarnessHost}/agent-sessions`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-        errorResponseHandler: sessionError,
-      }
-    );
+    return fetchWithToken<
+      CreateAgentSessionResponse,
+      typeof AI_USAGE_LIMIT_ERROR
+    >(`${agentHarnessHost}/agent-sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      errorResponseHandler: sessionAiError,
+    });
   },
 
   /**
@@ -185,13 +191,13 @@ export const agentHarnessServiceClient = {
    * out (`sent`) or waits in the session's queue (`queued`).
    */
   control(sessionId: string, request: ControlRequest) {
-    return fetchWithToken<ControlResponse>(
+    return fetchWithToken<ControlResponse, typeof AI_USAGE_LIMIT_ERROR>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/control`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
-        errorResponseHandler: sessionError,
+        errorResponseHandler: sessionAiError,
       }
     );
   },

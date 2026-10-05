@@ -5,11 +5,9 @@ import {
   MODEL_PRETTYNAME,
   MODEL_PROVIDER_ICON,
   Model,
-  modelUsageHint,
   PAID_MODELS,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
-import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CheckIcon from '@phosphor/check.svg';
@@ -51,7 +49,6 @@ const MODEL_DESCRIPTION: Record<TModel, string> = {
 
 export function ModelSelector(props: ModelSelectorProps) {
   const [open, setOpen] = createSignal(false);
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const model = () => props.selectedModel ?? DEFAULT_MODEL;
   const options = () =>
     props.models && props.models.length > 0 ? props.models : ALL_AVAILABLE;
@@ -103,21 +100,6 @@ export function ModelSelector(props: ModelSelectorProps) {
                     <span class="flex-1 truncate">
                       {MODEL_PRETTYNAME[option.id]}
                     </span>
-                    {/* Decorative: the item's accessible name stays the model. */}
-                    <Show
-                      when={
-                        aiUsageBilling().enabled && modelUsageHint(option.id)
-                      }
-                    >
-                      {(hint) => (
-                        <span
-                          aria-hidden="true"
-                          class="shrink-0 text-[10px] text-ink-extra-muted"
-                        >
-                          {hint()}
-                        </span>
-                      )}
-                    </Show>
                     <Show when={!option.available}>
                       <LockIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
                     </Show>
@@ -194,22 +176,8 @@ export function ModelSelector(props: ModelSelectorProps) {
                         class="size-6 shrink-0 text-ink-muted"
                       />
                       <span class="flex min-w-0 flex-1 flex-col gap-1">
-                        <span class="flex items-baseline gap-2">
-                          <span class="text-base font-medium leading-5">
-                            {MODEL_PRETTYNAME[option.id]}
-                          </span>
-                          <Show
-                            when={
-                              aiUsageBilling().enabled &&
-                              modelUsageHint(option.id)
-                            }
-                          >
-                            {(hint) => (
-                              <span class="text-xs text-ink-extra-muted">
-                                {hint()}
-                              </span>
-                            )}
-                          </Show>
+                        <span class="text-base font-medium leading-5">
+                          {MODEL_PRETTYNAME[option.id]}
                         </span>
                         <span class="text-[13px] leading-[18px] text-ink-muted">
                           {MODEL_DESCRIPTION[option.id]}

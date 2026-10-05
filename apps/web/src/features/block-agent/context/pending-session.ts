@@ -20,6 +20,8 @@
  * they already handle while the GET is in flight.
  */
 
+import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
+import { issueSessionAction } from '../queries/issue-session-action';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
@@ -114,6 +116,7 @@ export function startPendingSession(
     } satisfies CreateAgentSessionRequest)
     .then(async (result) => {
       if (result.isErr()) {
+        handleAiUsageLimitError(result.error);
         setError(
           result.error.map((error) => error.message).join(' ') ||
             'The agent session could not be created.'
@@ -166,7 +169,8 @@ export function startPendingSession(
           }
           setSessionId(created);
           if (prompt || options.attachments?.length) {
-            const delivered = await session.issue(
+            const delivered = await issueSessionAction(
+              session,
               {
                 type: 'prompt',
                 prompt,

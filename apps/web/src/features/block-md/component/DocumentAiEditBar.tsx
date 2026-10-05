@@ -3,11 +3,7 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import {
-  cancelAiEdit,
-  requestAiEdit,
-  toastAiEditResult,
-} from '@service-ai-editing/client';
+import { cancelAiEdit, requestAiEditWithToast } from '../queries/ai-edit';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -42,12 +38,10 @@ export function DocumentAiEditBar(props: { documentId: string }) {
     collapse();
     setEditing(true);
 
-    requestAiEdit({
-      documentId: props.documentId,
-      prompt: value,
-    })
-      .then(toastAiEditResult)
-      .finally(() => setEditing(false));
+    void requestAiEditWithToast(
+      { documentId: props.documentId, prompt: value },
+      () => setEditing(false)
+    );
   };
 
   const configureEditor = () =>

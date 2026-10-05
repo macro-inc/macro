@@ -5,6 +5,15 @@ import {
   settingsTabToSlug,
 } from './settingsTabsConfig';
 
+describe('settings Usage tab', () => {
+  it('routes Usage and places it directly before Billing', () => {
+    expect(settingsSlugToTab('usage')).toBe('Usage');
+    expect(settingsTabToSlug('Usage')).toBe('usage');
+    const tabs = SETTINGS_TAB_GROUPS[0].items.map((item) => item.tab);
+    expect(tabs[tabs.indexOf('Billing') - 1]).toBe('Usage');
+  });
+});
+
 describe('settings navigation', () => {
   it('gives calendar connections and booking links separate routes', () => {
     expect(settingsSlugToTab('calendar')).toBe('Calendar');

@@ -64,9 +64,8 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import {
   cancelAiEdit,
   hasActiveAiEdit,
-  requestAiEdit,
-  toastAiEditResult,
-} from '@service-ai-editing/client';
+  requestAiEditWithToast,
+} from '../queries/ai-edit';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, Toolbar } from '@ui';
 import {
@@ -351,17 +350,18 @@ export function MarkdownPopup(props: {
     setAiEditRunning(true);
     // Fast mode: one model edits the whole document directly, no supervisor.
     // Apply ops locally so the edit lands in this client's undo stack.
-    requestAiEdit({
-      documentId: blockId,
-      prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
-      mode: 'fast',
-      onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
-    })
-      .then(toastAiEditResult)
-      .finally(() => {
+    void requestAiEditWithToast(
+      {
+        documentId: blockId,
+        prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
+        mode: 'fast',
+        onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
+      },
+      () => {
         setAiEditLocation(null);
         setAiEditRunning(false);
-      });
+      }
+    );
     setAiEditInput('');
     setAiEditDrawerOpen(false);
     setPopupVisible(false);

@@ -3,24 +3,13 @@ import { createSignal } from 'solid-js';
 
 /**
  * Global open state for the AI usage-limit dialog, mirroring `PaywallState`:
- * the chat surfaces raise it when the backend answers 402 with one of the
+ * AI surfaces raise it when the backend answers 402 with one of the
  * billing codes, and the app layout mounts the dialog once.
  */
 const [usageLimitOpen, setUsageLimitOpen] = createSignal(false);
 const [usageLimitCode, setUsageLimitCode] = createSignal<AiDenyCode | null>(
   null
 );
-
-const KNOWN_CODES: readonly AiDenyCode[] = [
-  'ai_allowance_exhausted',
-  'ai_free_allowance_exhausted',
-  'ai_overage_limit_reached',
-  'ai_overage_payment_failed',
-];
-
-export function isAiDenyCode(code: string | undefined): code is AiDenyCode {
-  return !!code && (KNOWN_CODES as readonly string[]).includes(code);
-}
 
 export const useAiUsageLimitState = () => {
   const showUsageLimit = (code?: string) => {
@@ -33,3 +22,4 @@ export const useAiUsageLimitState = () => {
   };
   return { usageLimitOpen, usageLimitCode, showUsageLimit, hideUsageLimit };
 };
+import { isAiDenyCode } from '@app/lib/service-clients/ai-usage-limit';

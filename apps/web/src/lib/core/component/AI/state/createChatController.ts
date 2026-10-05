@@ -6,6 +6,7 @@ import {
 } from '@core/component/AI/util/stream';
 import { tailContext } from '@core/component/LexicalMarkdown/tailContext';
 import { toast } from '@core/component/Toast/Toast';
+import { isAiDenyCode } from '@app/lib/service-clients/ai-usage-limit';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
 import type { EditorState } from 'lexical';
@@ -163,6 +164,19 @@ export function createChatController(
                 attachments: r.attachments,
               });
             })
+            .with(
+              {
+                type: 'chat_message_response',
+                content: { type: 'toolCallErr' },
+              },
+              ({ content }) => {
+                // Tool refusals can arrive inside an otherwise successful
+                // stream. The backend prefixes their description with its
+                // stable admission code.
+                const code = content.description.split(':', 1)[0];
+                if (isAiDenyCode(code)) options?.onShowUsageLimit?.(code);
+              }
+            )
             .otherwise(() => {});
         }
       )
