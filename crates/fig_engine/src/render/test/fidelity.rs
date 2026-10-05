@@ -34,7 +34,7 @@ message Path windingRule:WindingRule commandsBlob:uint styleID:uint
 message Effect type:EffectType color:Color offset:Vector radius:float spread:float visible:bool
 message GUIDPath guids:GUID[]
 message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
-message Glyph commandsBlob:uint position:Vector fontSize:float firstCharacter:uint advance:float rotation:float
+message Glyph commandsBlob:uint position:Vector fontSize:float firstCharacter:uint advance:float rotation:float emojiCodePoints:uint[]
 message VectorData styleOverrideTable:NodeChange[]
 message DerivedTextData layoutSize:Vector glyphs:Glyph[] truncationStartIndex:int
 message NodeGenerationData overrides:NodeChange[]
@@ -415,4 +415,49 @@ fn draws_shared_fill_styles() {
     );
     let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 40, 40));
     assert_eq!(rgba(&p, 20, 20), [0, 128, 0, 255]);
+}
+
+/// Emoji glyphs keep only their box as an outline (Figma draws them from
+/// images it does not store); a colored stand-in is drawn, not the box.
+#[test]
+fn draws_emoji_stand_ins() {
+    let bytes = file(
+        vec![node(
+            2,
+            Some((1, "!")),
+            "TEXT",
+            "Done",
+            vec![
+                ("size", size(40.0, 40.0)),
+                ("transform", translate(0.0, 0.0)),
+                ("fillPaints", V::List(vec![solid(0.0, 0.0, 0.0)])),
+                (
+                    "derivedTextData",
+                    V::Msg(vec![
+                        ("layoutSize", size(40.0, 40.0)),
+                        (
+                            "glyphs",
+                            V::List(vec![V::Msg(vec![
+                                ("commandsBlob", V::Uint(0)),
+                                (
+                                    "position",
+                                    V::Msg(vec![("x", V::Float(0.0)), ("y", V::Float(30.0))]),
+                                ),
+                                ("fontSize", V::Float(30.0)),
+                                ("advance", V::Float(1.0)),
+                                ("emojiCodePoints", V::List(vec![V::Uint(0x2705)])),
+                            ])]),
+                        ),
+                    ]),
+                ),
+            ],
+        )],
+        vec![square(0.0, -0.07, 1.0, 1.0)],
+    );
+    let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 40, 40));
+    let [r, g, b, _] = rgba(&p, 6, 20);
+    assert!(
+        g > r && g > b,
+        "a green check mark box, not black: {r} {g} {b}"
+    );
 }
