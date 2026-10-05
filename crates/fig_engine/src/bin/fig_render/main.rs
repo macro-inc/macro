@@ -3,6 +3,7 @@
 
 mod collab;
 mod prototype;
+mod text;
 
 use clap::{Parser, Subcommand};
 use fig_engine::container::Container;
@@ -101,6 +102,20 @@ enum Command {
         limit: usize,
         files: Vec<PathBuf>,
     },
+    /// Lay out the text in fonts from a directory again and report how far
+    /// the glyphs land from Figma's layout.
+    Text {
+        /// Fonts to register (a subdirectory names its fonts' family).
+        #[arg(long)]
+        fonts: Option<PathBuf>,
+        /// Print the layers that differ most.
+        #[arg(long)]
+        verbose: bool,
+        /// List the faces registered for this family.
+        #[arg(long)]
+        faces: Option<String>,
+        files: Vec<PathBuf>,
+    },
 }
 
 fn main() {
@@ -182,6 +197,29 @@ fn main() {
             for path in files {
                 relayout(&path, verbose);
             }
+        }
+        Command::Text {
+            fonts,
+            verbose,
+            faces,
+            files,
+        } => {
+            if let Some(dir) = fonts {
+                println!("{} font files registered", text::register_fonts(&dir));
+                if let Some(family) = &faces {
+                    for f in fig_engine::text::registered()
+                        .iter()
+                        .filter(|f| &f.family == family)
+                    {
+                        println!("  {f:?}");
+                    }
+                }
+            }
+            let mut totals = text::Totals::default();
+            for path in files {
+                text::check(&path, verbose, &mut totals);
+            }
+            totals.print();
         }
         Command::Collab { files } => {
             for path in files {

@@ -6,10 +6,10 @@ use super::{
     dec_winding,
 };
 use crate::model::{
-    Action, Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting,
-    FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild, OverlaySettings,
-    Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props, StyleRun,
-    SymbolData, TextContent, TextLayout, TextStyle, Vec2, VectorData,
+    Action, Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
+    ExportSetting, FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild,
+    OverlaySettings, Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props,
+    StyleRun, SymbolData, TextContent, TextLayout, TextStyle, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -266,6 +266,9 @@ impl<'a> Reader<'a> {
             font_style: self.opt_arc_str()?,
             font_size: self.opt(Self::f32)?,
             decoration: self.opt_arc_str()?,
+            letter_spacing: self.opt(|r| Ok((r.f32()?, r.arc_str()?)))?,
+            line_height: self.opt(|r| Ok((r.f32()?, r.arc_str()?)))?,
+            case: self.opt_arc_str()?,
         })
     }
 
@@ -294,6 +297,18 @@ impl<'a> Reader<'a> {
             lines: self.u32()?,
             truncated_at: self.opt(Self::u32)?,
             first_baseline: self.opt(Self::f32)?,
+            baselines: self.arc_list(|r| {
+                Ok(Baseline {
+                    first_char: r.u32()?,
+                    end_char: r.u32()?,
+                    x: r.f32()?,
+                    y: r.f32()?,
+                    width: r.f32()?,
+                    line_y: r.f32()?,
+                    line_height: r.f32()?,
+                    line_ascent: r.f32()?,
+                })
+            })?,
         })
     }
 

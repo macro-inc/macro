@@ -89,6 +89,52 @@ pub struct TextInfo {
     pub style: crate::model::TextStyle,
     /// Fonts used by character style runs, beyond the base style.
     pub fonts: Vec<String>,
+    /// Whether the layer's own font is available for layout.
+    pub font_status: crate::text::FontStatus,
+    /// Style run id per character (UTF-16 unit); missing ids are 0, the
+    /// layer's style.
+    pub style_ids: Vec<u32>,
+    /// The character styles, by id.
+    pub runs: Vec<RunInfo>,
+}
+
+/// A character style: what it sets differently from its layer.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunInfo {
+    pub id: u32,
+    pub font_family: Option<String>,
+    pub font_style: Option<String>,
+    pub font_size: Option<f32>,
+    pub decoration: Option<String>,
+    pub letter_spacing: Option<(f32, String)>,
+    pub line_height: Option<(f32, String)>,
+    pub case: Option<String>,
+    pub fills: Option<Vec<PaintInfo>>,
+    pub font_status: crate::text::FontStatus,
+}
+
+/// A text layer's lines for the text editor's caret and selection, and
+/// where the layer is on the page.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextGeometryInfo {
+    /// Layer to page: `[a, b, c, d, e, f]` mapping `(x, y)` to
+    /// `(a x + c y + e, b x + d y + f)`.
+    pub transform: [f64; 6],
+    #[serde(flatten)]
+    pub geometry: crate::text::TextGeometry,
+}
+
+/// The caret geometry of text layer `i`.
+pub fn text_geometry(doc: &Document, scene: &Scene, i: SceneIdx) -> Option<TextGeometryInfo> {
+    let props = scene.props(doc, i);
+    let geometry = crate::text::geometry(props)?;
+    let w = &scene.node(i).world;
+    Some(TextGeometryInfo {
+        transform: [w.m00, w.m10, w.m01, w.m11, w.m02, w.m12],
+        geometry,
+    })
 }
 
 #[derive(Serialize)]
@@ -291,11 +337,50 @@ pub fn node_info(doc: &Document, scene: &Scene, i: SceneIdx) -> NodeInfo {
                 }
             }
         }
+        let style = props.text_style.as_deref().cloned().unwrap_or_default();
+        let family = style
+            .font_family
+            .as_deref()
+            .unwrap_or(crate::text::DEFAULT_FAMILY);
+        let font_style = style.font_style.as_deref().unwrap_or("Regular");
+        let units = chars[..end].encode_utf16().count();
+        let style_ids: Vec<u32> = content
+            .map(|c| c.style_ids.iter().take(units).copied().collect())
+            .unwrap_or_default();
+        let runs = content
+            .map(|c| {
+                c.styles
+                    .iter()
+                    .filter(|r| style_ids.contains(&r.id))
+                    .map(|r| RunInfo {
+                        id: r.id,
+                        font_family: r.font_family.as_deref().map(str::to_owned),
+                        font_style: r.font_style.as_deref().map(str::to_owned),
+                        font_size: r.font_size,
+                        decoration: r.decoration.as_deref().map(str::to_owned),
+                        letter_spacing: r.letter_spacing.as_ref().map(|(v, u)| (*v, u.to_string())),
+                        line_height: r.line_height.as_ref().map(|(v, u)| (*v, u.to_string())),
+                        case: r.case.as_deref().map(str::to_owned),
+                        fills: r
+                            .fills
+                            .as_ref()
+                            .map(|f| f.iter().map(|p| paint_info(p, props.size())).collect()),
+                        font_status: crate::text::font_status(
+                            r.font_family.as_deref().unwrap_or(family),
+                            r.font_style.as_deref().unwrap_or(font_style),
+                        ),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         TextInfo {
             characters: chars[..end].to_owned(),
             truncated,
-            style: props.text_style.as_deref().cloned().unwrap_or_default(),
+            font_status: crate::text::font_status(family, font_style),
+            style,
             fonts,
+            style_ids,
+            runs,
         }
     });
     let radii = props.radii();

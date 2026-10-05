@@ -73,6 +73,7 @@ import {
   designSyncExists,
   initializeDesignSync,
 } from './queries/fig-sync';
+import { createFontSource } from './queries/font-source';
 import { FigViewer } from './views/fig-viewer';
 
 /**
@@ -162,6 +163,7 @@ function FigHost(props: {
                   { present: frame }
                 ),
               presentAt: props.present,
+              fonts: createFontSource(),
             }}
           >
             <FigViewer />

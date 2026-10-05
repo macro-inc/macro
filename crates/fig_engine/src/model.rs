@@ -21,7 +21,7 @@ pub use paint::{
     ImageScaleMode, Paint, PaintKind,
 };
 pub use prototype::{Action, FlowStart, Interaction, OverlaySettings};
-pub use text::{Decoration, Glyph, StyleRun, TextContent, TextLayout, TextStyle};
+pub use text::{Baseline, Decoration, Glyph, StyleRun, TextContent, TextLayout, TextStyle};
 
 /// A node id, written `session:local` (Figma's node ids).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]

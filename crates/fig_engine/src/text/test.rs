@@ -1,6 +1,6 @@
 use super::*;
 use crate::edit::{History, Op};
-use crate::model::Guid;
+use crate::model::{Guid, Vec2};
 use crate::testing::simple_file;
 
 fn new_text(doc: &mut Document, h: &mut History, json_props: &str) -> NodeIdx {
@@ -73,15 +73,26 @@ fn reuses_glyph_outlines() {
 
 #[test]
 fn maps_style_names_to_weights() {
-    assert_eq!(weight_of("Regular"), 400.0);
-    assert_eq!(weight_of("Semi Bold"), 600.0);
-    assert_eq!(weight_of("Bold Italic"), 700.0);
-    assert_eq!(weight_of("ExtraLight"), 200.0);
+    let w = |s: &str| parse_style(s).weight;
+    assert_eq!(w("Regular"), 400.0);
+    assert_eq!(w("Semi Bold"), 600.0);
+    assert_eq!(w("SemiBold"), 600.0);
+    assert_eq!(w("Bold Italic"), 700.0);
+    assert_eq!(w("ExtraLight"), 200.0);
+    assert_eq!(w("Medium"), 500.0);
+    assert_eq!(w("Heavy"), 900.0);
+    assert_eq!(w("45 Light"), 300.0);
+    assert!(parse_style("Bold Italic").italic);
+    assert!(!parse_style("Medium").italic);
+    assert_eq!(parse_style("Condensed Bold").width, 75.0);
+    assert_eq!(parse_style("SemiCondensed").width, 87.5);
+    assert_eq!(parse_style("9pt Regular").optical_size, Some(9.0));
+    assert_eq!(parse_style("Regular").optical_size, None);
 }
 
 #[test]
 fn kerns_pairs() {
-    let font = Font::new("Inter", "Regular").unwrap();
+    let font = font::Font::new("Inter", "Regular");
     let k = font.kerning(font.glyph('A'), font.glyph('V'));
     assert!(k < 0.0, "A and V tuck together: {k}");
 }
@@ -330,4 +341,264 @@ fn undoes_typing() {
     assert_eq!(width(&doc, t), w);
     let content = doc.props(t).text_content.clone().unwrap();
     assert_eq!(&*content.characters, "Hi");
+}
+
+const INTER: &[u8] = include_bytes!("../../fonts/InterVariable.ttf");
+
+#[test]
+fn registers_fonts_under_a_family() {
+    let faces = register_font(INTER.to_vec(), Some("Test Sans"));
+    assert_eq!(faces.len(), 1);
+    assert_eq!(faces[0].family, "Test Sans");
+    assert!(faces[0].variable);
+    assert_eq!((faces[0].weight, faces[0].max_weight), (100.0, 900.0));
+    let count = registered().len();
+    // Registering the same file again changes nothing.
+    assert_eq!(register_font(INTER.to_vec(), Some("Test Sans")), faces);
+    assert_eq!(registered().len(), count);
+    assert!(register_font(b"not a font".to_vec(), None).is_empty());
+    assert_eq!(font_status("Test Sans", "Semi Bold"), FontStatus::Available);
+    assert_eq!(font_status("test sans", "Regular"), FontStatus::Available);
+    assert_eq!(font_status("Test Sans", "Italic"), FontStatus::StyleMissing);
+    assert_eq!(
+        font_status("Nowhere Grotesk", "Regular"),
+        FontStatus::Missing
+    );
+    assert!(has_font("Test Sans") && !has_font("Nowhere Grotesk"));
+}
+
+#[test]
+fn lays_out_in_the_registered_font() {
+    register_font(INTER.to_vec(), Some("Laid Sans"));
+    let mut doc = Document::open(&simple_file()).unwrap();
+    let mut h = History::default();
+    let inter = new_text(
+        &mut doc,
+        &mut h,
+        r#"{"characters":"Hamburgefonts","fontSize":20}"#,
+    );
+    let other = new_text(
+        &mut doc,
+        &mut h,
+        r#"{"characters":"Hamburgefonts","fontSize":20,"fontFamily":"Laid Sans"}"#,
+    );
+    assert_eq!(width(&doc, inter), width(&doc, other));
+    // A missing family keeps its name and lays out in Inter.
+    set(
+        &mut doc,
+        &mut h,
+        other,
+        r#"{"fontFamily":"Nowhere Grotesk"}"#,
+    );
+    let style = doc.props(other).text_style.clone().unwrap();
+    assert_eq!(style.font_family.as_deref(), Some("Nowhere Grotesk"));
+    assert_eq!(width(&doc, inter), width(&doc, other));
+    let fonts = document_fonts(&doc);
+    let missing = fonts
+        .iter()
+        .find(|f| f.family == "Nowhere Grotesk")
+        .unwrap();
+    assert_eq!(missing.status, FontStatus::Missing);
+    assert_eq!(missing.layers, 1);
+    assert!(
+        fonts
+            .iter()
+            .any(|f| f.family == "Inter" && f.status == FontStatus::Available)
+    );
+}
+
+fn content(doc: &Document, t: NodeIdx) -> Arc<TextContent> {
+    doc.props(t).text_content.clone().unwrap()
+}
+
+#[test]
+fn styles_a_range_of_characters() {
+    let mut doc = Document::open(&simple_file()).unwrap();
+    let mut h = History::default();
+    let t = new_text(
+        &mut doc,
+        &mut h,
+        r#"{"characters":"one two three","fontSize":10}"#,
+    );
+    let plain = width(&doc, t);
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"fontStyle":"Bold","textRange":[4,7]}"#,
+    );
+    let c = content(&doc, t);
+    assert_eq!(&c.style_ids[..], &[0, 0, 0, 0, 1, 1, 1]);
+    assert_eq!(c.styles.len(), 1);
+    assert_eq!(c.styles[0].font_style.as_deref(), Some("Bold"));
+    assert_eq!(c.styles[0].font_family.as_deref(), Some("Inter"));
+    assert!(width(&doc, t) > plain, "bold is wider");
+    // The layer's own style is unchanged.
+    let style = doc.props(t).text_style.clone().unwrap();
+    assert_eq!(style.font_style.as_deref(), Some("Regular"));
+    // A bigger size on part of the range splits it.
+    set(&mut doc, &mut h, t, r#"{"fontSize":20,"textRange":[6,9]}"#);
+    let c = content(&doc, t);
+    assert_eq!(&c.style_ids[..], &[0, 0, 0, 0, 1, 1, 2, 3, 3]);
+    let run = |id: u32| c.styles.iter().find(|r| r.id == id).unwrap().clone();
+    assert_eq!(run(2).font_size, Some(20.0));
+    assert_eq!(run(2).font_style.as_deref(), Some("Bold"));
+    assert_eq!(run(3).font_size, Some(20.0));
+    assert_eq!(run(3).font_style, None);
+    let layout = doc.props(t).text_layout.clone().unwrap();
+    assert_eq!(layout.glyphs[6].font_size, 20.0);
+    assert_eq!(layout.glyphs[5].font_size, 10.0);
+    // Setting a range back to the layer's style drops its runs.
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"fontStyle":"Regular","fontSize":10,"textRange":[0,13]}"#,
+    );
+    let c = content(&doc, t);
+    assert!(c.style_ids.is_empty() && c.styles.is_empty(), "{c:?}");
+    assert_eq!(width(&doc, t), plain);
+    // Undo restores the runs.
+    h.undo(&mut doc).unwrap();
+    assert_eq!(content(&doc, t).styles.len(), 3);
+}
+
+#[test]
+fn colors_decorates_and_spaces_a_range() {
+    let mut doc = Document::open(&simple_file()).unwrap();
+    let mut h = History::default();
+    let t = new_text(
+        &mut doc,
+        &mut h,
+        r#"{"characters":"red and blue","fontSize":10}"#,
+    );
+    let plain = width(&doc, t);
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"fills":[{"color":"FF0000"}],"textDecoration":"UNDERLINE","letterSpacing":{"value":10,"unit":"PIXELS"},"textRange":[0,3]}"#,
+    );
+    let p = doc.props(t);
+    let c = p.text_content.clone().unwrap();
+    let run = &c.styles[0];
+    let red = &run.fills.as_deref().unwrap()[0];
+    assert!(matches!(red.kind, crate::model::PaintKind::Solid(c) if c.r == 1.0 && c.b == 0.0));
+    assert_eq!(run.decoration.as_deref(), Some("UNDERLINE"));
+    assert_eq!(run.letter_spacing, Some((10.0, Arc::from("PIXELS"))));
+    // The layer keeps its paint; the underline covers only the range.
+    assert!(matches!(p.fills()[0].kind, crate::model::PaintKind::Solid(c) if c.r == 0.0));
+    let layout = p.text_layout.clone().unwrap();
+    assert_eq!(layout.decorations.len(), 1);
+    assert_eq!(layout.decorations[0].style_id, run.id);
+    assert!(layout.decorations[0].rects[0][2] < 50.0);
+    assert!(width(&doc, t) > plain + 25.0, "three letters spaced 10 px");
+    assert_eq!(fills_at(p, 1)[0], *red);
+    // A whole-layer change replaces the range's value.
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"letterSpacing":{"value":0,"unit":"PIXELS"}}"#,
+    );
+    let c = content(&doc, t);
+    assert_eq!(c.styles[0].letter_spacing, None);
+    assert!(c.styles[0].fills.is_some(), "other overrides stay");
+}
+
+#[test]
+fn saves_and_reopens_character_styles() {
+    let original = crate::save::blank("Text");
+    let mut doc = Document::open(&original).unwrap();
+    let mut h = History::default();
+    let page = doc
+        .nodes
+        .iter()
+        .find(|n| n.props.node_type() == crate::model::NodeType::Canvas)
+        .and_then(|n| n.props.guid)
+        .unwrap();
+    let ops: Vec<Op> = serde_json::from_str(&format!(
+        r#"[{{"op":"create","parent":"{page}","node":{{"type":"TEXT","x":0,"y":0,"width":1,"height":1,"props":{{"characters":"plain bold\nnext","fontSize":12}}}}}}]"#
+    ))
+    .unwrap();
+    let id = h.apply(&mut doc, &ops, None).unwrap().created[0].clone();
+    let t = doc.find(Guid::parse(&id).unwrap()).unwrap();
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"fontStyle":"Bold","fontSize":18,"textCase":"UPPER","lineHeight":{"value":30,"unit":"PIXELS"},"fills":[{"color":"0000FF"}],"textRange":[6,10]}"#,
+    );
+    let before = doc.props(t).clone();
+    let saved = crate::save::save(&doc, &original).unwrap();
+    let reopened = Document::open(&saved).unwrap();
+    let after = reopened.props(reopened.find(Guid::parse(&id).unwrap()).unwrap());
+    assert_eq!(after.text_content, before.text_content);
+    let (a, b) = (
+        after.text_layout.as_ref().unwrap(),
+        before.text_layout.as_ref().unwrap(),
+    );
+    assert_eq!(a.glyphs, b.glyphs);
+    assert_eq!(a.baselines, b.baselines);
+    assert_eq!(a.baselines.len(), 2);
+}
+
+#[test]
+fn gives_the_editor_caret_stops() {
+    let mut doc = Document::open(&simple_file()).unwrap();
+    let mut h = History::default();
+    let t = new_text(
+        &mut doc,
+        &mut h,
+        r#"{"characters":"ab\ncd ef","fontSize":10}"#,
+    );
+    let g = geometry(doc.props(t)).unwrap();
+    assert_eq!(g.length, 8);
+    assert_eq!(g.lines.len(), 2);
+    let (a, b) = (&g.lines[0], &g.lines[1]);
+    assert_eq!((a.start, a.end, b.start, b.end), (0, 3, 3, 8));
+    assert_eq!(a.xs.len(), 4);
+    assert_eq!(a.xs[0], 0.0);
+    assert!(a.xs[1] > 0.0 && a.xs[2] > a.xs[1]);
+    // The line break takes no room.
+    assert_eq!(a.xs[3], a.xs[2]);
+    assert!(b.xs.windows(2).all(|w| w[1] >= w[0]));
+    assert!(b.top >= a.top + a.height - 0.01);
+    assert!(a.baseline > a.top && a.baseline < a.top + a.height);
+    // Without line records the lines come from the glyphs.
+    let mut props = doc.props(t).clone();
+    let mut layout = props.text_layout.as_deref().cloned().unwrap();
+    layout.baselines = Arc::from([]);
+    props.text_layout = Some(Arc::new(layout));
+    let guessed = geometry(&props).unwrap();
+    assert_eq!(guessed.lines.len(), 2);
+    assert_eq!((guessed.lines[1].start, guessed.lines[1].end), (3, 8));
+    assert_eq!(guessed.lines[1].xs, b.xs);
+}
+
+#[test]
+fn restyling_a_whole_run_keeps_its_id() {
+    let mut doc = Document::open(&simple_file()).unwrap();
+    let mut h = History::default();
+    let t = new_text(
+        &mut doc,
+        &mut h,
+        r#"{"characters":"plain bold","fontSize":10}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"fontStyle":"Bold","textRange":[6,10]}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        t,
+        r#"{"textDecoration":"UNDERLINE","textRange":[6,10]}"#,
+    );
+    let c = content(&doc, t);
+    assert_eq!(&c.style_ids[..], &[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]);
+    assert_eq!(c.styles.len(), 1);
+    assert_eq!(c.styles[0].decoration.as_deref(), Some("UNDERLINE"));
 }

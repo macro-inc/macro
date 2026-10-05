@@ -1,7 +1,9 @@
 /**
  * The editable Type section: family, weight and italic, size, line height,
  * letter spacing, paragraph spacing, alignment, resizing, decoration, and
- * case, laid out as Figma's design panel does. Presentational.
+ * case, laid out as Figma's design panel does. With characters selected in
+ * the text editor it shows (and sets) theirs, "Mixed" where they differ.
+ * Presentational.
  */
 
 import type { TextInfo } from '@core/fig-engine/types';
@@ -18,7 +20,8 @@ import TextAlignRight from '@phosphor/text-align-right.svg';
 import TextItalic from '@phosphor/text-italic.svg';
 import TextStrikethrough from '@phosphor/text-strikethrough.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
-import { For, type JSX } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
+import type { MixedTextField } from '../core/rich-text';
 import {
   formatLetterSpacing,
   formatLineHeight,
@@ -30,6 +33,7 @@ import {
 } from '../core/type';
 import type { Patch } from '../primitives/create-fig-editor';
 import { ChoiceRow, NumberField, ParsedField } from './design-fields';
+import { FontPicker } from './font-picker';
 
 const icon = 'size-3.5';
 
@@ -109,42 +113,55 @@ function Select(props: {
 
 export function TypeControls(props: {
   text: TextInfo;
-  /** Families that can be laid out (Inter, and fonts registered). */
+  /** Fields the selected characters differ in. */
+  mixed?: ReadonlySet<MixedTextField>;
+  /** The document's font families. */
   families: readonly string[];
+  /** Google Fonts families, for the picker. */
+  googleFamilies?: readonly string[];
+  /** Weights the family has, when known. */
+  weights?: readonly number[];
+  preview?: (family: string) => Promise<string | undefined>;
+  onFontsOpen?: () => void;
   onPatch: (patch: Patch, live: boolean) => void;
 }) {
   const t = () => props.text;
+  const isMixed = (field: MixedTextField) => props.mixed?.has(field) ?? false;
   const style = () => parseStyle(t().fontStyle);
   const families = () => {
-    const current = t().fontFamily ?? 'Inter';
-    return props.families.includes(current)
-      ? props.families
-      : [current, ...props.families];
+    const current = t().fontFamily;
+    return current && !props.families.includes(current)
+      ? [current, ...props.families]
+      : props.families;
   };
-  const decoration = () => t().decoration ?? 'NONE';
+  const weights = () =>
+    WEIGHTS.filter(
+      ([w]) =>
+        !props.weights ||
+        props.weights.length === 0 ||
+        props.weights.includes(w) ||
+        w === style().weight
+    );
+  const decoration = () =>
+    isMixed('decoration') ? 'MIXED' : (t().decoration ?? 'NONE');
   const toggleDecoration = (d: 'UNDERLINE' | 'STRIKETHROUGH') =>
     props.onPatch({ textDecoration: decoration() === d ? 'NONE' : d }, false);
   return (
     <div class="flex flex-col gap-1.5" data-testid="fig-type">
-      <Select
-        label="Font family"
-        testId="fig-font-family"
-        value={t().fontFamily ?? 'Inter'}
-        onChange={(fontFamily) => props.onPatch({ fontFamily }, false)}
-      >
-        <For each={families()}>
-          {(f) => (
-            <option value={f} selected={f === (t().fontFamily ?? 'Inter')}>
-              {f}
-            </option>
-          )}
-        </For>
-      </Select>
+      <FontPicker
+        value={isMixed('fontFamily') ? null : (t().fontFamily ?? 'Inter')}
+        documentFamilies={families()}
+        googleFamilies={props.googleFamilies ?? []}
+        missing={t().fontStatus !== 'AVAILABLE'}
+        preview={props.preview}
+        onOpen={props.onFontsOpen}
+        onSelect={(fontFamily) => props.onPatch({ fontFamily }, false)}
+      />
       <div class="grid grid-cols-[1fr_auto] gap-1.5">
         <Select
           label="Font weight"
           testId="fig-font-weight"
-          value={String(style().weight)}
+          value={isMixed('fontStyle') ? 'mixed' : String(style().weight)}
           onChange={(w) =>
             props.onPatch(
               { fontStyle: styleName(Number(w), style().italic) },
@@ -152,9 +169,17 @@ export function TypeControls(props: {
             )
           }
         >
-          <For each={WEIGHTS}>
+          <Show when={isMixed('fontStyle')}>
+            <option value="mixed" selected disabled>
+              Mixed
+            </option>
+          </Show>
+          <For each={weights()}>
             {([w, name]) => (
-              <option value={String(w)} selected={w === style().weight}>
+              <option
+                value={String(w)}
+                selected={!isMixed('fontStyle') && w === style().weight}
+              >
                 {name}
               </option>
             )}
@@ -164,7 +189,7 @@ export function TypeControls(props: {
           type="button"
           aria-label="Italic"
           title="Italic"
-          aria-pressed={style().italic}
+          aria-pressed={!isMixed('fontStyle') && style().italic}
           data-testid="fig-italic"
           class="rounded-md bg-inset px-2 text-ink-muted hover:text-ink aria-pressed:bg-hover aria-pressed:text-ink"
           onClick={() =>
@@ -181,20 +206,27 @@ export function TypeControls(props: {
         <NumberField
           label="Size"
           value={t().fontSize ?? 12}
+          mixed={isMixed('fontSize')}
           min={1}
           testId="fig-field-font-size"
           onChange={(fontSize, live) => props.onPatch({ fontSize }, live)}
         />
         <ParsedField
           label="Line"
-          shown={formatLineHeight(t().lineHeight)}
+          shown={
+            isMixed('lineHeight') ? 'Mixed' : formatLineHeight(t().lineHeight)
+          }
           parse={parseLineHeight}
           testId="fig-field-line-height"
           onChange={(lineHeight) => props.onPatch({ lineHeight }, false)}
         />
         <ParsedField
           label="Letter"
-          shown={formatLetterSpacing(t().letterSpacing)}
+          shown={
+            isMixed('letterSpacing')
+              ? 'Mixed'
+              : formatLetterSpacing(t().letterSpacing)
+          }
           parse={parseLetterSpacing}
           testId="fig-field-letter-spacing"
           onChange={(letterSpacing) => props.onPatch({ letterSpacing }, false)}
@@ -262,16 +294,23 @@ export function TypeControls(props: {
         <Select
           label="Case"
           testId="fig-text-case"
-          value={t().case ?? 'ORIGINAL'}
+          value={isMixed('case') ? 'mixed' : (t().case ?? 'ORIGINAL')}
           onChange={(c) =>
             props.onPatch({ textCase: c as Patch['textCase'] }, false)
           }
         >
+          <Show when={isMixed('case')}>
+            <option value="mixed" selected disabled>
+              Mixed
+            </option>
+          </Show>
           <For each={CASES}>
             {([value, label]) => (
               <option
                 value={value}
-                selected={value === (t().case ?? 'ORIGINAL')}
+                selected={
+                  !isMixed('case') && value === (t().case ?? 'ORIGINAL')
+                }
               >
                 {label}
               </option>

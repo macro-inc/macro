@@ -211,6 +211,14 @@ fn entries_round_trip_every_property() {
             {"op":"set","ids":["1:13"],"props":{"effects":[{"type":"DROP_SHADOW","x":2,"y":3,"radius":5}]}}]"#,
     )
     .unwrap();
+    let text = h.apply(&mut doc, &ops, None).unwrap().created[0].clone();
+    // Character styles with every field a run holds.
+    let ops: Vec<Op> = serde_json::from_str(&format!(
+        r#"[{{"op":"set","ids":["{text}"],"props":{{"textRange":[1,3],"fontStyle":"Bold","fontSize":20,
+            "textDecoration":"UNDERLINE","textCase":"UPPER","fills":[{{"color":"FF0000"}}],
+            "letterSpacing":{{"value":5,"unit":"PERCENT"}},"lineHeight":{{"value":30,"unit":"PIXELS"}}}}}}]"#
+    ))
+    .unwrap();
     h.apply(&mut doc, &ops, None).unwrap();
     for node in &doc.nodes {
         // Fields the showcase leaves unset are set here, so they round-trip too.

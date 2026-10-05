@@ -151,6 +151,9 @@ pub struct Patch {
     pub text_decoration: Option<String>,
     /// `ORIGINAL`, `UPPER`, `LOWER`, or `TITLE`.
     pub text_case: Option<String>,
+    /// Characters of a text layer (UTF-16 units, `[start, end)`) that the
+    /// text style fields and `fills` apply to, instead of the whole layer.
+    pub text_range: Option<[u32; 2]>,
     /// Auto layout: `HORIZONTAL`, `VERTICAL`, or `NONE` to remove it.
     pub layout_mode: Option<String>,
     pub item_spacing: Option<f32>,
@@ -263,7 +266,8 @@ pub struct Measure {
 }
 
 impl Patch {
-    fn text_change(&self) -> Option<crate::text::Change<'_>> {
+    /// The text change this patch makes to a layer showing `props`.
+    fn text_change(&self, props: &Props) -> Option<crate::text::Change<'_>> {
         let line_height = self.line_height.as_ref().map(|m| match m.unit.as_str() {
             "PIXELS" => (m.value, "PIXELS"),
             "PERCENT" => (m.value / 100.0, "RAW"),
@@ -286,6 +290,14 @@ impl Patch {
             auto_resize: self.text_auto_resize.as_deref(),
             decoration: self.text_decoration.as_deref(),
             case: self.text_case.as_deref(),
+            range: self.text_range.map(|[a, b]| (a.min(b), a.max(b))),
+            fills: match (&self.text_range, &self.fills) {
+                (Some([a, b]), Some(specs)) => Some(paint::paints(
+                    &crate::text::fills_at(props, (*a).min(*b)),
+                    specs,
+                )),
+                _ => None,
+            },
         };
         let any = change.characters.is_some()
             || change.font_family.is_some()
@@ -298,7 +310,8 @@ impl Patch {
             || change.align_vertical.is_some()
             || change.auto_resize.is_some()
             || change.decoration.is_some()
-            || change.case.is_some();
+            || change.case.is_some()
+            || change.fills.is_some();
         any.then_some(change)
     }
 }
@@ -762,7 +775,9 @@ impl<'a> Txn<'a> {
         if let Some(b) = &patch.blend_mode {
             self.edit(i, flags::BLEND).blend_mode = Some(BlendMode::parse(b));
         }
-        if let Some(specs) = &patch.fills {
+        let text_range =
+            patch.text_range.is_some() && self.doc.props(i).node_type() == NodeType::Text;
+        if let Some(specs) = patch.fills.as_ref().filter(|_| !text_range) {
             let fills = Self::paints(self.doc.props(i).fills(), specs);
             let p = self.edit(i, flags::FILLS);
             p.fills = Some(fills);
@@ -867,7 +882,8 @@ impl<'a> Txn<'a> {
             self.set_position(i, patch.x, patch.y);
         }
         if text {
-            let mut change = patch.text_change();
+            let props = self.doc.props(i).clone();
+            let mut change = patch.text_change(&props);
             if let Some(auto) = text_sizing {
                 change.get_or_insert_with(Default::default).auto_resize = Some(auto);
                 resized_text = None;

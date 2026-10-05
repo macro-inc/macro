@@ -72,6 +72,10 @@ export interface WasmFigFile {
   collabChanges: () => string;
   /** Other people's `EntryChange[]` JSON; returns `EditResult` JSON. */
   applyCollab: (page: number, changes: string) => string;
+  /** `FontUse[]` JSON: the fonts the document's text uses. */
+  fonts: () => string;
+  /** `TextGeometry` JSON (`null` for other layers). */
+  textGeometry: (page: number, id: string) => string;
   /** An SVG document of one layer. */
   exportSvg: (page: number, id: string) => string;
   /** `VectorNetwork` JSON in page coordinates, if the layer has points. */
@@ -103,6 +107,8 @@ interface FigEngineWasmModule {
     new (bytes: Uint8Array): WasmFigFile;
     /** A new design with one empty page. */
     blank: (name: string) => Uint8Array;
+    /** Registers a font for layout; `RegisteredFace[]` JSON. */
+    registerFont: (bytes: Uint8Array, family?: string) => string;
   };
 }
 

@@ -9,7 +9,8 @@ app's `.fig` viewer workers (`apps/web/src/lib/core/fig-engine`).
 
 Third-party code is limited to small libraries: `tiny-skia` (rasterizing),
 `miniz_oxide` and `ruzstd` (deflate and zstd), `png`, `zune-jpeg`, `gif`, and
-`image-webp` (image fills), and `serde`. The ZIP reader, kiwi decoder, scene
+`image-webp` (image fills), `skrifa` (reading fonts) and
+`brotli-decompressor` (WOFF2), and `serde`. The ZIP reader, kiwi decoder, scene
 model, instance expansion, effects, and text drawing are implemented here.
 
 ## The format
@@ -57,7 +58,9 @@ boolean          path union, subtract, intersect, and exclude
 vector           vector networks: the `vectorNetworkBlob` format, fill
                  regions and stroke paths, conversion from outlines
 svg              SVG export of a layer, as Figma writes it
-text             text layout for edited text (bundled Inter, kerning, wrapping)
+text             text layout for edited text: fonts (bundled Inter, registered
+                 TTF/OTF/WOFF/WOFF2, variable axes), kerning, wrapping,
+                 per-character styles, caret geometry for the editor
 save             writing `.fig`: patch edited records, splice the rest; blank
                  files; the clipboard document (save/clipboard)
 wasm             the worker API (`FigFile`)
@@ -118,9 +121,30 @@ geometry, gradients and image patterns (with embedded PNGs), masks, clips,
 shadows and layer blur as filters, and text as outlines. `fig_render svg`
 writes SVGs (with matching PNGs) for the first page's top-level layers.
 
-Text the editor changes is laid out again with Inter (`fonts/`, SIL Open
-Font License), embedded in the build, or a font registered at run time;
-other text keeps Figma's own layout.
+Text the editor changes is laid out again in its own fonts when they are
+registered at run time (`FigFile.registerFont`: TTF, OTF, collections, WOFF,
+or WOFF2, optionally under a family name), else in Inter (`fonts/`, SIL Open
+Font License), embedded in the build; other text keeps Figma's own layout.
+Faces are chosen by family and Figma style name ("Semi Bold Italic",
+"Condensed Medium", "9pt Regular"); variable fonts get the style's `wght`,
+`ital`/`slnt`, `wdth`, and `opsz`, a family split into per-script files
+shares one style, and Inter fills in glyphs a font lacks. `fonts()` lists
+the fonts a document uses and whether each is available. Characters carry
+their own styles (Figma's `characterStyleIDs` and `styleOverrideTable`:
+font, size, paints, decoration, letter spacing, line height, case); a `set`
+with `textRange` styles only those characters, and saving writes the style
+table back, keeping fields the engine does not model. `textGeometry` gives
+the text editor each line's box and every caret stop.
+
+`fig_render text --fonts DIR` lays the text of each file out again in the
+fonts under `DIR` (a subdirectory names its fonts' family, as the web app
+registers fetched fonts) and reports how far the glyphs land from Figma's
+layout, per file and per family: an oracle for font selection, metrics,
+kerning, and line breaking. Fonts for it stay outside the repository. With
+the families' Google Fonts files, most layers land within a pixel (Roboto,
+Lato, Roboto Mono, IBM Plex Mono, Roboto Condensed: 91–99%); the rest are
+mostly fonts that changed since the file was made (Inter, DM Sans) and
+layers whose stored layout predates their style.
 
 Editing a layer inside an instance stores an override on the outermost
 instance (keyed by guid path, as Figma does), or sets the component text
@@ -168,6 +192,7 @@ cargo run -p fig_engine --features cli --release --bin fig_render -- info  FILE.
 cargo run -p fig_engine --features cli --release --bin fig_render -- render --out out FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- compare --out out FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- collab FILE.fig…
+cargo run -p fig_engine --features cli --release --bin fig_render -- text --fonts DIR --verbose FILE.fig…
 ```
 
 `info` prints decode statistics, `render` writes one PNG per page, and

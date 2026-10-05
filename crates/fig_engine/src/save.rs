@@ -75,7 +75,7 @@ message TextData characters:string characterStyleIDs:uint[] styleOverrideTable:N
 message GUIDPath guids:GUID[]
 message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
 message VectorData vectorNetworkBlob:uint normalizedSize:Vector
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID booleanOperation:BooleanOperation vectorData:VectorData
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID styleID:uint booleanOperation:BooleanOperation vectorData:VectorData
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -345,29 +345,7 @@ impl<'s> Build<'s> {
             }
             if let Some(family) = &style.font_family {
                 let font_style = style.font_style.as_deref().unwrap_or("Regular");
-                let same = match m.get(self.schema, "fontName") {
-                    Some(Value::Msg(f)) => {
-                        matches!(f.get(self.schema, "family"), Some(Value::Str(s)) if s.as_ref() == family.as_str())
-                            && matches!(f.get(self.schema, "style"), Some(Value::Str(s)) if s.as_ref() == font_style)
-                    }
-                    _ => false,
-                };
-                if !same {
-                    self.msg_field(m, "fontName", |b, inner| {
-                        inner.set(b.schema, "family", Value::Str(family.as_str().into()));
-                        inner.set(b.schema, "style", Value::Str(font_style.into()));
-                        let ps = format!(
-                            "{}-{}",
-                            family.replace(' ', ""),
-                            font_style.replace(' ', "")
-                        );
-                        inner.set(b.schema, "postscript", Value::Str(ps.into()));
-                    });
-                    // Axis values and the font's version belong to the old face.
-                    for f in ["fontVariations", "fontVersion"] {
-                        m.remove(self.schema, f);
-                    }
-                }
+                self.font_name(m, family, font_style);
             }
             if let Some(lh) = &style.line_height {
                 self.number(m, "lineHeight", lh);
@@ -443,6 +421,34 @@ impl<'s> Build<'s> {
                     .collect();
                 self.list_field(&mut d, "glyphs", glyphs);
             }
+            if !layout.baselines.is_empty()
+                && let Some(bdef) = self.sub(def, "baselines")
+            {
+                let lines = layout
+                    .baselines
+                    .iter()
+                    .map(|b| {
+                        let mut bm = Msg::new(bdef);
+                        self.vector(
+                            &mut bm,
+                            "position",
+                            Vec2::new(f64::from(b.x), f64::from(b.y)),
+                        );
+                        for (k, v) in [
+                            ("width", b.width),
+                            ("lineY", b.line_y),
+                            ("lineHeight", b.line_height),
+                            ("lineAscent", b.line_ascent),
+                        ] {
+                            bm.set(self.schema, k, Value::Float(v));
+                        }
+                        bm.set(self.schema, "firstCharacter", Value::Uint(b.first_char));
+                        bm.set(self.schema, "endCharacter", Value::Uint(b.end_char));
+                        Value::Msg(Box::new(bm))
+                    })
+                    .collect();
+                self.list_field(&mut d, "baselines", lines);
+            }
             if !layout.decorations.is_empty()
                 && let Some(ddef) = self.sub(def, "decorations")
                 && let Some(rdef) = self.sub(ddef, "rects")
@@ -474,42 +480,110 @@ impl<'s> Build<'s> {
         }
     }
 
-    /// Drops the properties an edit took over from the per-character style
-    /// table (the node's own style now applies).
+    /// Sets a `fontName` (keeping the record when it already names that
+    /// face).
+    fn font_name(&self, m: &mut Msg, family: &str, font_style: &str) {
+        let same = match m.get(self.schema, "fontName") {
+            Some(Value::Msg(f)) => {
+                matches!(f.get(self.schema, "family"), Some(Value::Str(s)) if s.as_ref() == family)
+                    && matches!(f.get(self.schema, "style"), Some(Value::Str(s)) if s.as_ref() == font_style)
+            }
+            _ => false,
+        };
+        if same {
+            return;
+        }
+        self.msg_field(m, "fontName", |b, inner| {
+            inner.set(b.schema, "family", Value::Str(family.into()));
+            inner.set(b.schema, "style", Value::Str(font_style.into()));
+            let ps = format!(
+                "{}-{}",
+                family.replace(' ', ""),
+                font_style.replace(' ', "")
+            );
+            inner.set(b.schema, "postscript", Value::Str(ps.into()));
+        });
+        // Axis values and the font's version belong to the old face.
+        for f in ["fontVariations", "fontVersion"] {
+            m.remove(self.schema, f);
+        }
+    }
+
+    /// Writes the per-character style table from the runs: each entry the
+    /// file had keeps the fields the engine does not model, and new runs
+    /// get new entries.
     fn style_overrides(&self, t: &mut Msg, runs: &[crate::model::StyleRun]) {
-        let Some(Value::List(entries)) = t.get(self.schema, "styleOverrideTable").cloned() else {
+        let Some(def) = self.sub(t.def, "styleOverrideTable") else {
             return;
         };
-        let entries = entries
-            .into_iter()
-            .map(|e| {
-                let Value::Msg(mut e) = e else { return e };
-                let id = match e.get(self.schema, "styleID") {
-                    Some(Value::Uint(id)) => Some(*id),
+        let existing: Vec<Msg> = match t.get(self.schema, "styleOverrideTable") {
+            Some(Value::List(entries)) => entries
+                .iter()
+                .filter_map(|e| match e {
+                    Value::Msg(m) => Some((**m).clone()),
                     _ => None,
-                };
-                if let Some(run) = id.and_then(|id| runs.iter().find(|r| r.id == id)) {
-                    let mut drop = Vec::new();
-                    if run.font_size.is_none() {
-                        drop.push("fontSize");
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        if runs.is_empty() && existing.is_empty() {
+            return;
+        }
+        let s = self.schema;
+        let entries = runs
+            .iter()
+            .map(|run| {
+                let mut e = existing
+                    .iter()
+                    .find(|e| matches!(e.get(s, "styleID"), Some(Value::Uint(id)) if *id == run.id))
+                    .cloned()
+                    .unwrap_or_else(|| Msg::new(def));
+                e.set(s, "styleID", Value::Uint(run.id));
+                match run.font_size {
+                    Some(fs) => {
+                        e.set(s, "fontSize", Value::Float(fs));
                     }
-                    if run.font_family.is_none() && run.font_style.is_none() {
-                        drop.extend(["fontName", "fontVariations", "fontVersion"]);
-                    }
-                    if run.decoration.is_none() {
-                        drop.push("textDecoration");
-                    }
-                    if run.fills.is_none() {
-                        drop.extend(["fillPaints", "styleIdForFill"]);
-                    }
-                    for f in drop {
-                        e.remove(self.schema, f);
+                    None => e.remove(s, "fontSize"),
+                }
+                match (&run.font_family, &run.font_style) {
+                    (Some(family), Some(style)) => self.font_name(&mut e, family, style),
+                    _ => {
+                        for f in ["fontName", "fontVariations", "fontVersion"] {
+                            e.remove(s, f);
+                        }
                     }
                 }
-                Value::Msg(e)
+                match &run.decoration {
+                    Some(d) => self.set_enum(&mut e, "textDecoration", d),
+                    None => e.remove(s, "textDecoration"),
+                }
+                match &run.case {
+                    Some(c) => self.set_enum(&mut e, "textCase", c),
+                    None => e.remove(s, "textCase"),
+                }
+                for (field, value) in [
+                    ("letterSpacing", &run.letter_spacing),
+                    ("lineHeight", &run.line_height),
+                ] {
+                    match value {
+                        Some((v, u)) => self.number(&mut e, field, &(*v, u.to_string())),
+                        None => e.remove(s, field),
+                    }
+                }
+                match &run.fills {
+                    Some(fills) => {
+                        self.paints(&mut e, "fillPaints", fills);
+                        e.remove(s, "styleIdForFill");
+                    }
+                    None => {
+                        e.remove(s, "fillPaints");
+                        e.remove(s, "styleIdForFill");
+                    }
+                }
+                Value::Msg(Box::new(e))
             })
             .collect();
-        t.set(self.schema, "styleOverrideTable", Value::List(entries));
+        t.set(s, "styleOverrideTable", Value::List(entries));
     }
 
     /// Rewrites the fields of `m` that `edits` names, from `node`.

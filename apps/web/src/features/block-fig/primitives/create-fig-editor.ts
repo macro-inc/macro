@@ -36,6 +36,13 @@ import type { FigViewer, Selected } from './create-fig-viewer';
 
 export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 
+/** Characters selected in a text layer being edited (UTF-16 units). */
+export interface TextSelection {
+  id: string;
+  start: number;
+  end: number;
+}
+
 /** Properties to set (`fig_engine::edit::Patch`). */
 export interface Patch {
   name?: string;
@@ -67,6 +74,11 @@ export interface Patch {
   textAutoResize?: 'WIDTH_AND_HEIGHT' | 'HEIGHT' | 'NONE';
   textDecoration?: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
   textCase?: 'ORIGINAL' | 'UPPER' | 'LOWER' | 'TITLE';
+  /**
+   * Characters (UTF-16 units, `[start, end)`) the text fields and fills
+   * apply to, instead of the whole text layer.
+   */
+  textRange?: [number, number];
   /** Auto layout direction; `NONE` removes it. */
   layoutMode?: 'HORIZONTAL' | 'VERTICAL' | 'NONE';
   itemSpacing?: number;
@@ -221,6 +233,8 @@ export function createFigEditor(options: FigEditorOptions) {
   const [saveState, setSaveState] = createSignal<SaveState>('saved');
   /** The text layer being typed into, if any. */
   const [editingText, setEditingText] = createSignal<string>();
+  /** The characters selected in the text editor (UTF-16 units). */
+  const [textSelection, setTextSelection] = createSignal<TextSelection>();
   /** The points of the path the pen is drawing (page coordinates). */
   const [penPath, setPenPath] = createSignal<PenPoint[]>();
   /**
@@ -409,8 +423,8 @@ export function createFigEditor(options: FigEditorOptions) {
     return run;
   };
 
-  const history = (action: 'undo' | 'redo') => {
-    if (!enabled()) return;
+  const history = (action: 'undo' | 'redo'): Promise<unknown> => {
+    if (!enabled()) return Promise.resolve();
     queue = queue.then(async () => {
       try {
         await pullShared();
@@ -426,6 +440,7 @@ export function createFigEditor(options: FigEditorOptions) {
         options.notifyError(e instanceof Error ? e.message : String(e));
       }
     });
+    return queue;
   };
 
   /** Selects the layers a step created. */
@@ -1077,6 +1092,8 @@ export function createFigEditor(options: FigEditorOptions) {
     saveState,
     editingText,
     setEditingText,
+    textSelection,
+    setTextSelection,
     apply,
     undo: () => history('undo'),
     redo: () => history('redo'),

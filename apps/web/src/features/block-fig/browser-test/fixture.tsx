@@ -19,6 +19,7 @@ import type { FigCommentAnchor, FigPerson } from '../core/comments';
 import { FigViewer } from '../views/fig-viewer';
 import { CollabFixture, type FixturePerson } from './collab-fixture';
 import { createMemoryComments, FIXTURE_PEOPLE } from './memory-comments';
+import { fixtureFontSource } from './font-source';
 
 declare const __FIG_CORPUS_URL__: string;
 
@@ -31,6 +32,8 @@ declare global {
       downloads: () => { name: string; size: number }[];
       /** Every saved file, oldest first. */
       saves: () => Uint8Array[];
+      /** Font stylesheets and files the viewer asked for. */
+      fontRequests: () => string[];
       /** With `?collab`: the people editing together. */
       collab?: { people: () => FixturePerson[] };
       /** The in-memory comments. */
@@ -64,6 +67,7 @@ function Fixture() {
   const editable = params.has('edit') || params.has('new');
   const comments = createMemoryComments();
 
+  const fonts = fixtureFontSource();
   window.figFixture = {
     engine,
     errors,
@@ -76,6 +80,7 @@ function Fixture() {
       notified: comments.notified,
       people: FIXTURE_PEOPLE,
     },
+    fontRequests: fonts.requests,
   };
 
   // Several people on one design, side by side (`?collab&people=a,b`).
@@ -169,6 +174,7 @@ function Fixture() {
                   return url.toString();
                 },
                 presentAt: params.get('present') ?? undefined,
+                fonts,
                 save: async (bytes) => {
                   if (params.has('reload'))
                     await FigEngine.open(bytes.slice().buffer).then((e) =>
