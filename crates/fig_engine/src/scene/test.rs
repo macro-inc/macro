@@ -213,4 +213,28 @@ fn moves_instances_and_components_in_place() {
         &format!(r#"[{{"op":"set","ids":["{rect}"],"props":{{"opacity":0.5}}}}]"#),
     );
     assert!(!scene.refresh(&doc, &applied.touched));
+
+    // What an edit redraws: a component's layer shows in the component and
+    // in its instance; the instance itself, once.
+    let scene = Scene::build(&doc, page);
+    let node = |id: &str| doc.find(Guid::parse(id).unwrap()).unwrap();
+    let scanned = |n: NodeIdx| {
+        scene
+            .nodes
+            .iter()
+            .skip(1)
+            .filter(|s| s.src == n)
+            .fold(Rect::EMPTY, |acc, s| acc.union(&s.bounds))
+    };
+    for id in [&rect, &instance, &frame] {
+        assert_eq!(
+            scene.bounds_of(&doc, &[node(id)]),
+            scanned(node(id)),
+            "{id}"
+        );
+    }
+    assert!(
+        scene.bounds_of(&doc, &[node(&rect)]).w > 100.0,
+        "both copies"
+    );
 }

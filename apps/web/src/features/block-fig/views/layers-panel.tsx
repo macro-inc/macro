@@ -3,6 +3,7 @@
  * loaded lazily as rows expand, with search (⌘F).
  */
 
+import { IS_MAC } from '@core/constant/isMac';
 import type { FigEngine } from '@core/fig-engine/client';
 import type { LayerRow, SearchHit } from '@core/fig-engine/types';
 import CaretDown from '@phosphor/caret-down.svg';
@@ -25,6 +26,7 @@ import {
 } from 'solid-js';
 import { VList, type VListHandle } from 'virtua/solid';
 import { isComponentType, LayerIcon } from '../components/layer-icon';
+import { rowClick, treeMove } from '../core/layer-tree';
 import { isPageDivider } from '../core/pages';
 import { isCommitKey } from '../core/shortcuts';
 import type { FigEditor } from '../primitives/create-fig-editor';
@@ -283,9 +285,82 @@ export function LayersPanel(props: {
     if (run === searchRun) setResults(hits);
   };
 
+  // Shift-click selects the rows between the last clicked one and this
+  // one; ⌘/Ctrl-click toggles a row (Figma's layer list).
+  let anchor: string | undefined;
+  let tree: HTMLDivElement | undefined;
   const onRowClick = (row: LayerRow, e: MouseEvent) => {
-    if (e.shiftKey) void viewer.selectIds([row.id], true);
-    else void viewer.selectIds([row.id]);
+    // The range starts at the last clicked row, or at the selection made
+    // elsewhere (the canvas, search).
+    const selected = viewer.selected();
+    const from = selected.some((s) => s.id === anchor)
+      ? anchor
+      : selected.at(-1)?.id;
+    const click = rowClick(
+      rows().map((r) => r.row.id),
+      row.id,
+      from,
+      { shift: e.shiftKey, toggle: IS_MAC ? e.metaKey : e.ctrlKey }
+    );
+    if (!e.shiftKey) anchor = row.id;
+    tree?.focus({ preventScroll: true });
+    if (click.kind === 'select') {
+      selectRows(click.ids);
+      return;
+    }
+    const current = viewer.selected();
+    if (current.some((s) => s.id === click.id))
+      viewer.select(current.filter((s) => s.id !== click.id));
+    else selectRows([...current.map((s) => s.id), click.id]);
+  };
+
+  /** Selects rows shown in the tree at once (their parents are known). */
+  const selectRows = (ids: string[]) => {
+    const byId = new Map(rows().map((r) => [r.row.id, r]));
+    const known = viewer.selected();
+    viewer.select(
+      ids.flatMap((id) => {
+        const r = byId.get(id);
+        if (r) return [{ id, parent: r.depth > 0 ? r.parent : null }];
+        const s = known.find((k) => k.id === id);
+        return s ? [s] : [];
+      })
+    );
+  };
+
+  /** Arrow keys move through the rows shown, and expand or collapse. */
+  const onTreeKey = (e: KeyboardEvent) => {
+    if (
+      e.metaKey ||
+      e.ctrlKey ||
+      e.altKey ||
+      (e.key !== 'ArrowUp' &&
+        e.key !== 'ArrowDown' &&
+        e.key !== 'ArrowLeft' &&
+        e.key !== 'ArrowRight')
+    )
+      return;
+    e.preventDefault();
+    e.stopPropagation();
+    const shown = rows();
+    const move = treeMove(
+      shown.map((r) => ({
+        id: r.row.id,
+        parent: r.depth > 0 ? r.parent : undefined,
+        hasChildren: r.row.childCount > 0,
+        expanded: r.expanded,
+      })),
+      viewer.selected().at(-1)?.id,
+      e.key
+    );
+    if (!move) return;
+    if (move.kind === 'select') {
+      anchor = move.id;
+      selectRows([move.id]);
+      return;
+    }
+    const row = shown.find((r) => r.row.id === move.id)?.row;
+    if (row) toggle(row);
   };
 
   return (
@@ -424,7 +499,15 @@ export function LayersPanel(props: {
           </Show>
         </div>
       </Show>
-      <div class="relative min-h-0 flex-1">
+      <div
+        ref={tree}
+        // Takes the keys after a row is clicked (arrows move in the tree).
+        tabIndex={-1}
+        aria-label="Layers"
+        data-testid="fig-layer-tree"
+        class="relative min-h-0 flex-1 outline-none"
+        onKeyDown={onTreeKey}
+      >
         <Show
           when={!query()}
           fallback={

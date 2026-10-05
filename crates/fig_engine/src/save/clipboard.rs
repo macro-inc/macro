@@ -207,7 +207,7 @@ pub fn copy(doc: &Document, original: &[u8], ids: &[NodeIdx]) -> Result<Copied> 
         scan = next;
     }
 
-    let mut container = Container::open(original)?;
+    let mut container = Container::open_without_images(original)?;
     let all: Vec<NodeIdx> = layers.iter().chain(&component_nodes).copied().collect();
     if all
         .iter()
@@ -410,7 +410,7 @@ pub fn copy(doc: &Document, original: &[u8], ids: &[NodeIdx]) -> Result<Copied> 
 
     let names: Vec<(String, &[u8])> = hashes
         .iter()
-        .filter_map(|h| Some((format!("images/{h}"), doc.images.get(h)?.as_slice())))
+        .filter_map(|h| Some((format!("images/{h}"), &**doc.images.get(h)?)))
         .collect();
     let images = if names.is_empty() {
         Vec::new()

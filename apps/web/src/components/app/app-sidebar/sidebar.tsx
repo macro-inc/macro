@@ -4,7 +4,6 @@ import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-fl
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import { CommandState } from '@app/features/command';
 import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
@@ -22,19 +21,15 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
-import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
-import { UserIcon } from '@core/component/UserIcon';
 import {
   ENABLE_CALLS,
   enableCrm,
   enableReminders,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import type { SettingsTab } from '@core/constant/SettingsState';
-import { useEmail, useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -43,16 +38,12 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import BellIcon from '@phosphor/bell.svg';
-import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
-import GearIcon from '@phosphor/gear.svg';
 import HomeIcon from '@phosphor/house.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import ActivityIcon from '@phosphor/pulse.svg';
-import SignOutIcon from '@phosphor/sign-out.svg';
-import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn, Dropdown, Hotkey } from '@ui';
+import { cn } from '@ui';
 import {
   type Component,
   createEffect,
@@ -368,157 +359,6 @@ export const GoToHotkeys = () => {
   });
 
   return <InviteModal />;
-};
-
-type SidebarSettingsWidgetProps = {
-  isSlim: () => boolean;
-  onSelect: (tab: SettingsTab) => void;
-  onMenuOpenChange?: (open: boolean) => void;
-  /**
-   * Icon-only: drops the trigger's leading padding and start alignment so the
-   * avatar centres in its square, and grows the avatar to nearly fill it. For
-   * `SidebarRail`, where the name and caret are hidden anyway.
-   */
-  compact?: boolean;
-};
-
-export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
-  const userId = useUserId();
-  const email = useEmail();
-  const logout = useLogout();
-
-  const userName = useOwnUserName();
-
-  // Prefer the user's real name (first/last); fall back to their email.
-  const displayName = createMemo(() => {
-    const name = userName();
-    const parts = [name?.first_name, name?.last_name]
-      .map((part) => part?.trim())
-      .filter((part): part is string => isRealNamePart(part));
-    return parts.length > 0 ? parts.join(' ') : (email() ?? 'Macro User');
-  });
-
-  return (
-    <Dropdown
-      placement="top-start"
-      gutter={6}
-      onOpenChange={props.onMenuOpenChange}
-    >
-      <Dropdown.Trigger
-        variant="ghost"
-        class={cn(
-          'flex items-center cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
-          props.compact
-            ? 'justify-center gap-0 p-0'
-            : 'justify-start gap-3 px-1.5 py-1'
-        )}
-        label={displayName()}
-        fullWidth
-        tooltipDisabled={!props.isSlim()}
-        tooltipPlacement="right"
-        onMouseDown={(e: MouseEvent) => {
-          if (e.button !== 0) return;
-          e.preventDefault();
-        }}
-      >
-        <Show
-          when={userId()}
-          fallback={
-            <div
-              class={cn(
-                'shrink-0 rounded-full bg-ink/10',
-                props.compact ? 'size-8' : 'size-5'
-              )}
-            />
-          }
-        >
-          {(id) => (
-            <div class={cn('shrink-0', props.compact ? 'size-8' : 'size-5')}>
-              <UserIcon
-                id={id()}
-                size="fill"
-                suppressClick
-                showTooltip={false}
-              />
-            </div>
-          )}
-        </Show>
-        <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
-          {displayName()}
-        </span>
-        <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
-      </Dropdown.Trigger>
-      {/*
-        The menu is shrink-to-fit, so without a cap a long name or email
-        stretches it instead of engaging the `truncate` below.
-      */}
-      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))]">
-        <Dropdown.Group class="p-1.5 gap-0">
-          <div class="flex items-center gap-3 px-1 py-1">
-            <Show
-              when={userId()}
-              fallback={<div class="size-10 shrink-0 rounded-full bg-ink/10" />}
-            >
-              {(id) => (
-                <div class="size-10 shrink-0">
-                  <UserIcon
-                    id={id()}
-                    size="fill"
-                    suppressClick
-                    showTooltip={false}
-                  />
-                </div>
-              )}
-            </Show>
-            <div class="min-w-0">
-              <div class="truncate text-sm font-semibold text-ink">
-                {displayName()}
-              </div>
-              <div class="truncate text-sm text-ink-muted">{email()}</div>
-            </div>
-          </div>
-          <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-divider" />
-          <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-            onSelect={() => CommandState.open()}
-          >
-            <span class="size-5 flex items-center justify-center text-ink-extra-muted">
-              ⌘
-            </span>
-            <span class="flex-1 text-ink">Command menu</span>
-            <Hotkey
-              token={TOKENS.global.commandMenu}
-              theme="subtle"
-              class="ml-6"
-            />
-          </Dropdown.Item>
-          <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-            onSelect={() => props.onSelect('Account')}
-          >
-            <span class="size-5 flex items-center justify-center">
-              <GearIcon class="size-4 shrink-0 text-ink-extra-muted" />
-            </span>
-            <span class="flex-1 text-ink">Settings</span>
-            <Hotkey
-              token={TOKENS.global.toggleSettings}
-              theme="subtle"
-              class="ml-6"
-            />
-          </Dropdown.Item>
-          <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-failure"
-            onSelect={() => logout()}
-          >
-            <span class="size-5 flex items-center justify-center">
-              <SignOutIcon class="size-4 shrink-0" />
-            </span>
-            <span>Log out</span>
-          </Dropdown.Item>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
 };
 
 const CALLS_LINK: SidebarItem = {

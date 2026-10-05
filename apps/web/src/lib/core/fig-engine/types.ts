@@ -297,6 +297,13 @@ export interface PasteSpec {
   index?: number;
   /** The page area in view. */
   view?: Rect;
+  /** Figma's "Paste here": the page point their top left goes to. */
+  at?: Vec2;
+  /**
+   * Figma's "Paste to replace": layers removed in the same step; the pasted
+   * ones take the first one's place, centered on where they were.
+   */
+  replace?: string[];
 }
 
 /** Copied layers, as the clipboard carries them. */
@@ -305,4 +312,14 @@ export interface CopiedLayers {
   document: Uint8Array;
   /** A ZIP of the images they use; empty when none. */
   images: Uint8Array;
+}
+
+/**
+ * One entry of a shared design's maps written (`value`) or deleted (`null`).
+ * Mirrors `fig_engine::collab::EntryChange`.
+ */
+export interface EntryChange {
+  container: string;
+  key: string;
+  value?: string | null;
 }

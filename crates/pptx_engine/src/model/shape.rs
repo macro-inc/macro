@@ -271,7 +271,8 @@ impl SlideContext {
     }
 }
 
-/// Picks the branch of an `mc:AlternateContent` the engine understands.
+/// Picks the branch of an `mc:AlternateContent` the engine understands
+/// (equations included: their `a14` choice is typeset natively).
 pub fn alternate_content_choice(doc: &XmlDoc, ac: NodeId) -> Option<NodeId> {
     const SUPPORTED: &[&str] = &[
         "p14", "a14", "p15", "a15", "a16", "p16", "a1611", "p159", "asvg",
@@ -280,12 +281,7 @@ pub fn alternate_content_choice(doc: &XmlDoc, ac: NodeId) -> Option<NodeId> {
         match doc.local(c) {
             "Choice" => {
                 let requires = doc.attr(c, "Requires").unwrap_or("");
-                let ok = requires.split_whitespace().all(|r| SUPPORTED.contains(&r));
-                let has_math = doc
-                    .descendants(c)
-                    .iter()
-                    .any(|&n| doc.ns(n) == Ns::A14 && doc.local(n) == "m");
-                if ok && !has_math {
+                if requires.split_whitespace().all(|r| SUPPORTED.contains(&r)) {
                     return Some(c);
                 }
             }

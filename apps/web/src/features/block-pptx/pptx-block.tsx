@@ -23,7 +23,7 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { useUserId } from '@core/context/user';
+import { useAuthor, useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { watchPresentationChanges } from '@core/pptx-engine/changes';
 import { blockMetadataSignal } from '@core/signal/load';
@@ -76,11 +76,11 @@ import { PptxEditor } from './views/pptx-editor';
 const LARGE_DECK_BYTES = 5 * 1024 * 1024;
 const LARGE_DECK_AUTOSAVE_MS = 5000;
 
-function download(bytes: Uint8Array | Blob, name: string) {
+function download(bytes: Uint8Array | Blob, name: string, mimeType?: string) {
   const blob =
     bytes instanceof Blob
       ? bytes
-      : new Blob([bytes as BlobPart], { type: PPTX_MIME });
+      : new Blob([bytes as BlobPart], { type: mimeType ?? PPTX_MIME });
   void downloadFile(blob, name);
 }
 
@@ -97,6 +97,7 @@ function PresentationHost(props: {
 }) {
   const [engine, setEngine] = createSignal<PresentationEngine>();
   const [failure, setFailure] = createSignal<string>();
+  const author = useAuthor();
   onMount(() => {
     let disposed = false;
     // A copy is transferred, so a remount can open the original again.
@@ -124,7 +125,7 @@ function PresentationHost(props: {
     persist: (bytes) => savePresentationFile(props.documentId, bytes),
     canEdit: props.canEdit,
     fileName: props.fileName,
-    download: (bytes, name) => download(bytes, name),
+    download: (bytes, name, mimeType) => download(bytes, name, mimeType),
     notifyError: (message) => toast.failure(message),
     notifyInfo: (message) => toast.success(message),
     watchStoredFile: (onChange) =>
@@ -135,6 +136,7 @@ function PresentationHost(props: {
         ? LARGE_DECK_AUTOSAVE_MS
         : undefined,
     collaboration: props.collaboration,
+    currentUser: () => ({ name: author() }),
   });
 
   return (

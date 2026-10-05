@@ -263,6 +263,9 @@ pub struct AutoLayout {
     pub counter_spacing: f32,
     /// Earlier children draw on top.
     pub reverse_z: bool,
+    /// Strokes take up space: the frame's own pad its content, and its
+    /// children's outer strokes count in their size.
+    pub strokes_in_layout: bool,
 }
 
 impl AutoLayout {
@@ -415,6 +418,9 @@ pub struct Props {
     pub fills: Option<Arc<[Paint]>>,
     pub strokes: Option<Arc<[Paint]>>,
     pub stroke_weight: Option<f32>,
+    /// Stroke weights per side (top, right, bottom, left) when they are
+    /// set independently.
+    pub stroke_sides: Option<[f32; 4]>,
     pub stroke_align: Option<StrokeAlign>,
     pub stroke_cap: Option<Arc<str>>,
     pub stroke_join: Option<Arc<str>>,
@@ -474,7 +480,8 @@ impl Props {
     pub fn merge(&mut self, other: &Props) {
         merge_fields!(self, other;
             node_type, name, visible, locked, opacity, blend_mode, size, transform, mask,
-            mask_type, fills, strokes, stroke_weight, stroke_align, stroke_cap, stroke_join,
+            mask_type, fills, strokes, stroke_weight, stroke_sides, stroke_align, stroke_cap,
+            stroke_join,
             dash_pattern, fill_geometry, stroke_geometry, effects, corner_radius, corner_radii,
             corner_smoothing, clip_disabled, background_color, internal_only, text_content,
             text_layout, text_style,

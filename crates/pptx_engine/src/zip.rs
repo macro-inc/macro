@@ -262,6 +262,39 @@ pub fn inflate_entry(entry: &Entry, raw: &[u8]) -> Result<Vec<u8>> {
     Ok(data)
 }
 
+/// Inflates at most the first `max` bytes of `entry` (no CRC check, since
+/// the data is not read to its end), for reading file headers cheaply.
+pub fn inflate_prefix(entry: &Entry, raw: &[u8], max: usize) -> Result<Vec<u8>> {
+    let len = max.min(entry.uncompressed_size.min(MAX_ENTRY_SIZE) as usize);
+    match entry.method {
+        METHOD_STORED => Ok(raw[..len.min(raw.len())].to_vec()),
+        METHOD_DEFLATE => {
+            use miniz_oxide::inflate::TINFLStatus;
+            use miniz_oxide::inflate::core::{DecompressorOxide, decompress, inflate_flags};
+            let mut out = vec![0u8; len];
+            let mut state = DecompressorOxide::new();
+            let (status, _, written) = decompress(
+                &mut state,
+                raw,
+                &mut out,
+                0,
+                inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF,
+            );
+            match status {
+                TINFLStatus::Done | TINFLStatus::HasMoreOutput => {
+                    out.truncate(written);
+                    Ok(out)
+                }
+                _ => Err(Error::Zip("corrupt deflate stream")),
+            }
+        }
+        other => Err(Error::Unsupported(format!(
+            "zip compression method {other} in {}",
+            entry.name
+        ))),
+    }
+}
+
 fn apply_zip64_extra(
     mut extra: &[u8],
     uncompressed: &mut u64,

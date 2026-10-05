@@ -32,6 +32,25 @@ fn opens_the_zip_layout() {
 }
 
 #[test]
+fn shares_stored_images_with_the_file() {
+    let png = b"\x89PNG not really".as_slice();
+    let file = std::sync::Arc::new(crate::testing::zip_stored(&[
+        ("canvas.fig", &simple_file()),
+        ("images/ABCDEF", png),
+    ]));
+    let doc = Document::open_shared(&file).unwrap();
+    let image = &doc.images["abcdef"];
+    assert!(matches!(image, Encoded::Shared(..)));
+    assert_eq!(&**image, png);
+    assert!(
+        crate::container::Container::open_without_images(&file)
+            .unwrap()
+            .images
+            .is_empty()
+    );
+}
+
+#[test]
 fn rejects_other_files() {
     assert!(matches!(
         Document::open(b"%PDF-1.7 hello"),

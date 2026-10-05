@@ -71,6 +71,20 @@ export function closesPath(
   return points.length > 2 && dist(points[0], p) <= tolerance;
 }
 
+/**
+ * Whether a pen press at `p` lands on the last point placed (the second
+ * press of a double-click, say), which ends the path open instead of
+ * adding the same point again.
+ */
+export function endsPath(
+  points: PenPoint[],
+  p: Vec2,
+  tolerance: number
+): boolean {
+  const last = points.at(-1);
+  return !!last && dist(last, p) <= tolerance;
+}
+
 /** The handle a drag from `from` to `to` gives a new pen point. */
 export function dragHandle(from: Vec2, to: Vec2, minimum: number): Vec2 {
   return dist(from, to) < minimum

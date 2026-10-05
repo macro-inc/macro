@@ -12,19 +12,23 @@
 import type { EditResult, FigEngine } from '@core/fig-engine/client';
 import type {
   NodeInfo,
+  PasteSpec,
   Rect,
   Sizing,
   VectorNetwork,
 } from '@core/fig-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
+import type { FigSharing } from '../context/fig-viewer-context';
 import { type Alignment, alignOffset } from '../core/align';
 import type { BooleanOperation } from '../core/boolean';
+import type { Point } from '../core/camera';
 import {
   type ClipboardMeta,
   decodeClipboard,
   encodeClipboard,
   pasteParent,
 } from '../core/clipboard';
+import type { PaintType, StopSpec } from '../core/paint';
 import type { Measure } from '../core/type';
 import { type PenPoint, penNetwork } from '../core/vector';
 import type { FigViewer, Selected } from './create-fig-viewer';
@@ -79,6 +83,8 @@ export interface Patch {
   /** Replaces the effects, bottom first. */
   effects?: EffectSpec[];
   strokeCap?: 'NONE' | 'ROUND' | 'SQUARE' | 'ARROW_LINES' | 'ARROW_EQUILATERAL';
+  /** Dash and gap lengths along strokes; empty for a solid stroke. */
+  dashPattern?: number[];
 }
 
 /** An effect as the editor sends it: an existing one kept, or a new one. */
@@ -106,6 +112,10 @@ export interface PaintSpec {
   color?: string;
   opacity?: number;
   visible?: boolean;
+  /** Switches the kind: `SOLID` or a gradient (stops carried over). */
+  type?: PaintType;
+  /** A gradient's stops, replacing its current ones. */
+  stops?: StopSpec[];
 }
 
 export type Arrangement = 'forward' | 'backward' | 'front' | 'back';
@@ -151,6 +161,7 @@ export type Op =
       y: number;
     }
   | { op: 'detach'; ids: string[] }
+  | { op: 'flip'; ids: string[]; vertical?: boolean }
   | { op: 'boolean'; ids: string[]; operation: BooleanOperation }
   | { op: 'flatten'; ids: string[] }
   | {
@@ -176,10 +187,20 @@ export interface FigEditorOptions {
   /** Called with each changed page area, to re-render it. */
   onDirty: (rect: Rect) => void;
   notifyError: (message: string) => void;
+  /** Live edits with other people, when the design is shared. */
+  sharing?: FigSharing;
+  /**
+   * Whether this person stores the merged file (one person among those
+   * editing does). Defaults to always.
+   */
+  stores?: () => boolean;
 }
 
 /** Quiet time after the last edit before saving. */
 const SAVE_DELAY_MS = 1500;
+
+/** How often the steps of one gesture are shared with other people. */
+const GESTURE_PUSH_MS = 80;
 
 const TYPE_FOR_TOOL: Record<ShapeTool, string> = {
   frame: 'FRAME',
@@ -209,6 +230,17 @@ export function createFigEditor(options: FigEditorOptions) {
     selected?: number;
   }>();
   let clipboard: string[] = [];
+  /** Whether the page may read the system clipboard without asking. */
+  let clipboardReadable = false;
+  void navigator.permissions
+    ?.query({ name: 'clipboard-read' as PermissionName })
+    .then((status) => {
+      clipboardReadable = status.state === 'granted';
+      status.onchange = () => {
+        clipboardReadable = status.state === 'granted';
+      };
+    })
+    .catch(() => {});
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saving: Promise<void> | undefined;
   let dirtySinceSave = false;
@@ -222,9 +254,15 @@ export function createFigEditor(options: FigEditorOptions) {
 
   // ---- saving ----------------------------------------------------------
 
+  const { sharing } = options;
+  // In a shared design one person stores the merged file; the others'
+  // edits are kept by the sync service until then.
+  const stores = () => options.stores?.() ?? true;
+
   const saveNow = async (): Promise<void> => {
     clearTimeout(saveTimer);
-    if (!options.save || !dirtySinceSave) return;
+    saveTimer = undefined;
+    if (!options.save || !dirtySinceSave || !stores()) return;
     if (saving) {
       await saving;
       if (!dirtySinceSave) return;
@@ -233,8 +271,10 @@ export function createFigEditor(options: FigEditorOptions) {
     setSaveState('saving');
     const run = (async () => {
       try {
+        const version = sharing?.appliedVersion();
         const bytes = await engine.save();
         await options.save?.(bytes);
+        if (version) sharing?.markStored(version);
         setSaveState(dirtySinceSave ? 'unsaved' : 'saved');
       } catch (e) {
         dirtySinceSave = true;
@@ -251,8 +291,11 @@ export function createFigEditor(options: FigEditorOptions) {
 
   const scheduleSave = () => {
     dirtySinceSave = true;
-    setSaveState('unsaved');
     clearTimeout(saveTimer);
+    saveTimer = undefined;
+    // Shared live, so nothing is lost while someone else stores the file.
+    if (!stores()) return;
+    setSaveState('unsaved');
     saveTimer = setTimeout(() => void saveNow(), SAVE_DELAY_MS);
   };
 
@@ -260,9 +303,25 @@ export function createFigEditor(options: FigEditorOptions) {
     if (document.visibilityState === 'hidden') void saveNow();
   };
   document.addEventListener('visibilitychange', onHidden);
+  // Whoever stores the file now (the one who did may have left) stores
+  // changes nobody stored yet.
+  const takeOver = sharing
+    ? setInterval(() => {
+        if (dirtySinceSave && stores() && !saveTimer && !saving) scheduleSave();
+      }, SAVE_DELAY_MS * 2)
+    : undefined;
+  const unsubscribeStored = sharing?.onStoredElsewhere(() => {
+    if (saving) return;
+    dirtySinceSave = false;
+    clearTimeout(saveTimer);
+    saveTimer = undefined;
+    setSaveState('saved');
+  });
   onCleanup(() => {
     document.removeEventListener('visibilitychange', onHidden);
-    void saveNow();
+    clearInterval(takeOver);
+    unsubscribeStored?.();
+    engine.retain(saveNow());
   });
 
   // ---- applying ----------------------------------------------------------
@@ -277,6 +336,52 @@ export function createFigEditor(options: FigEditorOptions) {
     await viewer.afterEdit();
   };
 
+  /** Applies other people's changes that arrived (inside the queue). */
+  const pullShared = async () => {
+    const result = await sharing?.pull(viewer.page());
+    if (!result) return;
+    await settle(result);
+    await viewer.pruneSelection();
+  };
+
+  // Steps of one gesture (a drag, typing) are shared at most this often;
+  // anything else is shared right away.
+  let pushTimer: ReturnType<typeof setTimeout> | undefined;
+  const pushNow = async () => {
+    clearTimeout(pushTimer);
+    pushTimer = undefined;
+    await sharing?.push();
+  };
+  const pushSoon = () => {
+    if (pushTimer) return;
+    pushTimer = setTimeout(() => {
+      pushTimer = undefined;
+      queue = queue.then(async () => {
+        try {
+          await sharing?.push();
+        } catch (e) {
+          options.notifyError(e instanceof Error ? e.message : String(e));
+        }
+      });
+    }, GESTURE_PUSH_MS);
+  };
+  onCleanup(() => clearTimeout(pushTimer));
+
+  let pullQueued = false;
+  const unsubscribeIncoming = sharing?.onIncoming(() => {
+    if (pullQueued) return;
+    pullQueued = true;
+    queue = queue.then(async () => {
+      pullQueued = false;
+      try {
+        await pullShared();
+      } catch (e) {
+        options.notifyError(e instanceof Error ? e.message : String(e));
+      }
+    });
+  });
+  onCleanup(() => unsubscribeIncoming?.());
+
   /**
    * Applies operations as one undo step, in order with other edits.
    * Resolves to the engine's result (undefined when not allowed or failed).
@@ -285,7 +390,11 @@ export function createFigEditor(options: FigEditorOptions) {
     if (!enabled() || ops.length === 0) return Promise.resolve(undefined);
     const run = queue.then(async () => {
       try {
+        // Other people's changes that arrived first apply first.
+        await pullShared();
         const result = await engine.apply(viewer.page(), ops, coalesce);
+        if (coalesce) pushSoon();
+        else await pushNow();
         await settle(result);
         return result;
       } catch (e) {
@@ -301,10 +410,13 @@ export function createFigEditor(options: FigEditorOptions) {
     if (!enabled()) return;
     queue = queue.then(async () => {
       try {
+        await pullShared();
         const result =
           action === 'undo'
             ? await engine.undo(viewer.page())
             : await engine.redo(viewer.page());
+        // Undo is local: what it restores is shared as a new change.
+        await pushNow();
         await settle(result);
         await viewer.pruneSelection();
       } catch (e) {
@@ -470,56 +582,87 @@ export function createFigEditor(options: FigEditorOptions) {
     }
   };
 
-  /** Pastes the layers copied in this file (see `copy`). */
-  const pasteHere = async () => {
-    if (clipboard.length === 0) return;
-    const result = await apply([
-      { op: 'duplicate', ids: clipboard, dx: 0, dy: 0 },
-    ]);
-    await selectCreated(result);
+  /**
+   * The system clipboard's HTML, for the context menu's paste actions (⌘V
+   * gets it from the paste event); undefined without clipboard access. The
+   * browser is asked for access only when nothing was copied here, so a
+   * menu paste never waits on a permission prompt it does not need.
+   */
+  const readClipboardHtml = async (): Promise<string | undefined> => {
+    try {
+      if (clipboard.length > 0) {
+        const status = await navigator.permissions.query({
+          name: 'clipboard-read' as PermissionName,
+        });
+        if (status.state !== 'granted') return undefined;
+      }
+      for (const item of await navigator.clipboard.read()) {
+        if (item.types.includes('text/html'))
+          return await (await item.getType('text/html')).text();
+      }
+    } catch {
+      // No access: the layers copied here are pasted.
+    }
+    return undefined;
   };
 
   /**
-   * ⌘V: layers on the clipboard (copied here, in another file, or in
-   * Figma) are pasted by Figma's rules: into a selected frame, beside a
+   * Pastes layers: those on the clipboard (`html`: copied here, in another
+   * file, or in Figma), or else the ones copied here, as one step. By
+   * default they go by Figma's rules: into a selected frame, beside a
    * selected layer, or onto the page, where they were when that is in view
-   * and in the middle of the view otherwise. Without layers on the
-   * clipboard, the ones copied here are pasted.
+   * and in the middle of the view otherwise. "Paste here" puts their top
+   * left at a point; "Paste to replace" puts them in place of layers.
    */
-  const paste = async (html?: string) => {
+  const pasteLayers = async (
+    html: string | undefined,
+    place?: { at: Point } | { replace: string[] }
+  ) => {
     const payload = html ? decodeClipboard(html) : undefined;
-    if (!payload) {
-      await pasteHere();
-      return;
-    }
     const page = viewer.pages[viewer.page()];
     if (!enabled() || !page) return;
-    const selection = viewer.selected();
-    const rows =
-      selection.length > 0
-        ? await engine.rows(
-            viewer.page(),
-            selection.map((s) => s.id)
-          )
-        : [];
-    const sameFile =
-      !!payload.meta && payload.meta.fileKey === (options.fileKey ?? '');
-    const parent = pasteParent(
-      selection.map((s) => ({
-        ...s,
-        type: rows.find((r) => r.id === s.id)?.type ?? 'GROUP',
-      })),
-      page.id,
-      sameFile ? (payload.meta?.ids ?? []) : []
-    );
+    const own = clipboard;
+    if (!payload && own.length === 0) return;
+    let parent = page.id;
+    if (place && 'at' in place) {
+      parent = await viewer.containerAt(place.at);
+    } else if (!place) {
+      const selection = viewer.selected();
+      const rows =
+        selection.length > 0
+          ? await engine.rows(
+              viewer.page(),
+              selection.map((s) => s.id)
+            )
+          : [];
+      const sameFile =
+        !payload ||
+        (!!payload.meta && payload.meta.fileKey === (options.fileKey ?? ''));
+      parent = pasteParent(
+        selection.map((s) => ({
+          ...s,
+          type: rows.find((r) => r.id === s.id)?.type ?? 'GROUP',
+        })),
+        page.id,
+        sameFile ? (payload ? (payload.meta?.ids ?? []) : own) : []
+      );
+    }
     const c = viewer.camera();
     const v = viewer.viewport();
+    const spec: PasteSpec = {
+      parent,
+      view: { x: c.x, y: c.y, w: v.w / c.zoom, h: v.h / c.zoom },
+      ...(place && 'at' in place ? { at: place.at } : {}),
+      ...(place && 'replace' in place ? { replace: place.replace } : {}),
+    };
     const run = queue.then(async () => {
       try {
-        const result = await engine.paste(viewer.page(), payload.copied, {
-          parent,
-          view: { x: c.x, y: c.y, w: v.w / c.zoom, h: v.h / c.zoom },
-        });
+        const copied =
+          payload?.copied ?? (await engine.copy(viewer.page(), own));
+        // As with other steps: others' changes first, then share this one.
+        await pullShared();
+        const result = await engine.paste(viewer.page(), copied, spec);
+        await pushNow();
         await settle(result);
         return result;
       } catch (e) {
@@ -529,6 +672,23 @@ export function createFigEditor(options: FigEditorOptions) {
     });
     queue = run;
     await selectCreated(await run);
+  };
+
+  /** ⌘V (`html` from the paste event) and the menus' Paste. */
+  const paste = (html?: string) => pasteLayers(html);
+
+  /** Figma's "Paste here": the layers' top left at a page point. */
+  const pasteHere = async (at: Point) =>
+    pasteLayers(await readClipboardHtml(), { at });
+
+  /** "Paste to replace": in place of the selection, centered on it. */
+  const pasteToReplace = async () => {
+    const targets = editableIds();
+    const html = await readClipboardHtml();
+    return pasteLayers(
+      html,
+      targets.length > 0 ? { replace: targets } : undefined
+    );
   };
 
   /** Cut layers stay pasteable: the engine can copy a deleted layer. */
@@ -652,6 +812,10 @@ export function createFigEditor(options: FigEditorOptions) {
     setVectorEdit({ ...edit, network, selected: undefined });
     await apply([{ op: 'setVector', id: edit.id, network }]);
   };
+
+  /** ⇧H / ⇧V: mirrors the selection about each layer's center. */
+  const flip = (vertical: boolean) =>
+    apply([{ op: 'flip', ids: editableIds(), vertical }]);
 
   // ---- drags ---------------------------------------------------------------
 
@@ -924,6 +1088,12 @@ export function createFigEditor(options: FigEditorOptions) {
     copy,
     paste,
     cut,
+    pasteHere,
+    pasteToReplace,
+    /** Whether layers copied in this file can be pasted. */
+    /** Layers were copied here, or may be on the readable clipboard. */
+    canPaste: () => clipboard.length > 0 || clipboardReadable,
+    flip,
     addAutoLayout,
     removeAutoLayout,
     createComponent,

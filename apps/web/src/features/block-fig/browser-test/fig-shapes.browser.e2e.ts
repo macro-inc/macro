@@ -173,6 +173,28 @@ test('draws with the pen and edits the points', async ({ page }) => {
   await canvas.focus();
   await page.keyboard.press('Control+z');
   await expect(page.getByTestId('fig-field-y')).toHaveValue('100');
+
+  // A double-click on the last point ends an open path (without adding
+  // the point twice).
+  await page.keyboard.press('Escape');
+  await canvas.focus();
+  await page.keyboard.press('p');
+  await clickOnCanvas(page, 500, 150);
+  const box = await canvasBox(page);
+  await page.mouse.dblclick(box.x + 650, box.y + 150);
+  await expect(page.getByTestId('fig-name')).toHaveValue('Vector 2');
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('150');
+  await expect(page.getByTestId('fig-tool-move')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  const vertices = await page.evaluate(async () => {
+    const engine = window.figFixture.engine();
+    const [hit] = (await engine?.search(0, 'Vector 2')) ?? [];
+    const network = hit && (await engine?.vectorNetwork(0, hit.id));
+    return network?.vertices.length;
+  });
+  expect(vertices).toBe(2);
   await expect.poll(() => errors(page)).toEqual([]);
 });
 
@@ -300,4 +322,20 @@ test('copies layers into another file', async ({ page, context }) => {
   await other.getByTestId('fig-canvas').focus();
   await other.keyboard.press('Shift+Enter');
   await expect(other.getByTestId('fig-name')).toHaveValue('Frame 2');
+
+  // The context menu pastes the other file's layers too: "Paste here" at
+  // the right-click, and "Paste to replace" in place of the selection.
+  const box = await canvasBox(other);
+  await other.mouse.click(box.x + 250, box.y + 150, { button: 'right' });
+  await other.getByTestId('fig-menu-paste-here').click();
+  await expect(other.getByTestId('fig-name')).toHaveValue('Primary button');
+  await expect(other.getByTestId('fig-field-x')).toHaveValue('250');
+  await expect(other.getByTestId('fig-field-y')).toHaveValue('150');
+  const count = await other.getByTestId('fig-layer-row').count();
+  await other.mouse.click(box.x + 260, box.y + 160, { button: 'right' });
+  await other.getByTestId('fig-menu-paste-replace').click();
+  await expect(other.getByTestId('fig-field-x')).toHaveValue('250');
+  await expect(other.getByTestId('fig-field-y')).toHaveValue('150');
+  await expect(other.getByTestId('fig-layer-row')).toHaveCount(count);
+  await expect.poll(() => errors(other)).toEqual([]);
 });

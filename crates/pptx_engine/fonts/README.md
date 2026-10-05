@@ -14,6 +14,7 @@ joining forms and required ligatures shaping uses). Regenerate with `scripts/sub
 | `LiberationSerif-*.ttf` | Times New Roman | SIL OFL 1.1, `LICENSE-Liberation.txt` |
 | `LiberationMono-*.ttf` | Courier New | SIL OFL 1.1, `LICENSE-Liberation.txt` |
 | `DejaVuSans*.ttf` | Verdana-like fallback, symbols, Wingdings/Symbol remaps | Bitstream Vera / DejaVu, `LICENSE-DejaVu.txt` |
+| `STIXTwoMath-Regular.ttf` | Cambria Math's symbols, large operators, and stretchy glyphs in equations (letters and digits come from Caladea); subset with its `MATH` table by `scripts/subset_math_font.sh` (~200 KB) | SIL OFL 1.1, `LICENSE-STIX.txt` |
 | `NotoNaskhArabic-*.ttf` | Arabic in serif fonts (Times New Roman, Simplified/Traditional Arabic) | SIL OFL 1.1, `LICENSE-Noto.txt` |
 | `NotoSansArabic-*.ttf` | Arabic in sans-serif fonts (Arial, Tahoma, Segoe UI) | SIL OFL 1.1, `LICENSE-Noto.txt` |
 | `NotoSerifHebrew-*.ttf` | Hebrew in serif fonts (Times New Roman, David, Frank Ruehl) | SIL OFL 1.1, `LICENSE-Noto.txt` |

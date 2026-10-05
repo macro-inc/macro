@@ -46,6 +46,7 @@ inspect          layer rows, frames, hit tests, marquee, node info, search, SVG 
 edit             edit operations, undo/redo, fractional-index positions;
                  auto layout (stacks re-laid out after edits); booleans,
                  flatten, and vectors (edit/shapes); pasting (edit/paste)
+collab           editing together: node states as CRDT map entries
 boolean          path union, subtract, intersect, and exclude
 vector           vector networks: the `vectorNetworkBlob` format, fill
                  regions and stroke paths, conversion from outlines
@@ -71,9 +72,11 @@ and reopened files render identically.
 
 Auto layout frames are laid out again when an edit changes them or their
 children: fill and stretch sizing, gaps (fixed or automatic), padding,
-alignment, min and max sizes, and hugging, which carries the change up
-through hugging parents. `fig_render relayout` re-lays out every stack in a
-file and reports the frames placed differently from Figma's own layout.
+alignment (including text baselines), min and max sizes, strokes included
+in layout, and hugging, which carries the change up through hugging
+parents. Hidden frames keep their layout until shown, as in Figma.
+`fig_render relayout` re-lays out every stack in a file and reports the
+frames placed differently from Figma's own layout.
 
 Boolean layers (`BOOLEAN_OPERATION`) keep their children; the engine
 combines the children's fill outlines (and, for layers with only strokes,
@@ -95,7 +98,12 @@ components and shared styles they show on an internal page) and the images
 it uses as a ZIP. Pasting decodes such a document from any file, translates
 its records into the target file's schema, gives every node a new GUID,
 detaches instances whose components are not in the target, and saves the
-pasted records over their original bytes so unmodeled fields survive.
+pasted records over their original bytes so unmodeled fields survive
+(peers in a live session receive the pasted nodes and images as ordinary
+entries, so a save from another peer writes their modeled fields). A main
+component pasted into the file that has it becomes an instance, as in
+Figma. `PasteSpec` places the layers by Figma's rules, at a point ("Paste
+here"), or in place of other layers ("Paste to replace").
 `fig_render paste` copies up to eight of a file's top-level layers into a
 blank design and scores the saved, reopened paste against the originals.
 
@@ -118,6 +126,28 @@ the instance's layers out again with the same constraints and auto layout
 code (on a temporary copy), keeping the result as the instance's derived
 layout, which saving writes to `derivedSymbolData`.
 
+## Editing together
+
+`collab` shares edits between people as flat maps (Loro maps in the web app,
+on the sync service): `figNodes` holds, per node id, the node's whole state
+after an edit (every modeled property bit for bit, parent and position,
+removed or not, and which fields were edited), `figBlobs` the geometry and
+glyph blobs edits made (keyed by content), and `figImages` images added
+during the session. Every peer opens the stored file and applies the
+entries; an entry is absolute, so applying it is idempotent, entries can
+arrive in any order, and concurrent edits to one node resolve
+last-writer-wins. Parents' children are derived from the nodes' parent links
+and positions, so concurrent moves, inserts, and deletes converge. Each peer
+creates nodes in its own guid session. Undo stays local: the nodes it
+restores are shared as ordinary changes. The edited-field flags accumulate
+across peers, so whoever saves writes every field anyone changed, whichever
+version of the file they opened; a later joiner opening a saved file and
+applying the same entries gets the same design. Blobs the file started with
+(`figMeta.baseBlobs`) are referenced by index, since saving keeps them in
+order. `fig_render collab` edits each file as one peer and checks that a
+second peer, both peers' saves, and a joiner from the saved file render
+identically.
+
 Instances have no stored children: the scene builds their sublayers from the
 component, applying overrides keyed by GUID paths (outer instances win), and
 uses the instance's derived sizes, transforms, and geometry. Rendering is a
@@ -131,6 +161,7 @@ progressively and only what is visible is drawn.
 cargo run -p fig_engine --features cli --release --bin fig_render -- info  FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- render --out out FILE.fig…
 cargo run -p fig_engine --features cli --release --bin fig_render -- compare --out out FILE.fig…
+cargo run -p fig_engine --features cli --release --bin fig_render -- collab FILE.fig…
 ```
 
 `info` prints decode statistics, `render` writes one PNG per page, and
@@ -140,8 +171,8 @@ any local collection of `.fig` files after rendering changes; third-party
 files are not committed.
 
 The browser build: `just build-fig-engine-wasm` from `apps/web` (wasm-pack,
-`--target web`, SIMD enabled; `ensure-fig-engine-wasm` rebuilds only when the
-crate changed).
+`--target web`, SIMD enabled, the `fig-engine-wasm` profile with full LTO;
+`ensure-fig-engine-wasm` rebuilds only when the crate changed).
 
 ## Tests
 

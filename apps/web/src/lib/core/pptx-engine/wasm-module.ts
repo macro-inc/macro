@@ -30,8 +30,26 @@ export interface WasmPptxDocument {
     mode: 'without' | 'only',
     shape: number
   ) => Uint8Array;
-  /** `TextLayoutInfo` JSON, or `null`. */
-  textLayout: (index: number, shape: number) => string;
+  renderSpan: (
+    index: number,
+    width: number,
+    start: number,
+    end: number,
+    backdrop: boolean
+  ) => Uint8Array;
+  /** `TextLayoutInfo` JSON, or `null`; with `row` and `col`, a table cell's. */
+  textLayout: (
+    index: number,
+    shape: number,
+    row?: number,
+    col?: number
+  ) => string;
+  /** The bytes of a video or audio clip (`MediaOutline.part`). */
+  mediaBytes: (part: string) => Uint8Array;
+  /** `LinkRegion[]` JSON: a slide's clickable areas. */
+  linkRegions: (index: number) => string;
+  /** `ShapeGeometryInfo` JSON (or `null`): a shape's outline as paths. */
+  geometryPaths: (index: number, shape: number) => string;
   /** Applies an `EditOp[]` JSON batch; returns `EditResult` JSON. */
   apply: (ops: string, group?: string) => string;
   breakGroup: () => void;
@@ -48,6 +66,12 @@ export interface WasmPptxDocument {
   collabChanges: () => string;
   /** Applies `EntryChange[]` JSON from the shared maps; returns `EditResult` JSON. */
   applyCollab: (changes: string) => string;
+  /** Clipboard payload JSON of shapes (`ids`: JSON array) of slide `index`. */
+  copyShapes: (index: number, ids: string) => string;
+  /** Clipboard payload JSON of slides (`ids`: JSON array of slide ids). */
+  copySlides: (ids: string) => string;
+  /** `TextMatch[]` JSON; `options` is `FindOptions` JSON. */
+  findText: (query: string, options: string) => string;
   free: () => void;
 }
 
@@ -59,6 +83,23 @@ interface PptxEngineWasmModule {
     fromEntries: (entries: string, seed: number) => WasmPptxDocument;
   };
   registerFont: (bytes: Uint8Array) => number;
+  /** `PresetPath[]` JSON for a preset at `w`×`h` points, or `null`. */
+  presetPaths: (name: string, w: number, h: number) => string;
+  /**
+   * PNG of an equation in the linear format (`size` points, `scale` pixels
+   * per point, `color` `RRGGBB`); throws what is wrong with the text.
+   */
+  renderEquation: (
+    latex: string,
+    display: boolean,
+    size: number,
+    scale: number,
+    color: string
+  ) => Uint8Array;
+  /** `SmartArtCatalog` JSON. */
+  smartArtCatalog: () => string;
+  /** `SmartArtPreviewPath[]` JSON (or `null`) for `SmartArtPreviewSpec` JSON. */
+  smartArtPreview: (spec: string) => string;
 }
 
 let modulePromise: Promise<PptxEngineWasmModule> | undefined;

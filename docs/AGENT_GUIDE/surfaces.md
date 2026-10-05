@@ -1884,12 +1884,18 @@ menu opened inside the sheet leaves the sheet itself open. Opening Settings agai
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms
-scroll, including with the keyboard open. On desktop, `/app/settings/<tab>`
-opens settings fullscreen, while `/app/home/~/settings/<tab>` docks it beside
-Home. **Open fullscreen** pushes a standalone settings URL; browser Back
-restores the preceding split layout. **Move to split** restores the app layout
-and docks the selected tab, while closing a docked settings pane minimizes it.
-A direct fullscreen link returns to Home when there is no prior app layout.
+scroll, including with the keyboard open. On desktop, Settings is an ordinary
+split view: the rail's gear button (or `Ctrl ;`) opens it in the active split
+like any other rail item, and Shift-click opens it in a new split.
+`/app/settings/<tab>` opens it as the only split with the app rail still
+visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
+sidebar matches Email and Tasks: a **Settings** title bar with the
+**Hide navigation** toggle (`Cmd .`), a rounded **Search settings** field, the
+grouped section pills, and **Log out** pinned to the bottom. Below 720px the
+sidebar becomes an overlay opened from **Show navigation**. Escape closes a
+settings split that shares the layout, or steps back to the previous view when
+it is the only split (Home when there is none). Leave settings by picking any
+other rail item; there is no separate back or fullscreen control.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
@@ -1949,7 +1955,7 @@ Cursor stays in Agents → Runtimes with its API key and default model controls;
 featured or offered in the Connections catalog. Personal Gmail and GitHub account
 links remain in Settings → Integrations. The native-only Connections page remains
 available when `pipedream-mcp` is disabled.
-`Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
 `Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
 `Instructions` field is a Lexical contenteditable textbox, not a textarea. It

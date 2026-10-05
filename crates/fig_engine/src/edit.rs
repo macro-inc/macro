@@ -31,6 +31,7 @@ pub mod flags {
     pub const OPACITY: u32 = 1 << 5;
     pub const FILLS: u32 = 1 << 6;
     pub const STROKES: u32 = 1 << 7;
+    /// Stroke weight and dashes.
     pub const STROKE_WEIGHT: u32 = 1 << 8;
     pub const STROKE_ALIGN: u32 = 1 << 9;
     pub const RADIUS: u32 = 1 << 10;
@@ -86,6 +87,22 @@ pub struct PaintSpec {
     pub opacity: Option<f32>,
     pub visible: Option<bool>,
     pub blend_mode: Option<String>,
+    /// Switches the paint's kind: `SOLID`, `GRADIENT_LINEAR`,
+    /// `GRADIENT_RADIAL`, `GRADIENT_ANGULAR`, or `GRADIENT_DIAMOND` (an image
+    /// is set with `image`).
+    #[serde(rename = "type")]
+    pub kind: Option<String>,
+    /// A gradient's stops, replacing its current ones.
+    pub stops: Option<Vec<StopSpec>>,
+}
+
+/// A gradient stop as the editor describes it.
+#[derive(Clone, Debug, Deserialize)]
+pub struct StopSpec {
+    /// `RRGGBB` or `RRGGBBAA`.
+    pub color: String,
+    /// Along the gradient, `0..=1`.
+    pub position: f32,
 }
 
 /// Properties to set; absent fields are left alone.
@@ -158,6 +175,8 @@ pub struct Patch {
     pub effects: Option<Vec<EffectSpec>>,
     /// `NONE`, `ROUND`, `SQUARE`, `ARROW_LINES`, or `ARROW_EQUILATERAL`.
     pub stroke_cap: Option<String>,
+    /// Dash and gap lengths along strokes; empty for a solid stroke.
+    pub dash_pattern: Option<Vec<f32>>,
 }
 
 /// An effect as the editor describes it: an existing one kept (and
@@ -350,6 +369,13 @@ pub enum Op {
     Detach {
         ids: Vec<String>,
     },
+    /// "Flip horizontal" (⇧H) or "Flip vertical" (⇧V): mirrors layers
+    /// about their centers.
+    Flip {
+        ids: Vec<String>,
+        #[serde(default)]
+        vertical: bool,
+    },
     /// Creates a layer in `parent` (a page or layer id), on top unless
     /// `index` (bottom is 0) says otherwise.
     Create {
@@ -454,12 +480,14 @@ struct Txn<'a> {
 }
 
 mod components;
+mod flip;
 mod instance_layout;
 mod overrides;
+mod paint;
 mod paste;
 pub mod shapes;
 pub(crate) use overrides::guid_of;
-pub use paste::{PasteSpec, View};
+pub use paste::{At, PasteSpec, View};
 pub(crate) mod layout;
 
 impl<'a> Txn<'a> {
@@ -641,14 +669,15 @@ impl<'a> Txn<'a> {
     fn resize(&mut self, i: NodeIdx, width: Option<f64>, height: Option<f64>) {
         let props = self.doc.props(i);
         let old = props.size();
-        let w = width.unwrap_or(old.x).max(0.01);
+        // An axis left alone keeps its size (a flat vector stays flat).
+        let w = width.map_or(old.x, |w| w.max(0.01));
         // Lines have no height.
         let min_h = if props.node_type() == NodeType::Line {
             0.0
         } else {
             0.01
         };
-        let h = height.unwrap_or(old.y).max(min_h);
+        let h = height.map_or(old.y, |h| h.max(min_h));
         if (w - old.x).abs() < 1e-9 && (h - old.y).abs() < 1e-9 {
             return;
         }
@@ -705,39 +734,7 @@ impl<'a> Txn<'a> {
     // ---- properties ------------------------------------------------------
 
     fn paints(existing: &[Paint], specs: &[PaintSpec]) -> Arc<[Paint]> {
-        specs
-            .iter()
-            .filter_map(|s| {
-                let mut paint = match s.keep {
-                    Some(k) => existing.get(k)?.clone(),
-                    None => Paint::solid(Color::BLACK),
-                };
-                if let Some(c) = s.color.as_deref().and_then(parse_hex) {
-                    paint.kind = crate::model::PaintKind::Solid(c);
-                }
-                if let Some(hash) = &s.image {
-                    paint.kind = crate::model::PaintKind::Image(crate::model::ImagePaint {
-                        hash: Some(hash.to_ascii_lowercase().into()),
-                        scale_mode: crate::model::ImageScaleMode::Fill,
-                        transform: Affine::IDENTITY,
-                        scale: 1.0,
-                        rotation: 0.0,
-                        filters: Default::default(),
-                        original_size: None,
-                    });
-                }
-                if let Some(o) = s.opacity {
-                    paint.opacity = o.clamp(0.0, 1.0);
-                }
-                if let Some(v) = s.visible {
-                    paint.visible = v;
-                }
-                if let Some(b) = &s.blend_mode {
-                    paint.blend_mode = BlendMode::parse(b);
-                }
-                Some(paint)
-            })
-            .collect()
+        paint::paints(existing, specs)
     }
 
     fn set(&mut self, i: NodeIdx, patch: &Patch) -> Result<()> {
@@ -807,6 +804,12 @@ impl<'a> Txn<'a> {
         if let Some(cap) = &patch.stroke_cap {
             self.edit(i, flags::STROKE_CAP | flags::GEOMETRY).stroke_cap =
                 Some(cap.as_str().into());
+            self.drop_stroke_geometry(i);
+        }
+        if let Some(dashes) = &patch.dash_pattern {
+            let dashes: Vec<f32> = dashes.iter().map(|d| d.max(0.0)).collect();
+            self.edit(i, flags::STROKE_WEIGHT | flags::GEOMETRY)
+                .dash_pattern = (!dashes.is_empty()).then(|| dashes.into());
             self.drop_stroke_geometry(i);
         }
         if let Some(specs) = &patch.effects {
@@ -898,8 +901,12 @@ impl<'a> Txn<'a> {
     fn new_node(&mut self, props: Props) -> NodeIdx {
         let i = self.doc.nodes.len() as NodeIdx;
         let guid = props.guid.expect("new nodes have ids");
+        // Before its creation the node has only its id (undo keeps it).
         self.doc.nodes.push(Node {
-            props: Props::default(),
+            props: Props {
+                guid: Some(guid),
+                ..Props::default()
+            },
             parent: None,
             children: Vec::new(),
             edits: flags::CREATED,
@@ -1220,6 +1227,14 @@ impl<'a> Txn<'a> {
             Op::Detach { ids } => {
                 for i in self.layers(ids)? {
                     self.detach_instance(i)?;
+                }
+            }
+            Op::Flip { ids, vertical } => {
+                let all = self.layers(ids)?;
+                for &i in &all {
+                    if !self.has_ancestor_in(i, &all) {
+                        self.flip(i, *vertical);
+                    }
                 }
             }
             Op::AutoLayout { ids } => {
@@ -1568,9 +1583,11 @@ impl History {
 /// when its own content changed (its children, size, or settings), and
 /// `Some(false)` when only its place in its parent did.
 fn layout_change(old: &Node, new: &Node) -> Option<bool> {
+    // A frame shown again is laid out again: hidden ones keep their layout.
     let own = old.children != new.children
         || old.props.size != new.props.size
-        || old.props.auto_layout != new.props.auto_layout;
+        || old.props.auto_layout != new.props.auto_layout
+        || old.props.visible != new.props.visible;
     let placed = old.removed != new.removed
         || old.parent != new.parent
         || old.props.transform != new.props.transform

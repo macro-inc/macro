@@ -151,6 +151,7 @@ function Fixture() {
     },
     fetchLatest: async () => stored.slice().buffer as ArrayBuffer,
     autosaveDelay: autosave === null ? undefined : Number(autosave),
+    currentUser: () => ({ name: params.get('author') ?? 'Alex Morgan' }),
   });
 
   return (

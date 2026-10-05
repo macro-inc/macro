@@ -15,8 +15,14 @@ import type {
   DeckOutline,
   EditResult,
   EntryChange,
+  LinkRegion,
+  PresetPath,
+  ShapeGeometryInfo,
   SlideOutline,
+  SmartArtCatalog,
+  SmartArtPreviewPath,
   TextLayoutInfo,
+  TextMatch,
 } from './types';
 import {
   discardPptxEngineWasm,
@@ -266,11 +272,97 @@ async function serve(
         ];
       }
     )
-    .with({ kind: 'textLayout' }, ({ docKey, index, shape }) => {
+    .with(
+      { kind: 'renderSpan' },
+      async ({ docKey, index, width, start, end, backdrop }) => {
+        const started = performance.now();
+        const pixels = documentFor(docKey).renderSpan(
+          index,
+          width,
+          start,
+          end,
+          backdrop
+        );
+        const bitmap = await toBitmap(pixels, width);
+        const millis = performance.now() - started;
+        return [{ id, ok: true, kind: 'render', bitmap, millis }, [bitmap]] as [
+          PptxResponse,
+          Transferable[],
+        ];
+      }
+    )
+    .with({ kind: 'presetPaths' }, ({ names, width, height }) => {
+      const paths: Record<string, PresetPath[]> = {};
+      for (const name of names) {
+        const json = JSON.parse(wasm.presetPaths(name, width, height)) as
+          | PresetPath[]
+          | null;
+        if (json) paths[name] = json;
+      }
+      return [{ id, ok: true, kind: 'presetPaths', paths }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with(
+      { kind: 'renderEquation' },
+      ({ latex, display, size, scale, color }) => {
+        const bytes = wasm.renderEquation(latex, display, size, scale, color);
+        return [{ id, ok: true, kind: 'png', bytes }, [bytes.buffer]] as [
+          PptxResponse,
+          Transferable[],
+        ];
+      }
+    )
+    .with({ kind: 'smartArtPreviews' }, ({ specs }) => {
+      const previews = specs.map(
+        (spec) =>
+          JSON.parse(wasm.smartArtPreview(JSON.stringify(spec))) as
+            | SmartArtPreviewPath[]
+            | null
+      );
+      return [{ id, ok: true, kind: 'smartArtPreviews', previews }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'smartArtCatalog' }, () => {
+      const catalog = JSON.parse(wasm.smartArtCatalog()) as SmartArtCatalog;
+      return [{ id, ok: true, kind: 'smartArtCatalog', catalog }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'textLayout' }, ({ docKey, index, shape, cell }) => {
       const layout = JSON.parse(
-        documentFor(docKey).textLayout(index, shape)
+        documentFor(docKey).textLayout(index, shape, cell?.row, cell?.col)
       ) as TextLayoutInfo | null;
       return [{ id, ok: true, kind: 'textLayout', layout }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'mediaBytes' }, ({ docKey, part }) => {
+      const bytes = documentFor(docKey).mediaBytes(part);
+      return [{ id, ok: true, kind: 'mediaBytes', bytes }, [bytes.buffer]] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'geometryPaths' }, ({ docKey, index, shape }) => {
+      const geometry = JSON.parse(
+        documentFor(docKey).geometryPaths(index, shape)
+      ) as ShapeGeometryInfo | null;
+      return [{ id, ok: true, kind: 'geometryPaths', geometry }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'linkRegions' }, ({ docKey, index }) => {
+      const regions = JSON.parse(
+        documentFor(docKey).linkRegions(index)
+      ) as LinkRegion[];
+      return [{ id, ok: true, kind: 'linkRegions', regions }, []] as [
         PptxResponse,
         Transferable[],
       ];
@@ -316,6 +408,32 @@ async function serve(
         saved.byteOffset + saved.byteLength
       ) as ArrayBuffer;
       return [{ id, ok: true, kind: 'save', bytes }, [bytes]] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'copyShapes' }, ({ docKey, index, shapes }) => {
+      const payload = documentFor(docKey).copyShapes(
+        index,
+        JSON.stringify(shapes)
+      );
+      return [{ id, ok: true, kind: 'clipboard', payload }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'copySlides' }, ({ docKey, slides }) => {
+      const payload = documentFor(docKey).copySlides(JSON.stringify(slides));
+      return [{ id, ok: true, kind: 'clipboard', payload }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'findText' }, ({ docKey, query, options }) => {
+      const matches = JSON.parse(
+        documentFor(docKey).findText(query, JSON.stringify(options ?? {}))
+      ) as TextMatch[];
+      return [{ id, ok: true, kind: 'matches', matches }, []] as [
         PptxResponse,
         Transferable[],
       ];

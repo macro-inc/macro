@@ -51,7 +51,6 @@ import {
   enableReminders,
 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -116,9 +115,7 @@ export function Layout(props: RouteSectionProps) {
     () =>
       !isTouchDevice() &&
       isAuthenticated() === true &&
-      !AUTH_URLS.includes(location.pathname) &&
-      // Settings-as-the-sole-split has its own tab nav — hide app chrome.
-      !isSoloSettings()
+      !AUTH_URLS.includes(location.pathname)
   );
 
   return (

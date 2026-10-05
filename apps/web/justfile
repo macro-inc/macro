@@ -345,7 +345,7 @@ ensure-docx-engine-wasm:
 # Build the fig-engine wasm module (.fig parsing and tile rasterization, hosted
 # in workers by the fig block) into src/lib/core/fig-engine/wasm (gitignored).
 build-fig-engine-wasm:
-    CARGO_TARGET_DIR="{{fig_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/fig_engine --target web --release --out-dir {{justfile_directory()}}/src/lib/core/fig-engine/wasm
+    CARGO_TARGET_DIR="{{fig_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/fig_engine --target web --profile fig-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/fig-engine/wasm
 
 # Dev fast path: build the fig-engine wasm pkg only when it is missing or any
 # engine source is newer than the built artifact.

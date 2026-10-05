@@ -20,6 +20,7 @@ export type QueryMethod =
   | 'geometry'
   | 'outline'
   | 'search'
+  | 'pageColors'
   | 'components'
   | 'inRect'
   | 'exportSvg'
@@ -54,12 +55,22 @@ export type FigRequest =
       id: number;
       kind: 'edit';
       page: number;
-      action: 'apply' | 'undo' | 'redo';
+      /** `remote`: other people's changes (outside the undo history). */
+      action: 'apply' | 'undo' | 'redo' | 'remote';
       /** `Op[]` JSON, for `apply`. */
       ops?: string;
       /** Steps with the same key in a row undo as one (a drag). */
       coalesce?: string;
+      /** `EntryChange[]` JSON, for `remote`. */
+      changes?: string;
     }
+  | {
+      id: number;
+      kind: 'enableCollab';
+      session: number;
+      baseBlobs: number | null;
+    }
+  | { id: number; kind: 'collabChanges' }
   | { id: number; kind: 'save' }
   | { id: number; kind: 'blank'; name: string }
   | { id: number; kind: 'addImage'; hash: string; bytes: ArrayBuffer }

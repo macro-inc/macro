@@ -1,7 +1,7 @@
 //! A decoded `.fig` file: every node change as a tree, the geometry blobs,
 //! and the image files.
 
-use crate::container::Container;
+use crate::container::{Container, Encoded};
 use crate::decode;
 use crate::error::{FigError, Result, corrupt};
 use crate::geometry::{self, ParsedPath};
@@ -84,7 +84,7 @@ pub struct Document {
     pub pages: Vec<NodeIdx>,
     pub blobs: Blobs,
     /// Encoded image files by lowercase hex SHA-1.
-    pub images: HashMap<String, Vec<u8>>,
+    pub images: HashMap<String, Encoded>,
     /// Figma's own render of part of the first page.
     pub thumbnail: Option<Vec<u8>>,
     /// The file name Figma saved, from `meta.json`.
@@ -104,6 +104,13 @@ impl Document {
     /// Decodes a `.fig` file (either container layout).
     pub fn open(bytes: &[u8]) -> Result<Document> {
         let container = Container::open(bytes)?;
+        Self::from_container(container)
+    }
+
+    /// Decodes a `.fig` file whose image files stay in `bytes` (shared, so
+    /// whoever keeps the file for saving does not hold a second copy).
+    pub fn open_shared(bytes: &Arc<Vec<u8>>) -> Result<Document> {
+        let container = Container::open_shared(bytes)?;
         Self::from_container(container)
     }
 
@@ -231,7 +238,8 @@ impl Document {
     /// it does not decode.
     pub fn add_image(&mut self, hash: &str, bytes: Vec<u8>) -> Option<(u32, u32)> {
         let pixmap = crate::images::decode(&bytes)?;
-        self.images.insert(hash.to_ascii_lowercase(), bytes);
+        self.images
+            .insert(hash.to_ascii_lowercase(), Encoded::Owned(bytes));
         Some((pixmap.width(), pixmap.height()))
     }
 

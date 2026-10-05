@@ -38,10 +38,23 @@ and shadows from the design panel with undo and redo, typing and styling
 text, auto layout (adding it, gap and padding, sizing, drag to reorder),
 constraints, resizing several layers and rotating one, components
 (creating, placing instances from Assets, overriding their layers,
-detaching), adding pages, boolean operations and flattening, drawing
-with the pen and editing points, SVG export (compared with the PNG) and
-Copy as SVG, copying layers into another file through the system
-clipboard, and read-only access.
+detaching), adding pages, and read-only access. `fig-shapes` covers
+boolean operations and flattening, drawing with the pen and editing
+points, SVG export (compared with the PNG) and Copy as SVG, and copying
+layers into another file through the system clipboard. `fig-design-ui` covers
+the right-click menus, the color and paint pickers (gradients, dashes,
+reordering paints), mixed values for several layers, and the layers
+panel's range selection and arrow keys.
+
+`?collab` opens several people on one design side by side
+(`&people=alice,bob` by default), each with the real shared-design session
+(Loro document, WAL, awareness), engine, and viewer, connected through an
+in-page sync server (`memory-sync.ts`, the `LiveSyncSource` contract the sync
+service's transport implements); `window.figFixture.collab.people()` exposes
+each person's engine, saves, status, and peers.
+`collaboration.browser.e2e.ts` covers edits and undo reaching the other
+person, remote pointers, selections and avatars, one person storing the
+merged file, and following someone's view.
 
 `FIG_CORPUS_DIR` (with a trailing slash) serves another directory of
 files; `--port` runs a second server beside the default one.

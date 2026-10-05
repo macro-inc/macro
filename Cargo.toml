@@ -312,6 +312,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ] }
 rmcp = "1.6.0"
+skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
@@ -444,3 +445,10 @@ strip = "none"
 inherits = "release"
 lto = true
 opt-level = "s"
+
+# The fig engine's browser build (apps/web `build-fig-engine-wasm`): one
+# codegen unit and full LTO, so its rasterizing loops inline across crates.
+[profile.fig-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

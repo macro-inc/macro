@@ -11,7 +11,7 @@
 //! or are centered in the view.
 
 use super::{Applied, History, Op, Txn, flags};
-use crate::container::Container;
+use crate::container::{Container, Encoded};
 use crate::document::{Document, NodeIdx};
 use crate::error::{Result, corrupt};
 use crate::kiwi::{Decoder, Msg, Reader, Schema, Ty, Value, Writer};
@@ -31,6 +31,20 @@ pub struct PasteSpec {
     pub index: Option<usize>,
     /// The page area in view, for placing them when their position is not.
     pub view: Option<View>,
+    /// Figma's "Paste here": the page point their top left goes to.
+    #[serde(default)]
+    pub at: Option<At>,
+    /// Figma's "Paste to replace": layers removed in the same step; the
+    /// pasted ones take the first one's parent and place, centered on
+    /// where the replaced layers were.
+    #[serde(default)]
+    pub replace: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct At {
+    pub x: f64,
+    pub y: f64,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -99,7 +113,7 @@ impl Clip {
         if !foreign.is_empty() {
             History::default().apply(&mut doc, &[Op::Detach { ids: foreign }], None)?;
         }
-        let container = Container::open(bytes)?;
+        let container = Container::open_without_images(bytes)?;
         let schema = Schema::decode(&container.schema)?;
         // (A detached instance keeps its record: pasting writes its type
         // again, which drops what made it an instance.)
@@ -254,7 +268,7 @@ impl History {
         spec: &PasteSpec,
     ) -> Result<Applied> {
         let clip = Clip::prepare(doc, clip)?;
-        let container = Container::open(original)?;
+        let container = Container::open_without_images(original)?;
         let schema = Schema::decode(&container.schema)?;
         if let Some(zip) = images.filter(|z| !z.is_empty()) {
             let archive = crate::zip::ZipArchive::new(zip)?;
@@ -263,7 +277,8 @@ impl History {
                     && !doc.images.contains_key(hash)
                 {
                     let bytes = archive.read(entry)?;
-                    doc.images.insert(hash.to_ascii_lowercase(), bytes);
+                    doc.images
+                        .insert(hash.to_ascii_lowercase(), Encoded::Owned(bytes));
                 }
             }
         }
@@ -278,7 +293,7 @@ impl History {
 
 impl Txn<'_> {
     fn paste(&mut self, clip: &Clip, schema: &Schema, spec: &PasteSpec) -> Result<()> {
-        let parent = self.resolve(&spec.parent)?;
+        let mut parent = self.resolve(&spec.parent)?;
         if clip.roots.is_empty() {
             return Ok(());
         }
@@ -287,22 +302,69 @@ impl Txn<'_> {
             let s = clip.doc.props(r).size();
             acc.union(&clip.doc.world(r).map_rect(&Rect::new(0.0, 0.0, s.x, s.y)))
         });
-        let offset = self.placement(parent, &bounds, spec.view);
+        let replaced: Vec<NodeIdx> = self
+            .resolve_all(&spec.replace)?
+            .into_iter()
+            .filter(|&i| {
+                !self.doc.node(i).removed
+                    && !matches!(
+                        self.doc.props(i).node_type(),
+                        NodeType::Canvas | NodeType::Document
+                    )
+            })
+            .collect();
+        let mut index = spec.index;
+        let offset = if let Some(&first) = replaced.first()
+            && let Some(p) = self.doc.node(first).parent
+        {
+            parent = p;
+            index = self.doc.node(p).children.iter().position(|&c| c == first);
+            let was = replaced
+                .iter()
+                .fold(Rect::EMPTY, |acc, &i| acc.union(&self.frame_bounds(i)));
+            Vec2::new(
+                (was.x + (was.w - bounds.w) / 2.0 - bounds.x).round(),
+                (was.y + (was.h - bounds.h) / 2.0 - bounds.y).round(),
+            )
+        } else if let Some(to) = spec.at {
+            Vec2::new((to.x - bounds.x).round(), (to.y - bounds.y).round())
+        } else {
+            self.placement(parent, &bounds, spec.view)
+        };
         let node_def = schema.def_index("NodeChange");
         let mut blob_map: HashMap<u32, u32> = HashMap::new();
-        let mut at = spec
-            .index
+        let mut at = index
             .unwrap_or(self.doc.node(parent).children.len())
             .min(self.doc.node(parent).children.len());
         let parent_world = self.doc.world(parent);
+        let in_set = self.doc.props(parent).is_state_group == Some(true);
         for &root in &clip.roots {
             let world = Affine::translate(offset.x, offset.y).mul(&clip.doc.world(root));
             let local = parent_world.invert().unwrap_or_default().mul(&world);
-            let i = self.paste_tree(clip, schema, node_def, root, parent, at, &mut blob_map)?;
+            // A main component pasted into the file that has it places an
+            // instance, as duplicating does (a variant pasted into its set
+            // stays a variant).
+            let main = clip
+                .doc
+                .props(root)
+                .guid
+                .filter(|&g| {
+                    !in_set
+                        && clip.doc.props(root).node_type() == NodeType::Symbol
+                        && has_component(self.doc, &clip.doc, g)
+                })
+                .and_then(|g| self.doc.find(g));
+            let i = match main {
+                Some(m) => self.instantiate(m, parent, at, local)?,
+                None => self.paste_tree(clip, schema, node_def, root, parent, at, &mut blob_map)?,
+            };
             self.edit(i, flags::TRANSFORM).transform = Some(local);
             let guid = self.doc.props(i).guid.unwrap_or_default();
             self.created.push(guid.to_string());
             at += 1;
+        }
+        for i in replaced {
+            self.remove_tree(i);
         }
         Ok(())
     }

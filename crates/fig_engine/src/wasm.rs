@@ -4,6 +4,7 @@
 //! premultiplied RGBA bytes. Every call names a page by index; the worker
 //! keeps the most recently used page expanded.
 
+use crate::collab::{Collab, EntryChange};
 use crate::document::{Document, NodeIdx};
 use crate::edit::{History, Op};
 use crate::images::{ImageStore, encode_png};
@@ -80,24 +81,29 @@ pub struct FigFile {
     doc: Document,
     scene: Option<(usize, Scene)>,
     images: ImageStore,
-    /// The file as opened (saving patches it).
-    original: Vec<u8>,
+    /// The file as opened (saving patches it; image fills are read from
+    /// it in place).
+    original: std::sync::Arc<Vec<u8>>,
     history: History,
+    /// Set while the file is edited together with other people.
+    collab: Option<Collab>,
 }
 
 #[wasm_bindgen]
 impl FigFile {
     /// Opens a `.fig` file.
     #[wasm_bindgen(constructor)]
-    pub fn new(bytes: &[u8]) -> Result<FigFile, JsError> {
+    pub fn new(bytes: Vec<u8>) -> Result<FigFile, JsError> {
         console_error_panic_hook::set_once();
-        let doc = Document::open(bytes).map_err(js_err)?;
+        let original = std::sync::Arc::new(bytes);
+        let doc = Document::open_shared(&original).map_err(js_err)?;
         Ok(FigFile {
             doc,
             scene: None,
             images: ImageStore::default(),
-            original: bytes.to_vec(),
+            original,
             history: History::default(),
+            collab: None,
         })
     }
 
@@ -118,13 +124,7 @@ impl FigFile {
         let Some((_, scene)) = &self.scene else {
             return Rect::EMPTY;
         };
-        let set: std::collections::HashSet<NodeIdx> = touched.iter().copied().collect();
-        scene
-            .nodes
-            .iter()
-            .skip(1)
-            .filter(|n| set.contains(&n.src))
-            .fold(Rect::EMPTY, |acc, n| acc.union(&n.bounds))
+        scene.bounds_of(&self.doc, touched)
     }
 
     fn after_edit(
@@ -171,23 +171,78 @@ impl FigFile {
     ) -> Result<String, JsError> {
         let ops: Vec<Op> = serde_json::from_str(ops).map_err(js_err)?;
         self.scene(page)?;
-        let applied = self
+        let mut applied = self
             .history
             .apply(&mut self.doc, &ops, coalesce.as_deref())
             .map_err(js_err)?;
+        if let Some(collab) = &mut self.collab {
+            collab.record(&mut self.doc, &mut applied.touched, false);
+        }
         self.after_edit(page, applied.touched, applied.created)
     }
 
     pub fn undo(&mut self, page: usize) -> Result<String, JsError> {
         self.scene(page)?;
-        let touched = self.history.undo(&mut self.doc).unwrap_or_default();
+        let mut touched = self.history.undo(&mut self.doc).unwrap_or_default();
+        if let Some(collab) = &mut self.collab {
+            collab.record(&mut self.doc, &mut touched, true);
+        }
         self.after_edit(page, touched, Vec::new())
     }
 
     pub fn redo(&mut self, page: usize) -> Result<String, JsError> {
         self.scene(page)?;
-        let touched = self.history.redo(&mut self.doc).unwrap_or_default();
+        let mut touched = self.history.redo(&mut self.doc).unwrap_or_default();
+        if let Some(collab) = &mut self.collab {
+            collab.record(&mut self.doc, &mut touched, true);
+        }
         self.after_edit(page, touched, Vec::new())
+    }
+
+    /// Starts editing together with other people: new layers get ids in
+    /// `session` (unique per person and visit), and `baseBlobs` is the
+    /// shared `figMeta.baseBlobs` when it is set. Returns the
+    /// `EntryChange[]` JSON to write (the base count when it was not set).
+    #[wasm_bindgen(js_name = enableCollab)]
+    pub fn enable_collab(
+        &mut self,
+        session: u32,
+        base_blobs: Option<u32>,
+    ) -> Result<String, JsError> {
+        let (collab, changes) = Collab::new(&mut self.doc, session, base_blobs);
+        self.collab = Some(collab);
+        to_json(&changes)
+    }
+
+    /// The `EntryChange[]` JSON that brings the shared maps up to date with
+    /// this person's edits (including undo and redo) since the last call.
+    #[wasm_bindgen(js_name = collabChanges)]
+    pub fn collab_changes(&mut self) -> Result<String, JsError> {
+        let collab = self
+            .collab
+            .as_mut()
+            .ok_or_else(|| js_err("the file is not shared"))?;
+        to_json(&collab.changes(&self.doc))
+    }
+
+    /// Applies other people's changes (`EntryChange[]` JSON); they do not
+    /// enter the undo history. Returns an `EditResult` JSON.
+    #[wasm_bindgen(js_name = applyCollab)]
+    pub fn apply_collab(&mut self, page: usize, changes: &str) -> Result<String, JsError> {
+        let changes: Vec<EntryChange> = serde_json::from_str(changes).map_err(js_err)?;
+        // Pages added or removed elsewhere may have moved the open one.
+        let page = page.min(self.doc.pages.len().saturating_sub(1));
+        self.scene(page)?;
+        let collab = self
+            .collab
+            .as_mut()
+            .ok_or_else(|| js_err("the file is not shared"))?;
+        let remote = collab.apply(&mut self.doc, &changes);
+        for hash in &remote.images {
+            self.images.forget(hash);
+        }
+        let page = page.min(self.doc.pages.len().saturating_sub(1));
+        self.after_edit(page, remote.touched, Vec::new())
     }
 
     /// Adds an image for image fills under its SHA-1 (hex); returns
@@ -423,6 +478,15 @@ impl FigFile {
         to_json(&inspect::search(&self.doc, scene, query, limit))
     }
 
+    /// The distinct solid colors the page uses, most used first
+    /// (`string[]` JSON of `RRGGBB` or `RRGGBBAA`).
+    #[wasm_bindgen(js_name = pageColors)]
+    pub fn page_colors(&mut self, page: usize, limit: usize) -> Result<String, JsError> {
+        self.scene(page)?;
+        let (_, scene) = self.scene.as_ref().expect("scene built above");
+        to_json(&inspect::page_colors(&self.doc, scene, limit))
+    }
+
     /// Children of `parent` (the page when absent) whose frames intersect a
     /// page rectangle (`string[]` JSON).
     #[wasm_bindgen(js_name = inRect)]
@@ -528,7 +592,7 @@ impl FigFile {
     ) -> Result<String, JsError> {
         let spec: crate::edit::PasteSpec = serde_json::from_str(spec).map_err(js_err)?;
         self.scene(page)?;
-        let applied = self
+        let mut applied = self
             .history
             .paste(
                 &mut self.doc,
@@ -538,6 +602,9 @@ impl FigFile {
                 &spec,
             )
             .map_err(js_err)?;
+        if let Some(collab) = &mut self.collab {
+            collab.record(&mut self.doc, &mut applied.touched, false);
+        }
         self.after_edit(page, applied.touched, applied.created)
     }
 }

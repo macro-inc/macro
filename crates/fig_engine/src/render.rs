@@ -72,6 +72,9 @@ impl Surface {
 /// Largest layer side; pathological bounds are clamped to the region.
 const MAX_LAYER_SIDE: u32 = 8192;
 
+/// Furthest (device pixels) drawing extends past the region for effects.
+const MAX_MARGIN: f64 = 1024.0;
+
 pub(crate) struct Painter<'a> {
     pub doc: &'a Document,
     pub scene: &'a Scene,
@@ -82,6 +85,13 @@ pub(crate) struct Painter<'a> {
     pub scale: f64,
     /// Device-space region being drawn (with margin).
     pub region: Rect,
+    /// The region's margin around what was asked for.
+    margin: f64,
+    /// How far past the region the layer being drawn reaches (see
+    /// [`Painter::layer_reach`]).
+    reach: f64,
+    /// Cleared masks to reuse (see [`AreaMask`]).
+    masks: Vec<Mask>,
 }
 
 /// Renders a viewport of a scene into a premultiplied RGBA pixmap.
@@ -102,13 +112,17 @@ pub fn render(
         base,
         scale: vp.scale,
         region,
+        margin: 0.0,
+        reach: 0.0,
+        masks: Vec::new(),
     };
     // Effects sample beyond what they cover: render with a margin so blurs
     // and shadows from just outside the region are complete inside it.
-    let margin = painter.effect_margin(scene.root()).ceil().min(1024.0) as i32;
+    let margin = painter.effect_margin(scene.root()).ceil().min(MAX_MARGIN) as i32;
     let (w, h) = (vp.width as i32 + 2 * margin, vp.height as i32 + 2 * margin);
     let mut surface = Surface::new(-margin, -margin, w as u32, h as u32)?;
     painter.region = surface.device_rect();
+    painter.margin = f64::from(margin);
     if let Some(bg) = opts.background {
         surface.pixmap.fill(bg.to_skia());
     }
@@ -152,6 +166,9 @@ pub fn render_node(
         base,
         scale,
         region: Rect::new(0.0, 0.0, f64::from(vp.width), f64::from(vp.height)),
+        margin: 0.0,
+        reach: 0.0,
+        masks: Vec::new(),
     };
     let mut surface = Surface::new(0, 0, vp.width, vp.height)?;
     if let Some(bg) = opts.background {
@@ -206,8 +223,33 @@ impl<'a> Painter<'a> {
         self.base.map_rect(r)
     }
 
-    /// How far (device pixels) effects in the subtree reach beyond their
-    /// node's geometry, for nodes that intersect the region.
+    /// How far (device pixels) the node's layer blurs and drop shadows
+    /// sample beyond a pixel, with a few pixels to spare for rounding.
+    fn layer_reach(&self, i: SceneIdx) -> f64 {
+        let mut reach: f64 = 0.0;
+        for e in self.props(i).effects().iter().filter(|e| e.is_visible()) {
+            let r = match e.kind {
+                EffectKind::DropShadow => {
+                    f64::from(e.radius) * 1.5
+                        + f64::from(e.spread.abs())
+                        + e.offset.x.abs().max(e.offset.y.abs())
+                }
+                EffectKind::LayerBlur if e.radius > 0.0 => f64::from(e.radius) * 1.5,
+                _ => continue,
+            };
+            reach = reach.max(r);
+        }
+        if reach > 0.0 {
+            (reach * self.scene.node(i).world.scale_factor() * self.scale + 3.0).min(MAX_MARGIN)
+        } else {
+            0.0
+        }
+    }
+
+    /// How far (device pixels) inner shadows and background blurs in the
+    /// subtree sample beyond their node's geometry, for nodes that intersect
+    /// the region. (They read the surface they draw on; layer blurs and drop
+    /// shadows extend their own layers instead.)
     fn effect_margin(&self, i: SceneIdx) -> f64 {
         let node = self.scene.node(i);
         let mut margin: f64 = 0.0;
@@ -218,13 +260,13 @@ impl<'a> Painter<'a> {
             }
             for e in props.effects().iter().filter(|e| e.is_visible()) {
                 let reach = match e.kind {
-                    EffectKind::DropShadow | EffectKind::InnerShadow => {
+                    EffectKind::InnerShadow => {
                         f64::from(e.radius) * 1.5
                             + f64::from(e.spread.abs())
                             + e.offset.x.abs().max(e.offset.y.abs())
                     }
-                    EffectKind::LayerBlur | EffectKind::BackgroundBlur => f64::from(e.radius) * 1.5,
-                    EffectKind::Other => 0.0,
+                    EffectKind::BackgroundBlur => f64::from(e.radius) * 1.5,
+                    _ => 0.0,
                 };
                 margin = margin.max(reach * node.world.scale_factor() * self.scale);
             }
@@ -269,7 +311,7 @@ impl<'a> Painter<'a> {
     ) {
         let mask_bounds = self.to_device(&self.scene.node(mask_node).bounds);
         let area = mask_bounds.intersect(&surface.device_rect());
-        let Some(mut layer) = self.layer(&area) else {
+        let Some(mut layer) = self.layer(&area, &self.region.outset(self.reach)) else {
             return;
         };
         for &c in content {
@@ -311,9 +353,9 @@ impl<'a> Painter<'a> {
         composite(surface, &layer, 1.0, tiny_skia::BlendMode::SourceOver, clip);
     }
 
-    /// A transparent layer covering `device` (clamped to the region).
-    fn layer(&self, device: &Rect) -> Option<Surface> {
-        let r = device.intersect(&self.region);
+    /// A transparent layer covering `device` within `bound`.
+    fn layer(&self, device: &Rect, bound: &Rect) -> Option<Surface> {
+        let r = device.intersect(bound);
         if r.is_empty() || r.w < 0.5 && r.h < 0.5 {
             return None;
         }
@@ -333,7 +375,9 @@ impl<'a> Painter<'a> {
         }
         let node = self.scene.node(i);
         let device = self.to_device(&node.bounds);
-        if !device.intersects(&surface.device_rect()) || !device.intersects(&self.region) {
+        if !device.intersects(&surface.device_rect())
+            || !device.intersects(&self.region.outset(self.reach))
+        {
             return;
         }
         if device.w < 0.25 && device.h < 0.25 {
@@ -375,10 +419,30 @@ impl<'a> Painter<'a> {
             self.draw_node_content_with_opacity(i, surface, clip, false, fold);
             return;
         }
-        let Some(mut layer) = self.layer(&device.intersect(&surface.device_rect())) else {
+        // Blurs and shadows sample around each pixel: their layer reaches
+        // past the surface by as far as they do, so it is complete within
+        // (and no further than any layer around it reaches past the region).
+        let outer = self.reach;
+        let layer = match self.layer_reach(i) {
+            reach if reach > 0.0 => {
+                self.reach = outer.max(reach - self.margin);
+                let bound = surface
+                    .device_rect()
+                    .outset(reach)
+                    .intersect(&self.region.outset(self.reach));
+                self.layer(&device, &bound)
+            }
+            _ => self.layer(
+                &device.intersect(&surface.device_rect()),
+                &self.region.outset(outer),
+            ),
+        };
+        let Some(mut layer) = layer else {
+            self.reach = outer;
             return;
         };
         self.draw_node_content(i, &mut layer, None, false);
+        self.reach = outer;
         for e in effects.iter().filter(|e| e.is_visible()) {
             if e.kind == EffectKind::LayerBlur && e.radius > 0.0 {
                 let sigma = f64::from(e.radius) / 2.0 * node.world.scale_factor() * self.scale;
@@ -505,7 +569,10 @@ impl<'a> Painter<'a> {
                 if props.clips_content() {
                     let mask = self.clip_mask(i, surface, clip);
                     match mask {
-                        ClipResult::Mask(m) => self.draw_children(&children, surface, Some(&m)),
+                        ClipResult::Mask(m) => {
+                            self.draw_children(&children, surface, Some(&m.mask));
+                            self.recycle(m);
+                        }
                         ClipResult::Unchanged => self.draw_children(&children, surface, clip),
                         ClipResult::Empty => {}
                     }
@@ -611,30 +678,46 @@ impl<'a> Painter<'a> {
         if align != StrokeAlign::Center && !geometry_is_open(props) {
             let fill = self.fill_shapes(i);
             if !fill.is_empty() {
-                let mut shape_mask =
-                    match Mask::new(surface.pixmap.width(), surface.pixmap.height()) {
-                        Some(m) => m,
-                        None => return,
-                    };
+                // The mask is read where the strokes draw.
                 let sts = ts.to_skia();
+                let read = shapes
+                    .iter()
+                    .filter_map(|s| s.path().bounds().transform(sts))
+                    .map(|b| {
+                        Rect::new(
+                            f64::from(b.x()),
+                            f64::from(b.y()),
+                            f64::from(b.width()),
+                            f64::from(b.height()),
+                        )
+                    })
+                    .fold(Rect::EMPTY, |acc, b| acc.union(&b));
+                let Some(mut shape_mask) = self.area_mask(surface, Some(read)) else {
+                    return;
+                };
                 for s in &fill {
-                    shape_mask.fill_path(s.path(), s.rule(), true, sts);
+                    shape_mask.fill_path(s.path(), s.rule(), sts);
                 }
                 if align == StrokeAlign::Outside {
                     shape_mask.invert();
                 }
                 if let Some(parent) = clip {
-                    multiply_masks(&mut shape_mask, parent);
+                    shape_mask.multiply(parent);
                 }
                 owned_clip = Some(shape_mask);
             }
         }
-        let clip = owned_clip.as_ref().or(clip);
         let size = props.size();
-        for paint in props.strokes().iter().filter(|p| p.is_visible()) {
-            for shape in &shapes {
-                self.fill_shape(surface, shape, ts, paint, size, opacity, clip);
+        {
+            let clip = owned_clip.as_ref().map(|m| &m.mask).or(clip);
+            for paint in props.strokes().iter().filter(|p| p.is_visible()) {
+                for shape in &shapes {
+                    self.fill_shape(surface, shape, ts, paint, size, opacity, clip);
+                }
             }
+        }
+        if let Some(m) = owned_clip {
+            self.recycle(m);
         }
     }
 
@@ -654,6 +737,7 @@ impl<'a> Painter<'a> {
         };
         let stroke = tiny_skia::Stroke {
             width,
+            dash: stroke_dash(props),
             ..Default::default()
         };
         let mut outlines: Vec<Path> = self
@@ -720,7 +804,7 @@ impl<'a> Painter<'a> {
         }
     }
 
-    fn clip_mask(&self, i: SceneIdx, surface: &Surface, parent: Option<&Mask>) -> ClipResult {
+    fn clip_mask(&mut self, i: SceneIdx, surface: &Surface, parent: Option<&Mask>) -> ClipResult {
         let props = self.props(i);
         let ts = self.node_transform(i, surface);
         let size = props.size();
@@ -742,25 +826,25 @@ impl<'a> Painter<'a> {
             }
         }
         let shapes = self.fill_shapes(i);
-        let Some(mut mask) = Mask::new(surface.pixmap.width(), surface.pixmap.height()) else {
-            return ClipResult::Empty;
-        };
         if shapes.is_empty() {
             return ClipResult::Empty;
         }
+        let Some(mut mask) = self.area_mask(surface, None) else {
+            return ClipResult::Empty;
+        };
         let sts = ts.to_skia();
         for s in &shapes {
-            mask.fill_path(s.path(), s.rule(), true, sts);
+            mask.fill_path(s.path(), s.rule(), sts);
         }
         if let Some(p) = parent {
-            multiply_masks(&mut mask, p);
+            mask.multiply(p);
         }
         ClipResult::Mask(mask)
     }
 }
 
 enum ClipResult {
-    Mask(Mask),
+    Mask(AreaMask),
     Unchanged,
     Empty,
 }
@@ -802,6 +886,7 @@ fn line_stroke(props: &Props) -> Vec<Shape> {
         } else {
             tiny_skia::LineJoin::Miter
         },
+        dash: stroke_dash(props),
         ..Default::default()
     };
     let mut shapes: Vec<Shape> = path
@@ -823,6 +908,20 @@ fn line_stroke(props: &Props) -> Vec<Shape> {
     shapes
 }
 
+/// The stroke's dashes, if it has any: dash and gap lengths, repeated as
+/// SVG does when there is an odd number of them.
+fn stroke_dash(props: &Props) -> Option<tiny_skia::StrokeDash> {
+    let pattern = props.dash_pattern.as_deref()?;
+    if pattern.is_empty() || pattern.iter().all(|&d| d <= 0.0) {
+        return None;
+    }
+    let mut dashes = pattern.to_vec();
+    if dashes.len() % 2 == 1 {
+        dashes.extend_from_within(..);
+    }
+    tiny_skia::StrokeDash::new(dashes, 0.0)
+}
+
 /// Whether a node's geometry is an open path (lines and open vectors have
 /// no inside, so stroke alignment does not apply).
 fn geometry_is_open(props: &Props) -> bool {
@@ -830,9 +929,126 @@ fn geometry_is_open(props: &Props) -> bool {
         || props.fill_geometry().is_empty() && matches!(props.node_type(), NodeType::Vector)
 }
 
-pub(crate) fn multiply_masks(dst: &mut Mask, src: &Mask) {
-    for (a, b) in dst.data_mut().iter_mut().zip(src.data()) {
-        *a = ((u16::from(*a) * u16::from(*b) + 127) / 255) as u8;
+/// A clip mask the size of its surface (tiny-skia clips with those) that is
+/// only computed within `area`: the pixels filled into it plus those it will
+/// be read at. Elsewhere it reads 0, so inverting, multiplying, and clearing
+/// it for reuse cost what it covers rather than the whole surface.
+pub(crate) struct AreaMask {
+    pub mask: Mask,
+    /// Columns `x0..x1`, rows `y0..y1`.
+    area: [usize; 4],
+}
+
+impl AreaMask {
+    /// Widens the area by a rectangle of surface pixels.
+    fn include(&mut self, r: tiny_skia::Rect) {
+        let (w, h) = (self.mask.width() as f32, self.mask.height() as f32);
+        let x0 = (r.left() - 2.0).floor().clamp(0.0, w) as usize;
+        let y0 = (r.top() - 2.0).floor().clamp(0.0, h) as usize;
+        let x1 = (r.right() + 2.0).ceil().clamp(0.0, w) as usize;
+        let y1 = (r.bottom() + 2.0).ceil().clamp(0.0, h) as usize;
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        let a = &mut self.area;
+        if a[0] >= a[2] || a[1] >= a[3] {
+            *a = [x0, y0, x1, y1];
+        } else {
+            *a = [a[0].min(x0), a[1].min(y0), a[2].max(x1), a[3].max(y1)];
+        }
+    }
+
+    /// Fills `path` (anti-aliased) into the mask.
+    pub fn fill_path(&mut self, path: &Path, rule: FillRule, ts: Transform) {
+        match path.bounds().transform(ts) {
+            Some(b) => self.include(b),
+            None => {
+                self.area = [
+                    0,
+                    0,
+                    self.mask.width() as usize,
+                    self.mask.height() as usize,
+                ]
+            }
+        }
+        self.mask.fill_path(path, rule, true, ts);
+    }
+
+    /// The area's rows, as ranges of the mask's data.
+    fn rows(&self) -> impl Iterator<Item = std::ops::Range<usize>> + use<> {
+        let stride = self.mask.width() as usize;
+        let [x0, y0, x1, y1] = self.area;
+        (y0..y1.max(y0)).map(move |y| y * stride + x0..y * stride + x1.max(x0))
+    }
+
+    pub fn invert(&mut self) {
+        let rows = self.rows();
+        let data = self.mask.data_mut();
+        for row in rows {
+            data[row].iter_mut().for_each(|a| *a = 255 - *a);
+        }
+    }
+
+    /// Multiplies the mask by `other` (the same size).
+    pub fn multiply(&mut self, other: &Mask) {
+        let rows = self.rows();
+        let (data, src) = (self.mask.data_mut(), other.data());
+        for row in rows {
+            let Some(s) = src.get(row.clone()) else {
+                continue;
+            };
+            for (a, &b) in data[row].iter_mut().zip(s) {
+                *a = ((u16::from(*a) * u16::from(b) + 127) / 255) as u8;
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        let rows = self.rows();
+        let data = self.mask.data_mut();
+        for row in rows {
+            data[row].fill(0);
+        }
+        self.area = [0; 4];
+    }
+}
+
+/// Masks (and their total bytes) kept for reuse by one render.
+const MASK_POOL: usize = 8;
+const MASK_POOL_BYTES: usize = 48 << 20;
+
+impl Painter<'_> {
+    /// A cleared mask the size of `surface`, which will be read within
+    /// `read` (surface pixels) besides where it is filled.
+    pub(crate) fn area_mask(&mut self, surface: &Surface, read: Option<Rect>) -> Option<AreaMask> {
+        let (w, h) = (surface.pixmap.width(), surface.pixmap.height());
+        let mask = match self
+            .masks
+            .iter()
+            .position(|m| m.width() == w && m.height() == h)
+        {
+            Some(at) => self.masks.remove(at),
+            None => Mask::new(w, h)?,
+        };
+        let mut m = AreaMask { mask, area: [0; 4] };
+        if let Some(r) = read
+            && let Some(r) =
+                tiny_skia::Rect::from_xywh(r.x as f32, r.y as f32, r.w as f32, r.h as f32)
+        {
+            m.include(r);
+        }
+        Some(m)
+    }
+
+    /// Clears a mask and keeps it for reuse, in place of the one unused
+    /// longest when the pool is full.
+    pub(crate) fn recycle(&mut self, mut m: AreaMask) {
+        m.clear();
+        self.masks.push(m.mask);
+        let bytes = |masks: &[Mask]| masks.iter().map(|m| m.data().len()).sum::<usize>();
+        while self.masks.len() > MASK_POOL || bytes(&self.masks) > MASK_POOL_BYTES {
+            self.masks.remove(0);
+        }
     }
 }
 

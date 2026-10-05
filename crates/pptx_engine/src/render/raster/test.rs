@@ -112,3 +112,72 @@ fn hostile_coordinates_are_ignored_or_clamped() {
     // The clamped triangle still covers the canvas's upper-right half.
     assert_eq!(px(&r, 35, 5)[0], 255);
 }
+
+/// A white 10 pt square at (5, 5) with layer effects, at one pixel per point.
+fn square_with(effects: Vec<Effect>) -> Raster {
+    let square = Node::Fill {
+        path: Path::rect(Rect::from_xywh(5.0, 5.0, 10.0, 10.0)),
+        paint: Paint::Solid(Rgba::WHITE),
+        even_odd: false,
+    };
+    let g = Group {
+        children: vec![square],
+        opacity: 1.0,
+        clip: None,
+        effects,
+    };
+    rasterize(&[g.into_node()], 40, 40, 1.0)
+}
+
+#[test]
+fn shadows_and_glows_are_cast_by_the_content_alone() {
+    use crate::path::{Affine, Point};
+    let outer = Effect::OuterShadow {
+        color: Rgba::BLACK.with_alpha_mul(0.5),
+        blur: 0.0,
+        offset: Point::new(10.0, 0.0),
+        transform: Affine::IDENTITY,
+    };
+    // Offset left: the inner shadow shades the square's right edge.
+    let inner = Effect::InnerShadow {
+        color: Rgba::BLACK,
+        blur: 0.0,
+        offset: Point::new(-3.0, 0.0),
+    };
+    let glow = Effect::Glow {
+        color: Rgba::from_u8(0, 255, 0),
+        radius: 2.0,
+    };
+    let alone = square_with(vec![outer.clone()]);
+    let both = square_with(vec![outer.clone(), inner]);
+    assert_eq!(px(&both, 13, 10), [0, 0, 0, 255], "shaded inside");
+    assert_eq!(
+        px(&both, 22, 10),
+        px(&alone, 22, 10),
+        "the outer shadow is not shaded"
+    );
+    // The shadow (x 15-25) is cast by the square, not by its glow.
+    let glowing = square_with(vec![glow, outer]);
+    assert_eq!(px(&glowing, 26, 10)[3], 0);
+    assert!(px(&glowing, 22, 10)[3] > 100);
+}
+
+#[test]
+fn reflections_are_blurred() {
+    let reflection = |blur: f32| Effect::Reflection {
+        axis: 15.0,
+        dist: 0.0,
+        start_alpha: 1.0,
+        end_alpha: 1.0,
+        end_pos: 1.0,
+        height: 10.0,
+        blur,
+    };
+    let sharp = square_with(vec![reflection(0.0)]);
+    assert_eq!(px(&sharp, 10, 18), [255, 255, 255, 255]);
+    assert_eq!(px(&sharp, 15, 18)[3], 0);
+    let soft = square_with(vec![reflection(3.0)]);
+    let edge = px(&soft, 15, 18);
+    assert!(edge[3] > 0 && edge[3] < 255, "{edge:?}");
+    assert!(edge[0] <= edge[3], "premultiplied: {edge:?}");
+}

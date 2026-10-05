@@ -14,6 +14,7 @@ import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { FigViewerProvider } from '../context/fig-viewer-context';
 import { FigViewer } from '../views/fig-viewer';
+import { CollabFixture, type FixturePerson } from './collab-fixture';
 
 declare const __FIG_CORPUS_URL__: string;
 
@@ -26,6 +27,8 @@ declare global {
       downloads: () => { name: string; size: number }[];
       /** Every saved file, oldest first. */
       saves: () => Uint8Array[];
+      /** With `?collab`: the people editing together. */
+      collab?: { people: () => FixturePerson[] };
     };
   }
 }
@@ -50,6 +53,21 @@ function Fixture() {
     downloads,
     saves,
   };
+
+  // Several people on one design, side by side (`?collab&people=a,b`).
+  if (params.has('collab')) {
+    const users = (params.get('people') ?? 'alice,bob')
+      .split(',')
+      .map((n) => `macro|${n}@example.com`);
+    return (
+      <div class="flex h-screen flex-col bg-page text-ink">
+        <CollabFixture
+          fileUrl={`${__FIG_CORPUS_URL__}${params.get('file') ?? 'showcase.fig'}`}
+          users={users}
+        />
+      </div>
+    );
+  }
 
   const open = async (bytes: ArrayBuffer, fileName: string) => {
     engine()?.close();

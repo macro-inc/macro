@@ -561,6 +561,12 @@ impl<'s> Build<'s> {
         }
         if edits & flags::STROKE_WEIGHT != 0 {
             m.set(s, "strokeWeight", Value::Float(p.stroke_weight()));
+            match p.dash_pattern.as_deref() {
+                Some(d) => {
+                    m.set(s, "dashPattern", Value::Floats(d.into()));
+                }
+                None => m.remove(s, "dashPattern"),
+            }
         }
         if edits & flags::STROKE_ALIGN != 0 {
             self.set_enum(
@@ -1173,7 +1179,7 @@ fn created_record(
 /// was opened from. Records of unedited nodes are copied byte for byte;
 /// only edited ones are decoded and re-encoded.
 pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
-    let mut container = Container::open(original)?;
+    let mut container = Container::open_without_images(original)?;
     let wants_shapes = doc
         .nodes
         .iter()
@@ -1472,7 +1478,7 @@ fn package(doc: &Document, canvas: &[u8], meta: Option<&serde_json::Value>) -> V
     let mut hashes: Vec<&String> = doc.images.keys().collect();
     hashes.sort();
     for h in hashes {
-        names.push((format!("images/{h}"), doc.images[h].as_slice()));
+        names.push((format!("images/{h}"), &doc.images[h]));
     }
     let entries: Vec<(&str, &[u8])> = names.iter().map(|(n, b)| (n.as_str(), *b)).collect();
     crate::zip::write_stored(&entries)

@@ -91,6 +91,57 @@ fn places_pasted_layers_like_figma() {
 }
 
 #[test]
+fn pastes_here_and_to_replace() {
+    let bytes = simple_file();
+    let source = Document::open(&bytes).unwrap();
+    let copied = crate::save::copy(&source, &bytes, &[idx(&source, "1:3")]).unwrap();
+    let mut target = Document::open(&bytes).unwrap();
+    let mut h = History::default();
+    // "Paste here": its top left at the point.
+    let created = h
+        .paste(
+            &mut target,
+            &bytes,
+            &copied.document,
+            None,
+            &spec(r#"{"parent":"1:1","at":{"x":300,"y":400}}"#),
+        )
+        .unwrap()
+        .created;
+    let r = frame(&target, idx(&target, &created[0]));
+    assert_eq!((r.x, r.y), (300.0, 400.0));
+    // "Paste to replace": in the replaced layer's place, centered on it,
+    // and the replaced layer gone, all in one step.
+    let replaced = idx(&target, "1:3");
+    let parent = target.node(replaced).parent.unwrap();
+    let place = target
+        .node(parent)
+        .children
+        .iter()
+        .position(|&c| c == replaced);
+    let created = h
+        .paste(
+            &mut target,
+            &bytes,
+            &copied.document,
+            None,
+            &spec(r#"{"parent":"1:1","replace":["1:3"]}"#),
+        )
+        .unwrap()
+        .created;
+    let i = idx(&target, &created[0]);
+    assert_eq!(target.node(i).parent, Some(parent));
+    assert_eq!(
+        target.node(parent).children.iter().position(|&c| c == i),
+        place
+    );
+    assert_eq!(frame(&target, i), Rect::new(10.0, 20.0, 100.0, 50.0));
+    assert!(target.node(replaced).removed);
+    h.undo(&mut target).unwrap();
+    assert!(!target.node(replaced).removed && target.node(i).removed);
+}
+
+#[test]
 fn keeps_instances_of_components_the_file_has() {
     let bytes = showcase_file();
     let source = Document::open(&bytes).unwrap();
@@ -114,6 +165,39 @@ fn keeps_instances_of_components_the_file_has() {
         p.symbol.as_ref().and_then(|s| s.symbol_id),
         Guid::parse("1:30")
     );
+    // The main component itself pastes as an instance of it, as in Figma;
+    // in another file it stays a component.
+    let main = crate::save::copy(&source, &bytes, &[idx(&source, "1:30")]).unwrap();
+    let created = History::default()
+        .paste(
+            &mut same,
+            &bytes,
+            &main.document,
+            None,
+            &spec(r#"{"parent":"1:1"}"#),
+        )
+        .unwrap()
+        .created;
+    let p = same.props(idx(&same, &created[0]));
+    assert_eq!(p.node_type(), NodeType::Instance);
+    assert_eq!(
+        p.symbol.as_ref().and_then(|s| s.symbol_id),
+        Guid::parse("1:30")
+    );
+    let blank = crate::save::blank("Other");
+    let mut elsewhere = Document::open(&blank).unwrap();
+    let created = History::default()
+        .paste(
+            &mut elsewhere,
+            &blank,
+            &main.document,
+            None,
+            &spec(r#"{"parent":"0:1"}"#),
+        )
+        .unwrap()
+        .created;
+    let p = elsewhere.props(idx(&elsewhere, &created[0]));
+    assert_eq!(p.node_type(), NodeType::Symbol);
     // Into another file: detached, with the component's layers (and the
     // instance's override) as ordinary layers.
     let target_bytes = crate::save::blank("Other");

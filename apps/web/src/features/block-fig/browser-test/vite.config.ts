@@ -3,6 +3,7 @@ import tailwind from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
+import wasm from 'vite-plugin-wasm';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
@@ -31,9 +32,14 @@ export default defineConfig({
     solidSvg({ defaultAsComponent: true }),
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
     tailwind(),
+    // Loro (collaboration) is a wasm singleton, as in the app's config.
+    wasm(),
   ],
-  resolve: { dedupe: ['solid-js'] },
-  optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+  resolve: { dedupe: ['solid-js', 'loro-crdt'] },
+  optimizeDeps: {
+    exclude: ['loro-crdt'],
+    esbuildOptions: { target: 'esnext' },
+  },
   server: {
     host: '127.0.0.1',
     port: Number(process.env.FIG_BROWSER_PORT ?? 3019),

@@ -12,6 +12,7 @@ import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import type {
   ComponentInfo,
   CopiedLayers,
+  EntryChange,
   FileSummary,
   LayerRow,
   NodeGeometry,
@@ -149,6 +150,8 @@ export class FigEngine {
   private readonly placed = new Map<number, EngineWorker>();
   private readonly starting = new Set<EngineWorker>();
   private closed = false;
+  /** Work (a last save) that keeps the primary worker alive after close. */
+  private readonly holds = new Set<Promise<unknown>>();
   private onFailure?: (error: Error) => void;
 
   private constructor(
@@ -316,6 +319,11 @@ export class FigEngine {
     return this.query('search', page, query, limit);
   }
 
+  /** The page's distinct solid colors, most used first (`RRGGBB[AA]`). */
+  pageColors(page: number, limit = 24): Promise<string[]> {
+    return this.query('pageColors', page, limit);
+  }
+
   inRect(page: number, parent: string | undefined, rect: Rect) {
     return this.query<string[]>(
       'inRect',
@@ -452,6 +460,43 @@ export class FigEngine {
   }
 
   /**
+   * Starts editing together with other people, in every worker: new layers
+   * get ids in `session` (unique per person and visit). `baseBlobs` is the
+   * shared `figMeta.baseBlobs`, when set. Resolves to changes to write.
+   */
+  async enableCollab(
+    session: number,
+    baseBlobs: number | null
+  ): Promise<EntryChange[]> {
+    for (const h of [...this.helpers, ...this.starting])
+      h.request({ kind: 'enableCollab', session, baseBlobs }).catch(() => {});
+    const r = await this.primary.request({
+      kind: 'enableCollab',
+      session,
+      baseBlobs,
+    });
+    if (r.kind !== 'query') throw new Error('unexpected response');
+    return JSON.parse(r.json) as EntryChange[];
+  }
+
+  /** The shared-map changes of this person's edits since the last call. */
+  async collabChanges(): Promise<EntryChange[]> {
+    const r = await this.primary.request({ kind: 'collabChanges' });
+    if (r.kind !== 'query') throw new Error('unexpected response');
+    return JSON.parse(r.json) as EntryChange[];
+  }
+
+  /** Applies other people's changes in every worker (not undoable here). */
+  applyRemote(page: number, changes: EntryChange[]): Promise<EditResult> {
+    return this.edit({
+      kind: 'edit',
+      page,
+      action: 'remote',
+      changes: JSON.stringify(changes),
+    });
+  }
+
+  /**
    * Adds an image file (PNG, JPEG, GIF, WebP) for image fills, in every
    * worker; returns its SHA-1 (the paint's reference) and pixel size.
    */
@@ -496,9 +541,21 @@ export class FigEngine {
     return this.primary.dead;
   }
 
+  /**
+   * Keeps the file open until `work` settles, even if it is closed first
+   * (so the save started when the editor goes away can finish).
+   */
+  retain(work: Promise<unknown>) {
+    this.holds.add(work);
+    void work.finally(() => this.holds.delete(work));
+  }
+
   close() {
     this.closed = true;
-    this.primary.terminate();
+    const primary = this.primary;
+    if (this.holds.size === 0) primary.terminate();
+    else
+      void Promise.allSettled([...this.holds]).then(() => primary.terminate());
     for (const h of this.helpers) h.terminate();
     for (const h of this.starting) h.terminate();
     this.helpers.length = 0;

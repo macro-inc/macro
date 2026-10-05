@@ -3,6 +3,7 @@
 //! `fig_render` CLI) and as WebAssembly in the web app's `.fig` viewer worker.
 
 pub mod boolean;
+pub mod collab;
 pub mod container;
 pub mod decode;
 pub mod document;

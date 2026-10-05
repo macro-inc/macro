@@ -2,70 +2,42 @@
 //! mip levels for drawing large images small, and a memory budget.
 
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use tiny_skia::{IntSize, Pixmap};
 
-/// One decoded image with lazily built half-size levels.
-pub struct DecodedImage {
-    pub width: u32,
-    pub height: u32,
-    levels: Vec<OnceLock<Option<Arc<Pixmap>>>>,
+/// One image's mip levels (each half the size of the one before), built on
+/// demand. Any level may be missing: a level is always built by halving
+/// the next finer one present, or the image decoded again, so every route
+/// gives the same pixels.
+struct Entry {
+    width: u32,
+    height: u32,
+    levels: Vec<Option<Arc<Pixmap>>>,
+    /// When each level was last drawn from (the store's clock).
+    used: Vec<u64>,
 }
 
-impl DecodedImage {
-    fn new(full: Pixmap) -> Self {
-        let (width, height) = (full.width(), full.height());
-        let mut count = 1;
-        let (mut w, mut h) = (width, height);
-        while w > 1 && h > 1 && count < 12 {
-            w = w.div_ceil(2);
-            h = h.div_ceil(2);
-            count += 1;
-        }
-        let levels: Vec<OnceLock<Option<Arc<Pixmap>>>> =
-            (0..count).map(|_| OnceLock::new()).collect();
-        let _ = levels[0].set(Some(Arc::new(full)));
-        Self {
-            width,
-            height,
-            levels,
-        }
-    }
-
-    /// The level to sample when one image pixel covers `device_per_pixel`
-    /// device pixels (a minification factor of its inverse), and that
-    /// level's scale relative to the full image.
-    pub fn level_for(&self, device_per_pixel: f64) -> Option<(Arc<Pixmap>, f64)> {
-        let mut level = 0usize;
-        if device_per_pixel > 0.0 && device_per_pixel < 0.75 {
-            level = ((1.0 / device_per_pixel).log2().floor().max(0.0) as usize)
-                .min(self.levels.len() - 1);
-        }
-        let pixmap = self.level(level)?;
-        let factor = f64::from(pixmap.width()) / f64::from(self.width);
-        Some((pixmap, factor))
-    }
-
-    fn level(&self, level: usize) -> Option<Arc<Pixmap>> {
-        if level == 0 {
-            return self.levels[0].get().cloned().flatten();
-        }
-        self.levels[level]
-            .get_or_init(|| {
-                let parent = self.level(level - 1)?;
-                halve(&parent).map(Arc::new)
-            })
-            .clone()
-    }
-
+impl Entry {
     fn bytes(&self) -> usize {
-        self.levels
-            .iter()
-            .filter_map(|l| l.get().cloned().flatten())
-            .map(|p| p.data().len())
-            .sum()
+        self.levels.iter().flatten().map(|p| p.data().len()).sum()
     }
 }
+
+/// How many levels an image of this size has (down to a pixel or 12).
+fn level_count(width: u32, height: u32) -> usize {
+    let mut count = 1;
+    let (mut w, mut h) = (width, height);
+    while w > 1 && h > 1 && count < 12 {
+        w = w.div_ceil(2);
+        h = h.div_ceil(2);
+        count += 1;
+    }
+    count
+}
+
+/// A full-size level decoded only to build a smaller one is let go when it
+/// is at least this large; drawing it later decodes the image again.
+const TRANSIENT_BYTES: usize = 16 << 20;
 
 /// Box-filters a pixmap to half size (premultiplied, so a plain average).
 fn halve(src: &Pixmap) -> Option<Pixmap> {
@@ -93,16 +65,18 @@ fn halve(src: &Pixmap) -> Option<Pixmap> {
     Some(dst)
 }
 
-/// Decoded images by hash, evicting the least recently used past a budget.
+/// Decoded images by hash, evicting the least recently drawn levels past a
+/// budget.
 pub struct ImageStore {
-    entries: HashMap<String, (Option<Arc<DecodedImage>>, u64)>,
+    /// `None` for images that do not decode.
+    entries: HashMap<String, Option<Entry>>,
     clock: u64,
     budget: usize,
 }
 
 impl Default for ImageStore {
     fn default() -> Self {
-        Self::new(384 * 1024 * 1024)
+        Self::new(256 * 1024 * 1024)
     }
 }
 
@@ -115,42 +89,109 @@ impl ImageStore {
         }
     }
 
-    /// The decoded image for `hash`, decoding `encoded` on first use.
-    pub fn get(&mut self, hash: &str, encoded: Option<&[u8]>) -> Option<Arc<DecodedImage>> {
+    /// The entry for `hash`, decoding `encoded` on first use.
+    fn entry(&mut self, hash: &str, encoded: Option<&[u8]>) -> Option<&mut Entry> {
+        if !self.entries.contains_key(hash) {
+            let entry = encoded.and_then(decode).map(|full| {
+                let (width, height) = (full.width(), full.height());
+                let count = level_count(width, height);
+                let mut levels = vec![None; count];
+                levels[0] = Some(Arc::new(full));
+                Entry {
+                    width,
+                    height,
+                    levels,
+                    used: vec![0; count],
+                }
+            });
+            self.entries.insert(hash.to_owned(), entry);
+        }
+        self.entries.get_mut(hash)?.as_mut()
+    }
+
+    /// The image's size in pixels, decoding it on first use; `None` when it
+    /// is missing or does not decode.
+    pub fn size(&mut self, hash: &str, encoded: Option<&[u8]>) -> Option<(u32, u32)> {
+        self.entry(hash, encoded).map(|e| (e.width, e.height))
+    }
+
+    /// The level to sample when one image pixel covers `device_per_pixel`
+    /// device pixels (a minification factor of its inverse), and that
+    /// level's scale relative to the full image.
+    pub fn level(
+        &mut self,
+        hash: &str,
+        encoded: Option<&[u8]>,
+        device_per_pixel: f64,
+    ) -> Option<(Arc<Pixmap>, f64)> {
         self.clock += 1;
         let clock = self.clock;
-        if let Some(entry) = self.entries.get_mut(hash) {
-            entry.1 = clock;
-            return entry.0.clone();
+        let entry = self.entry(hash, encoded)?;
+        let mut level = 0usize;
+        if device_per_pixel > 0.0 && device_per_pixel < 0.75 {
+            level = ((1.0 / device_per_pixel).log2().floor().max(0.0) as usize)
+                .min(entry.levels.len() - 1);
         }
-        let decoded = encoded
-            .and_then(decode)
-            .map(|p| Arc::new(DecodedImage::new(p)));
-        self.entries
-            .insert(hash.to_owned(), (decoded.clone(), clock));
+        if entry.levels[level].is_none() {
+            let finer = (0..level).rev().find(|&k| entry.levels[k].is_some());
+            let mut at = match finer {
+                Some(k) => k,
+                None => {
+                    entry.levels[0] = Some(Arc::new(encoded.and_then(decode)?));
+                    0
+                }
+            };
+            while at < level {
+                let next = halve(entry.levels[at].as_ref()?)?;
+                at += 1;
+                entry.levels[at] = Some(Arc::new(next));
+                entry.used[at] = clock;
+            }
+            // A large full-size level never drawn itself is let go.
+            if level > 0
+                && entry.used[0] == 0
+                && entry.levels[0]
+                    .as_ref()
+                    .is_some_and(|p| p.data().len() >= TRANSIENT_BYTES)
+            {
+                entry.levels[0] = None;
+            }
+        }
+        entry.used[level] = clock;
+        let pixmap = entry.levels[level].clone()?;
+        let factor = f64::from(pixmap.width()) / f64::from(entry.width);
         self.evict();
-        decoded
+        Some((pixmap, factor))
+    }
+
+    /// Drops the least recently drawn levels until the store fits its
+    /// budget.
+    /// Forgets `hash` (an image that was missing may have arrived).
+    pub fn forget(&mut self, hash: &str) {
+        self.entries.remove(hash);
     }
 
     fn evict(&mut self) {
-        let mut total: usize = self
-            .entries
-            .values()
-            .filter_map(|(img, _)| img.as_ref())
-            .map(|img| img.bytes())
-            .sum();
-        while total > self.budget && self.entries.len() > 1 {
-            let Some(oldest) = self
+        let mut total: usize = self.entries.values().flatten().map(Entry::bytes).sum();
+        while total > self.budget {
+            let oldest = self
                 .entries
                 .iter()
-                .filter(|(_, (img, _))| img.is_some())
-                .min_by_key(|(_, (_, used))| *used)
-                .map(|(k, _)| k.clone())
-            else {
+                .filter_map(|(hash, e)| Some((hash, e.as_ref()?)))
+                .flat_map(|(hash, e)| {
+                    (0..e.levels.len())
+                        .filter(|&k| e.levels[k].is_some())
+                        .map(move |k| (e.used[k], hash, k))
+                })
+                .min_by_key(|&(used, _, _)| used)
+                .map(|(_, hash, k)| (hash.clone(), k));
+            let Some((hash, k)) = oldest else {
                 break;
             };
-            if let Some((Some(img), _)) = self.entries.remove(&oldest) {
-                total = total.saturating_sub(img.bytes());
+            if let Some(Some(e)) = self.entries.get_mut(&hash)
+                && let Some(p) = e.levels[k].take()
+            {
+                total = total.saturating_sub(p.data().len());
             }
         }
     }
@@ -203,21 +244,35 @@ fn decode_png(bytes: &[u8]) -> Option<Pixmap> {
     }
     let mut buf = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
-    let data = &buf[..info.buffer_size()];
-    let rgba = match info.color_type {
-        png::ColorType::Rgba => data.to_vec(),
-        png::ColorType::Rgb => data
-            .chunks_exact(3)
-            .flat_map(|p| [p[0], p[1], p[2], 255])
-            .collect(),
-        png::ColorType::GrayscaleAlpha => data
-            .chunks_exact(2)
-            .flat_map(|p| [p[0], p[0], p[0], p[1]])
-            .collect(),
-        png::ColorType::Grayscale => data.iter().flat_map(|&g| [g, g, g, 255]).collect(),
+    buf.truncate(info.buffer_size());
+    let channels = match info.color_type {
+        png::ColorType::Rgba => 4,
+        png::ColorType::Rgb => 3,
+        png::ColorType::GrayscaleAlpha => 2,
+        png::ColorType::Grayscale => 1,
         png::ColorType::Indexed => return None,
     };
-    from_rgba(info.width, info.height, rgba)
+    expand_to_rgba(&mut buf, channels);
+    from_rgba(info.width, info.height, buf)
+}
+
+/// Widens 1- to 3-channel pixels (gray, gray and alpha, RGB) to RGBA in
+/// place, last pixel first, so a large image is not copied.
+fn expand_to_rgba(buf: &mut Vec<u8>, channels: usize) {
+    if channels == 4 {
+        return;
+    }
+    let pixels = buf.len() / channels;
+    buf.resize(pixels * 4, 0);
+    for i in (0..pixels).rev() {
+        let src = i * channels;
+        let px = match channels {
+            3 => [buf[src], buf[src + 1], buf[src + 2], 255],
+            2 => [buf[src], buf[src], buf[src], buf[src + 1]],
+            _ => [buf[src], buf[src], buf[src], 255],
+        };
+        buf[i * 4..i * 4 + 4].copy_from_slice(&px);
+    }
 }
 
 fn decode_jpeg(bytes: &[u8]) -> Option<Pixmap> {
@@ -281,14 +336,8 @@ fn decode_webp(bytes: &[u8]) -> Option<Pixmap> {
     let has_alpha = decoder.has_alpha();
     let mut buf = vec![0; decoder.output_buffer_size()?];
     decoder.read_image(&mut buf).ok()?;
-    let rgba = if has_alpha {
-        buf
-    } else {
-        buf.chunks_exact(3)
-            .flat_map(|p| [p[0], p[1], p[2], 255])
-            .collect()
-    };
-    from_rgba(w, h, rgba)
+    expand_to_rgba(&mut buf, if has_alpha { 4 } else { 3 });
+    from_rgba(w, h, buf)
 }
 
 /// Encodes a premultiplied pixmap as a PNG (straight alpha).
@@ -317,3 +366,6 @@ pub fn encode_png(pixmap: &Pixmap) -> Vec<u8> {
     }
     out
 }
+
+#[cfg(test)]
+mod test;

@@ -223,3 +223,122 @@ fn strokes_ellipses_along_their_outline() {
         "the stroke follows the curve"
     );
 }
+
+#[test]
+fn area_masks_match_whole_masks_where_read() {
+    let path = crate::geometry::rect_path(10.0, 10.0, 20.0, 15.0).unwrap();
+    let ts = Transform::from_translate(3.5, 2.25);
+    let mut parent = Mask::new(64, 48).unwrap();
+    for (i, a) in parent.data_mut().iter_mut().enumerate() {
+        *a = (i * 7 % 256) as u8;
+    }
+
+    // Filled, inverted, and multiplied over the whole surface.
+    let mut whole = Mask::new(64, 48).unwrap();
+    whole.fill_path(&path, FillRule::EvenOdd, true, ts);
+    whole.invert();
+    for (a, &b) in whole.data_mut().iter_mut().zip(parent.data()) {
+        *a = ((u16::from(*a) * u16::from(b) + 127) / 255) as u8;
+    }
+
+    let mut area = AreaMask {
+        mask: Mask::new(64, 48).unwrap(),
+        area: [0; 4],
+    };
+    area.include(tiny_skia::Rect::from_xywh(0.0, 0.0, 40.0, 30.0).unwrap());
+    area.fill_path(&path, FillRule::EvenOdd, ts);
+    area.invert();
+    area.multiply(&parent);
+    for y in 0..30 {
+        for x in 0..40 {
+            let at = y * 64 + x;
+            assert_eq!(area.mask.data()[at], whole.data()[at], "pixel {x},{y}");
+        }
+    }
+    area.clear();
+    assert!(
+        area.mask.data().iter().all(|&a| a == 0),
+        "cleared for reuse"
+    );
+}
+
+fn effect(kind: &'static str, radius: f32, offset: (f32, f32)) -> V {
+    V::Msg(vec![
+        ("type", V::Enum(kind)),
+        ("color", crate::testing::color(0.0, 0.0, 0.0, 0.5)),
+        ("offset", size(offset.0, offset.1)),
+        ("radius", V::Float(radius)),
+        ("visible", V::Bool(true)),
+    ])
+}
+
+#[test]
+fn tiles_match_the_whole_render() {
+    // Rectangles whose shadow and blur cross tile edges.
+    let rect = |local, x, y, effects| {
+        node(
+            local,
+            Some((1, "a")),
+            "RECTANGLE",
+            "Box",
+            vec![
+                ("size", size(70.0, 50.0)),
+                ("transform", translate(x, y)),
+                ("fillPaints", V::List(vec![solid(0.2, 0.5, 1.0)])),
+                ("effects", V::List(effects)),
+            ],
+        )
+    };
+    let bytes = fig_file(
+        vec![
+            node(0, None, "DOCUMENT", "Document", vec![]),
+            node(1, Some((0, "a")), "CANVAS", "Page", vec![]),
+            rect(2, 30.0, 40.0, vec![effect("DROP_SHADOW", 16.0, (6.0, 9.0))]),
+            rect(
+                3,
+                150.0,
+                120.0,
+                vec![effect("FOREGROUND_BLUR", 20.0, (0.0, 0.0))],
+            ),
+        ],
+        vec![],
+    );
+    let doc = Document::open(&bytes).unwrap();
+    let scene = Scene::build(&doc, doc.pages[0]);
+    let opts = RenderOptions {
+        outline: false,
+        background: Some(doc.page_background(doc.pages[0])),
+    };
+    let mut images = ImageStore::default();
+    let (scale, side, tiles) = (1.5, 48u32, 8);
+    let whole = render(
+        &doc,
+        &scene,
+        &mut images,
+        &viewport(0.0, 0.0, scale, side * tiles, side * tiles),
+        opts,
+    )
+    .unwrap();
+    for ty in 0..tiles {
+        for tx in 0..tiles {
+            let (x, y) = (tx * side, ty * side);
+            let vp = viewport(
+                f64::from(x) / scale,
+                f64::from(y) / scale,
+                scale,
+                side,
+                side,
+            );
+            let tile = render(&doc, &scene, &mut images, &vp, opts).unwrap();
+            for py in 0..side {
+                for px in 0..side {
+                    assert_eq!(
+                        tile.pixel(px, py),
+                        whole.pixel(x + px, y + py),
+                        "tile {tx},{ty} pixel {px},{py}"
+                    );
+                }
+            }
+        }
+    }
+}

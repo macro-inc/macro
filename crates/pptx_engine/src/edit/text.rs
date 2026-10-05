@@ -1,25 +1,34 @@
 //! Text editing on the DOM: insert, delete, split, replace, and format.
 //!
-//! Positions count Unicode scalar values; `a:br` counts as one character and
-//! fields count as their displayed text, matching the layout's caret stops.
+//! Positions count Unicode scalar values; `a:br` counts as one character,
+//! fields count as their displayed text, and an equation counts as one
+//! character, matching the layout's caret stops.
 
+use super::links::{LinkRef, set_run_link};
 use super::ops::{BodyPatch, BulletSpec, ParaPatch, RunPatch, TextPos};
 use super::xmlutil::{
     BODY_PR_ORDER, P_PR_ORDER, R_PR_ORDER, color_element, replace_fill, solid_fill,
 };
 use crate::error::{Error, Result};
+use crate::math::is_equation_item;
 use crate::units::pt_to_emu;
 use crate::xml::{NodeId, Ns, XmlDoc};
 
 /// The run-like children of a paragraph with their text lengths.
-fn items(doc: &XmlDoc, p: NodeId) -> Vec<(NodeId, usize)> {
+pub(super) fn items(doc: &XmlDoc, p: NodeId) -> Vec<(NodeId, usize)> {
     doc.children(p)
         .filter_map(|c| match doc.local(c) {
             "r" | "fld" => Some((c, run_text(doc, c).chars().count())),
             "br" => Some((c, 1)),
+            _ if is_equation_item(doc, c) => Some((c, 1)),
             _ => None,
         })
         .collect()
+}
+
+/// Whether a paragraph child is part of its text (a run, break, field, or equation).
+fn is_text_item(doc: &XmlDoc, c: NodeId) -> bool {
+    matches!(doc.local(c), "r" | "br" | "fld") || is_equation_item(doc, c)
 }
 
 fn run_text(doc: &XmlDoc, r: NodeId) -> String {
@@ -47,26 +56,25 @@ pub fn para_len(doc: &XmlDoc, p: NodeId) -> usize {
 pub fn para_text(doc: &XmlDoc, p: NodeId) -> String {
     items(doc, p)
         .iter()
-        .map(|&(n, _)| {
-            if doc.local(n) == "br" {
-                "\u{b}".to_owned()
-            } else {
-                run_text(doc, n)
-            }
+        .map(|&(n, _)| match doc.local(n) {
+            "br" => "\u{b}".to_owned(),
+            "r" | "fld" => run_text(doc, n),
+            _ => crate::math::OBJECT_CHAR.to_string(),
         })
         .collect()
 }
 
 /// Ensures a run boundary at `offset` and returns the index (among all child
 /// nodes of `p`) before which content at `offset` starts.
-fn split_at(doc: &mut XmlDoc, p: NodeId, offset: usize) -> usize {
+pub(super) fn split_at(doc: &mut XmlDoc, p: NodeId, offset: usize) -> usize {
     let mut pos = 0;
     for (node, len) in items(doc, p) {
         if offset == pos {
             return doc.index_in_parent(node).unwrap_or(0);
         }
         if offset < pos + len {
-            // Split inside a text run (fields and breaks are atomic: split before them).
+            // Split inside a text run (fields, breaks, and equations are
+            // atomic: split before them).
             if doc.local(node) != "r" {
                 return doc.index_in_parent(node).unwrap_or(0);
             }
@@ -87,7 +95,7 @@ fn split_at(doc: &mut XmlDoc, p: NodeId, offset: usize) -> usize {
 }
 
 /// The `a:rPr` to use for text typed at `offset` (formatting of the preceding run).
-fn rpr_template(doc: &XmlDoc, p: NodeId, offset: usize) -> Option<NodeId> {
+pub(super) fn rpr_template(doc: &XmlDoc, p: NodeId, offset: usize) -> Option<NodeId> {
     let mut pos = 0;
     let mut last: Option<NodeId> = None;
     for (node, len) in items(doc, p) {
@@ -129,7 +137,7 @@ fn rename(doc: &mut XmlDoc, node: NodeId, local: &str) {
     doc.rename(node, local);
 }
 
-fn paragraph_at(doc: &XmlDoc, body: NodeId, i: usize) -> Result<NodeId> {
+pub(super) fn paragraph_at(doc: &XmlDoc, body: NodeId, i: usize) -> Result<NodeId> {
     paragraphs(doc, body)
         .get(i)
         .copied()
@@ -214,7 +222,7 @@ pub fn split_paragraph(doc: &mut XmlDoc, body: NodeId, at: TextPos) -> Result<Te
     let moving: Vec<NodeId> = doc.child_nodes(p)[idx..]
         .iter()
         .copied()
-        .filter(|&c| matches!(doc.local(c), "r" | "br" | "fld"))
+        .filter(|&c| is_text_item(doc, c))
         .collect();
     let template = rpr_template(doc, p, at.offset);
     for m in moving {
@@ -265,10 +273,7 @@ pub fn delete_text(doc: &mut XmlDoc, body: NodeId, start: TextPos, end: TextPos)
         remove_range(doc, sp, start.offset, len);
         remove_range(doc, ep, 0, end.offset);
         // Move the rest of the end paragraph into the start paragraph.
-        let rest: Vec<NodeId> = doc
-            .children(ep)
-            .filter(|&c| matches!(doc.local(c), "r" | "br" | "fld"))
-            .collect();
+        let rest: Vec<NodeId> = doc.children(ep).filter(|&c| is_text_item(doc, c)).collect();
         let anchor = doc.child(sp, Ns::A, "endParaRPr");
         for n in rest {
             match anchor {
@@ -393,7 +398,7 @@ pub fn patch_rpr(
     doc: &mut XmlDoc,
     rpr: NodeId,
     patch: &RunPatch,
-    link_rid: Option<&str>,
+    link: Option<&LinkRef>,
 ) -> Result<()> {
     let flag = |v: bool| if v { "1" } else { "0" };
     if let Some(b) = patch.bold {
@@ -423,6 +428,18 @@ pub fn patch_rpr(
             doc.set_attr(rpr, "baseline", &((b * 1000.0).round() as i64).to_string());
         }
     }
+    if let Some(spacing) = patch.spacing {
+        if !(-100.0..=400.0).contains(&spacing) {
+            return Err(Error::InvalidEdit(format!(
+                "character spacing {spacing} pt is out of range"
+            )));
+        }
+        if spacing == 0.0 {
+            doc.remove_attr(rpr, "spc");
+        } else {
+            doc.set_attr(rpr, "spc", &((spacing * 100.0).round() as i64).to_string());
+        }
+    }
     if let Some(c) = &patch.color {
         let fill = solid_fill(doc, c, None)?;
         replace_fill(doc, rpr, fill, R_PR_ORDER);
@@ -445,17 +462,13 @@ pub fn patch_rpr(
             doc.remove_attr(el, "charset");
         }
     }
-    if let Some(link) = &patch.link {
-        doc.remove_children_named(rpr, Ns::A, "hlinkClick");
-        if !link.is_empty() {
-            let rid = link_rid
-                .ok_or_else(|| Error::InvalidEdit("hyperlink relationship missing".into()))?;
-            let el = doc.create_element(Ns::A, "hlinkClick");
-            doc.set_attr_ns(el, Ns::R, "id", rid);
-            doc.insert_in_order(rpr, el, R_PR_ORDER);
+    if let Some(target) = &patch.link {
+        if !target.trim().is_empty() && link.is_none() {
+            return Err(Error::InvalidEdit("hyperlink relationship missing".into()));
         }
+        set_run_link(doc, rpr, link);
     }
-    Ok(())
+    super::effects::patch_run_effects(doc, rpr, patch.shadow.as_ref(), patch.glow.as_ref())
 }
 
 /// Applies character formatting to a range (or the whole body).
@@ -465,7 +478,7 @@ pub fn format_text(
     start: Option<TextPos>,
     end: Option<TextPos>,
     patch: &RunPatch,
-    link_rid: Option<&str>,
+    link: Option<&LinkRef>,
 ) -> Result<()> {
     let ps = paragraphs(doc, body);
     if ps.is_empty() {
@@ -506,8 +519,12 @@ pub fn format_text(
             let mut pos = 0;
             for (node, l) in items(doc, p) {
                 if pos >= from && pos + l <= to && doc.local(node) != "br" {
-                    let rpr = ensure_rpr(doc, node);
-                    patch_rpr(doc, rpr, patch, link_rid)?;
+                    if is_equation_item(doc, node) {
+                        super::equation::format_equation(doc, node, patch)?;
+                    } else {
+                        let rpr = ensure_rpr(doc, node);
+                        patch_rpr(doc, rpr, patch, link)?;
+                    }
                 }
                 pos += l;
             }
@@ -671,6 +688,9 @@ pub fn format_body(doc: &mut XmlDoc, body: NodeId, patch: &BodyPatch) -> Result<
     if let Some(c) = patch.columns {
         doc.set_attr(bpr, "numCol", &c.clamp(1, 16).to_string());
     }
+    if let Some(d) = patch.direction {
+        super::text_direction::write(doc, bpr, d);
+    }
     if let Some(a) = &patch.autofit {
         for name in ["noAutofit", "normAutofit", "spAutoFit"] {
             doc.remove_children_named(bpr, Ns::A, name);
@@ -685,4 +705,50 @@ pub fn format_body(doc: &mut XmlDoc, body: NodeId, patch: &BodyPatch) -> Result<
         doc.insert_in_order(bpr, el, BODY_PR_ORDER);
     }
     Ok(())
+}
+
+/// Replaces characters `start..end` of paragraph `p` with `text` (no breaks)
+/// in the formatting of the first replaced character, whatever runs the
+/// range spans. Returns `false`, changing nothing, when the range is empty or
+/// touches a field or an equation (which cannot be split).
+pub fn replace_range(doc: &mut XmlDoc, p: NodeId, start: usize, end: usize, text: &str) -> bool {
+    if end <= start {
+        return false;
+    }
+    let mut pos = 0;
+    for (node, len) in items(doc, p) {
+        let atomic = doc.local(node) == "fld" || is_equation_item(doc, node);
+        if atomic && pos < end && start < pos + len {
+            return false;
+        }
+        pos += len;
+    }
+    split_at(doc, p, end);
+    split_at(doc, p, start);
+    let mut replaced = Vec::new();
+    let mut pos = 0;
+    for (node, len) in items(doc, p) {
+        if pos >= start && pos + len <= end && len > 0 {
+            replaced.push(node);
+        }
+        pos += len;
+    }
+    let Some(&first) = replaced.first() else {
+        return false;
+    };
+    if !text.is_empty() {
+        if doc.local(first) == "r" {
+            set_run_text(doc, first, text);
+            replaced.remove(0);
+        } else {
+            // A line break carries its formatting in its own rPr.
+            let template = doc.child(first, Ns::A, "rPr");
+            let run = new_run(doc, text, template);
+            doc.insert_before(first, run);
+        }
+    }
+    for n in replaced {
+        doc.detach(n);
+    }
+    true
 }

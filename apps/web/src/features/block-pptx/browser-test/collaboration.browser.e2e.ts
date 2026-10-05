@@ -153,8 +153,8 @@ test('slides added at the same time both survive', async ({ browser }) => {
     pages: [alice, bob],
   } = await people(browser, ['alice', 'bob']);
   await Promise.all([
-    alice.getByRole('button', { name: 'New slide' }).click(),
-    bob.getByRole('button', { name: 'New slide' }).click(),
+    alice.getByTestId('pptx-new-slide').click(),
+    bob.getByTestId('pptx-new-slide').click(),
   ]);
   await expect(alice.getByTestId('pptx-thumbnail')).toHaveCount(10);
   await expect(bob.getByTestId('pptx-thumbnail')).toHaveCount(10);

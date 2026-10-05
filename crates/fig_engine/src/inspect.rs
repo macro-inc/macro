@@ -9,6 +9,9 @@ use crate::model::{
 use crate::scene::{Scene, SceneIdx};
 use serde::Serialize;
 
+mod colors;
+pub use colors::page_colors;
+
 /// One row of the layers panel.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

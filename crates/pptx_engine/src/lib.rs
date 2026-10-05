@@ -7,6 +7,7 @@
 
 #![deny(missing_docs)]
 
+pub mod boolean;
 pub mod collab;
 pub mod edit;
 mod error;
@@ -15,6 +16,7 @@ pub mod font;
 pub mod geometry;
 pub mod inspect;
 mod integrity;
+pub mod math;
 pub mod model;
 pub mod opc;
 pub mod path;

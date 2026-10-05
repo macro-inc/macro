@@ -5,8 +5,9 @@
 //! `ImageData`.
 
 use crate::collab::{Entries, EntryChange};
-use crate::edit::{EditOp, Editor};
+use crate::edit::{CellRef, EditOp, Editor, FindOptions};
 use crate::font::FontDb;
+use crate::model::field::FieldTime;
 use crate::model::presentation::Presentation;
 use crate::render::Layer;
 use std::cell::RefCell;
@@ -25,6 +26,19 @@ fn bundled_fonts() -> FontDb {
     db
 }
 
+/// The browser's local time, which automatic date fields show.
+fn local_now() -> FieldTime {
+    let d = js_sys::Date::new_0();
+    FieldTime {
+        year: d.get_full_year() as i32,
+        month: (d.get_month() + 1) as u8,
+        day: d.get_date() as u8,
+        hour: d.get_hours() as u8,
+        minute: d.get_minutes() as u8,
+        second: d.get_seconds() as u8,
+    }
+}
+
 fn js_err(e: impl std::fmt::Display) -> JsError {
     JsError::new(&e.to_string())
 }
@@ -39,7 +53,63 @@ pub fn register_font(bytes: Vec<u8>) -> usize {
     FONTS.with(|f| f.borrow_mut().register(bytes).len())
 }
 
+/// A preset shape's outline at `w`×`h` points as JSON `[{d, fill, stroke}]`
+/// (SVG path data), or `null` for an unknown preset. For shape galleries.
+#[wasm_bindgen(js_name = presetPaths)]
+pub fn preset_paths(name: &str, w: f64, h: f64) -> Result<String, JsError> {
+    to_json(&crate::geometry::preset_svg(name, w, h))
+}
+
+/// Renders an equation written in the LaTeX-style linear format as a PNG,
+/// for the equation editor's preview and galleries: `size` in points,
+/// `scale` pixels per point, `color` as `RRGGBB`; empty slots show as
+/// dotted boxes. Fails with what is wrong with the linear text.
+#[wasm_bindgen(js_name = renderEquation)]
+pub fn render_equation(
+    latex: &str,
+    display: bool,
+    size: f64,
+    scale: f64,
+    color: &str,
+) -> Result<Vec<u8>, JsError> {
+    let color = crate::model::color::Rgba::from_hex(color.trim_start_matches('#'))
+        .unwrap_or(crate::model::color::Rgba::BLACK);
+    let raster = FONTS
+        .with(|f| {
+            crate::math::preview::render_equation(
+                latex,
+                display,
+                size.clamp(1.0, 400.0) as f32,
+                scale.clamp(0.1, 8.0) as f32,
+                color,
+                &f.borrow(),
+            )
+        })
+        .map_err(js_err)?;
+    Ok(raster.to_png())
+}
+
+/// The SmartArt layouts, color variations, and styles the galleries list,
+/// as JSON `{layouts, colors, styles}`.
+#[wasm_bindgen(js_name = smartArtCatalog)]
+pub fn smart_art_catalog() -> Result<String, JsError> {
+    to_json(&crate::edit::smart_art_catalog())
+}
+
+/// A SmartArt gallery preview as JSON `[{d, fill, fillOpacity, stroke,
+/// strokeWidth}]` (SVG paths), or `null` for an unknown layout. `spec` is
+/// JSON `{layout, colors?, style?, width, height, theme?}`.
+#[wasm_bindgen(js_name = smartArtPreview)]
+pub fn smart_art_preview(spec: &str) -> Result<String, JsError> {
+    let spec: crate::edit::SmartArtPreviewSpec = serde_json::from_str(spec).map_err(js_err)?;
+    to_json(&crate::edit::smart_art_preview(&spec))
+}
+
 /// An open presentation with undo history.
+///
+/// Reads that take a slide `index` (outlines, rendering, text layout,
+/// copying shapes) also take the id of a slide master or layout (always at
+/// least 2147483648) in its place, for Slide Master view.
 #[wasm_bindgen]
 pub struct PptxDocument {
     editor: Editor,
@@ -51,7 +121,8 @@ impl PptxDocument {
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: Vec<u8>) -> Result<PptxDocument, JsError> {
         console_error_panic_hook::set_once();
-        let pres = Presentation::open(bytes).map_err(js_err)?;
+        let mut pres = Presentation::open(bytes).map_err(js_err)?;
+        pres.set_clock(Some(local_now()));
         Ok(Self {
             editor: Editor::new(pres),
         })
@@ -63,7 +134,8 @@ impl PptxDocument {
     pub fn from_entries(entries: &str, seed: f64) -> Result<PptxDocument, JsError> {
         console_error_panic_hook::set_once();
         let entries: Entries = serde_json::from_str(entries).map_err(js_err)?;
-        let pres = Presentation::from_entries(entries, seed as u64).map_err(js_err)?;
+        let mut pres = Presentation::from_entries(entries, seed as u64).map_err(js_err)?;
+        pres.set_clock(Some(local_now()));
         Ok(Self {
             editor: Editor::new(pres),
         })
@@ -97,6 +169,12 @@ impl PptxDocument {
         self.editor.presentation_mut()
     }
 
+    /// Brings the time automatic date fields show up to date (an undo may
+    /// have restored an older one).
+    fn tick(&mut self) {
+        self.pres().set_clock(Some(local_now()));
+    }
+
     /// Number of slides.
     #[wasm_bindgen(js_name = slideCount)]
     pub fn slide_count(&self) -> usize {
@@ -112,19 +190,24 @@ impl PptxDocument {
 
     /// The deck outline as JSON (`DeckOutline`).
     pub fn outline(&mut self) -> Result<String, JsError> {
-        let o = self.pres().outline().map_err(js_err)?;
+        let o = FONTS
+            .with(|f| self.pres().outline_with_fonts(&f.borrow()))
+            .map_err(js_err)?;
         to_json(&o)
     }
 
     /// One slide's outline as JSON (`SlideOutline`).
     #[wasm_bindgen(js_name = slideOutline)]
     pub fn slide_outline(&mut self, index: usize) -> Result<String, JsError> {
-        let o = self.pres().slide_outline(index).map_err(js_err)?;
+        let o = FONTS
+            .with(|f| self.pres().slide_outline_with_fonts(index, &f.borrow()))
+            .map_err(js_err)?;
         to_json(&o)
     }
 
     /// Renders a slide; returns straight-alpha RGBA rows (`width × height × 4` bytes).
     pub fn render(&mut self, index: usize, width: u32) -> Result<Vec<u8>, JsError> {
+        self.tick();
         let width = width.clamp(16, 8192);
         let raster = FONTS
             .with(|f| self.pres().render_slide(index, width, &f.borrow()))
@@ -147,6 +230,7 @@ impl PptxDocument {
             "only" => Layer::Only(shape),
             other => return Err(JsError::new(&format!("unknown layer mode `{other}`"))),
         };
+        self.tick();
         let width = width.clamp(16, 8192);
         let raster = FONTS
             .with(|f| self.pres().render_layer(index, layer, width, &f.borrow()))
@@ -154,13 +238,75 @@ impl PptxDocument {
         Ok(raster.to_straight_rgba())
     }
 
-    /// Lays out a shape's text for carets as JSON (`TextLayoutInfo`, or `null`).
+    /// Renders the top-level slide shapes at z-order positions `start..end`
+    /// (see `Layer::Span`), over the background and inherited shapes when
+    /// `backdrop`.
+    #[wasm_bindgen(js_name = renderSpan)]
+    pub fn render_span(
+        &mut self,
+        index: usize,
+        width: u32,
+        start: usize,
+        end: usize,
+        backdrop: bool,
+    ) -> Result<Vec<u8>, JsError> {
+        self.tick();
+        let width = width.clamp(16, 8192);
+        let layer = Layer::Span {
+            start,
+            end,
+            backdrop,
+        };
+        let raster = FONTS
+            .with(|f| self.pres().render_layer(index, layer, width, &f.borrow()))
+            .map_err(js_err)?;
+        Ok(raster.to_straight_rgba())
+    }
+
+    /// Lays out a shape's text for carets as JSON (`TextLayoutInfo`, or `null`);
+    /// with `row` and `col`, the text of that table cell.
     #[wasm_bindgen(js_name = textLayout)]
-    pub fn text_layout(&mut self, index: usize, shape: u32) -> Result<String, JsError> {
+    pub fn text_layout(
+        &mut self,
+        index: usize,
+        shape: u32,
+        row: Option<usize>,
+        col: Option<usize>,
+    ) -> Result<String, JsError> {
+        let cell = match (row, col) {
+            (Some(row), Some(col)) => Some(CellRef { row, col }),
+            (None, None) => None,
+            _ => return Err(JsError::new("give both `row` and `col` for a table cell")),
+        };
         let lay = FONTS
-            .with(|f| self.pres().text_layout(index, shape, None, &f.borrow()))
+            .with(|f| self.pres().text_layout(index, shape, cell, &f.borrow()))
             .map_err(js_err)?;
         to_json(&lay)
+    }
+
+    /// A shape's outline as editable paths in shape-local points, with its
+    /// shape-local → slide transform, as JSON (`ShapeGeometryInfo`, or
+    /// `null` for groups and graphic frames). For Edit Points.
+    #[wasm_bindgen(js_name = geometryPaths)]
+    pub fn geometry_paths(&mut self, index: usize, shape: u32) -> Result<String, JsError> {
+        let info = self.pres().geometry_paths(index, shape).map_err(js_err)?;
+        to_json(&info)
+    }
+
+    /// The bytes of a video or audio clip (`MediaOutline.part`).
+    #[wasm_bindgen(js_name = mediaBytes)]
+    pub fn media_bytes(&mut self, part: &str) -> Result<Vec<u8>, JsError> {
+        self.pres().media_bytes(part).map_err(js_err)
+    }
+
+    /// A slide's clickable areas as JSON (`LinkRegion[]`): linked text, then
+    /// linked shapes.
+    #[wasm_bindgen(js_name = linkRegions)]
+    pub fn link_regions(&mut self, index: usize) -> Result<String, JsError> {
+        let regions = FONTS
+            .with(|f| self.pres().link_regions(index, &f.borrow()))
+            .map_err(js_err)?;
+        to_json(&regions)
     }
 
     /// Applies a JSON array of edit operations atomically; returns the `EditResult` as JSON.
@@ -168,6 +314,7 @@ impl PptxDocument {
     /// Batches with the same `group` merge into one undo step (typing).
     pub fn apply(&mut self, ops: &str, group: Option<String>) -> Result<String, JsError> {
         let ops: Vec<EditOp> = serde_json::from_str(ops).map_err(js_err)?;
+        self.tick();
         // Collaborative undo runs on the shared maps, not on local snapshots.
         let result = if self.editor.presentation().is_collaborative() {
             FONTS.with(|f| self.pres().apply(&ops, &f.borrow()))
@@ -215,5 +362,36 @@ impl PptxDocument {
     #[wasm_bindgen(js_name = missingFonts)]
     pub fn missing_fonts(&self) -> Result<String, JsError> {
         FONTS.with(|f| to_json(&f.borrow().missing_families()))
+    }
+
+    /// Copies shapes of slide `index` (`ids`: JSON array of shape ids) as a
+    /// clipboard payload (JSON) for the `pasteShapes` operation.
+    #[wasm_bindgen(js_name = copyShapes)]
+    pub fn copy_shapes(&mut self, index: usize, ids: &str) -> Result<String, JsError> {
+        let ids: Vec<u32> = serde_json::from_str(ids).map_err(js_err)?;
+        let payload = self.pres().copy_shapes(index, &ids).map_err(js_err)?;
+        to_json(&payload)
+    }
+
+    /// Copies slides (`ids`: JSON array of slide ids) with their notes as a
+    /// clipboard payload (JSON) for the `pasteSlides` operation.
+    #[wasm_bindgen(js_name = copySlides)]
+    pub fn copy_slides(&mut self, ids: &str) -> Result<String, JsError> {
+        let ids: Vec<u32> = serde_json::from_str(ids).map_err(js_err)?;
+        let payload = self.pres().copy_slides(&ids).map_err(js_err)?;
+        to_json(&payload)
+    }
+
+    /// Finds text in every slide (`options`: `FindOptions` JSON); returns
+    /// `TextMatch[]` JSON.
+    #[wasm_bindgen(js_name = findText)]
+    pub fn find_text(&mut self, query: &str, options: &str) -> Result<String, JsError> {
+        let options: FindOptions = if options.trim().is_empty() {
+            FindOptions::default()
+        } else {
+            serde_json::from_str(options).map_err(js_err)?
+        };
+        let matches = self.pres().find_text(query, options).map_err(js_err)?;
+        to_json(&matches)
     }
 }

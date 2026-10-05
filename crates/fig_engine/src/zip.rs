@@ -3,6 +3,9 @@
 
 use crate::error::{Result, corrupt};
 
+/// Largest entry inflated, whatever size its header claims.
+const MAX_ENTRY: usize = 1 << 30;
+
 pub(crate) struct ZipEntry {
     pub name: String,
     method: u16,
@@ -113,7 +116,8 @@ impl<'a> ZipArchive<'a> {
         self.entries.iter().find(|entry| entry.name == name)
     }
 
-    pub fn read(&self, entry: &ZipEntry) -> Result<Vec<u8>> {
+    /// Where an entry's (possibly compressed) data sits in the archive.
+    fn data_range(&self, entry: &ZipEntry) -> Result<std::ops::Range<usize>> {
         let at = entry.local_header_offset as usize;
         if u32_at(self.bytes, at) != Some(LOCAL) {
             return Err(corrupt(format!("zip: bad local header for {}", entry.name)));
@@ -121,15 +125,32 @@ impl<'a> ZipArchive<'a> {
         let name_len = usize::from(u16_at(self.bytes, at + 26).unwrap_or(0));
         let extra_len = usize::from(u16_at(self.bytes, at + 28).unwrap_or(0));
         let start = at + 30 + name_len + extra_len;
-        let data = start
+        start
             .checked_add(entry.compressed_size as usize)
-            .and_then(|end| self.bytes.get(start..end))
-            .ok_or_else(|| corrupt(format!("zip: {} is truncated", entry.name)))?;
+            .filter(|&end| end <= self.bytes.len())
+            .map(|end| start..end)
+            .ok_or_else(|| corrupt(format!("zip: {} is truncated", entry.name)))
+    }
+
+    /// For a stored (uncompressed) entry, where its bytes sit in the archive.
+    pub fn stored_range(&self, entry: &ZipEntry) -> Option<std::ops::Range<usize>> {
+        if entry.method != 0 {
+            return None;
+        }
+        self.data_range(entry).ok()
+    }
+
+    pub fn read(&self, entry: &ZipEntry) -> Result<Vec<u8>> {
+        let data = &self.bytes[self.data_range(entry)?];
         match entry.method {
             0 => Ok(data.to_vec()),
             8 => miniz_oxide::inflate::decompress_to_vec_with_limit(
                 data,
-                (entry.uncompressed_size as usize).max(1 << 20) * 2,
+                usize::try_from(entry.uncompressed_size)
+                    .unwrap_or(MAX_ENTRY)
+                    .max(1 << 20)
+                    .saturating_mul(2)
+                    .min(MAX_ENTRY),
             )
             .map_err(|e| corrupt(format!("zip: {}: {e:?}", entry.name))),
             other => Err(corrupt(format!(

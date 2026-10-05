@@ -3,6 +3,7 @@ import {
   closesPath,
   deleteVertex,
   dragHandle,
+  endsPath,
   hitVector,
   moveHandle,
   moveVertex,
@@ -59,6 +60,13 @@ describe('closesPath and dragHandle', () => {
     expect(closesPath(points, { x: 1, y: 1 }, 3)).toBe(true);
     expect(closesPath(points, { x: 5, y: 5 }, 3)).toBe(false);
     expect(closesPath(points.slice(0, 2), { x: 0, y: 0 }, 3)).toBe(false);
+  });
+
+  it('ends the path on a second press on the last point', () => {
+    const points = [corner(0, 0), corner(10, 0)];
+    expect(endsPath(points, { x: 11, y: 1 }, 3)).toBe(true);
+    expect(endsPath(points, { x: 20, y: 0 }, 3)).toBe(false);
+    expect(endsPath([], { x: 0, y: 0 }, 3)).toBe(false);
   });
 
   it('ignores tiny drags', () => {

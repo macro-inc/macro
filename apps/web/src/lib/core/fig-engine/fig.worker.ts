@@ -11,6 +11,7 @@
  * cancelled.
  */
 
+import { match } from 'ts-pattern';
 import type { FigRequest, FigResponse } from './protocol';
 import { isWasmTrap, loadFigEngineWasm, type WasmFigFile } from './wasm-module';
 
@@ -149,6 +150,9 @@ async function serve(request: FigRequest) {
         case 'search':
           json = f.search(a as number, b as string, c as number);
           break;
+        case 'pageColors':
+          json = f.pageColors(a as number, b as number);
+          break;
         case 'inRect':
           json = f.inRect(
             a as number,
@@ -190,13 +194,27 @@ async function serve(request: FigRequest) {
     }
     case 'edit': {
       const f = openFile();
-      const json =
-        request.action === 'undo'
-          ? f.undo(request.page)
-          : request.action === 'redo'
-            ? f.redo(request.page)
-            : f.apply(request.page, request.ops ?? '[]', request.coalesce);
+      const json = match(request.action)
+        .with('undo', () => f.undo(request.page))
+        .with('redo', () => f.redo(request.page))
+        .with('remote', () =>
+          f.applyCollab(request.page, request.changes ?? '[]')
+        )
+        .with('apply', () =>
+          f.apply(request.page, request.ops ?? '[]', request.coalesce)
+        )
+        .exhaustive();
       post({ id: request.id, ok: true, kind: 'edit', json });
+      return;
+    }
+    case 'enableCollab': {
+      const json = openFile().enableCollab(request.session, request.baseBlobs);
+      post({ id: request.id, ok: true, kind: 'query', json });
+      return;
+    }
+    case 'collabChanges': {
+      const json = openFile().collabChanges();
+      post({ id: request.id, ok: true, kind: 'query', json });
       return;
     }
     case 'addImage': {
