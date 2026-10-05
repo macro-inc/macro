@@ -412,10 +412,19 @@ Import keeps what Excel calculates and shows:
   (number formats, fonts and fills) are rewritten for the exported styles; a
   custom pivot style falls back to Excel's default.
   The location and source move with rows and columns, follow sheet renames,
-  and a pivot table whose source is deleted keeps only its values. Pivot tables
-  over other workbooks or data connections keep only their values, and pivot
-  charts linked to them become ordinary charts, while pivot charts keep the
-  series names their pivot table gives.
+  and a pivot table whose source is deleted keeps only its values. A pivot
+  table over another workbook (an `externalLinkPath` relationship, also when
+  Excel marked its path missing) or a data connection keeps the records Excel
+  saved (`records`, up to the part limit; larger ones are dropped first when a
+  sheet's metadata is too large, and the cache is written with
+  `saveData="0"`), the link (`workbook`) or the `connection` element with the
+  namespaces it uses, without saved passwords, and is not refreshed on load.
+  Export writes the records part, the cache's relationships and
+  `xl/connections.xml`, numbering connections anew. Pivot tables over Power
+  Query or the data model (`$Workbook$` connections), OLAP cubes and
+  consolidated ranges keep only their values, and pivot charts linked to them
+  become ordinary charts; other pivot charts keep the series names their pivot
+  table gives.
   GETPIVOTDATA calculates: `packages/spreadsheet/src/pivot-layout.ts` reads a
   kept table's row and column items (`rowItems`, `colItems`), its fields and
   cache items, and tells the engine which cell shows each value

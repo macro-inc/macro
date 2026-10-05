@@ -38,7 +38,7 @@ import {
   exportImplicitIntersections,
   markImplicitIntersections,
 } from './xlsx-formula';
-import { pivotParts, pivotTableName } from './xlsx-pivots';
+import { connectionsPart, pivotParts, pivotTableName } from './xlsx-pivots';
 import {
   conditionalFormattingXml,
   dataValidationsXml,
@@ -483,8 +483,11 @@ export function writeXlsxWorkbook(
   let chartCount = 0;
   const media = new Map<string, string | undefined>();
   const imageExtensions = new Set<string>();
-  // Pivot tables, each with its own cache, numbered from 1.
+  // Pivot tables, each with its own cache, numbered from 1, the caches that
+  // keep their records, and the data connections caches read.
   let pivotCount = 0;
+  const pivotRecords: number[] = [];
+  const connections: string[] = [];
   // Pivot charts stay linked only to pivot tables the download contains.
   const pivotNames = new Set(
     input.sheets.flatMap((sheet) =>
@@ -777,11 +780,15 @@ export function writeXlsxWorkbook(
       : undefined;
     if (notes) relate('comments', `../comments${sheetIndex + 1}.xml`);
     for (const pivot of metadata.pivotTables ?? []) {
+      const connection = pivot.connection
+        ? connections.indexOf(pivot.connection) + 1 || connections.length + 1
+        : undefined;
       const parts = pivotParts(
         pivot,
         pivotCount + 1,
         (code) => styles.format(code),
-        (style) => styles.dxf(style)
+        (style) => styles.dxf(style),
+        connection
       );
       if (!parts) {
         warnings.add(
@@ -789,7 +796,26 @@ export function writeXlsxWorkbook(
         );
         continue;
       }
+      if (pivot.connection && connection === connections.length + 1)
+        connections.push(pivot.connection);
       const number = ++pivotCount;
+      if (parts.records) {
+        files[`xl/pivotCache/pivotCacheRecords${number}.xml`] = strToU8(
+          parts.records
+        );
+        pivotRecords.push(number);
+      }
+      if (parts.relationships.length)
+        files[`xl/pivotCache/_rels/pivotCacheDefinition${number}.xml.rels`] =
+          strToU8(
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${PACKAGE_RELATIONSHIPS}">${parts.relationships
+              .map(
+                (relationship, index) =>
+                  `<Relationship Id="rId${index + 1}" Type="${RELATIONSHIPS}/${relationship.type}" Target="${escapeXml(relationship.target)}"${relationship.external ? ' TargetMode="External"' : ''}/>`
+              )
+              .join('')}</Relationships>`
+          );
       files[`xl/pivotTables/pivotTable${number}.xml`] = strToU8(parts.table);
       files[`xl/pivotTables/_rels/pivotTable${number}.xml.rels`] = strToU8(
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -875,7 +901,16 @@ export function writeXlsxWorkbook(
       { length: pivotCount },
       (_, index) =>
         `<Override PartName="/xl/pivotTables/pivotTable${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"/><Override PartName="/xl/pivotCache/pivotCacheDefinition${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/>`
-    ).join('')}${noted
+    ).join('')}${pivotRecords
+      .map(
+        (number) =>
+          `<Override PartName="/xl/pivotCache/pivotCacheRecords${number}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml"/>`
+      )
+      .join('')}${
+      connections.length
+        ? '<Override PartName="/xl/connections.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.connections+xml"/>'
+        : ''
+    }${noted
       .map(
         (number) =>
           `<Override PartName="/xl/comments${number}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>`
@@ -932,8 +967,14 @@ export function writeXlsxWorkbook(
       { length: pivotCount },
       (_, index) =>
         `<Relationship Id="rId${count + 5 + index}" Type="${RELATIONSHIPS}/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition${index + 1}.xml"/>`
-    ).join('')}</Relationships>`
+    ).join('')}${
+      connections.length
+        ? `<Relationship Id="rId${count + 5 + pivotCount}" Type="${RELATIONSHIPS}/connections" Target="connections.xml"/>`
+        : ''
+    }</Relationships>`
   );
+  if (connections.length)
+    files['xl/connections.xml'] = strToU8(connectionsPart(connections));
   // Charts without their own colors take them from the theme they came with.
   files['xl/theme/theme1.xml'] = strToU8(
     themePart(

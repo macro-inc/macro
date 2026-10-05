@@ -159,7 +159,7 @@ exports[`real-world XLSX corpus > figshare-ucl-social-enterprise-financia… 1`]
   },
   "cells": 65799,
   "formulas": 1861,
-  "roundTrip": "Charts_Labs metadata",
+  "roundTrip": "identical",
   "sheets": 17,
   "styledCells": 101113,
   "warnings": [
@@ -167,7 +167,7 @@ exports[`real-world XLSX corpus > figshare-ucl-social-enterprise-financia… 1`]
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
-    "Pivot tables from other workbooks, data connections or very large layouts keep only their last values.",
+    "Pivot tables over other workbooks or data connections show their last values in Macro; the download keeps them with the data Excel saved, to refresh in Excel.",
   ],
 }
 `;
@@ -388,7 +388,8 @@ exports[`real-world XLSX corpus > libreoffice-column-style-autofilter-lin… 1`]
   "warnings": [
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
-    "Pivot tables from other workbooks, data connections or very large layouts keep only their last values.",
+    "Pivot tables over other workbooks or data connections show their last values in Macro; the download keeps them with the data Excel saved, to refresh in Excel.",
+    "Some pivot tables over other workbooks or data connections are downloaded without the data Excel saved with them; Excel fills them again when they refresh.",
   ],
 }
 `;

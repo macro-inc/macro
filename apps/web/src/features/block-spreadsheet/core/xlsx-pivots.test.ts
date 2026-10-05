@@ -11,6 +11,7 @@ import { formatCellAddress } from './spreadsheet-document';
 import type { WorkbookFileData } from './workbook-file-types';
 import { decodeXlsx, encodeXlsx } from './xlsx-codec';
 import { corpusBytes, corpusEntries } from './xlsx-fixtures/corpus';
+import { PIVOT_RECORDS_WARNING, PIVOT_VALUES_WARNING } from './xlsx-pivots';
 
 const corpus = (file: string) => {
   const entry = corpusEntries().find((item) => item.file === file);
@@ -19,6 +20,8 @@ const corpus = (file: string) => {
 };
 const text = (files: Record<string, Uint8Array>, name: string) =>
   strFromU8(files[name]);
+const UCL =
+  'figshare-ucl-social-enterprise-financial-sustainability-model.xlsx';
 
 describe('Excel pivot tables', () => {
   it('keeps a pivot table that Excel rebuilds from its cells when the download opens', async () => {
@@ -159,25 +162,160 @@ describe('Excel pivot tables', () => {
     );
   });
 
-  it('keeps only the values of pivot tables over other workbooks, and unlinks their charts', async () => {
-    const imported = await decodeXlsx(
-      corpus(
-        'figshare-ucl-social-enterprise-financial-sustainability-model.xlsx'
-      )
-    );
+  it('keeps pivot tables over other workbooks with the data Excel saved, and their charts linked', async () => {
+    const imported = await decodeXlsx(corpus(UCL));
     expect(imported.warnings).toContain(
-      'Pivot tables from other workbooks, data connections or very large layouts keep only their last values.'
+      'Pivot tables over other workbooks or data connections show their last values in Macro; the download keeps them with the data Excel saved, to refresh in Excel.'
     );
-    expect(imported.sheets.some((sheet) => sheet.metadata?.pivotTables)).toBe(
-      false
+    expect(imported.warnings).not.toContain(PIVOT_VALUES_WARNING);
+    const pivots = imported.sheets.flatMap(
+      (sheet) => sheet.metadata?.pivotTables ?? []
     );
+    expect(pivots).toHaveLength(8);
+    for (const pivot of pivots) {
+      expect(pivot.workbook).toBe(
+        'file:///E:\\MBA%20Project\\Interviews_Revenue_Model.xlsx'
+      );
+      expect(pivot.records).toMatch(/^<pivotCacheRecords\b/);
+      expect(pivot.source).toBeUndefined();
+      // Excel shows it from its records; refreshing it is left to Excel.
+      expect(pivot.cache).not.toMatch(/refreshOnLoad|saveData="0"|r:id=/);
+    }
+
     const files = unzipSync((await encodeXlsx(imported)).bytes);
+    expect(text(files, 'xl/pivotCache/pivotCacheDefinition1.xml')).toMatch(
+      /<pivotCacheDefinition [^>]* r:id="rId1"><cacheSource type="worksheet"><worksheetSource r:id="rId2" ref="H1:H1048576" sheet="Labs"\/>/
+    );
+    expect(
+      text(files, 'xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels')
+    ).toContain(
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords" Target="pivotCacheRecords1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath" Target="file:///E:\\MBA%20Project\\Interviews_Revenue_Model.xlsx" TargetMode="External"/>'
+    );
+    expect(text(files, 'xl/pivotCache/pivotCacheRecords1.xml')).toBe(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${pivots[0].records}`
+    );
+    expect(text(files, '[Content_Types].xml')).toContain(
+      '<Override PartName="/xl/pivotCache/pivotCacheRecords8.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml"/>'
+    );
+    // Its pivot charts stay pivot charts.
     const charts = Object.keys(files).filter((name) =>
-      name.startsWith('xl/charts/')
+      /^xl\/charts\/chart\d+\.xml$/.test(name)
     );
     expect(charts).toHaveLength(10);
-    for (const name of charts)
-      expect(text(files, name)).not.toMatch(/pivotSource|pivotOptions/);
+    expect(
+      charts.filter((name) => text(files, name).includes('<c:pivotSource>'))
+    ).toHaveLength(8);
+
+    const again = await decodeXlsx(zipSync(files));
+    expect(
+      again.sheets.flatMap((sheet) => sheet.metadata?.pivotTables ?? [])
+    ).toEqual(pivots);
+  });
+
+  it('keeps pivot tables over data connections, without saved passwords', async () => {
+    // Two caches of the workbook read data connections instead: a
+    // database, with its password saved, and a Power Query query, which
+    // reads parts of the workbook Macro does not keep.
+    const files = unzipSync(corpus(UCL));
+    const fromConnection = (part: string, id: number) => {
+      files[part] = strToU8(
+        text(files, part).replace(
+          /<cacheSource type="worksheet">[\s\S]*?<\/cacheSource>/,
+          `<cacheSource type="external" connectionId="${id}"/>`
+        )
+      );
+    };
+    fromConnection('xl/pivotCache/pivotCacheDefinition1.xml', 3);
+    fromConnection('xl/pivotCache/pivotCacheDefinition2.xml', 4);
+    const revision =
+      'http://schemas.microsoft.com/office/spreadsheetml/2017/revision16';
+    const compatibility =
+      'http://schemas.openxmlformats.org/markup-compatibility/2006';
+    files['xl/connections.xml'] = strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<connections xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:mc="${compatibility}" mc:Ignorable="xr16" xmlns:xr16="${revision}"><connection id="3" xr16:uid="{8A6B0C1E-2F4D-4A54-9C2B-6D7E8F9A0B1C}" name="Clinic survey" type="1" refreshedVersion="6" savePassword="1" background="1" saveData="1"><dbPr connection="DSN=Clinics;UID=analyst;PWD=hunter2;DATABASE=survey" command="SELECT * FROM labs"/></connection><connection id="4" name="Query - Labs" type="5" refreshedVersion="6" background="1" saveData="1"><dbPr connection="Provider=Microsoft.Mashup.OleDb.1;Data Source=$Workbook$;Location=Labs" command="SELECT * FROM [Labs]"/></connection></connections>`
+    );
+    files['xl/_rels/workbook.xml.rels'] = strToU8(
+      text(files, 'xl/_rels/workbook.xml.rels').replace(
+        '</Relationships>',
+        '<Relationship Id="rId99" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/connections" Target="connections.xml"/></Relationships>'
+      )
+    );
+    const imported = await decodeXlsx(zipSync(files));
+    expect(imported.warnings).toContain(
+      'Passwords saved with data connections are not kept; Excel asks for them when it refreshes a pivot table.'
+    );
+    // The query's pivot table keeps only its values.
+    expect(imported.warnings).toContain(PIVOT_VALUES_WARNING);
+    const pivots = imported.sheets.flatMap(
+      (sheet) => sheet.metadata?.pivotTables ?? []
+    );
+    expect(pivots).toHaveLength(7);
+    const connected = pivots.filter((pivot) => pivot.connection);
+    expect(connected).toHaveLength(1);
+    const [pivot] = connected;
+    expect(pivot.workbook).toBeUndefined();
+    expect(pivot.records).toMatch(/^<pivotCacheRecords\b/);
+    // It declares what the connections part declared for it.
+    expect(pivot.connection).toBe(
+      `<connection id="0" xr16:uid="{8A6B0C1E-2F4D-4A54-9C2B-6D7E8F9A0B1C}" name="Clinic survey" type="1" refreshedVersion="6" background="1" saveData="1" xmlns:mc="${compatibility}" mc:Ignorable="xr16" xmlns:xr16="${revision}"><dbPr connection="DSN=Clinics;UID=analyst;DATABASE=survey" command="SELECT * FROM labs"/></connection>`
+    );
+
+    const exported = unzipSync((await encodeXlsx(imported)).bytes);
+    const caches = Object.keys(exported).filter((name) =>
+      /^xl\/pivotCache\/pivotCacheDefinition\d+\.xml$/.test(name)
+    );
+    expect(
+      caches.filter((name) =>
+        text(exported, name).includes(
+          '<cacheSource type="external" connectionId="1"/>'
+        )
+      )
+    ).toHaveLength(1);
+    expect(text(exported, 'xl/connections.xml')).toBe(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<connections xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${pivot.connection?.replace('id="0"', 'id="1"')}</connections>`
+    );
+    expect(text(exported, '[Content_Types].xml')).toContain(
+      '<Override PartName="/xl/connections.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.connections+xml"/>'
+    );
+    expect(text(exported, 'xl/_rels/workbook.xml.rels')).toMatch(
+      /<Relationship Id="rId\d+" Type="http:\/\/schemas.openxmlformats.org\/officeDocument\/2006\/relationships\/connections" Target="connections.xml"\/>/
+    );
+
+    const again = await decodeXlsx(zipSync(exported));
+    expect(
+      again.sheets.flatMap((sheet) => sheet.metadata?.pivotTables ?? [])
+    ).toEqual(pivots);
+    expect(again.warnings).not.toContain(
+      'Passwords saved with data connections are not kept; Excel asks for them when it refreshes a pivot table.'
+    );
+  });
+
+  it('downloads pivot tables without saved data that does not fit', async () => {
+    const files = unzipSync(corpus(UCL));
+    const part = 'xl/pivotCache/pivotCacheRecords1.xml';
+    // Records over the size Macro keeps.
+    files[part] = strToU8(
+      text(files, part).replace(
+        '</pivotCacheRecords>',
+        `${'<r><x v="0"/></r>'.repeat(20_000)}</pivotCacheRecords>`
+      )
+    );
+    const imported = await decodeXlsx(zipSync(files));
+    expect(imported.warnings).toContain(PIVOT_RECORDS_WARNING);
+    const pivots = imported.sheets.flatMap(
+      (sheet) => sheet.metadata?.pivotTables ?? []
+    );
+    expect(pivots).toHaveLength(8);
+    const [bare, ...rest] = pivots.filter((pivot) => !pivot.records);
+    expect(rest).toHaveLength(0);
+    // Excel shows its layout and fills it again when it refreshes.
+    expect(bare.cache).toMatch(/^<pivotCacheDefinition [^>]*saveData="0"/);
+    const exported = unzipSync((await encodeXlsx(imported)).bytes);
+    expect(
+      Object.keys(exported).filter((name) => name.includes('Records'))
+    ).toHaveLength(7);
   });
 });
 

@@ -50,7 +50,12 @@ import {
   parse,
   relationships,
 } from './xlsx-parts';
-import { readSheetPivotTables } from './xlsx-pivots';
+import {
+  PIVOT_RECORDS_WARNING,
+  PIVOT_VALUES_WARNING,
+  readSheetPivotTables,
+  withoutRecords,
+} from './xlsx-pivots';
 import { createSheetRulesReader } from './xlsx-sheet-rules';
 import {
   readXlsxStylesheet,
@@ -158,11 +163,21 @@ function fitMetadata(metadata: WorkbookSheetMetadata, warnings: Set<string>) {
     if (length() <= MAX_METADATA_LENGTH) return;
   }
   // Pivot tables are only kept for export; their values stay in cells.
+  // The records Excel saved go first: Excel refreshes a table without them.
+  const pivots = metadata.pivotTables ?? [];
+  for (const index of pivots
+    .map((_, index) => index)
+    .sort(
+      (a, b) =>
+        (pivots[b].records?.length ?? 0) - (pivots[a].records?.length ?? 0)
+    )) {
+    if (!pivots[index].records || length() <= MAX_METADATA_LENGTH) break;
+    pivots[index] = withoutRecords(pivots[index]);
+    warnings.add(PIVOT_RECORDS_WARNING);
+  }
   while (metadata.pivotTables?.length && length() > MAX_METADATA_LENGTH) {
     metadata.pivotTables.pop();
-    warnings.add(
-      'Pivot tables from other workbooks, data connections or very large layouts keep only their last values.'
-    );
+    warnings.add(PIVOT_VALUES_WARNING);
   }
   if (metadata.pivotTables && !metadata.pivotTables.length)
     delete metadata.pivotTables;

@@ -105,7 +105,9 @@ chart** (type, title, legend, the cells it charts, series in rows or columns).
 From the keyboard, Ctrl+Alt+5 (also in the Insert menu) selects the first
 drawing, Tab and Shift+Tab move between drawings, arrow keys move the selected
 one (Shift sizes it, Alt by one pixel). Pivot tables show their last values as ordinary cells; the Excel
-download keeps them, and Excel rebuilds them from their data when the file opens. GETPIVOTDATA formulas
+download keeps them, and Excel rebuilds them from their data when the file opens; pivot tables over other
+workbooks or data connections download with the data Excel saved with them (connections without saved
+passwords), for Excel to refresh from their source. GETPIVOTDATA formulas
 that read a kept pivot table calculate from its cells, so editing a value in the table updates them.
 Deleting a sheet whose data a chart on another sheet reads keeps the chart: it
 shows the values it had, which no longer change.

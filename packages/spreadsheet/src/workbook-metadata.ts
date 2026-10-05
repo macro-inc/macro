@@ -47,18 +47,25 @@ export type WorkbookSheetMetadata = {
 
 /**
  * An Excel pivot table, kept so export writes it back. Macro shows the
- * table's last values as cells; Excel rebuilds it from its source when the
- * exported file opens.
+ * table's last values as cells. Excel rebuilds a table over this workbook's
+ * cells when the exported file opens; one over another workbook or a data
+ * connection keeps the data Excel saved with it until Excel refreshes it.
  */
 export type SheetPivotTable = {
   /** The pivotTableDefinition part; export writes its cache and location. */
   table: string;
-  /** The pivotCacheDefinition part, without the records Excel saved. */
+  /** The pivotCacheDefinition part; export writes its relationships. */
   cache: string;
   /** The cells the table covers on its sheet. */
   location: string;
   /** The cells it summarizes, such as `'Orders'!$A$1:$F$500`. */
   source?: string;
+  /** The records Excel saved of a source Macro does not hold. */
+  records?: string;
+  /** The other workbook a cache reads, as Excel linked it. */
+  workbook?: string;
+  /** The data connection a cache reads: its `connection` element. */
+  connection?: string;
   /** Custom number formats the parts use, by `numFmtId`. */
   formats?: Record<string, string>;
   /** The differential formats of its areas, by the `dxfId` the table uses. */
@@ -66,6 +73,8 @@ export type SheetPivotTable = {
 };
 export const MAX_SHEET_PIVOT_TABLES = 64;
 export const MAX_PIVOT_PART_LENGTH = 300_000;
+const MAX_PIVOT_LINK_LENGTH = 2_048;
+const MAX_PIVOT_CONNECTION_LENGTH = 100_000;
 
 function validPivotTable(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -73,9 +82,17 @@ function validPivotTable(value: unknown): boolean {
   const formats = pivot.formats;
   return (
     Object.keys(pivot).every((key) =>
-      ['table', 'cache', 'location', 'source', 'formats', 'styles'].includes(
-        key
-      )
+      [
+        'table',
+        'cache',
+        'location',
+        'source',
+        'records',
+        'workbook',
+        'connection',
+        'formats',
+        'styles',
+      ].includes(key)
     ) &&
     typeof pivot.table === 'string' &&
     pivot.table.length <= MAX_PIVOT_PART_LENGTH &&
@@ -86,6 +103,18 @@ function validPivotTable(value: unknown): boolean {
     validWorkbookRange(pivot.location) &&
     (pivot.source === undefined ||
       (typeof pivot.source === 'string' && pivot.source.length <= 1_000)) &&
+    (pivot.records === undefined ||
+      (typeof pivot.records === 'string' &&
+        pivot.records.length <= MAX_PIVOT_PART_LENGTH &&
+        pivot.records.includes('pivotCacheRecords'))) &&
+    (pivot.workbook === undefined ||
+      (typeof pivot.workbook === 'string' &&
+        pivot.workbook.length > 0 &&
+        pivot.workbook.length <= MAX_PIVOT_LINK_LENGTH)) &&
+    (pivot.connection === undefined ||
+      (typeof pivot.connection === 'string' &&
+        pivot.connection.length <= MAX_PIVOT_CONNECTION_LENGTH &&
+        /^<(?:[\w.-]+:)?connection\b/.test(pivot.connection))) &&
     (pivot.styles === undefined ||
       (Array.isArray(pivot.styles) &&
         pivot.styles.length <= 200 &&

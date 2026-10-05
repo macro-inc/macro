@@ -39,7 +39,9 @@ undo, and kept in the download), radar, bubble, stock and contour charts
 (imported, redrawn after edits, inserted from More charts and downloaded),
 shapes, text boxes, groups, SmartArt and an EMF logo (drawn, a linked text box
 following its cell, moved and downloaded), GETPIVOTDATA formulas of an imported
-pivot table (calculated, following an edit to the table and downloaded), and
+pivot table (calculated, following an edit to the table and downloaded), pivot
+tables over another workbook (downloaded with their records, link and pivot
+charts), and
 creating, editing, moving and sizing charts and images with the pointer and the
 keyboard have their own suites. The imported workbook was
 created independently with openpyxl; the exported file is reopened using ExcelJS
