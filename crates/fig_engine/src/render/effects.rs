@@ -29,43 +29,105 @@ fn box_radii(sigma: f32) -> [usize; 3] {
     out
 }
 
-/// One box blur pass over rows (`stride` between pixels, `line` between
-/// rows) of `C`-channel data; outside the image counts as zero.
-fn box_pass<const C: usize>(
+/// `n / d` as a multiply and a shift (Granlund and Montgomery), exact for
+/// `n < 2^24`, so blur rows vectorize where a division would not.
+#[derive(Clone, Copy)]
+struct Divisor {
+    m: u64,
+    k: u32,
+}
+
+impl Divisor {
+    fn new(d: u32) -> Divisor {
+        let k = 24 + (32 - d.max(1).saturating_sub(1).leading_zeros());
+        Divisor {
+            m: (1u64 << k).div_ceil(u64::from(d.max(1))),
+            k,
+        }
+    }
+
+    #[inline]
+    fn div(self, n: u32) -> u32 {
+        ((u64::from(n) * self.m) >> self.k) as u32
+    }
+}
+
+/// One horizontal box blur pass over `C`-channel rows `w` pixels long;
+/// outside the image counts as zero.
+fn box_rows<const C: usize>(
     src: &[u8],
     dst: &mut [u8],
-    len: usize,
-    lines: usize,
-    stride: usize,
-    line: usize,
+    w: usize,
     r: usize,
+    div: impl Fn(u32) -> u32,
 ) {
-    let div = (2 * r + 1) as u32;
-    let half = div / 2;
-    for l in 0..lines {
-        let base = l * line;
+    let half = r as u32;
+    for (s, d) in src.chunks_exact(w * C).zip(dst.chunks_exact_mut(w * C)) {
         let mut sum = [0u32; C];
-        for x in 0..=r.min(len.saturating_sub(1)) {
-            for (c, s) in sum.iter_mut().enumerate() {
-                *s += u32::from(src[base + x * stride + c]);
+        for px in s.chunks_exact(C).take(r + 1) {
+            for (sum, &v) in sum.iter_mut().zip(px) {
+                *sum += u32::from(v);
             }
         }
-        for x in 0..len {
-            for (c, s) in sum.iter().enumerate() {
-                dst[base + x * stride + c] = ((*s + half) / div) as u8;
+        for (x, out) in d.chunks_exact_mut(C).enumerate() {
+            for (o, &sum) in out.iter_mut().zip(&sum) {
+                *o = div(sum + half) as u8;
             }
-            let add = x + r + 1;
-            if add < len {
-                for (c, s) in sum.iter_mut().enumerate() {
-                    *s += u32::from(src[base + add * stride + c]);
+            if let Some(px) = s.get((x + r + 1) * C..(x + r + 2) * C) {
+                for (sum, &v) in sum.iter_mut().zip(px) {
+                    *sum += u32::from(v);
                 }
             }
             if x >= r {
-                for (c, s) in sum.iter_mut().enumerate() {
-                    *s -= u32::from(src[base + (x - r) * stride + c]);
+                for (sum, &v) in sum.iter_mut().zip(&s[(x - r) * C..(x - r + 1) * C]) {
+                    *sum -= u32::from(v);
                 }
             }
         }
+    }
+}
+
+/// One vertical box blur pass over rows of `row` bytes, keeping a running
+/// sum per column so whole rows are added and removed at once.
+fn box_columns(src: &[u8], dst: &mut [u8], row: usize, r: usize, div: impl Fn(u32) -> u32) {
+    let half = r as u32;
+    let rows = src.len() / row;
+    let line = |y: usize| &src[y * row..(y + 1) * row];
+    let mut sums = vec![0u32; row];
+    for y in 0..=r.min(rows.saturating_sub(1)) {
+        for (sum, &v) in sums.iter_mut().zip(line(y)) {
+            *sum += u32::from(v);
+        }
+    }
+    for (y, out) in dst.chunks_exact_mut(row).enumerate() {
+        for (o, &sum) in out.iter_mut().zip(&sums) {
+            *o = div(sum + half) as u8;
+        }
+        if y + r + 1 < rows {
+            for (sum, &v) in sums.iter_mut().zip(line(y + r + 1)) {
+                *sum += u32::from(v);
+            }
+        }
+        if y >= r {
+            for (sum, &v) in sums.iter_mut().zip(line(y - r)) {
+                *sum -= u32::from(v);
+            }
+        }
+    }
+}
+
+/// A horizontal then a vertical box blur pass of radius `r`.
+fn box_pass<const C: usize>(data: &mut [u8], tmp: &mut [u8], w: usize, r: usize) {
+    let d = (2 * r + 1) as u32;
+    // Window sums (plus rounding) stay below 2^24 for any radius under
+    // ~32000; larger ones divide.
+    if 255 * (2 * r + 2) < 1 << 24 {
+        let divisor = Divisor::new(d);
+        box_rows::<C>(data, tmp, w, r, |n| divisor.div(n));
+        box_columns(tmp, data, w * C, r, |n| divisor.div(n));
+    } else {
+        box_rows::<C>(data, tmp, w, r, |n| n / d);
+        box_columns(tmp, data, w * C, r, |n| n / d);
     }
 }
 
@@ -78,8 +140,7 @@ fn blur_channels<const C: usize>(data: &mut [u8], w: usize, h: usize, sigma: f32
         if r == 0 {
             continue;
         }
-        box_pass::<C>(data, &mut tmp, w, h, C, w * C, r);
-        box_pass::<C>(&tmp, data, h, w, w * C, C, r);
+        box_pass::<C>(data, &mut tmp, w, r);
     }
 }
 
@@ -438,3 +499,6 @@ fn sub_mask(mask: &Mask, area: (i32, i32, u32, u32)) -> Mask {
     }
     out
 }
+
+#[cfg(test)]
+mod test;
