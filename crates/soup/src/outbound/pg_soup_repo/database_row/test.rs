@@ -400,8 +400,14 @@ async fn a_form_editor_reads_the_rows_of_the_forms_database(pool: PgPool) {
 }
 
 #[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_form_respondent_or_a_trashed_form_reads_no_rows(pool: PgPool) {
+async fn a_form_respondent_reads_no_rows(pool: PgPool) {
     grant_the_stranger_a_crm_form(&pool, "view", false).await;
+
+    assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_trashed_form_owner_reads_no_rows(pool: PgPool) {
     grant_the_stranger_a_crm_form(&pool, "owner", true).await;
 
     assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
