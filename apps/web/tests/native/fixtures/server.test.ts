@@ -3,6 +3,10 @@ import { type DocumentNode, type ExecutionResult, print, visit } from 'graphql';
 import {
   ChannelUnreadPresenceDocument,
   type ChannelUnreadPresenceQuery,
+  FavoritesDocument,
+  type FavoritesQuery,
+  ItemPreviewsDocument,
+  type ItemPreviewsQuery,
   MailAccountsDocument,
   type MailAccountsQuery,
   SoupBackfillDocument,
@@ -320,6 +324,82 @@ for (const [name, input] of invalidSignalInputs) {
   });
 }
 
+test('matrix favorites match thread facts and honor collection filters', async () => {
+  server = startFixtureServer(0, true);
+  for (const [filter, ids] of [
+    [{}, [6, 8, 9, 60, 71]],
+    [{ entityTypes: ['EMAIL_THREAD'] }, [6, 8, 9, 60, 71]],
+    [{ entityIds: [fixtureId(6)] }, [6]],
+    [{ entityTypes: ['DOCUMENT'] }, []],
+  ] as const) {
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(FavoritesDocument),
+        operationName: 'Favorites',
+        variables: { filter },
+      }),
+    });
+    const result: ExecutionResult<FavoritesQuery> = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(
+      result.data?.user.favorites.map((favorite) => favorite.entityId)
+    ).toEqual(ids.map(fixtureId));
+  }
+});
+
+test('favorite previews are ID-scoped and cannot seed arbitrary Mail pages', async () => {
+  server = startFixtureServer(0, true);
+  const origin = server.origin;
+  const preview = async (
+    input: SoupInput
+  ): Promise<ExecutionResult<ItemPreviewsQuery>> => {
+    const response = await fetch(`${origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(ItemPreviewsDocument),
+        operationName: 'ItemPreviews',
+        variables: { input },
+      }),
+    });
+    return await response.json();
+  };
+  const selected = await preview({
+    initial: {
+      emailView: 'ALL',
+      filters: {
+        emailFilter: {
+          tree: {
+            or: {
+              left: { literal: { threadId: fixtureId(6) } },
+              right: { literal: { threadId: fixtureId(8) } },
+            },
+          },
+        },
+      },
+    },
+  });
+  expect(selected.errors).toBeUndefined();
+  expect(selected.data?.user.soup.items.map((item) => item.id)).toEqual(
+    [6, 8].map(fixtureId)
+  );
+  expect(
+    (await preview({ initial: { emailView: 'ALL' } })).errors?.[0].message
+  ).toBe('ItemPreviews requires explicit thread IDs');
+  expect(
+    (
+      await preview({
+        initial: {
+          emailView: 'ALL',
+          filters: {
+            emailFilter: { tree: { literal: { threadId: fixtureId(4) } } },
+          },
+        },
+      })
+    ).errors?.[0].message
+  ).toBe('ItemPreviews only serves fixture favorites');
+});
+
 test('matrix fixtures validate against the production backfill selections', async () => {
   server = startFixtureServer(0, true);
   for (const [document, operationName, input, count] of [
@@ -335,7 +415,7 @@ test('matrix fixtures validate against the production backfill selections', asyn
           },
         },
       },
-      65,
+      67,
     ],
     [
       SoupSharedMailBackfillDocument,
