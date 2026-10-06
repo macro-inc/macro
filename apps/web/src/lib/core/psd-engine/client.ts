@@ -439,7 +439,16 @@ export class PsdEngine {
    */
   retain(work: Promise<unknown>) {
     this.holds.add(work);
-    void work.finally(() => this.holds.delete(work));
+    const release = async () => {
+      try {
+        await work;
+      } catch {
+        // Its own caller reports failures.
+      } finally {
+        this.holds.delete(work);
+      }
+    };
+    void release();
   }
 
   close() {

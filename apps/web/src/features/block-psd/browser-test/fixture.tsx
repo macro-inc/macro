@@ -108,11 +108,16 @@ function Fixture() {
     await open(await r.arrayBuffer(), file.split('/').pop() ?? file);
   };
 
-  const file = params.get('file');
-  if (file)
-    void openCorpusFile(file).catch((e: unknown) => setError(String(e)));
-  else if (params.has('new'))
-    void openNew().catch((e: unknown) => setError(String(e)));
+  const start = async () => {
+    try {
+      const file = params.get('file');
+      if (file) await openCorpusFile(file);
+      else if (params.has('new')) await openNew();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  void start();
 
   return (
     <div class="flex h-screen flex-col bg-page text-ink">

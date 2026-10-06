@@ -258,7 +258,7 @@ export function CollabFixture(props: {
   const server = new MemorySyncServer();
   const [stored, setStored] = createSignal(false);
   const [error, setError] = createSignal<string>();
-  const load = async () => {
+  const store = async () => {
     if (props.fileUrl) {
       const r = await fetch(props.fileUrl);
       if (!r.ok) throw new Error(`${props.fileUrl}: ${r.status}`);
@@ -270,7 +270,14 @@ export function CollabFixture(props: {
     }
     setStored(true);
   };
-  void load().catch((e: unknown) => setError(String(e)));
+  const load = async () => {
+    try {
+      await store();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  void load();
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>

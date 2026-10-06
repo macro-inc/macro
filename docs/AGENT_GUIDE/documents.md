@@ -951,7 +951,7 @@ entries. Its Playwright suites run with
 installed); `collaboration.browser.e2e.ts` opens several people on one deck. The editor sections above were verified on this fixture; the
 `/app/pptx` route itself needs a backend with an uploaded deck.
 
-## Images (Photoshop)
+## Photoshop editor
 
 Uploaded `.psd` and `.psb` files open in the `psd` block
 (`/app/psd/<documentId>`), and **Photoshop file** in the create menu (key
@@ -962,7 +962,8 @@ the flag off the block offers the file for download. The file is read,
 composited, and edited by the Rust `psd_engine` compiled to WebAssembly, in
 one worker. The canvas draws 512 px tiles from a pyramid of scales (the
 nearest one shows while zooming, then it sharpens) and redraws only what an
-edit changed.
+edit changed. How Macro AI and search read these files is under
+[Photoshop and Illustrator documents](#photoshop-and-illustrator-documents).
 
 People with edit access get the editor; others get the same view read-only
 (no painting or editing tools, no editing shortcuts). Documents the editor

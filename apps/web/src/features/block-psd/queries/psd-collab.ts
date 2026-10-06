@@ -118,7 +118,14 @@ class TrackedWALSyncer extends WALSyncer<Uint8Array> {
 
   override append(update: Uint8Array): Promise<void> {
     const appended = super.append(update);
-    this.lastAppend = appended.catch(() => {});
+    const settled = async () => {
+      try {
+        await appended;
+      } catch {
+        // The log reports its own failures.
+      }
+    };
+    this.lastAppend = settled();
     return appended;
   }
 }
