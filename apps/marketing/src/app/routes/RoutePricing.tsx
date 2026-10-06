@@ -69,7 +69,6 @@ function PlanCard(props: {
   price: string;
   primaryLine: string;
   secondaryLine?: string;
-  note: JSX.Element;
   buttonName: string;
   buttonLabel?: string;
 }) {
@@ -103,14 +102,7 @@ function PlanCard(props: {
         }}
       >
         <span style={planEyebrowStyle()}>{props.eyebrow}</span>
-        <div
-          style={{
-            'align-items': 'baseline',
-            display: 'flex',
-            'flex-wrap': 'wrap',
-            gap: '10px',
-          }}
-        >
+        <div style={{ display: 'grid', gap: '14px' }}>
           <span
             style={{
               color: 'var(--c0)',
@@ -147,16 +139,6 @@ function PlanCard(props: {
             </Show>
           </div>
         </div>
-        <p
-          style={{
-            color: 'var(--c4)',
-            'font-size': mobile() ? '15px' : '16px',
-            'line-height': 1.55,
-            margin: 0,
-          }}
-        >
-          {props.note}
-        </p>
       </div>
       <div style={{ display: 'flex' }}>
         <a
@@ -203,7 +185,7 @@ function PricingPlans() {
       style={{
         'box-sizing': 'border-box',
         margin: '0 auto',
-        'max-width': narrow() ? '560px' : '1100px',
+        'max-width': narrow() ? '560px' : '960px',
         'padding-inline': mobile() ? '18px' : '24px',
         width: '100%',
       }}
@@ -221,13 +203,7 @@ function PricingPlans() {
           eyebrow="Free"
           price="$0"
           primaryLine="per seat / month"
-          secondaryLine="no credit card required"
-          note={
-            <>
-              <strong>Get started with limited usage:</strong> Haiku, up to two
-              email accounts, 5 GB of storage, and a "Sent with Macro" footer.
-            </>
-          }
+          secondaryLine="No credit card required"
           buttonName="pricing_free_connect_google"
           buttonLabel="Start for free"
         />
@@ -237,13 +213,6 @@ function PricingPlans() {
           price="$40"
           primaryLine="per seat / month"
           secondaryLine="30 days free"
-          note={
-            <>
-              <strong>Your whole workspace:</strong> every AI model with
-              standard usage, unlimited email accounts, calls, teams, and 1 TB
-              of storage.
-            </>
-          }
           buttonName="pricing_paid_connect_google"
         />
         <PlanCard
@@ -251,12 +220,6 @@ function PricingPlans() {
           price="$200"
           primaryLine="per seat / month"
           secondaryLine="10× Pro usage"
-          note={
-            <>
-              <strong>Everything in Pro,</strong> with 10× the AI usage for
-              heavy agent work, plus priority support.
-            </>
-          }
           buttonName="pricing_max_connect_google"
         />
       </div>
