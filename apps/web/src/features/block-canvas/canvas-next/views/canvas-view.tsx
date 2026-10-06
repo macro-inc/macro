@@ -16,7 +16,7 @@ import {
   RectangleView,
   TextView,
 } from '@macro-inc/graphics/solid';
-import { Card, Layer } from '@ui';
+import { Layer } from '@ui';
 import {
   type Component,
   createMemo,
@@ -24,13 +24,11 @@ import {
   onCleanup,
   onMount,
   Show,
-  Suspense,
 } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
 import { ConnectorInspector } from '../components/connector-inspector';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
 import { EraserTrail } from '../components/eraser-trail';
-import { CanvasLayers } from '../components/layers';
 import { SelectionLayoutInspector } from '../components/selection-layout-inspector';
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
@@ -50,9 +48,12 @@ import type {
   CanvasTool,
 } from '../primitives/create-canvas-state';
 import { attachTextInput } from '../primitives/text-input';
-import { CanvasAssetPicker } from './asset-picker';
 import { CanvasContextMenu } from './canvas-context-menu';
-import { CanvasDrawingToolbar, CanvasViewControls } from './canvas-toolbars';
+import {
+  CanvasDrawingToolbar,
+  CanvasHistoryControls,
+  CanvasViewControls,
+} from './canvas-toolbars';
 import { ConnectorTargets } from './connector-targets';
 import { CanvasDocumentView, CanvasMediaView } from './embedded-items';
 import { CanvasTextContent } from './text-content';
@@ -77,9 +78,6 @@ export function CanvasView(props: {
   );
   let root!: HTMLDivElement, host!: HTMLDivElement;
   const [lockAspectRatio, setLockAspectRatio] = createSignal(false);
-  const [assetPicker, setAssetPicker] = createSignal<
-    'media' | 'document' | 'embed'
-  >();
   const point = (x: number, y: number) => {
     const rect = host.getBoundingClientRect();
     return screenToWorld(editor.getCamera(), {
@@ -87,11 +85,6 @@ export function CanvasView(props: {
       y: y - rect.top,
     });
   };
-  const center = () =>
-    screenToWorld(editor.getCamera(), {
-      x: (host.clientWidth - inspectorWidth()) / 2,
-      y: host.clientHeight / 2,
-    });
   const droppable = createCanvasAssetDrop(
     props.assets,
     point,
@@ -126,7 +119,6 @@ export function CanvasView(props: {
       endHead: shared('endHead'),
     };
   };
-  const [layers, setLayers] = createSignal(false);
   const inspectorWidth = () =>
     Math.min(288, Math.max(0, host.clientWidth - 48));
   const fit = () => {
@@ -238,7 +230,10 @@ export function CanvasView(props: {
               aria-label="Canvas inspector"
             >
               <header class="flex h-10 shrink-0 items-center justify-between px-3">
-                <span class="text-xs font-medium">Design</span>
+                <div class="flex items-center gap-1">
+                  <span class="text-xs font-medium">Canvas</span>
+                  <CanvasHistoryControls state={state} onFocusCanvas={focus} />
+                </div>
                 <CanvasViewControls
                   scale={state.camera().scale}
                   grid={state.grid()}
@@ -435,25 +430,6 @@ export function CanvasView(props: {
               </Show>
             </aside>
           </Layer>
-        </Show>
-        <Show when={layers()}>
-          <Card
-            depth={2}
-            variant="filled"
-            class="absolute left-4 top-20 z-10 max-h-[calc(100%-10rem)] w-56 overflow-y-auto shadow-lg"
-            role="complementary"
-            aria-label="Canvas layers"
-          >
-            <CanvasLayers
-              document={state.snapshot()}
-              selected={state.session().selectedIds}
-              onSelect={(id, additive) => {
-                state.chooseTool('select');
-                if (additive) editor.toggleSelection(id);
-                else editor.select(id);
-              }}
-            />
-          </Card>
         </Show>
         <ContextMenu>
           <ContextMenu.Trigger
@@ -655,63 +631,12 @@ export function CanvasView(props: {
           />
         </ContextMenu>
         <CanvasDrawingToolbar
-          state={state}
-          onFocusCanvas={focus}
-          layers={layers()}
-          onLayers={() => setLayers((value) => !value)}
           tool={state.tool()}
           onTool={(tool) => {
             state.chooseTool(tool);
             focus();
           }}
-          onInsert={(kind) => {
-            state.chooseTool('select');
-            setAssetPicker(kind);
-          }}
         />
-        <Show when={assetPicker()}>
-          {(mode) => (
-            <Suspense
-              fallback={
-                <div class="absolute right-4 top-4 rounded bg-panel p-4">
-                  Loading files…
-                </div>
-              }
-            >
-              <CanvasAssetPicker
-                mode={mode()}
-                onClose={() => setAssetPicker(undefined)}
-                onFiles={(files) => {
-                  void props.assets.files(files, center());
-                  setAssetPicker(undefined);
-                  focus();
-                }}
-                onSelect={(asset) => {
-                  if (mode() === 'media')
-                    void props.assets.media(asset, center());
-                  else
-                    props.assets.document(
-                      asset,
-                      center(),
-                      mode() === 'embed' ? 'embed' : 'preview'
-                    );
-                  setAssetPicker(undefined);
-                  focus();
-                }}
-              />
-            </Suspense>
-          )}
-        </Show>
-
-        <span
-          role="status"
-          class="pointer-events-none absolute bottom-5 max-w-[calc(100%-32rem)] truncate text-xs text-ink-muted"
-          style={{
-            right: '19rem',
-          }}
-        >
-          {state.notice()}
-        </span>
       </main>
     </div>
   );

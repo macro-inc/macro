@@ -38,6 +38,7 @@ import { createShapeView } from './create-shape-view';
 import { DotGrid } from './dot-grid-view';
 import { RadiusHandles } from './radius-handles';
 import { ShapeSelectionOutline } from './selection-outline';
+import { SELECTION_COLOR, SELECTION_FILL } from './selection-theme';
 import {
   defaultRenderers,
   type ItemRenderers,
@@ -483,7 +484,7 @@ export function GraphicsSurface(props: {
                     ref={(element) => registerMoveElement(id, element)}
                     item={view}
                     transform={transform()}
-                    color="#5687ff"
+                    color={SELECTION_COLOR}
                     hovered={!selectedShapes().includes(id)}
                   />
                 );
@@ -511,7 +512,7 @@ export function GraphicsSurface(props: {
                       cy={point().y}
                       r="6"
                       fill="white"
-                      stroke="#5687ff"
+                      stroke={SELECTION_COLOR}
                       style={{ 'pointer-events': 'all', cursor: 'grab' }}
                     />
                   );
@@ -538,7 +539,7 @@ export function GraphicsSurface(props: {
               <polygon
                 points={pointsAttribute(outline(id))}
                 fill="none"
-                stroke="#5687ff"
+                stroke={SELECTION_COLOR}
                 stroke-width="1"
               />
             )}
@@ -559,7 +560,7 @@ export function GraphicsSurface(props: {
                 }
                 points={pointsAttribute(selection().corners.map(screen))}
                 fill="transparent"
-                stroke="#5687ff"
+                stroke={SELECTION_COLOR}
                 stroke-width="1"
                 style={{
                   'pointer-events':
@@ -608,7 +609,7 @@ export function GraphicsSurface(props: {
                       height="10"
                       rx="0"
                       fill="white"
-                      stroke="#5687ff"
+                      stroke={SELECTION_COLOR}
                       style={{
                         'pointer-events': 'all',
                         cursor: resizeCursor(handle, frame()),
@@ -628,7 +629,7 @@ export function GraphicsSurface(props: {
                   cy={handle().y}
                   r="6"
                   fill="white"
-                  stroke="#5687ff"
+                  stroke={SELECTION_COLOR}
                   style={{ 'pointer-events': 'all', cursor: 'grab' }}
                 />
               )}
@@ -653,8 +654,8 @@ export function GraphicsSurface(props: {
             <polygon
               data-graphics-selection-box
               points={pointsAttribute(corners(box()).map(screen))}
-              fill="rgba(86,135,255,0.12)"
-              stroke="#5687ff"
+              fill={SELECTION_FILL}
+              stroke={SELECTION_COLOR}
             />
           )}
         </Show>

@@ -2,28 +2,17 @@ import { TOKENS } from '@core/hotkey/tokens';
 import Undo from '@phosphor/arrow-u-up-left.svg';
 import Redo from '@phosphor/arrow-u-up-right.svg';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import Browsers from '@phosphor/browsers.svg';
 import CaretDown from '@phosphor/caret-down.svg';
-import CaretUp from '@phosphor/caret-up.svg';
 import Check from '@phosphor/check.svg';
 import Circle from '@phosphor/circle.svg';
 import Cursor from '@phosphor/cursor.svg';
 import Eraser from '@phosphor/eraser.svg';
-import File from '@phosphor/file.svg';
 import Hand from '@phosphor/hand.svg';
-import Image from '@phosphor/image.svg';
-import List from '@phosphor/list.svg';
 import Pencil from '@phosphor/pencil-simple.svg';
 import Rectangle from '@phosphor/rectangle.svg';
-import Stack from '@phosphor/stack.svg';
 import Text from '@phosphor/text-t.svg';
-import { Dropdown, Hotkey, Toolbar } from '@ui';
-import {
-  type ComponentProps,
-  createSignal,
-  createUniqueId,
-  For,
-} from 'solid-js';
+import { Button, Dropdown, Hotkey, Toolbar } from '@ui';
+import { type ComponentProps, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { CanvasSnapMode } from '../core/snapping';
 import type {
@@ -45,68 +34,9 @@ const tools = [
 export function CanvasDrawingToolbar(props: {
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
-  onInsert: (kind: 'media' | 'document' | 'embed') => void;
-  state: CanvasState;
-  onFocusCanvas: () => void;
-  layers: boolean;
-  onLayers: () => void;
 }) {
-  const [historyOpen, setHistoryOpen] = createSignal(true);
-  const historyId = createUniqueId();
   return (
-    <div class="pointer-events-none absolute bottom-4 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col items-start">
-      <div
-        id={historyId}
-        hidden={!historyOpen()}
-        class="pointer-events-auto ml-3"
-      >
-        <Toolbar
-          size="icon-md"
-          aria-label="Canvas history"
-          class="rounded-b-none border-b-0 shadow-none"
-        >
-          <Toolbar.Button
-            label="Undo"
-            hotkey={TOKENS.canvas.undo}
-            disabled={!props.state.session().canUndo}
-            onClick={() => {
-              props.state.editor.undo();
-              props.onFocusCanvas();
-            }}
-          >
-            <Undo />
-          </Toolbar.Button>
-          <Toolbar.Button
-            label="Redo"
-            hotkey={TOKENS.canvas.redo}
-            disabled={!props.state.session().canRedo}
-            onClick={() => {
-              props.state.editor.redo();
-              props.onFocusCanvas();
-            }}
-          >
-            <Redo />
-          </Toolbar.Button>
-          <Toolbar.Divider />
-          <Dropdown placement="top-start">
-            <Dropdown.Trigger
-              size="icon-md"
-              variant="ghost"
-              label="Canvas menu"
-            >
-              <List />
-            </Dropdown.Trigger>
-            <Dropdown.Content>
-              <Dropdown.Group>
-                <Dropdown.Item onSelect={props.onLayers}>
-                  <Stack class="size-4" />
-                  {props.layers ? 'Hide layers' : 'Show layers'}
-                </Dropdown.Item>
-              </Dropdown.Group>
-            </Dropdown.Content>
-          </Dropdown>
-        </Toolbar>
-      </div>
+    <div class="pointer-events-none absolute bottom-4 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
       <Toolbar
         size="icon-md"
         aria-label="Drawing tools"
@@ -119,7 +49,7 @@ export function CanvasDrawingToolbar(props: {
                 label={`${tool.label} tool`}
                 shortcut={tool.key}
                 aria-pressed={props.tool === tool.id}
-                variant={props.tool === tool.id ? 'accent' : 'ghost'}
+                variant={props.tool === tool.id ? 'cta' : 'ghost'}
                 onClick={() => props.onTool(tool.id)}
               >
                 <Dynamic component={tool.icon} />
@@ -127,38 +57,46 @@ export function CanvasDrawingToolbar(props: {
             )}
           </For>
         </Toolbar.Group>
-        <Toolbar.Divider />
-        <Toolbar.Group>
-          <Toolbar.Button
-            label="Add media"
-            onClick={() => props.onInsert('media')}
-          >
-            <Image />
-          </Toolbar.Button>
-          <Toolbar.Button
-            label="Add document"
-            onClick={() => props.onInsert('document')}
-          >
-            <File />
-          </Toolbar.Button>
-          <Toolbar.Button
-            label="Add embed"
-            onClick={() => props.onInsert('embed')}
-          >
-            <Browsers />
-          </Toolbar.Button>
-        </Toolbar.Group>
-        <Toolbar.Divider />
-        <Toolbar.Button
-          label="Toggle history drawer"
-          aria-expanded={historyOpen()}
-          aria-controls={historyId}
-          onClick={() => setHistoryOpen((open) => !open)}
-        >
-          <CaretUp class={historyOpen() ? 'rotate-180' : ''} />
-        </Toolbar.Button>
       </Toolbar>
     </div>
+  );
+}
+
+export function CanvasHistoryControls(props: {
+  state: CanvasState;
+  onFocusCanvas: () => void;
+}) {
+  const hasHistory = () =>
+    props.state.session().canUndo || props.state.session().canRedo;
+  return (
+    <Show when={hasHistory()}>
+      <div class="flex items-center" role="group" aria-label="Canvas history">
+        <Button
+          size="icon-xs"
+          label="Undo"
+          hotkey={TOKENS.canvas.undo}
+          disabled={!props.state.session().canUndo}
+          onClick={() => {
+            props.state.editor.undo();
+            props.onFocusCanvas();
+          }}
+        >
+          <Undo />
+        </Button>
+        <Button
+          size="icon-xs"
+          label="Redo"
+          hotkey={TOKENS.canvas.redo}
+          disabled={!props.state.session().canRedo}
+          onClick={() => {
+            props.state.editor.redo();
+            props.onFocusCanvas();
+          }}
+        >
+          <Redo />
+        </Button>
+      </div>
+    </Show>
   );
 }
 

@@ -9,6 +9,7 @@ import { Show } from 'solid-js';
 import type { LayoutField } from '../core/selection-layout';
 import type { InspectorNumberScrub } from '../primitives/create-inspector-preview';
 import { CanvasAlignmentControls } from './arrange-controls';
+import { INSPECTOR_CONTROL_FRAME_CLASS } from './inspector-control-frame';
 import { InspectorNumberField } from './inspector-number-field';
 import { InspectorSection } from './inspector-section';
 
@@ -67,7 +68,10 @@ export function SelectionLayoutInspector(props: {
             onChange={(value) => props.onChange('rotation', value)}
             onScrub={() => props.onScrub('rotation')}
           />
-          <ButtonGroup size="icon-sm" class="w-full rounded-md bg-hover/50">
+          <ButtonGroup
+            size="icon-sm"
+            class={`w-full data-[orientation=horizontal]:rounded-lg ${INSPECTOR_CONTROL_FRAME_CLASS}`}
+          >
             <Button
               fullWidth
               class="bg-transparent"

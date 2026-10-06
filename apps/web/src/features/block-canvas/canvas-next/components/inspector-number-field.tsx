@@ -1,6 +1,7 @@
 import { InputGroup } from '@ui';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import type { InspectorNumberScrub } from '../primitives/create-inspector-preview';
+import { INSPECTOR_CONTROL_FRAME_CLASS } from './inspector-control-frame';
 
 /** A numeric control with a pointer-captured scrub handle and a single commit per drag. */
 export function InspectorNumberField(props: {
@@ -67,10 +68,7 @@ export function InspectorNumberField(props: {
     drag.scrub?.preview(value);
   };
   return (
-    <InputGroup
-      size="sm"
-      class="border-transparent bg-hover/50 hover:border-edge-muted has-[button:focus]:border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] has-[button:focus]:ring-2 has-[button:focus]:ring-edge-muted"
-    >
+    <InputGroup size="sm" class={INSPECTOR_CONTROL_FRAME_CLASS}>
       <InputGroup.Addon class="ps-0">
         <button
           type="button"

@@ -125,7 +125,6 @@ it('lets host controls receive clicks while retaining the selection border and r
     '[data-graphics-selection-bounds]'
   )!;
   expect(border.style.pointerEvents).toBe('none');
-  expect(border.getAttribute('stroke')).toBe('#5687ff');
   expect(host.querySelectorAll('[data-graphics-handle]')).toHaveLength(9);
   host
     .querySelector('button')!

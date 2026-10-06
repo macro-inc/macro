@@ -8,6 +8,7 @@ import {
   radiusHandles,
   rectangleRadius,
 } from '../core/radius';
+import { SELECTION_COLOR } from './selection-theme';
 
 /** Constant-size controls stay inside the shape even at zero corner radius. */
 export function RadiusHandles(props: {
@@ -50,6 +51,7 @@ export function RadiusHandles(props: {
     return points;
   });
   const radius = () => Number(rectangleRadius(props.item).toFixed(2));
+  const labelWidth = () => Math.max(28, String(radius()).length * 7 + 12);
   return (
     <For each={radiusHandles}>
       {(handle) => (
@@ -71,22 +73,33 @@ export function RadiusHandles(props: {
                 cy={point().y}
                 r="4"
                 fill="white"
-                stroke="#5687ff"
+                stroke={SELECTION_COLOR}
                 stroke-width="1"
               />
               <Show when={props.active === handle}>
-                <text
-                  x={point().x + 14}
-                  y={point().y - 12}
-                  fill="#5687ff"
-                  stroke="white"
-                  stroke-width="3"
-                  paint-order="stroke"
-                  font-size="12"
+                <g
+                  data-graphics-radius-label
+                  transform={`translate(${point().x + 12} ${point().y - 30})`}
                   style={{ 'pointer-events': 'none' }}
                 >
-                  {radius()}
-                </text>
+                  <rect
+                    width={labelWidth()}
+                    height="20"
+                    rx="5"
+                    fill={SELECTION_COLOR}
+                  />
+                  <text
+                    x={labelWidth() / 2}
+                    y="10"
+                    fill="white"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    font-size="12"
+                    font-weight="500"
+                  >
+                    {radius()}
+                  </text>
+                </g>
               </Show>
             </g>
           )}

@@ -131,29 +131,6 @@ export default function CanvasNextDocument(
           />
         </CanvasAncestry.Provider>
       </Show>
-      <div
-        role="status"
-        class="absolute bottom-1 right-3 text-xs text-ink-muted"
-      >
-        <Show
-          when={persistence()?.status() === 'error'}
-          fallback={
-            persistence()?.status() === 'saving' ||
-            persistence()?.status() === 'pending'
-              ? 'Saving…'
-              : ''
-          }
-        >
-          Could not save.{' '}
-          <button
-            type="button"
-            class="underline"
-            onClick={() => void persistence()?.flush()}
-          >
-            Retry
-          </button>
-        </Show>
-      </div>
     </div>
   );
   return props.children

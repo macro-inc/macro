@@ -87,8 +87,6 @@ function CanvasBlockEmbedContent(props: CanvasEmbedViewProps) {
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
     history: () => [],
-    getUrlSegments: () => [],
-    getUrl: () => '',
     meta: () => undefined,
     updateMeta: undefined,
     referredFrom: () => null,
@@ -96,6 +94,7 @@ function CanvasBlockEmbedContent(props: CanvasEmbedViewProps) {
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,
+    updateCurrentEntry: () => {},
   };
   const panel: SplitPanelContextType = {
     handle,

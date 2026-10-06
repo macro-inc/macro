@@ -22,7 +22,8 @@ non-document entity cards, subpath references, connector labels, invalid records
 and interleaved group layers offer **Open in legacy editor** without writing data.
 There is no version 2-to-legacy downgrade. Document-level read-only mode mounts a
 navigation-only surface without editing, paste/drop, or embedded editing handlers.
-Saves are debounced and serialized; failures keep edits dirty and show **Retry**.
+Saves are debounced and serialized; failures keep edits dirty. Save state is not
+shown in the canvas UI.
 
 SyncService integration and collaboration remain a follow-up. This change keeps
 the existing whole-file save behavior. See [Graphics and Canvas parity](../../../../../../docs/GRAPHICS_PARITY.md)
@@ -40,7 +41,7 @@ Camera zoom limits still apply; padding decreases for small embedded viewports.
 Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.002 exponential rate
 per normalized wheel pixel and an exponent cap of 0.2 per event (about 22% zoom-in).
 Plain wheel input pans at its existing speed.
-The Design panel's zoom menu offers **No snapping** (the default for each session),
+The Canvas panel's zoom menu offers **No snapping** (the default for each session),
 **Snap to px** (1 canvas px at every zoom), and **Auto snapping** (the smallest
 currently visible dot-grid interval, including faint dots). Auto follows zoom;
 hiding the grid temporarily disables it. Drawing, moving, resizing, insertion, duplication, pasting, free
@@ -100,10 +101,10 @@ converts rectangles, ellipses, text, freedraw and line/arrow elements, rebuilds
 flat `groupIds` membership into the nested local-transform tree, folds
 container-bound text into shape or connector labels, and keeps arrow bindings
 that resolve to imported shapes. Diamonds are approximated as rectangles; images,
-frames and embeddables are dropped. The status line reports the imported, approximated and
-unsupported counts. Hachure/fill styles, roughness and multi-point line bends are
-not represented. Connectors import as straight unless both endpoints bind to
-imported shapes; doubly bound connectors retain their straight, smooth or elbow route.
+frames and embeddables are dropped. Hachure/fill styles, roughness and multi-point
+line bends are not represented. Connectors import as straight unless both endpoints
+bind to imported shapes; doubly bound connectors retain their straight, smooth or
+elbow route.
 
 Option-drag duplicates the selected roots (or selects and duplicates the clicked
 shape). It is a cancellable preview; originals stay put and retain their DOM.
@@ -306,13 +307,13 @@ in this checkpoint.
 
 ## Media and document cards
 
-Add media accepts local images/videos (including HEIC conversion through the shared
-uploader) and existing workspace media. Native file drop, image clipboard paste,
-and workspace entity drag/drop use the same insertion path. Media is naturally
+The toolbar media insertion control is currently hidden pending a UI redesign.
+Native file drop, image clipboard paste, and workspace entity drag/drop continue
+to use the existing insertion path. Media is naturally
 sized, fitted within 640 × 480 world units, and inserted in one undo step per batch.
 Uploading/loading is host-owned; only stable static-file or document references
-enter the scene. Reset/unmount invalidates pending insertion. Failures are shown in
-the status line. Saved Canvas Next documents retain stable uploaded references;
+enter the scene. Reset/unmount invalidates pending insertion. Saved Canvas Next
+documents retain stable uploaded references;
 uploads use the existing static file service. Existing workspace file selection
 does not create a new file.
 
@@ -321,20 +322,21 @@ core. The host resolves URLs through existing queries. Images support border,
 opacity, radius, transformations (including flips), grouping, order and clipboard.
 Select a video and use Play/Pause video in the inspector; playback is local state.
 
-Add document inserts a document reference rendered with `DocumentPreviewContent`
-in a 340 × 136 card, one surface layer above its parent and inserted at the front
-of the scene. Card text uses `text-base` and reflows at its actual width;
-resizing no longer scales a 320px snapshot. Titles, menus and task controls remain
-interactive; dragging the card background moves it. Select the card and use Open document. Workspace drops and pasted Macro
-links also insert document cards. Preview loading/errors stay inside the card's
+Workspace document drops insert a document reference rendered with
+`DocumentPreviewContent` in a 340 × 136 card, one surface layer above its parent
+and inserted at the front of the scene. Card text uses `text-base` and reflows at
+its actual width; resizing no longer scales a 320px snapshot. Titles, menus and
+task controls remain interactive; dragging the card background moves it. Select
+the card and use Open document. Workspace drops and pasted Macro links also insert
+document cards. Preview loading/errors stay inside the card's
 Suspense/ErrorBoundary. Loading shows a pulsing icon dot and two title skeleton
-lines, shared with DocumentPreview. Signed URLs, query results, media players, preview contents,
-and upload state are never stored in core. SVG-to-editable-shape conversion is not
-part of this checkpoint; SVG files can be inserted as images.
+lines, shared with DocumentPreview. Signed URLs, query results, media players,
+preview contents, and upload state are never stored in core. SVG-to-editable-shape
+conversion is not part of this checkpoint; SVG files can be inserted as images.
 
 
-Add embed inserts a full Markdown document or existing canvas editor at 640 × 480.
-A document card can switch between preview and embed in the inspector. Double-click
+New embed insertion is not currently exposed in the toolbar. An existing document
+card can switch between preview and embed in the inspector. Double-click
 an embed or choose Interact to enter; Done, Escape, or a click elsewhere on this
 canvas returns input to the outer canvas. Resizing changes the editor viewport.
 The embedded block stays mounted when entering/leaving interaction mode.

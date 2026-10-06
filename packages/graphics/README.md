@@ -135,6 +135,8 @@ in whole-pixel steps independent of scene snapping, with a half-short-side clamp
 ephemeral preview, cancellation, and one
 history commit. Geometry and pose stay unchanged. The controls follow affine parent
 transforms while their visual size stays fixed on screen.
+During a radius drag, the active handle shows the whole-pixel value as white text
+on the filled selection-color badge.
 Each target spans 10 screen pixels across the edge at any zoom. Visible corner
 handles take priority where they overlap the edge targets.
 Handles stay square to the screen. Top/bottom edges use `ns-resize`; side edges use

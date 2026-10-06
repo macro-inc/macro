@@ -2345,7 +2345,8 @@ text formatting, labels, groups and connectors. Unsupported legacy content shows
 **Open in legacy editor** without saving a migration. Version 2 files require
 Canvas Next and cannot be opened by the legacy editor when the flag is off.
 Read-only documents show a pan/zoom surface with **Fit canvas** and no drawing
-controls. Failed saves show **Retry**. SyncService integration is a follow-up.
+controls. Save progress and failures are not shown in the canvas UI. SyncService
+integration is a follow-up.
 
 Smoke test the rollout with a disposable file: open legacy JSON, edit once,
 reload, and verify the edit remains. Disable the flag and reopen the saved file;
@@ -2362,10 +2363,10 @@ capped at the same factor. Plain wheel input still pans. Check small trackpad
 movements, coarse wheel ticks, and reversing direction without the anchor drifting.
 
 The bottom-center drawing toolbar uses icon buttons with tooltips and sits above
-the inspector when they overlap. It also contains Add media, Add document, and Add
-embed. Its trailing Toggle history drawer button opens/closes the attached bar above
-it, which contains Undo, Redo, and Canvas menu (Show/Hide layers).
-The zoom percentage in the Design panel header opens the standard dropdown and
+the inspector when they overlap. Media, document, and embed insertion buttons are
+currently hidden pending a redesigned insertion UI. The active drawing tool uses
+the filled CTA treatment.
+The zoom percentage in the Canvas panel header opens the standard dropdown and
 remains visible with or without a selection. Its sections contain Zoom In
 and Zoom Out (Cmd+= / Cmd+-, with Zoom In displayed as Cmd++), plus Zoom to fit
 (period) in the first group. The next group contains 25/50/100/200% presets, then Toggle
@@ -2395,13 +2396,13 @@ Fit scene centers the overall scene geometry in the current canvas viewport,
 independent of selection. It zooms in or out until the width or height fills the
 available space with 100 screen pixels of padding per side, within the camera's
 zoom limits. Padding shrinks for small embedded viewports.
-The Design inspector is visible on the right unless the block information panel
-is open. Show layers in Canvas menu toggles the floating left Layers panel. The
-Design inspector is a rounded floating right panel, inset from the canvas edges,
+The Canvas inspector is visible on the right unless the block information panel
+is open. It is a rounded floating right panel, inset from the canvas edges,
 with a fixed width and header. It expands to the available height with a scrolling
 body when an object is selected, and collapses to its header when the selection is
 cleared. Opening the block information panel hides it; closing that panel restores
-it. Fit scene always reserves its width. Sections follow Position, Layout, Appearance, Fill,
+it. Undo and Redo sit immediately to the right of Canvas in the header and remain
+hidden until document history exists. Fit scene always reserves its width. Sections follow Position, Layout, Appearance, Fill,
 Stroke, Connection, Typography, skipping inapplicable sections without reordering
 the rest. Position, Layout, and Appearance stay at the top across selection types.
 Position offers compact horizontal and vertical alignment button groups, distribution
@@ -2537,7 +2538,8 @@ whole number no greater than half the shorter side. Release commits one undo ste
 Escape, pointer cancellation, or blur restores the starting radius. Test a rotated
 rectangle inside a scaled group as well. Controls stay the same screen size, merge
 when they overlap at a pill/circle radius, and hide when the shape is too small on
-screen. Radius controls are not shown for groups, multi-selections, or other shapes.
+screen. During a drag, the radius value uses white text on a filled selection-color
+badge. Radius controls are not shown for groups, multi-selections, or other shapes.
 Option/Alt anchors the center; Shift preserves
 proportions, including shrinking. Incompatible descendant rotations force uniform
 scaling for both edge and corner drags, preventing new shear. Dragging through zero
@@ -2552,8 +2554,7 @@ the same core selection frame.
 The right inspector edits fill, stroke, width, opacity, and rectangle radius;
 mixed selections show Mixed values. Group styling applies to descendant shapes.
 Styles also become creation defaults. Arrange offers six alignments, horizontal
-and vertical equal-gap distribution, grouping, and stable layer changes. The
-Layers list selects items; Shift-click toggles selection. Keyboard clipboard
+and vertical equal-gap distribution, grouping, and stable layer changes. Keyboard clipboard
 round-trips Canvas Next shape/group/rich-text fragments. Plain/HTML text pasted
 onto the canvas creates a text shape.
 
@@ -2653,14 +2654,12 @@ endpoints bind to imported shapes; doubly bound connectors retain their route.
 
 ### Canvas Next media and document cards
 
-In a flagged Canvas Next document, Add media offers an upload input and a searchable
-list of existing workspace images/videos. Selecting an existing file inserts its
-reference without uploading again. File drop and pasted images use the same
-insertion path; uploads go to the existing static-file service. Select a video and
-use Play/Pause video in the inspector.
+The toolbar insertion controls are currently hidden pending a UI redesign. File
+drop and pasted images still insert through the existing static-file service.
+Select a video and use Play/Pause video in the inspector.
 
-Add document inserts workspace files as compact 340 × 136 preview cards, one
-surface layer above the canvas and at the front of the scene. Select a card and
+Workspace document drops insert compact 340 × 136 preview cards, one surface layer
+above the canvas and at the front of the scene. Select a card and
 use Open document to navigate to its source. Preview text stays at `text-base`
 when resizing; titles and controls are clickable, and dragging its background
 moves the card. While loading, the card keeps its frame and shows a pulsing icon
@@ -2669,16 +2668,15 @@ popups use the same skeleton. Workspace entity drops insert
 images/videos or document cards as appropriate; pasted Macro links create cards.
 
 Verify move/resize/rotate/flip, grouping, layer order, copy/paste and undo work for
-these items; failures show in the status line or the individual preview. Navigating
-away cancels pending insertion and does not delete any uploaded file. SVG files
-render as media, not editable imported shapes.
+these items. Navigating away cancels pending insertion and does not delete any
+uploaded file. SVG files render as media, not editable imported shapes.
 
 
 ### Canvas Next full embeds
 
-Add embed lists existing Markdown documents and canvases. Insert one, then choose
-Interact (or double-click the inactive editor) to use its full editor inside the
-card. Done, Escape, or clicking elsewhere on the outer canvas exits interaction.
+New embed insertion is not currently exposed in the toolbar. For existing embeds,
+choose Interact (or double-click the inactive editor) to use the full editor inside
+the card. Done, Escape, or clicking elsewhere on the outer canvas exits interaction.
 The inspector switches a supported reference between preview and full embed.
 Verify that embedded clicks, text selection, scrolling, and clipboard shortcuts
 do not move or paste into the outer canvas. Verify resizing reflows the viewport,

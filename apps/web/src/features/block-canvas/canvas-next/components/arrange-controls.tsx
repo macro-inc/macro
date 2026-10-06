@@ -10,6 +10,7 @@ import ArrowsVertical from '@phosphor/arrows-vertical.svg';
 import { Button, ButtonGroup } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { INSPECTOR_CONTROL_FRAME_CLASS } from './inspector-control-frame';
 
 export function CanvasAlignmentControls(props: {
   count: number;
@@ -36,7 +37,10 @@ export function CanvasAlignmentControls(props: {
           }
         >
           {(alignments) => (
-            <ButtonGroup size="icon-sm" class="w-full rounded-md bg-hover/50">
+            <ButtonGroup
+              size="icon-sm"
+              class={`w-full data-[orientation=horizontal]:rounded-lg ${INSPECTOR_CONTROL_FRAME_CLASS}`}
+            >
               <For each={alignments}>
                 {([alignment, icon]) => (
                   <>
@@ -57,7 +61,10 @@ export function CanvasAlignmentControls(props: {
         </For>
       </div>
       <Show when={props.count >= 3}>
-        <ButtonGroup size="icon-sm">
+        <ButtonGroup
+          size="icon-sm"
+          class={`data-[orientation=horizontal]:rounded-lg ${INSPECTOR_CONTROL_FRAME_CLASS}`}
+        >
           <Button
             label="Distribute horizontal"
             disabled={props.count < 3}

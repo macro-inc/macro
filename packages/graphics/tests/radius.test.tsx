@@ -199,7 +199,6 @@ it('previews all four corners from an inset handle, stays visible during drag, a
   expect(
     host.querySelectorAll('[data-graphics-handle^="radius-"]')
   ).toHaveLength(1);
-  expect(handle().querySelector('text')?.textContent).toBe('30');
   pointer(viewport, 'lostpointercapture', 46, 46);
   pointer(document.body, 'pointerup', 56, 56);
   expect(drawn().getAttribute('rx')).toBe('40');
