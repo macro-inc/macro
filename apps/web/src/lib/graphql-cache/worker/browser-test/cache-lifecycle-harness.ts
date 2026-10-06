@@ -1,9 +1,16 @@
-import { type Client, createClient, gql, stringifyDocument } from '@urql/core';
+import {
+  type Client,
+  CombinedError,
+  createClient,
+  gql,
+  stringifyDocument,
+} from '@urql/core';
 import { filter, map, pipe } from 'wonka';
 import { normalizedCacheExchange } from '../../exchange/normalized-cache-exchange';
 import type { CacheHost } from '../../host/types';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import { clearRegisteredCaches, registerCacheHost } from '../../lifecycle';
+import type { MutationSettlement } from '../../protocol';
 
 const result = document.querySelector<HTMLElement>('#result');
 if (!result) throw new Error('missing Cache result node');
@@ -226,6 +233,120 @@ const api = {
       'runnable on restore'
     );
     return queued.transactionId;
+  },
+  async seedRetryBudget(): Promise<string[]> {
+    const host = requireOwner();
+    const nowMs = Date.now();
+    const owner = 'retry-budget-seed';
+    const mutation = `mutation RetryBudget($input: SetEntityPropertyInput!) {
+      setEntityProperty(input: $input) { id displayName }
+    }`;
+    const enqueue = (id: string) =>
+      host.enqueueOptimisticMutation(
+        {
+          uuid: crypto.randomUUID(),
+          query: mutation,
+          variables: {
+            input: {
+              entityType: 'DOCUMENT',
+              entityId: id,
+              propertyDefinitionId: 'definition',
+              value: { string: id },
+            },
+          },
+          data: { setEntityProperty: { id, displayName: id } },
+        },
+        { owner, nowMs, leaseExpiresAtMs: nowMs + 300_000 }
+      );
+    const first = await enqueue('failing-property');
+    const second = await enqueue('following-property');
+    if (first.initialClaim.kind !== 'claimed')
+      throw new Error('missing first claim');
+    let claim = first.initialClaim.mutation;
+    for (let failure = 0; failure < 9; failure += 1) {
+      await host.deferOptimisticWrite(
+        first.transactionId,
+        { owner, generation: claim.leaseGeneration },
+        nowMs,
+        'server failure',
+        true
+      );
+      if (failure < 8) {
+        const next = await host.claimNextMutation(
+          owner,
+          nowMs,
+          nowMs + 300_000
+        );
+        if (!next) throw new Error('missing retry claim');
+        claim = next;
+      }
+    }
+    // Transport failure after nine server failures must preserve the budget.
+    const network = await host.claimNextMutation(owner, nowMs, nowMs + 300_000);
+    if (!network || network.serverFailureCount !== 9)
+      throw new Error('budget not persisted');
+    await host.deferOptimisticWrite(
+      first.transactionId,
+      { owner, generation: network.leaseGeneration },
+      nowMs,
+      'offline',
+      false
+    );
+    return [first.transactionId, second.transactionId];
+  },
+  async exhaustRetryBudget(): Promise<{
+    attempts: number;
+    settlements: MutationSettlement[];
+  }> {
+    const host = requireOwner();
+    const complete = Promise.withResolvers<void>();
+    const settlements: MutationSettlement[] = [];
+    let attempts = 0;
+    const unsubscribe = host.onMutationSettled((settlement) => {
+      settlements.push(settlement);
+      if (settlements.length === 2) complete.resolve();
+    });
+    mutationRunner = createClient({
+      url: 'http://cache-lifecycle.test/graphql',
+      exchanges: [
+        normalizedCacheExchange(host, { shouldRetryMutation: () => true }),
+        () => (operations) =>
+          pipe(
+            operations,
+            filter((operation) => operation.kind === 'mutation'),
+            map((operation) => {
+              attempts += 1;
+              return {
+                operation,
+                ...(attempts === 1
+                  ? {
+                      error: new CombinedError({
+                        graphQLErrors: [
+                          {
+                            message: 'persistent failure',
+                            extensions: { retryable: true },
+                          },
+                        ],
+                      }),
+                    }
+                  : {
+                      data: {
+                        setEntityProperty: {
+                          id: 'following-property',
+                          displayName: 'Synced',
+                        },
+                      },
+                    }),
+                stale: false,
+                hasNext: false,
+              };
+            })
+          ),
+      ],
+    });
+    await complete.promise;
+    unsubscribe();
+    return { attempts, settlements };
   },
   navigationState() {
     return {
