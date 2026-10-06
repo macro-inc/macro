@@ -373,12 +373,50 @@ fn distinct_keeps_the_first_of_equal_rows_after_sorting() {
 }
 
 #[test]
-fn distinct_over_aggregates_changes_nothing() {
+fn distinct_keeps_different_group_keys() {
     let plan =
         plan("SELECT DISTINCT stage, COUNT(*) FROM crm.deals GROUP BY stage ORDER BY 2 DESC");
     let (rows, ids) = fold_relations(&catalog(), &plan, vec![deals()]);
     assert_eq!(rows.len(), 3);
     assert_eq!(ids, Vec::<RowId>::new());
+}
+
+#[test]
+fn distinct_aggregate_results_are_deduplicated_before_limit_and_offset() {
+    use crate::engine::{Engine, Step};
+    use crate::run::Page;
+
+    for (window, expected) in [
+        (
+            "",
+            vec![vec![Some(Cell::Number(1.0))], vec![Some(Cell::Number(2.0))]],
+        ),
+        ("LIMIT 1 OFFSET 1", vec![vec![Some(Cell::Number(2.0))]]),
+        ("LIMIT 1 OFFSET 2", vec![]),
+    ] {
+        let sql = format!(
+            "SELECT DISTINCT COUNT(*) AS total FROM crm.deals \
+             GROUP BY stage ORDER BY total {window}"
+        );
+        let (mut engine, step) = Engine::start(&catalog(), &sql).unwrap();
+        let Step::Fetch(request) = step else {
+            panic!("expected rows for distinct groups");
+        };
+        let Step::Done(outcome) = engine
+            .feed_page(
+                request.id,
+                Page {
+                    rows: deals(),
+                    next: None,
+                },
+            )
+            .unwrap()
+        else {
+            panic!("expected a completed read");
+        };
+        assert_eq!(outcome.rows, expected, "{sql}");
+        assert!(outcome.row_ids.is_empty());
+    }
 }
 
 #[test]

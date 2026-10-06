@@ -155,7 +155,7 @@ fn fold_joined(catalog: &Catalog, plan: &Plan, rows: Vec<Row>) -> (Table, Vec<Ro
                 (row.id, cells)
             });
             let (ids, table): (Vec<RowId>, Table) = if plan.distinct {
-                window(plan, distinct(projected)).unzip()
+                window(plan, distinct(projected, |(_, cells)| cells)).unzip()
             } else {
                 window(plan, projected).unzip()
             };
@@ -164,6 +164,11 @@ fn fold_joined(catalog: &Catalog, plan: &Plan, rows: Vec<Row>) -> (Table, Vec<Ro
         Shape::Aggregate { group_by, items } => {
             let mut groups = aggregate::groups(rows, *group_by, items);
             sort::groups(catalog, plan, &mut groups, *group_by, items);
+            let groups = if plan.distinct {
+                distinct(groups.into_iter(), |group| &group.cells).collect()
+            } else {
+                groups
+            };
             (
                 window(plan, groups.into_iter().map(|group| group.cells)).collect(),
                 Vec::new(),
@@ -179,13 +184,14 @@ fn window<Item>(plan: &Plan, rows: impl Iterator<Item = Item>) -> impl Iterator<
 }
 
 /// Keep the first of every set of equal result rows, in order.
-fn distinct(
-    rows: impl Iterator<Item = (RowId, Vec<Option<Cell>>)>,
-) -> impl Iterator<Item = (RowId, Vec<Option<Cell>>)> {
+fn distinct<Item>(
+    rows: impl Iterator<Item = Item>,
+    cells: impl Fn(&Item) -> &[Option<Cell>],
+) -> impl Iterator<Item = Item> {
     let mut seen: HashSet<Vec<Option<CellKey>>> = HashSet::new();
-    rows.filter(move |(_, cells)| {
+    rows.filter(move |row| {
         seen.insert(
-            cells
+            cells(row)
                 .iter()
                 .map(|cell| cell.as_ref().map(CellKey::from))
                 .collect(),
