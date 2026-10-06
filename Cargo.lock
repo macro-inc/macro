@@ -17320,6 +17320,8 @@ dependencies = [
  "model-entity",
  "model_owner",
  "rootcause",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "uuid",
  "workspace-hack",
