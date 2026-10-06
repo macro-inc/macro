@@ -1,5 +1,12 @@
-//! Actual review -> edited tool execution -> PostgreSQL -> public booking HTTP API.
-use super::*;
+//! Confirmed tool execution -> PostgreSQL -> public booking HTTP API.
+use ai_toolset::RequestContext;
+use macro_user_id::user_id::MacroUserIdStr;
+use serde_json::{Value, json};
+use std::sync::Arc;
+
+fn owner() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("owner@macro.com").unwrap()
+}
 use ai_toolset::ToolSet;
 use calendar_scheduling::{
     domain::{models::*, ports::*, service::Service},
@@ -73,57 +80,25 @@ fn args() -> Value {
         "schedule":{"name":"Working hours", "timeZone":"UTC", "weekly":(0..7).map(|day| json!({"day":day, "windows":[{"start":"09:00", "end":"17:00"}]})).collect::<Vec<_>>(), "overrides":[]}
     }})
 }
-async fn review(
-    context: Context,
-    tool: &str,
-    args: Value,
-    outcome: ReviewOutcome,
-) -> FinishedUserTool {
-    let tools = Arc::new(booking_link_toolset());
-    let deferred = tools
-        .try_tool_call(context.clone(), RequestContext::new(owner()), tool, &args)
+async fn execute(context: Context, tool: &str, args: Value) -> Result<Value, String> {
+    booking_link_toolset()
+        .try_tool_call(context, RequestContext::new(owner()), tool, &args)
         .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(deferred, json!("PendingUserExecution"));
-    let reviewer = Arc::new(Scripted {
-        asked: Mutex::new(vec![]),
-        answer: Ok(outcome),
-    });
-    user_tool_finisher(tools, context, owner(), reviewer, CancellationToken::new())(
-        PendingUserTool {
-            tool_name: tool.into(),
-            tool_call_id: "booking-link-call".into(),
-            args,
-        },
-    )
-    .await
-    .unwrap()
-}
-fn accept(args: Value) -> ReviewOutcome {
-    ReviewOutcome::Accepted(BTreeMap::from([(
-        DRAFT_FIELD.into(),
-        Value::String(args.to_string()),
-    )]))
-}
-fn saved(result: FinishedUserTool) -> Value {
-    let FinishedUserTool::Result(value) = result else {
-        panic!("expected saved link: {result:?}")
-    };
-    value["UserAction"].clone()
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
 }
 
 #[sqlx::test(migrations = false)]
-async fn edited_review_is_saved_and_bookable_without_touching_other_links(pool: sqlx::PgPool) {
+async fn confirmed_booking_is_saved_and_bookable_without_touching_other_links(pool: sqlx::PgPool) {
     sqlx::raw_sql("CREATE TABLE \"User\" (id text PRIMARY KEY); CREATE TABLE team (id uuid PRIMARY KEY); INSERT INTO \"User\" VALUES ('macro|owner@macro.com');").execute(&pool).await.unwrap();
     sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260918164303_calendar_scheduling.sql"
+        "../../../macro_db_client/migrations/20260918164303_calendar_scheduling.sql"
     ))
     .execute(&pool)
     .await
     .unwrap();
     sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260918175703_scheduling_recovery.sql"
+        "../../../macro_db_client/migrations/20260918175703_scheduling_recovery.sql"
     ))
     .execute(&pool)
     .await
@@ -137,8 +112,16 @@ async fn edited_review_is_saved_and_bookable_without_touching_other_links(pool: 
         service: service.clone(),
         public_origin: "https://booking.example.test".into(),
     };
-    for outcome in [ReviewOutcome::Declined, ReviewOutcome::Cancelled] {
-        review(context.clone(), "CreateBookingLink", args(), outcome).await;
+    for confirmation in [None, Some(" ")] {
+        let mut unconfirmed = args();
+        if let Some(quote) = confirmation {
+            unconfirmed["userConfirmation"] = json!(quote);
+        }
+        assert!(
+            execute(context.clone(), "CreateBookingLink", unconfirmed)
+                .await
+                .is_err()
+        );
         assert!(
             service
                 .settings(owner().as_ref(), None)
@@ -148,18 +131,16 @@ async fn edited_review_is_saved_and_bookable_without_touching_other_links(pool: 
                 .is_empty()
         );
     }
-    let mut invalid = args();
+    let mut edited = args();
+    edited["userConfirmation"] = json!("Yes, create that booking link.");
+    edited["draft"]["event"]["title"] = json!("Reviewed title");
+    let mut invalid = edited.clone();
     invalid["draft"]["event"]["durationMinutes"] = json!(0);
-    assert!(matches!(
-        review(
-            context.clone(),
-            "CreateBookingLink",
-            args(),
-            accept(invalid)
-        )
-        .await,
-        FinishedUserTool::Error(_)
-    ));
+    assert!(
+        execute(context.clone(), "CreateBookingLink", invalid)
+            .await
+            .is_err()
+    );
     assert!(
         service
             .settings(owner().as_ref(), None)
@@ -168,65 +149,34 @@ async fn edited_review_is_saved_and_bookable_without_touching_other_links(pool: 
             .event_types
             .is_empty()
     );
-    let mut edited = args();
-    edited["draft"]["event"]["title"] = json!("Reviewed title");
-    let first = saved(
-        review(
-            context.clone(),
-            "CreateBookingLink",
-            args(),
-            accept(edited.clone()),
-        )
-        .await,
-    );
+    let first = execute(context.clone(), "CreateBookingLink", edited.clone())
+        .await
+        .unwrap();
     assert_eq!(first["draft"]["event"]["title"], "Reviewed title");
-    let retry = saved(
-        review(
-            context.clone(),
-            "CreateBookingLink",
-            edited.clone(),
-            accept(edited.clone()),
-        )
-        .await,
-    );
+    let retry = execute(context.clone(), "CreateBookingLink", edited.clone())
+        .await
+        .unwrap();
     assert_eq!(first, retry);
-    let mut other = args();
+    let mut other = edited.clone();
     other["draft"]["event"]["slug"] = json!("other");
-    let second = saved(
-        review(
-            context.clone(),
-            "CreateBookingLink",
-            other.clone(),
-            accept(other),
-        )
-        .await,
-    );
+    let second = execute(context.clone(), "CreateBookingLink", other)
+        .await
+        .unwrap();
     let before = service.settings(owner().as_ref(), None).await.unwrap();
-    let edit = json!({"teamId":null, "eventTypeId":first["eventTypeId"], "expectedRevision":second["revision"], "draft":edited["draft"]});
+    let edit = json!({"teamId":null, "eventTypeId":first["eventTypeId"], "expectedRevision":second["revision"], "draft":edited["draft"], "userConfirmation":"Yes, change the duration to 45 minutes."});
     let mut accepted = edit.clone();
     accepted["draft"]["event"]["durationMinutes"] = json!(45);
-    let updated = saved(
-        review(
-            context.clone(),
-            "EditBookingLink",
-            edit.clone(),
-            accept(accepted),
-        )
-        .await,
-    );
+    let updated = execute(context.clone(), "EditBookingLink", accepted)
+        .await
+        .unwrap();
     assert_eq!(updated["eventTypeId"], first["eventTypeId"]);
     let after = service.settings(owner().as_ref(), None).await.unwrap();
     assert_eq!(before.event_types[1], after.event_types[1]);
-    assert!(matches!(
-        review(
-            context.clone(),
-            "EditBookingLink",
-            edit.clone(),
-            accept(edit)
-        )
-        .await,
-        FinishedUserTool::Error(_)
-    ));
+    assert!(
+        execute(context.clone(), "EditBookingLink", edit)
+            .await
+            .is_err()
+    );
     let app: axum::Router = router(RouterState::new(
         service.clone(),
         MacroAuthorizationState::new(Arc::new(NoAuth)),

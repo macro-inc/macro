@@ -192,6 +192,7 @@ async function generateToolsFile(schema: FrontendSchemas) {
 
 import type { ResultError } from '@core/util/result';
 import { err, ok, type Result } from 'neverthrow';
+import { bookingLinkHistory } from '../../booking-link-history';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -247,7 +248,7 @@ function deserializeTool<T extends NamedTool>(
     return err([{ code: 'not_found', message: \`tool name not found \${tool.name}\` }]);
   }
   const parser = toolParserMap[tool.name as ToolName];
-  const maybeToolCall = parser[direction].safeParse(tool.json);
+  const maybeToolCall = parser[direction].safeParse(bookingLinkHistory(tool.name, direction, tool.json));
   if (maybeToolCall.success) {
     return ok({
       id: tool.id,
