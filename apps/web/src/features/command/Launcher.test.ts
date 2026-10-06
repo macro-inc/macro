@@ -18,6 +18,7 @@ vi.mock(
   () => ({})
 );
 vi.mock('@app/features/block-ai/queries/create-ai', () => ({}));
+vi.mock('@app/features/block-psd/queries/create-psd', () => ({}));
 vi.mock('@app/features/block-fig/queries/create-fig', () => ({}));
 vi.mock('@app/features/block-spreadsheet/queries/spreadsheet-access', () => ({
   isSpreadsheetEnabledForCurrentUser: () => true,
@@ -38,6 +39,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableDatabases: 'databases',
   enableFigViewer: 'fig',
   enableProjects: 'projects',
+  enablePsdEditor: 'psd',
   enableReminders: 'reminders',
   enableSnippets: 'snippets',
   isFeatureEnabled: (flag: string) => flag !== 'agents' || flags.agents,

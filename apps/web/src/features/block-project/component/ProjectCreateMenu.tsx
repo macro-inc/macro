@@ -1,5 +1,6 @@
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
+import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
@@ -11,6 +12,7 @@ import {
   enableAiEditor,
   enableChatV3Agents,
   enableFigViewer,
+  enablePsdEditor,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
@@ -159,6 +161,22 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     },
   },
   {
+    label: 'Photoshop file',
+    blockName: 'psd' as BlockName,
+    hotkeyToken: TOKENS.create.photoshop,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="psd" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createPsdDocument({ projectId, source: 'project' });
+      if (!id) throw new Error('Failed to create Photoshop file');
+      return id;
+    },
+  },
+  {
     label: 'Design',
     blockName: 'fig' as BlockName,
     hotkeyToken: TOKENS.create.design,
@@ -281,6 +299,7 @@ function ProjectCreateDialog(props: {
   const spreadsheetAccess = useSpreadsheetAccess();
   const offered = (spec: CreateBlockSpec) => {
     if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+    if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
     if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
     if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
     return true;
@@ -350,6 +369,7 @@ function MenuContent(props: { projectId: string; name: string }) {
   const spreadsheetAccess = useSpreadsheetAccess();
   const offered = (spec: CreateBlockSpec) => {
     if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+    if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
     if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
     if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
     return true;

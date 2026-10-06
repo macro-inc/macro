@@ -23,7 +23,7 @@ clap = { workspace = true, optional = true }
 # The Figma engine supplies the shared design foundation: fonts (the
 # registry and glyph outlines), boolean path operations, image decoding,
 # and the JPEG encoder.
-fig_engine = { path = "../fig_engine" }
+fig_engine = { path = "../fig_engine", default-features = false }
 miniz_oxide = { workspace = true }
 png = { workspace = true }
 ruzstd = { workspace = true }
