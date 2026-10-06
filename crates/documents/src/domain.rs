@@ -25,6 +25,10 @@ pub mod starter;
 #[cfg(feature = "ports")]
 pub mod upload_finalize;
 
+/// Legacy Office (.doc/.ppt/.xls) upgrades to OpenXML.
+#[cfg(feature = "ports")]
+pub mod legacy_office_upgrade;
+
 pub mod models;
 #[cfg(feature = "axum")]
 pub mod permission_token;

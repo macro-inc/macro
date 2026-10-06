@@ -4877,6 +4877,7 @@
       "crates/macro_env_var",
       "crates/macro_event_broker",
       "crates/macro_event_topics",
+      "crates/macro_queues",
       "crates/macro_service_urls",
       "crates/macro_sync_service_jwt",
       "crates/macro_tower_layers",

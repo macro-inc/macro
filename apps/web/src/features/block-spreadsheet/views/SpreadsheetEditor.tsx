@@ -529,9 +529,16 @@ export function SpreadsheetEditor(props: {
 
   async function importFile(file: File | undefined) {
     if (!file || !editable()) return;
+    if (/\.xls$/i.test(file.name)) {
+      // Converting .xls to .xlsx needs the server; uploads are upgraded.
+      actions.setNotice(
+        'Legacy .xls workbooks are converted when uploaded. Upload the file, then choose Edit in Macro.'
+      );
+      return;
+    }
     if (!/\.(csv|xlsx)$/i.test(file.name)) {
       actions.setNotice(
-        'Choose a .csv or .xlsx file. Legacy .xls and macro-enabled workbooks are not supported.'
+        'Choose a .csv or .xlsx file. Macro-enabled workbooks are not supported.'
       );
       return;
     }
