@@ -38,10 +38,10 @@ fn paste_copies_what_a_cut_deleted() {
     let mut h = History::new();
     let id = h
         .apply(&mut d, &[square(10.0, 10.0)], None)
-        .unwrap()
+        .expect("creates")
         .created[0];
     h.apply(&mut d, &[Op::Delete { ids: vec![id] }], None)
-        .unwrap();
+        .expect("deletes");
     assert!(!layer_children(&d).contains(&id));
 
     let pasted = h
@@ -54,9 +54,9 @@ fn paste_copies_what_a_cut_deleted() {
             }],
             None,
         )
-        .unwrap();
+        .expect("pastes");
     assert_eq!(pasted.created.len(), 1);
-    let copy = d.find(pasted.created[0]).unwrap();
+    let copy = d.find(pasted.created[0]).expect("the copy");
     assert!(!d.node(copy).removed);
     assert_eq!(
         node_bounds(&d, copy),
@@ -73,16 +73,11 @@ fn paste_copies_what_a_cut_deleted() {
 fn paste_keeps_the_order_and_copies_groups_whole() {
     let mut d = doc();
     let mut h = History::new();
-    let a = h.apply(&mut d, &[square(0.0, 0.0)], None).unwrap().created[0];
-    let b = h.apply(&mut d, &[square(50.0, 0.0)], None).unwrap().created[0];
-    let c = h
-        .apply(&mut d, &[square(100.0, 0.0)], None)
-        .unwrap()
-        .created[0];
-    let group = h
-        .apply(&mut d, &[Op::Group { ids: vec![b, c] }], None)
-        .unwrap()
-        .created[0];
+    let mut make = |d: &mut Document, op: Op| h.apply(d, &[op], None).expect("applies").created[0];
+    let a = make(&mut d, square(0.0, 0.0));
+    let b = make(&mut d, square(50.0, 0.0));
+    let c = make(&mut d, square(100.0, 0.0));
+    let group = make(&mut d, Op::Group { ids: vec![b, c] });
     let layer = d.node(d.layers[0]).id;
     let before = layer_children(&d);
 
@@ -98,23 +93,20 @@ fn paste_keeps_the_order_and_copies_groups_whole() {
             }],
             None,
         )
-        .unwrap();
+        .expect("pastes");
     let after = layer_children(&d);
     assert_eq!(after.len(), before.len() + 2);
     let (copy_a, copy_group) = (after[after.len() - 2], after[after.len() - 1]);
     assert!(pasted.created.contains(&copy_a) && pasted.created.contains(&copy_group));
-    let copied_children = d.node(d.find(copy_group).unwrap()).children.len();
-    assert_eq!(copied_children, 2);
-    assert_eq!(
-        node_bounds(&d, d.find(copy_a).unwrap()),
-        node_bounds(&d, d.find(a).unwrap())
-    );
+    let find = |id: u32| d.find(id).expect("a node");
+    assert_eq!(d.node(find(copy_group)).children.len(), 2);
+    assert_eq!(node_bounds(&d, find(copy_a)), node_bounds(&d, find(a)));
 }
 
 #[test]
 fn paste_parses_from_json() {
     let ops: Vec<Op> =
-        serde_json::from_str(r#"[{"op":"paste","ids":[3,4],"offset":[10,10]}]"#).unwrap();
+        serde_json::from_str(r#"[{"op":"paste","ids":[3,4],"offset":[10,10]}]"#).expect("parses");
     assert_eq!(
         ops,
         vec![Op::Paste {
