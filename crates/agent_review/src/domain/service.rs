@@ -212,6 +212,8 @@ impl<S> ReviewService<S> {
             ));
         }
         presentation::validate_groups(revision, presentation.file_groups.as_deref())?;
+        self.validate_graph(review, presentation.graph.as_ref())
+            .await?;
         let mut keys = std::collections::HashSet::new();
         for chapter in presentation.tour.iter().flatten() {
             validate_text(&chapter.key, 100)?;
@@ -262,8 +264,12 @@ fn apply_presentation(review: &mut Review, presentation: &Presentation) {
     if let Some(groups) = &presentation.file_groups {
         review.file_groups.clone_from(groups);
     }
+    if let Some(graph) = &presentation.graph {
+        review.graph = (!graph.nodes.is_empty()).then(|| graph.clone());
+    }
     if let Some(revision) = review.revisions.last_mut() {
         revision.file_groups.clone_from(&review.file_groups);
+        revision.graph.clone_from(&review.graph);
         revision.tour.clone_from(&review.tour);
         revision.annotations.clone_from(&review.annotations);
     }
@@ -355,6 +361,7 @@ impl<S: AgentSessionRepo> Reviews for ReviewService<S> {
             review.tour.clone_from(&revision.tour);
             review.annotations.clone_from(&revision.annotations);
             review.file_groups.clone_from(&revision.file_groups);
+            review.graph.clone_from(&revision.graph);
         }
         // History lists stay small; only the selected manifest is sent to the reader.
         for other in &mut review.revisions {
@@ -364,6 +371,7 @@ impl<S: AgentSessionRepo> Reviews for ReviewService<S> {
                 other.tour.clear();
                 other.annotations.clear();
                 other.file_groups.clear();
+                other.graph = None;
             }
         }
         if let Some(revision) = review.revisions.iter().find(|r| r.number == selected) {
@@ -379,6 +387,22 @@ impl<S: AgentSessionRepo> Reviews for ReviewService<S> {
                     })
                     .map(|file| file.path.clone())
                     .collect();
+            }
+            if let Some(graph) = &mut review.graph {
+                for node in &mut graph.nodes {
+                    node.files = revision
+                        .files
+                        .iter()
+                        .filter(|file| {
+                            file.path == node.location.path
+                                || node
+                                    .files
+                                    .iter()
+                                    .any(|pattern| diffd_core::kinds::matches(pattern, &file.path))
+                        })
+                        .map(|file| file.path.clone())
+                        .collect();
+                }
             }
         }
         Ok(Some(review))

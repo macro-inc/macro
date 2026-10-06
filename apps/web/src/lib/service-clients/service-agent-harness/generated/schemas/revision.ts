@@ -9,6 +9,7 @@ import type { Chapter } from './chapter';
 import type { Comparison } from './comparison';
 import type { FileEntry } from './fileEntry';
 import type { FileGroup } from './fileGroup';
+import type { RevisionGraph } from './revisionGraph';
 import type { Symbol } from './symbol';
 
 /**
@@ -25,6 +26,7 @@ export interface Revision {
   fileGroups?: FileGroup[];
   /** Lazy body references. */
   files: FileEntry[];
+  graph?: RevisionGraph;
   /**
    * Monotonic, one-based revision number.
    * @minimum 0

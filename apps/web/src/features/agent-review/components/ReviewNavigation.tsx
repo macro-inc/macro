@@ -6,6 +6,7 @@ import CollapseIcon from '@phosphor/arrows-in-line-vertical.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import FileIcon from '@phosphor/file-code.svg';
 import FolderIcon from '@phosphor/folder.svg';
+import GraphIcon from '@phosphor/graph.svg';
 import XIcon from '@phosphor/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
@@ -41,6 +42,7 @@ export function ReviewNavigation(props: {
   chapters: Chapter[];
   chapter: number;
   onChapter: (index: number) => void;
+  overview?: { title: string; active: boolean; onSelect: () => void };
   files: TreeFile[];
   walkthroughFiles?: TreeFile[];
   fileGroups?: FileGroup[];
@@ -205,6 +207,23 @@ export function ReviewNavigation(props: {
           groups={props.fileGroups ?? []}
           onToggle={(key) => props.onToggleGroup?.(key)}
         />
+        <Show when={props.overview}>
+          {(overview) => (
+            <button
+              type="button"
+              title={overview().title}
+              aria-current={overview().active ? 'step' : undefined}
+              onClick={() => overview().onSelect()}
+              class={cn(
+                'mx-2 mt-2 flex h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-left text-xs font-medium outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus',
+                overview().active && 'bg-surface-2'
+              )}
+            >
+              <GraphIcon class="size-3.5 shrink-0 text-ink-muted" />
+              Overview
+            </button>
+          )}
+        </Show>
       </Show>
       <div
         ref={scroller}

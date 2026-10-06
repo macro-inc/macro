@@ -47,6 +47,7 @@ impl ReviewRepo for MemoryReviewRepo {
                     other.tour.clear();
                     other.annotations.clear();
                     other.file_groups.clear();
+                    other.graph = None;
                 }
             }
         }

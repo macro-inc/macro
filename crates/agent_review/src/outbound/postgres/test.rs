@@ -71,6 +71,7 @@ fn review(session: AgentSessionId) -> Review {
         tour: vec![],
         annotations: vec![],
         file_groups: vec![],
+        graph: None,
         anchors: vec![],
         threads: vec![],
     }
@@ -116,6 +117,25 @@ fn revision(number: u32) -> Revision {
             files: vec!["src/**".into()],
             hidden: false,
         }],
+        graph: Some(ReviewGraph {
+            title: format!("Revision {number}"),
+            direction: None,
+            nodes: vec![GraphNode {
+                id: "main".into(),
+                title: "Entry point".into(),
+                description: Some(format!("Implementation at revision {number}")),
+                kind: None,
+                parent: None,
+                files: vec!["src/main.rs".into()],
+                location: Location {
+                    path: "src/main.rs".into(),
+                    side: diffd_core::model::Side::New,
+                    line: 1,
+                    end_line: None,
+                },
+            }],
+            edges: vec![],
+        }),
         symbols: vec![],
     }
 }
@@ -139,6 +159,7 @@ async fn projected_reads_preserve_selected_history_and_scope_body_references(poo
                 revision.tour.clear();
                 revision.annotations.clear();
                 revision.file_groups.clear();
+                revision.graph = None;
             }
         }
         let actual = repo.load_view(id, requested).await.unwrap().unwrap();

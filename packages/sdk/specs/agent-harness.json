@@ -4004,6 +4004,81 @@
           }
         }
       },
+      "GraphDirection": {
+        "type": "string",
+        "description": "Optional agent preference for the diagram's reading direction.",
+        "enum": ["leftToRight", "topToBottom"]
+      },
+      "GraphEdge": {
+        "type": "object",
+        "description": "A relationship, optionally linked to the call site that implements it.",
+        "required": ["from", "to", "label"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Source component ID."
+          },
+          "label": {
+            "type": "string",
+            "description": "Short verb describing the relationship."
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Location",
+                "description": "Optional call site to reveal when clicked."
+              }
+            ]
+          },
+          "to": {
+            "type": "string",
+            "description": "Destination component ID."
+          }
+        },
+        "additionalProperties": false
+      },
+      "GraphNode": {
+        "type": "object",
+        "description": "A component linked to its implementation in this revision.",
+        "required": ["id", "title", "location"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional concise explanation of this component's role or change (180 characters)."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Changed paths, directories, or globs belonging to this component.\nOmitted or empty uses the linked file. Reads expand patterns to exact paths;\nthe reader derives actual change counts rather than trusting authored totals."
+          },
+          "id": {
+            "type": "string",
+            "description": "Unique component identity within the map."
+          },
+          "kind": {
+            "type": ["string", "null"],
+            "description": "Optional agent-chosen category, such as UI, Runtime, or Storage (32 characters)."
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location",
+            "description": "Implementation to reveal when clicked."
+          },
+          "parent": {
+            "type": ["string", "null"],
+            "description": "Optional containing component ID. Zooming reveals children inside their\nparent. Use up to four levels, from broad components to specific code areas.\nParent references must exist and cannot form cycles."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short component name."
+          }
+        },
+        "additionalProperties": false
+      },
       "LinkBody": {
         "type": "object",
         "required": ["revision", "location"],
@@ -4481,6 +4556,17 @@
             },
             "description": "Current agent-selected file groups."
           },
+          "graph": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewGraph",
+                "description": "Current component map."
+              }
+            ]
+          },
           "id": {
             "$ref": "#/components/schemas/ReviewId",
             "description": "Stable review ID."
@@ -4533,6 +4619,43 @@
             "description": "Metadata/activity version, independent of code revisions."
           }
         }
+      },
+      "ReviewGraph": {
+        "type": "object",
+        "description": "A compact component or data-flow diagram authored by the agent.",
+        "required": ["title", "nodes", "edges"],
+        "properties": {
+          "direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GraphDirection",
+                "description": "Preferred reading direction; omitted lets the reader fit the available space."
+              }
+            ]
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "description": "Directed relationships between components."
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "description": "Components in reading order (up to 64). An empty list clears the map."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short description of what the map explains."
+          }
+        },
+        "additionalProperties": false
       },
       "ReviewId": {
         "type": "string",
@@ -4611,6 +4734,17 @@
               "$ref": "#/components/schemas/FileEntry"
             },
             "description": "Lazy body references."
+          },
+          "graph": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewGraph",
+                "description": "Agent-authored component map for this revision."
+              }
+            ]
           },
           "number": {
             "type": "integer",

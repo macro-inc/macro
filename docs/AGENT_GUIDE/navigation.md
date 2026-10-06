@@ -39,6 +39,41 @@ the mounted conversation and its draft. Reopening the review retains its code
 position and comment draft. Escape first dismisses search, selection, or a
 comment composer; with none open it returns to the session.
 
+When the agent supplies a component diagram, the walkthrough opens on a full-page
+**Overview**. The diagram is the first tour step; **Next chapter** opens the first
+code chapter, and its **Previous chapter** returns to the overview. The sidebar's
+**Overview** entry also returns to the diagram. Click a component or linked
+connection to open its code. Direct code citations skip the overview. Pan, zoom,
+and **Fit map** adjust the diagram; keyboard users can focus its component links.
+The layout adapts to the pane size. Switching between overview and code preserves
+comment drafts, and background revisions keep the current page.
+Nodes show an agent-written explanation, category, file previews, and captured
+file/line counts. A node can cover several files. Zoom reveals authored children
+first; leaf cards become scrollable file lists with paths and per-file
+additions/deletions. A parent's file-count button opens its full file list,
+including its children's files. Click a row to open that file while
+keeping the component highlighted in the corner map. Authored entry points are
+preserved, and deleted files open on their old side. Large lists have **Find a
+component file** search. Scrolling inside the list scrolls files; scroll outside
+the list to zoom the diagram. Keyboard map links include expandable file lists.
+The agent can nest specific components inside broader ones with `parent` IDs.
+Zooming in reveals those details inside the same component outline, without
+moving the surrounding diagram. A card's detail-count button also opens or folds
+its children. Breadcrumbs show the group in view and return to a broader level.
+Arrow keys pan the focused diagram; `+`/`-` zoom and `f` fits the map.
+Escape clears a component-file search, then closes file detail or folds the
+current component back one level. Touch pinch and trackpad pinch zoom the diagram,
+including over file lists; a single-finger swipe inside a list scrolls files.
+Zooming back out folds details away. Parent counts
+include descendant files, counted once; relationships appear at their shared
+level. Keyboard code links include every level and its explanations.
+Clicking a node opens a corner map highlighting the component being read; nested
+components appear alongside their siblings with a parent breadcrumb. Click
+another node to jump, **Expand map** to return to that component in the overview,
+or **Hide map** to dismiss it.
+The desktop overview frames the full graph; phones start at a readable card.
+Pan to explore larger diagrams or use **Fit map** to see the whole graph.
+
 Press `/` or click the search icon to open **Find in file** and **Go to line**.
 Search covers the full source, including unmounted lines; Escape closes it.
 Code uses compact rows, wraps long lines, and shows aligned side-by-side columns
