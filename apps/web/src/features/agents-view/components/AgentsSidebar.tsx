@@ -44,6 +44,7 @@ import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
+  supportsOpenInNewSplit: true,
   senderBucket: undefined,
 };
 
