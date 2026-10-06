@@ -18,20 +18,17 @@ import {
 } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem } from '@core/component/ContextMenu';
-import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { unreadFilterFn } from '@entity/utils/filter';
-import BriefcaseIcon from '@phosphor/briefcase.svg';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import RoutineIcon from '@phosphor/clock-clockwise.svg';
-import CodeIcon from '@phosphor/code.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn } from '@ui';
+import { cn, Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
 import { compactAge } from '../core/format-age';
@@ -261,27 +258,17 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           ref={tourTarget(AGENTS_TOUR.modeSwitch)}
           class="px-(--sidebar-gutter) pt-1 touch:pt-0"
         >
-          <TabsInset
+          <Tabs
             aria-label="Agents mode"
             fullWidth
-            value={props.mode}
             list={(['chat', 'code'] as const).map((mode) => ({
               value: mode,
-              label: (
-                <span class="flex items-center gap-1.5">
-                  {mode === 'code' ? (
-                    <CodeIcon class="size-3.5" />
-                  ) : (
-                    <BriefcaseIcon class="size-3.5" />
-                  )}
-                  {agentsModeLabel(mode)}
-                </span>
-              ),
+              label: agentsModeLabel(mode),
             }))}
+            value={props.mode}
             onChange={(value) =>
               props.onModeChange(value === 'code' ? 'code' : 'chat')
             }
-            labelClass="h-7 justify-center text-sm"
           />
         </div>
 
