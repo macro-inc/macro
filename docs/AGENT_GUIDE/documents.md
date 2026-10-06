@@ -96,7 +96,7 @@ the panel beneath the formatting and formula bars. While a workbook opens, a
 shimmering placeholder grid (status "Opening spreadsheet…") stands in for it, and
 formula cells show a short shimmer bar until their first results arrive; wait for
 real cell text before reading values. They have the `.spreadsheet` file type; uploading an
-Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
+Excel (`.xlsx`, `.xlsm`) or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
 
 You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets. A large workbook shows a progress bar on **Import workbook** while it is written; the page stays responsive, and one undo removes the whole import.
 
@@ -276,7 +276,11 @@ protection). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
-while the preview was open. Macros and encrypted files are rejected. A legacy `.xls`
+while the preview was open. Encrypted files are rejected. Macro-enabled `.xlsm`
+workbooks import like `.xlsx` (here and as uploads), without their macros: VBA
+projects, Excel 4.0 macro sheets and form/ActiveX controls are dropped with an
+import note, and **Download as Excel** writes a macro-free `.xlsx`; an uploaded
+`.xlsm` keeps its macros in the original download. A legacy `.xls`
 is rejected here with a hint to upload it instead; uploads convert it (see
 [Legacy Office uploads](#legacy-office-uploads)).
 
