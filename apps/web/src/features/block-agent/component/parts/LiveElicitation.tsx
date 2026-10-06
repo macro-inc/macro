@@ -1,3 +1,5 @@
+import type { BookingLinkArgs } from '@app/features/scheduling/core/booking-link';
+import { BookingDraftComposer } from '@core/component/AI/component/tool/booking-link/DraftComposer';
 /**
  * The live controls for a question the agent is waiting on, shared by the
  * session's card and the channel's Magic Chip: a form's fields and Submit,
@@ -354,6 +356,17 @@ export function UserToolComposer(props: {
   const locked = () => !props.review.canAnswer();
   return (
     <Switch fallback={props.fallback}>
+      <Match
+        when={
+          props.tool.name === 'CreateBookingLink' ||
+          props.tool.name === 'EditBookingLink'
+        }
+      >
+        <BookingDraftComposer
+          initialData={props.tool.data as BookingLinkArgs}
+          sink={sink<BookingLinkArgs>()}
+        />
+      </Match>
       <Match when={props.tool.name === 'CreateCalendarEvent'}>
         <CalendarDraftComposer
           initialData={props.tool.data as CreateCalendarEvent}

@@ -427,3 +427,23 @@ fn every_eager_tool_exists() {
         );
     }
 }
+
+#[test]
+fn booking_link_mutations_only_defer_on_hosts_that_finish_reviews() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host).toolset;
+        assert!(tools.tools.contains_key("ListBookingLinks"));
+        for name in ["CreateBookingLink", "EditBookingLink"] {
+            assert!(tools.tools.contains_key(name));
+            assert_eq!(
+                tools.user_tools.contains_key(name),
+                matches!(host, AiHost::Chat | AiHost::AgentSession)
+            );
+        }
+    }
+}

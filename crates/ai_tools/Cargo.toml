@@ -29,6 +29,7 @@ async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 aws-sdk-sqs.workspace = true
 bots = { path = "../bots", default-features = false, features = ["ai_tools", "outbound"] }
+calendar_scheduling = { path = "../calendar_scheduling", features = ["ai_tools", "postgres", "calendar"] }
 calendar_events = { path = "../calendar_events", features = ["ai_tools", "mutation-client", "postgres"] }
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
@@ -119,4 +120,7 @@ macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+calendar_scheduling = { path = "../calendar_scheduling", features = ["inbound"] }
+macro_authorization = { path = "../macro_authorization", features = ["axum"] }
+model_user = { path = "../model_user" }
 cool_asserts = "2"

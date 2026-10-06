@@ -15,6 +15,10 @@ export default defineConfig({
   test: {
     name: 'scheduling',
     environment: 'jsdom',
-    include: ['src/features/scheduling/**/*.{test,spec}.{ts,tsx}'],
+    include: [
+      'src/features/scheduling/**/*.{test,spec}.{ts,tsx}',
+      'src/lib/core/component/AI/component/tool/BookingLinks.test.tsx',
+      'src/lib/core/component/AI/component/tool/booking-link/DraftComposer.test.tsx',
+    ],
   },
 });

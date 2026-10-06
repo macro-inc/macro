@@ -1482,3 +1482,30 @@ To verify, start a Macro conversation as a free user with a previously saved
 paid-model preference: the composer should show Gemini and send that model.
 In a live session, confirm the model options contain only Gemini. Backend tests
 also exercise direct ACP model-change requests, downgrade, and resume.
+
+## Booking links
+
+Ask the AI to find or reuse an existing booking link before creating another.
+`ListBookingLinks` returns personal links, current team IDs, full settings and
+shareable URLs (including paused links). It also supplies the revision used to
+protect edits from concurrent settings changes.
+
+`CreateBookingLink` and `EditBookingLink` open the same native booking review form
+in chat and in an agent session's elicitation. Edit title, slug, duration, location
+or Google Meet, enabled state, weekly hours, time zone, date overrides, buffers,
+notice, booking window, daily limit, questions and team hosts directly in the
+card. Create/Save accepts the complete edited draft; no extra confirmation is
+required. Cancel declines without saving. Link creation itself sends no calendar
+invitations. Guests receive an invitation only when they book through the normal
+booking page.
+
+A successful result shows the actual saved URL and whether the link accepts
+bookings. Editing hours affects only that link, preserving other links and personal
+default availability. If another settings edit made the revision stale, ask the AI
+to read the latest link and propose the edit again rather than retrying the stale
+revision. A network/save error preserves the review for retry; repeating an
+identical successful create or edit does not create another link.
+
+For isolated UI checks, `/src/features/scheduling/browser-test/booking-ai.html`
+mounts the actual review controls with the agent elicitation sink and no remote
+writes. It includes create/edit modes and simulated save failures.

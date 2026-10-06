@@ -718,6 +718,10 @@ async fn main() -> anyhow::Result<()> {
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        booking_link_tool_context: ai_tools::build_booking_link_tool_context(
+            db.clone(),
+            config.environment,
+        ),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             db.clone(),
             CalendarServiceUrl::new()?,
