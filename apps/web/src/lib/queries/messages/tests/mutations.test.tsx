@@ -6,11 +6,20 @@ import type {
 } from '@service-storage/messages';
 import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 let testQueryClient: QueryClient;
 const mocks = vi.hoisted(() => ({
   delete: vi.fn(),
+  get: vi.fn(),
   patchThread: vi.fn(),
   post: vi.fn(),
 }));
@@ -28,6 +37,8 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
 
+import { toast } from '@core/component/Toast/Toast';
+import { ThrownResultError } from '@core/util/result';
 import { messageKeys } from '../keys';
 import {
   newMessageId,
@@ -65,8 +76,10 @@ function message(
 
 beforeEach(() => {
   mocks.delete.mockReset();
+  mocks.get.mockReset();
   mocks.patchThread.mockReset();
   mocks.post.mockReset();
+  vi.mocked(toast.failure).mockClear();
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -722,5 +735,71 @@ describe('sending', () => {
         expect.objectContaining({ root_id: 'server-id', anchor: null }),
       ],
     ]);
+  });
+
+  it('settles a resend whose id the server already stored', async () => {
+    const parent: MessageParent = { type: 'document', id: 'doc' };
+    const timelineKey = getMessageTimelineQueryKey(parent);
+    testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
+      pageParams: [null],
+      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+    });
+    const id = newMessageId();
+    mocks.post.mockRejectedValue(
+      new ThrownResultError([
+        { code: 'CONFLICT', message: 'message id already exists' },
+      ])
+    );
+    mocks.get.mockResolvedValue(message(parent, id));
+
+    const sent = await mountSend().mutateAsync({
+      parent,
+      message: { content: id },
+      senderId: 'macro|a@example.com',
+      optimisticId: id,
+    });
+
+    expect(sent.id).toBe(id);
+    expect(mocks.get.mock.calls).toEqual([[parent, id]]);
+    expect(toast.failure).not.toHaveBeenCalled();
+    expect(
+      testQueryClient
+        .getQueryData<MessageTimelineData>(timelineKey)!
+        .pages[0].items.map((item) => item.id)
+    ).toEqual([id]);
+  });
+
+  it.each([
+    {
+      failure: 'a conflict on an id the server does not hold',
+      code: 'CONFLICT',
+      readBack: () =>
+        Promise.reject(
+          new ThrownResultError([{ code: 'NOT_FOUND', message: 'missing' }])
+        ),
+    },
+    {
+      failure: 'any other error',
+      code: 'SERVER_ERROR',
+      readBack: () =>
+        Promise.resolve(message({ type: 'document', id: 'doc' }, 'stored')),
+    },
+  ])('reports $failure as a failed send', async ({ code, readBack }) => {
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => logError.mockRestore());
+    mocks.post.mockRejectedValue(
+      new ThrownResultError([{ code, message: code }])
+    );
+    mocks.get.mockImplementation(readBack);
+
+    await expect(
+      mountSend().mutateAsync({
+        parent: { type: 'document', id: 'doc' },
+        message: { content: 'Hello' },
+        senderId: 'macro|a@example.com',
+        optimisticId: newMessageId(),
+      })
+    ).rejects.toThrow();
+    expect(toast.failure).toHaveBeenCalledWith('Failed to send message');
   });
 });

@@ -16,16 +16,12 @@ import {
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
-import { thrownResultErrorHasCode } from './result';
 
 type SendContent = {
   content: string;
   mentions: SimpleMention[];
   attachments?: NewAttachment[];
-  /**
-   * Reuse one id across retries of the same message. The server stores one
-   * copy, and a conflict on a supplied id counts as delivered.
-   */
+  /** Reuse one id across retries of the same message, so the server stores one copy. */
   messageId?: string;
 };
 
@@ -53,14 +49,14 @@ export function useSendMessageToPeople() {
   const userId = useUserId();
   const sendMessage = useSendMessageMutation();
 
-  async function postMessage(
+  async function sendAndNavigateToChannel(
     channelId: string,
-    senderId: string,
-    args: SendContent
-  ): Promise<string | undefined> {
-    const messageId = args.messageId ?? newMessageId();
-    try {
-      const response = await sendMessage.mutateAsync({
+    args: SendContent & { navigate?: NavigationOptions }
+  ) {
+    const senderId = userId();
+    if (!senderId) return;
+    const sent = await sendMessage
+      .mutateAsync({
         parent: { type: 'channel', id: channelId },
         message: {
           content: args.content,
@@ -68,25 +64,11 @@ export function useSendMessageToPeople() {
           mentions: args.mentions,
         },
         senderId,
-        optimisticId: messageId,
-      });
-      return response.id;
-    } catch (error) {
-      const stored =
-        args.messageId !== undefined &&
-        thrownResultErrorHasCode(error, 'CONFLICT');
-      return stored ? messageId : undefined;
-    }
-  }
-
-  async function sendAndNavigateToChannel(
-    channelId: string,
-    args: SendContent & { navigate?: NavigationOptions }
-  ) {
-    const senderId = userId();
-    if (!senderId) return;
-    const messageId = await postMessage(channelId, senderId, args);
-    if (messageId === undefined) return;
+        optimisticId: args.messageId ?? newMessageId(),
+      })
+      .catch(() => undefined);
+    if (!sent) return;
+    const messageId = sent.id;
 
     invalidateListChannels();
     invalidateContacts();
