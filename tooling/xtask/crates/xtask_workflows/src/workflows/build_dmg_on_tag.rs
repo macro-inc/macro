@@ -5,6 +5,11 @@ use gh_workflow::{Event, Expression, Job, Run, Step, Workflow, WorkflowCall, Wor
 
 use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
 
+#[cfg(test)]
+mod test;
+
+const NIX_CACHE_SIZE_GB: u16 = 100;
+
 /// Build the reusable workflow.
 pub fn build_dmg() -> Workflow {
     Workflow::new("Build macOS DMG")
@@ -33,8 +38,9 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         .runs_on(vec![
             format!("{}-with-cache", runners::Runner::MacOsArm),
             "nscloud-cache-tag-macro-desktop-macos".to_owned(),
-            "nscloud-cache-size-50gb".to_owned(),
+            format!("nscloud-cache-size-{NIX_CACHE_SIZE_GB}gb"),
         ])
+        .add_env(("DESKTOP_NIX_CACHE_SIZE_GB", NIX_CACHE_SIZE_GB.to_string()))
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
         .add_step(steps::mount_macos_nix_cache_volume())
@@ -98,7 +104,7 @@ fn configure_nix_cache() -> Step<Run> {
 }
 
 fn save_nix_cache() -> Step<Run> {
-    Step::new("Save macOS Nix build dependencies")
+    Step::new("Prune and save macOS Nix build dependencies")
         .run(include_str!("scripts/save_macos_nix_cache.sh"))
         .shell("bash")
         .if_condition(Expression::new(
