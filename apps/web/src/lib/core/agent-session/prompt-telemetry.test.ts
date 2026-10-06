@@ -165,17 +165,49 @@ describe('PromptTrace', () => {
     );
   });
 
-  it('records only a bounded submit surface rather than a private route', () => {
-    history.replaceState(null, '', '/app/md/private-document-id');
+  it.each([
+    ['/app/md/private-document-id', 'document'],
+    ['/app/drive/md/private-document-id', 'document'],
+    ['/app/drive/shared/pdf/private-document-id', 'document'],
+    [
+      '/app/drive/folder/private-folder-id/code/private-document-id',
+      'document',
+    ],
+    ['/app/drive/folder/private-folder-id', 'drive'],
+    ['/app/drive', 'drive'],
+    ['/app/home', 'home'],
+    ['/app/agents', 'agents'],
+    ['/app/search', 'search'],
+    ['/app/drive/md/private-document-id/~/home', 'other'],
+  ])('records only a bounded submit surface for %s', (path, surface) => {
+    history.replaceState(null, '', path);
     const trace = new PromptTrace(SESSION, { newSession: true });
     trace.end('released');
     expect(telemetry.spans[0].attributes['agent.prompt.submit_surface']).toBe(
-      'document'
+      surface
     );
-    expect(JSON.stringify(telemetry.spans[0])).not.toContain(
-      'private-document-id'
-    );
+    expect(JSON.stringify(telemetry.spans[0])).not.toContain('private-');
   });
+
+  it.each(['home', 'agents', 'mobile_composer'] as const)(
+    'uses the submitting %s composer instead of another split pane',
+    (submitSurface) => {
+      history.replaceState(
+        null,
+        '',
+        '/app/drive/md/private-document-id/~/home/~/agents'
+      );
+      const trace = new PromptTrace(SESSION, {
+        newSession: true,
+        submitSurface,
+      });
+      trace.end('released');
+      expect(telemetry.spans[0].attributes['agent.prompt.submit_surface']).toBe(
+        submitSurface
+      );
+      expect(JSON.stringify(telemetry.spans[0])).not.toContain('private-');
+    }
+  );
 
   it('records the prompt from acceptance through confirmation to the first painted text', () => {
     vi.useFakeTimers();

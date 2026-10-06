@@ -22,7 +22,10 @@
 
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { AgentSession } from '@core/agent-session/AgentSession';
-import { PromptTrace } from '@core/agent-session/prompt-telemetry';
+import {
+  type PromptSubmitSurface,
+  PromptTrace,
+} from '@core/agent-session/prompt-telemetry';
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -66,6 +69,8 @@ export type StartPendingSessionOptions = {
   attachments?: PromptAttachment[];
   /** The sender, so the first prompt is attributed as the log will. */
   userId?: string;
+  /** The submitting composer, independent of its position in a split layout. */
+  submitSurface?: PromptSubmitSurface;
   /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
   /**
@@ -99,7 +104,10 @@ export function startPendingSession(
   // and every request on the way, lands in one trace.
   const trace =
     prompt || options.attachments?.length
-      ? new PromptTrace(id, { newSession: true })
+      ? new PromptTrace(id, {
+          newSession: true,
+          submitSurface: options.submitSurface,
+        })
       : undefined;
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();

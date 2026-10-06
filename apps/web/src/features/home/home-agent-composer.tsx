@@ -77,7 +77,11 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     },
   });
   const start = (conversation: StartConversation) => {
-    const id = startPendingSession({ ...conversation, userId: userId() });
+    const id = startPendingSession({
+      ...conversation,
+      userId: userId(),
+      submitSurface: 'home',
+    });
     panel.handle.replace({
       next: {
         type: 'component',

@@ -100,6 +100,22 @@ const RENDER_TIMEOUT_MS = 10_000;
 
 type Attributes = Record<string, string | number | boolean>;
 
+/** Bounded UI origins supplied by the composer that submits the prompt. */
+export type PromptSubmitSurface =
+  | 'home'
+  | 'agents'
+  | 'mobile_composer'
+  | 'search'
+  | 'document'
+  | 'drive'
+  | 'agent_session'
+  | 'other';
+
+type PromptTraceOptions = {
+  newSession: boolean;
+  submitSurface?: PromptSubmitSurface;
+};
+
 export class PromptTrace {
   readonly #span: Span | undefined;
   readonly #sessionId: string;
@@ -117,9 +133,9 @@ export class PromptTrace {
   #rendered = false;
   readonly #renderers = new Set<() => void>();
 
-  constructor(sessionId: string, options: { newSession: boolean }) {
+  constructor(sessionId: string, options: PromptTraceOptions) {
     this.#sessionId = sessionId;
-    this.#span = start(sessionId, options.newSession);
+    this.#span = start(sessionId, options);
     this.#stallTimer = setTimeout(
       () => this.end('stalled'),
       STALL_THRESHOLD_MS
@@ -347,12 +363,18 @@ function messagesOf(event: FoldedStreamEvent): FoldedMessage[] {
     .exhaustive();
 }
 
-function start(sessionId: string, newSession: boolean): Span | undefined {
+function start(
+  sessionId: string,
+  options: PromptTraceOptions
+): Span | undefined {
   try {
     const span = Telemetry.span('agent.prompt');
     span.setAttr('agent.session.id', sessionId);
-    span.setAttr('agent.prompt.new_session', newSession);
-    span.setAttr('agent.prompt.submit_surface', submitSurface(newSession));
+    span.setAttr('agent.prompt.new_session', options.newSession);
+    span.setAttr(
+      'agent.prompt.submit_surface',
+      options.submitSurface ?? submitSurface(options.newSession)
+    );
     return span;
   } catch {
     return undefined;
@@ -360,12 +382,23 @@ function start(sessionId: string, newSession: boolean): Span | undefined {
 }
 
 /** Bounded route categories only; paths and entity IDs are never telemetry labels. */
-function submitSurface(newSession: boolean): string {
+function submitSurface(newSession: boolean): PromptSubmitSurface {
   if (!newSession) return 'agent_session';
   const route = typeof location === 'undefined' ? '' : location.pathname;
-  if (/^\/app\/?$/.test(route) || route.startsWith('/app/home')) return 'home';
-  if (route.startsWith('/app/agents')) return 'agents';
-  if (route.startsWith('/app/search')) return 'search';
+  // Layout URLs enumerate panes without identifying the active one. Known
+  // composers supply their origin explicitly; never guess the leftmost pane.
+  if (route.includes('/~/')) return 'other';
+  if (/^\/app\/drive(?:\/|$)/.test(route)) {
+    return /\/(?:md|task|skill|snippet|canvas|pdf|code|csv|image|video|spreadsheet|unknown)\/[^/]+\/?$/.test(
+      route
+    )
+      ? 'document'
+      : 'drive';
+  }
+  if (/^\/app\/?$/.test(route) || /^\/app\/home(?:\/|$)/.test(route))
+    return 'home';
+  if (/^\/app\/agents(?:\/|$)/.test(route)) return 'agents';
+  if (/^\/app\/search(?:\/|$)/.test(route)) return 'search';
   if (/^\/app\/(?:md|pdf|code|document)\//.test(route)) return 'document';
   return 'other';
 }
