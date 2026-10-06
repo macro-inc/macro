@@ -158,42 +158,40 @@ where
             && bot_id == bot_id::MACRO_NEW_BOT_ID
             && matches!(mcp_servers, AgentMcpServers::OwnerConnections)
             && request.repo_url.is_none()
+            && let Some(lifecycle) = &self.warm_lifecycle
+            && lifecycle
+                .claim(
+                    session_id,
+                    &request.owner,
+                    bot_id,
+                    &model,
+                    instructions.as_deref(),
+                )
+                .await?
         {
-            if let Some(lifecycle) = &self.warm_lifecycle
-                && lifecycle
-                    .claim(
-                        session_id,
-                        &request.owner,
-                        bot_id,
-                        &model,
-                        instructions.as_deref(),
-                    )
-                    .await?
-            {
-                self.warm_reservations.lock().await.remove(&session_id);
-                tracing::Span::current().record("agent.session.warm_hit", true);
-                let session = self.inner.sessions.get_session(session_id).await?;
-                self.inner
-                    .publish_opened(&session)
-                    .instrument(
-                        tracing::info_span!("agent.init.publish", agent.session.id = %session_id),
-                    )
-                    .await;
-                if let Some(prompt) = request.prompt {
-                    self.execute(
-                        session_id,
-                        HarnessCommand::Deliver(DeliverAction {
-                            id: AgentActionId::mint(),
-                            action: AgentAction::prompt(prompt),
-                            actor: Some(owner_user),
-                            announce: None,
-                        }),
-                    )
-                    .await
-                    .map_err(into_session_error)?;
-                }
-                return Ok(session);
+            self.warm_reservations.lock().await.remove(&session_id);
+            tracing::Span::current().record("agent.session.warm_hit", true);
+            let session = self.inner.sessions.get_session(session_id).await?;
+            self.inner
+                .publish_opened(&session)
+                .instrument(
+                    tracing::info_span!("agent.init.publish", agent.session.id = %session_id),
+                )
+                .await;
+            if let Some(prompt) = request.prompt {
+                self.execute(
+                    session_id,
+                    HarnessCommand::Deliver(DeliverAction {
+                        id: AgentActionId::mint(),
+                        action: AgentAction::prompt(prompt),
+                        actor: Some(owner_user),
+                        announce: None,
+                    }),
+                )
+                .await
+                .map_err(into_session_error)?;
             }
+            return Ok(session);
         }
         let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self
