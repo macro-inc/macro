@@ -218,8 +218,9 @@ export function CommandMenuInner(props: {
       listController.setSelectedIndex(resultFollowsSearchRow() ? 1 : 0);
     })
   );
-  // Server matches (contacts, projects) can arrive after the query settles;
-  // the first one takes the default selection the search row held meanwhile.
+  // Results fetched from the server (CRM contacts outside the cache, projects)
+  // can appear after the query changes; the first one takes the default
+  // selection the search row held until then.
   createEffect(
     on(
       resultFollowsSearchRow,
