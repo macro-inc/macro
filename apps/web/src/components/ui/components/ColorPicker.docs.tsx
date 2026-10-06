@@ -40,6 +40,7 @@ export default defineDoc({
   status: 'stable',
   exports: ['ColorPicker'],
   import: "import { ColorPicker } from '@ui';",
+  propTypes: ['ColorPickerRootProps'],
   demos: [
     {
       id: 'basic',

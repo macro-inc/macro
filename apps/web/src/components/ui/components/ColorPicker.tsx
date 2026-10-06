@@ -457,7 +457,7 @@ function Input(props: ColorPickerInputProps) {
       disabled={context.disabled() || local.disabled}
       readOnly={context.readOnly() || local.readOnly}
       class={cn(
-        'h-8 w-full min-w-0 rounded-md border border-edge-muted bg-input px-2 font-mono text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20 disabled:opacity-50',
+        'h-8 w-full min-w-0 rounded-md border border-edge-muted bg-input px-2 font-mono text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-edge-muted aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20 disabled:opacity-50',
         local.class
       )}
       value={draft() ?? context.value()}
@@ -514,6 +514,11 @@ function Preview(props: ColorPickerPreviewProps) {
   );
 }
 
+/**
+ * @do Compose the slots you need inside `ColorPicker.Root`; the root owns their
+ * shared color, disabled, and read-only state.
+ * @dont Render ColorPicker slots outside `ColorPicker.Root`.
+ */
 export const ColorPicker = {
   Root,
   Field,
