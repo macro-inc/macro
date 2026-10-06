@@ -20,37 +20,6 @@ type MakeMarkNotDoneOptions = {
   notificationSource: () => NotificationSource;
 };
 
-/**
- * Return completed reminders to Active or Scheduled. Kept off the email path:
- * none of its preconditions apply, and a reminder's not-done state is its own
- * `completed` column rather than a notification override.
- */
-const uncompleteReminders = async (reminders: EntityData[]) => {
-  const reminderIds = reminders.map((r) => r.id);
-  const optimistic = applyEntitiesNotDoneOptimistic({
-    emailIds: [],
-    notificationIds: [],
-    reminderIds,
-  });
-  try {
-    await executeMarkEntitiesUndone({
-      emailIds: [],
-      notificationIds: [],
-      reminderIds,
-    });
-    optimistic.settle();
-    toast.success(
-      reminderIds.length > 1
-        ? `Marked ${reminderIds.length} reminders as not done`
-        : 'Marked as not done',
-      { duration: 3_000, stack: true, hideOnMobile: true }
-    );
-  } catch {
-    optimistic.rollback();
-    toast.failure('Failed to mark as not done');
-  }
-};
-
 /** Preserve the legacy REST batch, notification ordering and reconciliation. */
 async function unarchiveRestTargets(
   targets: EntityData[],
@@ -168,25 +137,15 @@ async function restoreEmailNotifications(
 
 /**
  * Reverses a mark-done: unarchives email threads and restores their
- * notifications, and un-completes reminders. GraphQL validates unarchive
+ * notifications. GraphQL validates unarchive
  * eligibility on the server. Each thread settles independently, including
  * queued writes; only a completely failed email selection rejects the action.
  */
 export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
-  // Email workflow mirrors reject generic reopening: Remind me owns rescheduling.
-  const isCompletedReminder = (entity: EntityData): boolean =>
-    entity.type === 'reminder' &&
-    entity.completedAt != null &&
-    !entity.emailFollowup;
-
   const canExecute = (entity: EntityData): boolean =>
-    (entity.type === 'email' && entity.done === true) ||
-    isCompletedReminder(entity);
+    entity.type === 'email' && entity.done === true;
 
   const execute = async (entities: EntityData[]) => {
-    const reminders = entities.filter(isCompletedReminder);
-    if (reminders.length > 0) await uncompleteReminders(reminders);
-
     const graphql = isFeatureEnabled(enableGraphqlSoup);
     const doneEmails = entities.filter(
       (e) => e.type === 'email' && e.done === true

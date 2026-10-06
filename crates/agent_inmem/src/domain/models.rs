@@ -45,7 +45,11 @@ pub fn advertised_models() -> &'static [&'static str] {
         .get_or_init(|| {
             let mut models = Vec::with_capacity(CHAT_MODELS.len() + ROUTED_MODELS.len());
             models.extend_from_slice(CHAT_MODELS);
-            models.extend(ROUTED_MODELS.iter().map(|(model, _)| *model));
+            for (model, _) in ROUTED_MODELS {
+                if !models.contains(model) {
+                    models.push(model);
+                }
+            }
             models
         })
         .as_slice()

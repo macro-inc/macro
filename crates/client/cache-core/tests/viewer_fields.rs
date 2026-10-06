@@ -243,6 +243,7 @@ fn query_updates_remain_scoped_while_an_optimistic_layer_is_pending() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000001",
                     query: "mutation { setEntityProperty { id } }",
                     operation_name: None,

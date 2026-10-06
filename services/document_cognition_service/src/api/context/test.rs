@@ -166,7 +166,9 @@ impl StreamRepo for MockStreamRepo {
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     let config = Config::new_empty_for_test();
     let enforcement = config.enable_ai_usage_enforcement;
-    let admission = ai_billing::composition::pg_admission_service(pool.clone(), enforcement);
+    let pricing = config.ai_pricing();
+    let admission =
+        ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
     let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
     use aws_sdk_sqs;
     use channels::{
@@ -260,7 +262,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         crm::domain::service::NoOpCrmService,
         github_pull_request_service,
-        reminders::domain::service::NoOpRemindersService,
     ));
 
     let ingress_queue = SqsQueue::new(
@@ -471,17 +472,16 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        booking_link_tool_context: ai_tools::build_booking_link_tool_context(
+            pool.clone(),
+            macro_env::Environment::Local,
+        ),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             pool.clone(),
             macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
         ),
         notification_tool_context: notification_tool_context.clone(),
-        reminders_tool_context: ai_tools::build_reminders_tool_context(
-            pool.clone(),
-            user_email_service.clone(),
-            entity_access_service.clone(),
-        ),
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
@@ -497,6 +497,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             "http://localhost:8086".to_string(),
             None,
         ),
+        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            "test-internal-api-key".to_string(),
+        )
+        .expect("valid test coding agent context"),
         project_tool_context,
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
@@ -554,6 +559,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 Arc::new(creator),
                 recorder.clone(),
             )
+            .with_slack_source(Arc::new(
+                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+            ))
             .with_admission(admission.clone()),
         );
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
@@ -639,8 +647,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
                 ),
                 ai_billing::outbound::PgUsageReader::new(pool.clone()),
-                ai_billing::outbound::PgBillingRepo::new(pool.clone()),
-                ai_billing::outbound::NoOpPaymentGateway,
+                ai_billing::outbound::PgBillingRepo::new(pool.clone(), pricing),
+                ai_billing::outbound::HttpPaymentGateway::new(Arc::new(
+                    authentication_service_client::AuthServiceClient::new(
+                        "testing".to_string(),
+                        "http://127.0.0.1:9".to_string(),
+                    ),
+                )),
+                pricing,
             )
             .with_enforcement(enforcement),
         ),

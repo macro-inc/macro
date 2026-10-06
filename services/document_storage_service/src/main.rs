@@ -12,6 +12,9 @@ use crate::{
     },
     service::s3::S3,
 };
+use agent_session_realtime::{
+    domain::service::AgentSessionLogConsumerService, outbound::log_topic_consumer::LogTopicConsumer,
+};
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
 use bots::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
@@ -149,7 +152,7 @@ use properties::{
 };
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use reminders::{
-    domain::service::{RemindersServiceImpl, dispatch::ReminderDispatchService},
+    domain::service::dispatch::ReminderDispatchService,
     inbound::{axum_router::RemindersRouterState, dispatch_worker::DispatchWorker},
     outbound::{
         notification_notifier::NotificationReminderNotifier, pg_reminders_repo::PgRemindersRepo,
@@ -1289,6 +1292,7 @@ async fn run() -> anyhow::Result<()> {
         db.clone(),
         event_broker_tracker.clone(),
         config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
     )
     .await
     .context("failed to build Macro agent tool context")?;
@@ -1396,7 +1400,6 @@ async fn run() -> anyhow::Result<()> {
     );
     let reminders_service =
         reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
-            RemindersServiceImpl::new(PgRemindersRepo::new(db.clone())),
             email_followups.clone(),
         )
         .with_entity_access((*entity_access_service).clone());
@@ -1465,7 +1468,6 @@ async fn run() -> anyhow::Result<()> {
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
                 PgGithubPullRequestRepo::new(db.clone()),
             ),
-            reminders_service.clone(),
         )
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
             db.clone(),
@@ -1496,7 +1498,6 @@ async fn run() -> anyhow::Result<()> {
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
                 PgGithubPullRequestRepo::new(readonly_db.clone()),
             ),
-            reminders_service.clone(),
         )
         .with_favorites(favorites_service.clone())
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
@@ -1604,6 +1605,42 @@ async fn run() -> anyhow::Result<()> {
                     tracing::error!(
                         error = ?error,
                         "realtime Soup subscription consumer stopped"
+                    );
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
+
+    let agent_session_log_realtime = Arc::new(AgentSessionLogConsumerService::new(
+        LogTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
+            anyhow::anyhow!("failed to create agent session log topic consumer: {error:?}")
+        })?,
+    ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&agent_session_log_realtime);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "agent session log subscription consumer stopped"
                     );
                 });
 
@@ -1865,6 +1902,9 @@ async fn run() -> anyhow::Result<()> {
             soup_realtime_service,
             websocket_notification_consumer_service,
             activity_realtime_service,
+        ),
+        agent_session_log_subscriptions: complete_graph::agent_session_log_subscriptions(
+            agent_session_log_realtime,
         ),
         graphql_notification_reader,
         // GraphQL reads the activity log through the readonly pool; the

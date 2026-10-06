@@ -20,6 +20,7 @@ async fn cleanup_batches_remove_all_session_rows_without_a_user_cascade(pool: Pg
     let other = create_session(
         &repo,
         CreateAgentSessionParams {
+            warm: false,
             owner_id: Owner::User(user_id(OTHER)),
             ..new_session(bot, None, None)
         },

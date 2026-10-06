@@ -1,14 +1,16 @@
-//! Stripe adapter: one-off Checkout for credit packs, and immediate invoices
-//! for overage chunks.
+//! Stripe adapter: one-off Checkout for credit packs, immediate invoices for
+//! overage chunks and automatic credit reloads, and the current subscription
+//! period.
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::{
-    BillingError, CreditCheckoutRequest, OverageChargeRequest, PaymentGateway, Result,
-    SubscriptionScope,
+    BillingError, BillingPeriod, CreditCheckoutRequest, CreditReloadRequest, OverageChargeRequest,
+    PaymentGateway, Result, SubscriptionScope,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -29,10 +31,16 @@ pub const PURPOSE_METADATA_KEY: &str = "macro_purpose";
 pub const PURPOSE_AI_CREDITS: &str = "ai_credits";
 /// [`PURPOSE_METADATA_KEY`] value for an overage invoice.
 pub const PURPOSE_AI_OVERAGE: &str = "ai_overage";
+/// [`PURPOSE_METADATA_KEY`] value for an automatic credit-reload invoice.
+pub const PURPOSE_AI_CREDIT_RELOAD: &str = "ai_credit_reload";
 /// Metadata key carrying the payer's Macro user id.
 pub const PAYER_METADATA_KEY: &str = "macro_user_id";
 /// Metadata key carrying the `ai_overage_charge` id on overage invoices.
 pub const CHARGE_METADATA_KEY: &str = "macro_charge_id";
+/// Metadata key carrying the `ai_credit_reload` id on reload invoices.
+pub const RELOAD_METADATA_KEY: &str = "macro_reload_id";
+const OVERAGE_INVOICE_DESCRIPTION: &str = "Macro AI usage beyond plan";
+const CREDIT_RELOAD_INVOICE_DESCRIPTION: &str = "Macro AI credits (automatic reload)";
 const BILLING_SCOPE_METADATA_KEY: &str = "macro_billing_scope";
 const PERSONAL_SCOPE_STAMP: &str = "personal";
 const TEAM_ID_METADATA_KEY: &str = "team_id";
@@ -55,6 +63,85 @@ impl StripePaymentGateway {
         (*self.client)
             .clone()
             .with_strategy(RequestStrategy::Idempotent(key))
+    }
+
+    /// Open and finalize an invoice for exactly one line item (and nothing
+    /// else pending on the customer). Idempotent on
+    /// [`OneOffInvoice::idempotency_prefix`]. Returns the invoice id.
+    async fn open_one_off_invoice(
+        &self,
+        customer: CustomerId,
+        scope: SubscriptionScope,
+        one_off: OneOffInvoice<'_>,
+    ) -> Result<String> {
+        let live_method = self.resolve_charge_method(&customer, scope).await?;
+        let key = one_off.idempotency_prefix;
+
+        // 1. An empty draft invoice that takes nothing else pending on the
+        //    customer, so it can never bill more than this one charge.
+        //    It cannot auto-finalize until routing and its line item are present.
+        let mut invoice = CreateInvoice::new();
+        invoice.customer = Some(customer.clone());
+        invoice.auto_advance = Some(false);
+        invoice.collection_method = Some(CollectionMethod::ChargeAutomatically);
+        invoice.pending_invoice_items_behavior = Some(InvoicePendingInvoiceItemsBehavior::Exclude);
+        invoice.description = Some(one_off.invoice_description);
+        invoice.metadata = Some(one_off.metadata.clone());
+        let invoice = Invoice::create(&self.idempotent(format!("{key}:invoice")), invoice)
+            .await
+            .map_err(payment)?;
+        // Stripe replays the original create response. Read the invoice again
+        // to observe routing written by an earlier attempt.
+        let invoice = Invoice::retrieve(&self.client, &invoice.id, &[])
+            .await
+            .map_err(payment)?;
+        // Finalization can collect before the caller persists this id. A retry
+        // must recover the paid invoice instead of attempting a forbidden update.
+        if invoice.status == Some(InvoiceStatus::Paid) {
+            return Ok(invoice.id.to_string());
+        }
+        let invoice_scope = stamped_scope(&invoice)?;
+        let effective_scope = invoice_scope.unwrap_or(scope);
+        let charge_method = if invoice_scope.is_some_and(|stamped| stamped != scope) {
+            self.resolve_charge_method(&customer, effective_scope)
+                .await?
+        } else {
+            live_method
+        };
+        let stored_method = payment_method_id(&invoice.default_payment_method);
+        let method = charge_method.select_payment_method(stored_method.as_ref())?;
+        self.client
+            .post_form::<Invoice, _>(
+                &format!("/invoices/{}", invoice.id),
+                &UpdateInvoice::new(effective_scope, method.as_ref()),
+            )
+            .await
+            .map_err(payment)?;
+
+        // 2. The line item, attached to that invoice rather than left pending
+        //    on the customer where another invoice could sweep it up.
+        let mut item = CreateInvoiceItem::new(customer);
+        item.invoice = Some(invoice.id.clone());
+        item.amount = Some(one_off.amount_cents);
+        item.currency = Some(Currency::USD);
+        item.description = Some(one_off.line_description);
+        item.metadata = Some(one_off.metadata);
+        InvoiceItem::create(&self.idempotent(format!("{key}:item")), item)
+            .await
+            .map_err(payment)?;
+
+        // 3. Finalize so it is collectable now rather than in an hour.
+        Invoice::finalize(
+            &self.idempotent(format!("{key}:finalize")),
+            &invoice.id,
+            FinalizeInvoiceParams {
+                auto_advance: Some(true),
+            },
+        )
+        .await
+        .map_err(payment)?;
+
+        Ok(invoice.id.to_string())
     }
 
     async fn resolve_charge_method(
@@ -125,6 +212,41 @@ fn dollars(cents: i64) -> String {
     format!("${}.{:02}", cents / 100, cents % 100)
 }
 
+/// What distinguishes one single-line invoice from another.
+struct OneOffInvoice<'a> {
+    /// Prefix of the idempotency keys for the create/item/finalize requests.
+    idempotency_prefix: String,
+    /// Stamped on both the invoice and its line item.
+    metadata: HashMap<String, String>,
+    /// The invoice-level description.
+    invoice_description: &'static str,
+    /// Amount, customer cents.
+    amount_cents: i64,
+    /// Line description shown on the invoice.
+    line_description: &'a str,
+}
+
+fn overage_metadata(charge_id: Uuid) -> HashMap<String, String> {
+    HashMap::from([
+        (
+            PURPOSE_METADATA_KEY.to_string(),
+            PURPOSE_AI_OVERAGE.to_string(),
+        ),
+        (CHARGE_METADATA_KEY.to_string(), charge_id.to_string()),
+    ])
+}
+
+fn credit_reload_metadata(reload_id: Uuid, payer: &MacroUserIdStr<'_>) -> HashMap<String, String> {
+    HashMap::from([
+        (
+            PURPOSE_METADATA_KEY.to_string(),
+            PURPOSE_AI_CREDIT_RELOAD.to_string(),
+        ),
+        (RELOAD_METADATA_KEY.to_string(), reload_id.to_string()),
+        (PAYER_METADATA_KEY.to_string(), payer.to_string()),
+    ])
+}
+
 #[derive(PartialEq, Eq)]
 enum ChargeMethod {
     NoMatchingSubscription,
@@ -175,6 +297,50 @@ fn in_scope(subscription: &Subscription, scope: SubscriptionScope) -> bool {
     }
 }
 
+fn billable(subscription: &Subscription) -> bool {
+    matches!(
+        subscription.status,
+        SubscriptionStatus::Active | SubscriptionStatus::Trialing
+    )
+}
+
+/// Billable subscriptions decide the period. Without one, any subscription in
+/// scope does, because a payer whose subscription fell past due can still be
+/// metered and the webhook stores periods whatever the status.
+fn scoped_period(
+    subscriptions: &[Subscription],
+    scope: SubscriptionScope,
+) -> Result<Option<BillingPeriod>> {
+    let scoped = || {
+        subscriptions
+            .iter()
+            .filter(move |subscription| in_scope(subscription, scope))
+    };
+    if let Some(period) = agreed_period(scoped().filter(|subscription| billable(subscription)))? {
+        return Ok(Some(period));
+    }
+    agreed_period(scoped())
+}
+
+fn agreed_period<'a>(
+    subscriptions: impl Iterator<Item = &'a Subscription>,
+) -> Result<Option<BillingPeriod>> {
+    let mut periods = subscriptions.filter_map(|subscription| {
+        let start = DateTime::from_timestamp(subscription.current_period_start, 0)?;
+        let end = DateTime::from_timestamp(subscription.current_period_end, 0)?;
+        (start < end).then_some(BillingPeriod { start, end })
+    });
+    let Some(period) = periods.next() else {
+        return Ok(None);
+    };
+    if periods.any(|other| other != period) {
+        return Err(BillingError::Payment(anyhow::anyhow!(
+            "subscriptions in scope disagree on the billing period"
+        )));
+    }
+    Ok(Some(period))
+}
+
 fn charge_method(
     fallback: Option<PaymentMethodId>,
     subscriptions: &[Subscription],
@@ -182,11 +348,7 @@ fn charge_method(
 ) -> Result<ChargeMethod> {
     let mut selected = ChargeMethod::NoMatchingSubscription;
     for subscription in subscriptions {
-        if !matches!(
-            subscription.status,
-            SubscriptionStatus::Active | SubscriptionStatus::Trialing
-        ) || !in_scope(subscription, scope)
-        {
+        if !billable(subscription) || !in_scope(subscription, scope) {
             continue;
         }
         let candidate = payment_method_id(&subscription.default_payment_method)
@@ -306,83 +468,35 @@ impl PaymentGateway for StripePaymentGateway {
     #[tracing::instrument(skip(self, request), fields(charge = %request.charge_id, cents = request.amount_cents), err)]
     async fn open_overage_invoice(&self, request: OverageChargeRequest) -> Result<String> {
         let customer = parse_customer(&request.customer_id)?;
-        let live_method = self.resolve_charge_method(&customer, request.scope).await?;
-        let key = format!("ai_overage:{}", request.charge_id);
-        let metadata: HashMap<String, String> = HashMap::from([
-            (
-                PURPOSE_METADATA_KEY.to_string(),
-                PURPOSE_AI_OVERAGE.to_string(),
-            ),
-            (
-                CHARGE_METADATA_KEY.to_string(),
-                request.charge_id.to_string(),
-            ),
-        ]);
-
-        // 1. An empty draft invoice that takes nothing else pending on the
-        //    customer, so it can never bill more than this one charge.
-        //    It cannot auto-finalize until routing and its line item are present.
-        let mut invoice = CreateInvoice::new();
-        invoice.customer = Some(customer.clone());
-        invoice.auto_advance = Some(false);
-        invoice.collection_method = Some(CollectionMethod::ChargeAutomatically);
-        invoice.pending_invoice_items_behavior = Some(InvoicePendingInvoiceItemsBehavior::Exclude);
-        invoice.description = Some("Macro AI usage beyond plan");
-        invoice.metadata = Some(metadata.clone());
-        let invoice = Invoice::create(&self.idempotent(format!("{key}:invoice")), invoice)
-            .await
-            .map_err(payment)?;
-        // Stripe replays the original create response. Read the invoice again
-        // to observe routing written by an earlier attempt.
-        let invoice = Invoice::retrieve(&self.client, &invoice.id, &[])
-            .await
-            .map_err(payment)?;
-        // Finalization can collect before the caller persists this id. A retry
-        // must recover the paid invoice instead of attempting a forbidden update.
-        if invoice.status == Some(InvoiceStatus::Paid) {
-            return Ok(invoice.id.to_string());
-        }
-        let invoice_scope = stamped_scope(&invoice)?;
-        let scope = invoice_scope.unwrap_or(request.scope);
-        let charge_method = if invoice_scope.is_some_and(|scope| scope != request.scope) {
-            self.resolve_charge_method(&customer, scope).await?
-        } else {
-            live_method
-        };
-        let stored_method = payment_method_id(&invoice.default_payment_method);
-        let method = charge_method.select_payment_method(stored_method.as_ref())?;
-        self.client
-            .post_form::<Invoice, _>(
-                &format!("/invoices/{}", invoice.id),
-                &UpdateInvoice::new(scope, method.as_ref()),
-            )
-            .await
-            .map_err(payment)?;
-
-        // 2. The line item, attached to that invoice rather than left pending
-        //    on the customer where another invoice could sweep it up.
-        let mut item = CreateInvoiceItem::new(customer);
-        item.invoice = Some(invoice.id.clone());
-        item.amount = Some(request.amount_cents);
-        item.currency = Some(Currency::USD);
-        item.description = Some(request.description.as_str());
-        item.metadata = Some(metadata);
-        InvoiceItem::create(&self.idempotent(format!("{key}:item")), item)
-            .await
-            .map_err(payment)?;
-
-        // 3. Finalize so it is collectable now rather than in an hour.
-        Invoice::finalize(
-            &self.idempotent(format!("{key}:finalize")),
-            &invoice.id,
-            FinalizeInvoiceParams {
-                auto_advance: Some(true),
+        self.open_one_off_invoice(
+            customer,
+            request.scope,
+            OneOffInvoice {
+                idempotency_prefix: format!("ai_overage:{}", request.charge_id),
+                metadata: overage_metadata(request.charge_id),
+                invoice_description: OVERAGE_INVOICE_DESCRIPTION,
+                amount_cents: request.amount_cents,
+                line_description: &request.description,
             },
         )
         .await
-        .map_err(payment)?;
+    }
 
-        Ok(invoice.id.to_string())
+    #[tracing::instrument(skip(self, request), fields(reload = %request.reload_id, payer = %request.payer, cents = request.amount_cents), err)]
+    async fn open_credit_reload_invoice(&self, request: CreditReloadRequest) -> Result<String> {
+        let customer = parse_customer(&request.customer_id)?;
+        self.open_one_off_invoice(
+            customer,
+            request.scope,
+            OneOffInvoice {
+                idempotency_prefix: format!("ai_credit_reload:{}", request.reload_id),
+                metadata: credit_reload_metadata(request.reload_id, &request.payer),
+                invoice_description: CREDIT_RELOAD_INVOICE_DESCRIPTION,
+                amount_cents: request.amount_cents,
+                line_description: &request.description,
+            },
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self), fields(charge = %charge_id, invoice = %invoice_id), err)]
@@ -471,6 +585,17 @@ impl PaymentGateway for StripePaymentGateway {
             }
         }
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn subscription_period(
+        &self,
+        customer_id: &str,
+        scope: SubscriptionScope,
+    ) -> Result<Option<BillingPeriod>> {
+        let customer = parse_customer(customer_id)?;
+        let subscriptions = self.non_canceled_subscriptions(&customer).await?;
+        scoped_period(&subscriptions, scope)
+    }
 }
 
 /// A [`PaymentGateway`] for services that never settle (they only read
@@ -491,6 +616,12 @@ impl PaymentGateway for NoOpPaymentGateway {
         )))
     }
 
+    async fn open_credit_reload_invoice(&self, _request: CreditReloadRequest) -> Result<String> {
+        Err(BillingError::Payment(anyhow::anyhow!(
+            "payments are not configured in this service"
+        )))
+    }
+
     async fn pay_overage_invoice(
         &self,
         _charge_id: Uuid,
@@ -500,5 +631,13 @@ impl PaymentGateway for NoOpPaymentGateway {
         Err(BillingError::Payment(anyhow::anyhow!(
             "payments are not configured in this service"
         )))
+    }
+
+    async fn subscription_period(
+        &self,
+        _customer_id: &str,
+        _scope: SubscriptionScope,
+    ) -> Result<Option<BillingPeriod>> {
+        Ok(None)
     }
 }

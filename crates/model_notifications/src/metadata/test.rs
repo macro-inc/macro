@@ -805,7 +805,10 @@ fn reminder_notif_event_round_trips_and_renders_without_a_sender() {
 
     // A reminder is self-set, so the dispatcher passes no sender. Formatting
     // must not depend on one.
-    assert_eq!(event.format_title(None).unwrap(), "Reminder");
+    assert_eq!(
+        event.format_title(None).unwrap(),
+        "Reminder: Follow up on the contract"
+    );
     assert_eq!(
         event.format_body(None).unwrap(),
         "Follow up on the contract"

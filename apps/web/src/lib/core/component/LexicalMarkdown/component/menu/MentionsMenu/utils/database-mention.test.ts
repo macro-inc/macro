@@ -75,3 +75,44 @@ describe('mentioning a database', () => {
     });
   });
 });
+
+it('inserts a CRM contact reference without sharing, inviting, or notification tracking', async () => {
+  trackMention.mockClear();
+  const dispatchCommand = vi.fn();
+  const onUserMention = vi.fn();
+  const onDocumentMention = vi.fn();
+  const onEmailMention = vi.fn();
+  const handle = createItemHandler({
+    editor: { dispatchCommand } as unknown as LexicalEditor,
+    blockId: 'doc-1',
+    onUserMention,
+    onDocumentMention,
+    onEmailMention,
+  });
+  await handle({
+    kind: 'entity',
+    bucket: 'crm_contact',
+    id: 'contact-1',
+    sortTimestamp: 0,
+    searchText: 'Pat',
+    timestamps: {},
+    data: {
+      type: 'crm_contact',
+      id: 'contact-1',
+      companyId: 'company-1',
+      ownerId: '',
+      name: 'Pat',
+      email: 'pat@example.com',
+      hidden: false,
+    },
+  });
+  expect(dispatchCommand).toHaveBeenLastCalledWith('insert-document', {
+    documentId: 'contact-1',
+    documentName: 'Pat',
+    blockName: 'contact',
+  });
+  expect(trackMention).not.toHaveBeenCalled();
+  expect(onUserMention).not.toHaveBeenCalled();
+  expect(onDocumentMention).not.toHaveBeenCalled();
+  expect(onEmailMention).not.toHaveBeenCalled();
+});

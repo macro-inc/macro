@@ -1,4 +1,4 @@
 #![deny(missing_docs)]
-//! Composition for side-effect-free, fenced Slack archive persistence.
+//! Composition for fenced Slack archive persistence and one best-effort colleague join email.
 
 pub mod composition;

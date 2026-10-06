@@ -11,7 +11,6 @@ import {
   MODEL_PROVIDER,
   Model,
   modelsForPlan,
-  modelUsageHint,
   PAID_MODELS,
   type TModel,
 } from './model';
@@ -30,7 +29,8 @@ describe('modelsForPlan / defaultModelForPlan', () => {
   it('gives free users only the free model, defaulted to it', () => {
     const free = modelsForPlan(false);
     expect(free).toEqual([FREE_DEFAULT_MODEL]);
-    expect(FREE_DEFAULT_MODEL).toBe(Model.haiku45);
+    expect(FREE_DEFAULT_MODEL).toBe(Model.gemini38Flash);
+    expect(free).not.toContain(Model.haiku45);
     expect(defaultModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
     // The premium models are *not* in a free user's selectable set.
     expect(free).not.toContain(Model.sonnet55);
@@ -59,17 +59,6 @@ describe('databaseModelForPlan', () => {
   });
 });
 
-describe('modelUsageHint', () => {
-  it('flags the heavy paid models and stays quiet for the default and cheaper', () => {
-    expect(modelUsageHint(Model.gpt6Astra)).toBe('5× usage');
-    expect(modelUsageHint(Model.gpt56)).toBe('3× usage');
-    expect(modelUsageHint(Model.opus55)).toBe('2.5× usage');
-    expect(modelUsageHint(Model.sonnet55)).toBeUndefined();
-    expect(modelUsageHint(Model.haiku45)).toBeUndefined();
-    expect(modelUsageHint(Model.gpt56Mini)).toBeUndefined();
-  });
-});
-
 describe('parseModel', () => {
   it('passes through known model ids', () => {
     for (const id of Object.values(Model)) {
@@ -90,6 +79,14 @@ describe('parseModel', () => {
 });
 
 describe('alternateProviderModel', () => {
+  it('does not offer a paid fallback when the free provider fails', () => {
+    expect(
+      alternateProviderModel(Model.gemini38Flash, {
+        candidates: modelsForPlan(false),
+      })
+    ).toBeUndefined();
+  });
+
   it('always suggests a model from a different provider than the current one', () => {
     for (const current of Object.values(Model)) {
       const alt = alternateProviderModel(current);

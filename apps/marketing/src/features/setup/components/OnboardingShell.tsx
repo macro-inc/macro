@@ -15,6 +15,7 @@ export function OnboardingShell(props: {
   heroFooter?: JSX.Element;
   below?: JSX.Element;
   explainer?: JSX.Element;
+  explainerLabel?: string;
 }) {
   const detailsId = createUniqueId();
   const explainer = createMemo(() => props.explainer);
@@ -133,7 +134,7 @@ export function OnboardingShell(props: {
                 });
               }}
             >
-              Read more
+              {props.explainerLabel ?? 'Read more'}
               <ArrowDownIcon class="size-5" aria-hidden="true" />
             </button>
           </Show>

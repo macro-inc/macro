@@ -185,6 +185,8 @@ pub enum InitialMutationClaimWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimedMutationWire {
+    /// Opaque client correlation restored from the durable source.
+    pub client_metadata: Option<serde_json::Value>,
     /// Durable mutation id.
     pub transaction_id: String,
     /// Caller coalescing UUID.
@@ -205,6 +207,8 @@ pub struct ClaimedMutationWire {
     pub identity: Option<String>,
     /// Number of network attempts including this claim.
     pub attempt_count: u32,
+    /// Retryable server failures, excluding transport failures.
+    pub server_failure_count: u32,
 }
 
 /// Tagged result of deferring or discarding a failed queue attempt.
@@ -291,8 +295,13 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
         let requires_confirmation = claimed.queued.requires_confirmation();
+        let client_metadata = cache_core::queue::decode_optimistic_source(
+            &claimed.queued.optimistic.optimistic_data_json,
+        )?
+        .client_metadata;
         let request = claimed.queued.mutation.request;
         Ok(Self {
+            client_metadata,
             transaction_id: claimed.queued.id.to_string(),
             uuid: claimed.queued.uuid.to_string(),
             superseded: claimed.queued.superseded,
@@ -303,6 +312,7 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
             variables: serde_json::from_str(&request.variables_json).map_err(|e| e.to_string())?,
             identity: request.identity,
             attempt_count: claimed.queued.mutation.attempt_count,
+            server_failure_count: claimed.queued.mutation.server_failure_count,
         })
     }
 }
@@ -688,6 +698,7 @@ impl EngineHandle {
         lease_owner: String,
         now_ms: i64,
         lease_expires_at_ms: i64,
+        client_metadata: Option<serde_json::Value>,
     ) -> Result<EnqueueOptimisticMutationResultWire, String> {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops, .. } = &mut *state;
@@ -705,6 +716,7 @@ impl EngineHandle {
             .enqueue_optimistic_mutation_with_projections(
                 origin,
                 BeginOptimisticWrite {
+                    client_metadata: client_metadata.as_ref(),
                     uuid: &uuid,
                     query: &query,
                     operation_name: operation_name.as_deref(),
@@ -741,6 +753,18 @@ impl EngineHandle {
         })
     }
 
+    /// Reads queued operations without acquiring their leases.
+    pub async fn inspect_mutations(
+        &self,
+    ) -> Result<Vec<cache_core::queue::MutationInspection>, String> {
+        let state = self.inner.lock().await;
+        state
+            .engine
+            .inspect_mutations()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Claims the strict mutation queue head when it is runnable.
     pub async fn claim_next_mutation(
         &self,
@@ -770,6 +794,7 @@ impl EngineHandle {
         lease_generation: String,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<DeferOptimisticWriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
         let claim = MutationClaimToken {
@@ -779,7 +804,13 @@ impl EngineHandle {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops, .. } = &mut *state;
         match engine
-            .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
+            .defer_optimistic_write(
+                transaction,
+                claim,
+                next_attempt_at_ms,
+                error,
+                server_failure,
+            )
             .await
             .map_err(|e| e.to_string())?
         {

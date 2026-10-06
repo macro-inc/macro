@@ -56,6 +56,7 @@ import {
 } from './queries/contacts';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
+import { useCrmPeopleQuery } from './queries/people';
 import {
   useRecordCallsQuery,
   useRecordFilesQuery,
@@ -228,6 +229,7 @@ export function createAppCrmContext(): CrmContext {
     createContactSource: (...args) =>
       withReadyGate(useContactQuery(deps, ...args)),
     createTeamSource: useCurrentTeamQuery,
+    createPeopleSource: (enabled) => useCrmPeopleQuery(deps, enabled),
     createTeamConfigSource: createSettings,
     createCapabilities: () =>
       createCrmPermissions(userId, useCurrentTeamQuery(), createSettings()),

@@ -1,26 +1,31 @@
 //! HTTP API for AI billing: the payer's position, overage settings, credit
-//! purchases, the plan catalog, and the internal settle hook.
+//! purchases, the plan catalog, and the internal settle and subscription-period
+//! hooks.
 
 use crate::domain::{
-    BillingError, BillingService, CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS,
-    OVERAGE_LIMIT_MIN_CENTS, PlanTier, UsageSnapshot,
+    AUTO_RELOAD_DEFAULT_MINIMUM_CENTS, AUTO_RELOAD_DEFAULT_TARGET_CENTS,
+    AUTO_RELOAD_TARGET_MAX_CENTS, AiPricing, AutoReloadThresholds, BillingError, BillingService,
+    CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS, PaymentGateway, PlanTier,
+    SubscriptionScope, UsageSnapshot,
 };
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
+    extract::{FromRef, Query, State},
     http::{HeaderMap, StatusCode, Uri, header::ORIGIN},
     response::{IntoResponse, Response},
     routing::{get, patch, post},
 };
+use chrono::{DateTime, Utc};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
     UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use teams::domain::model::SeatPlan;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 /// Error response body.
 #[derive(Debug, Serialize, ToSchema)]
@@ -34,16 +39,20 @@ pub struct AiBillingErrorBody {
 pub struct PlanCatalogEntry {
     /// The tier.
     pub tier: PlanTier,
-    /// Monthly list price per seat, cents.
+    /// Monthly subscription price per seat, cents.
     pub monthly_price_cents: i64,
-    /// Included AI per seat per period, list-rate cents.
+    /// Included AI per seat per period, in cents at provider cost. For the
+    /// free plan this is its monthly hard cap.
     pub included_ai_cents_per_seat: i64,
+    /// Whether a new purchase or plan move may pick this plan today.
+    pub purchasable: bool,
 }
 
 /// The plan catalog and the knobs the billing UI offers.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct PlanCatalogResponse {
-    /// Free and every purchasable paid plan, cheapest first.
+    /// Every plan, cheapest first. Clients read allowances from here rather
+    /// than hard-coding them; `purchasable` marks the plans a user can buy.
     pub plans: Vec<PlanCatalogEntry>,
     /// Credit packs a payer may buy, cents.
     pub credit_packs_cents: Vec<i64>,
@@ -51,6 +60,19 @@ pub struct PlanCatalogResponse {
     pub overage_limit_min_cents: i64,
     /// Largest allowed overage cap, cents.
     pub overage_limit_max_cents: i64,
+    /// Largest allowed automatic reload target, cents.
+    pub auto_reload_target_max_cents: i64,
+    /// Thresholds automatic reload starts from before the payer sets their own.
+    pub auto_reload_defaults: AutoReloadDefaults,
+}
+
+/// The automatic reload thresholds a payer starts from.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct AutoReloadDefaults {
+    /// Balance below which a reload fires, cents.
+    pub minimum_balance_cents: i64,
+    /// Balance a reload tops up to, cents.
+    pub target_balance_cents: i64,
 }
 
 /// Request body for [`update_overage_handler`].
@@ -62,6 +84,36 @@ pub struct UpdateOverageRequest {
     /// Per-period cap on overage spend, cents. Required when enabling.
     #[serde(default)]
     pub limit_cents: i64,
+}
+
+/// Request body for [`update_auto_reload_handler`].
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAutoReloadRequest {
+    /// Reload credits automatically, billing usage past allowance and
+    /// credits to the payer's card. Turning this off also turns off overage.
+    pub enabled: bool,
+    /// Reload once the balance drops below this, cents. Must be positive.
+    pub minimum_balance_cents: i64,
+    /// Reload the balance back up to this, cents. At least $0.50 above the
+    /// minimum and no more than the catalog's `auto_reload_target_max_cents`.
+    pub target_balance_cents: i64,
+    /// Most to reload per calendar month, cents. Omit or `null` for no limit.
+    /// Also serves as the per-period overage cap, so it must be at least the
+    /// catalog's `overage_limit_min_cents`; larger values are capped at
+    /// `overage_limit_max_cents`.
+    #[serde(default)]
+    pub monthly_spend_limit_cents: Option<i64>,
+}
+
+impl From<&UpdateAutoReloadRequest> for AutoReloadThresholds {
+    fn from(req: &UpdateAutoReloadRequest) -> Self {
+        Self {
+            minimum_cents: req.minimum_balance_cents,
+            target_cents: req.target_balance_cents,
+            monthly_limit_cents: req.monthly_spend_limit_cents,
+        }
+    }
 }
 
 /// Request body for [`create_credit_checkout_handler`].
@@ -164,40 +216,82 @@ pub struct SettleRequest {
     pub user_id: String,
 }
 
-/// Router state: the billing service plus the authorization state the
-/// extractors need.
-pub struct AiBillingRouterState<B, Auth> {
+/// Query for [`subscription_period_handler`].
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionPeriodQuery {
+    /// The payer's Stripe customer.
+    pub customer_id: String,
+    /// The team whose subscription to read. Absent for the personal subscription.
+    pub team_id: Option<Uuid>,
+}
+
+/// Response for [`subscription_period_handler`].
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionPeriodResponse {
+    /// First instant of the period.
+    pub start: DateTime<Utc>,
+    /// First instant after the period.
+    pub end: DateTime<Utc>,
+}
+
+fn scope_from_query(team_id: Option<Uuid>) -> SubscriptionScope {
+    match team_id {
+        Some(team_id) => SubscriptionScope::Team { team_id },
+        None => SubscriptionScope::Personal,
+    }
+}
+
+/// Router state: the billing service, the payment gateway the internal
+/// subscription-period read uses, the configured pricing the catalog
+/// publishes, and the authorization state the extractors need.
+pub struct AiBillingRouterState<B, P, Auth> {
     /// The billing service.
     pub service: Arc<B>,
+    /// The payment gateway that answers subscription-period reads.
+    pub payments: Arc<P>,
+    /// The pricing the host composed the billing service with.
+    pub pricing: AiPricing,
     /// Authorization state for the request extractors.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<B, Auth> Clone for AiBillingRouterState<B, Auth> {
+impl<B, P, Auth> Clone for AiBillingRouterState<B, P, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            payments: self.payments.clone(),
+            pricing: self.pricing,
             authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<B, Auth> FromRef<AiBillingRouterState<B, Auth>> for Arc<B> {
-    fn from_ref(state: &AiBillingRouterState<B, Auth>) -> Self {
+impl<B, P, Auth> FromRef<AiBillingRouterState<B, P, Auth>> for AiPricing {
+    fn from_ref(state: &AiBillingRouterState<B, P, Auth>) -> Self {
+        state.pricing
+    }
+}
+
+impl<B, P, Auth> FromRef<AiBillingRouterState<B, P, Auth>> for Arc<B> {
+    fn from_ref(state: &AiBillingRouterState<B, P, Auth>) -> Self {
         state.service.clone()
     }
 }
 
-impl<B, Auth> FromRef<AiBillingRouterState<B, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &AiBillingRouterState<B, Auth>) -> Self {
+impl<B, P, Auth> FromRef<AiBillingRouterState<B, P, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &AiBillingRouterState<B, P, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
 
 /// Build the AI billing router.
-pub fn ai_billing_router<B, Auth, S>(state: AiBillingRouterState<B, Auth>) -> Router<S>
+pub fn ai_billing_router<B, P, Auth, S>(state: AiBillingRouterState<B, P, Auth>) -> Router<S>
 where
     B: BillingService,
+    P: PaymentGateway,
     Auth: MacroAuthorizationService,
     S: Send + Sync + Clone + 'static,
 {
@@ -209,12 +303,20 @@ where
             patch(update_overage_handler::<B, Auth>),
         )
         .route(
+            "/ai-billing/auto-reload",
+            patch(update_auto_reload_handler::<B, Auth>),
+        )
+        .route(
             "/ai-billing/credits/checkout",
             post(create_credit_checkout_handler::<B, Auth>),
         )
         .route(
             "/internal/ai-billing/settle",
             post(settle_handler::<B, Auth>),
+        )
+        .route(
+            "/internal/ai-billing/subscription-period",
+            get(subscription_period_handler::<B, P, Auth>),
         )
         .with_state(state)
 }
@@ -225,6 +327,7 @@ fn error_response(e: BillingError) -> Response {
         BillingError::FreePlan => StatusCode::PAYMENT_REQUIRED,
         BillingError::InvalidCreditAmount
         | BillingError::InvalidOverageLimit
+        | BillingError::InvalidAutoReload(_)
         | BillingError::NoStripeCustomer => StatusCode::BAD_REQUEST,
         BillingError::Payment(_) | BillingError::Storage(_) | BillingError::Entitlement(_) => {
             tracing::error!(error = ?e, "ai billing request failed");
@@ -270,7 +373,8 @@ pub async fn get_summary_handler<B: BillingService, Auth: MacroAuthorizationServ
     }
 }
 
-/// The plan catalog, credit packs, and overage cap bounds.
+/// The plan catalog, credit packs, overage cap bounds, and automatic reload
+/// defaults and bounds.
 #[utoipa::path(
     get,
     path = "/ai-billing/plans",
@@ -280,19 +384,27 @@ pub async fn get_summary_handler<B: BillingService, Auth: MacroAuthorizationServ
     ),
     tag = "ai_billing"
 )]
-pub async fn get_plans_handler() -> Json<PlanCatalogResponse> {
+pub async fn get_plans_handler(State(pricing): State<AiPricing>) -> Json<PlanCatalogResponse> {
     Json(PlanCatalogResponse {
-        plans: std::iter::once(PlanTier::Free)
-            .chain(SeatPlan::PURCHASABLE.into_iter().map(PlanTier::from))
+        plans: [PlanTier::Free, PlanTier::Premium, PlanTier::Max]
+            .into_iter()
             .map(|tier| PlanCatalogEntry {
                 tier,
                 monthly_price_cents: tier.monthly_price_cents(),
-                included_ai_cents_per_seat: tier.included_ai_cents_per_seat(),
+                included_ai_cents_per_seat: tier.included_ai_cents_per_seat(pricing),
+                purchasable: SeatPlan::PURCHASABLE
+                    .into_iter()
+                    .any(|plan| PlanTier::from(plan) == tier),
             })
             .collect(),
         credit_packs_cents: CREDIT_PACKS_CENTS.to_vec(),
         overage_limit_min_cents: OVERAGE_LIMIT_MIN_CENTS,
         overage_limit_max_cents: OVERAGE_LIMIT_MAX_CENTS,
+        auto_reload_target_max_cents: AUTO_RELOAD_TARGET_MAX_CENTS,
+        auto_reload_defaults: AutoReloadDefaults {
+            minimum_balance_cents: AUTO_RELOAD_DEFAULT_MINIMUM_CENTS,
+            target_balance_cents: AUTO_RELOAD_DEFAULT_TARGET_CENTS,
+        },
     })
 }
 
@@ -323,6 +435,43 @@ pub async fn update_overage_handler<B: BillingService, Auth: MacroAuthorizationS
             &user.authorization.user.macro_user_id,
             req.enabled,
             req.limit_cents,
+        )
+        .await
+    {
+        Ok(snapshot) => Json(snapshot).into_response(),
+        Err(e) => error_response(e),
+    }
+}
+
+/// Turn automatic credit reloads (and with them overage) on with the given
+/// thresholds, or off. Payer only. Enabling settles right away, so a balance
+/// already under the minimum reloads immediately.
+#[utoipa::path(
+    patch,
+    path = "/ai-billing/auto-reload",
+    operation_id = "update_ai_billing_auto_reload",
+    request_body = UpdateAutoReloadRequest,
+    responses(
+        (status = 200, description = "Updated position", body = UsageSnapshot),
+        (status = 400, description = "Invalid thresholds", body = AiBillingErrorBody),
+        (status = 401, description = "Unauthorized"),
+        (status = 402, description = "A paid plan is required", body = AiBillingErrorBody),
+        (status = 403, description = "Only the payer may change billing", body = AiBillingErrorBody),
+        (status = 500, description = "Internal server error", body = AiBillingErrorBody),
+    ),
+    tag = "ai_billing"
+)]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+pub async fn update_auto_reload_handler<B: BillingService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<B>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(req): Json<UpdateAutoReloadRequest>,
+) -> Response {
+    match service
+        .update_auto_reload(
+            &user.authorization.user.macro_user_id,
+            req.enabled,
+            AutoReloadThresholds::from(&req),
         )
         .await
     {
@@ -411,6 +560,49 @@ pub async fn settle_handler<B: BillingService, Auth: MacroAuthorizationService>(
         Err(BillingError::Payment(_) | BillingError::NoStripeCustomer) => {
             StatusCode::NO_CONTENT.into_response()
         }
+        Err(e) => error_response(e),
+    }
+}
+
+/// The current period of a Stripe customer's non-canceled subscription in the
+/// personal or team scope, preferring an active or trialing one. Internal
+/// services only; the document cognition service reads it when a payer's stored
+/// period is missing or ended.
+#[utoipa::path(
+    get,
+    path = "/internal/ai-billing/subscription-period",
+    operation_id = "get_ai_billing_subscription_period",
+    params(SubscriptionPeriodQuery),
+    responses(
+        (status = 200, description = "Current subscription period", body = SubscriptionPeriodResponse),
+        (status = 204, description = "No non-canceled subscription in scope"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = AiBillingErrorBody),
+    ),
+    tag = "ai_billing"
+)]
+#[tracing::instrument(skip(state, _internal))]
+pub async fn subscription_period_handler<B, P, Auth>(
+    State(state): State<AiBillingRouterState<B, P, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Query(query): Query<SubscriptionPeriodQuery>,
+) -> Response
+where
+    B: BillingService,
+    P: PaymentGateway,
+    Auth: MacroAuthorizationService,
+{
+    match state
+        .payments
+        .subscription_period(&query.customer_id, scope_from_query(query.team_id))
+        .await
+    {
+        Ok(Some(period)) => Json(SubscriptionPeriodResponse {
+            start: period.start,
+            end: period.end,
+        })
+        .into_response(),
+        Ok(None) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => error_response(e),
     }
 }

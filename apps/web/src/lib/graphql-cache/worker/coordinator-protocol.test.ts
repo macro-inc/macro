@@ -57,6 +57,24 @@ it.each([undefined, 'DRAFT_ALREADY_SENT', 'INTERNAL', 42, null])(
   }
 );
 
+it.each([undefined, true, false, 'true', 1, null])(
+  'validates retry-budget classification %j',
+  (serverFailure) => {
+    expect(
+      isCacheRequest({
+        id: 1,
+        kind: 'defer-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        nextAttemptAtMs: 100,
+        error: 'failed',
+        serverFailure,
+      })
+    ).toBe(serverFailure === undefined || typeof serverFailure === 'boolean');
+  }
+);
+
 const enginePort = {
   postMessage() {},
   close() {},

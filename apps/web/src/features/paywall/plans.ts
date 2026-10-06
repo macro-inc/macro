@@ -1,17 +1,31 @@
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-
+/** API tier identifiers remain stable; `premium` is displayed as Pro. */
 export type PlanTier = 'free' | 'premium' | 'max';
 export type Plan = {
   tier: PlanTier;
   name: string;
   price: number;
   highlighted: boolean;
-  /**
-   * AI usage included each month, in dollars at Macro's list rate. Equal to the
-   * plan price: the plan's AI allowance is worth what the plan costs.
-   */
-  aiIncluded: number;
 };
+
+/**
+ * Included AI per seat per period in cents at provider cost, by tier. The
+ * backend owns these numbers; read them from the plan catalog with
+ * `useIncludedAiCentsByTier` (`@queries/auth`) rather than hard-coding them.
+ * Empty until the catalog has loaded.
+ */
+export type IncludedAiCentsByTier = Partial<Record<PlanTier, number>>;
+
+/** "$20" for whole dollars, "$12.50" otherwise; undefined while unknown. */
+export function formatPlanPrice(cents: number | undefined): string | undefined {
+  if (cents === undefined) return undefined;
+  const dollars = cents / 100;
+  return Number.isInteger(dollars)
+    ? `$${dollars.toLocaleString()}`
+    : `$${dollars.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+}
 /** Tiers that correspond to real Stripe products. Excludes 'free'. */
 export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
@@ -20,15 +34,13 @@ const FREE_PLAN = {
   name: 'Free',
   price: 0,
   highlighted: false,
-  aiIncluded: 0,
 } as const satisfies Plan;
 
 const PREMIUM_PLAN = {
   tier: 'premium',
-  name: 'Premium',
+  name: 'Pro',
   price: 40,
   highlighted: true,
-  aiIncluded: 40,
 } as const satisfies Plan;
 
 const MAX_PLAN = {
@@ -36,13 +48,12 @@ const MAX_PLAN = {
   name: 'Max',
   price: 200,
   highlighted: false,
-  aiIncluded: 200,
 } as const satisfies Plan;
 
 export const PLANS = [
   FREE_PLAN,
   PREMIUM_PLAN,
-  // MAX_PLAN,
+  MAX_PLAN,
 ] as const satisfies Plan[];
 
 export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
@@ -51,22 +62,26 @@ export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
   max: MAX_PLAN,
 };
 
+/** Older checkout services still use the API tier's old display name. */
+export function billingMessage(message: string): string {
+  return message.replace(/\bPremium\b/g, PLAN_BY_TIER.premium.name);
+}
+
 interface PlanFeature {
   label: string;
   values: Record<PlanTier, string>;
-  devOnly?: boolean;
+  /** Shown only while the `enable-ai-usage-billing` flag is on. */
+  aiUsageBilling?: boolean;
 }
 
-const planFeatures: PlanFeature[] = [
-  {
-    label: 'AI usage included',
-    devOnly: true,
-    values: {
-      free: 'Limited',
-      premium: '$40 / mo',
-      max: '$200 / mo',
-    },
-  },
+/** Product copy for included usage, relative to Pro rather than dollar allowances. */
+export const PLAN_USAGE_LABELS: Record<PlanTier, string> = {
+  free: 'Limited usage',
+  premium: 'Standard usage',
+  max: '10× usage',
+};
+
+const PLAN_FEATURE_ROWS: PlanFeature[] = [
   {
     label: 'AI Agent',
     values: {
@@ -77,9 +92,9 @@ const planFeatures: PlanFeature[] = [
   },
   {
     label: 'Beyond included',
-    devOnly: true,
+    aiUsageBilling: true,
     values: {
-      free: '—',
+      free: 'Upgrade to continue',
       premium: 'Credits or usage billing',
       max: 'Credits or usage billing',
     },
@@ -94,6 +109,10 @@ const planFeatures: PlanFeature[] = [
   },
 ];
 
-export const PLAN_FEATURES = planFeatures.filter(
-  (feature) => !feature.devOnly || DEV_MODE_ENV
-);
+/** AI usage rows appear only while usage billing is enabled. */
+export function planFeatures(aiUsageBilling: boolean): PlanFeature[] {
+  return [
+    { label: 'AI usage', values: PLAN_USAGE_LABELS, aiUsageBilling: true },
+    ...PLAN_FEATURE_ROWS,
+  ].filter((row) => !row.aiUsageBilling || aiUsageBilling);
+}

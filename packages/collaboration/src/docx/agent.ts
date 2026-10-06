@@ -34,6 +34,7 @@ import {
   unidOf,
   WORDML_NS,
 } from './paragraph';
+import { tracksRevisions } from './revisions';
 import {
   type DocxPackageState,
   diffDocxStates,
@@ -301,6 +302,11 @@ class Editor {
         this.changed(found);
         return;
       }
+      case 'addComment':
+        // Refused before any operation runs (see runDocxAgentRequest).
+        throw new DocxAgentError(
+          'Word comments need the document in the current editor format.'
+        );
     }
   }
 
@@ -723,7 +729,10 @@ export async function runDocxAgentRequest(
     if (request.action === 'read')
       return { content: describeWord(doc, request) };
     const version = doc.version();
-    const content = editWord(doc, request.operations);
+    const content = editWord(doc, request.operations, {
+      trackChanges: request.trackChanges,
+      author: request.author,
+    });
     const update = doc.export({ mode: 'update', from: version });
     source.registerPeerId(doc.peerId);
     if (!(await source.pushUpdate([update])))
@@ -737,6 +746,15 @@ export async function runDocxAgentRequest(
   const state = readDocxState(doc);
   if (request.action === 'read')
     return { content: describeDocx(state, request) };
+  // The first collaborative format predates tracked changes and Word
+  // comments here; opening the document in Macro upgrades it.
+  const tracked =
+    request.trackChanges ??
+    tracksRevisions(state.parts.get('word/settings.xml'));
+  if (tracked || request.operations.some((o) => o.type === 'addComment'))
+    throw new DocxAgentError(
+      "This Word document is still in Macro's previous editor format, which cannot record tracked changes or Word comments. Ask the user to open it once in Macro (that upgrades it), then try again; or pass trackChanges false to edit it directly without comments."
+    );
 
   const result = applyDocxOperations(state, request.operations);
   const version = doc.version();

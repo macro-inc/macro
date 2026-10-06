@@ -39,7 +39,6 @@ import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateCallItem,
   CalendarCreateEventItem,
-  CalendarCreateReminderItem,
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 
@@ -312,7 +311,6 @@ export function CalendarSidebar() {
         >
           <CalendarCreateEventItem onSelect={closeOverlay} />
           <CalendarCreateCallItem onSelect={closeOverlay} />
-          <CalendarCreateReminderItem onSelect={closeOverlay} />
         </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">

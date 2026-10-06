@@ -73,6 +73,10 @@ impl OnboardingRepo for MockRepo {
             ..active_row()
         })
     }
+
+    async fn delete_row(&self, _user: &MacroUserIdStr<'static>) -> Result<()> {
+        Ok(())
+    }
 }
 
 struct MockStore {
@@ -133,6 +137,14 @@ impl ImportService for MockImport {
     ) -> ImportResult<bool> {
         self.gathers.lock().unwrap().push((source, auto_import));
         Ok(true)
+    }
+
+    async fn start_discovery(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _source: ImportSource,
+    ) -> ImportResult<bool> {
+        Ok(false)
     }
 
     async fn retry_gather(

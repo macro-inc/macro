@@ -9,6 +9,9 @@ name = "macrod"
 path = "src/main.rs"
 
 [dependencies]
+agent_fold = { path = "../folds/agent_fold", default-features = false }
+claude_fold = { path = "../folds/claude_fold" }
+codex_fold = { path = "../folds/codex_fold" }
 messages = { path = "../messages", features = ["broker"] }
 # Direct crate imports are the whole typegen story: the protocol envelope,
 # the trigger event vocabulary, and the delivery signature all come from the
@@ -42,7 +45,7 @@ serde_json = { workspace = true }
 shell-words = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "signal", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "time"] }
 tokio-retry = { workspace = true }
 tokio-util = { workspace = true, features = ["compat", "rt"] }
 tokio-tungstenite = { workspace = true }

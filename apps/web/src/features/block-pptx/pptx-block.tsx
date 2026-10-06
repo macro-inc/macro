@@ -3,6 +3,7 @@
  * presentation editor, wired to the worker engine and document storage.
  */
 
+import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import {
   ResponsiveBlockToolbar,
@@ -295,6 +296,19 @@ export default function PptxBlock(props: { share?: string }) {
         </SplitHeaderLeft>
         <SplitHeaderRight>
           <BlockLiveIndicators />
+        </SplitHeaderRight>
+        <SplitHeaderRight>
+          <div class="order-[999] flex items-center">
+            <ChatWithAgentButton
+              label="Ask Macro"
+              entity={{
+                type: 'document',
+                id: documentId,
+                name: name(),
+                fileType: 'pptx',
+              }}
+            />
+          </div>
         </SplitHeaderRight>
         <ResponsivePermissionsBadge />
         <ResponsiveBlockToolbar

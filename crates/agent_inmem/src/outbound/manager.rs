@@ -69,6 +69,7 @@ impl Drop for LiveAgent {
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
     admission: Arc<dyn AiAdmissionService>,
+    model_access: Arc<dyn crate::domain::model_access::InMemModelAccess>,
     frames: Arc<dyn FrameSource>,
     mcp: Arc<dyn DynMcpToolConnector>,
     enable_dev_commands: bool,
@@ -91,9 +92,11 @@ impl InMemAgentManager {
         engine: Arc<dyn TurnEngine>,
         frames: Arc<dyn FrameSource>,
         mcp: Arc<dyn DynMcpToolConnector>,
+        model_access: Arc<dyn crate::domain::model_access::InMemModelAccess>,
     ) -> Self {
         Self {
             engine,
+            model_access,
             admission: Arc::new(DisabledAiAdmissionService),
             frames,
             mcp,
@@ -176,11 +179,13 @@ impl InMemAgentManager {
             owner: facts.owner,
             engine: Arc::clone(&self.engine),
             admission: Arc::clone(&self.admission),
+            model_access: Arc::clone(&self.model_access),
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),
             turn_lock: tokio::sync::Mutex::new(()),
             mcp: Arc::clone(&self.mcp),
             mcp_tools: std::sync::Mutex::new(None),
+            mcp_connect: std::sync::Mutex::new(None),
             client_renders_forms: AtomicBool::new(false),
             enable_dev_commands: self.enable_dev_commands,
         });
@@ -205,11 +210,13 @@ impl InMemAgentManager {
         server_half
     }
 
-    /// End the session for good: kill its agent task and drop its
-    /// conversation.
+    /// End the session for good: kill its agent task, drop its conversation,
+    /// and close the MCP sessions its token was holding open.
     pub fn teardown(&self, session: AgentSessionId) {
         self.live.remove(&session);
         self.store.remove(&session);
-        self.tokens.remove(&session);
+        if let Some((_, token)) = self.tokens.remove(&session) {
+            self.mcp.release_dyn(&token);
+        }
     }
 }

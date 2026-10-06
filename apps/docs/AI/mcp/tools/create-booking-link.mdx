@@ -1,0 +1,16 @@
+---
+title: CreateBookingLink
+description: >-
+  Create a reusable booking page, not a calendar meeting.
+---
+
+# CreateBookingLink
+
+Create a reusable booking page, not a calendar meeting. First use ListBookingLinks to discover a suitable existing link or reuse availability. Supply a full draft with all seven weekdays (Sunday=0), IANA time zone, and real host IDs; personal links use the authenticated user and individual mode. For a team use a real team ID and collective or roundRobin mode. Set enabled only when the user wants to accept bookings. No invitations are sent by creating a link. Repeating an identical draft with the same slug reuses the saved link; a different draft at that slug conflicts. In chat and agent sessions this presents an editable review card: use it directly without an extra prose confirmation. Cancellation changes nothing. Headless clients apply their own confirmation policy before execution. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `teamId` | string | No | Existing Macro team ID, or null for a personal booking link. |
+| `draft` | BookingLinkDraft | Yes | Complete proposal reviewed and validated before saving. |

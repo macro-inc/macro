@@ -370,10 +370,14 @@ async fn legacy_analytics_writes_and_repricing_leave_financial_evidence_unchange
     let pricing = ModelPricing::Tokens {
         input: 1.0,
         output: 2.0,
+        cache_read: None,
+        cache_write: None,
     };
     let amount = UsageAmount::Tokens {
         input: 1_000_000,
         output: 0,
+        cache_read: 0,
+        cache_write: 0,
     };
     analytics
         .insert_usage(
@@ -398,6 +402,8 @@ async fn legacy_analytics_writes_and_repricing_leave_financial_evidence_unchange
             ModelPricing::Tokens {
                 input: 99.0,
                 output: 99.0,
+                cache_read: None,
+                cache_write: None,
             },
         )
         .await

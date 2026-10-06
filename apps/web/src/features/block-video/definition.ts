@@ -8,7 +8,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { storageServiceClient } from '@service-storage/client';
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
 import { err, ok } from 'neverthrow';
-import BlockVideo from './component/Block';
+import { lazy } from 'solid-js';
 import {
   isVideoPlaybackEnabled,
   PLAYBACK_ENABLED_MIMES,
@@ -20,7 +20,7 @@ export { PLAYBACK_ENABLED_MIMES, VIDEO_MIMES };
 export const definition = defineBlock({
   name: 'video',
   description: 'block for video file types',
-  component: BlockVideo,
+  component: lazy(() => import('./component/Block')),
   liveTrackingEnabled: false,
   accepted: VIDEO_MIMES,
   async load(source, intent) {

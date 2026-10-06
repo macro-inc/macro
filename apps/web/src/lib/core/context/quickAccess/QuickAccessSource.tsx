@@ -2,7 +2,10 @@ import {
   materializeCachedGraphqlCrmCompanies,
   useQuickAccessCrmCompaniesQuery,
 } from '@app/features/crm/crm-search';
-import { useQuickAccessCrmContactsQuery } from '@app/features/crm/record-adapter';
+import {
+  materializeCachedGraphqlCrmContacts,
+  useQuickAccessCrmContactsQuery,
+} from '@app/features/crm/record-adapter';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { enableCrm, enableDatabases } from '@core/constant/featureFlags';
@@ -47,6 +50,7 @@ import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
+  deduplicateContactItems,
   filterQuickAccessItems,
   searchQuickAccessItems,
 } from './entity-search';
@@ -282,7 +286,7 @@ function getCrmContactSearchText(contact: CrmContactEntity): string {
 }
 
 function getCrmContactVersion(contact: CrmContactEntity): string {
-  return `${contact.name}|${contact.email}|${contact.hidden}|${contact.updatedAt}`;
+  return `${contact.name}|${contact.email}|${contact.hidden}|${contact.updatedAt}|${contact.lastInteraction}`;
 }
 
 function getSnippetVersion(snippet: SnippetEntity, viewedAt?: string): string {
@@ -340,7 +344,7 @@ const RECORD_TYPE_BY_BUCKET: Record<Bucket, string> = {
   dm: 'GraphqlSoupChannel',
   chat: 'GraphqlSoupChat',
   crm_company: 'GraphqlSoupCrmCompany',
-  crm_contact: 'CrmContact',
+  crm_contact: 'GraphqlSoupCrmContact',
   document: 'GraphqlSoupDocument',
   task: 'GraphqlSoupDocument',
   snippet: 'GraphqlSoupDocument',
@@ -674,10 +678,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const allEntries: IndexEntry[] = [];
     const hidden = hiddenIds();
     for (const contact of crmContactsAccessor()) {
-      if (hidden.has(contact.id)) continue;
+      if (contact.hidden || hidden.has(contact.id)) continue;
       const version = getCrmContactVersion(contact);
       const cached = itemCache.get(contact.id);
-      const sortTimestamp = toTimestamp(contact.updatedAt);
+      const sortTimestamp = toTimestamp(
+        contact.lastInteraction ?? contact.updatedAt
+      );
       if (!cached || cached.version !== version) {
         itemCache.set(contact.id, {
           version,
@@ -688,7 +694,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             searchText: getCrmContactSearchText(contact),
             sortTimestamp,
             timestamps: {
-              lastInteraction: contact.updatedAt,
+              lastInteraction: contact.lastInteraction ?? contact.updatedAt,
               createdAt: contact.createdAt,
             },
             data: contact,
@@ -1130,12 +1136,17 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               const missing = documents.filter(
                 ({ recordKey }) => !itemCache.has(idOf(recordKey))
               );
-              const [historyItems, cachedChannelItems, cachedCompanies] =
-                await Promise.all([
-                  materializeCachedGraphqlHistoryItems(projectionHost, missing),
-                  materializeCachedGraphqlChannels(projectionHost, missing),
-                  materializeCachedGraphqlCrmCompanies(projectionHost, missing),
-                ]);
+              const [
+                historyItems,
+                cachedChannelItems,
+                cachedCompanies,
+                cachedContacts,
+              ] = await Promise.all([
+                materializeCachedGraphqlHistoryItems(projectionHost, missing),
+                materializeCachedGraphqlChannels(projectionHost, missing),
+                materializeCachedGraphqlCrmCompanies(projectionHost, missing),
+                materializeCachedGraphqlCrmContacts(projectionHost, missing),
+              ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
               );
@@ -1144,6 +1155,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               );
               const companiesById = new Map(
                 cachedCompanies.map((company) => [company.id, company])
+              );
+              const contactsById = new Map(
+                cachedContacts.map((contact) => [contact.id, contact])
               );
               return documents.flatMap((document): QuickAccessItem[] => {
                 const id = idOf(document.recordKey);
@@ -1177,6 +1191,26 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                     },
                   ];
                 }
+                const contact = contactsById.get(id);
+                if (contact) {
+                  return [
+                    {
+                      kind: 'entity',
+                      id,
+                      bucket: 'crm_contact',
+                      searchText: getCrmContactSearchText(contact),
+                      sortTimestamp: toTimestamp(
+                        contact.lastInteraction ?? contact.updatedAt
+                      ),
+                      timestamps: {
+                        lastInteraction:
+                          contact.lastInteraction ?? contact.updatedAt,
+                        createdAt: contact.createdAt,
+                      },
+                      data: contact,
+                    },
+                  ];
+                }
                 const company = companiesById.get(id);
                 if (company) {
                   return [
@@ -1206,7 +1240,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
     const list = createLazyMemo(() => {
       const local = localItems();
-      if (!projected || options?.enabled?.() === false) return local;
+      if (!projected || options?.enabled?.() === false)
+        return deduplicateContactItems(local);
 
       // Search describes cached contents, not corpus completeness. Merge known
       // rows before sorting recency so hydration cannot promote older items.
@@ -1217,9 +1252,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const combined = ranked.concat(
         local.filter((item) => !seen.has(item.id))
       );
-      return options?.searchTerm?.().trim()
-        ? combined
-        : combined.sort(compareRecency);
+      return deduplicateContactItems(
+        options?.searchTerm?.().trim()
+          ? combined
+          : combined.sort(compareRecency)
+      );
     });
     return {
       items: list,

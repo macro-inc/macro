@@ -147,10 +147,21 @@ pub(crate) struct ApiContext {
     pub codex_connection: Option<Arc<dyn codex_connection::domain::ConnectionService>>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
+    pub subscription_checkout: Arc<
+        authentication_service::service::subscription_checkout::CheckoutService<
+            authentication_service::outbound::subscription_checkout::StripeCheckoutGateway<
+                GtmInviteServiceType,
+            >,
+        >,
+    >,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
-    pub user_deletion:
-        Arc<authentication_service::outbound::user_deletion::UserDeletionAdapter<TeamsServiceType>>,
+    pub user_deletion: Arc<
+        authentication_service::outbound::user_deletion::UserDeletionAdapter<
+            TeamsServiceType,
+            onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
+        >,
+    >,
     pub email_service_client: Arc<email::outbound::EmailServiceHttpClient>,
     pub ses_client: Arc<ses_client::Ses>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
@@ -179,6 +190,7 @@ pub(crate) struct ApiContext {
     pub stripe_prices: crate::api::user::stripe::StripePrices,
     /// AI allowances, credits, and overage
     pub ai_billing_service: Arc<AiBillingServiceType>,
+    pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,
     /// Whether Gmail link consent requests the Google Calendar scope.
     pub calendar_scope_enabled: bool,
 }

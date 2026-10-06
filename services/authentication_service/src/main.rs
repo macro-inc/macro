@@ -506,6 +506,19 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let stripe_client = Arc::new(stripe_client);
+    let gtm_invite_service = Arc::new(gtm_invite_service);
+    let subscription_checkout = Arc::new(
+        authentication_service::service::subscription_checkout::CheckoutService::new(
+            authentication_service::outbound::subscription_checkout::StripeCheckoutGateway::new(
+                db.clone(),
+                stripe_client.clone(),
+                gtm_invite_service.clone(),
+                stripe_prices.seat_prices(),
+            ),
+        ),
+    );
+    let ai_payment_gateway = ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone());
+    let ai_pricing = config.ai_pricing();
     let ai_billing_service = Arc::new(
         ai_billing::domain::BillingServiceImpl::new(
             ai_billing::outbound::RolesTeamsEntitlementSource::new(
@@ -513,8 +526,9 @@ async fn main() -> anyhow::Result<()> {
                 teams_repo_impl.clone(),
             ),
             ai_billing::outbound::PgUsageReader::new(db.clone()),
-            ai_billing::outbound::PgBillingRepo::new(db.clone()),
-            ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+            ai_billing::outbound::PgBillingRepo::new(db.clone(), ai_pricing),
+            ai_payment_gateway.clone(),
+            ai_pricing,
         )
         .with_enforcement(config.enable_ai_usage_enforcement)
         .with_billing(config.enable_ai_usage_billing),
@@ -541,6 +555,8 @@ async fn main() -> anyhow::Result<()> {
             db.clone(),
             document_storage_service_client.clone(),
             teams_service.clone(),
+            onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
+            stripe_client.clone(),
             config.service_internal_auth_key.to_string(),
             macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),
             macro_service_urls::ScheduledActionServiceUrl::new()?.to_string(),
@@ -558,6 +574,7 @@ async fn main() -> anyhow::Result<()> {
             codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client,
+            subscription_checkout,
             document_storage_service_client,
             user_deletion,
             email_service_client: Arc::new(email_service_client),
@@ -587,7 +604,7 @@ async fn main() -> anyhow::Result<()> {
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
-            gtm_invite_service: Arc::new(gtm_invite_service),
+            gtm_invite_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)
@@ -608,6 +625,7 @@ async fn main() -> anyhow::Result<()> {
             analytics_client,
             stripe_prices,
             ai_billing_service,
+            ai_payment_gateway: Arc::new(ai_payment_gateway),
         },
         config.port,
     )

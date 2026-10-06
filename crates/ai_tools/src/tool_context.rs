@@ -63,7 +63,6 @@ use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
 use projects::inbound::toolset::ProjectToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
-use reminders::inbound::toolset::RemindersToolContext;
 use skills::inbound::toolset::SkillToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
@@ -75,6 +74,8 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod coding_agents;
+pub use coding_agents::{ToolCodingAgentToolContext, build_coding_agent_tool_context};
 mod images;
 #[cfg(any(test, feature = "test-support"))]
 pub use images::build_image_generation_tool_context_test;
@@ -464,6 +465,37 @@ pub fn build_calendar_tool_context(
             calendar_events::outbound::pg::PgCalendarRepository::new(pool),
         )),
     )
+}
+
+/// Settings-only scheduling service; no provider/calendar writes are exposed here.
+pub type ToolBookingLinkService = calendar_scheduling::domain::service::Service<
+    calendar_scheduling::outbound::postgres::PostgresRepository,
+    (),
+    calendar_scheduling::outbound::macro_services::MacroDirectory<ToolTeamService>,
+>;
+/// Booking-link tool dependencies.
+pub type ToolBookingLinkToolContext =
+    calendar_scheduling::inbound::toolset::BookingLinkToolContext<ToolBookingLinkService>;
+/// Construct scheduling adapters at the AI composition root.
+pub fn build_booking_link_tool_context(
+    pool: sqlx::PgPool,
+    environment: macro_env::Environment,
+) -> ToolBookingLinkToolContext {
+    calendar_scheduling::inbound::toolset::BookingLinkToolContext {
+        service: Arc::new(calendar_scheduling::domain::service::Service::new(
+            calendar_scheduling::outbound::postgres::PostgresRepository::new(pool.clone()),
+            (),
+            calendar_scheduling::outbound::macro_services::MacroDirectory(TeamRepositoryImpl::new(
+                pool,
+            )),
+        )),
+        public_origin: match environment {
+            macro_env::Environment::Production => "https://macro.com",
+            macro_env::Environment::Develop => "https://dev.macro.com",
+            macro_env::Environment::Local => "",
+        }
+        .into(),
+    }
 }
 
 /// Type alias for the CRM AI tool context.
@@ -920,7 +952,6 @@ pub type ToolSoupService = SoupImpl<
     ToolCallRecordQueryService,
     crm::domain::service::NoOpCrmService,
     ToolGithubPullRequestService,
-    reminders::domain::service::NoOpRemindersService,
 >;
 
 /// No-op notification service for properties (tools don't send assignment notifications)
@@ -1063,43 +1094,6 @@ pub type ToolNotificationService = notification::domain::service::NotificationRe
 
 /// Type alias for the notification tool context.
 pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
-
-/// Type alias for the reminders service implementation used by AI tools.
-pub type ToolRemindersService =
-    reminders::domain::email_followup::reminder_service::EmailRemindersService<
-        reminders::domain::service::RemindersServiceImpl<
-            reminders::outbound::pg_reminders_repo::PgRemindersRepo,
-        >,
-        reminders::outbound::pg_reminders_repo::PgRemindersRepo,
-        ToolUserEmailService,
-        reminders::domain::ports::SystemClock,
-    >;
-
-/// Type alias for the reminders tool context.
-pub type ToolRemindersToolContext =
-    RemindersToolContext<ToolRemindersService, ToolEntityAccessService>;
-
-/// Build the reminders tool context with the same email lifecycle as HTTP.
-///
-/// The reminder tools go through the same access receipts the HTTP API does,
-/// so this needs the entity access service as well as the repository.
-pub fn build_reminders_tool_context(
-    pool: sqlx::PgPool,
-    email_service: Arc<ToolUserEmailService>,
-    entity_access_service: Arc<ToolEntityAccessService>,
-) -> ToolRemindersToolContext {
-    let repo = reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool);
-    RemindersToolContext::new(
-        reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
-            reminders::domain::service::RemindersServiceImpl::new(repo.clone()),
-            reminders::domain::email_followup::service::EmailFollowupService::new(
-                repo,
-                (*email_service).clone(),
-            ),
-        ),
-        entity_access_service,
-    )
-}
 
 /// Table-changed fan-out for AI tool hosts, the databases crate's publisher.
 pub use databases::outbound::gateway_event_publisher::MaybeGatewayTableEventPublisher as ToolTableEventPublisher;
@@ -1530,6 +1524,7 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
     ToolMcpSelector,
     ToolEntityCreator,
+    import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
 >;
 
 /// Type alias for the import tool context. Built `unwired` by the shared
@@ -1594,8 +1589,8 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub calendar_tool_context: ToolCalendarToolContext,
+    pub booking_link_tool_context: ToolBookingLinkToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
-    pub reminders_tool_context: ToolRemindersToolContext,
     pub databases_tool_context: ToolDatabasesToolContext,
     pub databases_sql_tool_context: ToolDatabasesSqlToolContext,
     /// Import staging/tracking tools. `unwired` in hosts that can't build
@@ -1608,6 +1603,7 @@ pub struct ToolServiceContext {
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
     pub bot_tool_context: ToolBotToolContext,
+    pub coding_agent_tool_context: ToolCodingAgentToolContext,
     pub project_tool_context: ToolProjectToolContext,
     /// Native task project lifecycle, properties, sharing and history.
     pub initiative_tool_context: ToolInitiativeToolContext,

@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   resolveMarkEntitiesDoneVariables: vi.fn(() => ({
     emailIds: [] as string[],
     notificationIds: [] as string[],
-    reminderIds: [] as string[],
   })),
   toNotificationEntityRef: vi.fn(),
   undoableOptionsFactory: vi.fn(),
@@ -134,6 +133,10 @@ describe('canExecuteMarkDoneOnView', () => {
     expect(canExecuteMarkDoneOnView('mail', 'drafts')).toBe(false);
     expect(canExecuteMarkDoneOnView('mail', 'sent')).toBe(false);
   });
+
+  it('allows mark done on the archived tab', () => {
+    expect(canExecuteMarkDoneOnView('mail', 'archived')).toBe(true);
+  });
 });
 
 describe('makeMarkDoneAction', () => {
@@ -144,13 +147,13 @@ describe('makeMarkDoneAction', () => {
     mocks.executeMarkEntitiesDone.mockResolvedValue([]);
     mocks.executeMarkEntitiesUndone.mockClear();
     mocks.graphqlSoupEnabled.mockReturnValue(false);
-    mocks.mutateAsync.mockClear();
+    mocks.mutateAsync.mockReset();
+    mocks.mutateAsync.mockResolvedValue(undefined);
     mocks.openEntityInSplitFromUnifiedList.mockClear();
     mocks.resolveMarkEntitiesDoneVariables.mockReset();
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: [],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReset();
   });
@@ -170,132 +173,11 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
-  it('keeps ordinary reminders undoable when selected with a workflow mirror', async () => {
-    const mirror = {
-      type: 'reminder',
-      id: 'mirror',
-      emailFollowup: { threadId: 'thread' },
-    } as EntityData;
-    const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
-    const { action, dispose } = createAction();
-    const onUndoHandle = vi.fn();
-    await action.execute([mirror, ordinary], undefined, { onUndoHandle });
-    expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
-    const mirrorVariables = mocks.mutateAsync.mock.calls[0][0];
-    const ordinaryVariables = mocks.mutateAsync.mock.calls[1][0];
-    expect(mirrorVariables).toMatchObject({ entities: [mirror] });
-    expect(ordinaryVariables).toMatchObject({
-      entities: [ordinary],
-      onUndoHandle,
-    });
-    const options = mocks.undoableOptionsFactory() as {
-      onPushed: (
-        handle: { dispose: () => void },
-        variables: unknown
-      ) => unknown;
-    };
-    const mirrorHandle = { dispose: vi.fn() };
-    const ordinaryHandle = { dispose: vi.fn() };
-    options.onPushed(mirrorHandle, mirrorVariables);
-    options.onPushed(ordinaryHandle, ordinaryVariables);
-    expect(mirrorHandle.dispose).toHaveBeenCalledOnce();
-    expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
-    expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
-    dispose();
-  });
-
-  it.each(['resolve', 'reject'] as const)(
-    'waits for the mirror to %s before publishing ordinary Undo',
-    async (settlement) => {
-      const mirror = {
-        type: 'reminder',
-        id: 'mirror',
-        emailFollowup: { threadId: 'thread' },
-      } as EntityData;
-      const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
-      let resolveMirror!: () => void;
-      let rejectMirror!: (reason: Error) => void;
-      const pendingMirror = new Promise<void>((resolve, reject) => {
-        resolveMirror = resolve;
-        rejectMirror = reject;
-      });
-      const failure = new Error('mirror failed');
-      const { action, dispose } = createAction();
-      const onUndoHandle = vi.fn();
-      const ordinaryHandle = { dispose: vi.fn() };
-      const options = mocks.undoableOptionsFactory() as {
-        onPushed: (
-          handle: { dispose: () => void },
-          variables: unknown
-        ) => unknown;
-      };
-      mocks.mutateAsync.mockImplementationOnce(() => pendingMirror);
-      mocks.mutateAsync.mockImplementationOnce(async (variables) => {
-        options.onPushed(ordinaryHandle, variables);
-      });
-      try {
-        const result = action
-          .execute([mirror, ordinary], undefined, { onUndoHandle })
-          .catch((error) => error);
-        await Promise.resolve();
-        expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
-        expect(onUndoHandle).not.toHaveBeenCalled();
-        if (settlement === 'reject') rejectMirror(failure);
-        else resolveMirror();
-        expect(await result).toBe(
-          settlement === 'reject' ? failure : undefined
-        );
-        expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
-        expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
-        expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
-      } finally {
-        dispose();
-      }
-    }
-  );
-
-  it.each(['mirror', 'ordinary'])(
-    'attempts both mixed groups when the %s group fails',
-    async (failedId) => {
-      const mirror = {
-        type: 'reminder',
-        id: 'mirror',
-        emailFollowup: { threadId: 'thread' },
-      } as EntityData;
-      const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
-      const failure = new Error(`${failedId} failed`);
-      mocks.mutateAsync.mockImplementationOnce(async () => {
-        if (failedId === 'mirror') throw failure;
-      });
-      mocks.mutateAsync.mockImplementationOnce(async () => {
-        if (failedId === 'ordinary') throw failure;
-      });
-      const { action, dispose } = createAction();
-      const onUndoHandle = vi.fn();
-      try {
-        await expect(
-          action.execute([mirror, ordinary], undefined, { onUndoHandle })
-        ).rejects.toBe(failure);
-        expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
-        expect(mocks.mutateAsync.mock.calls[1][0]).toMatchObject({
-          entities: [ordinary],
-          onUndoHandle,
-        });
-        expect(mocks.mutateAsync.mock.calls[0][0]).toMatchObject({
-          entities: [mirror],
-        });
-      } finally {
-        dispose();
-      }
-    }
-  );
-
   it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['agent-notification'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'agent_session',
@@ -362,7 +244,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: ['current'],
       notificationIds: ['notification-1'],
-      reminderIds: [],
     });
     const { action, dispose } = createAction();
 
@@ -384,7 +265,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: ['current'],
       notificationIds: ['notification-1'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'email',
@@ -410,7 +290,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['channel-notification'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'channel',
@@ -436,7 +315,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['thread-notification'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'channel_thread',
@@ -472,7 +350,6 @@ describe('makeMarkDoneAction', () => {
     const variables = {
       emailIds: ['current'],
       exactNotificationIds: { current: ['exact-id'] },
-      reminderIds: [],
     };
     const context = {
       applyUndone: vi.fn(),
@@ -504,7 +381,6 @@ describe('makeMarkDoneAction', () => {
     const variables = {
       emailIds: ['current'],
       exactNotificationIds: { current: ['exact-id'] },
-      reminderIds: [],
     };
     const context = {
       applyUndone: vi.fn(),
@@ -532,7 +408,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: ['current'],
       notificationIds: ['optimistic-notification'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'email',
@@ -547,7 +422,6 @@ describe('makeMarkDoneAction', () => {
       emailIds: string[];
       exactNotificationIds: { current: string[] };
       notificationEntities: Array<{ type: string; id: string }>;
-      reminderIds: string[];
     };
     const mutationOptions = mocks.undoableOptionsFactory() as {
       mutationFn: (input: typeof variables) => Promise<void>;
@@ -560,7 +434,6 @@ describe('makeMarkDoneAction', () => {
       emailIds: ['current'],
       notificationIds: [],
       notificationEntities: [{ type: 'email', id: 'current' }],
-      reminderIds: [],
     });
     expect(variables.exactNotificationIds.current).toEqual([
       'authoritative-notification',
@@ -570,7 +443,6 @@ describe('makeMarkDoneAction', () => {
     expect(mocks.executeMarkEntitiesUndone).toHaveBeenCalledWith({
       emailIds: ['current'],
       notificationIds: ['authoritative-notification'],
-      reminderIds: [],
     });
 
     mocks.executeMarkEntitiesDone.mockClear();
@@ -578,13 +450,7 @@ describe('makeMarkDoneAction', () => {
     expect(mocks.executeMarkEntitiesDone).toHaveBeenCalledWith({
       emailIds: ['current'],
       notificationIds: ['authoritative-notification'],
-      reminderIds: [],
     });
     dispose();
   });
-});
-
-it('keeps original Email Reminders rows eligible for the email archive action', async () => {
-  const { canExecuteMarkDoneOnView } = await import('./make-mark-done-action');
-  expect(canExecuteMarkDoneOnView('mail', 'reminders')).toBe(true);
 });

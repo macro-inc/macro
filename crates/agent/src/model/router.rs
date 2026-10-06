@@ -34,13 +34,16 @@ use rig_core::providers::{anthropic, gemini, openai};
 use rig_core::streaming::StreamedAssistantContent;
 use tracing::Instrument as _;
 
-use super::anthropic::AnthropicModel;
+use super::anthropic::{AnthropicModel, DeferredTools, LaidOutModel, SessionLayout};
+use super::anthropic_prompt_layout::AnthropicPromptLayout;
 use super::gemini::{GeminiCompletionModel, GeminiModel};
 use super::metering::{MeteringContext, WireProtocol};
 use super::metering_http::MeteredHttpClient;
 use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use super::types::Model;
+use super::usage_amount::usage_amount;
 use super::{PredefinedModel, ReasoningEffort};
+use crate::agent_loop::{SystemPrompt, ToolSearch};
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, StreamBridge};
 use crate::stream::{ChatCompletionStream, StreamPart};
@@ -77,7 +80,7 @@ const GOOGLE_PROVIDER: &str = "google";
 /// A routed model id bound to the provider client that serves it.
 pub(crate) enum RoutedModel<'a, H = MeteredHttpClient> {
     /// A model on Anthropic's native API.
-    Anthropic(AnthropicModel<'a, H>),
+    Anthropic(AnthropicModel<'a, AnthropicPromptLayout<H>>),
     /// A model on Gemini's native GenerateContent API.
     Gemini(GeminiModel<'a, H>),
     /// A model on the OpenAI-compatible Chat Completions API.
@@ -97,6 +100,16 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
         }
     }
 
+    /// The wire protocol the provider speaks, which fixes its usage semantics.
+    pub(crate) fn protocol(&self) -> WireProtocol {
+        match self {
+            RoutedModel::Anthropic(_) => WireProtocol::Anthropic,
+            RoutedModel::Gemini(_) => WireProtocol::Gemini,
+            RoutedModel::OpenAiChatCompletions(_) => WireProtocol::ChatCompletions,
+            RoutedModel::OpenAiResponses(_) => WireProtocol::Responses,
+        }
+    }
+
     /// The bare model name sent to the provider.
     pub(crate) fn model_name(&self) -> &str {
         match self {
@@ -109,27 +122,50 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
 
     /// Build the rig agent for this model, applying provider-specific thinking
     /// config. Pure construction — no model call is made here.
+    ///
+    /// Anthropic caches a split system prompt's shared part on its own, and a
+    /// model that loads tools by reference declares the whole catalog upfront.
+    /// Every other provider receives the prompt joined and loads tools by
+    /// registering them.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn into_agent(
         self,
         reasoning_effort: Option<ReasoningEffort>,
         handle: ToolServerHandle,
-        system_prompt: &str,
+        system_prompt: &SystemPrompt,
+        tool_search: &ToolSearch,
         max_turns: usize,
         max_tokens: u64,
         telemetry: &GenAiContext,
     ) -> ProviderAgent<H> {
+        let joined = system_prompt.joined();
+        let system_prompt_text = joined.as_str();
         match self {
             RoutedModel::Anthropic(m) => {
                 let thinking = m.thinking_params(reasoning_effort);
-                ProviderAgent::Anthropic(build_agent(
-                    m.completion(),
-                    thinking,
-                    handle,
-                    system_prompt,
-                    max_turns,
-                    max_tokens,
-                    telemetry,
-                ))
+                let layout = SessionLayout {
+                    shared_system: system_prompt.shared().is_some(),
+                    deferred: (m.loads_tools_by_reference() && !tool_search.catalog.is_empty())
+                        .then(|| {
+                            DeferredTools::new(&tool_search.catalog, tool_search.loads.clone())
+                        }),
+                };
+                let (preamble, session_system) = match system_prompt.shared() {
+                    Some(shared) => (shared, Some(system_prompt.rest().to_owned())),
+                    None => (system_prompt.rest(), None),
+                };
+                ProviderAgent::Anthropic(AnthropicAgent {
+                    agent: build_agent(
+                        LaidOutModel::new(m.completion(), layout),
+                        thinking,
+                        handle,
+                        preamble,
+                        max_turns,
+                        max_tokens,
+                        telemetry,
+                    ),
+                    session_system,
+                })
             }
             RoutedModel::Gemini(m) => {
                 let thinking = m.thinking_params();
@@ -137,7 +173,7 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
                     m.completion(),
                     thinking,
                     handle,
-                    system_prompt,
+                    system_prompt_text,
                     max_turns,
                     max_tokens,
                     telemetry,
@@ -149,7 +185,7 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
                     m.completion(),
                     thinking,
                     handle,
-                    system_prompt,
+                    system_prompt_text,
                     max_turns,
                     max_tokens,
                     telemetry,
@@ -161,7 +197,7 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
                     m.completion(),
                     thinking,
                     handle,
-                    system_prompt,
+                    system_prompt_text,
                     max_turns,
                     max_tokens,
                     telemetry,
@@ -181,7 +217,7 @@ pub(crate) enum ProviderAgent<
     H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static = MeteredHttpClient,
 > {
     /// An agent over Anthropic's native completion model.
-    Anthropic(Agent<TracedModel<anthropic::completion::CompletionModel<H>>>),
+    Anthropic(AnthropicAgent<H>),
     /// An agent over Gemini's native GenerateContent model.
     Gemini(Agent<TracedModel<GeminiCompletionModel<H>>>),
     /// An agent over the OpenAI Chat Completions model.
@@ -211,9 +247,18 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
         telemetry: GenAiContext,
     ) -> ChatCompletionStream<'static> {
         match self {
-            ProviderAgent::Anthropic(agent) => {
+            ProviderAgent::Anthropic(anthropic) => {
+                // After the agent's preamble, before the conversation: the
+                // second system block.
+                let history = anthropic
+                    .session_system
+                    .iter()
+                    .map(Message::system)
+                    .chain(history)
+                    .collect();
                 drive_stream(
-                    agent,
+                    &anthropic.agent,
+                    WireProtocol::Anthropic,
                     prompt,
                     history,
                     max_turns,
@@ -229,6 +274,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
             ProviderAgent::Gemini(agent) => {
                 drive_stream(
                     agent,
+                    WireProtocol::Gemini,
                     prompt,
                     history,
                     max_turns,
@@ -244,6 +290,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
             ProviderAgent::OpenAiChatCompletions(agent) => {
                 drive_stream(
                     agent,
+                    WireProtocol::ChatCompletions,
                     prompt,
                     history,
                     max_turns,
@@ -259,6 +306,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
             ProviderAgent::OpenAiResponses(agent) => {
                 drive_stream(
                     agent,
+                    WireProtocol::Responses,
                     prompt,
                     history,
                     max_turns,
@@ -291,6 +339,15 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
     }
 }
 
+/// The Anthropic arm of [`ProviderAgent`]: the agent, whose preamble is the
+/// system prompt's shared part when it is split, and the per-session rest.
+pub(crate) struct AnthropicAgent<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> {
+    agent: Agent<
+        TracedModel<LaidOutModel<anthropic::completion::CompletionModel<AnthropicPromptLayout<H>>>>,
+    >,
+    session_system: Option<String>,
+}
+
 /// Routes model api-id strings to the provider client that serves them.
 ///
 /// Holds native Anthropic, Gemini, and OpenAI Responses clients plus a
@@ -299,7 +356,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
 /// compatible providers with `with_openai_provider` on the metered router.
 #[derive(Clone)]
 pub struct ModelRouter<H = ReqwestClient> {
-    anthropic: Arc<anthropic::Client<H>>,
+    anthropic: Arc<anthropic::Client<AnthropicPromptLayout<H>>>,
     openai: Arc<openai::Client<H>>,
     gemini: Option<Arc<gemini::Client<H>>>,
     openai_compatible: HashMap<String, Arc<openai::CompletionsClient<H>>>,
@@ -307,8 +364,12 @@ pub struct ModelRouter<H = ReqwestClient> {
 
 impl<H: HttpClientExt + Clone + 'static> ModelRouter<H> {
     /// Build a router over native Anthropic and OpenAI Responses clients, with
-    /// no OpenAI-compatible Chat Completions providers registered yet.
-    pub fn new(anthropic: anthropic::Client<H>, openai: openai::Client<H>) -> Self {
+    /// no OpenAI-compatible Chat Completions providers registered yet. The
+    /// Anthropic client sends through [`AnthropicPromptLayout`].
+    pub fn new(
+        anthropic: anthropic::Client<AnthropicPromptLayout<H>>,
+        openai: openai::Client<H>,
+    ) -> Self {
         Self {
             anthropic: Arc::new(anthropic),
             openai: Arc::new(openai),
@@ -334,11 +395,11 @@ impl ModelRouter {
             .map_err(|error| rig_core::http_client::Error::Instance(Box::new(error)))?;
         let anthropic = anthropic::Client::builder()
             .api_key(env.anthropic_api_key.to_string())
-            .http_client(MeteredHttpClient::new(
+            .http_client(AnthropicPromptLayout::new(MeteredHttpClient::new(
                 http.clone(),
                 ANTHROPIC_PROVIDER,
                 WireProtocol::Anthropic,
-            ))
+            )))
             .build()?;
         // Default base URL is api.openai.com; OpenAI's GPT models use
         // Responses API so reasoning models get max_output_tokens.
@@ -530,6 +591,7 @@ fn build_agent<M: CompletionModel>(
 #[allow(clippy::too_many_arguments)]
 async fn drive_stream<M>(
     agent: &Agent<M>,
+    protocol: WireProtocol,
     prompt: Message,
     history: Vec<Message>,
     max_turns: usize,
@@ -675,6 +737,11 @@ where
 
             while let Some(item) = rig_stream.next().await {
                 liveness.observed();
+                if let Ok(MultiTurnStreamItem::StreamAssistantItem(content)) = &item
+                    && let Some(kind) = chunk_kind(content)
+                {
+                    telemetry.record_chunk(kind);
+                }
                 match item {
                     Ok(MultiTurnStreamItem::StreamAssistantItem(
                         StreamedAssistantContent::ReasoningDelta { reasoning, .. },
@@ -698,11 +765,11 @@ where
                                 );
                                 // Aggregate analytics only. Financial evidence is
                                 // persisted per HTTP attempt before SDK parsing.
-                                recorder.record(usage_ctx.clone().into_event(
-                                    model.clone(),
-                                    usage.input_tokens,
-                                    usage.output_tokens,
-                                ));
+                                recorder.record(
+                                    usage_ctx
+                                        .clone()
+                                        .into_event(model.clone(), usage_amount(protocol, &usage)),
+                                );
                                 let _ =
                                     driver_tx.send(Ok(StreamPart::Usage(crate::stream::Usage {
                                         input_tokens: usage.input_tokens,
@@ -769,6 +836,19 @@ where
     Box::pin(stream)
 }
 
+/// What a streamed item carries, for the model call's first-chunk timing.
+/// `None` for the final response and items rig does not model.
+fn chunk_kind<R>(content: &StreamedAssistantContent<R>) -> Option<&'static str> {
+    match content {
+        StreamedAssistantContent::Text(_) => Some("text"),
+        StreamedAssistantContent::Reasoning(_)
+        | StreamedAssistantContent::ReasoningDelta { .. } => Some("reasoning"),
+        StreamedAssistantContent::ToolCall { .. }
+        | StreamedAssistantContent::ToolCallDelta { .. } => Some("tool_call"),
+        StreamedAssistantContent::Final(_) | StreamedAssistantContent::Unknown(_) => None,
+    }
+}
+
 /// Test-only type erasure so [`ProviderAgent`] can hold an arbitrary
 /// [`Agent<M>`] (e.g. a scripted fake model) without adding a model type parameter.
 /// Mirrors the production arms: it just drives [`drive_stream`].
@@ -811,8 +891,44 @@ where
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
     > {
+        // Scripted fakes report Anthropic-shaped usage: input excludes cache.
         Box::pin(drive_stream(
             self,
+            WireProtocol::Anthropic,
+            prompt,
+            history,
+            max_turns,
+            inputs,
+            recorder,
+            usage_ctx,
+            model,
+            request_context,
+            telemetry,
+        ))
+    }
+}
+
+/// A routed agent over a test transport runs exactly as production's does.
+#[cfg(test)]
+impl<H> DynStreamAgent for ProviderAgent<H>
+where
+    H: HttpClientExt + Clone + Default + std::fmt::Debug + Send + Sync + 'static,
+{
+    fn run_stream_dyn<'a>(
+        &'a self,
+        prompt: Message,
+        history: Vec<Message>,
+        max_turns: usize,
+        inputs: BridgeInputs,
+        recorder: Arc<dyn UsageRecorder>,
+        usage_ctx: UsageContext,
+        model: String,
+        request_context: RequestContext,
+        telemetry: GenAiContext,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
+    > {
+        Box::pin(self.run_stream(
             prompt,
             history,
             max_turns,

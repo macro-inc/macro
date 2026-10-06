@@ -35,7 +35,6 @@ export type SchedulingCapabilities = {
   ) => SchedulingSource;
   copyLink: (profile: SchedulingProfile, slug?: string) => Promise<void>;
   link: (profile: SchedulingProfile, slug?: string) => string;
-  openConnections: () => void;
   openTeamSettings: () => void;
   manageBooking: (id: string) => Promise<void>;
 };

@@ -28,6 +28,11 @@ use crate::domain::ports::PromptMentions;
 /// The wire name the lexical service gives a user mention.
 const USER_MENTION_TYPE: &str = "user";
 
+/// The tag every user mention is written as. A prompt without it names
+/// nobody, so the lexical round trip - which sits in front of dispatching the
+/// prompt - is skipped.
+const USER_MENTION_TAG: &str = "<m-user-mention>";
+
 /// Extracts the user ids a markdown string mentions.
 pub(crate) trait MentionSource: Send + Sync + 'static {
     fn mentioned_user_ids(
@@ -156,6 +161,9 @@ where
         prompt_markdown: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
         Box::pin(async move {
+            if !prompt_markdown.contains(USER_MENTION_TAG) {
+                return Ok(Vec::new());
+            }
             let mentioned = self.source.mentioned_user_ids(prompt_markdown).await?;
             let mut users: Vec<MacroUserIdStr<'static>> = Vec::new();
             for id in mentioned {

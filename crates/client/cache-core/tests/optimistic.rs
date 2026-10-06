@@ -155,10 +155,11 @@ impl Storage for ClaimFailingStorage {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<bool, Self::Error> {
         Ok(self
             .inner
-            .defer_mutation(id, claim, next_attempt_at_ms, error)
+            .defer_mutation(id, claim, next_attempt_at_ms, error, server_failure)
             .await
             .unwrap())
     }
@@ -298,6 +299,7 @@ async fn reconciliation_engine() -> (Engine<ClaimFailingStorage>, MutationId) {
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: "00000000-0000-4000-8000-000000000005",
                 query: MUTATION,
                 operation_name: Some("SetEntityProperty"),
@@ -377,6 +379,7 @@ async fn begin_value(
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid,
                 query: MUTATION,
                 operation_name: Some("SetEntityProperty"),
@@ -410,6 +413,86 @@ async fn durable_value(engine: &Engine<InMemoryStorage>) -> Option<String> {
 }
 
 #[test]
+fn mutation_inspection_preserves_metadata_without_claiming_or_changing_leases() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let variables = mutation_vars("local edit");
+        let data = mutation_response("Status", "local edit");
+        let metadata = json!({"kind": "email-draft", "revision": 10});
+        let (id, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000030",
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &variables,
+                    data: &data,
+                    link_patches: &[],
+                    revalidations: &[],
+                    identity_bindings: &[],
+                    created_at_ms: 1,
+                    client_metadata: Some(&metadata),
+                },
+            )
+            .await
+            .unwrap();
+        let before = engine.storage().load_mutation_queue().await.unwrap();
+        let inspected = engine.inspect_mutations().await.unwrap();
+        assert_eq!(inspected.len(), 1);
+        assert_eq!(inspected[0].transaction_id, id.to_string());
+        assert_eq!(inspected[0].client_metadata, Some(metadata.clone()));
+        assert_eq!(inspected[0].optimistic_data, data);
+        assert_eq!(
+            inspected[0].variables,
+            serde_json::to_value(&variables).unwrap()
+        );
+        assert!(
+            !inspected[0]
+                .variables
+                .to_string()
+                .contains("clientMetadata")
+        );
+        assert_eq!(
+            engine.storage().load_mutation_queue().await.unwrap(),
+            before
+        );
+
+        let claimed = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 10,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        let before = engine.storage().load_mutation_queue().await.unwrap();
+        let inspected = engine.inspect_mutations().await.unwrap();
+        assert_eq!(inspected[0].client_metadata, Some(metadata));
+        assert_eq!(
+            engine.storage().load_mutation_queue().await.unwrap(),
+            before
+        );
+        assert_eq!(claimed.queued.mutation.attempt_count, 1);
+        assert!(
+            engine
+                .claim_next_mutation(MutationClaimRequest {
+                    owner: "another-runner".into(),
+                    now_ms: 20,
+                    lease_expires_at_ms: 200,
+                })
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert!(wire.get("leaseGeneration").is_none());
+        assert!(wire.get("leaseOwner").is_none());
+    });
+}
+
+#[test]
 fn begin_persists_mutation_and_optimistic_layer() {
     block_on(async {
         let mut engine = engine_with_base("Status", "todo").await;
@@ -418,6 +501,7 @@ fn begin_persists_mutation_and_optimistic_layer() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000006",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -456,6 +540,7 @@ fn enqueue_claims_new_mutation_when_queue_was_empty() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000007",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -491,6 +576,7 @@ fn enqueue_claims_older_strict_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000008",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -508,6 +594,7 @@ fn enqueue_claims_older_strict_head() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000009",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -544,6 +631,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        client_metadata: None,
                         uuid: "00000000-0000-4000-8000-000000000010",
                         query: MUTATION,
                         operation_name: Some("SetEntityProperty"),
@@ -560,7 +648,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
             let (_, claim) = claim_head(&mut engine, "first-runner", 10).await;
             if deferred {
                 engine
-                    .defer_optimistic_write(older, claim, 500, "offline".into())
+                    .defer_optimistic_write(older, claim, 500, "offline".into(), false)
                     .await
                     .unwrap();
             }
@@ -569,6 +657,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
                 .enqueue_optimistic_mutation(
                     None,
                     BeginOptimisticWrite {
+                        client_metadata: None,
                         uuid: "00000000-0000-4000-8000-000000000011",
                         query: MUTATION,
                         operation_name: Some("SetEntityProperty"),
@@ -628,6 +717,7 @@ fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000012",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -739,6 +829,7 @@ fn claimed_success_atomically_commits_real_response() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000013",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -792,6 +883,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000014",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -809,6 +901,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000015",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -826,7 +919,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
 
         let (_, claim) = claim_head(&mut engine, "runner", 10).await;
         engine
-            .defer_optimistic_write(first, claim, 100, "offline".into())
+            .defer_optimistic_write(first, claim, 100, "offline".into(), false)
             .await
             .unwrap();
         assert!(
@@ -857,6 +950,7 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000016",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -874,6 +968,7 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000017",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -911,6 +1006,7 @@ fn stale_claim_cannot_settle_mutation() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000018",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -983,6 +1079,7 @@ fn pending_replacement_restores_fields_omitted_by_the_new_intent() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: X,
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -1010,6 +1107,7 @@ fn pending_replacement_restores_fields_omitted_by_the_new_intent() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: X,
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -1085,6 +1183,7 @@ fn active_uuid_replacement_is_superseded_and_failed_attempt_is_discarded() {
                 },
                 500,
                 "superseded".into(),
+                false,
             )
             .await
             .unwrap();
@@ -1146,6 +1245,7 @@ fn invalid_uuid_is_rejected_before_queue_hydration() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "not-a-uuid",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -1183,6 +1283,7 @@ fn clear_and_identity_reset_drop_durable_queue() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000019",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),

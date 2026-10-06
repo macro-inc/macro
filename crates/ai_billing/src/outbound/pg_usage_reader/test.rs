@@ -19,12 +19,16 @@ fn completion(
             amount: UsageAmount::Tokens {
                 input: 1_000_000,
                 output: 0,
+                cache_read: 0,
+                cache_write: 0,
             },
             model: "test-model".to_string(),
             price: Some(Price {
                 pricing: ModelPricing::Tokens {
                     input: provider_cost_usd,
                     output: 0.0,
+                    cache_read: None,
+                    cache_write: None,
                 },
                 total: provider_cost_usd,
             }),
@@ -80,6 +84,8 @@ async fn aggregates_only_persisted_counted_rows_for_requested_seats(pool: PgPool
     unpriced.cost.amount = UsageAmount::Tokens {
         input: 1_000_000,
         output: 1_000_000,
+        cache_read: 0,
+        cache_write: 0,
     };
     repo.insert_usage(&unpriced, true).await.unwrap(); // $5 input + $25 output
     repo.insert_usage(&unpriced, false).await.unwrap();
@@ -97,7 +103,7 @@ async fn aggregates_only_persisted_counted_rows_for_requested_seats(pool: PgPool
 
     let reader = PgUsageReader::new(pool);
     let mut usage = reader
-        .list_rate_usage_cents_by_user(&[first.clone(), second.clone(), empty], current_period())
+        .usage_cost_cents_by_user(&[first.clone(), second.clone(), empty], current_period())
         .await
         .unwrap();
     usage.sort_by(|a, b| a.user.as_ref().cmp(b.user.as_ref()));
@@ -106,29 +112,29 @@ async fn aggregates_only_persisted_counted_rows_for_requested_seats(pool: PgPool
         vec![
             SeatUsage {
                 user: first.clone(),
-                used_cents: 1_000
+                used_cents: 400
             },
             SeatUsage {
                 user: second,
-                used_cents: 8_250
+                used_cents: 3_300
             },
         ]
     );
     assert!(
         reader
-            .list_rate_usage_cents_by_user(&[], current_period())
+            .usage_cost_cents_by_user(&[], current_period())
             .await
             .unwrap()
             .is_empty()
     );
     assert_eq!(
         reader
-            .list_rate_usage_cents_by_user(std::slice::from_ref(&first), current_period())
+            .usage_cost_cents_by_user(std::slice::from_ref(&first), current_period())
             .await
             .unwrap(),
         vec![SeatUsage {
             user: first,
-            used_cents: 1_000
+            used_cents: 400
         }]
     );
 }
@@ -160,14 +166,14 @@ async fn billing_period_includes_start_and_excludes_end(pool: PgPool) {
         .unwrap();
     }
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(std::slice::from_ref(&user), BillingPeriod { start, end })
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), BillingPeriod { start, end })
         .await
         .unwrap();
     assert_eq!(
         usage,
         vec![SeatUsage {
             user,
-            used_cents: 500
+            used_cents: 200
         }]
     );
 }
@@ -222,7 +228,7 @@ async fn free_features_are_recorded_but_only_chat_and_editing_are_metered(pool: 
     assert_eq!(stored_features, expected_features);
 
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(std::slice::from_ref(&user), current_period())
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
         .await
         .unwrap();
 
@@ -230,7 +236,7 @@ async fn free_features_are_recorded_but_only_chat_and_editing_are_metered(pool: 
         usage,
         vec![SeatUsage {
             user,
-            used_cents: 1_500,
+            used_cents: 600,
         }]
     );
 }
@@ -244,7 +250,7 @@ async fn free_features_alone_do_not_produce_billable_usage(pool: PgPool) {
     }
 
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(&[user], current_period())
+        .usage_cost_cents_by_user(&[user], current_period())
         .await
         .unwrap();
     assert!(usage.is_empty());
@@ -267,17 +273,108 @@ async fn unpriced_free_features_are_excluded_from_fallback_billing(pool: PgPool)
     }
 
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(std::slice::from_ref(&user), current_period())
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
         .await
         .unwrap();
 
-    // Chat and editing each fall back to $5 per million input tokens, with
-    // the 2.5x list-rate markup. Unpriced free features add nothing.
+    // Chat and editing each fall back to $5 per million input tokens, counted
+    // at cost. Unpriced free features add nothing.
     assert_eq!(
         usage,
         vec![SeatUsage {
             user,
-            used_cents: 2_500,
+            used_cents: 1_000,
+        }]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn priced_cache_tokens_count_through_the_stored_total(pool: PgPool) {
+    let user = MacroUserIdStr::try_from("macro|cache-priced@example.com".to_string()).unwrap();
+    let amount = UsageAmount::Tokens {
+        input: 1_000_000,
+        output: 0,
+        cache_read: 1_000_000,
+        cache_write: 1_000_000,
+    };
+    PgUsageRepo::new(pool.clone())
+        .insert_usage(
+            &CompletionUsage {
+                feature: AiFeature::Chat,
+                user: user.clone(),
+                entity: None,
+                cost: Usage {
+                    amount,
+                    model: "claude-opus-5".to_string(),
+                    price: Price::compute(
+                        ModelPricing::Tokens {
+                            input: 5.0,
+                            output: 25.0,
+                            cache_read: Some(0.5),
+                            cache_write: Some(6.25),
+                        },
+                        amount,
+                    ),
+                    created_at: Utc::now(),
+                },
+            },
+            true,
+        )
+        .await
+        .unwrap();
+
+    let usage = PgUsageReader::new(pool)
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
+        .await
+        .unwrap();
+
+    // $5 input + $0.50 cache read + $6.25 cache write.
+    assert_eq!(
+        usage,
+        vec![SeatUsage {
+            user,
+            used_cents: 1_175,
+        }]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unpriced_cache_tokens_fall_back_to_the_opus_5_cache_rates(pool: PgPool) {
+    let user = MacroUserIdStr::try_from("macro|cache-unpriced@example.com".to_string()).unwrap();
+    PgUsageRepo::new(pool.clone())
+        .insert_usage(
+            &CompletionUsage {
+                feature: AiFeature::Chat,
+                user: user.clone(),
+                entity: None,
+                cost: Usage {
+                    amount: UsageAmount::Tokens {
+                        input: 1_000_000,
+                        output: 0,
+                        cache_read: 1_000_000,
+                        cache_write: 1_000_000,
+                    },
+                    model: "unpriced-cache-model".to_string(),
+                    price: None,
+                    created_at: Utc::now(),
+                },
+            },
+            true,
+        )
+        .await
+        .unwrap();
+
+    let usage = PgUsageReader::new(pool)
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
+        .await
+        .unwrap();
+
+    // $5 input + $0.50 cache read + $6.25 cache write at the Opus 5 rates.
+    assert_eq!(
+        usage,
+        vec![SeatUsage {
+            user,
+            used_cents: 1_175,
         }]
     );
 }

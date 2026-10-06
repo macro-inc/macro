@@ -75,7 +75,7 @@ fn should_run_includes_fold_wasm_inputs() {
         .next()
         .expect("should_run block");
     assert!(
-        should_run.contains("crates/agent_fold/**"),
+        should_run.contains("crates/folds/agent_fold/**"),
         "fold wasm source must rebuild the web artifact: {should_run}"
     );
     assert!(
@@ -119,5 +119,32 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
     assert!(
         build.contains("just build-dev"),
         "build still produces the vite bundle: {build}"
+    );
+}
+
+#[test]
+fn test_job_runs_signup_browser_tests_after_vitest() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    // The job and its vitest step are both named "Test"; slice from the job.
+    let start = yaml.find("name: Test\n").expect("Test job");
+    let end = yaml[start..]
+        .find("name: Cycles Import Check")
+        .map_or(yaml.len(), |offset| start + offset);
+    let test_job = &yaml[start..end];
+    let wasm = test_job
+        .find("just build-agent-fold-wasm")
+        .expect("build WASM before the test setup hook");
+    let vitest = test_job.find("bunx vitest").expect("vitest step");
+    assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
+    let browser = test_job
+        .find("just test-signup-browser")
+        .expect("sign-up browser step");
+    assert!(
+        vitest < browser,
+        "browser tests run after vitest: {test_job}"
+    );
+    assert!(
+        test_job.contains("playwright: 'true'"),
+        "the Test job installs Playwright's Chromium: {test_job}"
     );
 }

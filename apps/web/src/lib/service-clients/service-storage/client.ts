@@ -71,7 +71,6 @@ import type { CreateInstructionsDocumentResponse } from './generated/schemas/cre
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
-import type { CreateReminderRequest } from './generated/schemas/createReminderRequest';
 import type { CreateSkillHandler200 } from './generated/schemas/createSkillHandler200';
 import type { CreateSkillRequest } from './generated/schemas/createSkillRequest';
 import type { CreateSnippetHandler200 } from './generated/schemas/createSnippetHandler200';
@@ -129,8 +128,6 @@ import type { JobId } from './generated/schemas/jobId';
 import type { ListEmailRemindersParams } from './generated/schemas/listEmailRemindersParams';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
-import type { ListReminderCollectionParams } from './generated/schemas/listReminderCollectionParams';
-import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { ListSlackImportsParams } from './generated/schemas/listSlackImportsParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
@@ -144,9 +141,6 @@ import type { PostGroupedSoupAstRequest } from './generated/schemas/postGroupedS
 import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest';
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { Project } from './generated/schemas/project';
-import type { Reminder } from './generated/schemas/reminder';
-import type { ReminderCollectionPage } from './generated/schemas/reminderCollectionPage';
-import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
@@ -171,7 +165,6 @@ import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOffic
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
-import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
 import type { UploadGrant } from './generated/schemas/uploadGrant';
 import type { UserApiKeysList } from './generated/schemas/userApiKeysList';
@@ -1202,17 +1195,6 @@ export const storageServiceClient = {
       documents: result.data.documents,
       total: result.data.total,
       nextOffset: result.data.next_offset,
-    }));
-  },
-
-  /** Ids of the starter documents seeded at signup. */
-  async getStarterDocs() {
-    return (
-      await dssFetch<{
-        how_to_guide_id: string;
-      }>('/documents/starter_docs')
-    ).map((result) => ({
-      howToGuideId: result.how_to_guide_id,
     }));
   },
 
@@ -2590,18 +2572,6 @@ export const storageServiceClient = {
         { method: 'GET' }
       );
     },
-    async listCollection(params: ListReminderCollectionParams) {
-      const query = new URLSearchParams();
-      if (params.completed !== undefined)
-        query.set('completed', String(params.completed));
-      if (params.limit !== undefined) query.set('limit', String(params.limit));
-      if (params.cursor) query.set('cursor', params.cursor);
-      return await dssFetch<ReminderCollectionPage>(
-        `/reminders/collection?${query}`,
-        { method: 'GET' }
-      );
-    },
-
     async getEmailFollowup(threadId: string) {
       return (
         await dssFetch<{ followup: EmailFollowup | null }>(
@@ -2615,42 +2585,6 @@ export const storageServiceClient = {
         method: 'PUT',
         body: JSON.stringify(command),
       });
-    },
-    async createReminder(params: CreateReminderRequest) {
-      return await dssFetch<Reminder>('/reminders', {
-        method: 'POST',
-        body: JSON.stringify(params),
-      });
-    },
-    async listReminders(params?: ListRemindersParams) {
-      const query = new URLSearchParams();
-      params?.entityType?.forEach((entityType) =>
-        query.append('entityType', entityType)
-      );
-      params?.entityId?.forEach((entityId) =>
-        query.append('entityId', entityId)
-      );
-      if (params?.includeCompleted !== undefined) {
-        query.set('includeCompleted', String(params.includeCompleted));
-      }
-      if (params?.limit !== undefined) query.set('limit', String(params.limit));
-      if (params?.cursor) query.set('cursor', params.cursor);
-      const qs = query.toString();
-      return await dssFetch<RemindersList>(`/reminders${qs ? `?${qs}` : ''}`, {
-        method: 'GET',
-      });
-    },
-    async getReminder(id: string) {
-      return await dssFetch<Reminder>(`/reminders/${id}`, { method: 'GET' });
-    },
-    async updateReminder(id: string, params: UpdateReminderRequest) {
-      return await dssFetch<Reminder>(`/reminders/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(params),
-      });
-    },
-    async deleteReminder(id: string) {
-      return await dssFetch(`/reminders/${id}`, { method: 'DELETE' });
     },
   },
   async editThread(params) {

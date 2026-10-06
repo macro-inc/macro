@@ -1,4 +1,4 @@
-import { changesState } from '@app/features/agent-changes/core/changeset';
+import { changesState } from '@app/features/changes/core/changeset';
 import { describe, expect, it } from 'vitest';
 import { decodePrChanges } from './pr-changes';
 

@@ -17,12 +17,14 @@ note: |-
 files:
   - apps/web/src/features/routines/core/**
   - apps/web/src/features/scheduling/core/**
+  - apps/web/src/features/usage/core/**
   - apps/web/src/features/crm/core/**
   - apps/web/src/features/slack-import/core/**
   - apps/web/src/features/channel/core/channel-invite*
   - apps/web/src/features/projects/core/**
   - apps/web/src/features/channel/Call/chat/core/**
   - apps/web/src/features/block-agent/core/**
+  - apps/web/src/features/block-ai/core/**
   - apps/web/src/features/meetings/core/**
   - apps/web/src/features/block-spreadsheet/core/**
   - apps/web/src/features/property/tags/core/**
@@ -32,8 +34,10 @@ files:
   - apps/web/src/features/email-message/core/**
   - apps/web/src/features/email-thread/core/**
   - apps/web/src/features/email-compose/core/**
-  - apps/web/src/features/agent-changes/core/**
+  - apps/web/src/features/changes/core/**
   - apps/web/src/features/block-write/core/**
+  - apps/web/src/features/onboarding/core/**
+  - apps/web/src/features/auth/core/**
 rule:
   kind: string
   regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views|ui|component|context)(/|['"]))

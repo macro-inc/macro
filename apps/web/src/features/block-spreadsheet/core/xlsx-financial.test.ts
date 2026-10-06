@@ -10,7 +10,10 @@ import ExcelJS from 'exceljs';
 import { strFromU8, unzipSync } from 'fflate';
 import { LoroDoc } from 'loro-crdt';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { writeSpreadsheetCells } from './spreadsheet-document';
+import {
+  type SpreadsheetCells,
+  writeSpreadsheetCells,
+} from './spreadsheet-document';
 import { decodeXlsx, encodeXlsx } from './xlsx-codec';
 
 beforeAll(() =>
@@ -30,7 +33,7 @@ const fixture = (name: string) =>
 describe('independent financial workbook regression', () => {
   it('imports valid namespace prefixes, absolute package references and table relationships', async () => {
     const imported = await decodeXlsx(fixture('namespaced-table'));
-    expect(imported.sheets[0].cells.A2.value).toBe("'Sample A");
+    expect(imported.sheets[0].cells.A2.value).toBe('Sample A');
     expect(imported.sheets[0].cells.B2.value).toBe('42');
     expect(imported.sheets[0].cells.D1.value).toBe('=SUM(B2:B3)');
     const engine = createInitializedSpreadsheetCalculator();
@@ -271,8 +274,162 @@ it('isolates unsupported display formats and resolves qualified worksheet-local 
   }
 });
 
+it('looks up whole columns within the grid, quickly and with sorted matches', () => {
+  const engine = createInitializedSpreadsheetCalculator();
+  try {
+    const data: SpreadsheetCells = {};
+    for (let row = 1; row <= 500; row++) {
+      data[`A${row}`] = { value: String(row) };
+      data[`B${row}`] = { value: String(row * 3) };
+    }
+    const report: SpreadsheetCells = {};
+    for (let row = 1; row <= 500; row++)
+      report[`A${row}`] = {
+        value: `=VLOOKUP(${row},Data!A:B,2,FALSE)+MATCH(${row},Data!$A:$A,1)+COUNTA(Data!A:A)`,
+      };
+    const started = performance.now();
+    const result = engine.calculateWorkbook([
+      { id: 'data', name: 'Data', rowCount: 500, cells: data },
+      { id: 'report', name: 'Report', rowCount: 500, cells: report },
+    ]);
+    // Scanning 1,048,576 rows per lookup took over a minute here.
+    expect(performance.now() - started).toBeLessThan(10_000);
+    expect(result.report.A7.number).toBe(7 * 3 + 7 + 500);
+    expect(result.report.A500.number).toBe(500 * 3 + 500 + 500);
+  } finally {
+    engine.dispose();
+  }
+});
+
+it('calculates names defined by formulas, as Excel loan templates use them', () => {
+  const engine = createInitializedSpreadsheetCalculator();
+  try {
+    const result = engine.calculateWorkbook([
+      {
+        id: 'loan',
+        name: 'Loan calculator',
+        rowCount: 200,
+        cells: {
+          D3: { value: '10000' },
+          D4: { value: '0.06' },
+          D5: { value: '2' },
+          D6: { value: '45000' },
+          D8: { value: '=IFERROR(IF(Values_Entered,Monthly_Payment,""),"")' },
+          D9: { value: '=Loan_Years*12' },
+          B14: { value: '=Payment_Number' },
+          C14: { value: '=ROUND(Ending_Balance,2)' },
+          B15: { value: '=Payment_Number' },
+          E9: { value: '=Left_Neighbor' },
+          A1: { value: '=Left_Neighbor' },
+          E15: { value: '=Loops' },
+          E16: { value: '=Deleted' },
+          E17: { value: "='Loan calculator'!Header_Row" },
+        },
+        metadata: {
+          definedNames: [
+            { name: 'Loan_Amount', formula: "'Loan calculator'!$D$3" },
+            { name: 'Interest_Rate', formula: "'Loan calculator'!$D$4" },
+            { name: 'Loan_Years', formula: "'Loan calculator'!$D$5" },
+            { name: 'Loan_Start', formula: "'Loan calculator'!$D$6" },
+            { name: 'Number_of_Payments', formula: "'Loan calculator'!$D$9" },
+            {
+              name: 'Values_Entered',
+              formula:
+                'IF(Loan_Amount*Interest_Rate*Loan_Years*Loan_Start>0,1,0)',
+            },
+            {
+              name: 'Monthly_Payment',
+              formula: '-PMT(Interest_Rate/12,Number_of_Payments,Loan_Amount)',
+            },
+            { name: 'Header_Row', formula: "ROW('Loan calculator'!$13:$13)" },
+            { name: 'Payment_Number', formula: 'ROW()-Header_Row' },
+            {
+              name: 'Ending_Balance',
+              formula:
+                '-FV(Interest_Rate/12,Payment_Number,-Monthly_Payment,Loan_Amount)',
+            },
+            // Relative to A1: one column to the left of the using cell.
+            { name: 'Left_Neighbor', formula: "'Loan calculator'!XFD1" },
+            { name: 'Loops', formula: 'Loops+1' },
+            { name: 'Deleted', formula: "'Loan calculator'!#REF!" },
+          ],
+        },
+      },
+    ]);
+    const values = result.loan;
+    expect(values.D8.number).toBeCloseTo(443.206, 3);
+    expect(values.B14.number).toBe(1);
+    expect(values.B15.number).toBe(2);
+    expect(values.C14.number).toBeCloseTo(9606.79, 2);
+    expect(values.E9.number).toBe(24);
+    // XFD1 is A1's left neighbor after wrapping, and it is empty.
+    expect(values.A1.number).toBe(0);
+    expect(values.E15.display).toBe('#N/A');
+    expect(values.E15.error).toContain('refers to itself');
+    expect(values.E16.display).toBe('#REF!');
+    expect(values.E17.number).toBe(13);
+  } finally {
+    engine.dispose();
+  }
+});
+
+it('never reads a column reference as a name that shares its letters', () => {
+  const engine = createInitializedSpreadsheetCalculator();
+  try {
+    const result = engine.calculateWorkbook([
+      {
+        id: 'data',
+        name: 'Data',
+        rowCount: 200,
+        cells: { B2: { value: '4' }, B3: { value: '6' }, AB1: { value: '1' } },
+        metadata: {
+          // Converted Lotus workbooks often carry names like these.
+          definedNames: [
+            { name: 'B', formula: '{#N/A,FALSE,"CGBR95C"}' },
+            { name: 'A', formula: '#REF!' },
+          ],
+        },
+      },
+      {
+        id: 'report',
+        name: 'Report',
+        rowCount: 200,
+        cells: {
+          A1: { value: '=Data!B$2*2' },
+          A2: { value: '=SUM(Data!B:B)' },
+          A3: { value: '=Data!AB$1+1' },
+        },
+      },
+    ]);
+    expect(result.report.A1.number).toBe(8);
+    expect(result.report.A2.number).toBe(10);
+    expect(result.report.A3.number).toBe(2);
+  } finally {
+    engine.dispose();
+  }
+});
+
+it('shows a HYPERLINK as its friendly name or link text', () => {
+  const engine = createInitializedSpreadsheetCalculator();
+  try {
+    const values = engine.calculate({
+      A1: { value: 'Quote' },
+      B1: { value: '=HYPERLINK("https://example.com/q1",A1&" 1")' },
+      B2: { value: '=HYPERLINK("https://example.com")' },
+      B3: {
+        value: '=LEN(HYPERLINK("https://example.com",HYPERLINK("x","ab")))',
+      },
+    });
+    expect(values.B1.display).toBe('Quote 1');
+    expect(values.B2.display).toBe('https://example.com');
+    expect(values.B3.number).toBe(2);
+  } finally {
+    engine.dispose();
+  }
+});
+
 it.each(['#SPILL!', '#CALC!'])(
-  'rejects unsupported stored %s errors rather than changing error propagation',
+  'imports stored %s errors, which older engines cannot represent, as text with a warning',
   async (error) => {
     const workbook = new ExcelJS.Workbook();
     workbook.addWorksheet('Errors').getCell('A1').value = { error: '#N/A' };
@@ -281,8 +438,8 @@ it.each(['#SPILL!', '#CALC!'])(
     files['xl/worksheets/sheet1.xml'] = strToU8(
       strFromU8(files['xl/worksheets/sheet1.xml']).replace('#N/A', error)
     );
-    await expect(decodeXlsx(zipSync(files))).rejects.toThrow(
-      `Stored Excel error ${error}`
-    );
+    const imported = await decodeXlsx(zipSync(files));
+    expect(imported.sheets[0].cells.A1.value).toBe(`'${error}`);
+    expect(imported.warnings.join(' ')).toContain('imported as text');
   }
 );

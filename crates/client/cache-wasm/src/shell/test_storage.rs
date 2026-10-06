@@ -156,9 +156,10 @@ impl Storage for BrowserStorage {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<bool, Self::Error> {
         self.inner
-            .defer_mutation(id, claim, next_attempt_at_ms, error)
+            .defer_mutation(id, claim, next_attempt_at_ms, error, server_failure)
             .await
     }
 

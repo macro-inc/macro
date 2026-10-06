@@ -4,6 +4,7 @@ import { Queue } from '../../packages/resources/src/resources/queue';
 
 interface SlackImportQueueArgs {
   stagingBucketArn: pulumi.Input<string>;
+  notificationIngressQueueArn: pulumi.Input<string>;
   tags: { [key: string]: string };
 }
 
@@ -16,7 +17,11 @@ export class SlackImportQueue extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    { stagingBucketArn, tags }: SlackImportQueueArgs,
+    {
+      stagingBucketArn,
+      notificationIngressQueueArn,
+      tags,
+    }: SlackImportQueueArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:SlackImportQueue', name, {}, opts);
@@ -76,6 +81,11 @@ export class SlackImportQueue extends pulumi.ComponentResource {
               // Also authorizes SendMessageBatch for the durable outbox.
               Action: ['sqs:SendMessage'],
               Resource: [this.queue.arn],
+            },
+            {
+              Effect: 'Allow',
+              Action: ['sqs:SendMessage'],
+              Resource: [notificationIngressQueueArn],
             },
           ],
         },

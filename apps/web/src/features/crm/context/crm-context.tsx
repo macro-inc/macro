@@ -23,6 +23,7 @@ import type {
   ExportDefinitionsSource,
   ItemListSource,
   ListsSource,
+  PeopleSource,
   PersonalViewsSource,
   PropertyCommands,
   TeamConfigSource,
@@ -38,7 +39,7 @@ export type CrmContext = {
   copyRecordLink(target: {
     type: 'company' | 'contact';
     id: string;
-  }): Promise<void>;
+  }): Promise<boolean>;
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(
@@ -101,6 +102,7 @@ export type CrmContext = {
   createCompanySource(id: Accessor<string>): CompanySource;
   createContactSource(id: Accessor<string>): ContactSource;
   createTeamSource(): TeamSource;
+  createPeopleSource(enabled: Accessor<boolean>): PeopleSource;
   createTeamConfigSource(): TeamConfigSource;
   createCapabilities(): CrmCapabilities;
   createDealStages(): DealStages;

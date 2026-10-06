@@ -105,7 +105,6 @@ const getEntityRenameData = (
   if (
     entity.type === 'crm_company' ||
     entity.type === 'crm_contact' ||
-    entity.type === 'reminder' ||
     entity.type === 'calendar_event' ||
     entity.type === 'initiative' ||
     entity.type === 'database'

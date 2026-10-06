@@ -1,3 +1,4 @@
+import { SettingsCard } from '@app/features/settings/primitives';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import External from '@phosphor/arrow-square-out.svg';
 import Clock from '@phosphor/clock.svg';
@@ -6,11 +7,14 @@ import Dots from '@phosphor/dots-three.svg';
 import Link from '@phosphor/link.svg';
 import { Button, ToggleSwitch } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import type { EventType } from '../core/types';
+import type { EventType, SchedulingScope } from '../core/types';
 import { TextInput } from './fields';
+import { OwnerBadge } from './owner-badge';
 
 export function EventTypesPanel(props: {
   events: EventType[];
+  owner?: SchedulingScope;
+  search?: string;
   canEdit: boolean;
   saving: boolean;
   onEdit: (event: EventType) => void;
@@ -20,28 +24,33 @@ export function EventTypesPanel(props: {
   onCopy: (event: EventType) => void;
   link: (event: EventType) => string;
 }) {
-  const [search, setSearch] = createSignal('');
+  const [localSearch, setSearch] = createSignal('');
+  const search = () => (props.search ?? localSearch()).trim();
   const [removing, setRemoving] = createSignal<string>();
   const filtered = () =>
     props.events.filter((e) =>
-      `${e.title} ${e.slug}`.toLowerCase().includes(search().toLowerCase())
+      `${e.title} ${e.slug} ${props.owner?.name ?? ''} ${props.owner?.teamId ? 'team' : 'personal'}`
+        .toLowerCase()
+        .includes(search().toLowerCase())
     );
   return (
     <div class="flex flex-col gap-5">
-      <div class="max-w-sm">
-        <TextInput
-          type="search"
-          aria-label="Search event types"
-          placeholder="Search event types…"
-          value={search()}
-          onInput={(e) => setSearch(e.currentTarget.value)}
-        />
-      </div>
-      <div class="overflow-hidden rounded-xl border border-edge-muted bg-panel">
+      <Show when={props.search === undefined}>
+        <div class="max-w-sm">
+          <TextInput
+            type="search"
+            aria-label="Search event types"
+            placeholder="Search event types…"
+            value={search()}
+            onInput={(e) => setSearch(e.currentTarget.value)}
+          />
+        </div>
+      </Show>
+      <SettingsCard>
         <For
           each={filtered()}
           fallback={
-            <div class="flex flex-col items-center gap-3 px-6 py-16 text-center">
+            <div class="flex flex-col items-center gap-3 px-6 py-8 text-center">
               <Link class="size-7 text-ink-muted" />
               <h2 class="font-semibold">
                 {search()
@@ -57,19 +66,24 @@ export function EventTypesPanel(props: {
           }
         >
           {(event) => (
-            <article class="border-b border-edge-muted px-5 py-5 last:border-b-0">
+            <article class="px-6 py-4">
               <div class="flex flex-wrap items-center gap-x-6 gap-y-4">
                 <div class="min-w-48 flex-1">
-                  <button
-                    type="button"
-                    disabled={!props.canEdit}
-                    onClick={() => props.onEdit(event)}
-                    class="max-w-full text-left"
-                  >
-                    <h2 class="truncate text-base font-semibold">
-                      {event.title}
-                    </h2>
-                  </button>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={!props.canEdit}
+                      onClick={() => props.onEdit(event)}
+                      class="max-w-full text-left"
+                    >
+                      <h2 class="truncate text-sm font-medium">
+                        {event.title}
+                      </h2>
+                    </button>
+                    <Show when={props.owner}>
+                      {(owner) => <OwnerBadge scope={owner()} />}
+                    </Show>
+                  </div>
                   <p class="mt-1 truncate text-xs text-ink-muted">
                     /{event.slug}
                   </p>
@@ -187,7 +201,7 @@ export function EventTypesPanel(props: {
             </article>
           )}
         </For>
-      </div>
+      </SettingsCard>
     </div>
   );
 }

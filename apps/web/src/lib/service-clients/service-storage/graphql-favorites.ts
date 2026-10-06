@@ -127,6 +127,7 @@ function favoriteSoupEffects(
   const typenames = {
     document: 'GraphqlSoupDocument',
     project: 'GraphqlSoupProject',
+    reminder: undefined,
     chat: 'GraphqlSoupChat',
     channel: 'GraphqlSoupChannel',
     channel_message: 'GraphqlSoupChannelMessage',
@@ -135,7 +136,6 @@ function favoriteSoupEffects(
     call: 'GraphqlSoupCall',
     crm_company: 'GraphqlSoupCrmCompany',
     foreign_entity: 'GraphqlSoupForeignEntity',
-    reminder: 'GraphqlSoupReminder',
     agent_session: 'GraphqlSoupAgentSession',
     user: undefined,
     team: undefined,

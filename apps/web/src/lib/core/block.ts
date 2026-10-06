@@ -132,6 +132,9 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   canvas: allBlockNames,
   spreadsheet: allBlockNames,
   pptx: allBlockNames,
+  psd: allBlockNames,
+  fig: allBlockNames,
+  ai: allBlockNames,
   project: allBlockNames,
   unknown: allBlockNames,
   video: allBlockNames,
@@ -154,6 +157,9 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   canvas: new Set(['md']),
   spreadsheet: new Set([]),
   pptx: new Set([]),
+  psd: new Set([]),
+  fig: new Set([]),
+  ai: new Set([]),
   database: new Set([]),
   chat: new Set([]),
   pdf: new Set(['md']),
@@ -373,6 +379,9 @@ export type BlockDefinition<
 
   /** The component for the block. */
   component: BlockComponent<Name>;
+
+  /** Lightweight placeholder while the block's component or data loads. */
+  loading?: Component;
 
   /** flag to indicate wether this block should enable collaborative features. */
   liveTrackingEnabled?: boolean;

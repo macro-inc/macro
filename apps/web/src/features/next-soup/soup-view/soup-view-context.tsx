@@ -50,9 +50,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
   enableInboxNotifiedSort,
-  enableReminders,
   enableSupportedSoupForeignEntities,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -67,9 +65,12 @@ import {
   unreadFilterFn,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
-import { queryReadyGate } from '@queries/gate';
+import {
+  createLocalDraftSource,
+  localDraftEntities,
+  localDraftMatchesFilters,
+} from '@queries/email/local-draft-source';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
-import { useReminderCollectionQuery } from '@queries/reminders/collection';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,
@@ -289,16 +290,6 @@ const resolveTabId = (
 ): string => {
   const config = VIEW_TAB_PRESETS[view];
   if (!remembered || !(remembered in config.tabs)) return config.default;
-  // A remembered tab can also be flag-gated out of the tab bar (see
-  // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
-  // off would leave a hidden tab active, still querying reminders.
-  if (
-    view === 'home' &&
-    remembered === 'reminders' &&
-    !isFeatureEnabled(enableReminders)
-  ) {
-    return config.default;
-  }
   return remembered;
 };
 
@@ -385,12 +376,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       : undefined;
 
   const initialFilters = resolveInitialViewFilters({
-    view: initialView,
-    rememberedTab:
-      initialEntryState?.['soup.tab'] ??
-      (filterPersistenceEnabled() && initialView
-        ? persistedActiveTabs()[initialView]
-        : undefined),
     entry: { query: initialEntryQuery, predicates: initialEntryPredicates },
     persisted: {
       query: initialPersistedQuery,
@@ -712,13 +697,11 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   // inbox's All and Reminders tabs stay on update recency even when a row
   // carries a notification stamp from a Signal page or a live delivery.
   const clientSort = createMemo((): SortConfig<SoupEntity>[] =>
-    activeListView() === 'reminders'
-      ? []
-      : presetSortMethod() === 'notified_at'
-        ? [SORT_CONFIGS.notified_at]
-        : config().sortMethod?.() === 'touched_by_me'
-          ? []
-          : soup.sort.active()
+    presetSortMethod() === 'notified_at'
+      ? [SORT_CONFIGS.notified_at]
+      : config().sortMethod?.() === 'touched_by_me'
+        ? []
+        : soup.sort.active()
   );
 
   const isClientPropertyGroup = createMemo(
@@ -882,12 +865,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
             : undefined;
 
         const filters = resolveInitialViewFilters({
-          view,
-          rememberedTab:
-            entryState?.['soup.tab'] ??
-            (filterPersistenceEnabled() && view
-              ? persistedActiveTabs()[view]
-              : undefined),
           entry: { query: entryQuery, predicates: entryPredicates },
           persisted: { query: persistedQuery, predicates: savedPredicates },
           initial: {
@@ -961,28 +938,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     );
   };
 
-  const usesReminderCollection = () =>
-    activeListView() === 'reminders' && !search.isSearching();
-  const reminderCollection = useReminderCollectionQuery(() => ({
-    userId: userId(),
-    enabled: enabled() && usesReminderCollection(),
-    completed: queryFilters.state.include.reminderCompleted,
-  }));
-  const reminderCollectionData = () =>
-    queryReadyGate(reminderCollection) ? reminderCollection.data : undefined;
-  const reminderSource = {
-    data: reminderCollectionData,
-    error: () => reminderCollection.error,
-    hasData: () => reminderCollectionData() !== undefined,
-    isLoading: () => reminderCollection.isLoading,
-    isFetching: () => reminderCollection.isFetching,
-    isPlaceholderData: () => false,
-    isFetchingNextPage: () => reminderCollection.isFetchingNextPage,
-    isEnabled: () => enabled() && usesReminderCollection(),
-    hasNextPage: () => reminderCollection.hasNextPage,
-    fetchNextPage: () => reminderCollection.fetchNextPage(),
-  };
-
   // The Soup query facade owns GraphQL eligibility and REST fallback. Its urql
   // implementation keeps loaded pages subscribed to the normalized cache.
   const itemsQuery = useSoupAstItemsQuery(
@@ -1001,8 +956,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       // after a tab switch.
       const emailImportance = queryFilters.state.include.emailImportance;
       return {
-        enabled:
-          enabled() && !search.isSearching() && !usesReminderCollection(),
+        enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
@@ -1040,16 +994,30 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     fetchNextPage: () => itemsQuery.fetchNextPage(),
   };
 
-  const itemsSource = () =>
-    usesReminderCollection() ? reminderSource : soupItemsSource;
+  const itemsSource = () => soupItemsSource;
 
+  const localDrafts = createLocalDraftSource(
+    () => itemsQuery.transport === 'graphql'
+  );
+  const localDraftRows = () => {
+    const filters = applyViewFilters(queryFilters.state);
+    if (!search.isSearching() && filters.emailView !== 'drafts') return [];
+    return localDraftEntities(
+      localDrafts
+        .drafts()
+        .filter((draft) => localDraftMatchesFilters(draft, filters))
+    ).map((entity) => attachNotifications(entity)) as SoupEntity[];
+  };
   const items = createMemo<SoupEntity[]>(
     (prev) => {
       const searching = search.isSearching();
 
       if (!searching) {
         const data = itemsSource().data();
-        const extras = config().additionalEntities?.() ?? [];
+        const extras = [
+          ...(config().additionalEntities?.() ?? []),
+          ...localDraftRows(),
+        ];
         const extraEntities = extras.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
@@ -1060,11 +1028,11 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           // navigation. Once the active query fails, those rows belong to
           // the previous query and must go so the load-error state can
           // render — only client-local rows remain valid.
-          return usesReminderCollection() || itemsSource().error()
+          return itemsSource().error()
             ? extraEntities
-            : prev;
+            : deduplicateEntities([...extraEntities, ...prev]);
         }
-        if (data.groups) return prev;
+        if (data.groups) return localDraftRows();
 
         const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
@@ -1072,13 +1040,25 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
         if (extraEntities.length === 0) return base;
 
-        return [...extraEntities, ...base];
+        const extraIds = new Set(
+          extraEntities.map((entity) => `${entity.type}:${entity.id}`)
+        );
+        return [
+          ...extraEntities,
+          ...base.filter(
+            (entity) => !extraIds.has(`${entity.type}:${entity.id}`)
+          ),
+        ];
       }
 
       const local = search.localFuzzyResults();
       const service = search.serviceSearchResults();
 
-      const merged: SoupEntity[] = [...service, ...local];
+      const needle = search.searchText().toLowerCase();
+      const recovery = localDraftRows().filter((entity) =>
+        entity.name.toLowerCase().includes(needle)
+      );
+      const merged: SoupEntity[] = [...recovery, ...service, ...local];
 
       if (
         merged.length === 0 &&
@@ -1431,17 +1411,56 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
     const result: SoupRow[] = [];
     let globalIndex = 0;
+    // Local working copies have no server group membership yet. Keep them
+    // discoverable, subject to the same filters as the flat Drafts view.
+    const recovery = entities();
+    const recoveryIds = new Set(
+      recovery.map((entity) => `${entity.type}:${entity.id}`)
+    );
+    if (recovery.length) {
+      const key = 'local-email-drafts';
+      const group: GroupMeta = {
+        key,
+        value: key,
+        label: 'Saved on this device',
+        count: recovery.length,
+        isExpanded: () => soup.grouping.isExpanded(key),
+        toggle: () => soup.grouping.toggle(key),
+      };
+      result.push(
+        soup.buildRow({
+          id: `header:${key}`,
+          index: globalIndex++,
+          original: recovery[0],
+          group,
+          isGrouped: true,
+        })
+      );
+      for (const entity of recovery)
+        result.push(
+          soup.buildRow({
+            id: entity.id,
+            index: globalIndex++,
+            original: entity,
+            group,
+          })
+        );
+    }
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
       const groupData = groupQueryFor(apiGroup.key)?.data();
       const groupEntities =
-        groupData?.entities?.map(
-          (entity) =>
-            (isWithNotification(entity)
-              ? entity
-              : attachNotifications(entity)) as SoupEntity
-        ) ?? [];
+        groupData?.entities
+          ?.map(
+            (entity) =>
+              (isWithNotification(entity)
+                ? entity
+                : attachNotifications(entity)) as SoupEntity
+          )
+          .filter(
+            (entity) => !recoveryIds.has(`${entity.type}:${entity.id}`)
+          ) ?? [];
 
       const firstEntity = groupEntities[0];
       if (!firstEntity) continue;
@@ -1491,6 +1510,12 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const searchSourceError = () =>
     (searchQuery.error as Error | null) ??
     nativeOfflineLoadError(searchSourceHasData);
+  const hasLocalRecoveryRows = () => {
+    const ids = new Set(localDraftRows().map((entity) => entity.id));
+    return entities().some(
+      (entity) => entity.type === 'email' && ids.has(entity.id)
+    );
+  };
 
   const context = {
     extensions: props.extensions,
@@ -1508,6 +1533,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         search.isSearching()
           ? searchSourceHasData()
           : itemsSource().hasData() ||
+            hasLocalRecoveryRows() ||
             // Rows retained across a query rebind count as data so the view
             // doesn't flash, but once the query errors only client-local
             // rows remain and must not suppress the load-error state.
@@ -1565,10 +1591,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
         // This covers both transports: urql pages sit outside the TanStack
         // invalidation above, and the REST refetch dedupes against it.
-        if (usesReminderCollection()) {
-          await reminderCollection.refetch({ throwOnError: true });
-          return;
-        }
         await itemsQuery.refresh();
       },
     },

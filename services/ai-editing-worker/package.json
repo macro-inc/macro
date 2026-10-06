@@ -35,7 +35,7 @@
 		"yargs": "^18.0.0",
 		"zod": "^4.4.3",
 		"@macro-inc/spreadsheet": "workspace:*",
-		"@ironcalc/wasm": "0.8.4"
+		"@ironcalc/wasm": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/node": "^25.9.3",

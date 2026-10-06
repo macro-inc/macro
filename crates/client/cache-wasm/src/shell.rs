@@ -236,6 +236,7 @@ enum JsInitialMutationClaim {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsClaimedMutation {
+    client_metadata: Option<serde_json::Value>,
     transaction_id: String,
     uuid: String,
     superseded: bool,
@@ -246,6 +247,7 @@ struct JsClaimedMutation {
     variables: serde_json::Value,
     identity: Option<String>,
     attempt_count: u32,
+    server_failure_count: u32,
 }
 
 impl TryFrom<ClaimedMutation> for JsClaimedMutation {
@@ -253,8 +255,14 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
         let requires_confirmation = claimed.queued.requires_confirmation();
+        let client_metadata = cache_core::queue::decode_optimistic_source(
+            &claimed.queued.optimistic.optimistic_data_json,
+        )
+        .map_err(err_js)?
+        .client_metadata;
         let request = claimed.queued.mutation.request;
         Ok(Self {
+            client_metadata,
             transaction_id: claimed.queued.id.to_string(),
             uuid: claimed.queued.uuid.to_string(),
             superseded: claimed.queued.superseded,
@@ -265,6 +273,7 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
             variables: serde_json::from_str(&request.variables_json).map_err(err_js)?,
             identity: request.identity,
             attempt_count: claimed.queued.mutation.attempt_count,
+            server_failure_count: claimed.queued.mutation.server_failure_count,
         })
     }
 }
@@ -1664,6 +1673,7 @@ impl CacheEngine {
         lease_owner: String,
         now_ms: f64,
         lease_expires_at_ms: f64,
+        client_metadata: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1671,6 +1681,8 @@ impl CacheEngine {
             let mut state = state.lock().await;
             state.ensure_callable()?;
             let vars = parse_variables(variables)?;
+            let client_metadata: Option<serde_json::Value> =
+                serde_wasm_bindgen::from_value(client_metadata).map_err(err_js)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
@@ -1738,6 +1750,7 @@ impl CacheEngine {
                 .enqueue_optimistic_mutation_with_projections(
                     origin,
                     BeginOptimisticWrite {
+                        client_metadata: client_metadata.as_ref(),
                         uuid: &uuid,
                         query: &query,
                         operation_name: operation_name.as_deref(),
@@ -1828,6 +1841,18 @@ impl CacheEngine {
         })
     }
 
+    /// Inspects durable mutations without claiming them.
+    #[wasm_bindgen(js_name = inspectMutations)]
+    pub fn inspect_mutations(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let result = state.engine_mut()?.inspect_mutations().await;
+            to_js(&state.engine_result(result)?)
+        })
+    }
+
     /// Claims the oldest runnable queued mutation.
     #[wasm_bindgen(js_name = claimNextMutation)]
     pub fn claim_next_mutation(
@@ -1863,6 +1888,7 @@ impl CacheEngine {
         lease_generation: String,
         next_attempt_at_ms: f64,
         error: String,
+        server_failure: bool,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1877,7 +1903,13 @@ impl CacheEngine {
             let next_attempt_at_ms = parse_timestamp(next_attempt_at_ms, "next attempt timestamp")?;
             let result = state
                 .engine_mut()?
-                .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
+                .defer_optimistic_write(
+                    transaction,
+                    claim,
+                    next_attempt_at_ms,
+                    error,
+                    server_failure,
+                )
                 .await;
             let result = state.engine_result(result)?;
             let result = match result {

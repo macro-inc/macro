@@ -69,11 +69,11 @@ const tasksFaq = [
     a: 'No. Our code is public. Your tasks, messages, and docs are not, and they follow your sharing settings.',
   },
   {
-    q: 'Is there a free plan?',
+    q: 'Can I join as a Guest for free?',
     a: (
       <>
-        Yes. Tasks come with email, chat, docs, and agents. See{' '}
-        <a href="/pricing">pricing</a> for the current limits.
+        Yes. Guest access includes tasks with email, chat, docs, and agents.
+        See <a href="/pricing">pricing</a> for the current limits.
       </>
     ),
   },

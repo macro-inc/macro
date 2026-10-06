@@ -22,7 +22,6 @@ function excludedNonCallFilters(): EntityFilters {
     email_filters: { email_thread_ids: [NIL_UUID] },
     foreign_entity_filters: { ids: [NIL_UUID] },
     project_filters: { project_ids: [NIL_UUID] },
-    reminder_filters: { ids: [NIL_UUID] },
   };
 }
 

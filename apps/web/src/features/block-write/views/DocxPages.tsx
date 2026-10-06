@@ -101,7 +101,7 @@ function Page(props: {
   return (
     <div
       ref={element}
-      class="docx-sheet absolute overflow-hidden rounded-[2px] shadow-md"
+      class="docx-sheet absolute cursor-text overflow-hidden rounded-[2px] shadow-md ring-1 ring-edge-muted"
       data-docx-page={props.index}
       style={{
         left: `${props.box.left}px`,

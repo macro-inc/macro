@@ -577,6 +577,9 @@ fn normalize(protocol: WireProtocol, usage: &Value) -> Option<TrustedTokenUsage>
             let cached = usage
                 .get(input_details)
                 .map_or(Some(0), |v| optional_count(v, "cached_tokens"))?;
+            let cache_written = usage
+                .get(input_details)
+                .map_or(Some(0), |v| optional_count(v, "cache_write_tokens"))?;
             let reasoning = usage
                 .get(output_details)
                 .map_or(Some(0), |v| optional_count(v, "reasoning_tokens"))?;
@@ -584,9 +587,10 @@ fn normalize(protocol: WireProtocol, usage: &Value) -> Option<TrustedTokenUsage>
             for details in [input_details, output_details] {
                 if let Some(object) = usage.get(details).and_then(Value::as_object)
                     && object.iter().any(|(key, value)| {
-                        key != "cached_tokens"
-                            && key != "reasoning_tokens"
-                            && value.as_u64() != Some(0)
+                        !matches!(
+                            key.as_str(),
+                            "cached_tokens" | "cache_write_tokens" | "reasoning_tokens"
+                        ) && value.as_u64() != Some(0)
                     })
                 {
                     return None;
@@ -596,7 +600,7 @@ fn normalize(protocol: WireProtocol, usage: &Value) -> Option<TrustedTokenUsage>
                 count(usage, input)?,
                 count(usage, output)?,
                 cached,
-                0,
+                cache_written,
                 reasoning,
             )
             .ok()

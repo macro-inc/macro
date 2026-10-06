@@ -23,7 +23,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::PROTOCOL_VERSION;
 use crate::domain::error::AgentSessionError;
-use crate::domain::model::AgentSessionId;
+use crate::domain::model::{AgentSessionId, MACRO_AGENT_SESSION_META_KEY};
 
 use super::types::{
     CloseReason, Effect, Input, OutstandingPermission, PendingAction, PendingElicitation,
@@ -636,7 +636,8 @@ impl<Token> SessionMachine<Token> {
     > {
         self.build_session_request(
             ResumeSessionRequest::new(session_id.clone(), self.workspace.clone())
-                .mcp_servers(self.mcp_servers.clone()),
+                .mcp_servers(self.mcp_servers.clone())
+                .meta(self.session_meta()),
             SessionOpening::Resume(session_id),
         )
     }
@@ -650,9 +651,21 @@ impl<Token> SessionMachine<Token> {
     > {
         self.build_session_request(
             LoadSessionRequest::new(session_id.clone(), self.workspace.clone())
-                .mcp_servers(self.mcp_servers.clone()),
+                .mcp_servers(self.mcp_servers.clone())
+                .meta(self.session_meta()),
             SessionOpening::Load(session_id),
         )
+    }
+
+    /// Names the Macro session an ACP session belongs to, so a runtime that
+    /// multiplexes sessions over one connection (macrod) can tell them apart.
+    fn session_meta(&self) -> agent_client_protocol::schema::v1::Meta {
+        let mut meta = agent_client_protocol::schema::v1::Meta::new();
+        meta.insert(
+            MACRO_AGENT_SESSION_META_KEY.to_owned(),
+            serde_json::Value::String(self.id.to_string()),
+        );
+        meta
     }
 
     fn build_initialize_request(
@@ -684,7 +697,9 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            NewSessionRequest::new(self.workspace.clone()).mcp_servers(self.mcp_servers.clone()),
+            NewSessionRequest::new(self.workspace.clone())
+                .mcp_servers(self.mcp_servers.clone())
+                .meta(self.session_meta()),
             SessionOpening::New,
         )
     }

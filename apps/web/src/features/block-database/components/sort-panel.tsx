@@ -14,7 +14,7 @@ import { DragSessionSensors } from '../../../components/drag-drop/drag-session-s
 import { VerticalInsertionLine } from '../../../components/drag-drop/insertion-line';
 import type { DatabaseViewColumn } from '../core/database-view';
 import { withSort, withSortMoved } from '../core/view-query';
-import type { ViewChange } from '../queries/views';
+import type { ViewChange } from '../core/view-state';
 import { ViewSelect } from './view-select';
 
 /** A view's sort levels, first first; drag a level's handle to change its priority. */

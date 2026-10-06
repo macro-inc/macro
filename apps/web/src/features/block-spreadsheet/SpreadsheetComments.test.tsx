@@ -500,7 +500,7 @@ it('keeps out-of-grid range threads readable without rendering an invalid marker
   mocks.data[0].state.anchor = {
     type: 'spreadsheet',
     ...anchor,
-    range: 'AA1:AB2',
+    range: 'XFE1:XFF2',
   };
   mount();
   expect(screen.getByText('Check assumptions')).toBeTruthy();

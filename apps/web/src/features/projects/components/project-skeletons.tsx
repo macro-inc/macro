@@ -71,10 +71,10 @@ export function ProjectContentSkeleton(props: { section: ProjectSection }) {
 
 function ProjectTasksSkeleton() {
   return (
-    <div class="space-y-6 p-3 touch:px-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <ListSkeleton.Bar class="h-10 w-96 max-w-full" />
-        <div class="flex gap-2">
+    <div class="space-y-6 px-4 py-2">
+      <div class="flex h-8 items-center gap-3 overflow-x-auto scrollbar-hidden">
+        <ListSkeleton.Bar class="size-8 shrink-0 rounded-full" />
+        <div class="ml-auto flex shrink-0 gap-2">
           <ListSkeleton.Bar class="h-8 w-32" />
           <ListSkeleton.Bar class="h-8 w-24" />
         </div>

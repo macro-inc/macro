@@ -165,3 +165,20 @@ fn test_generate_parent_only_upsert_without_file_type() {
 
     assert!(args.is_none());
 }
+
+#[test]
+fn test_design_content_is_indexed_but_other_vector_files_are_name_only() {
+    for design in [FileType::Fig, FileType::Psd, FileType::Psb, FileType::Ai] {
+        assert!(!should_index_parent_only(&design), "{design}");
+    }
+    assert!(should_index_parent_only(&FileType::Eps));
+    assert!(should_index_parent_only(&FileType::Dwg));
+}
+
+#[tokio::test]
+async fn test_unreadable_designs_are_read_errors() {
+    for file_type in [FileType::Psd, FileType::Psb, FileType::Ai, FileType::Md] {
+        let read = read_design_text(file_type, b"not a design".to_vec()).await;
+        assert!(read.is_err(), "{file_type}");
+    }
+}

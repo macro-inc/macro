@@ -247,7 +247,7 @@ describe('spreadsheet AI reads and calculation', () => {
       readSpreadsheetForAi(
         doc,
         'v',
-        { action: 'read', ranges: ['AA1'] },
+        { action: 'read', ranges: ['XFE1'] },
         calculator
       )
     ).toThrow('Invalid cell address');
@@ -446,7 +446,7 @@ describe('spreadsheet AI atomic editing', () => {
       ])
     ).toThrow('formatting');
     expect(() =>
-      edit([{ type: 'append_rows', sheetId: 'sheet1', count: 900 }])
+      edit([{ type: 'append_rows', sheetId: 'sheet1', count: 99_900 }])
     ).toThrow('exceeding');
     expect(() =>
       edit([

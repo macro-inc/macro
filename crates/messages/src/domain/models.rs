@@ -119,7 +119,7 @@ impl MessageParent {
 }
 
 /// A thread's location within its document. PDF geometry remains annotation-owned.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -161,6 +161,20 @@ pub enum ThreadAnchor {
         sheet_name: String,
         /// A1 cell or range, such as B4 or B4:C9.
         range: String,
+    },
+    /// A point pinned on a design (`.fig`): on a layer, or on the page
+    /// canvas when no layer was under it.
+    #[serde(rename_all = "camelCase")]
+    Fig {
+        /// Page (canvas) the pin is on.
+        page_id: String,
+        /// Layer the pin follows; absent for a pin on the bare canvas.
+        node_id: Option<String>,
+        /// Horizontal offset from the layer's origin, or the page's when
+        /// the pin is on no layer, in design units.
+        x: f64,
+        /// Vertical offset, measured like `x`.
+        y: f64,
     },
 }
 
@@ -209,6 +223,21 @@ pub enum NewThreadAnchor {
         sheet_name: String,
         /// A1 cell or range, such as B4 or B4:C9.
         range: String,
+    },
+    /// A point pinned on a design (`.fig`): on a layer, or on the page
+    /// canvas when no layer was under it.
+    #[serde(rename_all = "camelCase")]
+    Fig {
+        /// Page (canvas) the pin is on.
+        page_id: String,
+        /// Layer the pin follows; absent or null for a pin on the bare canvas.
+        #[serde(default)]
+        node_id: Option<String>,
+        /// Horizontal offset from the layer's origin, or the page's when
+        /// the pin is on no layer, in design units.
+        x: f64,
+        /// Vertical offset, measured like `x`.
+        y: f64,
     },
 }
 
@@ -259,6 +288,17 @@ impl NewThreadAnchor {
             },
             Self::PdfPlaceable { anchor_id, .. } => ThreadAnchor::PdfPlaceable {
                 anchor_id: *anchor_id,
+            },
+            Self::Fig {
+                page_id,
+                node_id,
+                x,
+                y,
+            } => ThreadAnchor::Fig {
+                page_id: page_id.clone(),
+                node_id: node_id.clone(),
+                x: *x,
+                y: *y,
             },
         }
     }

@@ -1,3 +1,4 @@
+import { MergePullRequestButton } from '@app/features/block-pr/component/MergePullRequestButton';
 import {
   parseGithubPrUrl,
   prDisplayName,
@@ -27,10 +28,14 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
       ? (value as Record<string, unknown>)
       : {};
   };
+  const text = (key: 'name' | 'status') => {
+    const value = metadata()[key];
+    return typeof value === 'string' ? value : undefined;
+  };
   const label = () => {
-    const title = metadata().name;
+    const title = text('name');
     const parsed = reference();
-    return typeof title === 'string' && title
+    return title
       ? `${parsed ? `#${parsed.number} · ` : ''}${title}`
       : parsed
         ? prDisplayName(parsed)
@@ -104,24 +109,40 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
       }
     >
       {(pr) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          fullWidth
-          noTouchResize
-          class="h-8 min-w-0 justify-start rounded-lg bg-hover p-2 transition-none not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:bg-none not-disabled:active:bg-none"
-          aria-label={label()}
-          data-magic-chip-pull-request={props.url}
-          on:click={(event) => {
-            event.stopPropagation();
-            layout.openWithSplit(
-              { type: 'pr', id: pr().id },
-              { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
-            );
-          }}
-        >
-          {content()}
-        </Button>
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            noTouchResize
+            class="h-8 min-w-0 flex-1 justify-start rounded-lg bg-hover p-2 transition-none not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:bg-none not-disabled:active:bg-none"
+            aria-label={label()}
+            data-magic-chip-pull-request={props.url}
+            on:click={(event) => {
+              event.stopPropagation();
+              layout.openWithSplit(
+                { type: 'pr', id: pr().id },
+                {
+                  preferNewSplit: openInNewSplitForMention(
+                    event.shiftKey,
+                    true
+                  ),
+                }
+              );
+            }}
+          >
+            {content()}
+          </Button>
+          <Show when={reference()}>
+            {(prRef) => (
+              <MergePullRequestButton
+                target={{ ...prRef(), title: text('name') }}
+                status={text('status')}
+                class="h-8"
+              />
+            )}
+          </Show>
+        </>
       )}
     </Show>
   );

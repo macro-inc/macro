@@ -309,6 +309,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: "00000000-0000-0000-0000-000000002000",
                 query: PARTIAL,
                 operation_name: None,

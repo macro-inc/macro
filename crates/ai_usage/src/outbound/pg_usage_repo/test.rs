@@ -10,7 +10,12 @@ fn completion(feature: AiFeature, model: &str, input: u64, output: u64) -> Compl
         user: SYSTEM_USER_ID.clone(),
         entity: None,
         cost: Usage {
-            amount: UsageAmount::Tokens { input, output },
+            amount: UsageAmount::Tokens {
+                input,
+                output,
+                cache_read: 0,
+                cache_write: 0,
+            },
             model: model.to_string(),
             price: None,
             created_at: Utc::now(),
@@ -26,7 +31,9 @@ async fn seeded_pricing_is_available(pool: PgPool) {
         price,
         Some(ModelPricing::Tokens {
             input: 5.0,
-            output: 25.0
+            output: 25.0,
+            cache_read: Some(0.5),
+            cache_write: Some(6.25),
         })
     );
     let price = repo.get_pricing("claude-opus-5").await.unwrap();
@@ -34,7 +41,19 @@ async fn seeded_pricing_is_available(pool: PgPool) {
         price,
         Some(ModelPricing::Tokens {
             input: 5.0,
-            output: 25.0
+            output: 25.0,
+            cache_read: Some(0.5),
+            cache_write: Some(6.25),
+        })
+    );
+    let price = repo.get_pricing("claude-opus-5-5").await.unwrap();
+    assert_eq!(
+        price,
+        Some(ModelPricing::Tokens {
+            input: 4.0,
+            output: 20.0,
+            cache_read: Some(0.2),
+            cache_write: Some(5.0),
         })
     );
     assert_eq!(
@@ -50,7 +69,9 @@ async fn seeded_pricing_is_available(pool: PgPool) {
         price,
         ModelPricing::Tokens {
             input: 0.30,
-            output: 30.0
+            output: 30.0,
+            cache_read: None,
+            cache_write: None,
         }
     );
     let cost = crate::Price::compute(
@@ -58,6 +79,8 @@ async fn seeded_pricing_is_available(pool: PgPool) {
         UsageAmount::Tokens {
             input: 100,
             output: 1290,
+            cache_read: 0,
+            cache_write: 0,
         },
     )
     .unwrap();
@@ -118,6 +141,8 @@ async fn set_pricing_recomputes_existing_rows(pool: PgPool) {
         ModelPricing::Tokens {
             input: 2.0,
             output: 8.0,
+            cache_read: None,
+            cache_write: None,
         },
     )
     .await
@@ -130,7 +155,9 @@ async fn set_pricing_recomputes_existing_rows(pool: PgPool) {
         repo.get_pricing("brand-new-model").await.unwrap(),
         Some(ModelPricing::Tokens {
             input: 2.0,
-            output: 8.0
+            output: 8.0,
+            cache_read: None,
+            cache_write: None,
         })
     );
 }
@@ -165,11 +192,15 @@ async fn counting_decisions_survive_repricing_and_remain_visible_to_analytics(po
         ModelPricing::Tokens {
             input: 2.0,
             output: 8.0,
+            cache_read: None,
+            cache_write: None,
         },
         ModelPricing::Audio { per_minute: 0.006 },
         ModelPricing::Tokens {
             input: 4.0,
             output: 16.0,
+            cache_read: None,
+            cache_write: None,
         },
     ] {
         repo.set_pricing(model, pricing).await.unwrap();
@@ -222,21 +253,27 @@ async fn pricing_resolves_provider_qualified_ids(pool: PgPool) {
         repo.get_pricing("anthropic/claude-opus-5").await.unwrap(),
         Some(ModelPricing::Tokens {
             input: 5.0,
-            output: 25.0
+            output: 25.0,
+            cache_read: Some(0.5),
+            cache_write: Some(6.25),
         })
     );
     assert_eq!(
         repo.get_pricing("claude-sonnet-5").await.unwrap(),
         Some(ModelPricing::Tokens {
             input: 2.0,
-            output: 10.0
+            output: 10.0,
+            cache_read: Some(0.2),
+            cache_write: Some(2.5),
         })
     );
     assert_eq!(
         repo.get_pricing("openai/gpt-6-astra").await.unwrap(),
         Some(ModelPricing::Tokens {
             input: 10.0,
-            output: 50.0
+            output: 50.0,
+            cache_read: Some(1.0),
+            cache_write: Some(12.5),
         })
     );
 }
@@ -278,6 +315,8 @@ async fn duration_usage_roundtrips_and_reprices_without_affecting_tokens(pool: P
                 None => ModelPricing::Tokens {
                     input: 0.0,
                     output: 0.0,
+                    cache_read: None,
+                    cache_write: None,
                 },
             },
         )
@@ -305,7 +344,9 @@ async fn duration_usage_roundtrips_and_reprices_without_affecting_tokens(pool: P
         chat[0].cost.amount,
         UsageAmount::Tokens {
             input: 1_000_000,
-            output: 0
+            output: 0,
+            cache_read: 0,
+            cache_write: 0,
         }
     );
     assert!(
@@ -333,10 +374,128 @@ async fn repricing_cannot_apply_audio_rates_to_token_usage(pool: PgPool) {
         ModelPricing::Tokens {
             input: 2.0,
             output: 8.0,
+            cache_read: None,
+            cache_write: None,
         },
     )
     .await
     .unwrap();
     let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
     assert_eq!(rows[0].cost.price.unwrap().total, 2.0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cached_token_usage_roundtrips_with_its_cache_rates(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    let amount = UsageAmount::Tokens {
+        input: 2_000,
+        output: 1_000,
+        cache_read: 140_000,
+        cache_write: 6_000,
+    };
+    let row = CompletionUsage {
+        feature: AiFeature::AgentSession,
+        user: SYSTEM_USER_ID.clone(),
+        entity: None,
+        cost: Usage {
+            amount,
+            model: "claude-opus-5".to_string(),
+            price: Price::compute(
+                repo.get_pricing("claude-opus-5").await.unwrap().unwrap(),
+                amount,
+            ),
+            created_at: Utc::now(),
+        },
+    };
+    repo.insert_usage(&row, true).await.unwrap();
+
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].cost.amount,
+        UsageAmount::Tokens {
+            input: 2_000,
+            output: 1_000,
+            cache_read: 140_000,
+            cache_write: 6_000,
+        }
+    );
+    let price = rows[0].cost.price.unwrap();
+    assert_eq!(
+        price.pricing,
+        ModelPricing::Tokens {
+            input: 5.0,
+            output: 25.0,
+            cache_read: Some(0.5),
+            cache_write: Some(6.25),
+        }
+    );
+    assert!((price.total - 0.1425).abs() < 1e-6);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn repricing_bills_cache_tokens_and_unprices_them_without_a_cache_rate(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    repo.insert_usage(
+        &CompletionUsage {
+            feature: AiFeature::AgentSession,
+            user: SYSTEM_USER_ID.clone(),
+            entity: None,
+            cost: Usage {
+                amount: UsageAmount::Tokens {
+                    input: 1_000_000,
+                    output: 0,
+                    cache_read: 1_000_000,
+                    cache_write: 1_000_000,
+                },
+                model: "cache-repricing-model".to_string(),
+                price: None,
+                created_at: Utc::now(),
+            },
+        },
+        true,
+    )
+    .await
+    .unwrap();
+
+    repo.set_pricing(
+        "cache-repricing-model",
+        ModelPricing::Tokens {
+            input: 2.0,
+            output: 8.0,
+            cache_read: Some(0.2),
+            cache_write: Some(2.5),
+        },
+    )
+    .await
+    .unwrap();
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    let price = rows[0].cost.price.unwrap();
+    assert_eq!(
+        price.pricing,
+        ModelPricing::Tokens {
+            input: 2.0,
+            output: 8.0,
+            cache_read: Some(0.2),
+            cache_write: Some(2.5),
+        }
+    );
+    assert!((price.total - 4.7).abs() < 1e-4);
+
+    repo.set_pricing(
+        "cache-repricing-model",
+        ModelPricing::Tokens {
+            input: 2.0,
+            output: 8.0,
+            cache_read: Some(0.2),
+            cache_write: None,
+        },
+    )
+    .await
+    .unwrap();
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert!(
+        rows[0].cost.price.is_none(),
+        "cache writes without a write rate must stay unpriced"
+    );
 }

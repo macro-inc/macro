@@ -1,5 +1,9 @@
 import { inflateSync, strFromU8 } from 'fflate';
-import { XLSX_MAX_BYTES, XLSX_MAX_EXPANDED_BYTES } from './workbook-file-types';
+import {
+  XLSX_MAX_BYTES,
+  XLSX_MAX_ENTRIES,
+  XLSX_MAX_EXPANDED_BYTES,
+} from './workbook-file-types';
 
 const invalid = () =>
   new Error('This is not a valid, unencrypted .xlsx workbook.');
@@ -15,11 +19,27 @@ function crc32(bytes: Uint8Array) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-/** Validate ZIP metadata and inflate into fixed buffers before ExcelJS sees it.
- * The caller must repack these checked files instead of loading the original ZIP. */
-export function inspectXlsxArchive(bytes: Uint8Array) {
+type ArchiveEntry = {
+  name: string;
+  size: number;
+  compressed: number;
+  offset: number;
+  crc: number;
+  method: number;
+};
+
+/** Validate the ZIP directory: bounded, unencrypted, no path aliases. */
+function archiveEntries(
+  bytes: Uint8Array,
+  { allowMacros }: { allowMacros: boolean }
+): {
+  entries: ArchiveEntry[];
+  centralStart: number;
+} {
   if (bytes.byteLength > XLSX_MAX_BYTES)
-    throw new Error('Choose an Excel workbook up to 5 MB.');
+    throw new Error(
+      `Choose an Excel workbook up to ${XLSX_MAX_BYTES / 1024 / 1024} MB.`
+    );
   if (bytes.byteLength < 22) throw invalid();
   const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let end = bytes.length - 22;
@@ -41,18 +61,11 @@ export function inspectXlsxArchive(bytes: Uint8Array) {
     data.getUint32(end + 4, true) !== 0 ||
     count !== data.getUint16(end + 8, true) ||
     !count ||
-    count > 2048 ||
+    count > XLSX_MAX_ENTRIES ||
     centralStart + centralSize !== end
   )
     throw invalid();
-  const entries: Array<{
-    name: string;
-    size: number;
-    compressed: number;
-    offset: number;
-    crc: number;
-    method: number;
-  }> = [];
+  const entries: ArchiveEntry[] = [];
   let offset = centralStart;
   let expanded = 0;
   const names = new Set<string>();
@@ -86,7 +99,9 @@ export function inspectXlsxArchive(bytes: Uint8Array) {
     names.add(name);
     expanded += size;
     if (expanded > XLSX_MAX_EXPANDED_BYTES)
-      throw new Error('The expanded workbook exceeds the 20 MB import limit.');
+      throw new Error(
+        `The expanded workbook exceeds the ${XLSX_MAX_EXPANDED_BYTES / 1024 / 1024} MB import limit.`
+      );
     entries.push({
       name,
       size,
@@ -103,76 +118,108 @@ export function inspectXlsxArchive(bytes: Uint8Array) {
     !names.has('xl/workbook.xml')
   )
     throw invalid();
-  if ([...names].some((name) => /vbaProject\.bin$/i.test(name)))
-    throw new Error(
-      'Macro-enabled workbooks are not supported. Save a macro-free .xlsx copy first.'
-    );
-  const files: Record<string, Uint8Array> = Object.create(null);
-  for (const entry of entries) {
-    const local = entry.offset;
-    if (local + 30 > centralStart || data.getUint32(local, true) !== 0x04034b50)
-      throw invalid();
-    const nameSize = data.getUint16(local + 26, true);
-    const start = local + 30 + nameSize + data.getUint16(local + 28, true);
-    if (
-      start + entry.compressed > centralStart ||
-      data.getUint16(local + 6, true) & 1 ||
-      data.getUint16(local + 8, true) !== entry.method ||
-      strFromU8(bytes.subarray(local + 30, local + 30 + nameSize)) !==
-        entry.name
-    )
-      throw invalid();
-    const compressed = bytes.subarray(start, start + entry.compressed);
-    // One extra byte makes an understated ZIP size detectable without allowing
-    // the inflater to allocate a buffer based on the deflate stream itself.
-    let content: Uint8Array;
-    try {
-      content =
-        entry.method === 0
-          ? compressed
-          : inflateSync(compressed, { out: new Uint8Array(entry.size + 1) });
-    } catch {
-      throw invalid();
-    }
-    if (content.length !== entry.size || crc32(content) !== entry.crc)
-      throw invalid();
-    files[entry.name] = content;
+  // Imports drop macros with a warning; Macro's own exports must never
+  // contain them.
+  if (!allowMacros && [...names].some(isMacroPart))
+    throw new Error('Workbooks written by Macro must not contain macros.');
+  return { entries, centralStart };
+}
+
+function inflateEntry(
+  bytes: Uint8Array,
+  entry: ArchiveEntry,
+  centralStart: number
+): Uint8Array {
+  const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const local = entry.offset;
+  if (local + 30 > centralStart || data.getUint32(local, true) !== 0x04034b50)
+    throw invalid();
+  const nameSize = data.getUint16(local + 26, true);
+  const start = local + 30 + nameSize + data.getUint16(local + 28, true);
+  if (
+    start + entry.compressed > centralStart ||
+    data.getUint16(local + 6, true) & 1 ||
+    data.getUint16(local + 8, true) !== entry.method ||
+    strFromU8(bytes.subarray(local + 30, local + 30 + nameSize)) !== entry.name
+  )
+    throw invalid();
+  const compressed = bytes.subarray(start, start + entry.compressed);
+  // One extra byte makes an understated ZIP size detectable without allowing
+  // the inflater to allocate a buffer based on the deflate stream itself.
+  let content: Uint8Array;
+  try {
+    content =
+      entry.method === 0
+        ? compressed
+        : inflateSync(compressed, { out: new Uint8Array(entry.size + 1) });
+  } catch {
+    throw invalid();
   }
+  if (content.length !== entry.size || crc32(content) !== entry.crc)
+    throw invalid();
+  return content;
+}
+
+/** Validate ZIP metadata and inflate every entry into fixed buffers. */
+export function inspectXlsxArchive(bytes: Uint8Array) {
+  const { entries, centralStart } = archiveEntries(bytes, {
+    allowMacros: false,
+  });
+  const files: Record<string, Uint8Array> = Object.create(null);
+  for (const entry of entries)
+    files[entry.name] = inflateEntry(bytes, entry, centralStart);
   return { files };
 }
 
-export function xlsxFeatureWarnings(
-  files: Record<string, Uint8Array>
-): string[] {
+export type XlsxArchive = {
+  names: string[];
+  /** Inflate one validated entry on demand; callers release it after use. */
+  read: (name: string) => Uint8Array | undefined;
+};
+
+/** Validate the directory up front, then inflate entries only when read. */
+export function openXlsxArchive(bytes: Uint8Array): XlsxArchive {
+  const { entries, centralStart } = archiveEntries(bytes, {
+    allowMacros: true,
+  });
+  const byName = new Map(entries.map((entry) => [entry.name, entry]));
+  return {
+    names: [...byName.keys()],
+    read(name) {
+      const entry = byName.get(name);
+      return entry && inflateEntry(bytes, entry, centralStart);
+    },
+  };
+}
+
+/** VBA projects, their signatures, and Excel 4.0 macro sheets. */
+function isMacroPart(name: string) {
+  return (
+    /(^|\/)vbaProject(Signature(Agile|V3)?)?\.bin$/i.test(name) ||
+    /^xl\/macrosheets\//i.test(name)
+  );
+}
+
+/** Warnings for package parts Macro does not import, from entry names alone. */
+export function xlsxFeatureWarnings(names: string[]): string[] {
   const warnings = new Set<string>();
-  for (const [name, bytes] of Object.entries(files)) {
-    if (/^xl\/(charts|drawings|media)\//.test(name))
-      warnings.add('Charts, drawings and images are not imported.');
-    if (/^xl\/(?:comments|threadedComments)/.test(name))
-      warnings.add('Cell comments and notes are not imported.');
-    if (/^xl\/pivot/.test(name))
-      warnings.add(
-        'Pivot tables are not imported; existing cell values are retained.'
-      );
+  for (const name of names) {
     if (/^xl\/externalLinks\//.test(name))
       warnings.add(
-        'External workbook links are not supported; their formulas may show errors.'
+        'External workbook links are not supported; formulas that use them keep their last calculated values.'
       );
-    if (!name.endsWith('.xml')) continue;
-    const text = strFromU8(bytes);
-    if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw invalid();
-    if (/<(?:\w+:)?conditionalFormatting[\s>]/.test(text))
-      warnings.add('Conditional formatting rules are not imported.');
-    if (/<(?:\w+:)?dataValidation[\s>]/.test(text))
-      warnings.add('Data validation and dropdown rules are not imported.');
-    if (/<(?:\w+:)?tablePart[\s>]/.test(text))
+    if (/^xl\/tables\//.test(name))
       warnings.add(
-        'Excel tables are imported as ordinary cells; table rules and structured references are not supported.'
+        'Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.'
       );
-    if (/<(?:\w+:)?sheetProtection[\s>]/.test(text))
+    if (/(^|\/)vbaProject\.bin$/i.test(name))
       warnings.add(
-        'Excel sheet protection is not imported; Macro sharing controls determine edit access.'
+        'VBA macros are not imported. Cells, formulas and formatting are; the macros do not run in Macro.'
       );
+    if (/^xl\/macrosheets\//i.test(name))
+      warnings.add('Excel 4.0 macro sheets are not imported.');
+    if (/^xl\/(activeX|ctrlProps)\//i.test(name))
+      warnings.add('Form and ActiveX controls are not imported.');
   }
   return [...warnings];
 }

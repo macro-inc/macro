@@ -63,8 +63,6 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
         </div>
       </HeaderIsland>
-      {/* Mobile has no room for inline tabs; the title file menu carries the
-          tab links there instead (see NewChannelBlockAdapter). */}
       <Show when={!isTouchDevice() && hasTabsMenu() && props.activeTab}>
         <CollapsibleHeaderItem
           id="channel-tabs"

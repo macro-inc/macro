@@ -11,9 +11,9 @@ use uuid::Uuid;
 pub struct Service<R, C, D> {
     pub(super) repository: R,
     pub(super) calendars: C,
-    directory: D,
+    pub(super) directory: D,
 }
-impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
+impl<R: Repository, C, D: Directory> Service<R, C, D> {
     /// Construct the scheduling use-case service.
     pub fn new(repository: R, calendars: C, directory: D) -> Self {
         Self {
@@ -30,7 +30,12 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         );
         Uuid::new_v5(&Uuid::NAMESPACE_URL, scope.as_bytes())
     }
-    async fn authorize(&self, user: &str, owner: &OwnedProfile, write: bool) -> Result<(), Error> {
+    pub(super) async fn authorize(
+        &self,
+        user: &str,
+        owner: &OwnedProfile,
+        write: bool,
+    ) -> Result<(), Error> {
         if let Some(team) = owner.team_id {
             if self
                 .directory
@@ -124,6 +129,8 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         }
         Ok(())
     }
+}
+impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
     async fn validate_booking_hosts(
         &self,
         owner: &OwnedProfile,

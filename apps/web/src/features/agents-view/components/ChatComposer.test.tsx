@@ -1,4 +1,6 @@
+import { createSessionComposerDraft } from '@app/features/block-agent/primitives/session-composer-draft';
 import type { InputAttachmentData } from '@channel/Input/types';
+import { preloadAgentFold } from '@core/agent-fold/client';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
@@ -13,6 +15,10 @@ import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
+
+vi.mock('@core/agent-fold/client', () => ({
+  preloadAgentFold: vi.fn(async () => {}),
+}));
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -139,6 +145,25 @@ function type(text: string) {
 }
 
 describe('Chat session input', () => {
+  it('preloads the fold only when focused without sending or changing the draft', () => {
+    const send = vi.fn();
+    const change = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft="Keep this draft"
+        onDraftChange={change}
+        onSend={send}
+        selector={null}
+      />
+    ));
+    expect(preloadAgentFold).not.toHaveBeenCalled();
+    fireEvent.focusIn(screen.getByTestId('editor'));
+    expect(preloadAgentFold).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalled();
+    expect(change).not.toHaveBeenCalled();
+    expect(editor.clear).not.toHaveBeenCalled();
+  });
+
   it('seeds the supplied context without sending it', () => {
     const send = vi.fn();
     render(() => (
@@ -163,6 +188,53 @@ describe('Chat session input', () => {
     expect(
       screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
     ).toBe(true);
+  });
+
+  it('restores an unsent session message after the composer remounts', () => {
+    localStorage.clear();
+    const View = () => {
+      const persisted = createSessionComposerDraft(() => 'session-restore');
+      return (
+        <ChatSessionInput
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          onSend={vi.fn()}
+        />
+      );
+    };
+    const first = render(() => <View />);
+    type('Hold this for the session');
+    first.unmount();
+    editor.text = '';
+    editor.setMarkdown.mockClear();
+    render(() => <View />);
+    expect(editor.setMarkdown).toHaveBeenCalledWith(
+      'Hold this for the session'
+    );
+  });
+
+  it('drops the saved session message once it is sent', () => {
+    localStorage.clear();
+    const send = vi.fn();
+    const View = () => {
+      const persisted = createSessionComposerDraft(() => 'session-sent');
+      return (
+        <ChatSessionInput
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          onSend={send}
+        />
+      );
+    };
+    const first = render(() => <View />);
+    type('Send and forget');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith('Send and forget', []);
+    first.unmount();
+    editor.text = '';
+    editor.setMarkdown.mockClear();
+    render(() => <View />);
+    expect(editor.setMarkdown).not.toHaveBeenCalledWith('Send and forget');
   });
 
   it('keeps a draft intact while the session is pending', () => {
@@ -229,7 +301,7 @@ describe('Chat session input', () => {
       expect(editor.enter?.(undefined, '')).toBe(false);
       expect(stop).not.toHaveBeenCalled();
       fireEvent.click(
-        screen.getByRole('button', { name: 'Send next queued message' })
+        screen.getByRole('button', { name: 'Flush queued messages' })
       );
       expect(stop).toHaveBeenCalledOnce();
     });

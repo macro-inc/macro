@@ -22,7 +22,7 @@ import { useCompanyQuery } from './use-crm';
 
 /**
  * Root of the company detail view, laid out like a project: the host's top
- * bar picks the section, Overview shows the company with its description and
+ * tab row picks the section, Overview shows the company with its description and
  * discussion, and the other sections list its team, emails, files, tasks and
  * calls. Properties and sharing open in the floating information panel.
  */
@@ -58,75 +58,78 @@ export function Company(props: {
       floating
       defaultOpen={false}
     >
-      <div class="size-full min-h-0 min-w-0">
-        <Switch>
-          <Match when={section() === 'overview'}>
-            <div class="h-full overflow-y-auto px-6 pb-12 pt-12 scrollbar-hidden touch:pt-6">
-              <div class="mx-auto flex max-w-3xl min-w-0 flex-col gap-6">
-                <CompanyHeader company={company()} />
-                <CompanyDiscussionSection companyId={props.companyId} />
-              </div>
-            </div>
-          </Match>
-          <Match when={section() === 'team'}>
-            <RecordSection
-              title="Team"
-              actions={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  // Contact emails are pinned to the company's primary
-                  // domain; disabled until the company has loaded.
-                  disabled={!company()?.domains[0]}
-                  onClick={() => {
-                    const domain = company()?.domains[0]?.domain;
-                    if (domain) openCreateContactModal(props.companyId, domain);
-                  }}
-                >
-                  <PlusIcon class="size-3.5" />
-                  Add contact
-                </Button>
-              }
-            >
-              <div class="px-2">
-                <CompanyContactsSection
-                  company={company()}
-                  contacts={contacts()}
-                  onOpenContact={props.onOpenContact}
-                />
-              </div>
-            </RecordSection>
-          </Match>
-          <Match when={section() === 'emails'}>
-            <CompanyEmailsSection company={company()} />
-          </Match>
-          <Match when={section() === 'files'}>
-            <RecordFilesSection scope={scope()} />
-          </Match>
-          <Match when={section() === 'tasks'}>
-            <Suspense
-              fallback={
-                <div class="p-6 text-center text-sm text-ink-muted">
-                  Loading…
+      <div class="flex size-full min-h-0 min-w-0 flex-col">
+        <div class="min-h-0 min-w-0 flex-1">
+          <Switch>
+            <Match when={section() === 'overview'}>
+              <div class="h-full overflow-y-auto px-6 pb-12 pt-12 scrollbar-hidden touch:pt-6">
+                <div class="mx-auto flex max-w-3xl min-w-0 flex-col gap-6">
+                  <CompanyHeader company={company()} />
+                  <CompanyDiscussionSection companyId={props.companyId} />
                 </div>
-              }
-            >
-              <Show
-                when={scope()}
+              </div>
+            </Match>
+            <Match when={section() === 'team'}>
+              <RecordSection
+                title="Team"
+                actions={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    // Contact emails are pinned to the company's primary
+                    // domain; disabled until the company has loaded.
+                    disabled={!company()?.domains[0]}
+                    onClick={() => {
+                      const domain = company()?.domains[0]?.domain;
+                      if (domain)
+                        openCreateContactModal(props.companyId, domain);
+                    }}
+                  >
+                    <PlusIcon class="size-3.5" />
+                    Add contact
+                  </Button>
+                }
+              >
+                <div class="px-2">
+                  <CompanyContactsSection
+                    company={company()}
+                    contacts={contacts()}
+                    onOpenContact={props.onOpenContact}
+                  />
+                </div>
+              </RecordSection>
+            </Match>
+            <Match when={section() === 'emails'}>
+              <CompanyEmailsSection company={company()} />
+            </Match>
+            <Match when={section() === 'files'}>
+              <RecordFilesSection scope={scope()} />
+            </Match>
+            <Match when={section() === 'tasks'}>
+              <Suspense
                 fallback={
                   <div class="p-6 text-center text-sm text-ink-muted">
                     Loading…
                   </div>
                 }
               >
-                {(current) => <context.RecordTasks scope={current()} />}
-              </Show>
-            </Suspense>
-          </Match>
-          <Match when={section() === 'calls'}>
-            <RecordCallsSection scope={scope()} />
-          </Match>
-        </Switch>
+                <Show
+                  when={scope()}
+                  fallback={
+                    <div class="p-6 text-center text-sm text-ink-muted">
+                      Loading…
+                    </div>
+                  }
+                >
+                  {(current) => <context.RecordTasks scope={current()} />}
+                </Show>
+              </Suspense>
+            </Match>
+            <Match when={section() === 'calls'}>
+              <RecordCallsSection scope={scope()} />
+            </Match>
+          </Switch>
+        </div>
       </div>
 
       <SidePanel.Section

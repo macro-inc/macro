@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import shortUUID from 'short-uuid';
 import ZipWorker from '../../workers/folder-upload/zip-worker?worker';
+import { joinZipPath } from './folderUploadPaths';
 
 const MAX_FOLDER_FILE_COUNT = 1000;
 // NOTE: you can expect a 30-40% decrease in folder size when zipped
@@ -97,6 +98,8 @@ interface ZipTaskMessage {
   action: 'zipFiles';
   files: File[];
   fileDetails: FileDetail[];
+  /** Folder paths to write as entries, so empty folders survive. */
+  folderPaths: string[];
   taskId?: string; // Added by the pool
 }
 
@@ -303,15 +306,14 @@ class ZipWorkerPool {
 }
 
 // zips up each folder entry and returns the zip files
-// empty directories are returned as null
 export function handleFoldersInput(
   entries: FileSystemDirectoryEntry[]
-): Promise<File | null>[] {
+): Promise<File>[] {
   if (entries.length === 0) {
     return [];
   }
 
-  const zipPromises: Promise<File | null>[] = [];
+  const zipPromises: Promise<File>[] = [];
   for (const entry of entries) {
     const promise = zipDirectory(entry);
     zipPromises.push(promise);
@@ -326,8 +328,15 @@ async function zipDirectory(entry: FileSystemDirectoryEntry) {
 
   const fileEntries: FileSystemFileEntry[] = [];
   const fileDetails: FileDetail[] = [];
+  const folderPaths: string[] = [];
   try {
-    await processDirectoryEntry(entry, '', fileEntries, fileDetails);
+    await processDirectoryEntry(
+      entry,
+      '',
+      fileEntries,
+      fileDetails,
+      folderPaths
+    );
   } catch (error) {
     if (error instanceof DirectoryFileCountExceededError) {
       throw error.setFolderName(folderName);
@@ -335,9 +344,8 @@ async function zipDirectory(entry: FileSystemDirectoryEntry) {
     throw error;
   }
 
-  if (fileEntries.length === 0) {
-    return null;
-  } else if (fileEntries.length > MAX_FOLDER_FILE_COUNT) {
+  // A folder with no files still uploads, so its (empty) folders are created.
+  if (fileEntries.length > MAX_FOLDER_FILE_COUNT) {
     throw new DirectoryFileCountExceededError(folderName, fileEntries.length);
   }
 
@@ -360,7 +368,7 @@ async function zipDirectory(entry: FileSystemDirectoryEntry) {
 
   const files = await Promise.all(filePromises);
 
-  const zipFile = await zipFiles(folderName, files, fileDetails);
+  const zipFile = await zipFiles(folderName, files, fileDetails, folderPaths);
 
   return zipFile;
 }
@@ -370,14 +378,15 @@ async function processDirectoryEntry(
   entry: FileSystemEntry,
   path: string,
   fileEntries: FileSystemFileEntry[],
-  fileDetails: FileDetail[]
+  fileDetails: FileDetail[],
+  folderPaths: string[]
 ): Promise<void> {
   if (entry.isFile) {
     if (fileEntries.length > MAX_FOLDER_FILE_COUNT)
       throw new DirectoryFileCountExceededError();
     fileEntries.push(entry as FileSystemFileEntry);
     fileDetails.push({
-      path: path ? `${path}/${entry.name}` : entry.name,
+      path: joinZipPath(path, entry.name),
     });
   } else if (entry.isDirectory) {
     const dirReader = (entry as FileSystemDirectoryEntry).createReader();
@@ -402,14 +411,16 @@ async function processDirectoryEntry(
       }
     } while (batch.length > 0);
 
-    const dirPath = path ? `${path}/${entry.name}` : entry.name;
+    const dirPath = joinZipPath(path, entry.name);
+    folderPaths.push(dirPath);
 
     for (const childEntry of entries) {
       await processDirectoryEntry(
         childEntry,
         dirPath,
         fileEntries,
-        fileDetails
+        fileDetails,
+        folderPaths
       );
     }
   }
@@ -418,7 +429,8 @@ async function processDirectoryEntry(
 export async function zipFiles(
   folderName: string,
   files: File[],
-  fileDetails: FileDetail[]
+  fileDetails: FileDetail[],
+  folderPaths: string[] = []
 ): Promise<File> {
   const workerPool = ZipWorkerPool.getInstance(ZipWorker);
 
@@ -426,6 +438,7 @@ export async function zipFiles(
     action: 'zipFiles',
     files: files,
     fileDetails: fileDetails,
+    folderPaths,
   };
 
   // check file count

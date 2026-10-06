@@ -646,35 +646,38 @@ describe('AssistantMessageParts streaming identity', () => {
   });
 });
 
-describe('generated image presentation', () => {
-  it('keeps generated images outside the activity group with adjacent tools', () => {
-    const parts: AssistantMessagePart[] = [
-      { type: 'toolCall', id: 'before', name: 'ReadContent', json: {} },
-      {
-        type: 'toolCall',
-        id: 'image',
-        name: 'GenerateImage',
-        json: { prompt: 'A frog' },
-      },
-      { type: 'toolCall', id: 'after', name: 'ReadContent', json: {} },
-    ];
-    const view = render(() => (
-      <AssistantMessageParts
-        parts={parts}
-        message={{
-          attachments: [],
-          content: parts,
-          id: 'message-1',
-          role: 'assistant',
-        }}
-        isStreaming={false}
-      />
-    ));
-    const image = view
-      .getAllByTestId('tool')
-      .find((tool) => tool.dataset.name === 'GenerateImage');
-    expect(image?.dataset.grouped).toBe('false');
-    expect(image?.textContent).toBe('image');
-    expect(view.queryByTestId('activity-toggle')).toBeNull();
-  });
+describe('standalone tool presentation', () => {
+  it.each(['GenerateImage', 'DispatchCodingAgent'])(
+    'keeps %s outside the activity group with adjacent tools',
+    (name) => {
+      const parts: AssistantMessagePart[] = [
+        { type: 'toolCall', id: 'before', name: 'ReadContent', json: {} },
+        {
+          type: 'toolCall',
+          id: 'standalone',
+          name,
+          json: { prompt: 'A frog' },
+        },
+        { type: 'toolCall', id: 'after', name: 'ReadContent', json: {} },
+      ];
+      const view = render(() => (
+        <AssistantMessageParts
+          parts={parts}
+          message={{
+            attachments: [],
+            content: parts,
+            id: 'message-1',
+            role: 'assistant',
+          }}
+          isStreaming={false}
+        />
+      ));
+      const standalone = view
+        .getAllByTestId('tool')
+        .find((tool) => tool.dataset.name === name);
+      expect(standalone?.dataset.grouped).toBe('false');
+      expect(standalone?.textContent).toBe('standalone');
+      expect(view.queryByTestId('activity-toggle')).toBeNull();
+    }
+  );
 });

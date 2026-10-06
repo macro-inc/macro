@@ -85,6 +85,32 @@ pub enum WordDocumentOperation {
         /// Paragraph style id or name, from the list ReadWordDocument shows.
         style: String,
     },
+    /// Add a Word comment on found text, or on the whole paragraph when
+    /// `find` is omitted. The comment is written into the file, attributed
+    /// to the edit's author, so it travels with the document into Word.
+    AddComment {
+        /// Paragraph id.
+        paragraph: String,
+        /// Exact text to comment on; omit for the whole paragraph.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        find: Option<String>,
+        /// Which match (1-based) when `find` appears more than once.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        occurrence: Option<u32>,
+        /// The comment. Newlines separate its paragraphs.
+        text: String,
+    },
+}
+
+/// How an edit is recorded.
+#[derive(Debug, Clone, Default)]
+pub struct WordEditOptions {
+    /// Record the edit as tracked changes (`true`) or apply it directly
+    /// (`false`); `None` follows the document's Track Changes setting.
+    pub track_changes: Option<bool>,
+    /// The name tracked changes and comments are attributed to; `None` for
+    /// the requesting user's name.
+    pub author: Option<String>,
 }
 
 /// A request to the editing worker for a Word document's live copy.
@@ -108,6 +134,11 @@ pub enum WordDocumentRequest {
     Edit {
         /// Ordered operations applied together.
         operations: Vec<WordDocumentOperation>,
+        /// Record tracked changes; omitted to follow the document's setting.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        track_changes: Option<bool>,
+        /// The name tracked changes and comments are attributed to.
+        author: String,
     },
 }
 

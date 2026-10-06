@@ -83,6 +83,12 @@ where
 
         if let Some(pricing) = repo.get_pricing(&model).await? {
             cost.price = Price::compute(pricing, cost.amount);
+            if cost.price.is_none() {
+                tracing::error!(
+                    ?pricing,
+                    "ai usage left unpriced: the model has no rate for a dimension it used"
+                );
+            }
         }
         let span = tracing::Span::current();
         span.record("usage.priced", cost.price.is_some());

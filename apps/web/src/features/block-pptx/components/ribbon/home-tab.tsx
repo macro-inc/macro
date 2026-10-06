@@ -454,30 +454,28 @@ export function HomeTab() {
             </div>
           )}
         </RibbonPopover>
-        <>
-          <RibbonPopover
-            label="Layout"
-            icon={<span>Layout</span>}
-            disabled={ro()}
-          >
-            {(close) => (
-              <div class="flex max-h-[60vh] w-56 flex-col overflow-y-auto">
-                <For each={env.deck()?.layouts ?? []}>
-                  {(layout) => (
-                    <PopoverItem
-                      label={layout.name}
-                      active={layout.name === env.slide()?.layout}
-                      onClick={() => {
-                        close();
-                        void c.setLayout(layout.name);
-                      }}
-                    />
-                  )}
-                </For>
-              </div>
-            )}
-          </RibbonPopover>
-        </>
+        <RibbonPopover
+          label="Layout"
+          icon={<span>Layout</span>}
+          disabled={ro()}
+        >
+          {(close) => (
+            <div class="flex max-h-[60vh] w-56 flex-col overflow-y-auto">
+              <For each={env.deck()?.layouts ?? []}>
+                {(layout) => (
+                  <PopoverItem
+                    label={layout.name}
+                    active={layout.name === env.slide()?.layout}
+                    onClick={() => {
+                      close();
+                      void c.setLayout(layout.name);
+                    }}
+                  />
+                )}
+              </For>
+            </div>
+          )}
+        </RibbonPopover>
         <SectionMenu />
         <RibbonButton
           label="Duplicate slide"

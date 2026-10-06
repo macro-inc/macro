@@ -183,6 +183,14 @@ type CompleteSubscriptionRoot {
 	"""
 	soupUpdates: [SoupPatch!]!
 	"""
+	Frames appended to one accessible agent session's log from now on,
+	one run per flush, in log order. Each entry is the row `agentSession.log`
+	serves, so a subscriber folds the same bytes a reader of the log does.
+	The stream ends with an error when the subscriber falls behind: rows
+	were missed, and the log must be refetched.
+	"""
+	agentSessionLogAppended(sessionId: ID!): [GraphqlAgentSessionLogEntry!]!
+	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
 	notificationUpdates: GraphqlNotificationPatch!
@@ -739,6 +747,70 @@ input GraphqlAgentSessionLiteral @oneOf {
 	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
+}
+
+"""
+One session's raw protocol log and the agent whose messages it derives.
+"""
+type GraphqlAgentSessionLog {
+	"""
+	The bot the session runs as: the sender of every agent message.
+	"""
+	bot: GraphqlAgentSessionLogBot!
+	"""
+	Effective history in ascending `(createdAt, id)` order. The first row
+	is the inclusive history boundary; a reader reconciles overlap by id.
+	"""
+	entries: [GraphqlAgentSessionLogEntry!]!
+}
+
+"""
+The bot as the log's reader needs it, handle included.
+"""
+type GraphqlAgentSessionLogBot {
+	"""
+	The bot's id. A message it sent has `"bot|{id}"` as its sender.
+	"""
+	id: ID!
+	"""
+	Display name.
+	"""
+	name: String!
+	"""
+	Stable `@` handle, without a leading `@`.
+	"""
+	handle: String!
+	"""
+	Avatar, when it has one.
+	"""
+	avatarUrl: String
+}
+
+"""
+One logged frame, in the shape the fold reads: the transport row's
+identity and time beside the frame's own `direction` and `content`.
+"""
+type GraphqlAgentSessionLogEntry {
+	"""
+	Durable transport row identity; with `createdAt`, its order cursor.
+	"""
+	id: ID!
+	"""
+	When the log recorded the frame.
+	"""
+	createdAt: String!
+	"""
+	The user whose action produced the frame, absent when no user did.
+	"""
+	userId: String
+	"""
+	Which way the frame travelled: `to_server` or `to_runtime`.
+	"""
+	direction: String!
+	"""
+	The protocol envelope, verbatim.
+	"""
+	content: JSON!
 }
 
 """
@@ -1687,6 +1759,76 @@ input GraphqlCrmCompanyLiteral @oneOf {
 }
 
 """
+The two operands of a recursive `CrmContactFilterExpr` binary expression.
+"""
+input GraphqlCrmContactBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlCrmContactExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlCrmContactExpr!
+}
+
+"""
+A recursive `CrmContactFilterExpr` filter expression.
+"""
+input GraphqlCrmContactExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlCrmContactBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlCrmContactBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlCrmContactExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlCrmContactLiteral
+}
+
+"""
+GraphQL contact predicates over authorized team records.
+"""
+input GraphqlCrmContactLiteral @oneOf {
+	"""
+	Include visible contacts. Must be true.
+	"""
+	include: Boolean
+	"""
+	Exact team-owned contact ID.
+	"""
+	id: ID
+	"""
+	Owning company ID.
+	"""
+	companyId: ID
+	"""
+	Owning team ID.
+	"""
+	teamId: ID
+	"""
+	Full email address, matched case-insensitively.
+	"""
+	email: String
+	"""
+	Literal name/email search text.
+	"""
+	search: String
+	"""
+	Effective hidden state, subject to the viewer's role on each team.
+	"""
+	hidden: Boolean
+}
+
+"""
 Metadata for a discussion on a CRM company or contact.
 """
 type GraphqlCrmDiscussionMetadata {
@@ -2370,6 +2512,11 @@ input GraphqlEntityFilterAst {
 	"""
 	crmCompanyFilter: GraphqlCrmCompanyExpr
 	"""
+	Opt-in CRM contact filters, applied before contacts are collapsed by
+	normalized email address.
+	"""
+	crmContactFilter: GraphqlCrmContactExpr
+	"""
 	The foreign entity filter to apply.
 	"""
 	foreignEntityFilter: GraphqlForeignEntityExpr
@@ -2377,10 +2524,6 @@ input GraphqlEntityFilterAst {
 	The GitHub pull request filter to apply, on top of the foreign entity filter.
 	"""
 	githubPullRequestFilter: GraphqlGithubPullRequestExpr
-	"""
-	The reminder filter to apply.
-	"""
-	reminderFilter: GraphqlReminderExpr
 	"""
 	The agent session filter to apply.
 	"""
@@ -4455,71 +4598,6 @@ A property value represented by a type-safe GraphQL union.
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
 
 """
-The two operands of a recursive `ReminderFilterExpr` binary expression.
-"""
-input GraphqlReminderBinaryExpr {
-	"""
-	Left expression.
-	"""
-	left: GraphqlReminderExpr!
-	"""
-	Right expression.
-	"""
-	right: GraphqlReminderExpr!
-}
-
-"""
-A recursive `ReminderFilterExpr` filter expression.
-"""
-input GraphqlReminderExpr @oneOf {
-	"""
-	Both expressions must match.
-	"""
-	and: GraphqlReminderBinaryExpr
-	"""
-	Either expression may match.
-	"""
-	or: GraphqlReminderBinaryExpr
-	"""
-	Negate an expression.
-	"""
-	not: GraphqlReminderExpr
-	"""
-	Match a literal.
-	"""
-	literal: GraphqlReminderLiteral
-}
-
-"""
-GraphQL input representing the reminder literal.
-"""
-input GraphqlReminderLiteral @oneOf {
-	"""
-	Opt this query into reminders at all. Reminders are off by default, so
-	without this (or an `id`/`entity`) Soup omits them entirely — a filter
-	of only `completed` would otherwise silently match nothing. Must be
-	`true`; there is no literal for excluding reminders, that is the default.
-	"""
-	include: Boolean
-	"""
-	The id option.
-	"""
-	id: ID
-	"""
-	The referenced entity, as `"{type}:{id}"`.
-	"""
-	entity: String
-	"""
-	Whether the owner has marked the reminder done.
-	"""
-	completed: Boolean
-	"""
-	Whether the reminder has come due and is awaiting its owner.
-	"""
-	fired: Boolean
-}
-
-"""
 Metadata for a due reminder.
 """
 type GraphqlReminderMetadata {
@@ -4539,20 +4617,6 @@ type GraphqlReminderMetadata {
 	notifications written before recurring dispatch existed.
 	"""
 	scheduledFor: String
-}
-
-"""
-How often a reminder fires.
-"""
-enum GraphqlReminderScheduleType {
-	"""
-	Fires once, at `remindAt`.
-	"""
-	ONCE
-	"""
-	Fires repeatedly, on `cron` evaluated in `timezone`.
-	"""
-	RECURRING
 }
 
 """
@@ -5007,6 +5071,12 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The bot running this session, when its profile still exists.
 	"""
 	bot: GraphqlSessionBot
+	"""
+	The session's raw protocol log: what the client folds into messages.
+	Served whole, in log order, the same rows the harness's REST log
+	endpoint serves.
+	"""
+	log: GraphqlAgentSessionLog!
 	"""
 	The runtime snapshotted when the session was created.
 	"""
@@ -5798,6 +5868,102 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+A team-owned CRM contact with its original record identity and shared Soup edges.
+"""
+type GraphqlSoupCrmContact implements GraphqlSoupEntity {
+	"""
+	Original CRM contact ID.
+	"""
+	id: ID!
+	"""
+	Canonical contact kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Contacts do not use document cache projections.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	Team-local name, falling back to the email address.
+	"""
+	displayName: String
+	"""
+	Record metadata; the parent is the owning company.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	Owning team.
+	"""
+	teamId: ID!
+	"""
+	Parent company.
+	"""
+	companyId: ID!
+	"""
+	Parent company's display name.
+	"""
+	companyName: String!
+	"""
+	Full email address.
+	"""
+	email: String!
+	"""
+	Team-local display name.
+	"""
+	name: String
+	"""
+	Effective hidden state of the contact and its company.
+	"""
+	hidden: Boolean!
+	"""
+	Earliest interaction with this contact on its owning team.
+	"""
+	firstInteraction: String!
+	"""
+	Most recent interaction with this contact on its owning team.
+	"""
+	lastInteraction: String!
+	"""
+	Record creation timestamp.
+	"""
+	createdAt: String!
+	"""
+	Record update timestamp.
+	"""
+	updatedAt: String!
+	"""
+	Viewer visit timestamp.
+	"""
+	viewedAt: String
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	Optional viewer frecency score.
 	"""
 	frecencyScore: Float
 }
@@ -6613,6 +6779,10 @@ enum GraphqlSoupEntityType {
 	"""
 	CRM_COMPANY
 	"""
+	CRM contact entity.
+	"""
+	CRM_CONTACT
+	"""
 	Foreign entity.
 	"""
 	FOREIGN_ENTITY
@@ -6620,10 +6790,6 @@ enum GraphqlSoupEntityType {
 	Calendar event entity.
 	"""
 	CALENDAR_EVENT
-	"""
-	Reminder entity.
-	"""
-	REMINDER
 	"""
 	AI coding agent session entity.
 	"""
@@ -6871,135 +7037,6 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 }
 
 """
-GraphQL representation of the soup reminder.
-"""
-type GraphqlSoupReminder implements GraphqlSoupEntity {
-	"""
-	The unique identifier.
-	"""
-	id: ID!
-	"""
-	Canonical entity kind.
-	"""
-	entityType: GraphqlSoupEntityType!
-	"""
-	Opaque cache projection metadata, unavailable for this entity variant.
-	"""
-	cacheProjection: SoupCacheProjection
-	"""
-	User-visible display name — a reminder's description is its name.
-	"""
-	displayName: String
-	"""
-	Common reminder metadata.
-	
-	`owner_id` is absent because a reminder is only ever readable by its
-	owner, and `parent` because a reminder is not contained by the entity it
-	references — see [`Self::referenced_entity`].
-	"""
-	metadata: GraphqlEntityMetadata!
-	"""
-	The entity this reminder is about, when it is attached to one.
-	
-	Only the reference is returned; the client resolves it into a Soup item
-	through the edges that already exist for that entity type.
-	"""
-	referencedEntity: GraphqlSoupReminderReference
-	"""
-	What to remind the user about.
-	"""
-	description: String!
-	"""
-	Whether the reminder fires once or repeatedly.
-	"""
-	scheduleType: GraphqlReminderScheduleType!
-	"""
-	The instant a one-shot reminder fires at, in RFC 3339 format.
-	"""
-	remindAt: String
-	"""
-	The cron expression a recurring reminder fires on.
-	"""
-	cron: String
-	"""
-	The timezone a recurring reminder's cron is evaluated in.
-	"""
-	timezone: String
-	"""
-	The next firing, in RFC 3339 format. Soup orders reminders on this.
-	"""
-	nextRunAt: String!
-	"""
-	When false, the dispatcher skips this reminder.
-	"""
-	enabled: Boolean!
-	"""
-	When a one-shot reminder fired, in RFC 3339 format.
-	"""
-	completedAt: String
-	"""
-	The created timestamp in RFC 3339 format.
-	"""
-	createdAt: String!
-	"""
-	The updated timestamp in RFC 3339 format.
-	"""
-	updatedAt: String!
-	"""
-	Properties assigned to this entity that the authenticated user may view.
-	"""
-	properties: [GraphqlProperty!]!
-	"""
-	Notifications associated with this entity for the authenticated user.
-	"""
-	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
-	"""
-	Whether the authenticated viewer has favorited this entity.
-	"""
-	isFavorited: Boolean!
-	"""
-	The authenticated viewer's effective permission for this entity.
-	"""
-	viewerPermission: GraphqlEntityPermission
-	"""
-	The newest activity on this entity, newest first. Loaded lazily and
-	batched across entities; an activity outage degrades to an empty
-	timeline. Deeper history belongs to the viewer's activity feed.
-	"""
-	activity(limit: Int): [GraphqlActivityEvent!]!
-	"""
-	The viewer's frecency score for this entity, when loaded.
-	"""
-	frecencyScore: Float
-}
-
-"""
-The entity a reminder is about, resolved server-side.
-
-Carries `file_type`/`sub_type` rather than just the reference: a reminder is
-iconed as whatever it points at, and the client's icon path is synchronous,
-so resolving them here saves a fetch per row.
-"""
-type GraphqlSoupReminderReference {
-	"""
-	The referenced entity's id.
-	"""
-	id: ID!
-	"""
-	The referenced entity's type.
-	"""
-	entityType: GraphqlEntityType!
-	"""
-	File type, when the reference is a document — `md`, `pdf`, and so on.
-	"""
-	fileType: String
-	"""
-	Sub type, when the reference is a task or snippet document.
-	"""
-	subType: String
-}
-
-"""
 Text stored by a string select option.
 """
 type GraphqlStringPropertyOptionValue {
@@ -7154,6 +7191,11 @@ type GraphqlUser {
 	Fetch one accessible email thread by its canonical identifier.
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
+	"""
+	Fetch one accessible agent session by id, with its protocol log
+	reachable through `log`.
+	"""
+	agentSession(sessionId: ID!): GraphqlSoupAgentSession
 	"""
 	Fetch Soup items nested into grouping bins.
 	"""

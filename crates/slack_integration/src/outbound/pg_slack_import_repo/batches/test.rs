@@ -45,7 +45,7 @@ async fn insert_message(batch: &mut FencedBatch<'_, '_>, message: &HistoricalMes
         panic!("user fixture")
     };
     sqlx::query!(
-        "INSERT INTO comms_messages (id, channel_id, sender_id, content) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content) VALUES ($1, 'channel', $2::uuid::text, $3, $4)",
         message.id,
         message.channel_id,
         sender.as_ref(),

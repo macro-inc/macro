@@ -5,6 +5,7 @@ import CheckIcon from '@phosphor/check.svg';
 import {
   type ComponentProps,
   createSignal,
+  type JSX,
   onCleanup,
   Show,
   splitProps,
@@ -68,7 +69,9 @@ export type DropdownItemIndicatorProps = ComponentProps<
 >;
 export type DropdownCheckboxItemProps = ComponentProps<
   typeof KobalteDropdownMenu.CheckboxItem
->;
+> & {
+  indicator?: JSX.Element;
+};
 export type DropdownSubTriggerProps = ComponentProps<
   typeof KobalteDropdownMenu.SubTrigger
 >;
@@ -319,17 +322,19 @@ const CHECKBOX_ITEM_BOX_CLASS = cn(
 );
 
 function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
-  const [local, rest] = splitProps(props, ['class', 'children']);
+  const [local, rest] = splitProps(props, ['class', 'children', 'indicator']);
   return (
     <KobalteDropdownMenu.CheckboxItem
       class={cn(ROW_CLASS, local.class)}
       {...rest}
     >
-      <div class={CHECKBOX_ITEM_BOX_CLASS}>
-        <KobalteDropdownMenu.ItemIndicator>
-          <CheckIcon class="size-2.5" />
-        </KobalteDropdownMenu.ItemIndicator>
-      </div>
+      {local.indicator ?? (
+        <div class={CHECKBOX_ITEM_BOX_CLASS}>
+          <KobalteDropdownMenu.ItemIndicator>
+            <CheckIcon class="size-2.5" />
+          </KobalteDropdownMenu.ItemIndicator>
+        </div>
+      )}
       {local.children}
     </KobalteDropdownMenu.CheckboxItem>
   );

@@ -38,6 +38,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
@@ -262,7 +263,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       : contextBlockBaseName;
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(
-      props.initialAccessLevel ?? (blockBaseName === 'md' ? 'edit' : 'view')
+      props.initialAccessLevel ??
+        match(blockBaseName)
+          .returnType<AccessLevel>()
+          .with('md', () => 'edit')
+          .with('pdf', () => 'comment')
+          .otherwise(() => 'view')
     );
   createEffect(() => {
     const channelPermissions_ = channelPermissions();

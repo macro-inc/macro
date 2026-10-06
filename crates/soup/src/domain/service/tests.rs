@@ -10,7 +10,6 @@ use chrono::Days;
 use chrono::{DateTime, Utc};
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
-use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
@@ -39,10 +38,6 @@ use models_pagination::{
 };
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
-use reminders::domain::models::{
-    CreateReminder, Reminder, ReminderError, ReminderFilter, ReminderForSoup, ReminderPage,
-    ReminderPatch,
-};
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -264,7 +259,6 @@ fn call_record(
 }
 
 use crm::domain::service::NoOpCrmService;
-use reminders::domain::service::NoOpRemindersService;
 
 #[derive(Clone)]
 struct NoopPullRequestListing;
@@ -554,7 +548,6 @@ async fn simple_soup_includes_channel_threads() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -617,7 +610,6 @@ async fn simple_soup_includes_call_records() {
         call_query_service.clone(),
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -672,7 +664,6 @@ async fn simple_soup_uses_channel_thread_filters_without_touching_channel_filter
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -750,7 +741,6 @@ async fn simple_soup_includes_foreign_entities() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         pull_request_listing.clone(),
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -807,7 +797,6 @@ async fn simple_soup_passes_the_github_pull_request_filter_to_the_listing() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         pull_request_listing.clone(),
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -862,7 +851,6 @@ async fn ascending_simple_soup_lists_pull_requests_oldest_first() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         pull_request_listing.clone(),
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -934,7 +922,6 @@ async fn frecency_soup_does_not_query_foreign_entities() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         pull_request_listing.clone(),
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -982,7 +969,6 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         pull_request_listing.clone(),
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -1044,7 +1030,6 @@ async fn crm_filters_without_team_receipt_are_rejected() {
             NoopCallRecordQueryService,
             NoOpCrmService,
             RecordingPullRequestListing::new(Vec::new()),
-            NoOpRemindersService,
         )
         .get_user_soup(
             SoupRequest {
@@ -1091,7 +1076,6 @@ async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         pull_request_listing.clone(),
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -1165,7 +1149,6 @@ async fn it_should_not_query_frecency() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -1228,7 +1211,6 @@ async fn properties_are_populated_once_after_pagination() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_properties(
         SoupRequest {
@@ -1303,7 +1285,6 @@ async fn frecency_is_populated_once_after_pagination() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
@@ -1373,7 +1354,6 @@ async fn properties_and_frecency_are_composed_after_pagination() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_properties_and_frecency(
         SoupRequest {
@@ -1448,7 +1428,6 @@ async fn grouped_properties_are_populated_by_the_service() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     );
     let items = service
         .get_user_soup_grouped(GroupedSortRequest {
@@ -1539,7 +1518,6 @@ async fn it_should_query_frecency() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -1625,7 +1603,6 @@ async fn it_should_sort_frecency_descending() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
@@ -1725,7 +1702,6 @@ async fn frecency_should_fallback() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
@@ -1810,7 +1786,6 @@ async fn frecency_should_paginate() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
@@ -1897,7 +1872,6 @@ async fn frecency_should_resume_cursor() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
@@ -2000,7 +1974,6 @@ async fn frecency_fallback_cursor_should_resume() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
@@ -2076,7 +2049,6 @@ async fn cursor_should_return_simple_sort() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2150,7 +2122,6 @@ async fn cursor_should_return_frecency() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2211,7 +2182,6 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2262,7 +2232,6 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2313,7 +2282,6 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2376,7 +2344,6 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2461,7 +2428,6 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2594,7 +2560,6 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_properties(
         SoupRequest {
@@ -2701,7 +2666,6 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_projection(
         SoupRequest {
@@ -2808,7 +2772,6 @@ async fn unexpanded_touched_hydrates_projects_in_the_main_query() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2879,7 +2842,6 @@ async fn touched_soup_full_page_builds_keyset_cursor() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -2938,76 +2900,6 @@ impl EmailPreviewServiceReadOnly for RecordingEmailPreviewService {
     }
 }
 
-/// Records the id sets and limits the reminders leg is asked for.
-#[derive(Default)]
-struct RecordingRemindersService {
-    queries: Arc<Mutex<Vec<(Vec<Uuid>, i64)>>>,
-}
-
-impl RemindersService for RecordingRemindersService {
-    async fn list_collection(
-        &self,
-        _user: &MacroUserIdStr<'_>,
-        _query: reminders::domain::collection::CollectionQuery,
-    ) -> Result<reminders::domain::collection::ReminderCollectionPage, ReminderError> {
-        Ok(reminders::domain::collection::ReminderCollectionPage {
-            items: vec![],
-            next_cursor: None,
-        })
-    }
-
-    async fn create_reminder(
-        &self,
-        _user_id: &MacroUserIdStr<'_>,
-        _request: CreateReminder,
-        _entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
-    ) -> Result<Reminder, ReminderError> {
-        unimplemented!("RecordingRemindersService.create_reminder")
-    }
-
-    async fn get_reminder(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<Reminder, ReminderError> {
-        unimplemented!("RecordingRemindersService.get_reminder")
-    }
-
-    async fn list_reminders(
-        &self,
-        _user_id: &MacroUserIdStr<'_>,
-        _filter: ReminderFilter,
-    ) -> Result<ReminderPage, ReminderError> {
-        unimplemented!("RecordingRemindersService.list_reminders")
-    }
-
-    async fn list_reminders_for_soup(
-        &self,
-        _user_id: &MacroUserIdStr<'_>,
-        query: SoupReminderQuery<'_>,
-    ) -> Result<Vec<ReminderForSoup>, ReminderError> {
-        self.queries
-            .lock()
-            .unwrap()
-            .push((query.ids.to_vec(), query.limit));
-        Ok(Vec::new())
-    }
-
-    async fn update_reminder(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _patch: ReminderPatch,
-    ) -> Result<Reminder, ReminderError> {
-        unimplemented!("RecordingRemindersService.update_reminder")
-    }
-
-    async fn delete_reminder(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ReminderError> {
-        unimplemented!("RecordingRemindersService.delete_reminder")
-    }
-}
-
 /// Touched email hydration must use the unfiltered `All` view: the candidate
 /// query admits threads the caller's display view (e.g. Inbox) would hide,
 /// and a view-filtered hydration would silently drop them from the page.
@@ -3045,7 +2937,6 @@ async fn touched_soup_hydrates_emails_with_the_unfiltered_view() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
@@ -3111,7 +3002,6 @@ async fn touched_soup_rejects_unfoldable_filters() {
             NoopCallRecordQueryService,
             NoOpCrmService,
             NoopPullRequestListing,
-            NoOpRemindersService,
         )
         .get_user_soup(
             SoupRequest {
@@ -3249,7 +3139,6 @@ async fn notified_soup_refills_after_hydration_drops_and_ends_when_exhausted() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup_with_properties(notified_request(3, vec![], EntityFilters::default()), None)
     .await
@@ -3311,7 +3200,6 @@ async fn notified_soup_full_page_builds_keyset_cursor() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(notified_request(2, vec![], EntityFilters::default()), None)
     .await
@@ -3362,7 +3250,6 @@ async fn notified_soup_caps_refill_rounds_and_keeps_a_cursor() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(notified_request(1, vec![], EntityFilters::default()), None)
     .await
@@ -3400,7 +3287,6 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
             assert!(req.hydratable.channels);
             assert!(req.hydratable.channel_threads);
             assert!(req.hydratable.email_threads);
-            assert!(!req.hydratable.reminders);
             Box::pin(async move {
                 Ok(vec![
                     notified(EntityType::Channel, channel, base + Days::new(3)),
@@ -3447,7 +3333,6 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(notified_request(20, vec![link], filters), None)
     .await
@@ -3479,117 +3364,6 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
     assert!(email_filters[0].contains("Importance"));
 }
 
-fn reminder_id_filters(ids: &[Uuid]) -> EntityFilters {
-    EntityFilters {
-        reminder_filters: item_filters::ReminderFilters {
-            include: true,
-            ids: ids.iter().map(Uuid::to_string).collect(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-/// A request naming reminder ids hydrates only the page candidates among
-/// them: the leg is asked for the intersection.
-#[tokio::test]
-async fn notified_soup_narrows_the_reminder_leg_to_the_request_ids() {
-    let named = Uuid::from_u128(11);
-    let unnamed = Uuid::from_u128(12);
-    let base: DateTime<Utc> = DateTime::default();
-
-    let mut soup_mock = MockSoupRepo::new();
-    soup_mock
-        .expect_notified_soup_page()
-        .times(1)
-        .returning(move |req| {
-            assert!(req.hydratable.reminders);
-            Box::pin(async move {
-                Ok(vec![
-                    notified(EntityType::Reminder, named, base + Days::new(2)),
-                    notified(EntityType::Reminder, unnamed, base + Days::new(1)),
-                ])
-            })
-        });
-    soup_mock
-        .expect_expanded_soup_by_ids()
-        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
-
-    let reminders_service = RecordingRemindersService::default();
-    let queries = reminders_service.queries.clone();
-
-    let _page = SoupImpl::new(
-        soup_mock,
-        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailPreviewService,
-        RecordingCommsService::new(vec![]),
-        NoopCallRecordQueryService,
-        NoOpCrmService,
-        NoopPullRequestListing,
-        reminders_service,
-    )
-    .get_user_soup(
-        notified_request(20, vec![], reminder_id_filters(&[named])),
-        None,
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(*queries.lock().unwrap(), vec![(vec![named], 1)]);
-}
-
-/// When no page candidate is among the named ids the leg is skipped: an
-/// empty id list means every reminder to the reminders service, which would
-/// hydrate — and surface — the candidates the request excluded.
-#[tokio::test]
-async fn notified_soup_skips_the_reminder_leg_when_no_candidate_is_named() {
-    let named = Uuid::from_u128(11);
-    let unnamed = Uuid::from_u128(12);
-    let base: DateTime<Utc> = DateTime::default();
-
-    let mut soup_mock = MockSoupRepo::new();
-    soup_mock
-        .expect_notified_soup_page()
-        .times(1)
-        .returning(move |_req| {
-            Box::pin(async move {
-                Ok(vec![notified(
-                    EntityType::Reminder,
-                    unnamed,
-                    base + Days::new(1),
-                )])
-            })
-        });
-    soup_mock
-        .expect_expanded_soup_by_ids()
-        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
-
-    let reminders_service = RecordingRemindersService::default();
-    let queries = reminders_service.queries.clone();
-
-    let page = SoupImpl::new(
-        soup_mock,
-        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailPreviewService,
-        RecordingCommsService::new(vec![]),
-        NoopCallRecordQueryService,
-        NoOpCrmService,
-        NoopPullRequestListing,
-        reminders_service,
-    )
-    .get_user_soup(
-        notified_request(20, vec![], reminder_id_filters(&[named])),
-        None,
-    )
-    .await
-    .unwrap()
-    .into_notified()
-    .unwrap();
-
-    assert!(queries.lock().unwrap().is_empty());
-    assert!(page.items.is_empty());
-}
-
 /// Calendar events hydrate by id through the main query, so only the
 /// calendar literals the candidate query can fold are accepted.
 #[tokio::test]
@@ -3612,7 +3386,6 @@ async fn notified_soup_rejects_unfoldable_calendar_filters() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     )
     .get_user_soup(notified_request(20, vec![], filters), None)
     .await

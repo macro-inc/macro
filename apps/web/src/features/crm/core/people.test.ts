@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { type CrmPerson, filterAndSortPeople } from './people';
+import {
+  type CrmPerson,
+  deduplicatePeople,
+  filterAndSortPeople,
+} from './people';
 
 const person = (id: string, overrides: Partial<CrmPerson> = {}): CrmPerson => ({
   id,
@@ -16,6 +20,26 @@ const person = (id: string, overrides: Partial<CrmPerson> = {}): CrmPerson => ({
 });
 
 describe('people directory', () => {
+  it('collapses representatives that change between pages while preserving aliases and team record IDs', () => {
+    const firstPage = [person('new', { email: 'PAT@example.com' })];
+    const laterPage = [
+      person('old', {
+        email: 'pat@example.com',
+        lastInteraction: '2025-01-01',
+      }),
+      person('z', { email: ' pat@example.com ' }),
+      person('hidden', {
+        email: 'pat@example.com',
+        hidden: true,
+        lastInteraction: '2027-01-01',
+      }),
+      person('alias', { email: 'pat+alias@example.com' }),
+    ];
+    expect(
+      deduplicatePeople([...firstPage, ...laterPage]).map((row) => row.id)
+    ).toEqual(['z', 'alias']);
+    expect(firstPage[0].id).toBe('new');
+  });
   it('searches contact names, emails and companies without exposing hidden contacts', () => {
     const rows = [
       person('Ada'),

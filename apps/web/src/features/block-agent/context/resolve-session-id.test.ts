@@ -7,7 +7,14 @@
 
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { createRoot } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const takeWarm = vi.hoisted(() => vi.fn<() => string | undefined>());
+const replenishWarm = vi.hoisted(() => vi.fn<(userId: string) => void>());
+vi.mock('@queries/agent-session/warm', () => ({
+  takeWarmAgentSession: takeWarm,
+  replenishWarmAgentSession: replenishWarm,
+}));
 
 const refetchSoupEntity = vi.hoisted(() => vi.fn(async () => {}));
 // Session creation refreshes Soup in the background. Keep this unit test at
@@ -22,6 +29,7 @@ const create = vi.hoisted(() => ({
   confirm: undefined as ((error?: string) => void) | undefined,
   release: vi.fn(),
   attribution: vi.fn(),
+  confirmedModel: undefined as string | undefined,
 }));
 
 vi.mock('@service-agent-harness/client', () => ({
@@ -84,6 +92,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
               ]
             : [],
           metadata: {
+            model: create.confirmedModel,
             configOptions: [
               {
                 id: 'effort',
@@ -111,7 +120,10 @@ vi.mock('@core/agent-session/AgentSession', () => ({
   },
 }));
 
-const { startPendingSession } = await import('./pending-session');
+const { forgetPendingSession, startPendingSession } = await import(
+  './pending-session'
+);
+const { PromptTrace } = await import('@core/agent-session/prompt-telemetry');
 const { agentHarnessServiceClient } = await import(
   '@service-agent-harness/client'
 );
@@ -121,11 +133,21 @@ const { resolveSessionId } = await import('./resolve-session-id');
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  takeWarm.mockReset();
+  replenishWarm.mockReset();
   refetchSoupEntity.mockClear();
   create.control.mockReset();
   create.release.mockReset();
   create.autoConfirm = true;
   create.confirm = undefined;
+  create.confirmedModel = undefined;
+});
+
+afterEach(() => {
+  for (const [request] of vi.mocked(agentHarnessServiceClient.create).mock
+    .calls) {
+    if (request.id) forgetPendingSession(request.id);
+  }
 });
 
 describe('a block id that is already a session', () => {
@@ -141,6 +163,25 @@ describe('a block id that is already a session', () => {
 });
 
 describe('an id whose create is in flight', () => {
+  it('sends immediately when the runtime already confirms the requested model and effort', async () => {
+    create.confirmedModel = 'model-2';
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'prompt', status: 'sent' },
+    });
+    const placeholder = startPendingSession({
+      prompt: 'Hello',
+      modelOverride: 'model-2',
+      effortOverride: { configId: 'effort', value: 'low' },
+    });
+    create.resolve?.();
+    await flush();
+    expect(create.control.mock.calls).toEqual([
+      [placeholder, { type: 'prompt', prompt: 'Hello' }],
+    ]);
+    expect(create.release).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps initial context as a draft after startup without issuing a prompt', async () => {
     const placeholder = startPendingSession({
       initialInput: 'Document context ',
@@ -462,6 +503,57 @@ it.each([undefined, 'explicit-user'])(
     await flush();
     expect(create.attribution).toHaveBeenCalledWith({
       userId: userId ?? 'session-owner',
+      trace: expect.any(PromptTrace),
     });
   }
 );
+
+it('falls back to a cold session when claiming a warm session fails', async () => {
+  takeWarm.mockReturnValueOnce('stale-warm');
+  const placeholder = startPendingSession();
+  expect(placeholder).toBe('stale-warm');
+  create.reject?.();
+  await vi.waitFor(() => {
+    const request = vi.mocked(agentHarnessServiceClient.create).mock
+      .lastCall?.[0];
+    expect(request?.id).not.toBe('stale-warm');
+  });
+  expect(replenishWarm).not.toHaveBeenCalled();
+  create.resolve?.();
+  const { pendingSession } = await import('./pending-session');
+  await vi.waitFor(() =>
+    expect(pendingSession(placeholder)?.sessionId()).toBeTruthy()
+  );
+  expect(pendingSession(placeholder)?.failed()).toBe(false);
+  expect(replenishWarm).toHaveBeenCalledExactlyOnceWith('session-owner');
+});
+
+it.each([undefined, 'ready-warm'])(
+  'replenishes only after successful creation when the reservation is %s',
+  async (warmId) => {
+    takeWarm.mockReturnValueOnce(warmId);
+    startPendingSession({ userId: 'session-owner' });
+    await flush();
+    expect(replenishWarm).not.toHaveBeenCalled();
+    create.resolve?.();
+    await flush();
+    expect(replenishWarm).toHaveBeenCalledExactlyOnceWith('session-owner');
+  }
+);
+
+it('does not replenish when both the warm claim and fallback creation fail', async () => {
+  takeWarm.mockReturnValueOnce('stale-warm');
+  const placeholder = startPendingSession({ userId: 'session-owner' });
+  create.reject?.();
+  await vi.waitFor(() =>
+    expect(
+      vi.mocked(agentHarnessServiceClient.create).mock.lastCall?.[0].id
+    ).not.toBe('stale-warm')
+  );
+  create.reject?.();
+  const { pendingSession } = await import('./pending-session');
+  await vi.waitFor(() =>
+    expect(pendingSession(placeholder)?.failed()).toBe(true)
+  );
+  expect(replenishWarm).not.toHaveBeenCalled();
+});

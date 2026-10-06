@@ -72,22 +72,11 @@ vi.mock('@channel/Participants/ChannelParticipantsTab', () => ({
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalBlockOrchestrator: () => orchestrator,
 }));
-vi.mock(
-  '@components/app/split-layout/components/PriorityCollapseOverflowSensor',
-  () => ({
-    createPriorityCollapseController: () => ({
-      setRow: vi.fn(),
-      collapser: undefined,
-    }),
-    PriorityCollapseOverflowSensor: mocks.pass,
-  })
-);
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useRegisterPriorityCollapseItem: () => () => false,
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
-vi.mock('@core/component/TabsInset', () => ({ TabsInset: () => null }));
+vi.mock('@ui/components/Tabs', () => ({ Tabs: () => null }));
 vi.mock('@core/context/channels', () => ({
   useChannelName: () => () => 'channel-name',
   useChannelType: () => () => 'private',
@@ -133,6 +122,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('channel detail navigation', () => {
+  it('measures tab content against the height left after channel chrome', () => {
+    const view = render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>
+    ));
+
+    const content = view.container.querySelector('[data-channel-tab-content]');
+    expect(content?.classList.contains('min-h-0')).toBe(true);
+    expect(content?.classList.contains('flex-1')).toBe(true);
+  });
+
   it('navigates the surface for every message link click, including a repeat', async () => {
     render(() => (
       <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>

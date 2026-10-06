@@ -62,6 +62,14 @@ struct Openings {
 }
 
 impl SessionOpener for Openings {
+    async fn warm_session(
+        &self,
+        _owner: model_owner::Owner,
+        _id: AgentSessionId,
+    ) -> crate::domain::error::Result<Option<crate::domain::model::AgentSession>> {
+        Ok(None)
+    }
+
     async fn open_managed_session(
         &self,
         request: OpenManagedSession,
@@ -137,6 +145,14 @@ impl AgentSessionNotificationRecipient for Controls {
         panic!("not a routine capability")
     }
     async fn remove_queued_control(
+        &self,
+        _: AgentSessionId,
+        _: AgentActionId,
+        _: Option<MacroUserIdStr<'static>>,
+    ) -> SessionResult<()> {
+        panic!("not a routine capability")
+    }
+    async fn steer_queued_control(
         &self,
         _: AgentSessionId,
         _: AgentActionId,
@@ -285,6 +301,7 @@ async fn external_preparation_uses_requested_identity_and_model() {
         assert_eq!(
             requests.as_slice(),
             &[RequestedExternalSession {
+                repo_url: None,
                 session_id: fx.session.id,
                 bot_id: fx.session.bot_id,
                 owner: fx.session.owner_user().unwrap().clone(),

@@ -109,7 +109,7 @@ uuid = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-agent_fold = { path = "../agent_fold" }
+agent_fold = { path = "../folds/agent_fold" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false, features = [
   "test-utils",

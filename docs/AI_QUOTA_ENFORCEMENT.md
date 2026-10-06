@@ -34,11 +34,14 @@ Automation, DynamicCompletionsApi, ChatRename, ChannelBot, AiEditing, Import,
 AgentSession, AgentRepositoryChoice. In particular, AI editing is not exempt.
 The classification is exhaustive and server-selected, not request-controlled.
 
-Free-plan and unlimited-entitlement allowance behavior is unchanged: these users
-are not blocked by this quota policy. Model-access and resource permissions remain
-independent. Counting eligibility is not a claim that a particular user owes money;
-it does not special-case their plan. Existing paid allowance, per-seat usage,
-payer credits, overage opt-in/cap, and denial decisions remain in the legacy ledger.
+Unlimited (enterprise) entitlements are never blocked by this quota policy.
+Free-plan users are hard-capped at `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` of
+counted usage per UTC calendar month: past it, admission answers
+`ai_free_allowance_exhausted` and nothing is settled, since Free has no credits
+or overage. Model-access and resource permissions remain independent. Counting
+eligibility is not a claim that a particular user owes money; it does not
+special-case their plan. Existing paid allowance, per-seat usage, payer credits,
+overage opt-in/cap, and denial decisions remain in the legacy ledger.
 
 ### Persistence
 
@@ -47,7 +50,7 @@ for both `record()` and `record_now()`, before the
 [repository insert](../crates/ai_usage/src/outbound/pg_usage_repo.rs). Clients cannot
 supply it. The [billing reader](../crates/ai_billing/src/outbound/pg_usage_reader.rs)
 uses the persisted literal `count_usage = TRUE`, not a mutable feature exclusion
-list. User/team-seat scoping, `[start, end)` periods, list-rate arithmetic, and
+list. User/team-seat scoping, `[start, end)` periods, at-cost arithmetic, and
 fallback pricing for null totals are retained. Admin analytics still includes
 uncounted rows; repricing can change totals, never eligibility.
 
@@ -69,11 +72,32 @@ independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
 there is no longer an `Environment::Develop` safeguard, so a true value settles
 in production.
 
+Pricing is four mandatory Doppler values, loaded once at startup by every host that
+composes `ai_billing` (see [`config.rs`](../crates/ai_billing/src/config.rs) and
+[`pricing.rs`](../crates/ai_billing/src/domain/pricing.rs)): one allowance per plan,
+measured at provider cost — `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` (the free plan's
+hard cap, per user per UTC calendar month), `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
+(Premium, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
+(Max, per seat per subscription period) — and `AI_USAGE_OVERAGE_MARKUP_PERCENT`,
+the whole-percent markup over cost applied to paid usage beyond the allowance before
+credits are consumed or overage is charged. There is no default in code: a missing,
+malformed, or out-of-range value fails startup and the Doppler CI validator. The values live in `shared_ai` (`lcl`,
+`dev`, `prd`), which every participating service inherits except the authentication
+service, whose `dev` and `prd` configs carry them directly; the no-Doppler local
+stack stubs them in `BootStubEnv`. The markup is applied to the period's cumulative
+chargeable cost, so settling in chunks books the same money as settling once.
+Change the values in Doppler and redeploy to change pricing. The plan catalog
+(`GET /ai-billing/plans`) publishes `included_ai_cents_per_seat` for every tier,
+and the frontend reads allowances from it
+(`useIncludedAiCentsByTier`) rather than hard-coding them. Frozen per-period
+rosters keep their cost amounts in `ai_billing_period_allowance.included_cost_cents_by_user`;
+rows written before that column existed are priced at the configured allowance.
+
 Only two hosts participate:
 
 | Host | Gate | When disabled |
 | --- | --- | --- |
-| Authentication service | [`BillingServiceImpl::settle`](../crates/ai_billing/src/domain/service.rs) guards every caller: summary reads, overage changes, credit-purchase webhooks, and the internal settle endpoint | Returns without reading entitlements, consuming credits, or touching Stripe. Credit purchases are still booked and remain unconsumed |
+| Authentication service | [`BillingServiceImpl::settle`](../crates/ai_billing/src/domain/service.rs) guards every caller: summary reads, overage and auto-reload changes, credit-purchase webhooks, and the internal settle endpoint. It also reserves and collects automatic credit reloads | Returns without reading entitlements, consuming credits, reloading credits, or touching Stripe. Credit purchases are still booked and remain unconsumed |
 | Document cognition service | [`SettlingUsageRecorder`](../crates/ai_billing/src/outbound/settling_recorder.rs) requests settlement after counted usage lands | Usage is still recorded and counted; no settlement request is sent |
 
 Every other host composes admission through
@@ -85,10 +109,54 @@ settles on summary reads, overage changes, and credit purchases. Enable both
 together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
-The frontend is not tied to this flag. The usage meter, credit packs,
-usage-billing controls, the out-of-credits dialog, and model usage multipliers
-keep their existing development-mode gate (`DEV_MODE_ENV`), so they show on
-`dev.macro.com` and local dev builds regardless of backend settlement.
+Automatic credit reload is part of the same settlement. It fires only inside
+`BillingServiceImpl::settle`, so it shares the `ENABLE_AI_USAGE_BILLING` gate,
+and only for the current period, before an overage chunk is reserved: while
+overage is active (enabled, not suspended, cap above zero) and reloads are not
+reload-suspended, settlement compares the credit balance net of the period's
+uncovered usage with the payer's minimum balance and, below it, reloads up to the
+target balance. The minimum, target, and optional monthly spend limit are stored
+per payer on `ai_billing_account` (defaults `$10`, `$100`, and no limit). The
+monthly limit counts reloads Stripe may still collect (pending, paid, or failed
+with an invoice) within the UTC calendar month, independent of the Stripe period
+anchor; a remainder under the Stripe minimum charge is skipped. Each reload is one `ai_credit_reload` row reserved under the
+payer lock and collected as a one-off Stripe invoice stamped
+`macro_purpose = ai_credit_reload`; a paid invoice books an `ai_credit_ledger`
+purchase, idempotent on the invoice id. A declined invoice stays pending, which
+blocks further reloads, until the Stripe webhook reports it paid (credits are
+booked) or failed (reloads are suspended). A provider failure marks the reload
+failed and sets `auto_reload_suspended_at`; overage remains the fallback until
+the payer saves their settings again. A failed reload whose invoice reached
+Stripe keeps that invoice, and the next reservation after reloads are re-enabled
+retries it rather than opening a second one. `PATCH /ai-billing/auto-reload`
+(payer on a paid plan only) is how overage is turned on: enabling validates and
+stores the thresholds, sets `overage_enabled`, uses the monthly limit as the
+per-period overage cap (the offered maximum when there is no limit), clears both
+suspensions, and settles at once; disabling behaves like turning overage off and
+keeps the stored thresholds. A monthly limit must be at least the overage cap
+minimum (`$5`) so the cap is never raised above what the payer entered. The
+monthly limit bounds reload purchases per calendar month; the overage cap it
+seeds bounds how far *over* credits usage may run per Stripe period. They are
+not a combined budget. `GET /ai-billing/summary`
+reports `auto_reload` with the thresholds, `suspended`, and `active`.
+
+The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
+dialog support all plans. Production activation follows the
+`enable-ai-usage-billing` PostHog flag: while off or loading, Usage shows the
+October 8, 2026 announcement with disabled controls and the dialog stays closed.
+Dev and local stay active regardless of the flag. No backend rollout endpoint is
+required. Foreground AI actions recognize the four quota
+codes below; clients return typed errors, and presentation happens in the app's
+mutation subscription or direct session/edit action handlers. Generic HTTP errors
+and background queries do not open dialogs. Free refusals offer a paid plan;
+paid refusals link to Usage settings. The monthly percentage uses
+`GET /ai-billing/summary`; plan allowances use `GET /ai-billing/plans`.
+Plan allowance copy and comparisons follow the `enable-ai-usage-billing` PostHog
+flag (`enableAiUsageBilling` in `apps/web/src/lib/core/constant/featureFlags.ts`),
+which defaults on in development builds and follows PostHog elsewhere;
+`VITE_ENABLE_AI_USAGE_BILLING` overrides it locally. Model usage multipliers have
+been removed. The Auto-Reload dialog saves through `PATCH /ai-billing/auto-reload`
+and is the only surface that turns usage billing on.
 
 ## Public failure contracts
 
@@ -99,6 +167,7 @@ errors are not permission grants and must not disclose another user's quota.
 | Result | HTTP status | Stable `code` | Retry semantics |
 | --- | --- | --- | --- |
 | Allowance exhausted | 402 | `ai_allowance_exhausted` | Policy/allowance must change; no automatic tight retry |
+| Free monthly cap reached | 402 | `ai_free_allowance_exhausted` | Only an upgrade (or the next calendar month) lifts it |
 | Spending cap reached | 402 | `ai_overage_limit_reached` | Policy/allowance must change |
 | Overage payment failed | 402 | `ai_overage_payment_failed` | Billing problem must be resolved |
 | Could not validate billing | 503 | `ai_billing_unavailable` | Retry later with bounded backoff; never execute on uncertainty |
@@ -256,6 +325,10 @@ procedure. Operators must approve and record each release gate.
    standalone agent trigger, and scheduled action. Include any separately launched
    memory/common-tool host. Use the existing Doppler-backed application config,
    not a quoted JSON string, AWS secret indirection, or a second Pulumi flag.
+   The pricing values `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`,
+   `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`,
+   and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
+   whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
    Verify the effective startup value for every replica/worker. Registration and
    hosted access require operator approval; code defaults are not proof of it.
 4. **Validate locally, then in an approved staging environment.** Use the checklist

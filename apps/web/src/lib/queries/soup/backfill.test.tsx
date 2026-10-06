@@ -5,13 +5,21 @@ import * as Fiber from 'effect/Fiber';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_SOUP_BACKFILL_LANES,
   loadSoupBackfillCheckpoint,
+  NOISE_EMAIL_FILTER_BACKFILL_LANE,
+  NOISE_EMAIL_SOUP_BACKFILL_LANE,
   runSoupBackfill,
   runSoupBackfills,
+  SHARED_EMAIL_FILTER_BACKFILL_LANE,
+  SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
+  SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
   type SoupBackfillCheckpoint,
   type SoupBackfillParams,
   useSoupBackfills,
 } from './backfill';
+
+type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
 const featureFlagMocks = vi.hoisted(() => ({
   useFeatureFlag: vi.fn(),
@@ -95,10 +103,17 @@ function seedCheckpoint(overrides: Partial<SoupBackfillCheckpoint> = {}) {
     ...overrides,
   };
   localStorage.setItem(
-    'graphql-soup-backfill:v15:user-1:core-entities',
+    'graphql-soup-backfill:v16:user-1:core-entities',
     JSON.stringify(checkpoint)
   );
 }
+
+const recencyTree = (signal: boolean, gte: string) => ({
+  and: {
+    left: { literal: { importance: signal } },
+    right: { literal: { updatedAt: { gte } } },
+  },
+});
 
 function BackfillRunner(props: { userId: string }) {
   useSoupBackfills(props.userId);
@@ -302,6 +317,148 @@ describe('runSoupBackfills', () => {
     await Effect.runPromise(runSoupBackfill('user-1', mockCacheHost, params));
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(fetchPage.mock.calls[1]?.[0]).toEqual(fetchPage.mock.calls[0]?.[0]);
+  });
+
+  it('runs signal email lanes before their noise counterparts', () => {
+    expect(
+      DEFAULT_SOUP_BACKFILL_LANES.map((lane) => lane.checkpointId)
+    ).toEqual([
+      'core-entities',
+      'email-signal-filter-metadata',
+      'email-noise-filter-metadata',
+      'shared-email-filter-metadata',
+      'email-signal-thread-pages',
+      'email-noise-thread-pages',
+      'auxiliary-entities',
+    ]);
+  });
+
+  it.each([
+    {
+      checkpointId: 'email-signal-filter-metadata',
+      params: SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
+      tree: recencyTree(true, '2026-07-08T12:00:00.000Z'),
+    },
+    {
+      checkpointId: 'email-noise-filter-metadata',
+      params: NOISE_EMAIL_FILTER_BACKFILL_LANE,
+      tree: recencyTree(false, '2026-09-06T12:00:00.000Z'),
+    },
+    {
+      checkpointId: 'email-signal-thread-pages',
+      params: SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+      tree: recencyTree(true, '2026-07-08T12:00:00.000Z'),
+    },
+    {
+      checkpointId: 'email-noise-thread-pages',
+      params: NOISE_EMAIL_SOUP_BACKFILL_LANE,
+      tree: recencyTree(false, '2026-09-06T12:00:00.000Z'),
+    },
+  ])(
+    'bounds $checkpointId by latest message recency and resumes without new filters',
+    async ({ params, tree }) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime('2026-10-06T12:00:00.000Z');
+      const fetchPage = vi.fn(async (_input: FetchInput) => {
+        vi.setSystemTime('2026-10-07T12:00:00.000Z');
+        return {
+          nextCursor: fetchPage.mock.calls.length === 1 ? 'page-2' : null,
+        };
+      });
+      await Effect.runPromise(
+        runSoupBackfill('user-1', mockCacheHost, {
+          ...params,
+          fetchPage,
+          pageDelayMs: 0,
+        })
+      );
+      expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
+        initial: {
+          sortMethod: 'UPDATED_AT',
+          emailView: 'ALL',
+          filters: { emailFilter: { tree } },
+        },
+      });
+      expect(fetchPage.mock.calls[1]?.[0]).toEqual({
+        continuation: { cursor: 'page-2', expand: true, emailView: 'ALL' },
+      });
+    }
+  );
+
+  it('bounds Shared mail to either recency window in one scan', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime('2026-10-06T12:00:00.000Z');
+    const fetchPage = vi.fn(async (_input: FetchInput) => ({
+      nextCursor: null,
+    }));
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...SHARED_EMAIL_FILTER_BACKFILL_LANE,
+        createFetchPage: async () => fetchPage,
+      })
+    );
+    expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: {
+            tree: {
+              and: {
+                left: { literal: { shared: 'ONLY' } },
+                right: {
+                  or: {
+                    left: recencyTree(true, '2026-07-08T12:00:00.000Z'),
+                    right: recencyTree(false, '2026-09-06T12:00:00.000Z'),
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('recomputes the recency cutoff for the catch-up pass and keeps its watermark', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime('2026-10-06T12:00:00.000Z');
+    const fetchPage = vi.fn(async (_input: FetchInput) => {
+      vi.setSystemTime('2026-10-07T12:00:00.000Z');
+      return { nextCursor: null };
+    });
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+        fetchPage,
+      })
+    );
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: {
+            tree: {
+              and: {
+                left: recencyTree(true, '2026-07-09T12:00:00.000Z'),
+                right: {
+                  or: {
+                    left: {
+                      literal: {
+                        updatedAt: { gte: '2026-10-06T12:00:00.000Z' },
+                      },
+                    },
+                    right: {
+                      literal: {
+                        viewedAt: { gte: '2026-10-06T12:00:00.000Z' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
   });
 
   it('runs each lane to completion before starting the next lane', async () => {
@@ -633,33 +790,36 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
-  it.each([13, 14])('does not reuse v%i backfill checkpoints', (version) => {
-    localStorage.setItem(
-      `graphql-soup-backfill:v${version}:user-1:email-filter-metadata`,
-      JSON.stringify({
-        userId: 'user-1',
-        nextCursor: 'old-page',
-        pagesFetched: 3,
+  it.each([13, 14, 15])(
+    'does not reuse v%i backfill checkpoints',
+    (version) => {
+      localStorage.setItem(
+        `graphql-soup-backfill:v${version}:user-1:email-filter-metadata`,
+        JSON.stringify({
+          userId: 'user-1',
+          nextCursor: 'old-page',
+          pagesFetched: 3,
+          completed: false,
+          scanStartedAt: '2026-09-01T00:00:00.000Z',
+          updatedSince: null,
+          completedAt: null,
+        })
+      );
+      expect(
+        loadSoupBackfillCheckpoint('user-1', 'email-filter-metadata')
+      ).toMatchObject({
+        nextCursor: null,
+        pagesFetched: 0,
         completed: false,
-        scanStartedAt: '2026-09-01T00:00:00.000Z',
-        updatedSince: null,
-        completedAt: null,
-      })
-    );
-    expect(
-      loadSoupBackfillCheckpoint('user-1', 'email-filter-metadata')
-    ).toMatchObject({
-      nextCursor: null,
-      pagesFetched: 0,
-      completed: false,
-    });
-  });
+      });
+    }
+  );
 
   it.each(['preserved', 'reset'] as const)(
     'restarts the runner with %s storage semantics and ignores obsolete completions',
     async (storage) => {
       localStorage.setItem(
-        'graphql-soup-backfill:v15:user-1:core-entities',
+        'graphql-soup-backfill:v16:user-1:core-entities',
         JSON.stringify({
           userId: 'user-1',
           storageGeneration: 'storage-1',
@@ -733,7 +893,7 @@ describe('runSoupBackfills', () => {
       const watermark = '2026-09-01T00:00:00.000Z';
       for (const checkpointId of ['core-entities', 'email-thread-pages']) {
         localStorage.setItem(
-          `graphql-soup-backfill:v15:user-1:${checkpointId}`,
+          `graphql-soup-backfill:v16:user-1:${checkpointId}`,
           JSON.stringify({
             userId: 'user-1',
             storageGeneration: 'storage-1',

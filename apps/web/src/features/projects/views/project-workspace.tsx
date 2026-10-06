@@ -157,6 +157,7 @@ export function ProjectWorkspace(props: {
             <Match when={props.section === 'tasks'}>
               <ProjectTasksList
                 projectId={props.project.id}
+                projectName={props.project.name}
                 onOpenTask={props.onOpenTask}
                 onCreateTask={canEdit() ? props.onCreateTask : undefined}
                 addTasksAction={

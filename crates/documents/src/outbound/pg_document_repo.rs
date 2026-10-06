@@ -8,6 +8,7 @@ mod tests;
 mod copy;
 mod create;
 mod edit;
+mod legacy_upgrade;
 mod markdown_backfill;
 mod share;
 
@@ -302,6 +303,31 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         })
         .fetch_one(&self.pool)
         .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_name(
+        &self,
+        user_id: &str,
+    ) -> Result<(Option<String>, Option<String>), Self::Err> {
+        let ids = vec![user_id.to_owned()];
+        // The name row is created by the first name write, so a user who
+        // never set a name has none.
+        let row = sqlx::query!(
+            r#"
+            SELECT 
+                u.id as user_profile_id, 
+                mui.first_name, 
+                mui.last_name
+            FROM macro_user_info mui
+            JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+            WHERE u.id = ANY($1)
+        "#,
+            &ids
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map_or((None, None), |row| (row.first_name, row.last_name)))
     }
 
     #[tracing::instrument(err, skip(self))]

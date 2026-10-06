@@ -394,7 +394,8 @@ current batch. Preserve `orphaned_thread_ts` when missing/skipped, without a lat
 repair promise. Convert reactions, dedupe mapped reactors, and use source message
 time when reaction time is absent. Ignore files/attachments and skip empty
 converted messages. No live-message notifications, activity rows, Kafka, bots,
-contacts, sharing changes or realtime sends. Historical activity timestamps use
+contacts, sharing changes or realtime sends. The colleague join email is the one
+deliberate exception. Historical activity timestamps use
 `GREATEST` so newer live activity never regresses.
 
 `SearchBackfillClient` submits only affected channel IDs (empty scope means no
@@ -410,6 +411,29 @@ not sufficient. Existing search authorization still applies.
 Staging may expire after 14 days. Job/staging cleanup must not delete user-visible
 history, long-lived dedupe mappings, canonical reservations or source bindings.
 Team/channel deletion semantics belong to owning schema migrations.
+
+## Colleague join email
+
+`SLACK_IMPORT_JOIN_EMAIL_ENABLED` gates this email and defaults to off. When it
+is on, the worker sends the email after a conversation binds. That send runs on
+every bind, including a retry of the same attempt and a later re-import. Public
+channels, private channels, DMs, and group DMs all participate.
+
+A member is eligible only when all four of these conditions hold.
+
+- The team has `auto_join_domain` set.
+- The member's email domain equals the team's `auto_join_domain`.
+- The member is not a `team_user`.
+- The member has no pending `team_invite`.
+
+`team_joined_macro_email` records one row per team and email. The worker sends
+the email at most once for that pair, including across channels and later
+imports. If the enqueue fails, the worker removes the row so a later import can
+try again. x is the importing admin. The email shows x's Slack display name when
+the export has one, and x's email otherwise.
+
+The worker logs a send failure and continues. The failure does not change the
+import result, and it does not retry the import.
 
 ## Native links and deferred source references
 

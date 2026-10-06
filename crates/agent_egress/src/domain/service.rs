@@ -1,16 +1,22 @@
 //! The service itself: verify, resolve, stamp, forward.
 
+use std::sync::Arc;
+
 use http::header::AUTHORIZATION;
 use http::{Method, Uri};
 use http_body_util::{BodyExt, Full};
 
+use crate::domain::approval::{
+    HeldCall, MACRO_SERVER_SLUG, OwnerApprovals, RefuseHeldCalls, ToolsCall, spends_owner_access,
+};
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, McpServerSlug,
-    ProxyRequest, ProxyResponse, SessionToken, TOOLS_CALL_METHOD, ensure_method_allowed,
-    is_macro_staff, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
-    sanitize_response_headers,
+    EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, ProxyRequest,
+    ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, disconnected_tool_result,
+    ensure_method_allowed, is_macro_staff, not_connected_tool_result, peek_json_rpc,
+    sanitize_request_headers, sanitize_response_headers,
 };
+use crate::domain::observed_body::{ObservedBody, StreamIdentity};
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
 
 #[cfg(test)]
@@ -29,13 +35,17 @@ pub trait EgressService: Send + Sync {
     ) -> impl Future<Output = Result<ProxyResponse, EgressError>> + Send;
 }
 
-/// The service, over its four ports.
-pub struct EgressServiceImpl<Sessions, Credentials, Tokens, Forward> {
+/// The service, over its ports.
+///
+/// Held tool calls are refused until [`Self::with_owner_approvals`] says how
+/// to ask the owner, so a proxy wired without approvals fails closed.
+pub struct EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals = RefuseHeldCalls> {
     sessions: Sessions,
     credentials: Credentials,
     tokens: Tokens,
-    forward: Forward,
+    forward: Arc<Forward>,
     preview_mcp: Option<(url::Url, bool)>,
+    approvals: Approvals,
 }
 
 impl<Sessions, Credentials, Tokens, Forward>
@@ -73,19 +83,41 @@ where
             sessions,
             credentials,
             tokens,
-            forward,
+            forward: Arc::new(forward),
             preview_mcp: None,
+            approvals: RefuseHeldCalls,
         }
     }
 }
 
-impl<Sessions, Credentials, Tokens, Forward> EgressService
-    for EgressServiceImpl<Sessions, Credentials, Tokens, Forward>
+impl<Sessions, Credentials, Tokens, Forward, Approvals>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
+{
+    /// Hold the tool calls of turns somebody other than the owner prompted
+    /// with `approvals`.
+    pub fn with_owner_approvals<Next>(
+        self,
+        approvals: Next,
+    ) -> EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Next> {
+        EgressServiceImpl {
+            sessions: self.sessions,
+            credentials: self.credentials,
+            tokens: self.tokens,
+            forward: self.forward,
+            preview_mcp: self.preview_mcp,
+            approvals,
+        }
+    }
+}
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals> EgressService
+    for EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
 where
     Sessions: SessionAuthority,
     Credentials: McpCredentials,
     Tokens: GithubTokens,
-    Forward: Forwarder,
+    Forward: Forwarder + 'static,
+    Approvals: OwnerApprovals,
 {
     #[tracing::instrument(skip_all, err, fields(
         destination = ?target,
@@ -139,28 +171,63 @@ where
                 }
             }
 
-            EgressTarget::McpServer(destination @ McpDestination::Macro) => {
-                match self.credentials.resolve(&grant.owner, destination).await? {
-                    McpResolution::Connected(call) | McpResolution::Unconnected(call) => call,
-                }
-            }
-            EgressTarget::McpServer(destination @ McpDestination::Connected(slug)) => {
-                match self.credentials.resolve(&grant.owner, destination).await? {
-                    McpResolution::Connected(call) => call,
-                    // The owner has no grant for this app, but it can still
-                    // be addressed for them: the handshake and tool listing
-                    // go through, and a tool call is answered here with a
-                    // result the model can act on.
-                    McpResolution::Unconnected(call) => {
-                        let name = grant.display_name(slug);
-                        match Self::answer_unconnected(slug, &name, request).await? {
-                            Unconnected::Answered(response) => return Ok(response),
-                            Unconnected::Forward(forwarded) => {
-                                request = forwarded;
-                                call
-                            }
+            EgressTarget::McpServer(
+                destination @ (McpDestination::Macro
+                | McpDestination::Connected(_)
+                | McpDestination::Custom(_)),
+            ) => {
+                let (call, answer): (UpstreamCall, Option<Answer>) = match self
+                    .credentials
+                    .resolve(&grant.owner, destination)
+                    .await?
+                {
+                    McpResolution::Connected(call) => (call, None),
+                    // The owner has no grant for this app, but it can
+                    // still be addressed for them: the handshake and tool
+                    // listing go through, and a tool call is answered
+                    // here with a result the model can act on. Only a
+                    // Pipedream app resolves this way; Macro's own server
+                    // has no grant to lack, and a custom server with no
+                    // row is refused by its resolver outright.
+                    McpResolution::Unconnected(call) => match destination {
+                        McpDestination::Connected(slug) => {
+                            let name = grant.display_name(slug);
+                            let slug = slug.clone();
+                            let answer: Answer = Box::new(move |id| {
+                                tracing::info!(
+                                    app = %slug,
+                                    "answering tools/call for an app the owner has not connected"
+                                );
+                                not_connected_tool_result(&slug, &name, id)
+                            });
+                            (call, Some(answer))
                         }
+                        _ => (call, None),
+                    },
+                    // The owner connected this server once and the grant
+                    // has since died. Same treatment: the handshake is
+                    // forwarded bare, in case the server allows it, and a
+                    // tool call is answered with how to reconnect.
+                    McpResolution::Disconnected { call, name } => {
+                        let answer: Answer = Box::new(move |id| {
+                            tracing::info!(
+                                server = %name,
+                                "answering tools/call for a server whose grant has died"
+                            );
+                            disconnected_tool_result(&name, id)
+                        });
+                        (call, Some(answer))
                     }
+                };
+                match answer {
+                    None => call,
+                    Some(answer) => match Self::answer_unconnected(answer, request).await? {
+                        Unconnected::Answered(response) => return Ok(response),
+                        Unconnected::Forward(forwarded) => {
+                            request = forwarded;
+                            call
+                        }
+                    },
                 }
             }
             EgressTarget::GitHubGit { endpoint } => {
@@ -206,9 +273,9 @@ where
         // upstream sees is the one resolved for the owner, whatever the
         // sandbox sent.
         sanitize_request_headers(request.headers_mut());
-        request
-            .headers_mut()
-            .insert(AUTHORIZATION, call.authorization().header_value()?);
+        if let Some(authorization) = call.authorization().header_value()? {
+            request.headers_mut().insert(AUTHORIZATION, authorization);
+        }
         // Scoping headers are half of the credential - for Pipedream they are
         // what says whose account the bearer spends - so they get the same
         // treatment: stamped from the resolved call after the strip, never
@@ -216,6 +283,70 @@ where
         for (name, value) in call.scope_headers() {
             request.headers_mut().insert(name.clone(), value.clone());
         }
+
+        // A turn somebody other than the owner prompted spends the owner's
+        // access only with their say-so, one tool call at a time. Checked
+        // last, so the held request is already addressed and stamped, and an
+        // app the owner has not connected was answered above without asking
+        // anyone - nothing would run.
+        if let (EgressTarget::McpServer(destination), Some(prompter)) =
+            (&target, grant.held_prompter())
+            && !matches!(destination, McpDestination::Preview)
+            && *request.method() == Method::POST
+        {
+            let (parts, bytes) = read_mcp_body(request).await?;
+            let (server_slug, server_name) = match destination {
+                // Session-scoped previews spend nobody's access; exempt above.
+                McpDestination::Macro | McpDestination::Preview => {
+                    (MACRO_SERVER_SLUG.to_owned(), "Macro".to_owned())
+                }
+                McpDestination::Connected(slug) => {
+                    (slug.as_str().to_owned(), grant.display_name(slug))
+                }
+                // Known only by the hash of its URL here; nothing on the path
+                // carries the name the owner gave it.
+                McpDestination::Custom(key) => {
+                    (format!("custom-{key}"), "custom MCP server".to_owned())
+                }
+            };
+            if let Some(call) = ToolsCall::parse(&bytes)
+                .filter(|call| spends_owner_access(&server_slug, &call.name))
+            {
+                let forward = Arc::clone(&self.forward);
+                return self
+                    .approvals
+                    .hold(HeldCall {
+                        session: grant.session,
+                        owner: grant.owner.clone(),
+                        prompter: prompter.clone(),
+                        server_slug,
+                        server_name,
+                        call,
+                        request: ProxyRequest::from_parts(parts, full_body(bytes)),
+                        forward: Box::new(move |request| {
+                            Box::pin(async move {
+                                let mut response = forward.forward(request).await?;
+                                sanitize_response_headers(response.headers_mut());
+                                Ok(response)
+                            })
+                        }),
+                    })
+                    .await;
+            }
+            // The agent giving up on a call it is waiting on: the hold has to
+            // hear it too, or the owner is asked about a call nobody wants.
+            if let Some(request_id) = cancelled_request_id(&bytes) {
+                self.approvals.withdraw(grant.session, &request_id).await?;
+            }
+            request = ProxyRequest::from_parts(parts, full_body(bytes));
+        }
+
+        // A GET on an MCP target opens the server's event stream. Those are
+        // the requests a client reopens in a loop when the upstream keeps
+        // closing them, so its body is watched to its end - the one place the
+        // upstream's side of the loop can be seen.
+        let event_stream =
+            matches!(target, EgressTarget::McpServer(_)) && *request.method() == Method::GET;
 
         let mut response = self.forward.forward(request).await?;
         sanitize_response_headers(response.headers_mut());
@@ -233,11 +364,32 @@ where
             );
         }
 
+        if event_stream {
+            let identity = StreamIdentity {
+                session: grant.session,
+                upstream: target.name(),
+                status: response.status().as_u16(),
+                content_type: response
+                    .headers()
+                    .get(http::header::CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned),
+            };
+            tracing::info!(
+                session = %identity.session,
+                upstream = %identity.upstream,
+                status = identity.status,
+                content_type = identity.content_type.as_deref(),
+                "MCP event stream opened"
+            );
+            return Ok(response.map(|body| ObservedBody::new(body, identity).boxed_unsync()));
+        }
+
         Ok(response)
     }
 }
 
-/// What became of a request to an app the owner has not connected.
+/// What became of a request to a server the owner has no live grant for.
 enum Unconnected {
     /// The proxy answered it itself; nothing goes upstream.
     Answered(ProxyResponse),
@@ -246,66 +398,83 @@ enum Unconnected {
     Forward(ProxyRequest),
 }
 
-impl<Sessions, Credentials, Tokens, Forward>
-    EgressServiceImpl<Sessions, Credentials, Tokens, Forward>
-where
-    Sessions: SessionAuthority,
-    Credentials: McpCredentials,
-    Tokens: GithubTokens,
-    Forward: Forwarder,
+/// How a `tools/call` with the given JSON-RPC id is answered in the
+/// upstream's place.
+type Answer = Box<dyn FnOnce(serde_json::Value) -> ProxyResponse + Send>;
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
 {
-    /// An app the owner has not connected: forward everything except
+    /// A server the owner has no live grant for: forward everything except
     /// `tools/call`.
     ///
     /// `initialize`, `tools/list`, notifications, the GET event stream and
     /// DELETE all go to the upstream addressed for the owner, so the agent's
-    /// client completes its handshake and sees the app's real tools from the
-    /// first turn. A `tools/call` is answered here with a tool result that
-    /// names the app and how to connect it - and the moment the owner does,
-    /// the same advertised server resolves as connected and calls flow
-    /// through, with nothing re-attached.
+    /// client completes its handshake and sees the server's real tools from
+    /// the first turn. A `tools/call` is answered here with `answer` - a tool
+    /// result that names the server and how to connect it - and the moment
+    /// the owner does, the same advertised server resolves as connected and
+    /// calls flow through, with nothing re-attached.
     async fn answer_unconnected(
-        slug: &McpServerSlug,
-        name: &str,
+        answer: Answer,
         request: ProxyRequest,
     ) -> Result<Unconnected, EgressError> {
         if *request.method() != Method::POST {
             return Ok(Unconnected::Forward(request));
         }
-        let (parts, mut body) = request.into_parts();
-        let mut bytes = Vec::new();
-        while let Some(frame) = body.frame().await {
-            let frame = frame.map_err(|error| {
-                EgressError::Internal(rootcause::report!(
-                    "could not read an MCP request body: {error}"
-                ))
-            })?;
-            if let Ok(data) = frame.into_data() {
-                if bytes.len() + data.len() > MAX_MCP_REQUEST_BYTES {
-                    return Err(EgressError::RequestTooLarge);
-                }
-                bytes.extend_from_slice(&data);
-            }
-        }
-        let bytes = bytes::Bytes::from(bytes);
+        let (parts, bytes) = read_mcp_body(request).await?;
 
         if let Some(call) = peek_json_rpc(&bytes)
             && call.method == TOOLS_CALL_METHOD
         {
-            tracing::info!(
-                app = %slug,
-                "answering tools/call for an app the owner has not connected"
-            );
-            return Ok(Unconnected::Answered(not_connected_tool_result(
-                slug, name, call.id,
-            )));
+            return Ok(Unconnected::Answered(answer(call.id)));
         }
 
         Ok(Unconnected::Forward(ProxyRequest::from_parts(
             parts,
-            Full::new(bytes)
-                .map_err(|never| match never {})
-                .boxed_unsync(),
+            full_body(bytes),
         )))
     }
+}
+
+/// Read an MCP request body the proxy has to look inside, up to
+/// [`MAX_MCP_REQUEST_BYTES`].
+async fn read_mcp_body(
+    request: ProxyRequest,
+) -> Result<(http::request::Parts, bytes::Bytes), EgressError> {
+    let (parts, mut body) = request.into_parts();
+    let mut bytes = Vec::new();
+    while let Some(frame) = body.frame().await {
+        let frame = frame.map_err(|error| {
+            EgressError::Internal(rootcause::report!(
+                "could not read an MCP request body: {error}"
+            ))
+        })?;
+        if let Ok(data) = frame.into_data() {
+            if bytes.len() + data.len() > MAX_MCP_REQUEST_BYTES {
+                return Err(EgressError::RequestTooLarge);
+            }
+            bytes.extend_from_slice(&data);
+        }
+    }
+    Ok((parts, bytes::Bytes::from(bytes)))
+}
+
+fn full_body(bytes: bytes::Bytes) -> crate::domain::model::ProxyBody {
+    Full::new(bytes)
+        .map_err(|never| match never {})
+        .boxed_unsync()
+}
+
+/// The request id a `notifications/cancelled` names.
+fn cancelled_request_id(body: &[u8]) -> Option<serde_json::Value> {
+    let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+    if value.get("method")?.as_str()? != "notifications/cancelled" {
+        return None;
+    }
+    value
+        .get("params")?
+        .get("requestId")
+        .filter(|id| !id.is_null())
+        .cloned()
 }

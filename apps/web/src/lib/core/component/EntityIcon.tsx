@@ -11,8 +11,6 @@ import type {
   EmailEntity,
   EntityData,
   ForeignEntity,
-  NamedSubType,
-  ReminderEntity,
 } from '@entity';
 import Spreadsheet from '@icon/wide-spreadsheet.svg';
 import SpreadsheetBold from '@icon/wide-spreadsheet-bold.svg';
@@ -28,6 +26,7 @@ import Code from '@phosphor/code.svg';
 import Database from '@phosphor/database.svg';
 import Email from '@phosphor/envelope.svg';
 import EmailRead from '@phosphor/envelope-open.svg';
+import FigmaLogo from '@phosphor/figma-logo.svg';
 import File from '@phosphor/file.svg';
 import FileArchive from '@phosphor/file-archive.svg';
 import FileCsv from '@phosphor/file-csv.svg';
@@ -46,6 +45,8 @@ import GlobeIcon from '@phosphor/globe.svg';
 import HashStraight from '@phosphor/hash-straight.svg';
 import FileImage from '@phosphor/image.svg';
 import ListChecks from '@phosphor/list-checks.svg';
+import PaintBrushBroad from '@phosphor/paint-brush-broad.svg';
+import PenNib from '@phosphor/pen-nib.svg';
 import PhoneCall from '@phosphor/phone-call.svg';
 import Shapes from '@phosphor/shapes.svg';
 import Sparkle from '@phosphor/sparkle.svg';
@@ -64,6 +65,7 @@ import CodeBold from '@phosphor-icons/core/bold/code-bold.svg';
 import DatabaseBold from '@phosphor-icons/core/bold/database-bold.svg';
 import EmailBold from '@phosphor-icons/core/bold/envelope-bold.svg';
 import EmailReadBold from '@phosphor-icons/core/bold/envelope-open-bold.svg';
+import FigmaLogoBold from '@phosphor-icons/core/bold/figma-logo-bold.svg';
 import FileArchiveBold from '@phosphor-icons/core/bold/file-archive-bold.svg';
 import FileBold from '@phosphor-icons/core/bold/file-bold.svg';
 import FileCsvBold from '@phosphor-icons/core/bold/file-csv-bold.svg';
@@ -82,6 +84,8 @@ import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
 import HashStraightBold from '@phosphor-icons/core/bold/hash-straight-bold.svg';
 import FileImageBold from '@phosphor-icons/core/bold/image-bold.svg';
 import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
+import PaintBrushBroadBold from '@phosphor-icons/core/bold/paint-brush-broad-bold.svg';
+import PenNibBold from '@phosphor-icons/core/bold/pen-nib-bold.svg';
 import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
 import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
 import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
@@ -174,6 +178,27 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-orange',
     background: 'bg-orange/20',
     prettyName: 'Presentation',
+  },
+  psd: {
+    icon: PaintBrushBroad,
+    boldIcon: PaintBrushBroadBold,
+    foreground: 'text-blue',
+    background: 'bg-blue/20',
+    prettyName: 'Photoshop file',
+  },
+  fig: {
+    icon: FigmaLogo,
+    boldIcon: FigmaLogoBold,
+    foreground: 'text-violet',
+    background: 'bg-violet/20',
+    prettyName: 'Figma file',
+  },
+  ai: {
+    icon: PenNib,
+    boldIcon: PenNibBold,
+    foreground: 'text-amber',
+    background: 'bg-amber/20',
+    prettyName: 'Illustrator file',
   },
   database: {
     icon: Database,
@@ -618,8 +643,6 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   hasIcsAttachment?: EmailEntity['hasIcsAttachment'];
   foreignSource?: ForeignEntity['foreignSource'];
   metadata?: ForeignEntity['metadata'];
-  /** Reference metadata carried by reminder entities. */
-  referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
 /** The shared entity-to-icon mapping used by lists, previews, and drag images. */
@@ -646,11 +669,6 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'initiative' }, () => 'initiative')
     .with({ type: 'project' }, () => 'project')
     .with({ type: 'calendar_event' }, () => 'calendar')
-    .with({ type: 'reminder' }, (e) =>
-      e.referencedEntity
-        ? reminderReferenceIconType(e.referencedEntity)
-        : 'reminder'
-    )
     .with({ type: 'call' }, () => 'call')
     .with({ type: 'routine' }, () => 'routine')
     .with({ type: 'foreign' }, (e) => {
@@ -665,40 +683,6 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
     .exhaustive();
-}
-
-/** What the block resolvers return when they cannot place something. */
-const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
-
-/**
- * The icon for what a reminder is about, shown beside the reminder's name.
- *
- * Synchronous by design: the referenced entity's `fileType`/`subType` are
- * resolved server-side precisely so this costs no fetch per row.
- *
- * A reference that resolves to nothing gets the reminder icon, not the unknown-file
- * glyph, which on a reminder row reads as breakage rather than as a reminder.
- * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
- * returns the literal `unknown`, and `validateEntity` returns `default`.
- */
-export function reminderReferenceIconType(
-  reference: NonNullable<ReminderEntity['referencedEntity']>
-): EntityWithValidIcon {
-  if (reference.type === 'crm_company') return 'company';
-  if (reference.type === 'crm_contact') return 'contact';
-  const blockName = itemToBlockName(
-    {
-      type: reference.type,
-      fileType: reference.fileType,
-      subType: reference.subType
-        ? { type: reference.subType as NamedSubType }
-        : undefined,
-    },
-    true
-  );
-
-  const iconType = blockName ? validateEntity(blockName) : 'default';
-  return UNRESOLVED_ICONS.has(iconType) ? 'reminder' : iconType;
 }
 
 export function getEntityIconConfig(

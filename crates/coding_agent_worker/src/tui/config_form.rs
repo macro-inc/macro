@@ -41,6 +41,14 @@ pub enum Setting {
     Scope,
     /// Whether the next pairing may enable permission bypass.
     PermissionBypass,
+    /// Native model override; empty uses the installed agent's default.
+    HerdrModel,
+    /// Optional arguments passed to the native agent.
+    HerdrArguments,
+    /// Location of managed clones and worktrees.
+    HerdrStorage,
+    /// Whether newly launched sessions take focus.
+    HerdrFocus,
 }
 
 impl Setting {
@@ -52,7 +60,19 @@ impl Setting {
             Self::Name => "Name",
             Self::Scope => "Access",
             Self::PermissionBypass => "Full Access",
+            Self::HerdrModel => "Model",
+            Self::HerdrArguments => "Extra args",
+            Self::HerdrStorage => "Storage",
+            Self::HerdrFocus => "Open sessions",
         }
+    }
+
+    /// Whether the setting only applies to an agent running in herdr.
+    pub fn is_herdr(self) -> bool {
+        matches!(
+            self,
+            Self::HerdrModel | Self::HerdrArguments | Self::HerdrStorage | Self::HerdrFocus
+        )
     }
 }
 
@@ -64,6 +84,30 @@ pub const SETTINGS: &[Setting] = &[
     Setting::Scope,
     Setting::PermissionBypass,
 ];
+
+/// Settings relevant to the currently selected agent.
+pub fn settings(config: &Config) -> &'static [Setting] {
+    if config
+        .harness
+        .args
+        .first()
+        .is_some_and(|arg| arg == "herdr-acp")
+    {
+        &[
+            Setting::Agent,
+            Setting::Workspace,
+            Setting::Name,
+            Setting::Scope,
+            Setting::PermissionBypass,
+            Setting::HerdrModel,
+            Setting::HerdrArguments,
+            Setting::HerdrStorage,
+            Setting::HerdrFocus,
+        ]
+    } else {
+        SETTINGS
+    }
+}
 
 /// The config document being viewed and edited.
 pub struct ConfigForm {
@@ -128,6 +172,24 @@ impl ConfigForm {
                 .map(str::to_owned)
                 .unwrap_or_else(|| format!("Custom ({})", config.harness.command)),
             Setting::Workspace => config.workspace.path.display().to_string(),
+            Setting::HerdrModel => config
+                .herdr
+                .model
+                .clone()
+                .unwrap_or_else(|| "Agent default".to_owned()),
+            Setting::HerdrArguments => shell_words::join(&config.herdr.arguments),
+            Setting::HerdrStorage => config
+                .herdr
+                .storage_path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "Automatic (~/.macrod/herdr)".to_owned()),
+            Setting::HerdrFocus => if config.herdr.focus {
+                "Foreground"
+            } else {
+                "Background"
+            }
+            .to_owned(),
             Setting::Name => config
                 .identity
                 .name
@@ -152,7 +214,20 @@ impl ConfigForm {
         match setting {
             Setting::Workspace => self.string("workspace", "path").unwrap_or_default(),
             Setting::Name => self.string("identity", "name").unwrap_or_default(),
-            Setting::Agent | Setting::Scope | Setting::PermissionBypass => String::new(),
+            Setting::HerdrModel => self.string("herdr", "model").unwrap_or_default(),
+            Setting::HerdrStorage => self.string("herdr", "storage_path").unwrap_or_default(),
+            Setting::HerdrArguments => shell_words::join(
+                self.doc
+                    .get("herdr")
+                    .and_then(|section| section.get("arguments"))
+                    .and_then(Item::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(toml_edit::Value::as_str),
+            ),
+            Setting::Agent | Setting::Scope | Setting::PermissionBypass | Setting::HerdrFocus => {
+                String::new()
+            }
         }
     }
 
@@ -179,7 +254,32 @@ impl ConfigForm {
                     self.set_string("identity", "name", input);
                 }
             }
-            Setting::Agent | Setting::Scope | Setting::PermissionBypass => {
+            Setting::HerdrModel | Setting::HerdrStorage => {
+                let key = if setting == Setting::HerdrModel {
+                    "model"
+                } else {
+                    "storage_path"
+                };
+                if input.is_empty() {
+                    self.remove("herdr", key);
+                } else {
+                    if setting == Setting::HerdrStorage && !Path::new(input).is_absolute() {
+                        return Err(
+                            "Storage must be an absolute path, or empty for automatic".to_owned()
+                        );
+                    }
+                    self.set_string("herdr", key, input);
+                }
+            }
+            Setting::HerdrArguments => {
+                let words = shell_words::split(input).map_err(|error| error.to_string())?;
+                let mut args = toml_edit::Array::new();
+                for word in words {
+                    args.push(word);
+                }
+                self.doc["herdr"].or_insert(toml_edit::table())["arguments"] = value(args);
+            }
+            Setting::Agent | Setting::Scope | Setting::PermissionBypass | Setting::HerdrFocus => {
                 return Err(format!("{} is selected rather than typed", setting.label()));
             }
         }
@@ -188,6 +288,30 @@ impl ConfigForm {
 
     /// Apply a detected agent's concrete launch specification.
     pub fn apply_agent(&mut self, agent: &DetectedAgent) {
+        let current = self
+            .doc
+            .get("harness")
+            .and_then(|section| section.get("args"))
+            .and_then(Item::as_array)
+            .map(|args| {
+                args.iter()
+                    .filter_map(toml_edit::Value::as_str)
+                    .collect::<Vec<_>>()
+            });
+        if current.as_deref()
+            != Some(
+                agent
+                    .launch
+                    .args
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )
+        {
+            self.remove("herdr", "model");
+            self.remove("herdr", "arguments");
+        }
         self.set_string("harness", "command", &agent.launch.command);
         let mut args = toml_edit::Array::new();
         for arg in &agent.launch.args {
@@ -229,6 +353,11 @@ impl ConfigForm {
             crate::config::IdentityScope::Team => "private",
         };
         self.set_string("identity", "scope", next);
+    }
+
+    /// Toggle whether a new native session takes focus.
+    pub fn toggle_herdr_focus(&mut self, config: &Config) {
+        self.doc["herdr"].or_insert(toml_edit::table())["focus"] = value(!config.herdr.focus);
     }
 
     /// Set the requested scope without changing any approved credential scope.
@@ -295,7 +424,7 @@ impl ConfigForm {
     }
 
     fn remove(&mut self, section: &str, key: &str) {
-        if let Some(table) = self.doc[section].as_table_like_mut() {
+        if let Some(table) = self.doc.get_mut(section).and_then(Item::as_table_like_mut) {
             table.remove(key);
         }
     }
