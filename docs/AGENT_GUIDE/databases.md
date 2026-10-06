@@ -162,7 +162,9 @@ skipped. Select values open the option picker; checkboxes change
 directly. Type on a selected select cell to search its options; Enter chooses a
 match, and Tab chooses the highlighted option or typed match before moving on.
 Number cells display thousands separators (for example, `100,000`); opening an
-editor shows the raw number for editing.
+editor shows the raw number for editing. Invalid numbers and integers outside the
+safe integer range stay in the editor with **Enter a valid number** instead of
+saving a rounded value. Signed decimals and scientific notation remain supported.
 
 Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**

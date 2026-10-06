@@ -67,6 +67,26 @@ test('resizes from the rendered width and saves once on release', async ({
     .toBe(Math.round(before.width + 70));
 });
 
+test('keeps an unsafe integer draft instead of saving a rounded value', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: /^Amount: 12\./ }).click();
+  const input = page.getByRole('textbox', { name: 'Edit Amount' });
+  await input.fill('9007199254740993');
+  await input.press('Tab');
+  await expect(page.getByRole('alert')).toHaveText('Enter a valid number');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('9007199254740993');
+  await expect(page.getByLabel('Writes', { exact: true })).toHaveText('0');
+
+  await input.fill('1.25e3');
+  await input.press('Enter');
+  await expect(page.getByLabel('Writes', { exact: true })).toHaveText('1');
+  await expect(
+    page.getByRole('button', { name: /^Amount: 1,250\./ })
+  ).toBeFocused();
+});
+
 test('sorts through the column menu and keeps sorting when switching layouts', async ({
   page,
 }) => {
