@@ -491,7 +491,7 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
         let mut storage = TursoStorage::open_in_memory("schema-scope").unwrap();
         assert_eq!(raw_scalar(&storage, "PRAGMA foreign_keys"), 1);
         storage.check_integrity().unwrap();
-        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 5);
+        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 6);
 
         let violation = driver::execute(
             &storage.connection(),

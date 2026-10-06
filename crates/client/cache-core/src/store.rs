@@ -6,6 +6,7 @@
 //! wasm — wasm futures aren't
 //! `Send`.
 
+use crate::calendar::{CalendarRangeRow, CalendarSpan, CalendarSyncState, project_calendar_range};
 use crate::predicate::reconciliation::{
     PredicateBaselineEntry, PredicateMembership, PredicateReconciliation, predicate_membership,
     reconcile_predicate_baseline,
@@ -30,6 +31,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+mod calendar;
 
 /// Whether a storage implementation can provide queue diagnostics.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -286,6 +289,9 @@ pub struct InMemoryStorage {
     search_catalog_load_count: Arc<AtomicUsize>,
     search_catalog_rows_loaded: Arc<AtomicUsize>,
     mutation_queue_load_count: Arc<AtomicUsize>,
+    calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
+    calendar_coverage: Vec<CalendarSpan>,
+    calendar_sync: CalendarSyncState,
 }
 
 #[derive(Clone, Debug)]
@@ -307,6 +313,33 @@ impl InMemoryStorage {
 
     pub fn is_empty(&self) -> bool {
         self.records.is_empty()
+    }
+
+    /// Writes one record with every derived row, like a relational write-through.
+    fn write_record(&mut self, key: EntityKey<'static>, record: Record) {
+        self.search_documents
+            .retain(|(_, existing_key), _| existing_key != &key);
+        for document in project_search_documents(&key, &record) {
+            self.search_documents
+                .insert((document.profile, key.clone()), document);
+        }
+        match project_calendar_range(&key, &record) {
+            Some(row) => {
+                self.calendar_ranges.insert(key.clone(), row);
+            }
+            None => {
+                self.calendar_ranges.remove(&key);
+            }
+        }
+        self.records.insert(key, record);
+    }
+
+    /// Deletes one record with every derived row.
+    fn remove_record(&mut self, key: &EntityKey<'static>) {
+        self.records.remove(key);
+        self.search_documents
+            .retain(|(_, existing_key), _| existing_key != key);
+        self.calendar_ranges.remove(key);
     }
 
     fn rebase_projections(&mut self, keys: &[PredicateRecordKey]) {
@@ -378,13 +411,7 @@ impl Storage for InMemoryStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<(), Self::Error> {
         for (key, record) in entries {
-            self.search_documents
-                .retain(|(_, existing_key), _| existing_key != &key);
-            for document in project_search_documents(&key, &record) {
-                self.search_documents
-                    .insert((document.profile, key.clone()), document);
-            }
-            self.records.insert(key, record);
+            self.write_record(key, record);
         }
         Ok(())
     }
@@ -406,9 +433,7 @@ impl Storage for InMemoryStorage {
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         for key in keys {
-            self.records.remove(key);
-            self.search_documents
-                .retain(|(_, existing_key), _| existing_key != key);
+            self.remove_record(key);
         }
         Ok(())
     }
@@ -679,13 +704,7 @@ impl Storage for InMemoryStorage {
             return Ok(false);
         }
         for (key, record) in entries {
-            self.search_documents
-                .retain(|(_, existing_key), _| existing_key != &key);
-            for document in project_search_documents(&key, &record) {
-                self.search_documents
-                    .insert((document.profile, key.clone()), document);
-            }
-            self.records.insert(key, record);
+            self.write_record(key, record);
         }
         apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
@@ -719,13 +738,7 @@ impl Storage for InMemoryStorage {
             }
         }
         for (key, record) in entries {
-            self.search_documents
-                .retain(|(_, existing_key), _| existing_key != &key);
-            for document in project_search_documents(&key, &record) {
-                self.search_documents
-                    .insert((document.profile, key.clone()), document);
-            }
-            self.records.insert(key, record);
+            self.write_record(key, record);
         }
         apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
@@ -795,6 +808,9 @@ impl Storage for InMemoryStorage {
         self.projections.clear();
         self.optimistic_projections.clear();
         self.mutations.clear();
+        self.calendar_ranges.clear();
+        self.calendar_coverage.clear();
+        self.calendar_sync = CalendarSyncState::default();
         Ok(())
     }
 }

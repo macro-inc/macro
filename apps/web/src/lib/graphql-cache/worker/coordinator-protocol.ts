@@ -1328,7 +1328,7 @@ export function tabIdFromLivenessLockName(
  * and the engine checks its WASM before touching storage.
  */
 export const CACHE_STORAGE_VERSION = {
-  schemaCompatibilityEpoch: 3,
+  schemaCompatibilityEpoch: 4,
   formatVersion: 3,
   storageSchemaVersion: 11,
 } as const;

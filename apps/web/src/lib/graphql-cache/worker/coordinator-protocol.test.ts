@@ -725,13 +725,13 @@ describe('coordinator runtime protocol', () => {
   });
 
   it('derives the exact UTF-8 canonical turso-opfs lock name', () => {
-    // The current versions keep the unversioned name, and so the lock that
-    // builds before versioned names hold.
+    // The current versions moved past the unversioned name, so the lock
+    // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:19:graphql-cache:scope'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v3.t11'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:16:graphql-cache:é'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v3.t11'
     );
   });
 
@@ -781,13 +781,10 @@ describe('coordinator runtime protocol', () => {
     const own = cacheDatabaseIdentity('a');
     const versioned = (storage: number): string =>
       `graphql-cache:a:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storage}`;
-    // The current versions still open the unversioned name.
-    expect(own).toBe('graphql-cache:a');
+    // The current versions moved past the unversioned name.
+    expect(own).toBe(versioned(storageSchemaVersion));
     expect(isStaleCacheDatabaseIdentity('a', own)).toBe(false);
-    // Another spelling of this build's own versions is never opened again.
-    expect(
-      isStaleCacheDatabaseIdentity('a', versioned(storageSchemaVersion))
-    ).toBe(true);
+    expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a')).toBe(true);
     expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a:s1.v2.t3')).toBe(
       true
     );
