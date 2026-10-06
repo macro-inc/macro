@@ -172,6 +172,27 @@ describe('onboarding flow', () => {
     );
   });
 
+  it('preserves team inputs and focus when onboarding suggestions refresh', async () => {
+    const { fake } = setup({ resume: 'team' });
+    await heading('Built for teams.');
+    const name = screen.getByDisplayValue('Acme');
+    const email = screen.getByLabelText('Teammate 1 email');
+    fireEvent.input(name, { target: { value: 'My workspace' } });
+    fireEvent.input(email, { target: { value: 'chosen@example.com' } });
+    email.focus();
+
+    fake.update((world) => {
+      world.record.suggestedTeamDomain = 'updated.example.com';
+      world.contacts.push('new@updated.example.com');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('My workspace')).toBe(name);
+      expect(screen.getByDisplayValue('chosen@example.com')).toBe(email);
+      expect(document.activeElement).toBe(email);
+    });
+  });
+
   it('joins a pending team invite instead of creating a team', async () => {
     const { fake } = setup({
       resume: 'team',
