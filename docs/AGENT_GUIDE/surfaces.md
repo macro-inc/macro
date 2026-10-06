@@ -2060,14 +2060,22 @@ those controls, with purchases disabled.
 The **Automatic reload** switch opens **Auto-Reload** without toggling directly.
 It contains Minimum balance (default `$10`), Target balance (default `$100`),
 optional Maximum monthly spend (`No limit`), a payment-method management link,
-and the automatic-charge warning. Balance-triggered reload is not implemented
-by the backend yet, so saving is disabled outside its explicit developer preview.
-Existing postpaid usage billing is shown separately and can be turned off by the
-payer. Local **Developer tools** offer `Preview Free plan` and `Preview paid plan`
-to display either Usage page with sample usage, regardless of the signed-in
-account's tier. `Open Free usage-limit dialog` and `Open paid usage-limit dialog`
-open the corresponding exhausted-usage prompt directly. The previews also work
-before the usage summary loads or when it fails. The paid-plan preview allows
+and the automatic-charge warning. The dialog saves for paid payers:
+`Turn on auto-reload` enables usage billing with those thresholds (the monthly
+limit also caps usage billing per period), `Save` updates them while on, and
+`Turn off` disables usage billing. The **Automatic reload** switch reflects the
+saved state. Paid team members who are not the payer see
+`Only the account that pays for this plan can change automatic reload.` and
+cannot save. After a failed automatic reload the dialog shows `Your last
+automatic reload could not be charged. Update your payment method, then save to
+try again.`; saving retries. Existing postpaid usage billing is shown separately
+and can be turned off by the payer; while it is on, credits reload automatically
+when the balance drops below the minimum. Local **Developer tools** offer
+`Preview Free plan` and `Preview paid plan` to display either Usage page with
+sample usage, regardless of the signed-in account's tier.
+`Open Free usage-limit dialog` and `Open paid usage-limit dialog` open the
+corresponding exhausted-usage prompt directly. The previews also work before
+the usage summary loads or when it fails. The paid-plan preview allows
 testing Auto-Reload settings. Purchases and payment management are disabled during any
 preview; `Reset preview` restores server data and closes the usage-limit dialog.
 `Preview production before Oct 8` shows the October 8 announcement and disables

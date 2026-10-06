@@ -620,7 +620,8 @@ answer 402 with code `ai_free_allowance_exhausted`. The dialog title is
 `You've used this month's free AI`; it says `Subscribe to a paid plan to keep
 going.` and offers `View plans`, which opens Billing. This upgrade path remains
 available while the usage summary loads or fails. Free users cannot buy credits
-or enable Auto-Reload. The cap resets with the UTC calendar month.
+or enable Auto-Reload. Enabling Auto-Reload is how paid payers turn on usage
+billing. The cap resets with the UTC calendar month.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
 
