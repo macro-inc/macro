@@ -9,7 +9,7 @@ import type { FoldInput } from '@core/agent-fold/client';
 import type { FoldedStreamEvent } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { err, ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 const fold = vi.hoisted(() => ({
   pushSession: vi.fn(),
@@ -1056,6 +1056,22 @@ describe('AgentSession', () => {
       vi.spyOn(answer, 'getBoundingClientRect').mockReturnValue(
         new DOMRect(10, 10, 300, 30)
       );
+      const createRange = document.createRange.bind(document);
+      const ranges = vi
+        .spyOn(document, 'createRange')
+        .mockImplementation(() => {
+          const range = createRange();
+          range.getClientRects = () => {
+            const rects = [
+              range.startContainer.parentElement!.getBoundingClientRect(),
+            ];
+            return Object.assign(rects, {
+              item: (index: number) => rects[index],
+            });
+          };
+          return range;
+        });
+      onTestFinished(() => ranges.mockRestore());
       const unsubscribe = live.subscribe(() => {
         // Folding establishes telemetry before that batch mounts the answer UI.
         expect(span.attributes['agent.prompt.first_text_at_ms']).toEqual(
@@ -1083,6 +1099,9 @@ describe('AgentSession', () => {
       AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
       await settle();
       expect(span.ends).toBe(0);
+      expect(span.attributes['agent.prompt.first_text_rendered_at_ms']).toEqual(
+        expect.any(Number)
+      );
       await new Promise((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve))
       );
