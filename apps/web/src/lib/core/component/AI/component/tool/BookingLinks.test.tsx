@@ -74,7 +74,7 @@ it('keeps historical booking results readable without inventing confirmation', (
   });
   expect(call.isOk()).toBe(true);
   if (call.isOk() && call.value.name === 'CreateBookingLink') {
-    expect(call.value.data.userConfirmation).toBe('');
+    expect(call.value.data).toMatchObject({ userConfirmation: '' });
   }
   const saved = {
     profileId: crypto.randomUUID(),
