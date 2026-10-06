@@ -95,8 +95,6 @@ const ACCESS_PROBLEM = {
 
 function recipientLines(recipient: RecipientOutcome, name: string): string[] {
   const unsent = new Set(recipient.unsent.map(itemKey));
-  // A refused before-send grant also leaves its item unsent, and the unsent
-  // line already covers it.
   const received = recipient.accessIssues.filter(
     ({ item }) => !unsent.has(itemKey(item))
   );

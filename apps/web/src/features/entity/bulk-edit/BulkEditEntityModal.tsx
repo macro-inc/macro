@@ -25,7 +25,6 @@ const BulkEditEntityModalContent = (props: {
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
 }) => {
-  // Dismissing a share that reached anyone finishes it, as its Close does.
   const [dismissFinishes, setDismissFinishes] = createSignal(false);
   const handleFinish = () => {
     props.setIsOpen(false);

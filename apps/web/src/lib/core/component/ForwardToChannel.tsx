@@ -105,7 +105,6 @@ function MobileForwardToChannelLayout(
 }
 
 interface ForwardToChannelProps {
-  /** What is being shared, as `toShareItem` parsed it. */
   item: ShareItem;
   editPermissionEnabled?: boolean;
   onSubmit?: () => void;

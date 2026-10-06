@@ -32,16 +32,13 @@ import {
 
 export type ShareFormOptions = {
   readonly items: Accessor<readonly ShareItem[]>;
-  /** `ENABLE_MARKDOWN_COMMENTS`. */
   readonly markdownComments: boolean;
-  /** Called once per planned message. Production passes `newMessageId`. */
   readonly mintMessageId: () => string;
 };
 
 export type ShareFormStatus =
   | { readonly t: 'editing' }
   | { readonly t: 'sending'; readonly plan: SharePlan }
-  /** The last submit left work undone. The next submit retries only that work. */
   | {
       readonly t: 'incomplete';
       readonly plan: SharePlan;
@@ -55,7 +52,6 @@ export type ShareFormStatus =
 
 export type ShareSubmitResult = {
   readonly outcome: ShareOutcome;
-  /** Opens the conversation when the share has one recipient and it received a message. */
   readonly open?: () => void;
 };
 
@@ -65,40 +61,21 @@ export type LevelField = {
 };
 
 export type ShareForm<Recipient extends PickedRecipient> = {
-  /** Mutable to match `RecipientSelector`'s `selectedOptions`. */
   readonly recipients: Accessor<Recipient[]>;
   readonly setRecipients: (recipients: readonly Recipient[]) => void;
-  /** Present when the recipients can share one group conversation. */
   readonly group: Accessor<{ readonly on: boolean } | undefined>;
   readonly setGroup: (on: boolean) => void;
-  /**
-   * True once the first submit freezes the share, and every setter ignores
-   * changes from then on. A changed member list or group toggle would name a
-   * new conversation, and a new conversation receives every item again.
-   */
   readonly locked: Accessor<boolean>;
-  /** Absent when no item can be granted above view. */
   readonly level: Accessor<LevelField | undefined>;
   readonly setLevel: (level: ChannelAccessLevel) => void;
   readonly setText: (text: string) => void;
-  /** False when every item is left out. */
   readonly sendable: Accessor<boolean>;
   readonly notices: Accessor<readonly ShareNotice[]>;
   readonly triedToSubmit: Accessor<boolean>;
   readonly status: Accessor<ShareFormStatus>;
-  /**
-   * The first submit freezes the share and plans it, and later submits retry
-   * what is left of that plan. Resolves undefined without sending while a
-   * submit runs, after the share completes, or when no recipient is valid or
-   * every item is left out.
-   */
   readonly submit: () => Promise<ShareSubmitResult | undefined>;
 };
 
-/**
- * One share of one or more items to one or more recipients, with retry
- * memory. The single forward form and the bulk dialog both run this.
- */
 export function createShareForm<Recipient extends PickedRecipient>(
   options: ShareFormOptions,
   context: ShareDeliveryContext
@@ -111,9 +88,6 @@ export function createShareForm<Recipient extends PickedRecipient>(
   const [status, setStatus] = createSignal<ShareFormStatus>({ t: 'editing' });
   const locked = () => status().t !== 'editing';
 
-  // Targets run concurrently and each writes only its own record. Every write
-  // reads the ledger after its await and replaces it in one synchronous step,
-  // so no target overwrites another's progress.
   let ledger: DeliveryLedger = emptyLedger;
   const opens = new Map<TargetKey, () => void>();
 
@@ -131,7 +105,6 @@ export function createShareForm<Recipient extends PickedRecipient>(
     if (now.t !== 'editing') {
       return { options: current.options, value: now.plan.request.level };
     }
-    // A level the user picked beats the channel's existing grant.
     const picked = pickedLevel();
     const value =
       picked !== undefined && current.options.includes(picked)
@@ -152,7 +125,6 @@ export function createShareForm<Recipient extends PickedRecipient>(
     shareNotices(options.items(), level()?.value ?? 'view')
   );
 
-  /** Whether every grant succeeded. Each result lands in the ledger either way. */
   async function grantAll(
     key: TargetKey,
     channelId: string,
@@ -178,8 +150,6 @@ export function createShareForm<Recipient extends PickedRecipient>(
   }
 
   async function post(work: TargetWork, message: PlannedMessage) {
-    // A known channel posts directly, so later messages and retries reach the
-    // same conversation without another DM or group lookup.
     const channelId = ledger.get(work.key)?.channelId;
     const beforeSend =
       message.grantFirst.length === 0
@@ -198,12 +168,10 @@ export function createShareForm<Recipient extends PickedRecipient>(
         beforeSend,
       });
     } catch {
-      // Only beforeSend rejects, and its grant results are in the ledger.
       return undefined;
     }
   }
 
-  /** Messages run in order. A failed send ends the run, and a failed grant does not. */
   async function runTarget(work: TargetWork): Promise<void> {
     const known = ledger.get(work.key)?.channelId;
     if (known !== undefined) await grantAll(work.key, known, work.grants);

@@ -16,28 +16,20 @@ import type { ShareForm } from '../primitives/create-share-form';
 
 export function BulkShareView<Recipient extends PickedRecipient>(props: {
   form: ShareForm<Recipient>;
-  /** Shareable rows, including any the share leaves out. */
   count: number;
   selection: JSX.Element;
-  /** Must call `form.setRecipients`. */
   recipientField: JSX.Element;
-  /** Must call `form.setText`. */
   messageField: JSX.Element;
   recipientName: (recipient: Recipient) => string;
   onFinish: () => void;
   onCancel: () => void;
-  /** Fires when a share reached someone but did not complete, so the dialog stays open. */
   onDelivered: () => void;
 }) {
   let root!: HTMLDivElement;
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('bulk-share', true);
-  // The form drops the last outcome while a retry runs, so the report keeps
-  // its own copy and stays on screen until the retry settles.
   const [report, setReport] = createSignal<ShareOutcome>();
   const sending = () => props.form.status().t === 'sending';
   const settled = () => report()?.retryable === false;
-  // Once anyone has a message, a re-share from the kept selection would send
-  // it again, so closing then clears the selection the way finishing does.
   const close = () =>
     report()?.delivered ? props.onFinish() : props.onCancel();
 
@@ -79,7 +71,6 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
     description: 'Share',
     runWithInputFocused: true,
     keyDownHandler: (event) => {
-      // Holding the shortcut repeats keydown. One press sends one share.
       if (event?.repeat) return true;
       if (settled()) props.onFinish();
       else void share();

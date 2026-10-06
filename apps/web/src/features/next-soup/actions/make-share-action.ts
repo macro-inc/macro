@@ -8,7 +8,6 @@ import type { EntityData } from '@entity';
 import { restoreSoupFocus } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
 
-/** Only the bulk dialog calls these. `ShareModal` for one row leaves the list as it is. */
 type BulkShareCallbacks = { onFinish?: () => void; onCancel?: () => void };
 
 export const makeShareAction = () => {
@@ -43,7 +42,6 @@ export const makeShareAction = () => {
     const focusedId = soup.focus.id();
 
     await execute(entities, {
-      // Shared rows stay in the list, so focus returns to the row the user was on.
       onFinish: () => {
         soup.selection.clear();
         if (focusedId) {

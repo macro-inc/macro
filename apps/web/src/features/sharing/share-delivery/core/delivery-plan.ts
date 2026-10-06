@@ -14,13 +14,8 @@ import {
   shareAccess,
 } from './share-item';
 
-/**
- * `validate_references` in `crates/messages` rejects a message with more
- * attachments with HTTP 400, before anything is stored or granted.
- */
 export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
-/** The parts of a recipient-selector option the plan reads. */
 export type PickedRecipient =
   | { readonly kind: 'channel'; readonly id: string }
   | { readonly kind: 'user' | 'contact'; readonly id: string }
@@ -30,17 +25,12 @@ export type PickedRecipient =
       readonly data: { readonly invalid: boolean };
     };
 
-/**
- * Where one conversation's messages go. It is an existing channel, or people
- * whose DM or group channel exists only after the first send resolves it.
- */
 export type ShareTarget =
   | { readonly t: 'channel'; readonly channelId: string }
   | { readonly t: 'people'; readonly userIds: readonly string[] };
 
 declare const targetKeyBrand: unique symbol;
 
-/** Names a target across retries. A group's key ignores recipient order. */
 export type TargetKey = string & { readonly [targetKeyBrand]: true };
 
 export function targetKey(target: ShareTarget): TargetKey {
@@ -54,7 +44,6 @@ export function targetKey(target: ShareTarget): TargetKey {
   return key as TargetKey;
 }
 
-/** Two or more recipients and no channel among them. */
 export function canSendAsGroup(
   recipients: readonly PickedRecipient[]
 ): boolean {
@@ -64,11 +53,6 @@ export function canSendAsGroup(
   );
 }
 
-/**
- * One target per channel and per person, or one group target when `asGroup`
- * applies. Invalid custom email chips are skipped in both modes, and
- * duplicate keys collapse.
- */
 export function targetsFor(
   recipients: readonly PickedRecipient[],
   asGroup: boolean
@@ -91,7 +75,6 @@ export function targetsFor(
   return [...targets.values()];
 }
 
-/** The sole recipient, when it is a channel. Its existing grants may seed the level. */
 export function prefillChannel(
   recipients: readonly PickedRecipient[]
 ): string | undefined {
@@ -99,7 +82,6 @@ export function prefillChannel(
   return only?.kind === 'channel' && rest.length === 0 ? only.id : undefined;
 }
 
-/** One share, frozen at its first submit. A retry runs what is left of it. */
 export type ShareRequest = {
   readonly items: readonly ShareItem[];
   readonly targets: readonly ShareTarget[];
@@ -113,13 +95,9 @@ export type GrantStep = {
 };
 
 export type PlannedMessage = {
-  /** Minted once. A retry posts under the same id, so the server keeps one copy. */
   readonly id: string;
-  /** At most MAX_ATTACHMENTS_PER_MESSAGE, in selection order. */
   readonly items: readonly ShareItem[];
-  /** The request text on the target's first message, '' on the rest. */
   readonly text: string;
-  /** Granted before the post. Any failure stops the post. */
   readonly grantFirst: readonly GrantStep[];
   readonly grantAfter: readonly GrantStep[];
 };
@@ -127,7 +105,6 @@ export type PlannedMessage = {
 export type TargetPlan = {
   readonly key: TargetKey;
   readonly target: ShareTarget;
-  /** In order. A failed send ends the target's run, and a failed grant does not. */
   readonly messages: readonly PlannedMessage[];
 };
 
@@ -136,10 +113,6 @@ export type SharePlan = {
   readonly targets: readonly TargetPlan[];
 };
 
-/**
- * Splits the request into each target's messages and the grants each one
- * owes. Owner-only items the sender does not own are left out.
- */
 export function planShare(
   request: ShareRequest,
   mintMessageId: () => string
@@ -176,17 +149,13 @@ export function planShare(
   };
 }
 
-/** What one target has so far. A record exists once the target's channel is known. */
 export type TargetRecord = {
   readonly channelId: string;
-  /** Ids of planned messages the server confirmed. */
   readonly delivered: ReadonlySet<string>;
   readonly granted: ReadonlyMap<ItemKey, ChannelAccessLevel>;
-  /** The latest failed grant per item. A later success clears it. */
   readonly grantErrors: ReadonlyMap<ItemKey, ChannelAccessError>;
 };
 
-/** Everything the server confirmed during one share, by target. */
 export type DeliveryLedger = ReadonlyMap<TargetKey, TargetRecord>;
 
 export const emptyLedger: DeliveryLedger = new Map();
@@ -217,7 +186,6 @@ export function recordDelivery(
   }));
 }
 
-/** Records one grant attempt. A before-send grant is how a people target first learns its channel. */
 export function recordGrant(
   ledger: DeliveryLedger,
   key: TargetKey,
@@ -243,24 +211,16 @@ export function recordGrant(
   });
 }
 
-/** What a submit still has to do for one target. */
 export type TargetWork = {
   readonly key: TargetKey;
   readonly target: ShareTarget;
-  /** After-send grants on delivered messages that are unconfirmed and may still succeed. */
   readonly grants: readonly GrantStep[];
-  /**
-   * Undelivered messages in order, each with only the before-send grants it
-   * still owes. A refused before-send grant blocks its message, so that
-   * message and every later one are left out.
-   */
   readonly messages: readonly PlannedMessage[];
 };
 
 const mayRetry = (error: ChannelAccessError | undefined) =>
   error === undefined || error === 'failed';
 
-/** The undone parts of the frozen plan. Targets with nothing left are absent. */
 export function remainingWork(
   plan: SharePlan,
   ledger: DeliveryLedger
@@ -302,20 +262,14 @@ export type AccessIssue = {
 export type RecipientOutcome = {
   readonly key: TargetKey;
   readonly target: ShareTarget;
-  /** Planned items this target has not received. */
   readonly unsent: readonly ShareItem[];
-  /** Owed grants that are not confirmed, on received items or refused before a post. */
   readonly accessIssues: readonly AccessIssue[];
 };
 
 export type ShareOutcome = {
-  /** Every planned message is delivered and every owed grant is confirmed. */
   readonly complete: boolean;
-  /** A retry could change something. Refused grants never make a share retryable. */
   readonly retryable: boolean;
-  /** At least one message reached a recipient. */
   readonly delivered: boolean;
-  /** One entry per target, in request order. */
   readonly recipients: readonly RecipientOutcome[];
 };
 
@@ -357,20 +311,15 @@ export function summarizeShare(
 }
 
 export type ShareNotice =
-  /** Owner-only kinds the sender does not own. They are left out of every message. */
   | { readonly t: 'left-out'; readonly items: readonly ShareItem[] }
-  /** Items the sender does not own. Recipients get view from the message, and only the owner can grant more. */
   | { readonly t: 'not-owner'; readonly items: readonly ShareItem[] }
-  /** Items whose kind tops out below the chosen level, such as email at view. */
   | {
       readonly t: 'capped';
       readonly items: readonly ShareItem[];
       readonly level: ChannelAccessLevel;
     }
-  /** Each recipient gets several messages because one holds at most MAX_ATTACHMENTS_PER_MESSAGE. */
   | { readonly t: 'split'; readonly messagesPerRecipient: number };
 
-/** What the sender is told before sending. */
 export function shareNotices(
   items: readonly ShareItem[],
   level: ChannelAccessLevel
@@ -409,20 +358,17 @@ export function shareNotices(
 }
 
 export type ShareEvent =
-  /** A target first has an item with its owed access settled. Once per target and item. */
   | {
       readonly t: 'forwarded';
       readonly item: ShareItemRef;
       readonly target: 'channel' | 'user';
     }
-  /** A grant was confirmed at a new level. */
   | {
       readonly t: 'access-set';
       readonly item: ShareItemRef;
       readonly level: ChannelAccessLevel;
     };
 
-/** The events one submit earned, read off the ledger before and after it. */
 export function shareEvents(
   plan: SharePlan,
   before: DeliveryLedger,

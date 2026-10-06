@@ -55,7 +55,6 @@ export function useSendMessageToPeople() {
   const userId = useUserId();
   const sendMessage = useSendMessageMutation();
 
-  /** The stored message's id, or undefined when the post failed. */
   async function postMessage(
     channelId: string,
     senderId: string,
@@ -75,7 +74,6 @@ export function useSendMessageToPeople() {
       });
       return response.id;
     } catch (error) {
-      // A conflict on a reused id means an earlier attempt stored the message.
       const stored =
         args.messageId !== undefined &&
         thrownResultErrorHasCode(error, 'CONFLICT');

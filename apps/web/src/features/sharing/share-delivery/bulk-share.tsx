@@ -31,8 +31,6 @@ export function BulkShare(props: {
         kind: entity.type,
         name: entity.name,
         block: itemToBlockName(entity),
-        // A list row carries no permission read. The stored owner is the
-        // only signal before sending, and the server still decides.
         canGrant: entity.ownerId === viewerId(),
       })
     )
@@ -86,7 +84,6 @@ export function BulkShare(props: {
   );
 }
 
-/** Must match the chip label `RecipientSelector` shows for the same recipient. */
 function recipientName(recipient: RecipientOption): string {
   return match(recipient)
     .with({ kind: 'channel' }, ({ id, data }) => data.name || id)

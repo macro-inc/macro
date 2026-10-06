@@ -23,8 +23,6 @@ type ChannelGrantClient = (
   | Promise<Result<unknown, readonly ResultError[]>>
   | ResultAsync<unknown, readonly ResultError[]>;
 
-// `satisfies` fails the build when a kind is added without deciding how it
-// grants. A call has no channel grant API, so its message is its only access.
 const CHANNEL_GRANT_CLIENTS = {
   document: (documentId, operation) =>
     storageServiceClient.editDocument({
@@ -76,19 +74,12 @@ function toOperation(change: ChannelAccessChange) {
     .exhaustive();
 }
 
-// safeFetch reports 401 as UNAUTHORIZED and 403 as FORBIDDEN, and the
-// initiative GraphQL client passes FORBIDDEN through. The agent harness
-// reports a 403 as HTTP_ERROR, so that one refusal reads as failed.
 function refused(errors: readonly ResultError[]) {
   return errors.some(
     ({ code }) => code === 'UNAUTHORIZED' || code === 'FORBIDDEN'
   );
 }
 
-/**
- * Sets or removes one channel's access to one item through the client that
- * owns its kind. Logs each failed request once.
- */
 export async function changeChannelAccess(
   item: ShareItemRef,
   change: ChannelAccessChange

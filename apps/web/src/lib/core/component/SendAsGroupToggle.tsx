@@ -2,13 +2,8 @@ import CheckIcon from '@phosphor/check.svg?component-solid';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 
-/**
- * Whether several people get one group conversation or one conversation
- * each. Render it only when grouping is possible.
- */
 export function SendAsGroupToggle(props: {
   on: boolean;
-  /** Shown but not changeable, such as while a share is out. */
   locked: boolean;
   onChange: (on: boolean) => void;
 }) {

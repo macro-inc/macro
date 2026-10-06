@@ -25,10 +25,6 @@ function item(kind: ShareKind, id: string, canGrant = true): ShareItem {
 const channel = (id: string): PickedRecipient => ({ kind: 'channel', id });
 const person = (id: string): PickedRecipient => ({ kind: 'user', id });
 
-/**
- * Runs a form against a fake app that logs each lookup, post, and grant by
- * channel. A people target resolves to `dm:` and its member ids.
- */
 function setup(items: readonly ShareItem[]) {
   let log: Record<string, string[]> = {};
   const note = (channelId: string, line: string) => {

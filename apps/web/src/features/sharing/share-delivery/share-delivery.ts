@@ -38,7 +38,6 @@ export type {
 } from './primitives/create-share-form';
 export { changeChannelAccess } from './queries/channel-access';
 
-/** A recipient `RecipientSelector` picks for a share. */
 export type RecipientOption = WithCustomUserInput<
   'user' | 'contact' | 'channel'
 >;
@@ -49,15 +48,11 @@ export type ShareItemInput = {
   readonly id: string;
   readonly kind: ShareKind;
   readonly name: string;
-  /** The entity's block or alias. Markdown aliases (md, task, snippet, skill) default to edit. */
   readonly block?: BlockName | BlockAlias;
-  /** The viewer may set explicit channel grants, as an owner can. */
   readonly canGrant: boolean;
-  /** Existing channel grants, when the caller has already fetched them. */
   readonly channelGrants?: SharePermissionV2ChannelSharePermissions;
 };
 
-/** Parses what a caller knows about one entity into the share engine's item. */
 export function toShareItem(input: ShareItemInput): ShareItem {
   const grants = (input.channelGrants ?? []).flatMap(
     ({ channel_id, access_level }): [string, ChannelAccessLevel][] => {
@@ -76,11 +71,6 @@ export function toShareItem(input: ShareItemInput): ShareItem {
   };
 }
 
-/**
- * The one production constructor for a share form. It wires messaging, the
- * per-kind grant clients, and analytics for `location`. Call inside a
- * component.
- */
 export function useShareForm(
   items: Accessor<readonly ShareItem[]>,
   options: { readonly location: ShareLocation }
@@ -140,7 +130,6 @@ function toAttachment(item: ShareItemRef): NewAttachment {
   };
 }
 
-/** `ShareModal` tracks its own channel grants with this same `share_entity` shape. */
 function toSharePayload(event: ShareEvent) {
   return match(event)
     .with({ t: 'forwarded' }, ({ item, target }) => ({

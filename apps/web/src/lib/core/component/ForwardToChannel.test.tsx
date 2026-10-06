@@ -284,8 +284,6 @@ describe('forwarding with selected access', () => {
 
       await submit();
       expect(onSubmit).not.toHaveBeenCalled();
-      // The share froze at its first submit, so the retry keeps the original
-      // level and the original group.
       setAccessLevel('edit');
       mocks.recipients = [...mocks.recipients].reverse();
       fireEvent.click(
@@ -319,8 +317,6 @@ describe('forwarding with selected access', () => {
 
     await submit();
     expect(onSubmit).not.toHaveBeenCalled();
-    // The share froze at its first submit, so a recipient added afterwards
-    // gets nothing from the retry.
     mocks.recipients = [
       ...mocks.recipients,
       { kind: 'channel', id: 'channel-3' },
