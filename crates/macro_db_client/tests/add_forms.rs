@@ -7,8 +7,8 @@ use uuid::Uuid;
 const OWNER: &str = "macro|owner@forms.test";
 const RESPONDENT: &str = "macro|respondent@forms.test";
 
-/// The ids of one database, its table, a question column, the two managed
-/// columns, a form over the table, and its one section and question.
+/// The ids of one database, its table, a question column, a managed
+/// column, a form over the table, and its one section and question.
 struct FormFixture {
     database_id: Uuid,
     table_id: Uuid,
@@ -46,17 +46,19 @@ async fn insert_column(
     database_id: Uuid,
     table_id: Uuid,
     name: &str,
+    data_type: &str,
 ) -> Uuid {
     let definition_id = Uuid::now_v7();
     let column_id = Uuid::now_v7();
     sqlx::query!(
         r#"
         INSERT INTO property_definitions (id, database_id, display_name, data_type, is_multi_select)
-        VALUES ($1, $2, $3, 'STRING', false)
+        VALUES ($1, $2, $3, $4::text::property_data_type, false)
         "#,
         definition_id,
         database_id,
         name,
+        data_type,
     )
     .execute(pool)
     .await
@@ -97,8 +99,8 @@ async fn insert_form(pool: &Pool<Postgres>) -> FormFixture {
     .execute(pool)
     .await
     .unwrap();
-    let question_column_id = insert_column(pool, database_id, table_id, "a1").await;
-    let submitted_column_id = insert_column(pool, database_id, table_id, "a2").await;
+    let question_column_id = insert_column(pool, database_id, table_id, "a1", "STRING").await;
+    let submitted_column_id = insert_column(pool, database_id, table_id, "a2", "DATE").await;
     sqlx::query!(
         r#"
         INSERT INTO forms (id, name, owner_id, database_id, table_id, submitted_column_id)
@@ -216,13 +218,29 @@ async fn a_signed_in_person_responds_once_per_form_and_anonymous_responses_are_u
 }
 
 #[sqlx::test]
-async fn deleting_a_column_removes_its_question_and_nulls_a_managed_column(pool: Pool<Postgres>) {
+async fn deleting_an_ordinary_column_removes_its_question_but_managed_columns_are_protected(
+    pool: Pool<Postgres>,
+) {
     insert_user(&pool, OWNER).await;
     let form = insert_form(&pool).await;
 
+    let protected = sqlx::query!(
+        r#"DELETE FROM database_columns WHERE id = ANY($1)"#,
+        &[form.submitted_column_id],
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        protected
+            .as_database_error()
+            .and_then(|error| error.constraint()),
+        Some("database_column_protected")
+    );
+
     sqlx::query!(
         r#"DELETE FROM database_columns WHERE id = ANY($1)"#,
-        &[form.question_column_id, form.submitted_column_id],
+        &[form.question_column_id],
     )
     .execute(&pool)
     .await
@@ -243,7 +261,7 @@ async fn deleting_a_column_removes_its_question_and_nulls_a_managed_column(pool:
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(submitted_column_id, None);
+    assert_eq!(submitted_column_id, Some(form.submitted_column_id));
 }
 
 #[sqlx::test]
