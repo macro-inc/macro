@@ -19,6 +19,7 @@ import type {
   FoldedStreamEvent,
 } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
+import { observeRenderedAnswer } from './render-telemetry';
 
 /** How a sent prompt ended, as far as this span is concerned. */
 export type PromptOutcome =
@@ -32,6 +33,10 @@ export type PromptOutcome =
   | 'failed'
   /** Every holder released the session before any output arrived. */
   | 'released'
+  /** The document was hidden before a readable answer could paint. */
+  | 'hidden'
+  /** Raw text arrived but no visible renderer confirmed it before the deadline. */
+  | 'not_rendered'
   /** Still waiting at {@link STALL_THRESHOLD_MS} — reported, not concluded. */
   | 'stalled';
 
@@ -51,7 +56,11 @@ export type PromptStage =
   | 'first_output'
   /** The turn's first agent text was folded. */
   | 'first_text'
-  /** The frame after the first text was folded: what a person saw. */
+  /** A renderer for the matching answer mounted. */
+  | 'text_mounted'
+  /** Readable answer text was present in visible transcript DOM. */
+  | 'first_text_rendered'
+  /** That visible DOM remained readable across a paint boundary. */
   | 'first_text_paint';
 
 /**
@@ -87,11 +96,29 @@ export function frameDelivery(
  * exports once it ends.
  */
 const STALL_THRESHOLD_MS = 5 * 60_000;
+const RENDER_TIMEOUT_MS = 10_000;
 
 type Attributes = Record<string, string | number | boolean>;
 
+/** Bounded UI origins supplied by the composer that submits the prompt. */
+export type PromptSubmitSurface =
+  | 'home'
+  | 'agents'
+  | 'mobile_composer'
+  | 'search'
+  | 'document'
+  | 'drive'
+  | 'agent_session'
+  | 'other';
+
+type PromptTraceOptions = {
+  newSession: boolean;
+  submitSurface?: PromptSubmitSurface;
+};
+
 export class PromptTrace {
   readonly #span: Span | undefined;
+  readonly #sessionId: string;
   readonly #startedAt = performance.now();
   /** Ids the prompt may be confirmed under: the speculated one and the accepted one. */
   readonly #actionIds = new Set<string>();
@@ -101,9 +128,14 @@ export class PromptTrace {
   #text = false;
   #ended = false;
   #stallTimer: ReturnType<typeof setTimeout> | undefined;
+  #renderTimer: ReturnType<typeof setTimeout> | undefined;
+  #mounted = false;
+  #rendered = false;
+  readonly #renderers = new Set<() => void>();
 
-  constructor(sessionId: string, options: { newSession: boolean }) {
-    this.#span = start(sessionId, options.newSession);
+  constructor(sessionId: string, options: PromptTraceOptions) {
+    this.#sessionId = sessionId;
+    this.#span = start(sessionId, options);
     this.#stallTimer = setTimeout(
       () => this.end('stalled'),
       STALL_THRESHOLD_MS
@@ -131,7 +163,8 @@ export class PromptTrace {
 
   stage(stage: PromptStage, attributes: Attributes = {}): void {
     if (this.#ended) return;
-    const atMs = Math.round(performance.now() - this.#startedAt);
+    const now = performance.now();
+    const atMs = Math.round(now - this.#startedAt);
     this.#set(`agent.prompt.${stage}_at_ms`, atMs);
     for (const [name, value] of Object.entries(attributes)) {
       this.#set(`agent.prompt.${name}`, value);
@@ -141,8 +174,53 @@ export class PromptTrace {
         at_ms: atMs,
         ...attributes,
       });
+      performance.measure(`agent.prompt.${stage}`, {
+        start: this.#startedAt,
+        end: now,
+        detail: { sessionId: this.#sessionId },
+      });
     } catch {
       // See the module comment.
+    }
+  }
+
+  /** Called by the matching TextPart, never by raw fold delivery. */
+  observeRenderedText(
+    turn: number,
+    element: HTMLElement
+  ): (() => void) | undefined {
+    if (this.#ended || this.#turn !== turn) return;
+    try {
+      if (!this.#mounted) {
+        this.#mounted = true;
+        this.stage('text_mounted');
+      }
+      const stop = observeRenderedAnswer(element, {
+        readable: () => {
+          if (this.#rendered) return;
+          this.#rendered = true;
+          this.stage('first_text_rendered');
+        },
+        painted: () => {
+          this.stage('first_text_paint');
+          this.end('text');
+        },
+        hidden: () => {
+          if (this.#text) this.end('hidden');
+        },
+      });
+      if (this.#ended) {
+        stop();
+        return;
+      }
+      this.#renderers.add(stop);
+      return () => {
+        stop();
+        this.#renderers.delete(stop);
+      };
+    } catch {
+      // Rendering the answer must never depend on telemetry support.
+      return;
     }
   }
 
@@ -182,6 +260,13 @@ export class PromptTrace {
     if (this.#ended) return;
     clearTimeout(this.#stallTimer);
     this.#stallTimer = undefined;
+    clearTimeout(this.#renderTimer);
+    this.#renderTimer = undefined;
+    this.#set('agent.prompt.renderer_mounted', this.#mounted);
+    this.#set('agent.prompt.renderer_attached', this.#renderers.size > 0);
+    for (const stop of this.#renderers) stop();
+    this.#renderers.clear();
+    if (outcome === 'hidden') this.#set('agent.prompt.hidden', true);
     this.#set('agent.prompt.outcome', outcome);
     this.#set(
       'agent.prompt.total_ms',
@@ -191,6 +276,11 @@ export class PromptTrace {
     try {
       if (outcome === 'failed' && error !== undefined) this.#span?.error(error);
       this.#span?.end();
+      performance.measure('agent.prompt', {
+        start: this.#startedAt,
+        end: performance.now(),
+        detail: { sessionId: this.#sessionId, outcome },
+      });
     } catch {
       // See the module comment.
     }
@@ -238,15 +328,12 @@ export class PromptTrace {
     // A hidden tab never paints, and never runs animation frames either.
     if (documentHidden()) {
       this.#set('agent.prompt.hidden', true);
-      this.end('text');
+      this.end('hidden');
       return;
     }
-    // Two frames: the first runs before the paint the text lands in.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        this.stage('first_text_paint');
-        this.end('text');
-      })
+    this.#renderTimer = setTimeout(
+      () => this.end('not_rendered'),
+      RENDER_TIMEOUT_MS
     );
   }
 
@@ -276,13 +363,42 @@ function messagesOf(event: FoldedStreamEvent): FoldedMessage[] {
     .exhaustive();
 }
 
-function start(sessionId: string, newSession: boolean): Span | undefined {
+function start(
+  sessionId: string,
+  options: PromptTraceOptions
+): Span | undefined {
   try {
     const span = Telemetry.span('agent.prompt');
     span.setAttr('agent.session.id', sessionId);
-    span.setAttr('agent.prompt.new_session', newSession);
+    span.setAttr('agent.prompt.new_session', options.newSession);
+    span.setAttr(
+      'agent.prompt.submit_surface',
+      options.submitSurface ?? submitSurface(options.newSession)
+    );
     return span;
   } catch {
     return undefined;
   }
+}
+
+/** Bounded route categories only; paths and entity IDs are never telemetry labels. */
+function submitSurface(newSession: boolean): PromptSubmitSurface {
+  if (!newSession) return 'agent_session';
+  const route = typeof location === 'undefined' ? '' : location.pathname;
+  // Layout URLs enumerate panes without identifying the active one. Known
+  // composers supply their origin explicitly; never guess the leftmost pane.
+  if (route.includes('/~/')) return 'other';
+  if (/^\/app\/drive(?:\/|$)/.test(route)) {
+    return /\/(?:md|task|skill|snippet|canvas|pdf|code|csv|image|video|spreadsheet|unknown)\/[^/]+\/?$/.test(
+      route
+    )
+      ? 'document'
+      : 'drive';
+  }
+  if (/^\/app\/?$/.test(route) || /^\/app\/home(?:\/|$)/.test(route))
+    return 'home';
+  if (/^\/app\/agents(?:\/|$)/.test(route)) return 'agents';
+  if (/^\/app\/search(?:\/|$)/.test(route)) return 'search';
+  if (/^\/app\/(?:md|pdf|code|document)\//.test(route)) return 'document';
+  return 'other';
 }

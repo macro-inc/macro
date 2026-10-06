@@ -42,8 +42,8 @@ export function useOwnUserName(): Accessor<UserName | undefined> {
 /**
  * Call after writing the name (putUserName). The write and every reader live
  * in the same tab, so invalidating here is what flips dependent surfaces —
- * e.g. the Getting Started checklist beside a settings Viewer, which would
- * otherwise have to poll.
+ * e.g. the sidebar name beside a settings Viewer, which would otherwise have
+ * to poll.
  */
 export function invalidateOwnUserName() {
   return queryClient.invalidateQueries({

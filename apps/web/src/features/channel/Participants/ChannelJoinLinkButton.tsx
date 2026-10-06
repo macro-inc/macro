@@ -7,7 +7,10 @@ import { useGetChannelJoinLinkMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 
-export function ChannelJoinLinkButton(props: { channelId: string }) {
+export function ChannelJoinLinkButton(props: {
+  channelId: string;
+  iconOnly?: boolean;
+}) {
   const getJoinLinkMutation = useGetChannelJoinLinkMutation();
   const [joinCode, setJoinCode] = createSignal<string>();
   const [copied, setCopied] = createSignal(false);
@@ -72,6 +75,8 @@ export function ChannelJoinLinkButton(props: { channelId: string }) {
   return (
     <Button
       variant="outline"
+      size={props.iconOnly ? 'icon-md' : 'sm'}
+      label={buttonLabel()}
       disabled={getJoinLinkMutation.isPending}
       onClick={() => void copyJoinLink()}
     >
@@ -83,7 +88,7 @@ export function ChannelJoinLinkButton(props: { channelId: string }) {
           <CheckIcon class="size-4" />
         </Show>
       </Show>
-      {buttonLabel()}
+      <Show when={!props.iconOnly}>{buttonLabel()}</Show>
     </Button>
   );
 }

@@ -15,11 +15,35 @@ first prose. Verify a second prompt and a reload preserve the complete answer.
 Selected model and effort must be confirmed before the first prompt; settings
 already confirmed by the runtime do not need another control request.
 
+Repeat from a fresh tab using Home, Agents, and a document's Chat action.
+Focusing an agent composer prepares its transcript renderer locally; focus alone
+must not send a prompt. Record navigation and focus time separately from typing
+and Enter-to-first-answer time. Check the first readable agent words in the DOM,
+not a loading indicator or a bare Markdown delimiter.
+
 Repeat from Home, Agents, and the create menu with an already-ready session.
 The first prompt can be accepted before its destination mounts; navigating into
 the session must keep the same streamed turn without restarting its load. Also
 leave a pending destination, then reopen the session and confirm the sent prompt
 and complete answer remain available.
+
+The `agent.prompt` trace separates raw fold text (`first_text`) from mounted
+answer DOM (`text_mounted`), readable visible text (`first_text_rendered`), and
+its paint (`first_text_paint`). Only the final milestone is a visible-response
+success. Bare Markdown prefixes and code-toolbar labels do not count. With only
+a code toolbar visible at a scroll boundary, verify the milestone waits until
+the code itself scrolls into view. A hidden tab reports `hidden`; raw text without
+a visible renderer within ten seconds reports `not_rendered`, including whether
+a renderer mounted and stayed attached.
+`submit_surface` uses bounded composer categories, including explicit Home,
+Agents, and mobile origins so a neighboring split cannot mislabel the submit.
+The fallback recognizes Drive documents; an ambiguous split reports `other`.
+All milestones omit message contents. Compare these timings with created,
+loaded, configured, delivery, and fold timing to distinguish startup, transport,
+and rendering delays.
+The same stages are available immediately in DevTools as
+`performance.getEntriesByType('measure')` entries named `agent.prompt.*`, with
+session ID in `detail`; the `agent.prompt` entry includes the final outcome.
 
 ## Working with projects
 

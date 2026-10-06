@@ -1,22 +1,26 @@
 import SlackIcon from '@icon/mcp-slack.svg';
 import { Button } from '@ui';
 import type { JSX } from 'solid-js';
-import { IntegrationRow, SettingsCard } from '../../settings/primitives';
+import { IntegrationRow } from '../../settings/primitives';
 
 type Props = { onOpen(trigger: HTMLButtonElement): void };
 
+/** The Connections row that opens the importer; the host supplies the card. */
 export function SlackImportCard(props: Props): JSX.Element {
   return (
-    <SettingsCard>
-      <IntegrationRow
-        icon={<SlackIcon />}
-        title="Import from Slack"
-        description="Import conversations from a Slack export, with optional message history."
+    <IntegrationRow
+      icon={<SlackIcon />}
+      title="Slack"
+      description="Import channels and message history from a Slack export."
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        depth={3}
+        onClick={(event) => props.onOpen(event.currentTarget)}
       >
-        <Button onClick={(event) => props.onOpen(event.currentTarget)}>
-          Import from Slack
-        </Button>
-      </IntegrationRow>
-    </SettingsCard>
+        Import from Slack
+      </Button>
+    </IntegrationRow>
   );
 }

@@ -127,6 +127,10 @@ Tools use the same Pipedream catalog and connection UI as Settings. Search, load
 more, cancel/retry connection, and confirm connected checks persist on return.
 Team setup retains existing membership, invite acceptance, domain suggestions,
 and editable invite recipients; submitting the form sends real invitations.
+On the create-team form, type a workspace name and edit a teammate address,
+then allow onboarding/contacts queries to refresh. The same inputs must retain
+their values and focus as suggestions arrive or a background request fails.
+Pending queries must show local loading states without suspending the flow.
 
 Members with an active or trialing license, including a license from their team,
 finish directly from the team step without visiting the plan page. The Continue

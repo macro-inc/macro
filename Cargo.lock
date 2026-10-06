@@ -818,6 +818,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_engine"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console_error_panic_hook",
+ "fig_engine",
+ "js-sys",
+ "miniz_oxide",
+ "png",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "skrifa",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "wasm-bindgen",
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
 name = "ai_projections"
 version = "0.1.0"
 dependencies = [
@@ -6394,6 +6415,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "ai_billing",
+ "ai_engine",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -6453,6 +6475,7 @@ dependencies = [
  "models_properties",
  "non_empty",
  "pptx_engine",
+ "psd_engine",
  "rdkafka",
  "redis",
  "reqwest 0.13.4",
@@ -14930,6 +14953,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "psd_engine"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console_error_panic_hook",
+ "fig_engine",
+ "js-sys",
+ "miniz_oxide",
+ "png",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16515,6 +16555,7 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "agent_session",
+ "ai_engine",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -16570,6 +16611,7 @@ dependencies = [
  "pdfium-render",
  "projects",
  "properties",
+ "psd_engine",
  "rdkafka",
  "rootcause",
  "rust-embed",

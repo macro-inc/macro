@@ -235,7 +235,14 @@ export function systemThemeEffect(): void {
 /** Only committed colors affect browser/notification icons and first paint. */
 function syncCommittedColors(): void {
   const colors = resolvedThemeColors();
-  setHtmlColor({ color: formatOklch(colors['surface-0']) });
+  // index.html reads these before any JS loads to paint the boot shell.
+  setHtmlColor({
+    color: formatOklch(colors.page),
+    panel: formatOklch(colors.panel),
+    ink: formatOklch(colors.ink),
+    muted: formatOklch(colors['ink-muted']),
+    input: formatOklch(colors.input),
+  });
   setCommittedThemeAccent(formatOklch(colors.accent));
 }
 

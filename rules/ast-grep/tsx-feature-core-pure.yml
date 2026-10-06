@@ -24,6 +24,7 @@ files:
   - apps/web/src/features/projects/core/**
   - apps/web/src/features/channel/Call/chat/core/**
   - apps/web/src/features/block-agent/core/**
+  - apps/web/src/features/block-ai/core/**
   - apps/web/src/features/meetings/core/**
   - apps/web/src/features/block-spreadsheet/core/**
   - apps/web/src/features/property/tags/core/**

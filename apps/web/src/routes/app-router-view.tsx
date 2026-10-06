@@ -1,55 +1,9 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
-import { ActivityRouteView } from '@app/features/activity/route-views';
-import { AgentsRouteView } from '@app/features/agents-view/route-views';
-import { MobileWebSignup } from '@app/features/auth/auth';
-import { CallDetailRouteView } from '@app/features/block-call/route-views';
-import { PrDetailRouteView } from '@app/features/block-pr/route-views';
-import { CalendarRouteView } from '@app/features/calendar-view/route-views';
-import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
-import { ChannelDetailRouteView } from '@app/features/channels-view/channels-view';
-import { ChannelsRouteView } from '@app/features/channels-view/route-views';
-import { CompaniesRouteView } from '@app/features/crm/route-views';
-import { DriveDetailView } from '@app/features/drive-view/components/DriveDetailView';
-import {
-  DriveCallRouteView,
-  DriveRouteView,
-} from '@app/features/drive-view/route-views';
-import { EmailDetailRouteView } from '@app/features/email-view/components/EmailDetailView';
-import { MailRouteView } from '@app/features/email-view/route-views';
-import { GettingStartedRouteView } from '@app/features/getting-started/route-views';
-import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
-import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
-import { HomeEntityDetailRouteView } from '@app/features/home/components/HomeEntityDetailRouteView';
-import { HomeReminderDetailRouteView } from '@app/features/home/components/HomeReminderDetailRouteView';
 import {
   HomeCalendarRouteView,
   HomeDetailRouteView,
 } from '@app/features/home/home-view';
 import { HomeRouteView } from '@app/features/home/route-views';
-import { MeetingRouter } from '@app/features/meetings/meeting-router';
-import {
-  CallsRouteView,
-  FoldersRouteView,
-  RecentRouteView,
-  SearchRouteView,
-} from '@app/features/next-soup/route-views';
-import {
-  ReminderDetailRouteView,
-  RemindersRouteView,
-} from '@app/features/reminders/route-views';
-import {
-  ReviewsPrDetailRouteView,
-  ReviewsRouteView,
-} from '@app/features/reviews-view/route-views';
-import { RoutineCreateRouteView } from '@app/features/routines/route-views';
-import { SettingsRouteView } from '@app/features/settings/route-views';
-import { TasksDetailRouteView } from '@app/features/tasks-view/components/TasksDetailView';
-import {
-  ProjectDetailRouteView,
-  ProjectTaskRouteView,
-  TasksRouteView,
-} from '@app/features/tasks-view/route-views';
-import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   createMemoryPaneStore,
   SplitRouter,
@@ -63,26 +17,14 @@ import {
   splitContentFromLocation,
   upgradeLegacyPath,
 } from '@components/app/split-layout/split-router/legacy-route';
-import NotFound from '@core/component/AccessErrorViews/NotFound';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { lazy } from 'solid-js';
+import { lazy, onMount } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
-import {
-  BookingReceiptRoutePage,
-  EmailCallback,
-  EmailLinkCallback,
-  LoginPage,
-  LoginPopupSuccess,
-  OnboardingPage,
-  PublicBookingRoutePage,
-  SignupPage,
-  TaskSlugPage,
-  WelcomePage,
-} from './pages';
 import {
   activityRoute,
   agentChatsRoute,
@@ -111,7 +53,6 @@ import {
   emailSplitRoute,
   emailThreadRoute,
   foldersRoute,
-  gettingStartedRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
@@ -153,6 +94,177 @@ import {
 
 const { Router, Route } = SplitRouter;
 
+/**
+ * Every view except Home (the default landing) loads as its own chunk. The
+ * split router warms a route's chunks while it navigates, and
+ * `prefetchRouteViews` fetches them once the first screen has settled.
+ */
+const ActivityRouteView = lazyNamed(
+  () => import('@app/features/activity/route-views'),
+  'ActivityRouteView'
+);
+const AgentsRouteView = lazyNamed(
+  () => import('@app/features/agents-view/route-views'),
+  'AgentsRouteView'
+);
+const MobileWebSignup = lazyNamed(
+  () => import('@app/features/auth/auth'),
+  'MobileWebSignup'
+);
+const CallDetailRouteView = lazyNamed(
+  () => import('@app/features/block-call/route-views'),
+  'CallDetailRouteView'
+);
+const PrDetailRouteView = lazyNamed(
+  () => import('@app/features/block-pr/route-views'),
+  'PrDetailRouteView'
+);
+const CalendarRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/route-views'),
+  'CalendarRouteView'
+);
+const ChannelInviteAcceptance = lazyNamed(
+  () => import('@app/features/channel-invitations/ChannelInviteAcceptance'),
+  'ChannelInviteAcceptance'
+);
+const ChannelDetailRouteView = lazyNamed(
+  () => import('@app/features/channels-view/channels-view'),
+  'ChannelDetailRouteView'
+);
+const ChannelsRouteView = lazyNamed(
+  () => import('@app/features/channels-view/route-views'),
+  'ChannelsRouteView'
+);
+const CompaniesRouteView = lazyNamed(
+  () => import('@app/features/crm/route-views'),
+  'CompaniesRouteView'
+);
+const DriveDetailView = lazyNamed(
+  () => import('@app/features/drive-view/components/DriveDetailView'),
+  'DriveDetailView'
+);
+const DriveCallRouteView = lazyNamed(
+  () => import('@app/features/drive-view/route-views'),
+  'DriveCallRouteView'
+);
+const DriveRouteView = lazyNamed(
+  () => import('@app/features/drive-view/route-views'),
+  'DriveRouteView'
+);
+const EmailDetailRouteView = lazyNamed(
+  () => import('@app/features/email-view/components/EmailDetailView'),
+  'EmailDetailRouteView'
+);
+const MailRouteView = lazyNamed(
+  () => import('@app/features/email-view/route-views'),
+  'MailRouteView'
+);
+const InviteLinksPortal = lazyNamed(
+  () => import('@app/features/gtm-invite/InviteLinksPortal'),
+  'InviteLinksPortal'
+);
+const InviteWelcome = lazyNamed(
+  () => import('@app/features/gtm-invite/InviteWelcome'),
+  'InviteWelcome'
+);
+const HomeEntityDetailRouteView = lazyNamed(
+  () => import('@app/features/home/components/HomeEntityDetailRouteView'),
+  'HomeEntityDetailRouteView'
+);
+const HomeReminderDetailRouteView = lazyNamed(
+  () => import('@app/features/home/components/HomeReminderDetailRouteView'),
+  'HomeReminderDetailRouteView'
+);
+const MeetingRouter = lazyNamed(
+  () => import('@app/features/meetings/meeting-router'),
+  'MeetingRouter'
+);
+const CallsRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'CallsRouteView'
+);
+const FoldersRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'FoldersRouteView'
+);
+const RecentRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'RecentRouteView'
+);
+const SearchRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'SearchRouteView'
+);
+const ReminderDetailRouteView = lazyNamed(
+  () => import('@app/features/reminders/route-views'),
+  'ReminderDetailRouteView'
+);
+const RemindersRouteView = lazyNamed(
+  () => import('@app/features/reminders/route-views'),
+  'RemindersRouteView'
+);
+const ReviewsPrDetailRouteView = lazyNamed(
+  () => import('@app/features/reviews-view/route-views'),
+  'ReviewsPrDetailRouteView'
+);
+const ReviewsRouteView = lazyNamed(
+  () => import('@app/features/reviews-view/route-views'),
+  'ReviewsRouteView'
+);
+const RoutineCreateRouteView = lazyNamed(
+  () => import('@app/features/routines/route-views'),
+  'RoutineCreateRouteView'
+);
+const SettingsRouteView = lazyNamed(
+  () => import('@app/features/settings/route-views'),
+  'SettingsRouteView'
+);
+const TasksDetailRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/components/TasksDetailView'),
+  'TasksDetailRouteView'
+);
+const ProjectDetailRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/route-views'),
+  'ProjectDetailRouteView'
+);
+const ProjectTaskRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/route-views'),
+  'ProjectTaskRouteView'
+);
+const TasksRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/route-views'),
+  'TasksRouteView'
+);
+const TeamInviteAcceptance = lazyNamed(
+  () => import('@app/features/team-invitations/TeamInviteAcceptance'),
+  'TeamInviteAcceptance'
+);
+const BookingReceiptRoutePage = lazyNamed(
+  () => import('./pages'),
+  'BookingReceiptRoutePage'
+);
+const EmailCallback = lazyNamed(() => import('./pages'), 'EmailCallback');
+const EmailLinkCallback = lazyNamed(
+  () => import('./pages'),
+  'EmailLinkCallback'
+);
+const LoginPage = lazyNamed(() => import('./pages'), 'LoginPage');
+const LoginPopupSuccess = lazyNamed(
+  () => import('./pages'),
+  'LoginPopupSuccess'
+);
+const OnboardingPage = lazyNamed(() => import('./pages'), 'OnboardingPage');
+const PublicBookingRoutePage = lazyNamed(
+  () => import('./pages'),
+  'PublicBookingRoutePage'
+);
+const SignupPage = lazyNamed(() => import('./pages'), 'SignupPage');
+const TaskSlugPage = lazyNamed(() => import('./pages'), 'TaskSlugPage');
+const WelcomePage = lazyNamed(() => import('./pages'), 'WelcomePage');
+const NotFound = lazy(
+  () => import('@core/component/AccessErrorViews/NotFound')
+);
+
 /** Debug views stay behind the registry's lazy import. */
 function debugView(componentId: string) {
   return lazy(async () => {
@@ -163,8 +275,46 @@ function debugView(componentId: string) {
   });
 }
 
+/**
+ * Views a session is likely to open next. Fetching them while the browser is
+ * idle keeps the first navigation as fast as it was with one big bundle.
+ */
+const LIKELY_NEXT_VIEWS = [
+  HomeEntityDetailRouteView,
+  ChannelsRouteView,
+  ChannelDetailRouteView,
+  MailRouteView,
+  EmailDetailRouteView,
+  DriveRouteView,
+  DriveDetailView,
+  TasksRouteView,
+  AgentsRouteView,
+  CalendarRouteView,
+];
+
+/** Warms the likely-next view chunks one at a time, without competing with startup work. */
+function prefetchRouteViews(): void {
+  const idle = (run: () => void) =>
+    'requestIdleCallback' in window
+      ? window.requestIdleCallback(run, { timeout: 5000 })
+      : setTimeout(run, 1000);
+  const queue = [...LIKELY_NEXT_VIEWS];
+  const next = () => {
+    const view = queue.shift();
+    if (!view) return;
+    view
+      .preload()
+      .catch(() => {})
+      .finally(() => idle(next));
+  };
+  // Leave the first seconds to the landing view's own data and chunks.
+  setTimeout(() => idle(next), 2500);
+}
+
 /** The app's router: the first pane's top-level route renders here, and app URLs render the split layout. */
 export function AppRouterView() {
+  onMount(prefetchRouteViews);
+
   const debugRouteElements = debugRoutes.map(({ componentId, route }) => (
     <Route definition={route} component={debugView(componentId)} />
   ));
@@ -281,10 +431,6 @@ export function AppRouterView() {
             component={HomeDetailRouteView}
           />
         </Route>
-        <Route
-          definition={gettingStartedRoute}
-          component={GettingStartedRouteView}
-        />
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
         <Route

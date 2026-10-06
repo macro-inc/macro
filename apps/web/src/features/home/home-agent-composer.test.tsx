@@ -89,7 +89,11 @@ it('forwards the shared composer selection into the common session flow', () => 
   };
   mocks.onStart?.(start);
   // The viewer rides along so the first prompt is attributed as the log will.
-  expect(mocks.start).toHaveBeenCalledWith({ ...start, userId: 'viewer-1' });
+  expect(mocks.start).toHaveBeenCalledWith({
+    ...start,
+    userId: 'viewer-1',
+    submitSurface: 'home',
+  });
   expect(mocks.replace).toHaveBeenCalledWith({
     next: { type: 'component', id: 'agents-session~agents~pending-session' },
   });

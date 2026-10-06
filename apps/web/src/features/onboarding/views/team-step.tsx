@@ -1,4 +1,4 @@
-import { Match, Show, Switch } from 'solid-js';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 import { ContinueButton, SkipButton } from '../components/controls';
 import {
   InvitesPanel,
@@ -32,13 +32,17 @@ export function TeamStep(props: {
     return viewer.t === 'signed-in' ? viewer.viewer.email : undefined;
   };
   // Wait for contacts and the domain suggestion so the form mounts once,
-  // fully formed — nothing rewrites the user's rows afterwards.
-  const seed = () =>
-    teamFormSeed({
-      record: record(),
-      contacts: directory.contacts(),
-      ownEmail: ownEmail(),
-    });
+  // fully formed. Keep the first settled seed so background refreshes cannot
+  // replace the form, reset edits, or steal focus from an input.
+  const seed = createMemo<TeamFormSeed | undefined>(
+    (previous) =>
+      previous ??
+      teamFormSeed({
+        record: record(),
+        contacts: directory.contacts(),
+        ownEmail: ownEmail(),
+      })
+  );
 
   return (
     <TeamSetup>
@@ -71,13 +75,12 @@ export function TeamStep(props: {
         <Match when={team.state().t === 'create'}>
           <Show
             when={seed()}
-            keyed
             fallback={<TeamStatus message="Finding your teammates…" />}
           >
             {(ready) => (
               <TeamForm
                 finishing={props.finishing}
-                seed={ready}
+                seed={ready()}
                 ownEmail={ownEmail()}
                 onContinue={props.onContinue}
                 onSkip={props.onSkip}

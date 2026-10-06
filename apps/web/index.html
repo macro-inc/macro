@@ -26,10 +26,481 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
     <link rel="manifest" href="/manifest.json" />
+    <!-- The first API calls wait for the bundle; open their connection meanwhile. -->
+    <link
+      rel="preconnect"
+      href="%GATEWAY_ORIGIN%"
+      crossorigin="use-credentials"
+    />
+    <!--
+      Boot shell: a static likeness of the app frame (rail, view sidebar, Home's
+      composer), painted with the HTML so the screen is never blank while the
+      bundle downloads and starts. The inline script in <body> fills it in from
+      the saved theme and layout; the app fades it out once its own frame mounts
+      (see dismissBootShell). Geometry mirrors the sidebar rail, ViewSidebar, and
+      the Agents new-chat layout.
+    -->
+    <style>
+      /* The boot shell renders before Tailwind's preflight has loaded. */
+      #boot-shell,
+      #boot-shell * {
+        box-sizing: border-box;
+      }
+      #boot-shell {
+        --bs-page: oklch(0.17 0 0);
+        --bs-panel: oklch(0.17 0 0);
+        --bs-ink: oklch(1 0 0);
+        --bs-muted: oklch(0.83 0 0);
+        --bs-input: color-mix(in oklch, var(--bs-page) 95%, var(--bs-ink));
+        --bs-bar: color-mix(in oklch, var(--bs-ink) 10%, transparent);
+        --bs-shine: color-mix(in oklch, var(--bs-ink) 18%, transparent);
+        --bs-edge: color-mix(in oklch, var(--bs-ink) 8%, transparent);
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        overflow: hidden;
+        background: var(--bs-panel);
+        color: var(--bs-ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        transition: opacity 180ms ease-out;
+        pointer-events: none;
+      }
+      @media (prefers-color-scheme: light) {
+        #boot-shell {
+          --bs-page: oklch(0.964 0 0);
+          --bs-panel: oklch(1 0 0);
+          --bs-ink: oklch(0.16 0 0);
+          --bs-muted: oklch(0.4 0 0);
+          --bs-input: transparent;
+        }
+      }
+      #boot-shell[data-leaving] {
+        opacity: 0;
+      }
+      #boot-shell svg {
+        flex: none;
+        fill: currentColor;
+      }
+      .bs-bar {
+        flex: none;
+        height: 10px;
+        border-radius: 999px;
+        /* One fixed-position gradient shared by every bar, so the shimmer
+           sweeps across the whole frame as a single band. */
+        background: linear-gradient(
+            100deg,
+            transparent 40%,
+            var(--bs-shine) 50%,
+            transparent 60%
+          )
+          var(--bs-bar);
+        background-size: 200vw 100%;
+        background-attachment: fixed;
+        animation: bs-shimmer 1.6s linear infinite;
+      }
+      @keyframes bs-shimmer {
+        from {
+          background-position: 100vw 0;
+        }
+        to {
+          background-position: -100vw 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bs-bar {
+          animation: none;
+        }
+      }
+      /* Rail: SidebarRail's 56px column of 40px icon buttons. */
+      .bs-rail {
+        display: flex;
+        width: 56px;
+        flex: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 8px 12px;
+        border-right: 1px solid var(--bs-edge);
+      }
+      .bs-btn {
+        display: flex;
+        width: 40px;
+        height: 40px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        color: var(--bs-muted);
+      }
+      .bs-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+      .bs-btn[data-active] {
+        background: color-mix(in oklch, var(--bs-ink) 6%, transparent);
+        color: var(--bs-ink);
+      }
+      .bs-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding-top: 16px;
+        min-height: 0;
+        overflow: hidden;
+      }
+      /* View sidebar: ViewSidebar's 256px aside. */
+      .bs-aside {
+        display: flex;
+        width: 256px;
+        flex: none;
+        flex-direction: column;
+        box-shadow: 1px 0 var(--bs-edge);
+        margin-right: 1px;
+      }
+      /* Home yields to its 640px main pane, after the 56px rail and 1px gutter. */
+      #boot-shell[data-view="home"] .bs-aside {
+        width: clamp(224px, calc(100vw - 56px - 1px - 640px), 256px);
+      }
+      .bs-head {
+        display: flex;
+        height: 48px;
+        flex: none;
+        align-items: center;
+        gap: 4px;
+        padding: 0 14px 0 16px;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+      }
+      .bs-head svg {
+        width: 16px;
+        height: 16px;
+        color: var(--bs-muted);
+      }
+      .bs-head > :last-child {
+        margin-left: auto;
+      }
+      .bs-control {
+        display: flex;
+        width: 24px;
+        height: 24px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .bs-filter svg {
+        width: 12px;
+        height: 12px;
+      }
+      .bs-row {
+        display: flex;
+        height: 32px;
+        flex: none;
+        align-items: center;
+        gap: 6px;
+        margin: 2px 8px;
+        padding: 0 8px;
+        font-size: 14px;
+        color: var(--bs-muted);
+      }
+      .bs-primary {
+        margin-top: 8px;
+        margin-bottom: 0;
+      }
+      .bs-list {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+        margin-top: 12px;
+      }
+      .bs-row svg {
+        width: 16px;
+        height: 16px;
+        margin: 0 2px;
+        color: var(--bs-muted);
+      }
+      .bs-ico {
+        width: 16px;
+        height: 16px;
+        margin: 0 2px;
+        border-radius: 4px;
+      }
+      .bs-row-text {
+        min-width: 0;
+        flex: 1;
+      }
+      .bs-label {
+        display: flex;
+        height: 28px;
+        flex: none;
+        align-items: center;
+        padding: 0 16px;
+      }
+      .bs-label > .bs-bar {
+        width: 64px;
+        height: 8px;
+      }
+      .bs-main {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+      /* Home's composer: the Agents new-chat grid, under the 48px top bar. */
+      .bs-newchat {
+        display: grid;
+        flex: 1;
+        grid-template-rows: max(0px, calc(40% - 60px)) auto 1fr;
+        justify-items: center;
+        padding: 72px 24px 64px;
+      }
+      /* Without the Agents flag, Home centers a smaller greeting (HomeChatStart). */
+      .bs-newchat[data-legacy] {
+        grid-template-rows: 1fr auto 1fr;
+        padding: 0 24px 64px;
+      }
+      .bs-newchat[data-legacy] .bs-col {
+        display: contents;
+      }
+      .bs-newchat[data-legacy] .bs-composer {
+        max-width: 720px;
+        grid-row: 2;
+      }
+      .bs-newchat[data-legacy] .bs-greeting {
+        align-self: end;
+        grid-row: 1;
+        margin-bottom: 24px;
+        font-size: 24px;
+        font-weight: 400;
+        letter-spacing: normal;
+        line-height: 42px;
+      }
+      .bs-col {
+        display: flex;
+        width: 100%;
+        max-width: 720px;
+        grid-row: 2;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+      .bs-greeting {
+        margin: 0 0 12px;
+        font-size: 28px;
+        font-weight: 500;
+        letter-spacing: -0.03em;
+        line-height: 1.2;
+      }
+      .bs-composer {
+        display: flex;
+        width: 100%;
+        height: 48px;
+        align-items: center;
+        gap: 12px;
+        padding: 0 8px 0 18px;
+        border: 1px solid var(--bs-edge);
+        border-radius: 999px;
+        background: var(--bs-input);
+        color: var(--bs-muted);
+      }
+      .bs-composer svg {
+        width: 18px;
+        height: 18px;
+      }
+      .bs-composer > .bs-bar {
+        height: 8px;
+      }
+      .bs-send {
+        display: flex;
+        width: 32px;
+        height: 32px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: color-mix(in oklch, var(--bs-ink) 8%, transparent);
+      }
+      .bs-send svg {
+        width: 16px;
+        height: 16px;
+      }
+      /* Any other view: a header and content lines. */
+      .bs-page {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 18px 32px;
+      }
+      .bs-page > .bs-bar:first-child {
+        width: 160px;
+        height: 12px;
+        margin-bottom: 18px;
+      }
+      .bs-mark {
+        width: 44px;
+        height: 44px;
+        margin: auto;
+        color: color-mix(in oklch, var(--bs-ink) 18%, transparent);
+      }
+      /* Narrow windows overlay the view sidebar, so it starts hidden. */
+      @media (max-width: 776px) {
+        .bs-aside {
+          display: none;
+        }
+      }
+      /* Touch devices: no rail; a full-width list and the floating dock. */
+      .bs-dock {
+        display: none;
+      }
+      @media (pointer: coarse) {
+        #boot-shell {
+          background: var(--bs-page);
+          padding: env(safe-area-inset-top) env(safe-area-inset-right) 0
+            env(safe-area-inset-left);
+        }
+        .bs-rail,
+        .bs-newchat,
+        .bs-head,
+        .bs-head + .bs-row {
+          display: none;
+        }
+        #boot-shell[data-view] .bs-aside {
+          display: flex;
+          width: auto;
+          flex: 1;
+          padding-top: 48px;
+          border: 0;
+          box-shadow: none;
+          margin-right: 0;
+        }
+        .bs-main {
+          display: none;
+        }
+        .bs-row {
+          height: 60px;
+          gap: 12px;
+          margin: 0 4px;
+        }
+        .bs-ico {
+          width: 32px;
+          height: 32px;
+          margin: 0;
+          border-radius: 999px;
+        }
+        .bs-dock {
+          position: absolute;
+          bottom: calc(env(safe-area-inset-bottom) + 12px);
+          left: 50%;
+          display: flex;
+          gap: 20px;
+          padding: 12px 22px;
+          border: 1px solid var(--bs-edge);
+          border-radius: 999px;
+          background: var(--bs-panel);
+          transform: translateX(-50%);
+        }
+        .bs-dock > .bs-bar {
+          width: 24px;
+          height: 24px;
+        }
+      }
+    </style>
   </head>
 
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="boot-shell" aria-hidden="true"></div>
+    <script>
+      // Draw the boot shell for this route in the saved theme and layout.
+      // App code writes the `macro:boot-shell` hint (rail items) and the theme
+      // colors; everything degrades to Home's default layout without them.
+      try {
+        const shell = document.getElementById("boot-shell");
+        const read = (key) => {
+          try {
+            return JSON.parse(localStorage.getItem(key) || "null");
+          } catch {
+            return null;
+          }
+        };
+        const theme = read("html-color-theme");
+        if (theme && theme.color) {
+          document.body.style.backgroundColor = theme.color;
+          shell.style.setProperty("--bs-page", theme.color);
+          shell.style.setProperty("--bs-panel", theme.panel || theme.color);
+          // Saves from older builds have no ink; infer it from page lightness.
+          const lightness = parseFloat(/oklch\(\s*([\d.]+)/.exec(theme.color)?.[1]);
+          const ink = theme.ink || (lightness > 0.6 ? "oklch(0.16 0 0)" : lightness >= 0 ? "oklch(1 0 0)" : "");
+          if (ink) shell.style.setProperty("--bs-ink", ink);
+          if (theme.muted) shell.style.setProperty("--bs-muted", theme.muted);
+          if (theme.input) shell.style.setProperty("--bs-input", theme.input);
+        }
+
+        const I = {"plus":"<path d=\"M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z\"/>","search":"<path d=\"M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z\"/>","home":"<path d=\"M219.31,108.68l-80-80a16,16,0,0,0-22.62,0l-80,80A15.87,15.87,0,0,0,32,120v96a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V160h32v56a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V120A15.87,15.87,0,0,0,219.31,108.68ZM208,208H160V152a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8v56H48V120l80-80,80,80Z\"/>","home-fill":"<path d=\"M224,120v96a8,8,0,0,1-8,8H160a8,8,0,0,1-8-8V164a4,4,0,0,0-4-4H108a4,4,0,0,0-4,4v52a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V120a16,16,0,0,1,4.69-11.31l80-80a16,16,0,0,1,22.62,0l80,80A16,16,0,0,1,224,120Z\"/>","reminders":"<path d=\"M221.8,175.94C216.25,166.38,208,139.33,208,104a80,80,0,1,0-160,0c0,35.34-8.26,62.38-13.81,71.94A16,16,0,0,0,48,200H88.81a40,40,0,0,0,78.38,0H208a16,16,0,0,0,13.8-24.06ZM128,216a24,24,0,0,1-22.62-16h45.24A24,24,0,0,1,128,216ZM48,184c7.7-13.24,16-43.92,16-80a64,64,0,1,1,128,0c0,36.05,8.28,66.73,16,80Z\"/>","documents":"<path d=\"M216,72H130.67L102.93,51.2a16.12,16.12,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V200a16,16,0,0,0,16,16H216.89A15.13,15.13,0,0,0,232,200.89V88A16,16,0,0,0,216,72Zm0,128H40V64H93.33L123.2,86.4A8,8,0,0,0,128,88h88Z\"/>","mail":"<path d=\"M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48Zm-96,85.15L52.57,64H203.43ZM98.71,128,40,181.81V74.19Zm11.84,10.85,12,11.05a8,8,0,0,0,10.82,0l12-11.05,58,53.15H52.57ZM157.29,128,216,74.18V181.82Z\"/>","channels":"<path d=\"M232.07,186.76a80,80,0,0,0-62.5-114.17A80,80,0,1,0,23.93,138.76l-7.27,24.71a16,16,0,0,0,19.87,19.87l24.71-7.27a80.39,80.39,0,0,0,25.18,7.35,80,80,0,0,0,108.34,40.65l24.71,7.27a16,16,0,0,0,19.87-19.86ZM62,159.5a8.28,8.28,0,0,0-2.26.32L32,168l8.17-27.76a8,8,0,0,0-.63-6,64,64,0,1,1,26.26,26.26A8,8,0,0,0,62,159.5Zm153.79,28.73L224,216l-27.76-8.17a8,8,0,0,0-6,.63,64.05,64.05,0,0,1-85.87-24.88A79.93,79.93,0,0,0,174.7,89.71a64,64,0,0,1,41.75,92.48A8,8,0,0,0,215.82,188.23Z\"/>","tasks":"<path d=\"M224,128a8,8,0,0,1-8,8H128a8,8,0,0,1,0-16h88A8,8,0,0,1,224,128ZM128,72h88a8,8,0,0,0,0-16H128a8,8,0,0,0,0,16Zm88,112H128a8,8,0,0,0,0,16h88a8,8,0,0,0,0-16ZM82.34,42.34,56,68.69,45.66,58.34A8,8,0,0,0,34.34,69.66l16,16a8,8,0,0,0,11.32,0l32-32A8,8,0,0,0,82.34,42.34Zm0,64L56,132.69,45.66,122.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32Zm0,64L56,196.69,45.66,186.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32Z\"/>","calendar":"<path d=\"M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM72,48v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80H48V48ZM208,208H48V96H208V208Z\"/>","agents":"<path d=\"M197.58,129.06,146,110l-19-51.62a15.92,15.92,0,0,0-29.88,0L78,110l-51.62,19a15.92,15.92,0,0,0,0,29.88L78,178l19,51.62a15.92,15.92,0,0,0,29.88,0L146,178l51.62-19a15.92,15.92,0,0,0,0-29.88ZM137,164.22a8,8,0,0,0-4.74,4.74L112,223.85,91.78,169A8,8,0,0,0,87,164.22L32.15,144,87,123.78A8,8,0,0,0,91.78,119L112,64.15,132.22,119a8,8,0,0,0,4.74,4.74L191.85,144ZM144,40a8,8,0,0,1,8-8h16V16a8,8,0,0,1,16,0V32h16a8,8,0,0,1,0,16H184V64a8,8,0,0,1-16,0V48H152A8,8,0,0,1,144,40ZM248,88a8,8,0,0,1-8,8h-8v8a8,8,0,0,1-16,0V96h-8a8,8,0,0,1,0-16h8V72a8,8,0,0,1,16,0v8h8A8,8,0,0,1,248,88Z\"/>","companies":"<path d=\"M240,208H224V96a16,16,0,0,0-16-16H144V32a16,16,0,0,0-24.88-13.32L39.12,72A16,16,0,0,0,32,85.34V208H16a8,8,0,0,0,0,16H240a8,8,0,0,0,0-16ZM208,96V208H144V96ZM48,85.34,128,32V208H48ZM112,112v16a8,8,0,0,1-16,0V112a8,8,0,1,1,16,0Zm-32,0v16a8,8,0,0,1-16,0V112a8,8,0,1,1,16,0Zm0,56v16a8,8,0,0,1-16,0V168a8,8,0,0,1,16,0Zm32,0v16a8,8,0,0,1-16,0V168a8,8,0,0,1,16,0Z\"/>","calls":"<path d=\"M144.27,45.93a8,8,0,0,1,9.8-5.66,86.22,86.22,0,0,1,61.66,61.66,8,8,0,0,1-5.66,9.8A8.23,8.23,0,0,1,208,112a8,8,0,0,1-7.73-5.94,70.35,70.35,0,0,0-50.33-50.33A8,8,0,0,1,144.27,45.93Zm-2.33,41.8c13.79,3.68,22.65,12.54,26.33,26.33A8,8,0,0,0,176,120a8.23,8.23,0,0,0,2.07-.27,8,8,0,0,0,5.66-9.8c-5.12-19.16-18.5-32.54-37.66-37.66a8,8,0,1,0-4.13,15.46Zm81.94,95.35A56.26,56.26,0,0,1,168,232C88.6,232,24,167.4,24,88A56.26,56.26,0,0,1,72.92,32.12a16,16,0,0,1,16.62,9.52l21.12,47.15,0,.12A16,16,0,0,1,109.39,104c-.18.27-.37.52-.57.77L88,129.45c7.49,15.22,23.41,31,38.83,38.51l24.34-20.71a8.12,8.12,0,0,1,.75-.56,16,16,0,0,1,15.17-1.4l.13.06,47.11,21.11A16,16,0,0,1,223.88,183.08Zm-15.88-2s-.07,0-.11,0h0l-47-21.05-24.35,20.71a8.44,8.44,0,0,1-.74.56,16,16,0,0,1-15.75,1.14c-18.73-9.05-37.4-27.58-46.46-46.11a16,16,0,0,1,1-15.7,6.13,6.13,0,0,1,.57-.77L96,95.15l-21-47a.61.61,0,0,1,0-.12A40.2,40.2,0,0,0,40,88,128.14,128.14,0,0,0,168,216,40.21,40.21,0,0,0,208,181.07Z\"/>","reviews":"<path d=\"M104,64A32,32,0,1,0,64,95v66a32,32,0,1,0,16,0V95A32.06,32.06,0,0,0,104,64ZM56,64A16,16,0,1,1,72,80,16,16,0,0,1,56,64ZM88,192a16,16,0,1,1-16-16A16,16,0,0,1,88,192Zm120-31V110.63a23.85,23.85,0,0,0-7-17L163.31,56H192a8,8,0,0,0,0-16H144a8,8,0,0,0-8,8V96a8,8,0,0,0,16,0V67.31L189.66,105a8,8,0,0,1,2.34,5.66V161a32,32,0,1,0,16,0Zm-8,47a16,16,0,1,1,16-16A16,16,0,0,1,200,208Z\"/>","more":"<path d=\"M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm56-12a12,12,0,1,0,12,12A12,12,0,0,0,196,116ZM60,116a12,12,0,1,0,12,12A12,12,0,0,0,60,116Z\"/>","gear":"<path d=\"M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm88-29.84q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.21,107.21,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.71,107.71,0,0,0-26.25-10.87,8,8,0,0,0-7.06,1.49L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.21,107.21,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06Zm-16.1-6.5a73.93,73.93,0,0,1,0,8.68,8,8,0,0,0,1.74,5.48l14.19,17.73a91.57,91.57,0,0,1-6.23,15L187,173.11a8,8,0,0,0-5.1,2.64,74.11,74.11,0,0,1-6.14,6.14,8,8,0,0,0-2.64,5.1l-2.51,22.58a91.32,91.32,0,0,1-15,6.23l-17.74-14.19a8,8,0,0,0-5-1.75h-.48a73.93,73.93,0,0,1-8.68,0,8,8,0,0,0-5.48,1.74L100.45,215.8a91.57,91.57,0,0,1-15-6.23L82.89,187a8,8,0,0,0-2.64-5.1,74.11,74.11,0,0,1-6.14-6.14,8,8,0,0,0-5.1-2.64L46.43,170.6a91.32,91.32,0,0,1-6.23-15l14.19-17.74a8,8,0,0,0,1.74-5.48,73.93,73.93,0,0,1,0-8.68,8,8,0,0,0-1.74-5.48L40.2,100.45a91.57,91.57,0,0,1,6.23-15L69,82.89a8,8,0,0,0,5.1-2.64,74.11,74.11,0,0,1,6.14-6.14A8,8,0,0,0,82.89,69L85.4,46.43a91.32,91.32,0,0,1,15-6.23l17.74,14.19a8,8,0,0,0,5.48,1.74,73.93,73.93,0,0,1,8.68,0,8,8,0,0,0,5.48-1.74L155.55,40.2a91.57,91.57,0,0,1,15,6.23L173.11,69a8,8,0,0,0,2.64,5.1,74.11,74.11,0,0,1,6.14,6.14,8,8,0,0,0,5.1,2.64l22.58,2.51a91.32,91.32,0,0,1,6.23,15l-14.19,17.74A8,8,0,0,0,199.87,123.66Z\"/>","filter":"<path d=\"M200,136a8,8,0,0,1-8,8H64a8,8,0,0,1,0-16H192A8,8,0,0,1,200,136Zm32-56H24a8,8,0,0,0,0,16H232a8,8,0,0,0,0-16Zm-80,96H104a8,8,0,0,0,0,16h48a8,8,0,0,0,0-16Z\"/>","sidebar":"<path d=\"M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,56H80V200H40ZM216,200H96V56H216V200Z\"/>","mic":"<path d=\"M128,176a48.05,48.05,0,0,0,48-48V64a48,48,0,0,0-96,0v64A48.05,48.05,0,0,0,128,176ZM96,64a32,32,0,0,1,64,0v64a32,32,0,0,1-64,0Zm40,143.6V240a8,8,0,0,1-16,0V207.6A80.11,80.11,0,0,1,48,128a8,8,0,0,1,16,0,64,64,0,0,0,128,0,8,8,0,0,1,16,0A80.11,80.11,0,0,1,136,207.6Z\"/>","send":"<path d=\"M205.66,117.66a8,8,0,0,1-11.32,0L136,59.31V216a8,8,0,0,1-16,0V59.31L61.66,117.66a8,8,0,0,1-11.32-11.32l72-72a8,8,0,0,1,11.32,0l72,72A8,8,0,0,1,205.66,117.66Z\"/>","caret":"<path d=\"M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z\"/>","mobile-app":"<path d=\"M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16ZM72,64H184V192H72Zm8-32h96a8,8,0,0,1,8,8v8H72V40A8,8,0,0,1,80,32Zm96,192H80a8,8,0,0,1-8-8v-8H184v8A8,8,0,0,1,176,224Z\"/><path d=\"M128,92v72M100,136l28,28,28-28\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"};
+        const icon = (name) => `<svg viewBox="0 0 256 256">${I[name] || ""}</svg>`;
+        const bar = (width, style = "") => `<div class="bs-bar" style="width:${width};${style}"></div>`;
+        const square = `<div class="bs-bar bs-ico"></div>`;
+        const row = (width) => `<div class="bs-row">${square}<div class="bs-row-text">${bar(width)}</div></div>`;
+
+        if (localStorage.getItem("macro:login") !== "true") {
+          // Signed out: the app opens on a login page, so show only the mark.
+          shell.style.background = "var(--bs-page)";
+          shell.innerHTML = `<svg class="bs-mark" viewBox="0 0 24 24"><path d="m6.25 4.038-2.242.879v5.818l-1.756-1.658-2.242.879v6.677c0 .257.106.502.292.678l2.794 2.642 2.244-.879v-5.818l7.084 6.697 2.244-.879v-5.818l7.086 6.698 2.24-.879v-6.677c0-.257-.104-.502-.292-.678l-8.124-7.682-2.244.879v5.818z"/></svg>`;
+        } else {
+          const hint = read("macro:boot-shell") || {};
+          const path = (location.hash.startsWith("#/") ? location.hash.slice(1) : location.pathname)
+            .replace(/^\/app(?=\/|$)/, "");
+          const view = path.split("/")[1] || "home";
+          shell.dataset.view = view;
+          const isHomeStart = view === "home" && !path.split("/")[2];
+          const listViews = ["home", "mail", "documents", "tasks", "channels", "agents", "routines", "reminders", "companies", "calls", "reviews", "recent", "folders", "search", "activity"];
+          const collapsed = read(`macro:pref:view-sidebar:collapsed:${view}`) === true;
+          const showAside = listViews.includes(view) && !collapsed;
+
+          const railItems = Array.isArray(hint.rail) && hint.rail.length
+            ? hint.rail
+            : ["home", "reminders", "documents", "mail", "channels", "tasks", "calendar", "agents", "companies"];
+          const railButton = (id) =>
+            I[id] ? `<div class="bs-btn"${id === view ? " data-active" : ""}>${icon(id === "home" && view === "home" ? "home-fill" : id)}</div>` : "";
+          const rail = `<div class="bs-rail">
+            <div class="bs-btn">${icon("plus")}</div>
+            <div class="bs-btn">${icon("search")}</div>
+            <div class="bs-nav">${railItems.map(railButton).join("")}</div>
+            <div class="bs-btn">${icon("more")}</div>
+            <div style="flex:1"></div>
+            ${hint.mobileApp === false ? "" : `<div class="bs-btn">${icon("mobile-app")}</div>`}
+            <div class="bs-btn">${icon("gear")}</div>
+          </div>`;
+
+          const widths = ["60%", "80%", "50%", "66.6667%", "75%", "50%", "80%", "60%"];
+          // Match HomeListSkeleton: one group header followed by eight rows.
+          let rows = `<div class="bs-label">${bar("64px")}</div>`;
+          for (const width of widths) rows += row(width);
+          const aside = `<div class="bs-aside">
+            <div class="bs-head">${view === "home" ? `<span>Home</span><span class="bs-control bs-filter">${icon("filter")}</span>` : bar("72px", "height:12px")}<span class="bs-control">${icon("sidebar")}</span></div>
+            ${view === "home" ? `<div class="bs-row bs-primary">${icon("plus")}<span>New chat</span></div>` : `<div class="bs-row bs-primary">${square}${bar("38%")}</div>`}
+            <div class="bs-list">${rows}</div>
+          </div>`;
+
+          const legacyComposer = hint.homeComposer === "legacy";
+          const main = isHomeStart
+            ? `<div class="bs-newchat"${legacyComposer ? " data-legacy" : ""}><div class="bs-col">
+                <h2 class="bs-greeting">${legacyComposer ? "What should we get done in Macro?" : "What should we work on?"}</h2>
+                <div class="bs-composer">${icon("plus")}${bar("38%")}<div style="flex:1"></div>${bar("72px")}${icon("mic")}<div class="bs-send">${icon("send")}</div></div>
+              </div></div>`
+            : `<div class="bs-page">${bar("160px")}${["92%", "86%", "95%", "70%", "88%", "80%", "60%"].map((w) => bar(w)).join("")}</div>`;
+
+          shell.innerHTML = `${rail}${showAside ? aside : ""}<div class="bs-main">${main}</div>
+            <div class="bs-dock">${bar("24px") + bar("24px") + bar("24px") + bar("24px") + bar("24px")}</div>`;
+          if (!showAside && matchMedia("(pointer: coarse)").matches) shell.insertAdjacentHTML("afterbegin", aside);
+        }
+      } catch (err) {
+        console.error("Failed to draw boot shell: ", err);
+      }
+    </script>
     <div id="root" class="h-[calc(var(--dvh,1dvh)*100)]"></div>
     <div id="modal" class="z-modal"></div>
     <!--
@@ -38,18 +509,6 @@
     <script type="module" src="/src/index.tsx"></script>
     <script>
       window.__START_TIME__ = performance.now();
-    </script>
-    <!-- Sets blank page to theme surface color to prevent background color flash -->
-    <script>
-      try {
-        let htmlColorString = localStorage.getItem("html-color-theme");
-        if (htmlColorString) {
-          let htmlColor = JSON.parse(htmlColorString);
-          document.body.style.backgroundColor = htmlColor.color;
-        }
-      } catch (err) {
-        console.error("Failed parse macro-selected-theme: ", err);
-      }
     </script>
   </body>
 </html>

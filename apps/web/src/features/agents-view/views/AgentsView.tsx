@@ -253,6 +253,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     const id = startPendingSession({
       ...start,
       userId: userId(),
+      submitSurface: 'agents',
     });
     openConversation(
       { id, type: 'agent_session' },

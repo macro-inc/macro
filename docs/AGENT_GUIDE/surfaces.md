@@ -13,7 +13,7 @@ Low-emphasis right-aligned split-header actions (including Calendar's touch/prev
 New event and Channel's idle Call and Ask Macro) are borderless with a rounded-xl
 background on hover. Emphasized variants retain their treatment, including an
 active call's green ink and outline frame. Channel, company, contact, and project
-content tabs use bubble tabs in a separate row below the header. Button sizes do not change variant colors or framing; individual
+content tabs use inset controls in the top bar. Button sizes do not change variant colors or framing; individual
 framed controls default to glass on touch and flat on desktop. Use `glass={true}`
 to enable glass on all devices, or `glass={false}` to disable it everywhere.
 Embedded and low-emphasis actions use `ghost`; inline calendar-invitation text
@@ -284,13 +284,7 @@ are restored, including before a chat-limit paywall opens. With agents disabled,
 the input stays 32px above the vertical center as suggestions load. With agents
 enabled, the composer uses the same topbar offset and 24/64 padding as the
 Agents new-conversation page so the two inputs share a baseline; suggestions
-still load below it without moving the input. Eligible newer accounts (all
-accounts in development) see “New to Macro? See the **Getting Started** page.” directly
-below the composer, above suggestions. The link opens
-`/app/component/getting-started`; **Dismiss Getting Started link** hides it and
-remembers the dismissal per user in this browser across reloads. Dismissals update
-all open Home panes immediately and stay isolated when switching accounts. This
-dismissal is independent of the Getting Started sidebar link. Up to three cached AI
+still load below it without moving the input. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
@@ -1043,7 +1037,12 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
-The New menu and drag/drop uploads target the selected folder. File rows retain
+The New menu and drag/drop uploads target the selected folder. In a folder
+opened in its own split or an inline preview, drop files from the computer onto
+the empty state or file list, then reopen the folder to verify membership.
+Check both one file and multiple files; the nested list drop target must retain
+the open folder as the upload destination.
+File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
 while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
 clicks and Enter replace the list with a breadcrumbed detail. Those detail
@@ -1700,9 +1699,9 @@ the toggle to dismiss it; the open state is not restored on a later visit.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
-A company is laid out like a project. Below its split header or embedded
-breadcrumb header, a separate bubble-tab row shows `Overview`, `Team`, `Emails`,
-`Files`, `Tasks`, and `Calls`. Narrow rows scroll horizontally with text labels. Overview shows the name, pills
+A company is laid out like a project. Its split header or embedded breadcrumb
+header shows inset `Overview`, `Team`, `Emails`, `Files`, `Tasks`, and `Calls`
+tabs, collapsing to icons when narrow. Overview shows the name, pills
 for each domain and `Last interacted`, the generated description and the
 Discussion. Team lists the contacts with `Add contact`. Emails keeps the
 `Signal`/`All` and `Team`/`Me` toggles. Files lists non-task documents whose
@@ -1826,22 +1825,12 @@ the mention opens the database. Databases also appear in the Ctrl+K command menu
 **All** and **Files**, ordered by creation time. Home's merged feed and the Recent view read Soup, which
 does not list databases.
 
-## Getting Started — `/app/component/getting-started`
-
-The buttons under **Put Macro's agent to work** create a chat and send their
-example prompt on first use. Later clicks reopen that button's saved chat without
-sending the prompt again, including after leaving the page or refreshing. Each
-button has its own chat, saved per account in this browser's local storage.
-Repeated clicks while the same button is creating its chat are ignored; a failed
-creation can be retried.
-
 ## Home — `/app/component/home`
 
-Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
-`Draft an email`, `Search & research`), and the ubiquitous `Ask AI` composer.
-Eligible newer accounts (all accounts in development) also see the same
-dismissible **Getting Started** link below
-the composer, with its dismissal shared with the desktop Home starting pane.
+Greeting, example prompt buttons (`Draft a document`, `Draft an email`,
+`Search & research`), and the ubiquitous `Ask AI` composer. Finishing onboarding
+without a deep link lands here. The retired Getting Started page's old
+`/app/getting-started` and `/app/component/getting-started` links also open Home.
 
 On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and

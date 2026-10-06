@@ -142,6 +142,11 @@ export function handleLegacySplitPath(
     return [{ route: paneRoute({ id: 'drive', params: {} }) }];
   }
 
+  // The retired Getting Started checklist's own path.
+  if (segments.length === 1 && segments[0] === 'getting-started') {
+    return [{ route: paneRoute({ id: 'view-home', params: {} }) }];
+  }
+
   if (
     context.matchedRouteId &&
     context.matchedRouteId !== 'settings' &&

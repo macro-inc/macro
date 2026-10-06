@@ -1,24 +1,129 @@
 use super::*;
 use crate::domain::engine::AgentIdentity;
+use agent_session::domain::model::AgentSessionId;
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+};
+use async_trait::async_trait;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use std::sync::Mutex;
 
 /// A stand-in for the toolset prompt, short enough to assert on positionally.
 const TOOLS: &str = "TOOLS";
 
-fn has_ask_user(supports_user_input: bool) -> bool {
-    let tools = tools_for(AiHost::AgentSession);
-    let base_tools = Arc::into_inner(tools.toolset)
-        .expect("tools_for should return a fresh, uniquely owned collection");
-    tools_for_turn(base_tools, supports_user_input)
-        .request_schemas()
-        .expect("tool schemas should be valid")
-        .iter()
-        .any(|schema| schema.name == "AskUser")
+#[test]
+fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
+    let tools = NativeTools::new();
+    let supported = tools.for_turn(true);
+    let unsupported = tools.for_turn(false);
+
+    assert!(supported.tools.contains_key("AskUser"));
+    assert!(!unsupported.tools.contains_key("AskUser"));
+    assert!(Arc::ptr_eq(&supported, &tools.for_turn(true)));
+    assert!(Arc::ptr_eq(&unsupported, &tools.for_turn(false)));
+    assert_eq!(
+        supported
+            .tools
+            .keys()
+            .filter(|name| name.as_str() != "AskUser")
+            .collect::<Vec<_>>(),
+        unsupported.tools.keys().collect::<Vec<_>>()
+    );
+    for tools in [supported, unsupported] {
+        for name in ["SendEmail", "CreateCalendarEvent"] {
+            assert!(tools.user_tools.contains_key(name));
+        }
+    }
 }
 
-#[test]
-fn ask_user_is_only_advertised_when_the_client_supports_it() {
-    assert!(has_ask_user(true));
-    assert!(!has_ask_user(false));
+#[derive(Deserialize, JsonSchema)]
+#[schemars(title = "ReadTurnContext", description = "Read this call's context.")]
+struct ReadTurnContext {}
+
+impl ToolAnnotated for ReadTurnContext {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read context");
+}
+
+#[async_trait]
+impl AsyncTool<String> for ReadTurnContext {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        context: ServiceContext<String>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        Ok(serde_json::json!({
+            "context": context.0,
+            "user": request.user_id.to_string(),
+        }))
+    }
+}
+
+struct RecordingGate {
+    refused: AgentSessionId,
+    calls: Mutex<Vec<AgentSessionId>>,
+}
+
+impl NativeToolGate for RecordingGate {
+    fn check<'a>(
+        &'a self,
+        session: AgentSessionId,
+        _tool: &'a str,
+        _arguments: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(session);
+            if session == self.refused {
+                NativeToolVerdict::Refuse("not approved".to_owned())
+            } else {
+                NativeToolVerdict::Run
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gate() {
+    let definitions: Arc<dyn AiToolSet<String> + Send + Sync> =
+        Arc::new(AsyncToolCollection::<String>::new().add_tool::<ReadTurnContext, String>());
+    let allowed = AgentSessionId::new();
+    let refused = AgentSessionId::new();
+    let gate = Arc::new(RecordingGate {
+        refused,
+        calls: Mutex::new(Vec::new()),
+    });
+    for (session, user, label) in [
+        (allowed, "macro|first@example.com", "first turn"),
+        (refused, "macro|second@example.com", "refused turn"),
+        (allowed, "macro|third@example.com", "third turn"),
+    ] {
+        let tools = GatedToolSet {
+            tools: Arc::clone(&definitions),
+            gate: gate.clone(),
+            session,
+            awaiting: Arc::default(),
+        };
+        let result = tools
+            .dispatch_tool_call(
+                label.to_owned(),
+                RequestContext::new(MacroUserIdStr::try_from(user.to_owned()).unwrap()),
+                "ReadTurnContext",
+                &serde_json::json!({}),
+            )
+            .await
+            .unwrap();
+        if session == refused {
+            assert_eq!(result.unwrap_err().description, "not approved");
+        } else {
+            assert_eq!(
+                result.unwrap(),
+                serde_json::json!({"context": label, "user": user})
+            );
+        }
+    }
+    assert_eq!(*gate.calls.lock().unwrap(), vec![allowed, refused, allowed]);
 }
 
 #[test]

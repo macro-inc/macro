@@ -46,6 +46,14 @@ pub mod presentation;
 #[cfg(feature = "ai_tools")]
 pub mod design;
 
+/// Reading Photoshop documents with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod photoshop;
+
+/// Reading Illustrator documents with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod illustrator;
+
 #[cfg(feature = "ports")]
 pub mod ports;
 

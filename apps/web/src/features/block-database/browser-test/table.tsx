@@ -39,18 +39,31 @@ function TableFixture() {
         { id: 'done', label: 'Done', color: null },
       ],
     },
+    {
+      id: 'amount',
+      name: 'Amount',
+      dataType: 'NUMBER',
+      writable: true,
+      isMultiSelect: false,
+      options: [],
+    },
   ]);
   const [rows, setRows] = createSignal<DatabaseRow[]>([
     {
       rowId: 'one',
-      cells: { name: 'First', notes: 'First note', status: 'Open' },
+      cells: { name: 'First', notes: 'First note', status: 'Open', amount: 12 },
     },
     {
       rowId: 'two',
-      cells: { name: 'Second', notes: 'Second note', status: 'Done' },
+      cells: {
+        name: 'Second',
+        notes: 'Second note',
+        status: 'Done',
+        amount: 24,
+      },
     },
   ]);
-  const [order, setOrder] = createSignal(['name', 'notes', 'status']);
+  const [order, setOrder] = createSignal(['name', 'notes', 'status', 'amount']);
   const [widths, setWidths] = createSignal<Record<string, number | null>>({});
   const [sort, setSort] = createSignal<SortKey[]>([]);
   const [resizeSaves, setResizeSaves] = createSignal(0);

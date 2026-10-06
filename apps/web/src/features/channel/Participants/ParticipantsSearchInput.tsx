@@ -3,20 +3,21 @@ import { InputGroup } from '@ui';
 
 export function ParticipantsSearchInput(props: {
   value: string;
+  placeholder?: string;
   onInput: (value: string) => void;
 }) {
   return (
-    <InputGroup class="rounded-full">
-      <InputGroup.Input
-        type="search"
-        aria-label="Search participants"
-        value={props.value}
-        onInput={(event) => props.onInput(event.currentTarget.value)}
-        placeholder="Search participants"
-      />
+    <InputGroup size="lg" class="rounded-full">
       <InputGroup.Addon>
         <MagnifyingGlassIcon />
       </InputGroup.Addon>
+      <InputGroup.Input
+        type="search"
+        value={props.value}
+        onInput={(event) => props.onInput(event.currentTarget.value)}
+        placeholder={props.placeholder ?? 'Search participants'}
+        aria-label={props.placeholder ?? 'Search participants'}
+      />
       <InputGroup.Addon align="inline-end">
         <InputGroup.ClearButton />
       </InputGroup.Addon>
