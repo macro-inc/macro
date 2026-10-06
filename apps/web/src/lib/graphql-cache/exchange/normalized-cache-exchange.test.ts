@@ -313,6 +313,12 @@ function makeFakeHost(): FakeHost {
     async entityFilter() {
       return { kind: 'unsupported' };
     },
+    async calendarRange() {
+      return { kind: 'unsupported' };
+    },
+    async calendarCommit() {
+      return { kind: 'unsupported' };
+    },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({
         opKey: args.opKey,

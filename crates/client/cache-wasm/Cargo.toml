@@ -4,7 +4,8 @@ name = "cache-wasm"
 publish = false
 # Rebuild for database rows in the local filter index, after main's resumable reads.
 # Rebuild with the calendar range index and the compatibility epoch 4 storage name.
-version = "0.6.39"
+# Expose calendarRange, calendarCommit, and uncertain calendar events on enqueue.
+version = "0.6.40"
 
 [features]
 default = []
