@@ -170,7 +170,6 @@ async fn database_row_explanation_is_its_database_grants(pool: PgPool) {
 async fn insert_database_with_form(pool: &PgPool, audience: &str) -> (Uuid, Uuid) {
     let database_id = Uuid::now_v7();
     let table_id = Uuid::now_v7();
-    let form_id = Uuid::now_v7();
     sqlx::query!(
         r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
            INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'db', 'macro|owner@team.com' FROM storage"#,
@@ -187,6 +186,12 @@ async fn insert_database_with_form(pool: &PgPool, audience: &str) -> (Uuid, Uuid
     .execute(pool)
     .await
     .unwrap();
+    let form_id = insert_form(pool, database_id, table_id, audience).await;
+    (database_id, form_id)
+}
+
+async fn insert_form(pool: &PgPool, database_id: Uuid, table_id: Uuid, audience: &str) -> Uuid {
+    let form_id = Uuid::now_v7();
     sqlx::query!(
         r#"
         INSERT INTO forms (id, name, owner_id, database_id, table_id, audience)
@@ -200,7 +205,7 @@ async fn insert_database_with_form(pool: &PgPool, audience: &str) -> (Uuid, Uuid
     .execute(pool)
     .await
     .unwrap();
-    (database_id, form_id)
+    form_id
 }
 
 #[sqlx::test(
@@ -210,18 +215,17 @@ async fn insert_database_with_form(pool: &PgPool, audience: &str) -> (Uuid, Uuid
 async fn database_explanation_names_the_form_a_form_editor_reaches_it_through(pool: PgPool) {
     let (database_id, edited_form) = insert_database_with_form(&pool, "members").await;
     let member = MacroUserIdStr::try_from_email("member@team.com").unwrap();
-    let viewed_form = Uuid::now_v7();
+    // A form owns its table, so the view-only form needs another table in the same database.
+    let table_id = Uuid::now_v7();
     sqlx::query!(
-        r#"
-        INSERT INTO forms (id, name, owner_id, database_id, table_id)
-        SELECT $1, 'Viewed', owner_id, database_id, table_id FROM forms WHERE id = $2
-        "#,
-        viewed_form,
-        edited_form,
+        r#"INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'viewed', 'b')"#,
+        table_id,
+        database_id,
     )
     .execute(&pool)
     .await
     .unwrap();
+    let viewed_form = insert_form(&pool, database_id, table_id, "members").await;
     sqlx::query!(
         r#"
         INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)

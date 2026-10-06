@@ -419,7 +419,6 @@ export type FormEntity = EntityBase & {
   access: 'view' | 'edit' | 'owner';
 };
 
-
 /** Normalized time shape of a calendar event soup row. */
 export type CalendarEventEntityTime =
   | { kind: 'timed'; startsAt: string; endsAt: string }
