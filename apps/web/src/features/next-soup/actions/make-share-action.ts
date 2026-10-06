@@ -21,7 +21,7 @@ export const makeShareAction = () => {
 
   const execute = async (
     entities: EntityData[],
-    callbacks: BulkShareCallbacks = {}
+    bulk: BulkShareCallbacks = {}
   ) => {
     const shareable = entities.filter(isShareableEntity);
     const [first, ...others] = shareable;
@@ -32,7 +32,7 @@ export const makeShareAction = () => {
       return;
     }
 
-    openBulkEditModal({ view: 'share', entities: shareable, ...callbacks });
+    openBulkEditModal({ view: 'share', entities: shareable, ...bulk });
   };
 
   const executeWithSoup = async (
