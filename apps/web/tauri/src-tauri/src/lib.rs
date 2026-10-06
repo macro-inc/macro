@@ -33,6 +33,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
+mod desktop_update;
 mod device;
 mod diagnostics;
 mod logging;
@@ -264,6 +265,8 @@ pub fn run() {
         .manage(graphql_cache_plugin::CacheState::default())
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
+            desktop_update::get_native_update_status,
+            desktop_update::restart_native_update,
             diagnostics::read_desktop_diagnostics,
             #[cfg(target_os = "macos")]
             macos_notification_permission::get_macos_notification_permission,
@@ -309,6 +312,8 @@ pub fn run() {
             staged_upload::upload_staged_file_to_presigned_url,
         ])
         .setup(move |app| {
+            #[cfg(desktop)]
+            desktop_update::setup(app, recording)?;
             diagnostics::setup(app, diagnostics);
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {
@@ -380,6 +385,10 @@ pub fn run() {
                         }
                     });
                 }
+            }
+            #[cfg(desktop)]
+            RunEvent::ExitRequested { api, .. } => {
+                desktop_update::on_exit_requested(app_handle, api)
             }
             RunEvent::Exit => {
                 if let Some(state) = app_handle.try_state::<graphql_cache_plugin::CacheState>() {

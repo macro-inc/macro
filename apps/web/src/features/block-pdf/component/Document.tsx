@@ -272,7 +272,7 @@ export function Document() {
       const annotationsPromise = loadAnnotations(documentProxy);
 
       if (updateModificationDataOnLoad()) {
-        annotationsPromise.then(saveModificationData);
+        annotationsPromise.then(() => saveModificationData());
       }
 
       const documentId = pdf.documentId();

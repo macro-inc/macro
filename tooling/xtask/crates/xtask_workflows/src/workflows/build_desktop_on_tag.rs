@@ -8,11 +8,11 @@
 use std::collections::HashMap;
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Step, Workflow, WorkflowDispatch,
-    WorkflowDispatchInput,
+    Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Workflow,
+    WorkflowDispatch, WorkflowDispatchInput,
 };
 
-use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag};
+use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, steps, vars};
 
 const RESOLVED_REF: &str = "${{ needs.resolve-ref.outputs.ref }}";
 
@@ -35,14 +35,52 @@ pub fn build_desktop_on_tag() -> Workflow {
         )
         .add_job(
             "publish-release",
-            build_appimage_on_tag::publish_job(
-                RESOLVED_REF,
-                xtask_paths::runtime_path!("release-artifacts/*"),
-            )
+            publish_desktop_job()
                 .add_needs("resolve-ref")
                 .add_needs("build-appimage")
                 .add_needs("build-dmg"),
         )
+}
+
+fn publish_desktop_job() -> Job {
+    Job::default()
+        .name("Sign and publish desktop updates")
+        .runs_on("ubuntu-latest")
+        // Serialize channel promotion across tags; an older build cannot win a race.
+        .concurrency(
+            Concurrency::new(Expression::new("desktop-stable-publish")).cancel_in_progress(false),
+        )
+        .cond(Expression::new(
+            "startsWith(needs.resolve-ref.outputs.ref, 'refs/tags/v')",
+        ))
+        .permissions(Permissions {
+            contents: Some(Level::Write),
+            ..Default::default()
+        })
+        .add_step(steps::checkout_ref(RESOLVED_REF))
+        .add_step(steps::setup_nix())
+        .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
+        .add_step(steps::download_artifacts(xtask_paths::runtime_path!(
+            "release-artifacts"
+        )))
+        .add_step(
+            Step::new("Sign updater artifacts")
+                .run(include_str!("scripts/sign_desktop_updates.sh"))
+                .shell("bash")
+                .add_env(("DOPPLER_TOKEN", vars::MACOS_RELEASE_DOPPLER_TOKEN))
+                .add_env(("GH_TOKEN", "${{ github.token }}"))
+                .add_env(("RELEASE_TAG", "${{ steps.metadata.outputs.tag }}"))
+                .add_env(("RELEASE_REPOSITORY", "${{ github.repository }}")),
+        )
+        .add_step(
+            Step::new("Publish desktop release and update feed")
+                .run(include_str!("scripts/publish_desktop_updates.sh"))
+                .shell("bash")
+                .add_env(("GH_TOKEN", "${{ github.token }}"))
+                .add_env(("RELEASE_TAG", "${{ steps.metadata.outputs.tag }}"))
+                .add_env(("RELEASE_REPOSITORY", "${{ github.repository }}")),
+        )
+        .add_step(steps::teardown_nix())
 }
 
 fn desktop_events() -> Event {

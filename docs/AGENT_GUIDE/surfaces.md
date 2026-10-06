@@ -2250,6 +2250,13 @@ Section headings and controls share a white surface in light mode and the
 composer border in dark mode, with subtle row separators. The compact sidebar
 uses the shared workspace width.
 
+On desktop release builds, **Account → Desktop app update** shows native update
+progress. When a verified update is ready, **Restart to update** also appears in
+a notification. Restart waits for pending canvas/PDF saves and local persistence;
+active calls, uploads, and imports must finish first. A ready update also installs
+on normal app quit. Closing a window only triggers installation if it exits the
+app. Browser, mobile, and development builds do not show this native updater row.
+
 Left nav (feature and platform gates still apply):
 
 - **Blocks**: Email, Calendar, Agents, CRM.

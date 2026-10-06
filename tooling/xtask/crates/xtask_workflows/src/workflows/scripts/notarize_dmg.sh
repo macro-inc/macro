@@ -32,5 +32,19 @@ xcrun stapler staple "$dmg"
 xcrun stapler validate "$dmg"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
 
+# The updater ships the app rather than the DMG. Notarize and staple that exact
+# final app too; stapling only the disk image does not staple the updater app.
+ditto -c -k --keepParent updater-app/Macro.app "$credentials_dir/updater-app.zip"
+xcrun notarytool submit "$credentials_dir/updater-app.zip" \
+  --key "$credentials_dir/AuthKey.p8" --key-id "$key_id" --issuer "$issuer" \
+  --wait --timeout 30m --output-format json > "$credentials_dir/app-submission.json"
+jq -e '.status == "Accepted"' "$credentials_dir/app-submission.json" > /dev/null
+xcrun stapler staple updater-app/Macro.app
+xcrun stapler validate updater-app/Macro.app
+codesign --verify --deep --strict --verbose=2 updater-app/Macro.app
+spctl --assess --type execute --verbose=2 updater-app/Macro.app
+version=$(jq -er '.version' apps/web/tauri/desktop-release.json)
+COPYFILE_DISABLE=1 tar -czf "artifacts/Macro-${version}-aarch64-darwin.app.tar.gz" -C updater-app Macro.app
+
 # Stapling changes the DMG bytes, so checksum the final distributable.
 (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
