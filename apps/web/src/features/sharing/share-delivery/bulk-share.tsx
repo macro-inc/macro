@@ -86,7 +86,7 @@ export function BulkShare(props: {
 
 function recipientName(recipient: RecipientOption): string {
   return match(recipient)
-    .with({ kind: 'channel' }, ({ id, data }) => data.name || id)
+    .with({ kind: 'channel' }, ({ id, data }) => data.name ?? id)
     .with(
       { kind: 'user' },
       { kind: 'contact' },
