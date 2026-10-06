@@ -1043,7 +1043,12 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
-The New menu and drag/drop uploads target the selected folder. File rows retain
+The New menu and drag/drop uploads target the selected folder. In a folder
+opened in its own split or an inline preview, drop files from the computer onto
+the empty state or file list, then reopen the folder to verify membership.
+Check both one file and multiple files; the nested list drop target must retain
+the open folder as the upload destination.
+File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
 while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
 clicks and Enter replace the list with a breadcrumbed detail. Those detail
