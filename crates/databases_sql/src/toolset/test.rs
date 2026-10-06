@@ -192,6 +192,15 @@ fn query_schema_teaches_the_dialect() {
             validated.description
         );
     }
+    for template in databases::domain::templates::TEMPLATES {
+        assert!(
+            validated
+                .description
+                .contains(&format!("`{}`", template.id)),
+            "description is missing template {}",
+            template.id
+        );
+    }
 }
 
 /// Every tool has to survive being put in a collection — that is where name

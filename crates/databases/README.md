@@ -29,8 +29,8 @@ without app metadata. A future CRM domain can hold its own reference to a core
 database and authorize access through its own service. Its composition root
 supplies the storage adapter. The port is trusted persistence, not a new public
 API: consumers validate their own commands and authorize their own resources.
-The Macro database service creates its entity and owner grant atomically through
-its repository and uses `CellStore` to hold the entity's lifecycle lock during writes.
+The Macro database service continues to use `CellStore`, which atomically creates
+the entity/owner grant when needed and holds its lifecycle lock during writes.
 Both paths use the same transaction engine, table versions, cells and journal.
 An app entity's foreign key prevents deleting its storage through the core port.
 
@@ -104,6 +104,14 @@ and cells. The core storage adapter purges its journal in the same transaction.
    batch: a column `create` after the original, then a rows `update` with those
    values, at the conversion's table version.
 6. Successful commits publish their versions and change notifications.
+7. A template is an ops batch. `domain::templates` defines each one in code
+   (`TemplateId`, a stable slug, and the ops that build it under fresh ids),
+   and `POST /databases` with a `template` creates the database and applies
+   that batch through the same planner and `apply_writes`, in one
+   transaction: the database exists with all of it or not at all.
+   `GET /databases/templates` lists them. The first-visit starter is the
+   Getting started template; its batch also claims the user's one starter
+   (`database_starter_seeds`) in that transaction.
 
 SQL lives outside this crate. The browser compiles statements with the
 `database_sql` engine and posts the ops it emits; agents run the same engine
@@ -121,7 +129,8 @@ through `apply_ops`.
 | Table, column and cell ops | `src/domain/service/ops/tables.rs`, `columns.rs`, `cells.rs`, `src/outbound/pg_databases_repo/schema.rs` |
 | Column casts and inference | `src/domain/service/casts.rs`, `column_types.rs`, `infer_column_type.rs` |
 | Typed views and a board's card places | `models_databases::views`, `src/domain/service/ops/views.rs`, `src/outbound/pg_databases_repo/views.rs` |
-| Saved queries, sharing, imports, starter data | Corresponding modules under `src/domain/` |
+| Templates and the starter | `src/domain/templates.rs`, `templates/`, `src/domain/service/templates.rs`, `src/outbound/pg_starter.rs` |
+| Saved queries, sharing, imports | Corresponding modules under `src/domain/` |
 | HTTP transport | `src/inbound/axum_router.rs`, `starter_router.rs` |
 | Service construction and notifications | `src/outbound/build.rs`, `gateway_event_publisher.rs` |
 
@@ -131,8 +140,9 @@ domain ports, including transaction and locking requirements.
 
 The document storage service mounts the routes. Writes inside a database go
 through `POST /databases/{id}/ops`; the other routes are the database list and
-detail, create, starter, CSV import, a board's card positions, a column's casts
-and type inference, awareness, permissions and saved queries.
+detail, create (blank or from a template), the template list, starter, CSV
+import, a board's card positions, a column's casts and type inference,
+awareness, permissions and saved queries.
 
 ## Validation
 
@@ -144,6 +154,6 @@ cargo test -p databases --features postgres,inbound,ai_tools,gateway,entity_muta
 ```
 
 The suite covers permission scoping, typed round trips, relations, safe casts,
-rollback, stale/concurrent writes, sharing, typed views and card moves, and
-retry-safe import/starter provisioning. SQLx tests create isolated databases
+rollback, stale/concurrent writes, sharing, typed views and card moves,
+templates, and retry-safe import/starter provisioning. SQLx tests create isolated databases
 using the repository migrator.

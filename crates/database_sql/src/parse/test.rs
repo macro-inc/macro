@@ -1,6 +1,8 @@
 use super::*;
 use models_databases::{ColumnKind as OpColumnKind, EntityKind};
 
+mod templates;
+
 #[test]
 fn grouped_aggregate_with_mixed_where() {
     let sql = "

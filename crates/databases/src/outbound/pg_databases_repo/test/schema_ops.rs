@@ -279,6 +279,7 @@ async fn a_table_id_another_database_already_has_is_refused_as_taken(pool: PgPoo
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();
@@ -343,6 +344,7 @@ async fn an_option_id_another_definition_already_has_is_refused_as_taken(pool: P
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();
@@ -443,6 +445,7 @@ async fn a_view_id_another_database_already_has_is_refused_as_taken(pool: PgPool
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();
@@ -530,24 +533,27 @@ async fn a_stale_expected_version_conflicts_and_writes_nothing(pool: PgPool) {
     let hosts = TableId::new();
 
     let outcome = cells(&pool)
-        .apply_writes(&Writes {
-            database_id: guests.database_id,
-            created_by: viewer().user_id,
-            writes: vec![
-                Write::CreateTable {
-                    table_id: hosts,
-                    name: "Hosts".into(),
-                },
-                Write::RenameTable {
-                    table_id: guests.table_id,
-                    from: "Table 1".into(),
-                    name: "Guests".into(),
-                },
-            ],
-            related_rows: Vec::new(),
-            expected_versions: vec![(guests.table_id, TableVersion(before.0 - 1))],
-            journal: crate::domain::journal::JournalPlan::default(),
-        })
+        .apply_writes(
+            &Writes {
+                database_id: guests.database_id,
+                created_by: viewer().user_id,
+                writes: vec![
+                    Write::CreateTable {
+                        table_id: hosts,
+                        name: "Hosts".into(),
+                    },
+                    Write::RenameTable {
+                        table_id: guests.table_id,
+                        from: "Table 1".into(),
+                        name: "Guests".into(),
+                    },
+                ],
+                related_rows: Vec::new(),
+                expected_versions: vec![(guests.table_id, TableVersion(before.0 - 1))],
+                journal: crate::domain::journal::JournalPlan::default(),
+            },
+            None,
+        )
         .await
         .unwrap();
 

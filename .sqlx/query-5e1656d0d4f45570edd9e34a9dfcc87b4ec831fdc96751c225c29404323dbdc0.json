@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT COUNT(*) FROM property_definitions WHERE database_id IS NOT NULL)\n                + (SELECT COUNT(*) FROM database_starter_seeds) AS \"count!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5e1656d0d4f45570edd9e34a9dfcc87b4ec831fdc96751c225c29404323dbdc0"
+}

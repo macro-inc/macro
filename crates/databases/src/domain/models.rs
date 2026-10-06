@@ -25,12 +25,14 @@ pub use models_databases::{
 };
 
 use crate::domain::journal::{JournalPlan, RestoredRow};
+use crate::domain::templates::TemplateId;
 
 /// Identifier of a `models_properties` property definition bound as a column.
 pub type PropertyDefinitionId = Uuid;
 
-/// A database: a named collection of tables, owned and shared as one entity.
-#[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
+/// The app entity for a core database: its display metadata and ownership.
+/// A core database can exist without this entity.
+#[derive(utoipa::ToSchema, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Database {
     /// Identifier.
     #[schema(value_type = Uuid)]
@@ -229,7 +231,8 @@ pub struct FirstTable {
     pub title_column: &'static str,
 }
 
-/// Command to create a database (with its [`FirstTable`]).
+/// Command to create a database: blank, with its [`FirstTable`], or built
+/// by a template's ops.
 #[derive(Debug, Clone)]
 pub struct CreateDatabase {
     /// Display name.
@@ -238,6 +241,8 @@ pub struct CreateDatabase {
     pub owner_id: MacroUserIdStr<'static>,
     /// The agent creating it for the owner; `None` when the owner acts.
     pub acting_bot: Option<BotId>,
+    /// The template that builds it; `None` for a blank database.
+    pub template: Option<TemplateId>,
 }
 
 /// Settle a new empty column's type using its first value.
@@ -584,6 +589,17 @@ pub struct Writes {
     pub journal: JournalPlan,
 }
 
+/// A database a batch of writes creates, owned by its `owner_id`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewDatabase {
+    /// The database as it is stored.
+    pub database: Database,
+    /// Whether it is its owner's starter, which each user is given once:
+    /// the batch then claims that, and creates nothing when the owner was
+    /// given one already or has a database of their own.
+    pub starter: bool,
+}
+
 impl Writes {
     /// Whether a write adds, renames, removes or reorders tables, which
     /// takes the database's lock rather than a share of it.
@@ -619,6 +635,10 @@ pub enum WritesOutcome {
     /// A table whose schema the batch changes moved after the batch was
     /// planned: planned again, it is planned against what is there now.
     SchemaMoved(TableId),
+    /// The batch creates its owner's starter, and the owner was given one
+    /// already or has a database of their own. Only the claim, which keeps
+    /// them from being given one later, committed.
+    StarterTaken,
     /// The database is gone or trashed, or a written table is gone.
     TableNotFound(TableId),
     /// A table is no longer at the version it was expected at.

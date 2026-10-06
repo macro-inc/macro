@@ -6,6 +6,7 @@ use database_sql::parse::schema::{
 };
 use database_sql::parse::{Identifier, TableName};
 use databases::domain::models::{CreateDatabase, OpBatch};
+use databases::domain::templates::{TEMPLATES, TemplateId};
 use models_databases::{
     ColumnChange, ColumnId, ColumnKind, DatabaseOp, NewColumn, NewOption, OptionId, TableChange,
 };
@@ -141,20 +142,36 @@ impl<
         if self.read_only {
             return Err(refused("This SQL surface is read-only."));
         }
-        if let SchemaStatement::CreateDatabase(name) = command {
+        if let SchemaStatement::CreateDatabase { name, template } = command {
+            let template = template
+                .map(|slug| {
+                    slug.0.parse::<TemplateId>().map_err(|_| {
+                        refused(format!(
+                            "Unknown database template \"{}\". Available templates: {}.",
+                            slug.0,
+                            TEMPLATES
+                                .iter()
+                                .map(|template| template.id.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                    })
+                })
+                .transpose()?;
             let created = self
                 .databases
                 .create_database(CreateDatabase {
                     name: name.0,
                     owner_id: viewer.user_id,
                     acting_bot: viewer.acting_bot,
+                    template,
                 })
                 .await
                 .map_err(schema_error)?;
             return Ok(outcome(
                 created.id,
                 format!(
-                    "Created database \"{}\". Call DescribeDatabase for its starter table and column IDs.",
+                    "Created database \"{}\". Call DescribeDatabase for its tables, columns and views before editing it.",
                     created.name
                 ),
                 HashMap::new(),
@@ -163,7 +180,7 @@ impl<
         let catalog = self.catalog(&viewer, request.scope).await?;
         let mut ops = Vec::new();
         let (database_id, summary, rename) = match command {
-            SchemaStatement::CreateDatabase(_) => unreachable!("handled before catalog read"),
+            SchemaStatement::CreateDatabase { .. } => unreachable!("handled before catalog read"),
             SchemaStatement::RenameDatabase {
                 database: name,
                 name: new_name,

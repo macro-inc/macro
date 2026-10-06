@@ -75,7 +75,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
         ],
     );
     assert!(matches!(
-        store.apply_writes(&writes).await.unwrap(),
+        store.apply_writes(&writes, None).await.unwrap(),
         WritesOutcome::TableNotFound(_)
     ));
     let WritesOutcome::Applied {
@@ -233,6 +233,7 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
                 name: "Fresh start".into(),
                 owner_id: user(),
                 acting_bot: None,
+                template: None,
             },
             FirstTable {
                 name: "Contacts",

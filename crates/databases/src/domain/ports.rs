@@ -19,9 +19,9 @@ use crate::domain::journal::{
 use crate::domain::models::{
     AppliedOps, Awareness, CardPosition, ChangeId, Column, ColumnCast, ColumnConversion, ColumnId,
     CreateDatabase, Database, DatabaseDetail, DatabaseError, DatabaseId, DatabaseView, FirstTable,
-    InferColumnType, InferColumnTypeOutcome, ListedDatabase, OpBatch, PropertyDefinitionId,
-    QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError, Table, TableId,
-    TableVersion, ViewId, Viewer, Writes, WritesOutcome,
+    InferColumnType, InferColumnTypeOutcome, ListedDatabase, NewDatabase, OpBatch,
+    PropertyDefinitionId, QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError,
+    Table, TableId, TableVersion, ViewId, Viewer, Writes, WritesOutcome,
 };
 use models_databases::{ColumnKind, OpResult};
 
@@ -37,6 +37,13 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         command: &CreateDatabase,
         first_table: FirstTable,
     ) -> impl Future<Output = Result<Database, Self::Error>> + Send;
+
+    /// The live database the user was given as their starter, if they were
+    /// given one and it is neither trashed nor deleted.
+    fn starter_database(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<DatabaseId>, Self::Error>> + Send;
 
     /// A database and its tables, if it exists.
     fn get_database(
@@ -228,10 +235,14 @@ pub trait CellStore: Send + Sync + 'static {
     /// any column binds it, each updated or deleted row checked to belong to
     /// its table, each related row to its target table, each changed option
     /// or column to its definition, and each changed table's version bumped
-    /// once. Anything but [`WritesOutcome::Applied`] wrote nothing.
+    /// once. `creates` inserts an app entity and its core resource with an
+    /// owner grant before anything else, and for a starter first claims
+    /// the owner's one starter. Anything but [`WritesOutcome::Applied`]
+    /// wrote nothing, beyond the claim of [`WritesOutcome::StarterTaken`].
     fn apply_writes(
         &self,
         writes: &Writes,
+        creates: Option<&NewDatabase>,
     ) -> impl Future<Output = Result<WritesOutcome, Self::Error>> + Send;
 }
 

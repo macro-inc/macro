@@ -7,7 +7,8 @@
 import type { DatabaseTrashedAt } from './databaseTrashedAt';
 
 /**
- * A database: a named collection of tables, owned and shared as one entity.
+ * The app entity for a core database: its display metadata and ownership.
+A core database can exist without this entity.
  */
 export interface Database {
   /** Creation time. */

@@ -14,9 +14,9 @@ lifecycle.
 - **Building a feature such as CRM:** reference `databases.id` from that
   feature's domain model. Use the `DatabaseStorage` port to `create_storage`,
   `apply_storage_writes`, and `delete_storage`.
-- **Working on the Macro database app:** use `DatabasesService`. Its repository
-  creates the app entity and owner grant together; `CellStore` enforces the
-  entity's lifecycle during writes.
+- **Working on the Macro database app:** use `DatabasesService`. Its `CellStore`
+  creates the app entity and owner grant together and enforces the entity's
+  lifecycle during writes.
 
 A new consumer authorizes access to its own resources, validates writes, and
 controls discovery and cleanup. `DatabaseStorage` expects calls from a trusted

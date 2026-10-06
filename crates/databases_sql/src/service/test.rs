@@ -1,4 +1,6 @@
 use chrono::{TimeZone, Utc};
+
+mod templates;
 use databases::domain::models::{
     Column, ColumnConfig, ColumnDetail, Database, DatabaseDetail, Table, TableDetail,
 };
@@ -1140,6 +1142,7 @@ async fn sql_database_creation_acknowledges_id_and_actor_without_a_followup_read
     assert!(matches!(result.statement, SqlStatement::Schema { .. }));
     let world = world.lock().unwrap();
     assert_eq!(world.created[0].name, "Planning");
+    assert_eq!(world.created[0].template, None);
     assert_eq!(world.created[0].acting_bot, agent_for(OWNER).acting_bot);
 }
 

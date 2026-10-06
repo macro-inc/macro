@@ -1,17 +1,26 @@
-use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use models_databases::views::LaneKey;
-use models_databases::views::{Lane, ViewLayout, ViewQuery};
-use properties::outbound::properties_pg_repo::PropertiesPgRepo;
+//! The starter over Postgres, through the service as hosts build it: the
+//! Getting started template, given once per user, whole or not at all.
 
-use super::*;
-use crate::{
-    domain::{
-        models::{CreateDatabase, FirstTable},
-        ports::{CellStore, ColumnDefinitionStore, DatabasesRepo},
-    },
-    outbound::pg_databases_repo::PgDatabasesRepo,
-};
+use std::sync::Arc;
+
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access::outbound::PgAccessRepository;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_event_broker::NoopMacroEventBroker;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use models_databases::OptionId;
+use models_databases::views::{Lane, LaneKey, ViewLayout, ViewQuery};
+use properties::outbound::properties_pg_repo::PropertiesPgRepo;
+use sqlx::PgPool;
+
+use crate::domain::models::{CreateDatabase, Viewer};
+use crate::domain::ports::{CellStore, ColumnDefinitionStore, DatabasesRepo, DatabasesService};
+use crate::domain::starter::{DatabaseStarterService, StarterDatabase};
+use crate::outbound::gateway_event_publisher::NoOpTableEventPublisher;
+use crate::outbound::pg_cell_store::PgCellStore;
+use crate::outbound::pg_databases_repo::PgDatabasesRepo;
+use crate::outbound::pg_definition_store::PgDefinitionStore;
+use crate::wiring::{PgDatabasesService, build_service};
 
 const USER: &str = "macro|starter-database@macro.com";
 
@@ -36,18 +45,48 @@ async fn insert_user(pool: &PgPool) {
     .unwrap();
 }
 
-fn repo(pool: &PgPool) -> PgDatabaseStarterRepo<PropertiesPgRepo> {
-    PgDatabaseStarterRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
+fn service(
+    pool: &PgPool,
+) -> PgDatabasesService<
+    NoOpTableEventPublisher,
+    NoopMacroEventBroker,
+    EntityAccessServiceImpl<PgAccessRepository>,
+> {
+    build_service(
+        pool.clone(),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            pool.clone(),
+        ))),
+        NoOpTableEventPublisher,
+        NoopMacroEventBroker,
+    )
+}
+
+fn data(pool: &PgPool) -> PgDatabasesRepo<PropertiesPgRepo> {
+    PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
+}
+
+const NOT_GIVEN: StarterDatabase = StarterDatabase {
+    database_id: None,
+    table_id: None,
+    view_id: None,
+    created: false,
+};
+
+async fn database_count(pool: &PgPool) -> i64 {
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM database_entities WHERE user_id = $1"#,
+        USER
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_starter_records_initial_values_in_history(pool: PgPool) {
     insert_user(&pool).await;
-    let blueprint = StarterBlueprint::default();
-    let created = repo(&pool)
-        .ensure_starter(&viewer(), &blueprint)
-        .await
-        .unwrap();
+    let created = service(&pool).ensure_starter(viewer()).await.unwrap();
     let database = created.database_id.unwrap();
     let table = created.table_id.unwrap();
     let data = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
@@ -60,8 +99,13 @@ async fn the_starter_records_initial_values_in_history(pool: PgPool) {
     .await
     .unwrap();
     let rows = data.row_refs(table).await.unwrap();
-    assert_eq!(rows.len(), blueprint.rows.len());
-    for (row, (name, stage_index)) in rows.iter().zip(blueprint.rows) {
+    let examples = [
+        ("Add your first idea", 0),
+        ("Try moving a card", 1),
+        ("Explore All records and the board", 2),
+    ];
+    assert_eq!(rows.len(), examples.len());
+    for (row, (name, stage_index)) in rows.iter().zip(examples) {
         let changes = data.row_history(database, table, row.id).await.unwrap();
         let history = crate::domain::journal::row_history(row.id, changes);
         assert_eq!(history.len(), 1);
@@ -91,51 +135,43 @@ async fn the_starter_records_initial_values_in_history(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn concurrent_starter_requests_create_one_complete_editable_example(pool: PgPool) {
     insert_user(&pool).await;
-    let repo = repo(&pool);
-    let user = viewer();
-    let first = StarterBlueprint::default();
-    let second = StarterBlueprint::default();
+    let service = service(&pool);
     let (left, right) = tokio::join!(
-        repo.ensure_starter(&user, &first),
-        repo.ensure_starter(&user, &second)
+        service.ensure_starter(viewer()),
+        service.ensure_starter(viewer())
     );
-    let left = left.unwrap();
-    let right = right.unwrap();
+    let (left, right) = (left.unwrap(), right.unwrap());
     assert_ne!(left.created, right.created);
     assert_eq!(left.database_id, right.database_id);
     let created = if left.created { left } else { right };
     let id = created.database_id.unwrap();
     let table = created.table_id.unwrap();
-    let data = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    let data = data(&pool);
     let (database, tables) = data.get_database(id).await.unwrap().unwrap();
     assert_eq!(database.name, "Getting started");
     assert_eq!(tables.len(), 1);
     assert_eq!(tables[0].name, "Ideas");
+    assert_eq!(tables[0].id, table);
     let columns = data.columns_for_tables(&[table]).await.unwrap();
     assert_eq!(columns.len(), 2);
     let rows = data.row_refs(table).await.unwrap();
     assert_eq!(rows.len(), 3);
-    let cells = crate::outbound::pg_cell_store::PgCellStore::new(
-        pool.clone(),
-        PropertiesPgRepo::new(pool.clone()),
-    )
-    .cells(&rows.iter().map(|row| row.id).collect::<Vec<_>>())
-    .await
-    .unwrap();
+    let cells = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
+        .cells(&rows.iter().map(|row| row.id).collect::<Vec<_>>())
+        .await
+        .unwrap();
     assert!(rows.iter().all(|row| cells[&row.id].len() == 2));
+    let stages: Vec<OptionId> =
+        PgDefinitionStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
+            .definitions(&[columns[1].property_definition_id])
+            .await
+            .unwrap()
+            .remove(0)
+            .property_options
+            .iter()
+            .map(|option| OptionId::from_uuid(option.id))
+            .collect();
     let views = data.views_for_tables(&[table]).await.unwrap();
-    let stages: Vec<_> = crate::outbound::pg_definition_store::PgDefinitionStore::new(
-        pool.clone(),
-        PropertiesPgRepo::new(pool.clone()),
-    )
-    .definitions(&[columns[1].property_definition_id])
-    .await
-    .unwrap()
-    .remove(0)
-    .property_options
-    .iter()
-    .map(|option| option.id)
-    .collect();
     let shown: Vec<(&str, &str, &ViewQuery, &ViewLayout)> = views
         .iter()
         .map(|view| {
@@ -149,36 +185,26 @@ async fn concurrent_starter_requests_create_one_complete_editable_example(pool: 
         .collect();
     assert_eq!(
         shown,
-        vec![
-            (
-                "Table",
-                "7f80",
-                &ViewQuery::default(),
-                &ViewLayout::Table { columns: vec![] }
-            ),
-            (
-                "Board",
-                "80",
-                &ViewQuery::default(),
-                &ViewLayout::Board {
-                    group_by: columns[1].id,
-                    title: columns[0].id,
-                    lanes: stages
-                        .iter()
-                        .map(|option| Lane {
-                            key: LaneKey::Option(OptionId::from_uuid(*option)),
-                            hidden: false,
-                        })
-                        .collect(),
-                    card_fields: vec![],
-                    hide_empty_lanes: false,
-                }
-            ),
-        ]
+        vec![(
+            "By stage",
+            "80",
+            &ViewQuery::default(),
+            &ViewLayout::Board {
+                group_by: columns[1].id,
+                title: columns[0].id,
+                lanes: stages
+                    .iter()
+                    .map(|option| Lane {
+                        key: LaneKey::Option(*option),
+                        hidden: false,
+                    })
+                    .collect(),
+                card_fields: vec![],
+                hide_empty_lanes: false,
+            }
+        ),]
     );
-    assert_eq!(created.view_id, Some(views[1].id));
-    let positions: Vec<&str> = rows.iter().map(|row| row.position.as_str()).collect();
-    assert_eq!(positions, ["7f80", "80", "8180"]);
+    assert_eq!(created.view_id, Some(views[0].id));
     let owner = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND access_level = 'owner'",
         id.into_uuid()
@@ -189,36 +215,35 @@ async fn concurrent_starter_requests_create_one_complete_editable_example(pool: 
     assert_eq!(owner, Some(1));
 
     data.rename_database(id, "My ideas").await.unwrap();
-    let again = repo
-        .ensure_starter(&user, &StarterBlueprint::default())
-        .await
-        .unwrap();
-    assert!(!again.created);
+    assert_eq!(
+        service.ensure_starter(viewer()).await.unwrap(),
+        StarterDatabase {
+            database_id: Some(id),
+            table_id: None,
+            view_id: None,
+            created: false,
+        }
+    );
     assert_eq!(
         data.get_database(id).await.unwrap().unwrap().0.name,
         "My ideas"
     );
     assert_eq!(data.row_refs(table).await.unwrap().len(), 3);
+    assert_eq!(database_count(&pool).await, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_starter_stages_are_coloured_in_palette_order(pool: PgPool) {
     insert_user(&pool).await;
-    let created = repo(&pool)
-        .ensure_starter(&viewer(), &StarterBlueprint::default())
-        .await
-        .unwrap();
-    let columns = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
+    let created = service(&pool).ensure_starter(viewer()).await.unwrap();
+    let columns = data(&pool)
         .columns_for_tables(&[created.table_id.unwrap()])
         .await
         .unwrap();
-    let definitions = crate::outbound::pg_definition_store::PgDefinitionStore::new(
-        pool.clone(),
-        PropertiesPgRepo::new(pool.clone()),
-    )
-    .definitions(&[columns[1].property_definition_id])
-    .await
-    .unwrap();
+    let definitions = PgDefinitionStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
+        .definitions(&[columns[1].property_definition_id])
+        .await
+        .unwrap();
 
     let colors: Vec<Option<&str>> = definitions[0]
         .property_options
@@ -231,71 +256,45 @@ async fn the_starter_stages_are_coloured_in_palette_order(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn starter_never_resurrects_trashed_or_deleted_content(pool: PgPool) {
     insert_user(&pool).await;
-    let repo = repo(&pool);
-    let id = repo
-        .ensure_starter(&viewer(), &StarterBlueprint::default())
+    let service = service(&pool);
+    let id = service
+        .ensure_starter(viewer())
         .await
         .unwrap()
         .database_id
         .unwrap();
-    let data = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    let data = data(&pool);
     data.trash_database(id, chrono::Utc::now()).await.unwrap();
-    let trashed = repo
-        .ensure_starter(&viewer(), &StarterBlueprint::default())
-        .await
-        .unwrap();
-    assert!(!trashed.created);
-    assert!(trashed.database_id.is_none());
+    assert_eq!(service.ensure_starter(viewer()).await.unwrap(), NOT_GIVEN);
     data.delete_database(id).await.unwrap();
-    let deleted = repo
-        .ensure_starter(&viewer(), &StarterBlueprint::default())
-        .await
-        .unwrap();
-    assert!(!deleted.created);
-    assert!(deleted.database_id.is_none());
-    assert!(data.get_database(id).await.unwrap().is_none());
+    assert_eq!(service.ensure_starter(viewer()).await.unwrap(), NOT_GIVEN);
+    assert_eq!(database_count(&pool).await, 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn existing_database_skips_seed_even_after_it_is_deleted(pool: PgPool) {
+async fn existing_database_skips_the_starter_even_after_it_is_deleted(pool: PgPool) {
     insert_user(&pool).await;
-    let data = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
-    let database = data
-        .create_database(
-            &CreateDatabase {
-                name: "Already mine".into(),
-                owner_id: viewer().user_id,
-                acting_bot: None,
-            },
-            FirstTable {
-                name: "Tasks",
-                title_column: "Name",
-            },
-        )
+    let service = service(&pool);
+    let database = service
+        .create_database(CreateDatabase {
+            name: "Already mine".into(),
+            owner_id: viewer().user_id,
+            acting_bot: None,
+            template: None,
+        })
         .await
         .unwrap();
-    let repo = repo(&pool);
-    let outcome = repo
-        .ensure_starter(&viewer(), &StarterBlueprint::default())
-        .await
-        .unwrap();
-    assert!(!outcome.created);
-    assert!(outcome.database_id.is_none());
-    data.delete_database(database.id).await.unwrap();
-    assert!(
-        !repo
-            .ensure_starter(&viewer(), &StarterBlueprint::default())
-            .await
-            .unwrap()
-            .created
-    );
+    assert_eq!(service.ensure_starter(viewer()).await.unwrap(), NOT_GIVEN);
+    data(&pool).delete_database(database.id).await.unwrap();
+    assert_eq!(service.ensure_starter(viewer()).await.unwrap(), NOT_GIVEN);
+    assert_eq!(database_count(&pool).await, 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn failed_dependency_rolls_back_content_and_marker_then_retry_succeeds(pool: PgPool) {
+async fn a_failed_view_rolls_back_content_and_claim_then_a_retry_succeeds(pool: PgPool) {
     insert_user(&pool).await;
-    // The views are the seed's last write before the marker, so failing them
-    // proves everything before rolls back with them.
+    // The views are the template's last ops, so failing them proves
+    // everything before rolls back with them.
     sqlx::raw_sql(
         "CREATE FUNCTION refuse_views() RETURNS trigger LANGUAGE plpgsql AS $$
          BEGIN RAISE EXCEPTION 'injected view failure'; END $$;
@@ -305,42 +304,28 @@ async fn failed_dependency_rolls_back_content_and_marker_then_retry_succeeds(poo
     .execute(&pool)
     .await
     .unwrap();
-    let blueprint = StarterBlueprint::default();
-    assert!(
-        repo(&pool)
-            .ensure_starter(&viewer(), &blueprint)
-            .await
-            .is_err()
-    );
-    assert!(
-        PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
-            .get_database(blueprint.database_id)
-            .await
-            .unwrap()
-            .is_none()
-    );
-    let definitions = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM property_definitions WHERE database_id = $1",
-        blueprint.database_id.into_uuid()
+    let service = service(&pool);
+    assert!(service.ensure_starter(viewer()).await.is_err());
+    assert_eq!(database_count(&pool).await, 0);
+    let leftovers = sqlx::query_scalar!(
+        r#"SELECT (SELECT COUNT(*) FROM property_definitions WHERE database_id IS NOT NULL)
+                + (SELECT COUNT(*) FROM database_starter_seeds) AS "count!""#
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(definitions, Some(0));
+    assert_eq!(leftovers, 0);
     sqlx::raw_sql("DROP TRIGGER refuse_views ON database_views")
         .execute(&pool)
         .await
         .unwrap();
-    let success = repo(&pool)
-        .ensure_starter(&viewer(), &blueprint)
-        .await
-        .unwrap();
-    assert!(success.created);
-    assert_eq!(success.database_id, Some(blueprint.database_id));
+    let retried = service.ensure_starter(viewer()).await.unwrap();
+    assert!(retried.created);
+    assert_eq!(database_count(&pool).await, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_failed_cell_rolls_back_the_whole_seed(pool: PgPool) {
+async fn a_failed_cell_rolls_back_the_whole_starter(pool: PgPool) {
     insert_user(&pool).await;
     sqlx::raw_sql(
         "CREATE FUNCTION refuse_cells() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -351,27 +336,12 @@ async fn a_failed_cell_rolls_back_the_whole_seed(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let blueprint = StarterBlueprint::default();
-    assert!(
-        repo(&pool)
-            .ensure_starter(&viewer(), &blueprint)
-            .await
-            .is_err()
-    );
-    assert!(
-        PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
-            .get_database(blueprint.database_id)
-            .await
-            .unwrap()
-            .is_none()
-    );
+    let service = service(&pool);
+    assert!(service.ensure_starter(viewer()).await.is_err());
+    assert_eq!(database_count(&pool).await, 0);
     sqlx::raw_sql("DROP TRIGGER refuse_cells ON entity_properties")
         .execute(&pool)
         .await
         .unwrap();
-    let retried = repo(&pool)
-        .ensure_starter(&viewer(), &blueprint)
-        .await
-        .unwrap();
-    assert!(retried.created);
+    assert!(service.ensure_starter(viewer()).await.unwrap().created);
 }

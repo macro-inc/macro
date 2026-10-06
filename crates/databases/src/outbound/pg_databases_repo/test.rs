@@ -29,6 +29,8 @@ mod schema_ops;
 mod sharing;
 #[cfg(feature = "gateway")]
 mod tables;
+#[cfg(feature = "gateway")]
+mod templates;
 mod transfer;
 #[cfg(feature = "gateway")]
 mod undo;
@@ -146,14 +148,17 @@ async fn commit(
     writes: Vec<Write>,
 ) -> HashMap<TableId, TableVersion> {
     let outcome = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
-        .apply_writes(&Writes {
-            database_id,
-            created_by: user(),
-            writes,
-            related_rows: Vec::new(),
-            expected_versions: Vec::new(),
-            journal: crate::domain::journal::JournalPlan::default(),
-        })
+        .apply_writes(
+            &Writes {
+                database_id,
+                created_by: user(),
+                writes,
+                related_rows: Vec::new(),
+                expected_versions: Vec::new(),
+                journal: crate::domain::journal::JournalPlan::default(),
+            },
+            None,
+        )
         .await
         .expect("the batch should run");
     let WritesOutcome::Applied { table_versions, .. } = outcome else {
@@ -189,6 +194,7 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo<PropertiesPgRepo>, Table, Uu
                 name: "Summer Offsite".to_string(),
                 owner_id: user(),
                 acting_bot: None,
+                template: None,
             },
             FirstTable {
                 name: "Table 1",
@@ -235,6 +241,7 @@ async fn a_new_database_starts_with_a_title_column_that_infers_its_type(pool: Pg
                 name: "Hiring".to_string(),
                 owner_id: user(),
                 acting_bot: None,
+                template: None,
             },
             FirstTable {
                 name: "Table 1",

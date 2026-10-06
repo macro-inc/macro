@@ -91,14 +91,17 @@ async fn a_deleted_database_is_not_found_rather_than_a_name_conflict_or_storage_
         },
     ] {
         let outcome = store
-            .apply_writes(&Writes {
-                database_id: table.database_id,
-                created_by: user(),
-                writes: vec![write],
-                related_rows: Vec::new(),
-                expected_versions: Vec::new(),
-                journal: crate::domain::journal::JournalPlan::default(),
-            })
+            .apply_writes(
+                &Writes {
+                    database_id: table.database_id,
+                    created_by: user(),
+                    writes: vec![write],
+                    related_rows: Vec::new(),
+                    expected_versions: Vec::new(),
+                    journal: crate::domain::journal::JournalPlan::default(),
+                },
+                None,
+            )
             .await
             .unwrap();
         assert!(
