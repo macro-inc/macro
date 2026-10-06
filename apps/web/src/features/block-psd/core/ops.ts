@@ -25,6 +25,16 @@ export function newLayerPlace(active: LayerRow | undefined): {
   return { parent: active.parent, position: { type: 'above', id: active.id } };
 }
 
+/** The name Photoshop gives the next new layer: "Layer" and a number. */
+export function nextLayerName(rows: readonly LayerRow[]): string {
+  let last = 0;
+  for (const row of rows) {
+    const m = /^Layer (\d+)$/.exec(row.name);
+    if (m) last = Math.max(last, Number(m[1]));
+  }
+  return `Layer ${last + 1}`;
+}
+
 /** A new layer of a kind above the active one. */
 export function newLayerOp(
   active: LayerRow | undefined,

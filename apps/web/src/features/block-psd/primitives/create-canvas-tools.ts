@@ -521,9 +521,16 @@ export function createCanvasTools(options: CanvasToolsOptions) {
 
   // ---- crop ------------------------------------------------------------------------
 
+  /**
+   * The crop box is still the whole canvas it starts as: a drag inside it
+   * draws a new box (as in Photoshop) rather than moving this one.
+   */
+  let cropFresh = false;
+
   const startCrop = () => {
     if (crop()) return;
     setCrop(startTransform(canvasRect()));
+    cropFresh = true;
     refreshOverlay();
   };
 
@@ -532,16 +539,20 @@ export function createCanvasTools(options: CanvasToolsOptions) {
     if (!c) return;
     setCrop(undefined);
     refreshOverlay();
-    if (!apply) return;
     const rect = boxRect(c);
     const whole = canvasRect();
-    if (
-      rect.w < 1 ||
-      rect.h < 1 ||
-      (rect.x === 0 && rect.y === 0 && rect.w === whole.w && rect.h === whole.h)
-    )
-      return;
-    await editor.apply([{ op: 'crop', rect }]);
+    const changed =
+      rect.w >= 1 &&
+      rect.h >= 1 &&
+      !(
+        rect.x === 0 &&
+        rect.y === 0 &&
+        rect.w === whole.w &&
+        rect.h === whole.h
+      );
+    if (apply && changed) await editor.apply([{ op: 'crop', rect }]);
+    // The Crop tool offers the whole (new) canvas again.
+    if (view.tool() === 'crop' && editable()) startCrop();
   };
 
   // ---- polygonal lasso ---------------------------------------------------------------
@@ -607,7 +618,9 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       const part = c
         ? hitTransform({ ...c, angle: 0 }, p.at, HANDLE_SLOP / zoom())
         : undefined;
-      if (c && part && part.kind !== 'rotate') {
+      const redraw = cropFresh && part?.kind === 'move';
+      cropFresh = false;
+      if (c && part && part.kind !== 'rotate' && !redraw) {
         gesture = { kind: 'box', target: 'crop', part, from: p.at, box: c };
         return;
       }
@@ -928,8 +941,10 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       }
       case 'crop-draw': {
         const c = crop();
-        if (c && (Math.abs(c.w) < 2 || Math.abs(c.h) < 2))
+        if (c && (Math.abs(c.w) < 2 || Math.abs(c.h) < 2)) {
           setCrop(startTransform(canvasRect()));
+          cropFresh = true;
+        }
         break;
       }
       default:

@@ -19,7 +19,12 @@ import {
 } from '../core/adjustments';
 import type { FilterKind } from '../core/filters';
 import { twoColorGradient } from '../core/gradient';
-import { clippingOp, mergeDownOp, newLayerOp } from '../core/ops';
+import {
+  clippingOp,
+  mergeDownOp,
+  newLayerOp,
+  nextLayerName,
+} from '../core/ops';
 import { stepBrushSize } from '../core/shortcuts';
 import type { CanvasTools } from './create-canvas-tools';
 import type { PsdEditor } from './create-psd-editor';
@@ -99,11 +104,32 @@ export function createPsdCommands(options: PsdCommandsOptions) {
     await editor.apply([{ op: 'clear', id: t.id, target: t.target }]);
   };
 
-  /** Pastes an image (from the paste event, else the last copy) as a layer. */
-  const paste = async (image?: Blob) => {
+  /** An image on the system clipboard, when the browser lets us read it. */
+  const readClipboardImage = async (): Promise<Blob | undefined> => {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((t) => t.startsWith('image/'));
+        if (type) return await item.getType(type);
+      }
+    } catch {
+      // Closed to this page, or empty.
+    }
+    return undefined;
+  };
+
+  /**
+   * Pastes an image as a layer: the one a paste event carried, else the
+   * last copy made here, else (for Edit > Paste, `ask`) the system
+   * clipboard's, which the browser may ask the person to allow.
+   */
+  const paste = async (image?: Blob, ask = false) => {
     if (!editable()) return;
-    const blob = image ?? clipboard;
-    if (!blob) return;
+    const blob =
+      image ?? clipboard ?? (ask ? await readClipboardImage() : undefined);
+    if (!blob) {
+      options.notifyInfo('There is no image to paste.');
+      return;
+    }
     const bytes = await blob.arrayBuffer();
     const camera = view.camera();
     const v = view.viewport();
@@ -114,7 +140,7 @@ export function createPsdCommands(options: PsdCommandsOptions) {
     // Into the view's middle, or the selection's when there is one.
     const sel = editor.selection().bounds;
     const at = sel ? { x: sel.x + sel.w / 2, y: sel.y + sel.h / 2 } : center;
-    await placeImage(bytes, 'Layer', at);
+    await placeImage(bytes, nextLayerName(editor.layers()), at);
   };
 
   const placeImage = async (
@@ -216,7 +242,8 @@ export function createPsdCommands(options: PsdCommandsOptions) {
     copy: () => void copy(false),
     copyMerged: () => void copy(true),
     cut: () => void cut(),
-    paste: () => void paste(),
+    /** Edit > Paste. */
+    paste: () => void paste(undefined, true),
     layerViaCopy: () => {
       const row = active();
       if (row)
@@ -406,7 +433,6 @@ export function createPsdCommands(options: PsdCommandsOptions) {
         const row = active();
         return !!row && !!mergeDownOp(editor.layers(), row.id);
       },
-      clipboard: () => !!clipboard,
     },
   };
 }

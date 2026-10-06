@@ -83,6 +83,11 @@ export function PsdEditor() {
   const collab = context.collaboration;
   const sharing = context.sharing;
 
+  /** The canvas size the view last fitted. */
+  let shownSize: DocSize = {
+    width: engine.summary.width,
+    height: engine.summary.height,
+  };
   let compositor:
     | {
         invalidate: (r: IRect) => void;
@@ -105,7 +110,13 @@ export function PsdEditor() {
     online: collab ? () => collab.status() === 'connected' : undefined,
     notifyError: context.notifyError,
     onDirty: (rect) => compositor?.invalidate(rect),
-    onReset: (doc) => compositor?.reset(doc),
+    onReset: (doc) => {
+      compositor?.reset(doc);
+      // A crop or resize: show the new canvas, as Photoshop does.
+      if (doc.width !== shownSize.width || doc.height !== shownSize.height)
+        view.fitDocument();
+      shownSize = doc;
+    },
   });
   const view = createPsdView({ docSize: editor.docSize });
   const [spaceHeld, setSpaceHeld] = createSignal(false);

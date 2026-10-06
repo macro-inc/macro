@@ -46,7 +46,9 @@ bunx playwright test --config src/features/block-psd/browser-test/playwright.con
 adds a layer, fills a selection and moves it with undo and redo, types text
 and edits it again (the layer named after its text, one undo step for the
 typing), saves (and reopens the saved file), zooms with the keyboard, and
-opens read-only. `collaboration.browser.e2e.ts` covers a stroke, a new
+opens read-only. `psd-tools.browser.e2e.ts` crops to a drawn box, previews
+a Gaussian Blur and applies it as one undo step, and paints on a layer
+mask. `collaboration.browser.e2e.ts` covers a stroke, a new
 layer, and undo reaching the other person, their pointer and avatar, one
 person storing the merged file, and someone reopening the document after
 edits.

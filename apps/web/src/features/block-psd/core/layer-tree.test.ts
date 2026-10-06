@@ -8,7 +8,7 @@ import {
   rangeBetween,
   visibleRows,
 } from './layer-tree';
-import { mergeDownOp, newLayerOp, paintable } from './ops';
+import { mergeDownOp, newLayerOp, nextLayerName, paintable } from './ops';
 
 function row(
   id: number,
@@ -131,5 +131,18 @@ describe('ops', () => {
     expect(paintable(rows[0], 'pixels')).toBe(false);
     expect(paintable(rows[2], 'mask')).toBe(false);
     expect(paintable({ ...rows[0], hasMask: true }, 'mask')).toBe(true);
+  });
+});
+
+describe('new layer names', () => {
+  it('numbers past the highest "Layer n"', () => {
+    expect(nextLayerName([])).toBe('Layer 1');
+    expect(
+      nextLayerName([
+        row(1, 0, null, { name: 'Layer 3' }),
+        row(2, 0, null, { name: 'Sky' }),
+        row(3, 0, null, { name: 'Layer 12 copy' }),
+      ])
+    ).toBe('Layer 4');
   });
 });

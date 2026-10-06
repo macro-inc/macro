@@ -82,7 +82,7 @@ export function buildMenus(args: {
     {
       label: 'Paste',
       shortcut: mod('V'),
-      disabled: !edit || !can.clipboard(),
+      disabled: !edit,
       onSelect: r.paste,
       testId: 'psd-menu-paste',
     },

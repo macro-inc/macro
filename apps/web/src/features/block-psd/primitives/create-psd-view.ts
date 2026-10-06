@@ -159,6 +159,10 @@ export function createPsdView(options: { docSize: () => DocSize }) {
     pan(dx: number, dy: number) {
       setCamera((c) => panBy(c, dx, dy));
     },
+    /** Shows the whole canvas (after it changed size), at most at 100%. */
+    fitDocument() {
+      fit(OPEN_MAX_ZOOM);
+    },
     /** Fit on Screen (⌘0). */
     zoomToFit() {
       fit(Number.POSITIVE_INFINITY);
