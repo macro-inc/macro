@@ -40,6 +40,21 @@ export type DraftFormAttachment =
       fileName: string;
       mimeType: string;
       fileSize: number;
+    }
+  | {
+      /**
+       * A Macro document attached by reference; the backend fetches its file
+       * when the email is sent. Used by the AI draft composer, whose email has
+       * no draft row to upload into until it is sent.
+       */
+      type: 'document';
+      documentId: string;
+      /** No draft row holds it, so it never has a draft attachment id. */
+      attachmentId?: never;
+      fileName: string;
+      mimeType?: string;
+      /** Unknown (0) until the document's metadata resolves. */
+      fileSize: number;
     };
 
 export interface EmailFormStateOptions {

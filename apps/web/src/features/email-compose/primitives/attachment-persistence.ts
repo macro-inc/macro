@@ -147,6 +147,9 @@ export function createAttachmentPersistence(options: {
     },
     async remove(attachment: DraftFormAttachment) {
       const state = options.attachments;
+      // Document attachments exist only in the AI draft composer, which owns
+      // their removal; no draft row holds them.
+      if (attachment.type === 'document') return false;
       const draftId = options.draftId();
       const removalGeneration = generation;
       const operation =

@@ -542,3 +542,34 @@ pub(super) async fn upsert_recipients(
 
     Ok(())
 }
+
+/// Record a staged attachment on a draft. The insert selects through the
+/// draft row under `link_id`, so a draft that belongs to another inbox (or
+/// does not exist) records nothing instead of leaking a cross-inbox row.
+pub(super) async fn insert_draft_attachment(
+    pool: &PgPool,
+    link_id: Uuid,
+    attachment: &AttachmentDraft,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO email_attachments_drafts (
+            id, draft_id, file_name, content_type, sha, size, s3_key
+        )
+        SELECT $1, $2, $3, $4, $5, $6, $7
+        FROM email_messages m
+        WHERE m.id = $2 AND m.link_id = $8
+        "#,
+        attachment.id,
+        attachment.draft_id,
+        attachment.file_name,
+        attachment.content_type,
+        attachment.sha,
+        attachment.size,
+        attachment.s3_key,
+        link_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}

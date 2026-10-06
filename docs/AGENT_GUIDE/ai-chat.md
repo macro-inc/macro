@@ -756,6 +756,18 @@ as email blocks: an opaque background, subtle border and shadow, and a raised
 rim in dark mode. The recipients, subject, body, and send controls stay inside
 that card. Touch-device styling is unchanged.
 
+A drafted email can carry attachments. The agent attaches uploaded Macro files
+(PDFs, images, spreadsheets, Word documents; a Word document is attached as its
+PDF rendering) through `SendEmail`'s `attachments`, and each appears as a
+removable file pill under the body once its name resolves. The card's paperclip
+`Attach` control and dropping files onto the body add more: each file is first
+uploaded as a Macro document, shown as a pill while it uploads, and `Send email`
+stays disabled until every upload finishes. Macro-native documents written in the
+editor have no file and cannot be attached; the send reports which document
+could not be attached. Attachments together may total 18 MB. The sent and
+saved-draft rows read `with N attachments`, and the expanded sent card shows
+the pills read-only.
+
 The reliable completion signal is the disappearance of the `Stop generating` button — poll
 with `evaluate_script`. Do not wait on response text: the page displays
 `Time to first token: N s` and doc content that easily false-matches `wait_for` patterns.

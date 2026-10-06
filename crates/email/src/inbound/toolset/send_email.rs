@@ -7,8 +7,9 @@ use crate::domain::{
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -36,11 +37,22 @@ impl From<EmailRecipient> for ContactInfo {
     }
 }
 
+/// A Macro document attached to an outgoing email as a file.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailAttachment {
+    /// The id of the Macro document to attach. It must be a stored file -
+    /// an uploaded PDF, image, spreadsheet, Word document, or other upload -
+    /// that the user can view. A Macro-native document (one written in the
+    /// editor) has no file to attach; link to it in the body instead.
+    pub document_id: Uuid,
+}
+
 /// Compose and send an email. Creates a draft and immediately queues it for delivery.
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "SendEmail",
-    description = "Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body."
+    description = "Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. To attach files, list the Macro documents in attachments — uploaded files such as PDFs, images, spreadsheets, or Word documents the user can view; the user can add or remove attachments in the composer before sending. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct SendEmail {
@@ -69,6 +81,10 @@ pub struct SendEmail {
     /// excludes the signature for this one email.
     #[serde(default)]
     pub include_signature: Option<bool>,
+    /// Macro documents to attach as files (optional). Each must be an
+    /// uploaded file the user can view; together they may total 18 MB.
+    #[serde(default)]
+    pub attachments: Vec<EmailAttachment>,
 }
 
 /// Response from the SendEmail tool.
@@ -105,6 +121,7 @@ where
         user_id=?request_context.user_id,
         subject=%self.subject,
         to_count=%self.to.len(),
+        attachment_count=%self.attachments.len(),
     ), err)]
     async fn call(
         &self,
@@ -115,6 +132,24 @@ where
         let link = service_context.resolve_link(acting_user.clone()).await?;
 
         let body = service_context.render_body(&self.body).await?;
+
+        let mut attachments = Vec::with_capacity(self.attachments.len());
+        for attachment in &self.attachments {
+            let receipt = service_context
+                .entity_access_service
+                .generate_entity_access_receipt::<ViewAccessLevel>(
+                    &request_context.user_id,
+                    None,
+                    &attachment.document_id.to_string(),
+                    EntityType::Document,
+                )
+                .await
+                .map_err(|e| ToolCallError {
+                    description: format!("Cannot attach document {}: {e}", attachment.document_id),
+                    internal_error: e.into(),
+                })?;
+            attachments.push(receipt);
+        }
 
         let input = CreateDraftInput {
             db_id: None,
@@ -140,8 +175,8 @@ where
         };
 
         let sent = service_context
-            .service
-            .send_message(&link, std::slice::from_ref(&link), input)
+            .attachment_sender
+            .send_message_with_attachments(&link, std::slice::from_ref(&link), input, attachments)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to send email: {e}"),

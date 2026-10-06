@@ -227,6 +227,9 @@ async function persistLocalDraft(input: LocalDraftInput): Promise<LocalDraft> {
   const files = new Map<string, Blob>();
   const attachments: LocalDraftAttachment[] = [];
   for (const attachment of input.attachments) {
+    // Document attachments exist only in the AI draft composer, which keeps no
+    // local draft.
+    if (attachment.type === 'document') continue;
     if (attachment.type !== 'local') {
       attachments.push({ ...attachment });
       continue;

@@ -65,6 +65,25 @@ pub struct AttachmentDraft {
     pub s3_key: String,
 }
 
+/// The most raw bytes one outgoing message may attach in total. Gmail caps
+/// the encoded message at 25 MB; base64 adds about a third, so 18 MB of raw
+/// content is the safe ceiling the draft attachment API enforces too.
+pub const MAX_DRAFT_ATTACHMENTS_BYTES: usize = 18_000_000;
+
+/// A file resolved from a Macro document, ready to be staged as a draft
+/// attachment. Produced by a [`DraftAttachmentSource`].
+///
+/// [`DraftAttachmentSource`]: crate::domain::ports::DraftAttachmentSource
+#[derive(Debug, Clone)]
+pub struct SourcedAttachment {
+    /// The file name the recipient sees, extension included.
+    pub file_name: String,
+    /// The MIME type the attachment part is sent with.
+    pub content_type: String,
+    /// The file's raw bytes.
+    pub bytes: Vec<u8>,
+}
+
 /// A forwarded attachment linking a draft to an original message's attachment.
 #[derive(Debug, Clone)]
 pub struct AttachmentForwarded {

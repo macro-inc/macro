@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::{RecipientType, UpsertedContacts, UpsertedRecipient};
+use crate::domain::models::{AttachmentDraft, RecipientType, UpsertedContacts, UpsertedRecipient};
 use chrono::Timelike;
 use sqlx::Row;
 
@@ -785,5 +785,71 @@ async fn test_delete_scheduled_messages_batch_empty_input(
         .delete_scheduled_messages_batch(&[], Uuid::new_v4())
         .await?;
     assert!(deleted.is_empty());
+    Ok(())
+}
+
+// ── insert_draft_attachment ─────────────────────────────────────────
+
+fn staged_attachment(draft_id: Uuid, id: Uuid) -> AttachmentDraft {
+    AttachmentDraft {
+        id,
+        draft_id,
+        file_name: "report.pdf".to_owned(),
+        content_type: "application/pdf".to_owned(),
+        sha: "f".repeat(64),
+        size: 42,
+        s3_key: format!("draft/{draft_id}/{id}"),
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn insert_draft_attachment_records_the_attachment_on_the_inboxs_draft(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::ports::DraftAttachmentRepo;
+    let repo = EmailPgRepo::new(pool);
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let id = Uuid::parse_str("dd000009-0000-0000-0000-000000000009")?;
+
+    repo.insert_draft_attachment(link, &staged_attachment(draft, id))
+        .await?;
+
+    let drafts = repo.draft_attachments_by_message_ids(&[draft]).await?;
+    let staged = drafts[&draft]
+        .iter()
+        .find(|a| a.id == id)
+        .expect("the staged attachment is recorded");
+    assert_eq!(staged.file_name, "report.pdf");
+    assert_eq!(staged.content_type, "application/pdf");
+    assert_eq!(staged.size, 42);
+    assert_eq!(staged.s3_key, format!("draft/{draft}/{id}"));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn insert_draft_attachment_records_nothing_for_another_inboxs_draft(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::ports::DraftAttachmentRepo;
+    let repo = EmailPgRepo::new(pool);
+    let other_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let id = Uuid::parse_str("dd000009-0000-0000-0000-000000000009")?;
+
+    repo.insert_draft_attachment(other_link, &staged_attachment(draft, id))
+        .await?;
+
+    let drafts = repo.draft_attachments_by_message_ids(&[draft]).await?;
+    assert!(
+        drafts[&draft].iter().all(|a| a.id != id),
+        "a draft outside the inbox gains no attachment"
+    );
     Ok(())
 }

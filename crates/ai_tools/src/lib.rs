@@ -12,6 +12,7 @@ pub mod ai_operations;
 mod build_context;
 mod deferred;
 mod display_results;
+pub mod email_attachments;
 mod import_channels;
 mod mcp_app_catalog;
 mod schemas;

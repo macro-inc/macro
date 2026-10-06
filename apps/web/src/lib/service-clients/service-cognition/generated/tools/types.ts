@@ -10517,6 +10517,11 @@ export interface SendConfirmedEmail {
    */
   includeSignature?: boolean | null;
   /**
+   * Macro documents to attach as files (optional). Each must be an
+   * uploaded file the user can view; together they may total 18 MB.
+   */
+  attachments?: EmailAttachment[];
+  /**
    * The user's own message approving this specific email, quoted verbatim - for example their "yes, send it" in reply to the email you wrote out for them. It is a reply to your draft, never the earlier request that asked you to write one: if the user has not yet seen this email, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself.
    */
   userConfirmation: string;
@@ -10535,7 +10540,19 @@ export interface EmailRecipient {
   name?: string | null;
 }
 /**
- * Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
+ * A Macro document attached to an outgoing email as a file.
+ */
+export interface EmailAttachment {
+  /**
+   * The id of the Macro document to attach. It must be a stored file -
+   * an uploaded PDF, image, spreadsheet, Word document, or other upload -
+   * that the user can view. A Macro-native document (one written in the
+   * editor) has no file to attach; link to it in the body instead.
+   */
+  documentId: string;
+}
+/**
+ * Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. To attach files, list the Macro documents in attachments — uploaded files such as PDFs, images, spreadsheets, or Word documents the user can view; the user can add or remove attachments in the composer before sending. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {
   /**
@@ -10573,6 +10590,11 @@ export interface SendEmail {
    * excludes the signature for this one email.
    */
   includeSignature?: boolean | null;
+  /**
+   * Macro documents to attach as files (optional). Each must be an
+   * uploaded file the user can view; together they may total 18 MB.
+   */
+  attachments?: EmailAttachment[];
 }
 /**
  * Set or update a property value on an entity. Tasks are targeted as entity_type='document'. Projects in the Tasks UI are entity_type='initiative'; entity_type='project' still means a folder. Initiatives share the Assignees, Status, Priority and Due Date definitions below and their clearing behavior. Project Status accepts only Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), and Completed (...0004); In Review and Canceled are task-only options. Provide the property_definition_id and exactly one value field matching the property's data type.

@@ -31,6 +31,11 @@ static INSTRUCTIONS: &str = r##"- User tools are tools that must be executed by 
   sending are the same tool: it always creates a draft for the user to confirm before anything is
   sent, so use it even when the user only wants a draft.
 
+- To attach a file, pass the Macro document's id in `SendEmail`'s `attachments`. Only uploaded
+  files attach (PDFs, images, spreadsheets, Word documents); a document written in the Macro
+  editor has no file, so link to it in the body instead. The user can add or remove attachments
+  in the composer before sending.
+
 - `SendConfirmedEmail` and `CreateConfirmedCalendarEvent` send or create immediately, with no
   composer. They are for conversation threads that have no composer, and this chat does, so
   never use them here: `SendEmail` and `CreateCalendarEvent` and their composers are how the
@@ -81,6 +86,11 @@ static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `Cr
   body as plain text in your reply. The review card is a real email composer the user can edit
   before it sends; inline text does none of that and is wrong. Drafting and sending are the same
   tool: the user decides in the card whether it goes out.
+
+- To attach a file, pass the Macro document's id in `SendEmail`'s `attachments`. Only uploaded
+  files attach (PDFs, images, spreadsheets, Word documents); a document written in the Macro
+  editor has no file, so link to it in the body instead. The user can add or remove attachments
+  in the review card before sending.
 "##;
 
 static SESSION_INTENT: &str = "The model checks where the newest prompt came from before using a \
