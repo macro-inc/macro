@@ -15,6 +15,12 @@ first prose. Verify a second prompt and a reload preserve the complete answer.
 Selected model and effort must be confirmed before the first prompt; settings
 already confirmed by the runtime do not need another control request.
 
+Repeat from Home, Agents, and the create menu with an already-ready session.
+The first prompt can be accepted before its destination mounts; navigating into
+the session must keep the same streamed turn without restarting its load. Also
+leave a pending destination, then reopen the session and confirm the sent prompt
+and complete answer remain available.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and

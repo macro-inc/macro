@@ -40,8 +40,15 @@ export function AgentSessionProvider(
     onSessionId?: (sessionId: string) => void;
   }
 ) {
-  const { sessionId, pending, failed, error, pendingPrompt, initialInput } =
-    resolveSessionId(() => props.blockId);
+  const {
+    sessionId,
+    pending,
+    failed,
+    error,
+    pendingPrompt,
+    initialInput,
+    acquired,
+  } = resolveSessionId(() => props.blockId);
 
   createEffect(() => {
     const id = sessionId();
@@ -49,7 +56,7 @@ export function AgentSessionProvider(
   });
 
   const userId = useUserId();
-  const live = createAgentSession(sessionId, { userId });
+  const live = createAgentSession(sessionId, { userId, onAcquire: acquired });
   // A block opened by sending a first prompt shows that prompt, and the
   // working line under it, from its very first paint. Nothing else can: the
   // session does not exist until `POST /agent-sessions` answers, and the

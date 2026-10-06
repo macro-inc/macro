@@ -14,6 +14,8 @@
  * before the block is on screen is normal, not a race. It is what tells a
  * block "not created yet" apart from "a session to load": an id in here is
  * waiting on its create; any other id is loaded as it is.
+ * It also holds the live session across navigation until the destination
+ * owns a reference, even when creation and the prompt POST finish first.
  *
  * Everything downstream of the block reads its session id as
  * `Accessor<string | undefined>`, so "not created yet" is the same absence
@@ -50,7 +52,14 @@ export type PendingSession = {
   initialInput?: string;
 };
 
-const pending = new Map<string, PendingSession>();
+type PendingSessionEntry = PendingSession & { dispose: () => void };
+
+const pending = new Map<string, PendingSessionEntry>();
+
+// A destination normally adopts the session immediately. Bound abandoned
+// navigation and failed creates without making a timer part of the handoff.
+// Cold sandbox provisioning can take minutes, like the prompt trace's stall bound.
+const PENDING_SESSION_TTL_MS = 5 * 60_000;
 
 /**
  * Options captured by the preflight composer before a session exists.
@@ -103,16 +112,32 @@ export function startPendingSession(
       : undefined;
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
+  let navigation: AgentSession | undefined;
+  let disposed = false;
+  const releaseNavigation = () => {
+    navigation?.release();
+    navigation = undefined;
+  };
   const fail = (message: string, cause?: unknown) => {
     trace?.end('failed', cause ?? new Error(message));
+    releaseNavigation();
     setError(message);
   };
+  const expiry = setTimeout(
+    () => forgetPendingSession(id),
+    PENDING_SESSION_TTL_MS
+  );
   pending.set(id, {
     sessionId,
     failed: () => error() !== undefined,
     error,
     prompt: options.prompt?.trim() || undefined,
     initialInput: options.initialInput,
+    dispose: () => {
+      disposed = true;
+      clearTimeout(expiry);
+      releaseNavigation();
+    },
   });
 
   const traced = <T>(operation: () => T): T =>
@@ -163,6 +188,10 @@ export function startPendingSession(
               );
               trace?.stage('configured');
             }
+            // The prompt's reference ends when its POST answers. Navigation
+            // owns a separate reference until the destination acquires, so a
+            // fast POST cannot destroy the fold before that view mounts.
+            if (!disposed) navigation = AgentSession.acquire(created);
             setSessionId(created);
             if (prompt || options.attachments?.length) {
               const delivered = await issueSessionAction(
@@ -180,6 +209,7 @@ export function startPendingSession(
                 }
               );
               if (delivered.isErr()) {
+                releaseNavigation();
                 setError(
                   delivered.error.map((error) => error.message).join(' ') ||
                     'The first message could not be sent.'
@@ -221,9 +251,11 @@ export function pendingSession(id: string): PendingSession | undefined {
 }
 
 /**
- * Drop a settled create. Called once the block has seen it land or fail, so
- * the map does not grow for the life of the tab.
+ * Release the navigation reference once the destination owns its acquisition,
+ * or when a failed/abandoned create no longer needs a placeholder.
  */
 export function forgetPendingSession(id: string): void {
+  const entry = pending.get(id);
   pending.delete(id);
+  entry?.dispose();
 }
