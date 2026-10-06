@@ -99,8 +99,3 @@ export function sameColor(a: Rgb, b: Rgb): boolean {
   const [br, bg, bb] = toBytes(b);
   return ar === br && ag === bg && ab === bb;
 }
-
-/** Rec. 601 luma, `0..=1`. */
-export function luma(c: Rgb): number {
-  return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
-}

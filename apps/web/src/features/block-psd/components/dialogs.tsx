@@ -28,7 +28,7 @@ import { SHORTCUT_GROUPS } from '../core/shortcuts';
 import { AdjustmentControls } from './adjustment-controls';
 import { CheckField, NumberField, SelectField, SliderField } from './fields';
 
-export function DialogShell(props: {
+function DialogShell(props: {
   title: string;
   testId: string;
   children: JSX.Element;

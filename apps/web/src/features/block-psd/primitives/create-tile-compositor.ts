@@ -103,7 +103,7 @@ const defaultSurface = (width: number, height: number): TileSurface => {
 };
 
 /** The canvas area a view shows (in canvas pixels), within the document. */
-export function viewRect(view: CompositorView, doc: DocSize): IRect {
+function viewRect(view: CompositorView, doc: DocSize): IRect {
   const { camera, viewport } = view;
   return intersect(
     {

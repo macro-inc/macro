@@ -80,7 +80,7 @@ function mergeResults(a: EditResult, b: EditResult): EditResult {
  * Applies changes, then the tiles the layer states among them want (the
  * tiles of new generations that arrived earlier).
  */
-export async function applyWithWants(
+async function applyWithWants(
   engine: Pick<PsdEngine, 'applyCollab'>,
   doc: LoroDoc,
   changes: EntryChange[]

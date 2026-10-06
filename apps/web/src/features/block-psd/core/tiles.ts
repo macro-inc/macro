@@ -17,7 +17,7 @@ import type { IRect } from '@core/psd-engine/types';
 export const TILE = 512;
 
 /** The coarsest level the engine renders. */
-export const MAX_LEVEL = 16;
+const MAX_LEVEL = 16;
 
 export interface TileKey {
   level: number;
@@ -75,7 +75,7 @@ export function tileLevelRect(key: TileKey, doc: DocSize): IRect {
 }
 
 /** A level rectangle in canvas pixels. */
-export function levelToCanvas(rect: IRect, level: number): IRect {
+function levelToCanvas(rect: IRect, level: number): IRect {
   const s = 2 ** level;
   return { x: rect.x * s, y: rect.y * s, w: rect.w * s, h: rect.h * s };
 }

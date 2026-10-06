@@ -35,10 +35,7 @@ import {
   type Tool,
 } from '../core/tools';
 
-export const TOOL_ICONS: Record<
-  Tool,
-  (props: { class?: string }) => JSX.Element
-> = {
+const TOOL_ICONS: Record<Tool, (props: { class?: string }) => JSX.Element> = {
   move: ArrowsOutCardinal,
   marqueeRect: Selection,
   marqueeEllipse: CircleDashed,

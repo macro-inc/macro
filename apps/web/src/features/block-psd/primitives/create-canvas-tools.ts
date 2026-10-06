@@ -12,7 +12,6 @@
  */
 
 import type { Point } from '@app/features/block-fig/core/camera';
-import { screenToPage } from '@app/features/block-fig/core/camera';
 import type { IRect, Op, SelectMode, Target } from '@core/psd-engine/types';
 import { createSignal } from 'solid-js';
 import { brushFor, newStrokeId, type PaintingTool } from '../core/brush';
@@ -32,7 +31,7 @@ import {
   toPairs,
 } from '../core/selection-math';
 import { shapeLayer } from '../core/shapes';
-import { intersect, isEmpty } from '../core/tiles';
+import { isEmpty } from '../core/tiles';
 import type { ToolOverlay, TransformImage } from '../core/tool-overlay';
 import { PAINT_TOOLS, SELECTION_TOOLS, type Tool } from '../core/tools';
 import {
@@ -1135,19 +1134,6 @@ function partCursor(part: BoxPart): string {
   if (part.kind === 'move') return 'move';
   if (part.kind === 'rotate') return 'alias';
   return HANDLE_CURSORS[part.handle];
-}
-
-/** Canvas pixels from a screen point. */
-export function toCanvas(
-  camera: Parameters<typeof screenToPage>[0],
-  screen: Point
-): Point {
-  return screenToPage(camera, screen);
-}
-
-/** Whether a rectangle meets the canvas. */
-export function onCanvas(rect: IRect, width: number, height: number) {
-  return !isEmpty(intersect(rect, { x: 0, y: 0, w: width, h: height }));
 }
 
 export type CanvasTools = ReturnType<typeof createCanvasTools>;

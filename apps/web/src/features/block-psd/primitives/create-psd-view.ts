@@ -43,7 +43,7 @@ export interface ToolOptions {
   font: string;
 }
 
-export const DEFAULT_TOOL_OPTIONS: ToolOptions = {
+const DEFAULT_TOOL_OPTIONS: ToolOptions = {
   autoSelect: true,
   tolerance: 32,
   contiguous: true,

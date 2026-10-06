@@ -12,7 +12,7 @@ import { normalizeCurve } from '../core/adjustments';
 const SIZE = 200;
 
 /** The curve's value at `x` (monotone cubic through sorted points). */
-export function curveValue(points: [number, number][], x: number): number {
+function curveValue(points: [number, number][], x: number): number {
   const n = points.length;
   if (n === 0) return x;
   if (x <= points[0][0]) return points[0][1];

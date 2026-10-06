@@ -133,7 +133,7 @@ class TrackedWALSyncer extends WALSyncer<Uint8Array> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The first shared snapshot: the format version and nothing changed yet. */
-export function buildPsdSeed(): Uint8Array {
+function buildPsdSeed(): Uint8Array {
   const doc = new LoroDoc();
   seedDocument(doc);
   return doc.export({ mode: 'snapshot' });
