@@ -1,11 +1,13 @@
 /**
- * A color swatch that opens the color picker beside it. Presentational.
+ * A color swatch that opens the color picker beside it (drawn over the
+ * page, so the panel's scrolling does not clip it). Presentational.
  */
 
 import type { Rgb } from '@core/psd-engine/types';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { css, toHex } from '../core/color';
 import { ColorPicker } from './color-picker';
+import { Floating } from './floating';
 
 export function ColorSwatch(props: {
   label: string;
@@ -14,18 +16,18 @@ export function ColorSwatch(props: {
   testId?: string;
   onChange: (color: Rgb, done: boolean) => void;
 }) {
-  const [open, setOpen] = createSignal(false);
+  /** The swatch's rectangle while the picker is open. */
+  const [open, setOpen] = createSignal<DOMRect>();
   let root!: HTMLDivElement;
+  let picker: HTMLDivElement | undefined;
   const onDocumentDown = (e: PointerEvent) => {
-    if (!root.contains(e.target as Node)) setOpen(false);
+    const target = e.target as Node;
+    if (!root.contains(target) && !picker?.contains(target)) setOpen(undefined);
   };
   document.addEventListener('pointerdown', onDocumentDown);
   onCleanup(() => document.removeEventListener('pointerdown', onDocumentDown));
   return (
-    <div
-      ref={root}
-      class="relative flex items-center gap-2 text-ink-muted text-xs"
-    >
+    <div ref={root} class="flex items-center gap-2 text-ink-muted text-xs">
       <span class="w-20 shrink-0">{props.label}</span>
       <button
         type="button"
@@ -35,16 +37,24 @@ export function ColorSwatch(props: {
         disabled={props.disabled}
         class="h-5 w-10 rounded border border-edge-muted disabled:opacity-50"
         style={{ 'background-color': css(props.color) }}
-        onClick={() => setOpen((o) => !o)}
+        onClick={(e) =>
+          setOpen(open() ? undefined : e.currentTarget.getBoundingClientRect())
+        }
       />
       <span class="text-ink tabular-nums">#{toHex(props.color)}</span>
       <Show when={open()}>
-        <div
-          class="absolute top-full right-0 z-50 mt-1 w-56 rounded-lg border border-edge-muted bg-menu p-2 shadow-lg"
-          data-testid={props.testId ? `${props.testId}-picker` : undefined}
-        >
-          <ColorPicker color={props.color} onChange={props.onChange} />
-        </div>
+        {(anchor) => (
+          <Floating
+            anchor={anchor()}
+            ref={(el) => {
+              picker = el;
+            }}
+            class="w-56 rounded-lg border border-edge-muted bg-menu p-2 shadow-lg"
+            testId={props.testId ? `${props.testId}-picker` : undefined}
+          >
+            <ColorPicker color={props.color} onChange={props.onChange} />
+          </Floating>
+        )}
       </Show>
     </div>
   );
