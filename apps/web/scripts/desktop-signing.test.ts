@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const directories: string[] = [];
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true });
 });
 
@@ -16,6 +17,10 @@ test('publication retries reuse signatures and reject changed package bytes', as
   const bin = join(directory, 'bin');
   const artifacts = join(directory, 'release-artifacts');
   const published = join(directory, 'published');
+  const startup = join(directory, 'shell-startup.sh');
+  writeFileSync(startup, 'echo "Inherited shell startup executed" >&2\nexit 97\n');
+  vi.stubEnv('BASH_ENV', startup);
+  vi.stubEnv('ENV', startup);
   for (const path of [bin, artifacts, published]) mkdirSync(path);
   const names = ['Macro-test.app.tar.gz', 'Macro-test.AppImage'];
   const signature = Buffer.from('previously published signature').toString('base64');
@@ -57,7 +62,8 @@ esac`);
   const run = () => new Promise<{ code: number | null; stderr: string }>((resolve, reject) => {
     const child = spawn('bash', [script], {
       cwd: directory,
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, DOPPLER_TOKEN: 'test-only', RELEASE_TAG: 'v1.0.0', RELEASE_REPOSITORY: 'test/test', TEST_PUBLISHED: published, TEST_VERIFICATIONS: join(directory, 'verified') },
+      // CI's Nix BASH_ENV resets PATH, bypassing the command fixtures.
+      env: { ...process.env, BASH_ENV: undefined, ENV: undefined, PATH: `${bin}:${process.env.PATH}`, DOPPLER_TOKEN: 'test-only', RELEASE_TAG: 'v1.0.0', RELEASE_REPOSITORY: 'test/test', TEST_PUBLISHED: published, TEST_VERIFICATIONS: join(directory, 'verified') },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     let stderr = '';
