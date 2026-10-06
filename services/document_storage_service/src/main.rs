@@ -1722,12 +1722,13 @@ async fn run() -> anyhow::Result<()> {
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
         db.clone(),
     )));
-    let calendar_state = CalendarRouterState::new(
-        Arc::new(calendar_events::domain::service::CalendarService::new(
-            calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
-        )),
-        authorization_state.clone(),
-    );
+    let calendar_read_service = Arc::new(calendar_events::domain::service::CalendarService::new(
+        calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+    ));
+    let graphql_calendar_context =
+        graphql_calendar::CalendarGraphqlContext::new(calendar_read_service.clone());
+    let calendar_state =
+        CalendarRouterState::new(calendar_read_service, authorization_state.clone());
 
     // Reminder dispatch. An EventBridge rule drops a sweep tick on this queue
     // every minute; the sweep fans one message out per due firing, onto the
@@ -1872,6 +1873,7 @@ async fn run() -> anyhow::Result<()> {
         graphql_scheduled_action_context: ScheduledActionGraphqlContext::new(
             scheduled_action_read_service,
         ),
+        graphql_calendar_context,
         initiative_state: InitiativeRouterState::new(
             initiative_service,
             entity_access_service.clone(),

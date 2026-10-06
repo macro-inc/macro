@@ -24,8 +24,8 @@ use crate::domain::{
         DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride, EventReminders,
         EventStart, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
         GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
-        OccurrenceContent, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
-        TeamOutOfOffice, VisibleCalendar, is_system_calendar,
+        OccurrenceException, OccurrenceListing, OccurrenceRange, ProviderCalendar,
+        StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -280,6 +280,7 @@ struct StoredCalendarRow {
 
 struct OccurrenceJoinRow {
     event_id: Uuid,
+    source_link_id: Uuid,
     occurrence_key: String,
     recurrence_id: Option<String>,
     occurrence_starts_at: Option<DateTime<Utc>>,
@@ -875,7 +876,7 @@ impl CalendarRepository for PgCalendarRepository {
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report> {
+    ) -> Result<Vec<OccurrenceListing>, Report> {
         let cursor_starts_at = cursor.as_ref().map(|cursor| cursor.starts_at);
         let cursor_event_id = cursor.as_ref().map(|cursor| cursor.event_id);
         let cursor_occurrence_key = cursor.as_ref().map(|cursor| cursor.occurrence_key.as_str());
@@ -884,6 +885,7 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             SELECT
                 occurrence.event_id,
+                event.source_link_id,
                 occurrence.occurrence_key,
                 occurrence.recurrence_id,
                 occurrence.starts_at AS occurrence_starts_at,
@@ -988,22 +990,28 @@ impl CalendarRepository for PgCalendarRepository {
         rows.into_iter()
             .map(|row| {
                 let event_id = row.event_id;
+                let link_id = row.source_link_id;
                 let occurrence = occurrence_from_join(&row)?;
                 // An exception's attendee list replaces the series list for
                 // that occurrence alone: Google records an instance-scoped
                 // RSVP there and never on the master.
-                let effective = occurrence
-                    .recurrence_id
-                    .as_ref()
-                    .and_then(|recurrence_id| {
-                        override_attendees.get(&(event_id, recurrence_id.clone()))
-                    })
-                    .or_else(|| attendees.get(&event_id))
-                    .cloned()
-                    .unwrap_or_default();
+                let exception_attendees =
+                    occurrence.recurrence_id.as_ref().and_then(|recurrence_id| {
+                        override_attendees
+                            .get(&(event_id, recurrence_id.clone()))
+                            .cloned()
+                    });
+                let series_attendees = attendees.get(&event_id).cloned().unwrap_or_default();
                 let sources = source_contents.get(&event_id).cloned().unwrap_or_default();
-                let event = event_from_join(row, effective, sources)?;
-                Ok((event, occurrence))
+                let (event, mut exception) =
+                    series_event_from_join(row, series_attendees, sources)?;
+                exception.attendees = exception_attendees;
+                Ok(OccurrenceListing {
+                    event,
+                    occurrence,
+                    link_id,
+                    exception,
+                })
             })
             .collect()
     }
@@ -4071,15 +4079,33 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
 }
 
 fn event_from_join(
-    mut row: OccurrenceJoinRow,
+    row: OccurrenceJoinRow,
     attendees: Vec<CalendarAttendee>,
     sources: Vec<CalendarEventSourceContent>,
 ) -> Result<CalendarEvent, Report> {
-    let override_title = row.override_title.take();
-    let override_description = row.override_description.take();
-    let override_location = row.override_location.take();
-    let override_status = row.override_status.take();
-    let mut event = CalendarEvent {
+    let (mut event, exception) = series_event_from_join(row, attendees, sources)?;
+    // An exception's content replaces the series content for that occurrence
+    // alone, the same way its attendee list shadows the series list.
+    event.apply_occurrence_content(exception.content());
+    Ok(event)
+}
+
+/// Split a joined occurrence row into its series event and the occurrence's
+/// exception content. The exception's attendee list is left to the caller,
+/// which loads attendees in bulk.
+fn series_event_from_join(
+    mut row: OccurrenceJoinRow,
+    attendees: Vec<CalendarAttendee>,
+    sources: Vec<CalendarEventSourceContent>,
+) -> Result<(CalendarEvent, OccurrenceException), Report> {
+    let exception = OccurrenceException {
+        title: row.override_title.take(),
+        description: row.override_description.take(),
+        location: row.override_location.take(),
+        status: row.override_status.take().as_deref().map(event_status),
+        attendees: None,
+    };
+    let event = CalendarEvent {
         id: row.event_id,
         owner_id: row.owner_id,
         ical_uid: row.ical_uid,
@@ -4120,15 +4146,7 @@ fn event_from_join(
         created_at: row.created_at,
         updated_at: row.updated_at,
     };
-    // An exception's content replaces the series content for that occurrence
-    // alone, the same way its attendee list shadows the series list.
-    event.apply_occurrence_content(OccurrenceContent {
-        title: override_title.as_deref(),
-        description: override_description.as_deref(),
-        location: override_location.as_deref(),
-        status: override_status.as_deref().map(event_status),
-    });
-    Ok(event)
+    Ok((event, exception))
 }
 
 fn occurrence_from_join(row: &OccurrenceJoinRow) -> Result<CalendarOccurrence, Report> {

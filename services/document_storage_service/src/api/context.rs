@@ -768,6 +768,7 @@ pub(crate) struct ApiContext {
     pub initiative_state: DssInitiativeState,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
+    pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub databases_state: DssDatabasesState,
     pub database_starter_state: DssDatabaseStarterState,

@@ -4454,12 +4454,14 @@ dependencies = [
  "async-stream",
  "axum",
  "bots",
+ "calendar_events",
  "chrono",
  "email",
  "entity_access",
  "entity_mutation",
  "favorites",
  "graphql_activity",
+ "graphql_calendar",
  "graphql_channel",
  "graphql_common",
  "graphql_email",
@@ -6236,6 +6238,7 @@ dependencies = [
  "futures",
  "github",
  "github_pull_requests",
+ "graphql_calendar",
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
@@ -8455,6 +8458,25 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_calendar"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "calendar_events",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "macro_user_id",
+ "models_pagination",
+ "rootcause",
+ "serde_json",
+ "tokio",
  "tracing",
  "uuid",
  "workspace-hack",

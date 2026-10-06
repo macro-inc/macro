@@ -171,6 +171,7 @@ fn insert_graphql_context_data(
     data.insert(state.channel_service.clone());
     data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
+    data.insert(state.graphql_calendar_context.clone());
     data.insert(state.graphql_initiative_entity_loader.clone());
     data.insert(graphql_initiative::initiative_detail_loader(
         state.graphql_initiative_context.clone(),

@@ -21,6 +21,7 @@ use graphql_activity::{
     GraphqlActivityPage, NoOpActivityReader, NoOpActivitySubscriptionService,
     resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
 };
+use graphql_calendar::GraphqlCalendarQuery;
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
@@ -772,6 +773,12 @@ where
         input: ActivityOverviewInput,
     ) -> async_graphql::Result<GraphqlActivityOverview> {
         resolve_activity_overview::<AcR>(ctx, &self.user_id, input).await
+    }
+
+    /// Authenticated user calendar fields supplied by `graphql_calendar`.
+    #[graphql(flatten)]
+    async fn calendar(&self) -> GraphqlCalendarQuery {
+        GraphqlCalendarQuery::new(self.user_id.clone())
     }
 
     /// Authenticated user email catalog fields supplied by `graphql_email`.

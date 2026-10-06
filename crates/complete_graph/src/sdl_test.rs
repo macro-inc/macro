@@ -710,6 +710,54 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
     );
 }
 
+#[test]
+fn calendar_reads_hang_off_the_authenticated_user() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "calendars: [GraphqlCalendar!]!",
+        "calendarOccurrences(input: CalendarRangeInput!): GraphqlCalendarOccurrencePage!",
+        "union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime",
+        "watermark: [GraphqlCalendarLinkWatermark!]!",
+        "needsCalendarPermission: Boolean!",
+        "calendarDisabled: Boolean!",
+        "hasCalendarData: Boolean!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let ExtendedType::Object(occurrence) = schema
+        .types
+        .get("GraphqlCalendarOccurrence")
+        .expect("occurrence type")
+    else {
+        panic!("GraphqlCalendarOccurrence must be an object");
+    };
+    for scalar in ["id", "eventId", "linkId"] {
+        assert_eq!(occurrence.fields[scalar].ty.to_string(), "ID!");
+    }
+    assert_eq!(
+        occurrence.fields["event"].ty.to_string(),
+        "GraphqlCalendarEvent!"
+    );
+    for entity in ["GraphqlCalendarEvent", "GraphqlCalendar"] {
+        let ExtendedType::Object(object) = schema.types.get(entity).expect("entity type") else {
+            panic!("{entity} must be an object");
+        };
+        assert_eq!(object.fields["id"].ty.to_string(), "ID!");
+        assert_eq!(object.fields["linkId"].ty.to_string(), "ID!");
+    }
+
+    let ExtendedType::Object(root) = schema.types.get("SoupQueryRoot").expect("query root") else {
+        panic!("SoupQueryRoot must be an object");
+    };
+    assert!(!root.fields.contains_key("calendars"));
+    assert!(!root.fields.contains_key("calendarOccurrences"));
+}
+
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client
 /// codegen and the normalized-cache metadata. Splitting the schema across
 /// crates must never change it silently — regenerate with

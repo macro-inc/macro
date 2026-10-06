@@ -55,6 +55,7 @@ members = [
   "crates/gmail_client",
   "crates/google_token",
   "crates/graphql_activity",
+  "crates/graphql_calendar",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_email",

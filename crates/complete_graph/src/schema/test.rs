@@ -44,6 +44,7 @@ use uuid::Uuid;
 
 use super::*;
 
+mod calendar;
 mod database_activity;
 mod database_row;
 mod email_archive;
@@ -411,6 +412,9 @@ impl EmailUserService for CountingEmailService {
                 signature: Some("<p>Regards</p>".to_owned()),
             },
             is_primary: true,
+            needs_calendar_permission: false,
+            calendar_disabled: false,
+            has_calendar_data: true,
             created_at: Default::default(),
             updated_at: Default::default(),
         }])

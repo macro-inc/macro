@@ -24,6 +24,38 @@ input ActivityOverviewInput {
 }
 
 """
+A bounded occurrence viewport and page request.
+"""
+input CalendarRangeInput {
+	"""
+	Inclusive UTC viewport start in RFC 3339 format.
+	"""
+	start: String!
+	"""
+	Exclusive UTC viewport end in RFC 3339 format.
+	"""
+	end: String!
+	"""
+	Inclusive local date boundary for all-day events (`YYYY-MM-DD`).
+	Defaults to the date of `start`.
+	"""
+	startDate: String
+	"""
+	Exclusive local date boundary for all-day events (`YYYY-MM-DD`).
+	Defaults to the first date at or after `end`.
+	"""
+	endDate: String
+	"""
+	Page size, from 1 through 2,000. Defaults to 1,000.
+	"""
+	first: Int
+	"""
+	`endCursor` of the previous page.
+	"""
+	after: String
+}
+
+"""
 Channel activity operation exposed by GraphQL.
 """
 enum ChannelActivityType {
@@ -924,6 +956,20 @@ type GraphqlAiResponseMetadata {
 }
 
 """
+An all-day span using RFC 5545's exclusive end date.
+"""
+type GraphqlAllDayEventTime {
+	"""
+	Inclusive local start date (`YYYY-MM-DD`).
+	"""
+	startDate: String!
+	"""
+	Exclusive local end date (`YYYY-MM-DD`).
+	"""
+	endDate: String!
+}
+
+"""
 A Boolean property value.
 """
 type GraphqlBooleanPropertyValue {
@@ -945,6 +991,236 @@ type GraphqlCacheDeletion {
 	Identifier used in the normalized cache key.
 	"""
 	entityId: ID!
+}
+
+"""
+A calendar visible to the viewer.
+"""
+type GraphqlCalendar {
+	"""
+	Macro calendar identifier.
+	"""
+	id: ID!
+	"""
+	Connected inbox that syncs this calendar.
+	"""
+	linkId: ID!
+	"""
+	Connected inbox address.
+	"""
+	emailAddress: String!
+	"""
+	Provider display name.
+	"""
+	name: String!
+	"""
+	Provider color.
+	"""
+	color: String
+	"""
+	Whether this is its account's primary calendar.
+	"""
+	isPrimary: Boolean!
+	"""
+	Whether the grant can create and modify events on this calendar.
+	"""
+	isWritable: Boolean!
+	"""
+	Whether this is a shared system calendar (holidays, birthdays).
+	"""
+	isSubscription: Boolean!
+	"""
+	A persistent sync failure isolated to this calendar.
+	"""
+	syncError: String
+	"""
+	Default reminders applied to events that keep `useDefault`.
+	"""
+	defaultReminders: [GraphqlCalendarReminderOverride!]!
+}
+
+"""
+One event attendee.
+"""
+type GraphqlCalendarAttendee {
+	"""
+	Attendee email address.
+	"""
+	email: String!
+	"""
+	Attendee display name.
+	"""
+	displayName: String
+	"""
+	The attendee's RSVP.
+	"""
+	responseStatus: GraphqlCalendarAttendeeResponseStatus!
+	"""
+	Whether the attendee organizes the event.
+	"""
+	isOrganizer: Boolean!
+	"""
+	Whether the attendee is optional.
+	"""
+	isOptional: Boolean!
+	"""
+	Whether the attendee is one of the viewer's own connected inboxes.
+	"""
+	isSelf: Boolean!
+	"""
+	The attendee's RSVP comment.
+	"""
+	comment: String
+}
+
+"""
+An attendee's RSVP.
+"""
+enum GraphqlCalendarAttendeeResponseStatus {
+	"""
+	The attendee has not responded.
+	"""
+	NEEDS_ACTION
+	"""
+	The attendee accepted.
+	"""
+	ACCEPTED
+	"""
+	The attendee declined.
+	"""
+	DECLINED
+	"""
+	The attendee tentatively accepted.
+	"""
+	TENTATIVE
+}
+
+"""
+Conferencing system backing an event's join URL.
+"""
+enum GraphqlCalendarConferenceProvider {
+	"""
+	Google Meet.
+	"""
+	GOOGLE_MEET
+	"""
+	Any other conferencing system.
+	"""
+	OTHER
+}
+
+"""
+A calendar event entity: the series content shared by every occurrence.
+"""
+type GraphqlCalendarEvent {
+	"""
+	Macro event identifier.
+	"""
+	id: ID!
+	"""
+	Macro user who owns this event projection.
+	"""
+	ownerId: String!
+	"""
+	Connected inbox whose grant backs the event.
+	"""
+	linkId: ID!
+	"""
+	RFC 5545 UID used to reconcile provider and email sources.
+	"""
+	icalUid: String!
+	"""
+	Calendar the canonical source belongs to, when known.
+	"""
+	calendarId: ID
+	"""
+	Content of every active copy of this event, canonical first.
+	"""
+	sources: [GraphqlCalendarEventSource!]!
+	"""
+	Display title.
+	"""
+	title: String!
+	"""
+	Optional event body.
+	"""
+	description: String
+	"""
+	Optional physical or virtual location label.
+	"""
+	location: String
+	"""
+	Event status.
+	"""
+	status: GraphqlCalendarEventStatus!
+	"""
+	Event visibility.
+	"""
+	visibility: GraphqlCalendarEventVisibility!
+	"""
+	Availability behavior.
+	"""
+	transparency: GraphqlCalendarEventTransparency!
+	"""
+	Provider event type.
+	"""
+	eventType: GraphqlCalendarEventType!
+	"""
+	The series time span.
+	"""
+	time: GraphqlEventTime!
+	"""
+	Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+	"""
+	recurrenceLines: [String!]!
+	"""
+	Organizer email.
+	"""
+	organizerEmail: String
+	"""
+	Organizer display name.
+	"""
+	organizerName: String
+	"""
+	Provider-reported creator email.
+	"""
+	creatorEmail: String
+	"""
+	Provider-reported creator display name.
+	"""
+	creatorName: String
+	"""
+	Direct join URL when known.
+	"""
+	conferenceUrl: String
+	"""
+	Which conferencing system backs `conferenceUrl`.
+	"""
+	conferenceProvider: GraphqlCalendarConferenceProvider
+	"""
+	Provider/iCalendar sequence number.
+	"""
+	sequence: Int!
+	"""
+	Whether the canonical source's calendar prohibits editing it.
+	"""
+	isReadOnly: Boolean!
+	"""
+	Series attendees.
+	"""
+	attendees: [GraphqlCalendarAttendee!]!
+	"""
+	Reminder configuration.
+	"""
+	reminders: GraphqlCalendarReminders!
+	"""
+	Entity creation time in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	Entity update time in RFC 3339 format.
+	"""
+	updatedAt: String!
 }
 
 """
@@ -1053,6 +1329,287 @@ type GraphqlCalendarEventReminderMetadata {
 	Minutes before the event start when the alarm fires.
 	"""
 	minutesBefore: Int!
+}
+
+"""
+Content of one calendar's copy of an event.
+"""
+type GraphqlCalendarEventSource {
+	"""
+	Calendar this copy lives on.
+	"""
+	calendarId: ID!
+	"""
+	Display title.
+	"""
+	title: String!
+	"""
+	Optional event body.
+	"""
+	description: String
+	"""
+	Optional physical or virtual location label.
+	"""
+	location: String
+	"""
+	Provider event type.
+	"""
+	eventType: GraphqlCalendarEventType!
+	"""
+	Event visibility.
+	"""
+	visibility: GraphqlCalendarEventVisibility!
+	"""
+	Availability behavior.
+	"""
+	transparency: GraphqlCalendarEventTransparency!
+	"""
+	Whether the calendar's access role prohibits editing this copy.
+	"""
+	isReadOnly: Boolean!
+	"""
+	Reminder configuration of this copy.
+	"""
+	reminders: GraphqlCalendarReminders!
+	"""
+	Provider-reported creator email.
+	"""
+	creatorEmail: String
+	"""
+	Provider-reported creator display name.
+	"""
+	creatorName: String
+}
+
+"""
+Event status.
+"""
+enum GraphqlCalendarEventStatus {
+	"""
+	The event is confirmed.
+	"""
+	CONFIRMED
+	"""
+	The event is tentatively confirmed.
+	"""
+	TENTATIVE
+	"""
+	The event was cancelled.
+	"""
+	CANCELLED
+}
+
+"""
+Whether the event blocks time on the calendar.
+"""
+enum GraphqlCalendarEventTransparency {
+	"""
+	The event blocks time.
+	"""
+	OPAQUE
+	"""
+	The event does not block time.
+	"""
+	TRANSPARENT
+}
+
+"""
+Provider event type.
+"""
+enum GraphqlCalendarEventType {
+	"""
+	A regular event.
+	"""
+	DEFAULT
+	"""
+	An out-of-office block.
+	"""
+	OUT_OF_OFFICE
+	"""
+	A focus-time block.
+	"""
+	FOCUS_TIME
+	"""
+	A working-location marker.
+	"""
+	WORKING_LOCATION
+	"""
+	A contact's birthday.
+	"""
+	BIRTHDAY
+	"""
+	An event Gmail created from an email.
+	"""
+	FROM_GMAIL
+}
+
+"""
+Event visibility.
+"""
+enum GraphqlCalendarEventVisibility {
+	"""
+	The calendar's default visibility.
+	"""
+	DEFAULT
+	"""
+	Visible to everyone with access to the calendar.
+	"""
+	PUBLIC
+	"""
+	Details visible only to attendees.
+	"""
+	PRIVATE
+	"""
+	Treated as private.
+	"""
+	CONFIDENTIAL
+}
+
+"""
+How far the viewer's client has read one connected inbox's calendar
+change log.
+"""
+type GraphqlCalendarLinkWatermark {
+	"""
+	Connected inbox identifier.
+	"""
+	linkId: ID!
+	"""
+	Last change-log sequence covered, as a decimal string.
+	"""
+	seq: String!
+}
+
+"""
+One materialized instance of a calendar event.
+
+`eventId` and `linkId` repeat the event's identity as scalars so a client
+range index can project occurrences without dereferencing the event.
+"""
+type GraphqlCalendarOccurrence {
+	"""
+	`{eventId}:{occurrenceKey}`.
+	"""
+	id: ID!
+	"""
+	Owning event identifier.
+	"""
+	eventId: ID!
+	"""
+	Connected inbox whose grant backs the event.
+	"""
+	linkId: ID!
+	"""
+	The series event.
+	"""
+	event: GraphqlCalendarEvent!
+	"""
+	Stable key within the event.
+	"""
+	occurrenceKey: String!
+	"""
+	Provider recurrence identifier, when applicable.
+	"""
+	recurrenceId: String
+	"""
+	Instance time.
+	"""
+	time: GraphqlEventTime!
+	"""
+	Whether the instance was cancelled.
+	"""
+	isCancelled: Boolean!
+	"""
+	Title replacing the series title on this instance alone.
+	"""
+	overrideTitle: String
+	"""
+	Description replacing the series description on this instance alone.
+	"""
+	overrideDescription: String
+	"""
+	Location replacing the series location on this instance alone.
+	"""
+	overrideLocation: String
+	"""
+	Status replacing the series status on this instance alone.
+	"""
+	overrideStatus: GraphqlCalendarEventStatus
+	"""
+	Attendee list replacing the series list on this instance alone, where
+	an instance-scoped RSVP is recorded.
+	"""
+	overrideAttendees: [GraphqlCalendarAttendee!]
+}
+
+"""
+One page of occurrences overlapping a viewport.
+"""
+type GraphqlCalendarOccurrencePage {
+	"""
+	Occurrences ordered by start, event, and occurrence key.
+	"""
+	nodes: [GraphqlCalendarOccurrence!]!
+	"""
+	Whether another page follows.
+	"""
+	hasNextPage: Boolean!
+	"""
+	Cursor for the next page, present when `hasNextPage` is true.
+	"""
+	endCursor: String
+	"""
+	Aggregate ingestion state; clients render a skeleton while syncing.
+	"""
+	syncStatus: GraphqlCalendarSyncStatus!
+	"""
+	Change-log position of every visible connected inbox, captured before
+	the page was read.
+	"""
+	watermark: [GraphqlCalendarLinkWatermark!]!
+}
+
+"""
+One reminder override.
+"""
+type GraphqlCalendarReminderOverride {
+	"""
+	Delivery method (`popup` or `email`).
+	"""
+	method: String!
+	"""
+	Minutes before the start the reminder fires.
+	"""
+	minutes: Int!
+}
+
+"""
+An event's reminder configuration.
+"""
+type GraphqlCalendarReminders {
+	"""
+	Whether the calendar's default reminders apply.
+	"""
+	useDefault: Boolean!
+	"""
+	Explicit reminders, used when `useDefault` is false.
+	"""
+	overrides: [GraphqlCalendarReminderOverride!]!
+}
+
+"""
+Aggregate ingestion state across every calendar account visible to the
+viewer.
+"""
+enum GraphqlCalendarSyncStatus {
+	"""
+	At least one visible calendar account is still ingesting.
+	"""
+	SYNCING
+	"""
+	Every visible calendar account has finished its latest sync.
+	"""
+	READY
 }
 
 """
@@ -2250,6 +2807,18 @@ type GraphqlEmailLink {
 	"""
 	isPrimary: Boolean!
 	"""
+	Whether the recorded Google grant lacks the calendar capability.
+	"""
+	needsCalendarPermission: Boolean!
+	"""
+	Whether the owner turned the inbox's calendar off.
+	"""
+	calendarDisabled: Boolean!
+	"""
+	Whether a calendar account has been provisioned for the inbox.
+	"""
+	hasCalendarData: Boolean!
+	"""
 	Link creation timestamp in RFC 3339 format.
 	"""
 	createdAt: String!
@@ -2737,6 +3306,11 @@ enum GraphqlEntityType {
 	"""
 	DATABASE_ROW
 }
+
+"""
+The mutually exclusive time shape of an event or occurrence.
+"""
+union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime
 
 """
 GraphQL fields for an ordered favorite.
@@ -7121,6 +7695,24 @@ type GraphqlTeamRolePermission {
 }
 
 """
+A span with absolute instants.
+"""
+type GraphqlTimedEventTime {
+	"""
+	Inclusive start instant in RFC 3339 format.
+	"""
+	startsAt: String!
+	"""
+	Exclusive end instant in RFC 3339 format.
+	"""
+	endsAt: String!
+	"""
+	Original IANA time-zone identifier, when supplied.
+	"""
+	timeZone: String
+}
+
+"""
 An update to an existing notification.
 """
 type GraphqlUpdatedNotification {
@@ -7179,6 +7771,16 @@ type GraphqlUser {
 	into local dates in the requested time zone.
 	"""
 	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
+	"""
+	Every calendar visible across owned and delegated inboxes, primaries
+	and writables first.
+	"""
+	calendars: [GraphqlCalendar!]!
+	"""
+	One page of occurrences overlapping the viewport, across owned and
+	delegated inboxes, ordered by start.
+	"""
+	calendarOccurrences(input: CalendarRangeInput!): GraphqlCalendarOccurrencePage!
 	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""
