@@ -4097,10 +4097,13 @@ describe('normalizedCacheExchange', () => {
           host,
           () => {
             attempts += 1;
-            // Nine server failures, then more than ten transport failures, then
-            // the tenth server failure. Transport errors cannot reset the budget.
+            // Transport failures before the first server error cannot consume
+            // the budget; transport failures after nine cannot reset it either.
             return {
-              error: attempts <= 9 || attempts === 22 ? server : network,
+              error:
+                (attempts >= 13 && attempts <= 21) || attempts === 34
+                  ? server
+                  : network,
               data: undefined,
             };
           },
@@ -4108,14 +4111,14 @@ describe('normalizedCacheExchange', () => {
         );
         ops.next(makeMutationOp(1, optimistic));
         await vi.advanceTimersByTimeAsync(0);
-        for (let attempt = 1; attempt < 22; attempt += 1) {
+        for (let attempt = 1; attempt < 34; attempt += 1) {
           expect(host.rollbacks).toHaveLength(0);
           await vi.advanceTimersByTimeAsync(
             Math.min(1_000 * 2 ** (attempt - 1), 60_000)
           );
         }
-        expect(attempts).toBe(22);
-        expect(host.defers).toHaveLength(21);
+        expect(attempts).toBe(34);
+        expect(host.defers).toHaveLength(33);
         expect(host.rollbacks).toEqual(['txn-1']);
       } finally {
         vi.clearAllTimers();
