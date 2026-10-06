@@ -66,9 +66,13 @@ pub fn open(bytes: &[u8]) -> Result<Opened> {
         let (w, h) = page.shown_size();
         page.origin = (x, 0.0);
         let id = doc.allocate_id();
+        let saved_name = page
+            .dict
+            .get(marks::ARTBOARD)
+            .and_then(|v| pdf.resolve(v).as_text());
         doc.artboards.push(Artboard {
             id,
-            name: format!("Artboard {}", i + 1),
+            name: saved_name.unwrap_or_else(|| format!("Artboard {}", i + 1)),
             rect: Rect::from_xywh(x, 0.0, w, h),
             page: Some(i as u32),
             removed: false,
@@ -117,6 +121,7 @@ pub fn open(bytes: &[u8]) -> Result<Opened> {
             text: None,
             skip: 0,
             hidden: 0,
+            name: None,
             seen_layer: false,
         };
         let mut interp = Interp::new(&pdf, &mut fonts);
@@ -258,6 +263,8 @@ enum Marked {
     /// Edited text's or a masked path's: the object comes from the marked
     /// content's properties, and its drawing is skipped.
     Skipped,
+    /// A named object's (the name goes to the next object added).
+    Name,
     /// Other marked content.
     Other,
 }
@@ -281,6 +288,8 @@ struct Builder<'a, 'p> {
     skip: usize,
     /// Inside hidden objects' marked content.
     hidden: usize,
+    /// The name `/MacroName` gives the next object added.
+    name: Option<String>,
     /// A layer has started on this page.
     seen_layer: bool,
 }
@@ -379,6 +388,11 @@ impl Builder<'_, '_> {
         node.artboard = self.artboard;
         if self.hidden > 0 {
             node.hidden = true;
+        }
+        if !node.is_container()
+            && let Some(name) = self.name.take()
+        {
+            node.name = name;
         }
         let i = self.doc.push(node);
         self.doc.node_mut(parent).children.push(i);
@@ -901,6 +915,10 @@ impl Sink for Builder<'_, '_> {
                 self.skip += 1;
                 Marked::Skipped
             }
+            t if t == marks::NAME.as_bytes() => {
+                self.name = marks::read_name(self.pdf, props);
+                Marked::Name
+            }
             _ => Marked::Other,
         };
         self.marked.push(mark);
@@ -915,6 +933,7 @@ impl Sink for Builder<'_, '_> {
             }
             Some(Marked::Hidden) => self.hidden = self.hidden.saturating_sub(1),
             Some(Marked::Skipped) => self.skip = self.skip.saturating_sub(1),
+            Some(Marked::Name) => self.name = None,
             Some(Marked::Named) | Some(Marked::Other) | None => {}
         }
     }

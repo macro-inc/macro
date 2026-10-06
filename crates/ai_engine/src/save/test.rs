@@ -299,6 +299,68 @@ fn new_documents_open() {
 }
 
 #[test]
+fn object_and_artboard_names_round_trip() {
+    let mut doc = open(&sample()).expect("opens").document;
+    let art = layer(&doc, "Art");
+    let shape = doc.node(doc.node(art).children[0]).id;
+    let text = doc.node(doc.node(art).children[2]).id;
+    let board = doc.artboards[0].id;
+    let art_id = doc.node(art).id;
+    let rename = |id: u32, name: &str| Op::SetNode {
+        ids: vec![id],
+        patch: crate::edit::NodePatch {
+            name: Some(name.into()),
+            ..Default::default()
+        },
+    };
+    apply(
+        &mut doc,
+        vec![
+            rename(shape, "Red square"),
+            rename(text, "Greeting"),
+            Op::SetText {
+                id: text,
+                patch: TextPatch {
+                    text: Some("Hello".into()),
+                    ..Default::default()
+                },
+            },
+            Op::SetArtboard {
+                id: board,
+                name: Some("Cover".into()),
+                rect: None,
+            },
+            Op::Create {
+                node: NewNode::Rect {
+                    rect: Rect::new(150.0, 10.0, 190.0, 30.0),
+                    radius: 0.0,
+                    fill: Some(Paint::Solid {
+                        color: Color::BLACK,
+                    }),
+                    stroke: None,
+                },
+                parent: Some(art_id),
+                position: Position::Top,
+            },
+        ],
+    );
+    let again = reopen(&doc);
+    assert_eq!(again.artboards[0].name, "Cover");
+    let names: Vec<&str> = again
+        .node(self::layer(&again, "Art"))
+        .children
+        .iter()
+        .map(|&c| again.node(c).name.as_str())
+        .collect();
+    // New shapes keep the name they were made with; the blue square the
+    // file drew, unnamed, stays so.
+    assert_eq!(names, ["Red square", "", "Greeting", "Rectangle"]);
+    // Files from elsewhere name their artboards in order.
+    let plain = open(&sample()).expect("opens").document;
+    assert_eq!(plain.artboards[0].name, "Artboard 1");
+}
+
+#[test]
 fn placed_images_save() {
     let mut doc = open(&blank_file(100.0, 100.0).expect("writes"))
         .expect("opens")

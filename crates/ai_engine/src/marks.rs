@@ -1,9 +1,10 @@
 //! Marked content the engine writes so a saved file reads back as it was
 //! edited: groups (`/MacroGroup`), edited text (`/MacroText`, written as
 //! outlines that other applications draw), paths whose gradients have
-//! transparent stops (`/MacroPath`, drawn under soft masks), and hidden
-//! objects (inside an optional content group that is off and marked
-//! `/MacroHidden`).
+//! transparent stops (`/MacroPath`, drawn under soft masks), objects' names
+//! (`/MacroName`), and hidden objects (inside an optional content group
+//! that is off and marked `/MacroHidden`). Artboard names are a page
+//! dictionary key (`/MacroArtboard`).
 
 use crate::geom::Affine;
 use crate::model::{PathNode, TextNode};
@@ -17,6 +18,10 @@ pub const GROUP: &str = "MacroGroup";
 pub const TEXT: &str = "MacroText";
 /// The tag of a path drawn under soft masks.
 pub const PATH: &str = "MacroPath";
+/// The tag around a named object (groups keep theirs in `/MacroGroup`).
+pub const NAME: &str = "MacroName";
+/// The page dictionary key holding the name of the artboard it is.
+pub const ARTBOARD: &str = "MacroArtboard";
 /// The key marking the optional content group of hidden objects.
 pub const HIDDEN: &str = "MacroHidden";
 
@@ -111,6 +116,20 @@ pub fn path_props(path: &PathNode, to_page: &Affine) -> Dict {
 /// Reads a masked path's property list.
 pub fn read_path(pdf: &dyn Resolve, props: Option<&Object>) -> Option<(PathNode, Affine)> {
     read_content(pdf, props)
+}
+
+/// The property list of a named object.
+pub fn name_props(name: &str) -> Dict {
+    let mut d = Dict::new();
+    d.set("Name", Object::String(crate::pdf::encode_text(name)));
+    d
+}
+
+/// Reads a named object's property list.
+pub fn read_name(pdf: &dyn Resolve, props: Option<&Object>) -> Option<String> {
+    let d = pdf.resolve(props?);
+    let name = d.as_dict()?.get("Name")?;
+    pdf.resolve(name).as_text()
 }
 
 /// Whether an optional content group holds hidden objects.
