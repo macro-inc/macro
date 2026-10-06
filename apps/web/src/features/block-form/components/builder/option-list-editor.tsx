@@ -1,6 +1,4 @@
 import { Popover } from '@kobalte/core/popover';
-import CheckSquare from '@phosphor/check-square.svg';
-import Circle from '@phosphor/circle.svg';
 import Palette from '@phosphor/palette.svg';
 import X from '@phosphor/x.svg';
 import { ColorSwatches } from '@property/tags/components/color-swatches';
@@ -8,6 +6,7 @@ import { Key } from '@solid-primitives/keyed';
 import { TagDot } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { FormOption } from '../../core/form-model';
+import { ChoiceMarker } from './choice-marker';
 import { DraftInput } from './draft-input';
 
 /**
@@ -33,21 +32,12 @@ export function OptionListEditor(props: {
     const added = await props.onAdd(label);
     if (!added && !draft()) setDraft(label);
   };
-  const Glyph = () =>
-    props.multi ? (
-      <CheckSquare
-        class="size-4 shrink-0 text-ink-extra-muted"
-        aria-hidden="true"
-      />
-    ) : (
-      <Circle class="size-4 shrink-0 text-ink-extra-muted" aria-hidden="true" />
-    );
   return (
     <ul class="flex flex-col gap-1" aria-label="Options">
       <Key each={props.options} by={(option) => option.id}>
         {(option, index) => (
           <li class="group/option flex items-center gap-2">
-            <Glyph />
+            <ChoiceMarker multi={props.multi} />
             <DraftInput
               aria-label={`Option ${index() + 1}`}
               value={option().label}
@@ -92,7 +82,7 @@ export function OptionListEditor(props: {
         )}
       </Key>
       <li class="flex items-center gap-2">
-        <Glyph />
+        <ChoiceMarker multi={props.multi} />
         <input
           aria-label="Add option"
           placeholder="Add option"

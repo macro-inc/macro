@@ -1,8 +1,8 @@
 import CheckSquare from '@phosphor/check-square.svg';
-import Circle from '@phosphor/circle.svg';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { FormColumn, FormOption } from '../../core/form-model';
 import type { QuestionTypeId } from '../../core/question-types';
+import { ChoiceMarker } from './choice-marker';
 
 function FauxField(props: { children: JSX.Element; tall?: boolean }) {
   return (
@@ -34,17 +34,8 @@ function OptionsPreview(props: {
                     {index() + 1}.
                   </span>
                 </Match>
-                <Match when={props.multi}>
-                  <CheckSquare
-                    class="size-4 text-ink-extra-muted"
-                    aria-hidden="true"
-                  />
-                </Match>
-                <Match when={!props.multi}>
-                  <Circle
-                    class="size-4 text-ink-extra-muted"
-                    aria-hidden="true"
-                  />
+                <Match when={!props.numbered}>
+                  <ChoiceMarker multi={props.multi} />
                 </Match>
               </Switch>
               <span class="truncate">{option.label}</span>
