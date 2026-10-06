@@ -172,7 +172,12 @@ function FormBlockContent(props: {
               </Button>
               {primary()}
             </Show>
-            <ShareTrigger onClick={openShare} copyLink={copyRespondLink} />
+            <ShareTrigger
+              id={formId}
+              blockType="form"
+              onClick={openShare}
+              copyLink={copyRespondLink}
+            />
           </div>
         </HeaderIsland>
       </SplitHeaderRight>

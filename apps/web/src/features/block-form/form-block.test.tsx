@@ -44,7 +44,11 @@ vi.mock('@core/component/LiveIndicators', () => ({
   BlockLiveIndicators: () => <span>Live editors</span>,
 }));
 vi.mock('@core/component/TopBar/ShareButton', () => ({
-  ShareTrigger: () => null,
+  ShareTrigger: (props: { id?: string; blockType?: string }) => {
+    expect(props.id).toBe('form-1');
+    expect(props.blockType).toBe('form');
+    return null;
+  },
 }));
 vi.mock('@core/component/TopBar/shareModal', () => ({
   useShareModal: () => () => {},
