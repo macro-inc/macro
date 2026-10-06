@@ -1355,6 +1355,9 @@ On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
 does not start a new event; the next press creates one. Clicking another event
 switches the open details.
+Desktop event details stay inside the visible calendar grid, including Home
+previews and narrow splits. They overlap wide Day-view events when needed and
+shrink to fit the pane; long details scroll while the RSVP row stays visible.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
