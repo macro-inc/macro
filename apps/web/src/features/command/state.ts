@@ -176,6 +176,9 @@ function createCommandState(): ICommandState {
   function onMenuClose() {
     setLastClosedTime(Date.now());
     setHint(undefined);
+    // Opening clears the query too late for a menu that mounts reading it, and
+    // the previous search's results would briefly reappear.
+    clearQuery();
     clearCommandScopeCommands();
     clearEntityActionEntities();
   }

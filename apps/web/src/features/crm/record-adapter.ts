@@ -1,10 +1,15 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableCrm } from '@core/constant/featureFlags';
 import type { EntityItem } from '@core/context/quickAccess';
+import { useQuickAccess } from '@core/context/quickAccess/context';
+import { toCrmContactItem } from '@core/context/quickAccess/crm-contacts';
+import { debouncedDependent } from '@core/util/debounce';
+import { isCrmContactEntity } from '@entity/types/entity';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { createContactDiscovery } from './primitives/contact-discovery';
 import { useSetCompanyHiddenMutation as createHiddenMutation } from './queries/companies';
 import {
   useQuickAccessCrmContactsQuery as createContactSuggestions,
@@ -57,18 +62,9 @@ export function useCrmContactMentionSource(
   const entities = createMemo<EntityItem[]>(() =>
     queryReadyGate(query)
       ? query.data.pages.flatMap((page) =>
-          page.contacts.map((record) => {
-            const contact = toCrmContactEntity(record);
-            return {
-              kind: 'entity' as const,
-              bucket: 'crm_contact' as const,
-              id: contact.id,
-              data: contact,
-              searchText: `${contact.name} | ${contact.email}`,
-              sortTimestamp: Date.parse(record.lastInteraction),
-              timestamps: { lastInteraction: record.lastInteraction },
-            };
-          })
+          page.contacts.map((record) =>
+            toCrmContactItem(toCrmContactEntity(record))
+          )
         )
       : []
   );
@@ -82,4 +78,65 @@ export function useCrmContactMentionSource(
       await query.fetchNextPage();
     },
   };
+}
+
+const CONTACT_SEARCH_DEBOUNCE_MS = 250;
+
+/** Contacts matching a typed query: cached matches at once, then authorized
+ * server pages across the viewer's CRM-enabled teams beyond the cached rows. */
+export function useCrmContactDiscovery(
+  search: Accessor<string>,
+  active: Accessor<boolean>
+) {
+  const flag = useFeatureFlag(enableCrm);
+  const query = () => search().trim();
+  const enabled = () => flag().enabled && active() && query().length > 0;
+  const serverQuery = debouncedDependent(query, CONTACT_SEARCH_DEBOUNCE_MS);
+  const cached = useQuickAccess().useList({
+    buckets: ['crm_contact'],
+    searchTerm: query,
+    enabled,
+  });
+  const server = useCrmContactsQuery(
+    { client: useQueryClient() },
+    () => enabled() && serverQuery().length > 0,
+    serverQuery
+  );
+  return createContactDiscovery({
+    query,
+    active: enabled,
+    cached: {
+      contacts: () =>
+        cached
+          .items()
+          .flatMap((item) =>
+            item.kind === 'entity' && isCrmContactEntity(item.data)
+              ? [item.data]
+              : []
+          ),
+      isLoading: cached.isLoading,
+      hasMore: cached.hasMore,
+      isLoadingMore: cached.isLoadingMore,
+      loadMore: cached.loadMore,
+    },
+    server: {
+      query: serverQuery,
+      contacts: () =>
+        queryReadyGate(server)
+          ? server.data.pages.flatMap((page) =>
+              page.contacts.map(toCrmContactEntity)
+            )
+          : undefined,
+      error: () => server.error ?? undefined,
+      isLoading: () => server.isLoading,
+      hasMore: () => server.hasNextPage,
+      isLoadingMore: () => server.isFetchingNextPage,
+      loadMore: async () => {
+        await server.fetchNextPage();
+      },
+      refresh: async () => {
+        await server.refetch({ throwOnError: true });
+      },
+    },
+  });
 }
