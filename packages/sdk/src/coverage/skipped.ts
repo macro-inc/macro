@@ -125,6 +125,7 @@ export const authExcluded = [
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
   'toggleTeamNonAdminInvites',
+  'updateAiBillingAutoReload',
   'updateAiBillingOverage',
   'verifyEmailLink',
   'verifyFusionauthUserEmail',

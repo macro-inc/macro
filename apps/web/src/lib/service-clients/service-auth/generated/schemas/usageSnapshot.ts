@@ -4,7 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { AutoReloadSnapshot } from './autoReloadSnapshot';
 import type { PlanTier } from './planTier';
 import type { UsageSnapshotBlockedReason } from './usageSnapshotBlockedReason';
 
@@ -13,6 +13,9 @@ import type { UsageSnapshotBlockedReason } from './usageSnapshotBlockedReason';
 by the gate.
  */
 export interface UsageSnapshot {
+  /** Automatic credit reload settings. `active` means overage is on and
+reloads are not suspended. */
+  auto_reload: AutoReloadSnapshot;
   blocked_reason?: UsageSnapshotBlockedReason;
   /** Whether the requesting user is the payer. */
   can_manage_billing: boolean;
