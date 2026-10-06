@@ -420,6 +420,18 @@ client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
 
+## Folder uploads
+
+Dropping a folder (or choosing one with the folder picker) zips it in the browser
+and imports it as a folder tree: each subfolder becomes a folder, including empty
+ones, and each file becomes a document. The folder picker cannot see empty
+subfolders, so only dropped folders keep them. Office lock files (`~$…`),
+`Thumbs.db`, `desktop.ini`, `__MACOSX` and hidden files or folders are skipped.
+Extension case does not matter (`REPORT.DOCX` imports as `.docx`). If some files
+fail, the rest of the tree still appears and a toast says some files could not be
+uploaded. The unzip runs in the upload extractor Lambda, which the local stack
+does not run; verify folder imports against a deployed backend.
+
 ## Presentations (PowerPoint)
 
 Uploaded `.pptx` files open in the `pptx` block (`/app/pptx/<documentId>`).
