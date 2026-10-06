@@ -15,7 +15,7 @@ mod test;
 /// Namespace's sccache setup mints a short-lived workspace credential. GitHub
 /// withholds repository secrets from fork PRs, but this runner-minted token is
 /// not a `secrets.*` value, so enforce the equivalent trust boundary here.
-const TRUSTED_NAMESPACE_SCCACHE_CONTEXT: &str = concat!(
+pub(crate) const TRUSTED_NAMESPACE_SCCACHE_CONTEXT: &str = concat!(
     "(github.event_name != 'pull_request' && ",
     "github.event_name != 'pull_request_target') || ",
     "github.event.pull_request.head.repo.full_name == github.repository"
@@ -201,6 +201,13 @@ pub fn mount_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount Namespace cache volume")
         .add_with(("cache", "rust"))
         .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
+}
+
+/// Mount only `path` from the profile's cache volume, without a framework
+/// mode. Unlike [`mount_cache_volume`] (`cache: rust` plus `/nix`, ~11 s on
+/// `linux-rust-ci`), a plain path mounts in under a second.
+pub fn mount_path_cache_volume(name: &str, path: RuntimePath<'_>) -> Step<Use> {
+    nscloud_cache_action(name).add_with(("path", path.as_str()))
 }
 
 /// The pinned `nscloud-cache-action`, shared by every mount helper below.
