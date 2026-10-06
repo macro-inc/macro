@@ -69,8 +69,8 @@
 .workspace-demo .demo-inline-mention.mention-person {
   padding: 2px;
   border-radius: 6px;
-  color: var(--color-accent, #59a8ed);
-  background: color-mix(in srgb, var(--color-accent, #59a8ed) 8%, transparent);
+  color: var(--color-link, #59a8ed);
+  background: color-mix(in srgb, var(--color-link, #59a8ed) 8%, transparent);
   white-space: nowrap;
 }
 .workspace-demo .demo-inline-mention > .demo-mention-icon { position: relative; top: .125em; width: 1em; height: 1em; margin-inline: 4px; }

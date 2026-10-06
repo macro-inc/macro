@@ -59,7 +59,7 @@ function chooseRepeat(
 }
 
 describe('one-shot scheduling', () => {
-  it('parses natural date language and previews the exact timezone', () => {
+  it('parses natural date language and previews the exact local time without a redundant timezone', () => {
     const { onSubmit } = renderForm({ initialDescription: 'Follow up' });
 
     fireEvent.input(
@@ -74,7 +74,7 @@ describe('one-shot scheduling', () => {
     );
     const preview = screen.getByText(/Scheduled:/).closest('p');
     expect(preview?.textContent).toContain('12:30 PM');
-    expect(preview?.textContent).toMatch(/\([A-Z]+\)/);
+    expect(preview?.textContent).not.toContain('UTC');
     fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
 
     expect(onSubmit).toHaveBeenCalledWith({
@@ -171,7 +171,9 @@ describe('one-shot scheduling', () => {
     vi.setSystemTime(new Date('2026-09-21T12:07:23.000Z'));
     const { onSubmit } = renderForm({ initialDescription: 'Exact follow up' });
 
-    fireEvent.click(screen.getByRole('button', { name: /In 30m.*12:37 PM/ }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /In 30m.*12:37:23 PM/ })
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
     const time = screen.getByLabelText('Time') as HTMLInputElement;
 
@@ -191,7 +193,9 @@ describe('one-shot scheduling', () => {
     vi.setSystemTime(new Date('2026-09-21T12:07:23.000Z'));
     const { onSubmit } = renderForm({ initialDescription: 'Exact follow up' });
 
-    fireEvent.click(screen.getByRole('button', { name: /In 30m.*12:37 PM/ }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /In 30m.*12:37:23 PM/ })
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
     fireEvent.click(screen.getByLabelText('Custom reminder date'));
     fireEvent.click(screen.getByRole('gridcell', { name: '22' }));
@@ -465,8 +469,13 @@ describe('recurrence', () => {
       screen.getByRole('button', { name: 'Repeat, Custom schedule' })
     ).not.toBeNull();
     expect(
-      screen.getByText(/will stay unchanged unless you choose a replacement/)
+      screen.getByText(/stays unchanged unless you choose a replacement/)
     ).not.toBeNull();
+    const preview = screen.getByText('Next:').closest('p');
+    expect(preview?.textContent).toContain('Sep 22, 2026 at 9:00 AM EDT');
+    expect(preview?.textContent).toContain('Repeats on a custom schedule');
+    expect(preview?.textContent).not.toContain(custom.cron);
+    expect(preview?.textContent).not.toContain('America/New_York');
     fireEvent.input(screen.getByLabelText('Reminder description'), {
       target: { value: 'Renamed custom cadence' },
     });
@@ -676,4 +685,75 @@ it('reverts an edited form in place when its host requests that behavior', () =>
 
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(onCancel).toHaveBeenLastCalledWith(false);
+});
+
+it('shows the stored custom monthly occurrence without exposing cron and drops it after replacement', () => {
+  renderForm({
+    initialDescription: 'Monthly review',
+    initialSchedule: {
+      type: 'recurring',
+      cron: '0 0 9 1,15 * *',
+      timezone: 'America/New_York',
+    },
+    initialRemindAt: '2026-10-15T13:00:00Z',
+    submitLabel: 'Save',
+  });
+  const preview = screen.getByText('Next:').closest('p');
+  expect(preview?.textContent).toContain('Oct 15, 2026 at 9:00 AM EDT');
+  expect(preview?.textContent).toContain('Repeats monthly on the 1st and 15th');
+  expect(preview?.textContent).not.toContain('0 0 9');
+  chooseRepeat('daily');
+  expect(screen.queryByText('Next:')).toBeNull();
+  expect(screen.queryByText(/Oct 15, 2026/)).toBeNull();
+  expect(screen.getByText(/Repeats daily at/)).not.toBeNull();
+});
+
+it('does not invent a next occurrence when a custom schedule has no nextRunAt', () => {
+  renderForm({
+    initialDescription: 'Custom review',
+    initialSchedule: {
+      type: 'recurring',
+      cron: '0 */15 9 * * *',
+      timezone: 'America/New_York',
+    },
+    submitLabel: 'Save',
+  });
+  expect(screen.queryByText('Next:')).toBeNull();
+  const preview = screen.getByText('Repeats on a custom schedule').closest('p');
+  expect(preview?.textContent).not.toContain('America/New_York');
+  expect(preview?.textContent).not.toContain('EDT');
+});
+
+it('labels a past custom occurrence as due', () => {
+  renderForm({
+    initialDescription: 'Past review',
+    initialSchedule: {
+      type: 'recurring',
+      cron: '0 0 9 1,15 * *',
+      timezone: 'UTC',
+    },
+    initialRemindAt: '2026-09-15T09:00:00Z',
+    submitLabel: 'Save',
+  });
+  expect(screen.getByText('Due:').closest('p')?.textContent).toContain(
+    'Sep 15, 2026 at 9:00 AM'
+  );
+  expect(screen.queryByText('Next:')).toBeNull();
+});
+
+it('does not apply the opening day seasonal offset to a recurring preview after DST', () => {
+  vi.setSystemTime(new Date('2026-10-31T12:00:00Z'));
+  renderForm({
+    initialDescription: 'Sunday review',
+    initialSchedule: {
+      type: 'recurring',
+      cron: '0 0 9 * * 1',
+      timezone: 'America/New_York',
+    },
+    initialRemindAt: '2026-11-01T14:00:00Z',
+    submitLabel: 'Save',
+  });
+  const preview = screen.getByText(/Repeats weekly on Sun at/);
+  expect(preview.textContent).toContain('9:00 AM Eastern Time');
+  expect(preview.textContent).not.toContain('EDT');
 });

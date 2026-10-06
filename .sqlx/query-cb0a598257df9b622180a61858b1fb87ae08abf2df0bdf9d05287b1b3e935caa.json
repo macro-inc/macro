@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n        VALUES ($1, 'database', $3, 'user', 'view'),\n               ($1, 'database', $4, 'team', 'edit'),\n               ($1, 'database', '00000000-0000-0000-0000-0000000ea002', 'team', 'owner'),\n               ($1, 'chat', $3, 'user', 'owner'),\n               ($2, 'database', $3, 'user', 'owner')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb0a598257df9b622180a61858b1fb87ae08abf2df0bdf9d05287b1b3e935caa"
+}

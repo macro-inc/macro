@@ -9,10 +9,11 @@ WITH local_e2e_channels AS (
     WHERE channel.id::text LIKE '00000000-0000-0000-0000-00000000000%'
     GROUP BY channel.id
 )
-INSERT INTO comms_messages (id, channel_id, sender_id, content, created_at, updated_at)
+INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, created_at, updated_at)
 SELECT
     md5('local-e2e-scroll-' || channel.id::text || '-' || message_number)::uuid,
-    channel.id,
+    'channel',
+    channel.id::text,
     channel.sender_ids[
         1 + ((message_number - 1) % cardinality(channel.sender_ids))::integer
     ],
@@ -27,7 +28,8 @@ CROSS JOIN generate_series(1, 5000) AS message_number;
 
 INSERT INTO comms_messages (
     id,
-    channel_id,
+    parent_entity_type,
+    parent_entity_id,
     sender_id,
     content,
     created_at,
@@ -35,7 +37,8 @@ INSERT INTO comms_messages (
 )
 VALUES (
     '00000000-0000-0000-0003-000000000001'::uuid,
-    '00000000-0000-0000-0000-000000000001'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000001',
     'macro|bob@example.com',
     'Deep thread navigation fixture parent',
     now() - interval '1 day',
@@ -77,7 +80,8 @@ WITH deep_thread_replies AS (
 )
 INSERT INTO comms_messages (
     id,
-    channel_id,
+    parent_entity_type,
+    parent_entity_id,
     sender_id,
     content,
     thread_id,
@@ -86,7 +90,8 @@ INSERT INTO comms_messages (
 )
 SELECT
     id,
-    '00000000-0000-0000-0000-000000000001'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000001',
     CASE
         WHEN reply_number % 2 = 0 THEN 'macro|charlie@example.com'
         ELSE 'macro|bob@example.com'
@@ -99,7 +104,8 @@ FROM deep_thread_replies;
 
 INSERT INTO comms_messages (
     id,
-    channel_id,
+    parent_entity_type,
+    parent_entity_id,
     sender_id,
     content,
     created_at,
@@ -107,7 +113,8 @@ INSERT INTO comms_messages (
 )
 VALUES (
     '00000000-0000-0000-0003-000000000010'::uuid,
-    '00000000-0000-0000-0000-000000000001'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000001',
     'macro|charlie@example.com',
     'Alternate deep thread navigation fixture parent. Navigate elsewhere: <m-document-mention>{"documentId":"00000000-0000-0000-0000-000000000001","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"00000000-0000-0000-0003-000000000006","channel_thread_id":"00000000-0000-0000-0003-000000000001"},"collapsed":false}</m-document-mention>',
     now() - interval '2 days',
@@ -139,7 +146,8 @@ WITH alternate_thread_replies AS (
 )
 INSERT INTO comms_messages (
     id,
-    channel_id,
+    parent_entity_type,
+    parent_entity_id,
     sender_id,
     content,
     thread_id,
@@ -148,7 +156,8 @@ INSERT INTO comms_messages (
 )
 SELECT
     id,
-    '00000000-0000-0000-0000-000000000001'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000001',
     CASE
         WHEN reply_number % 2 = 0 THEN 'macro|bob@example.com'
         ELSE 'macro|charlie@example.com'
@@ -161,7 +170,8 @@ FROM alternate_thread_replies;
 
 INSERT INTO comms_messages (
     id,
-    channel_id,
+    parent_entity_type,
+    parent_entity_id,
     sender_id,
     content,
     created_at,
@@ -169,7 +179,8 @@ INSERT INTO comms_messages (
 )
 VALUES (
     '00000000-0000-0000-0003-000000000040'::uuid,
-    '00000000-0000-0000-0000-000000000001'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000001',
     'macro|bob@example.com',
     'Unread navigation fixture parent',
     now() - interval '3 days',
@@ -220,7 +231,8 @@ WITH unread_thread_replies AS (
 )
 INSERT INTO comms_messages (
     id,
-    channel_id,
+    parent_entity_type,
+    parent_entity_id,
     sender_id,
     content,
     thread_id,
@@ -229,7 +241,8 @@ INSERT INTO comms_messages (
 )
 SELECT
     id,
-    '00000000-0000-0000-0000-000000000001'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000001',
     CASE
         WHEN reply_number % 2 = 0 THEN 'macro|charlie@example.com'
         ELSE 'macro|bob@example.com'
@@ -242,7 +255,8 @@ FROM unread_thread_replies;
 
 INSERT INTO comms_messages (
     id,
-    channel_id,
+    parent_entity_type,
+    parent_entity_id,
     sender_id,
     content,
     created_at,
@@ -250,7 +264,8 @@ INSERT INTO comms_messages (
 )
 VALUES (
     '00000000-0000-0000-0003-000000000020'::uuid,
-    '00000000-0000-0000-0000-000000000001'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000001',
     'macro|bob@example.com',
     'Navigation race A: <m-document-mention>{"documentId":"00000000-0000-0000-0000-000000000001","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"00000000-0000-0000-0003-000000000014","channel_thread_id":"00000000-0000-0000-0003-000000000010"},"collapsed":false}</m-document-mention> Navigation target B: <m-document-mention>{"documentId":"00000000-0000-0000-0000-000000000001","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"00000000-0000-0000-0003-000000000006","channel_thread_id":"00000000-0000-0000-0003-000000000001"},"collapsed":false}</m-document-mention>',
     now() + interval '2 hours',
@@ -259,7 +274,8 @@ VALUES (
 
 INSERT INTO comms_messages (
     id,
-    channel_id,
+    parent_entity_type,
+    parent_entity_id,
     sender_id,
     content,
     created_at,
@@ -268,7 +284,8 @@ INSERT INTO comms_messages (
 VALUES
 (
     '00000000-0000-0000-0003-000000000030'::uuid,
-    '00000000-0000-0000-0000-000000000002'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000002',
     'macro|bob@example.com',
     'Open general at its latest message: <m-document-mention>{"documentId":"00000000-0000-0000-0000-000000000001","blockName":"channel","documentName":"general","blockParams":{},"collapsed":false}</m-document-mention>',
     now() + interval '3 hours',
@@ -276,7 +293,8 @@ VALUES
 ),
 (
     '00000000-0000-0000-0003-000000000031'::uuid,
-    '00000000-0000-0000-0000-000000000003'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000003',
     'macro|charlie@example.com',
     'Open a specific reply in general: <m-document-mention>{"documentId":"00000000-0000-0000-0000-000000000001","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"00000000-0000-0000-0003-000000000006","channel_thread_id":"00000000-0000-0000-0003-000000000001"},"collapsed":false}</m-document-mention>',
     now() + interval '3 hours',
@@ -284,7 +302,8 @@ VALUES
 ),
 (
     '00000000-0000-0000-0003-000000000032'::uuid,
-    '00000000-0000-0000-0000-000000000003'::uuid,
+    'channel',
+    '00000000-0000-0000-0000-000000000003',
     'macro|bob@example.com',
     'Warm the unread target in general: <m-document-mention>{"documentId":"00000000-0000-0000-0000-000000000001","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"00000000-0000-0000-0003-000000000044","channel_thread_id":"00000000-0000-0000-0003-000000000040"},"collapsed":false}</m-document-mention>',
     now() + interval '3 hours 1 minute',

@@ -34,6 +34,18 @@ channel-based sharing. Verify claims against the implementation. Avoid vague
 “context,” “move work forward,” and “all in one place” headlines, demo narration
 as feature prose, and unqualified superiority claims. Explain technical terms
 once in plain language; keep demo disclosures in captions and relevant FAQs.
+Write it the way the founder talks to another founder: plain words, “we,” the
+competitor by name when the comparison is specific, and why we built it.
+
+Demos are faithful to the signed-in app: its labels, layout, icons, and
+hover-only controls (the message toolbar appears on hover, as in the app).
+Don't invent chrome such as step chips or explanatory labels inside a mock, and
+don't show features the app doesn't have. Every animated cursor is
+`DemoCursor`, the homepage CRM pipeline's pointer and name tag: label it
+“Claude” when an agent acts and with the person's first name otherwise. Size
+each `ProductDemo` to its scene with `height`/`mobileHeight` so a window is
+never mostly empty, and seed enough content that the first frame already
+reads as a real workspace.
 
 Product stories live in their feature's `components/*/*Stories.tsx` files.
 They reuse frozen product presentation and local workspace data. Call records
@@ -88,8 +100,16 @@ bun run build
 
 Install workspace dependencies from the repository root first. The public dev
 server runs independently of the authenticated app. It serves the homepage,
-public feature and blog routes, and `/start`; `/onboarding-preview.html` remains
-a development review entry. It does not host the authenticated `/app/*` routes.
+public feature and blog routes, `/download`, and `/start`;
+`/onboarding-preview.html` remains a development review entry. It does not host
+the authenticated `/app/*` routes.
+
+`/download` has a single “Download for macOS” button for Apple silicon Macs.
+It resolves the current DMG from the latest GitHub release in the browser,
+with the latest release page as a fallback, and shows the current release tag.
+The page hides the header's Open app action, has no web-app download option,
+and has no header/footer navigation entry.
+Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
 Before the first prerender build, install Chromium with
 `bunx playwright install chromium --only-shell` (add `--with-deps` on Linux CI).
@@ -165,6 +185,21 @@ at both desktop and mobile widths.
 FAQ answers and the collapsed comparison are rendered in the initial HTML.
 The comparison uses a native `details` disclosure for both people and crawlers.
 Retain FAQ class markers so prerendering emits matching FAQPage structured data.
+
+## Paid-social landing page
+
+`/tour` (`features/marketing/views/SalesPage.tsx`) is the Instagram ad landing
+page. It is prerendered, `noindex`, out of the sitemap, and not linked from the
+navigation. It has four parts, top to bottom: the homepage hero markup
+(`WelcomeStep` with `ContextScene`), the expanded `FeatureConstellation`, a
+savings calculator, and an inline cal.com booker for the Macro demo call.
+
+`core/sales-savings.ts` reduces the pricing calculator to one plan tier for all
+tools and reads prices from `core/savings-calculator.ts`; update prices there,
+not on the page. "Book a demo" buttons scroll to the booker, which loads
+`embed.js` only as the visitor approaches it and appends Meta attribution to
+the booking. Verify at phone width: no horizontal scroll, calculator steppers
+and toggles, and that the booker loads.
 
 ## Blog presentation
 

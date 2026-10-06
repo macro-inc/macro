@@ -4,14 +4,16 @@ import type { RosterAgent } from '../core/roster';
 import { composerModelTarget, createComposerModels } from './composer-models';
 
 const discovery = vi.hoisted(() => ({
-  targets: undefined as (() => unknown) | undefined,
-  queries: [] as object[],
+  target: undefined as (() => unknown) | undefined,
+  enabled: undefined as (() => boolean) | undefined,
+  query: {} as object,
 }));
 
 vi.mock('@queries/agents/models', () => ({
-  useAgentModelsQueries: (targets: () => unknown) => {
-    discovery.targets = targets;
-    return discovery.queries;
+  useAgentModelsQuery: (target: () => unknown, enabled: () => boolean) => {
+    discovery.target = target;
+    discovery.enabled = enabled;
+    return discovery.query;
   },
 }));
 
@@ -34,7 +36,6 @@ describe('composer model discovery', () => {
   });
 
   it('switches discovery targets with the selected agent and skips disconnected runtimes', () => {
-    discovery.queries = [];
     createRoot((dispose) => {
       const [agent, setAgent] = createSignal<RosterAgent>({
         id: 'bot-one',
@@ -46,15 +47,21 @@ describe('composer model discovery', () => {
         runtime: { label: 'Cursor', connected: true },
       });
       createComposerModels(agent);
-      expect(discovery.targets?.()).toEqual([{ harness: 'cursor' }]);
+      expect(discovery.enabled?.()).toBe(true);
+      expect(discovery.target?.()).toEqual({ harness: 'cursor' });
       setAgent({ ...agent(), harness: 'claude-cloud' });
-      expect(discovery.targets?.()).toEqual([{ harness: 'claude-cloud' }]);
+      expect(discovery.target?.()).toEqual({ harness: 'claude-cloud' });
       setAgent({ ...agent(), harness: 'macrod', harnessId: 'paired-runtime' });
-      expect(discovery.targets?.()).toEqual([
-        { harness: 'macrod', harnessId: 'paired-runtime' },
-      ]);
+      expect(discovery.target?.()).toEqual({
+        harness: 'macrod',
+        harnessId: 'paired-runtime',
+      });
       setAgent({ ...agent(), runtime: { label: 'Offline', connected: false } });
-      expect(discovery.targets?.()).toEqual([]);
+      expect(discovery.enabled?.()).toBe(false);
+      expect(discovery.target?.()).toEqual({
+        harness: 'in-memory',
+        harnessId: 'composer-idle',
+      });
       dispose();
     });
   });
@@ -62,28 +69,26 @@ describe('composer model discovery', () => {
   it('does not read pending resource data and exposes discovered choices when ready', () => {
     createRoot((dispose) => {
       const [ready, setReady] = createSignal(false);
-      const models = [
-        { id: 'runtime-model', name: 'Runtime model' },
-        { id: 'anthropic/claude-fable-5-1', name: 'Fable 5.1' },
-      ];
-      discovery.queries = [
-        {
-          get isSuccess() {
-            return ready();
-          },
-          get isPending() {
-            return !ready();
-          },
-          get data() {
-            if (!ready()) throw new Error('Pending resource must not be read');
-            return {
-              models,
-              currentModel: 'runtime-model',
-              status: 'available',
-            };
-          },
+      const models = [{ id: 'runtime-model', name: 'Runtime model' }];
+      discovery.query = {
+        get isSuccess() {
+          return ready();
         },
-      ];
+        get isPending() {
+          return !ready();
+        },
+        get isError() {
+          return false;
+        },
+        get data() {
+          if (!ready()) throw new Error('Pending resource must not be read');
+          return {
+            models,
+            currentModel: 'runtime-model',
+            status: 'available',
+          };
+        },
+      };
       const source = createComposerModels(() => ({
         id: 'bot',
         name: 'Agent',
@@ -96,7 +101,7 @@ describe('composer model discovery', () => {
       expect(source.models()).toEqual([]);
       expect(source.message()).toBe('Loading models…');
       setReady(true);
-      expect(source.models()).toEqual([models[0]]);
+      expect(source.models()).toEqual(models);
       expect(source.currentModel()).toBe('runtime-model');
       dispose();
     });

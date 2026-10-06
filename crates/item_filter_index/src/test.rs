@@ -115,6 +115,36 @@ fn compiles_complete_supported_forest_after_eligibility() {
 }
 
 #[test]
+fn crm_document_literals_always_fall_back_to_the_server() {
+    use item_filters::ast::{
+        email::Email,
+        properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue},
+    };
+    for literal in [
+        DocumentLiteral::Property(PropertiesLiteral {
+            property_definition_id: uuid::Uuid::from_u128(0xc),
+            entity_type: None,
+            value: PropertyMatchValue::EntityRef(EntityRefId::new("company".to_string()).unwrap()),
+        }),
+        DocumentLiteral::EmailAttachmentParticipant(Email::Domain("acme.com".to_string())),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(Expr::val(literal)));
+        for outcome in [
+            compile_soup_flat_v1(&ast, request()).unwrap(),
+            compile_soup_flat_v2(&ast, request()).unwrap(),
+            compile_soup_flat_v3(&ast, request()).unwrap(),
+            compile_soup_flat_v4(&ast, request()).unwrap(),
+        ] {
+            assert_eq!(
+                outcome,
+                LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
+            );
+        }
+    }
+}
+
+#[test]
 fn production_documents_membership_literals_require_and_compile_in_v2() {
     for literal in [
         DocumentLiteral::IsEmailAttachment(false),
@@ -439,4 +469,74 @@ fn initiative_queries_use_server_instead_of_incomplete_local_index() {
         properties::compile_soup(&ast, request()).unwrap(),
         LocalCompileOutcome::Unsupported(UnsupportedReason::Partition("initiative"))
     );
+}
+
+#[test]
+fn a_tables_rows_compile_to_the_database_row_partition() {
+    use item_filters::ast::database_row::DatabaseRowLiteral;
+    let deals = Uuid::from_u128(0x7ab00000_0000_0000_0000_000000000001);
+    let stage = Uuid::from_u128(0x5e1ec700_0000_0000_0000_000000000001);
+    let won = Uuid::from_u128(0x0e000000_0000_0000_0000_000000000001);
+    let rows_partition = |ast: &EntityFilterAst| {
+        let LocalCompileOutcome::Supported(query) =
+            properties::compile_soup(ast, request()).unwrap()
+        else {
+            panic!("rows compile locally")
+        };
+        query
+            .as_query()
+            .partitions
+            .iter()
+            .find(|partition| partition.partition == vocabulary::database_row_partition())
+            .expect("the current profile always has a rows partition")
+            .predicate
+            .clone()
+    };
+
+    let mut ast = excluded_deferred_partitions();
+    ast.database_row_filter = Some(Arc::new(Expr::val(DatabaseRowLiteral::TableId(deals))));
+    ast.properties_filter = Some(Arc::new(Expr::val(PropertiesLiteral {
+        property_definition_id: stage,
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(won),
+    })));
+    assert_eq!(
+        rows_partition(&ast),
+        PredicateExpr::And(
+            Box::new(PredicateExpr::Exact {
+                attribute: vocabulary::table_id(),
+                value: predicate_index::ExactValue::new(deals.as_bytes()).unwrap(),
+            }),
+            Box::new(PredicateExpr::Exact {
+                attribute: properties::select_attribute(stage),
+                value: predicate_index::ExactValue::new(won.as_bytes()).unwrap(),
+            }),
+        )
+    );
+
+    let without_rows = excluded_deferred_partitions();
+    assert_eq!(rows_partition(&without_rows), PredicateExpr::None);
+
+    let mut only_negated = excluded_deferred_partitions();
+    only_negated.database_row_filter = Some(Arc::new(Expr::is_not(Expr::val(
+        DatabaseRowLiteral::TableId(deals),
+    ))));
+    assert_eq!(rows_partition(&only_negated), PredicateExpr::None);
+
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("database_row"))
+    );
+}
+
+#[test]
+fn contact_queries_require_server_authorization_and_deduplication() {
+    let mut ast = excluded_deferred_partitions();
+    ast.crm_contact_filter = Some(Arc::new(Expr::val(CrmContactLiteral::Include)));
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("crmContact"))
+    );
+    ast.crm_contact_filter = Some(Arc::new(Expr::val(CrmContactLiteral::Id(Uuid::nil()))));
+    assert_eq!(check_soup_flat_v3(&ast, request()), Eligibility::Supported);
 }

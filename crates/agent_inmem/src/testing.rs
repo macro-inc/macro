@@ -109,7 +109,7 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
 }
 
 /// Models advertised by shared test engines.
-pub(crate) const TEST_MODELS: &[&str] = &["anthropic/claude-sonnet-5", "other-model"];
+pub(crate) const TEST_MODELS: &[&str] = &["anthropic/claude-sonnet-5-5", "other-model"];
 
 /// An engine that plays back a script of parts for every turn.
 pub(crate) struct ScriptedEngine {

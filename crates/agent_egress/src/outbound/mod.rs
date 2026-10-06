@@ -3,6 +3,9 @@
 /// Minting a scoped GitHub App installation credential.
 pub mod github_tokens;
 
+/// Resolving an owner's custom (URL-added) MCP servers to upstream calls.
+pub mod custom_mcp;
+
 /// Answering the reserved `macro` slug with Macro's own MCP server.
 pub mod macro_mcp;
 
@@ -14,3 +17,6 @@ pub mod session_authority;
 
 /// Executing an already-addressed, already-stamped request.
 pub mod forwarder;
+
+/// Held tool calls in Postgres, and the NOTIFY that wakes their holds.
+pub mod tool_approvals;

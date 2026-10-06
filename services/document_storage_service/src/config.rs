@@ -16,6 +16,8 @@ env_vars! {
     pub struct DatabaseUrlReadonly;
     pub struct DocumentStorageBucket;
     pub struct DocxDocumentUploadBucket;
+    /// S3 bucket holding pull request patches, shared with agent-harness-service.
+    pub struct GithubPullRequestPatchBucket;
     /// Shared CloudFront distribution URL for document content and call recording GET URLs.
     pub struct DocumentStorageServiceCloudfrontDistributionUrl;
     /// Shared CloudFront signer public key ID for document content and call recordings.
@@ -88,10 +90,23 @@ pub struct Config {
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
+    /// The free plan's hard monthly AI cap, in cents at provider cost.
+    /// Mandatory; set in Doppler.
+    pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Premium seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Max seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_max_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// Markup on paid AI usage past the allowance, as a whole percent of
+    /// provider cost. Mandatory; set in Doppler.
+    pub ai_usage_overage_markup_percent: ai_billing::OverageMarkupPercent,
     pub database_url: DatabaseUrl,
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
     pub docx_document_upload_bucket: DocxDocumentUploadBucket,
+    pub github_pull_request_patch_bucket: GithubPullRequestPatchBucket,
     pub document_storage_service_cloudfront_distribution_url:
         DocumentStorageServiceCloudfrontDistributionUrl,
     pub document_storage_service_cloudfront_signer_public_key_id:
@@ -139,6 +154,11 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_search_enabled: bool,
 
+    /// Enable Slack import creation and uploads. Existing receipts remain
+    /// readable, finalizable and cancellable when this switch is off.
+    #[macro_config_default(false)]
+    pub slack_import_enabled: bool,
+
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]
     pub queue_max_messages: i32,
@@ -162,14 +182,6 @@ pub struct Config {
     /// synced reminder schedules produce no notifications until enabled.
     #[macro_config_default(false)]
     pub calendar_reminder_dispatch_enabled: bool,
-
-    /// Master switch for the legacy document comment writers: comment create,
-    /// edit and delete, and anchor delete, which also deletes the thread.
-    /// Set to `false` for the final pass of the legacy comment importer, before
-    /// the new document discussion UI is enabled; those handlers then answer
-    /// 503 and the importer works from a frozen source.
-    #[macro_config_default(true)]
-    pub legacy_comment_writes_enabled: bool,
 
     /// Lets a team-scoped bot with no acting user own the documents it creates.
     pub enable_non_user_owners: EnableNonUserOwners,
@@ -198,6 +210,19 @@ pub struct Config {
 }
 
 impl Config {
+    /// The AI pricing every billing component is composed with. Every value
+    /// is validated when the configuration loads.
+    pub fn ai_pricing(&self) -> ai_billing::AiPricing {
+        ai_billing::AiPricing::new(
+            ai_billing::PlanAllowances {
+                free: self.ai_usage_free_included_allowance_cents,
+                premium: self.ai_usage_included_allowance_cents,
+                max: self.ai_usage_max_included_allowance_cents,
+            },
+            self.ai_usage_overage_markup_percent,
+        )
+    }
+
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
             .map_err(|error| anyhow::anyhow!("{error}"))?;

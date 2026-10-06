@@ -4,6 +4,7 @@
 
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -83,6 +84,50 @@ describe('agent model discovery', () => {
       { harness: 'claude-cloud' },
       { harness: 'macrod', harnessId: 'harness-a' },
     ]);
+  });
+
+  it('keeps a loaded catalog across remounts', async () => {
+    vi.mocked(agentHarnessServiceClient.loadAgentModels).mockResolvedValue(
+      ok({
+        status: 'available',
+        models: [],
+      })
+    );
+
+    renderHook(() =>
+      useAgentModelsQueries(() => [
+        { harness: 'in-memory' },
+        { harness: 'cursor' },
+      ])
+    );
+    await vi.waitFor(() => {
+      expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(
+        2
+      );
+      expect(
+        queryClient
+          .getQueryCache()
+          .getAll()
+          .every((query) => query.state.status === 'success')
+      ).toBe(true);
+    });
+
+    dispose?.();
+    renderHook(() =>
+      useAgentModelsQueries(() => [
+        { harness: 'in-memory' },
+        { harness: 'cursor' },
+      ])
+    );
+    await vi.waitFor(() => {
+      expect(
+        queryClient
+          .getQueryCache()
+          .getAll()
+          .every((query) => query.state.status === 'success')
+      ).toBe(true);
+    });
+    expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(2);
   });
 
   it('does not query Claude when its feature flag is off', async () => {

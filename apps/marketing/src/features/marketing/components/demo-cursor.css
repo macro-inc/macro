@@ -1,0 +1,49 @@
+/* Matches the homepage CRM pipeline cursor exactly; every demo reuses it. */
+.demo-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 8;
+  font-size: 20px;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.4));
+}
+
+.demo-cursor > svg {
+  display: block;
+  width: 0.7em;
+  height: 0.7em;
+  overflow: visible;
+}
+
+.demo-cursor > svg path {
+  fill: oklch(0.96 0 59);
+}
+
+.demo-cursor > span {
+  position: absolute;
+  top: 16px;
+  left: 15px;
+  padding: 3px 8px;
+  border-radius: 4px 10px 10px;
+  background: oklch(1 0 0);
+  color: oklch(0.17 0.002 250);
+  font: 500 11px Inter, sans-serif;
+  white-space: nowrap;
+}
+
+.demo-cursor[data-clicking='true'] > svg {
+  animation: demo-cursor-click 600ms ease both;
+}
+
+@keyframes demo-cursor-click {
+  55% {
+    transform: scale(0.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-cursor {
+    display: none;
+  }
+}

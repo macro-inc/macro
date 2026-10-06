@@ -1,0 +1,35 @@
+[package]
+edition = "2024"
+name = "agent_session_realtime"
+publish = false
+version = "0.1.0"
+
+[features]
+# The Kafka consumer feeding the fan-out; without it only the ports and the
+# fan-out service compile, for the GraphQL schema crate.
+consumer = [
+  "dep:kafka_util",
+  "dep:rdkafka",
+  "macro_event_broker/outbound",
+]
+default = ["consumer"]
+
+[dependencies]
+agent_session = { path = "../agent_session", default-features = false }
+broadcast = { path = "../broadcast" }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+rdkafka = { workspace = true, optional = true }
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-retry = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_session = { path = "../agent_session", default-features = false, features = ["test-utils"] }
+chrono = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }

@@ -25,11 +25,17 @@ impl UserDeletionGateway for FakeGateway {
     async fn delete_agent_sessions(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.call("sessions", user.as_ref())
     }
+    async fn leave_teams(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
+        self.call("teams", user.as_ref())
+    }
     async fn delete_items(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.call("items", user.as_ref())
     }
     async fn delete_profile(&self, user: &MacroUserIdStr<'static>, _: &Uuid) -> Result<(), Report> {
         self.call("profile", user.as_ref())
+    }
+    async fn delete_billing_customer(&self, _: &Uuid) -> Result<(), Report> {
+        self.call("customer", "")
     }
     async fn delete_account(&self, _: &Uuid) -> Result<(), Report> {
         self.call("account", "")
@@ -46,10 +52,11 @@ fn users() -> Vec<MacroUserIdStr<'static>> {
 fn expected_calls() -> Vec<String> {
     let mut expected = Vec::new();
     for user in users() {
-        for step in ["actions", "sessions", "items", "profile"] {
+        for step in ["actions", "sessions", "teams", "items", "profile"] {
             expected.push(format!("{step}:{user}"));
         }
     }
+    expected.push("customer:".into());
     expected.push("account:".into());
     expected
 }
@@ -86,5 +93,5 @@ async fn retry_after_profiles_are_gone_still_deletes_the_account() {
     delete_user_data(&gateway, &Uuid::now_v7(), &[])
         .await
         .unwrap();
-    assert_eq!(*gateway.calls.lock().unwrap(), ["account:"]);
+    assert_eq!(*gateway.calls.lock().unwrap(), ["customer:", "account:"]);
 }

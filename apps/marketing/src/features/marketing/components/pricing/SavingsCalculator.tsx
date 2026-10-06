@@ -26,7 +26,7 @@ import {
 } from '../../core/savings-calculator';
 import './savings-calculator.css';
 
-const toolIcons: Record<
+export const toolIcons: Record<
   SavingsToolId,
   (props: JSX.SvgSVGAttributes<SVGSVGElement>) => JSX.Element
 > = {

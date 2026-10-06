@@ -14,6 +14,7 @@ use soup::domain::models::SoupProjectionHydration;
 use thiserror::Error;
 
 pub mod channel;
+pub mod database_row;
 mod profile;
 mod wire;
 
@@ -365,10 +366,12 @@ pub fn project_soup_item<T>(
         | SoupItem::Call(_)
         | SoupItem::CalendarEvent(_)
         | SoupItem::CrmCompany(_)
+        | SoupItem::CrmContact(_)
         | SoupItem::ForeignEntity(_)
         | SoupItem::Reminder(_)
         | SoupItem::AgentSession(_)
-        | SoupItem::Initiative(_) => Ok(None),
+        | SoupItem::Initiative(_)
+        | SoupItem::DatabaseRow(_) => Ok(None),
     }
 }
 

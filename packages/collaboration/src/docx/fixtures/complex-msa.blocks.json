@@ -1,0 +1,66 @@
+[
+  [
+    "3022e689e5494c5f91f461426a9529e8",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"3022e689e5494c5f91f461426a9529e8\"><w:pPr p18:Unid=\"f510774fa77fbcfd3d69d468d4592d58\"><w:pStyle w:val=\"Title\" p18:Unid=\"83de547fb791df2d7f4ecba35dbb20f7\" /></w:pPr><w:r p18:Unid=\"9fd01c3461f169d60bbd360109bb2f27\"><w:t p18:Unid=\"0afe5854707b0d672d09593bb22ffc77\">MASTER SERVICES AGREEMENT</w:t></w:r></w:p>"
+  ],
+  [
+    "453dae028a3360596f1fc0c45dcdcc5e",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"453dae028a3360596f1fc0c45dcdcc5e\"><w:pPr p18:Unid=\"3ab6d64f232dad0ea2360dc54acabc48\"><w:pStyle w:val=\"Heading1\" p18:Unid=\"60adc03a0cc45c432e3735ea202fccae\" /></w:pPr><w:r p18:Unid=\"515501a04a907ffbeb7a64549d5fdd0b\"><w:t p18:Unid=\"bc880c5631f83403491e48b847da58dc\">1. Services</w:t></w:r></w:p>"
+  ],
+  [
+    "e19905192bacb7fb594d5b2353d2da51",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"e19905192bacb7fb594d5b2353d2da51\"><w:r p18:Unid=\"a1cd2c147dc1358158d14d67eb18dc50\"><w:t p18:Unid=\"b2f77571e7026a853291bf257c848013\">Provider shall perform the services described in each Statement of Work (\"SOW\") executed by the parties.</w:t></w:r></w:p>"
+  ],
+  [
+    "983edf064cfe1cd12cba68d3d598edff",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"983edf064cfe1cd12cba68d3d598edff\"><w:pPr p18:Unid=\"1e15d37b2396dc7d77bdc35b0d8dbf6f\"><w:pStyle w:val=\"ListBullet\" p18:Unid=\"297fe2a6e5b99394ec51cffba4405bfa\" /></w:pPr><w:r p18:Unid=\"b6deb0c67d5d6932a6214bfd78c73137\"><w:t p18:Unid=\"08807fbdac4bfad7e5015726c65f72b8\">Each SOW shall describe deliverables, milestones and fees.</w:t></w:r></w:p>"
+  ],
+  [
+    "5effaed0146ecdaaa41da1313faa6c57",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"5effaed0146ecdaaa41da1313faa6c57\"><w:pPr p18:Unid=\"d71cb017df60f626e1f3bc98916580d5\"><w:pStyle w:val=\"ListBullet\" p18:Unid=\"15e6580a34253d72db914b2ee9009ae8\" /></w:pPr><w:r p18:Unid=\"c3cb1b497fcfce3be6fe4212e9cc13c5\"><w:t p18:Unid=\"16921aba728d97b43635d3843f1cf40d\">Change orders must be in writing.</w:t></w:r></w:p>"
+  ],
+  [
+    "d737add278acfd1bb4e084b38ddf4908",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" p18:Unid=\"d737add278acfd1bb4e084b38ddf4908\"><w:r p18:Unid=\"d140ba3c85c0f7a10b96237907ee6e2c\"><w:drawing p18:Unid=\"26caf1bb25ec0b742018c9bb283eefd8\"><wp:inline xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\" p18:Unid=\"9c78101b19d2bc41ef1246ef0128ae99\"><wp:extent cx=\"914400\" cy=\"457200\" p18:Unid=\"7133efab7b59371cd5d6682a2f9198b4\" /><wp:docPr id=\"1\" name=\"Picture 1\" p18:Unid=\"d415cb16197b1bb6e73fbbed5d1ab6fd\" /><wp:cNvGraphicFramePr p18:Unid=\"f46436ebac7291c0d066ebf37a9c7646\"><a:graphicFrameLocks noChangeAspect=\"1\" p18:Unid=\"2d1d73bd0857d38a982d31f9d4b3cfe8\" /></wp:cNvGraphicFramePr><a:graphic p18:Unid=\"2299300221233d3160ff16753b45a088\"><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\" p18:Unid=\"a6145036033d0bc280aca7138d998b9b\"><pic:pic p18:Unid=\"d81b2ec1b6a249c5a5f522944e60b26e\"><pic:nvPicPr p18:Unid=\"6630691e6180288c1bd93f41d3ecb401\"><pic:cNvPr id=\"0\" name=\"red.png\" p18:Unid=\"98beb6debd34279d049246f2a2f4e4e0\" /><pic:cNvPicPr p18:Unid=\"5a93b696cb16ac04dd0d9cabb5f23bbe\" /></pic:nvPicPr><pic:blipFill p18:Unid=\"502c4612daff0923340d5cc5d3c60e98\"><a:blip r:embed=\"rId11\" p18:Unid=\"2ceb94c9a5c8bcdf9aef8411746bea1d\" /><a:stretch p18:Unid=\"9749bbc5c24431176f59a00925c1f63c\"><a:fillRect p18:Unid=\"afe566b7b4fa97a60529751d204cecde\" /></a:stretch></pic:blipFill><pic:spPr p18:Unid=\"a3b1e4c855af9ddecf9f2fdeb8eccc80\"><a:xfrm p18:Unid=\"7421642e362ca52eaa1c487e0719570f\"><a:off x=\"0\" y=\"0\" p18:Unid=\"dfc4e39ed35a3b2608069f1642d72599\" /><a:ext cx=\"914400\" cy=\"457200\" p18:Unid=\"a0dd4e8b0602b549d9fde7e9275da994\" /></a:xfrm><a:prstGeom prst=\"rect\" p18:Unid=\"3d4ecdbd46ec4e845c81ea6a73f76b3e\" /></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"
+  ],
+  [
+    "1b20b456a032507763add810f85cda28",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"1b20b456a032507763add810f85cda28\"><w:pPr p18:Unid=\"97995d7a99100d784d767d686f1faadb\"><w:pStyle w:val=\"Heading1\" p18:Unid=\"d236353e8c60aa13f6b8dd5a04d8faa1\" /></w:pPr><w:r p18:Unid=\"8f5290a81088189201e911ef1c7f108e\"><w:t p18:Unid=\"2fa6831659134a557768f01e24694ec4\">2. Payment</w:t></w:r></w:p>"
+  ],
+  [
+    "9c830f9333a09baf31b2b3093163f83f",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"9c830f9333a09baf31b2b3093163f83f\"><w:r p18:Unid=\"e4a672950287bde4b165f67977931e31\"><w:t xml:space=\"preserve\" p18:Unid=\"33fef000e251ecd408acb37146cc2a14\">Invoices are due </w:t></w:r><w:r p18:Unid=\"be1a9287034fdc94da071ec5b09e91c5\"><w:rPr p18:Unid=\"e64cee965c1a66b4af2d2e6693405042\"><w:b p18:Unid=\"fbef6bf50f90119296b8d52a758ba25e\" /><w:i p18:Unid=\"4847346bd54c9273052418b4dfdeab54\" /></w:rPr><w:t p18:Unid=\"1226ccac702bdd188fdb962da54b3214\">net thirty (30) days</w:t></w:r><w:r p18:Unid=\"c5a0ec477ae84fd23893304333e4c210\"><w:t xml:space=\"preserve\" p18:Unid=\"f40804d7215840ebb3afed26b7b454ff\"> from receipt.</w:t></w:r></w:p>"
+  ],
+  [
+    "c8d7175430d2890a576660d37129f163",
+    "<w:tbl xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"c8d7175430d2890a576660d37129f163\"><w:tblPr p18:Unid=\"bfa7142d5d13ed22ec2f7badb2c49a6d\"><w:tblStyle w:val=\"TableGrid\" p18:Unid=\"10b1abf97f1db7e9fda9b7a4ff907dcd\" /><w:tblW w:type=\"auto\" w:w=\"0\" p18:Unid=\"2416c2808c70796b87ba357cdd42486c\" /><w:tblLook w:firstColumn=\"1\" w:firstRow=\"1\" w:lastColumn=\"0\" w:lastRow=\"0\" w:noHBand=\"0\" w:noVBand=\"1\" w:val=\"04A0\" p18:Unid=\"bb1f972d0414df7a6bb59902f45b26b9\" /></w:tblPr><w:tblGrid p18:Unid=\"67b753f5bf4f620c202fc83e22b19110\"><w:gridCol w:w=\"4320\" p18:Unid=\"0ddc66314c1a3da17e85db898d2ad9ab\" /><w:gridCol w:w=\"4320\" p18:Unid=\"1c5409d162ed0d1cab2123cdca9d40c9\" /></w:tblGrid><w:tr p18:Unid=\"e8bdb46a6049b85bf736a116172aa698\"><w:tc p18:Unid=\"7e5725c56b3c6a509d2e7f94eb039700\"><w:tcPr p18:Unid=\"e468ba69ee23284dfe70f8f7c01e0b84\"><w:tcW w:type=\"dxa\" w:w=\"4320\" p18:Unid=\"e595f0938b7323cb4da4c5b4ce26ff82\" /></w:tcPr><w:p p18:Unid=\"630255b16c16f98f045b567d0e021a14\"><w:r p18:Unid=\"c41ca3addd06abab801524b9e8ad0885\"><w:t p18:Unid=\"07a4e4233c618742e835143b15ae0b92\">Milestone</w:t></w:r></w:p></w:tc><w:tc p18:Unid=\"2dd410b9b660c7d324f4fd9b821728d9\"><w:tcPr p18:Unid=\"25ca6a89b4d3ee57894d6964f500084a\"><w:tcW w:type=\"dxa\" w:w=\"4320\" p18:Unid=\"dc075b6186c30a6f31b50f5fb99cfd61\" /></w:tcPr><w:p p18:Unid=\"5f2b4f3834ebc776ea5c27f33d87d53a\"><w:r p18:Unid=\"2d25a60f471b34ff4483b39c6b65bf5a\"><w:t p18:Unid=\"30dcd361c7bb055eed00694cadd3ba34\">Fee</w:t></w:r></w:p></w:tc></w:tr><w:tr p18:Unid=\"0ccf61cd16ddae9157a69e40b104eac2\"><w:tc p18:Unid=\"53b3533e536d099b8499e0bb6378d9f3\"><w:tcPr p18:Unid=\"05f93bfd83018aa79698cb8586158520\"><w:tcW w:type=\"dxa\" w:w=\"4320\" p18:Unid=\"b45f017b368349886dfc2c9349fc07cc\" /></w:tcPr><w:p p18:Unid=\"cf461db9c8fff29a9320f0580f20a469\"><w:r p18:Unid=\"109c996bf108a66821bc3c5b2d9b72e8\"><w:t p18:Unid=\"990d7bc0c44ed024140be69a13eea133\">Kickoff</w:t></w:r></w:p></w:tc><w:tc p18:Unid=\"5b1f231bc6b184f28049076c504e4d8f\"><w:tcPr p18:Unid=\"999c11c8b06b5111df1fd6be3b78a85b\"><w:tcW w:type=\"dxa\" w:w=\"4320\" p18:Unid=\"851ff1ae95ce09fd290f489a78e58538\" /></w:tcPr><w:p p18:Unid=\"c432259f56505a5a0b0963d2c8d0ac2e\"><w:r p18:Unid=\"8bb746bb9e7c497e088c93992e04939d\"><w:t p18:Unid=\"2fbe4468c8025f84afe08ab808f30361\">$10,000</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
+  ],
+  [
+    "61b0916ef9b45c1502239db85cc53c88",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"61b0916ef9b45c1502239db85cc53c88\"><w:r p18:Unid=\"65a8bda469bc95bf747eea199c0a8b10\"><w:br w:type=\"page\" p18:Unid=\"9e5498f474af50ade4ef5d32e18a3a03\" /></w:r></w:p>"
+  ],
+  [
+    "ee8c45affa3c0497b319fb11a4621162",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"ee8c45affa3c0497b319fb11a4621162\"><w:pPr p18:Unid=\"b8e944959eca5513ca2bb7f052d05bb0\"><w:pStyle w:val=\"Heading1\" p18:Unid=\"5e53d72955829a89e9466961d8d472a8\" /></w:pPr><w:r p18:Unid=\"5bc98dab18ed85ccc9b3da13cb289926\"><w:t p18:Unid=\"327b5e0464e6157bbff1f7540e0affa6\">3. Termination</w:t></w:r></w:p>"
+  ],
+  [
+    "ab3515ca502f385fa4fbaf0d5d606b58",
+    "<w:p xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"ab3515ca502f385fa4fbaf0d5d606b58\"><w:r p18:Unid=\"de2f954ba22f6af0bdb9de72a50b08fb\"><w:t p18:Unid=\"3deb03c9ca10c0e5672dea08aeea3d16\">Either party may terminate this Agreement for material breach that remains uncured thirty (30) days after written notice.</w:t></w:r></w:p>"
+  ],
+  [
+    "79ac65e095e2d064dd8895e684f1ae81",
+    "<w:sectPr xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" w:rsidR=\"00FC693F\" w:rsidRPr=\"0006063C\" w:rsidSect=\"00034616\" p18:Unid=\"79ac65e095e2d064dd8895e684f1ae81\"><w:headerReference w:type=\"default\" r:id=\"rId9\" p18:Unid=\"c436f8206882cdbf7cfd16fd35465237\" /><w:footerReference w:type=\"default\" r:id=\"rId10\" p18:Unid=\"7e80bb924c2ba4e3526ce50711cf26ed\" /><w:pgSz w:w=\"12240\" w:h=\"15840\" p18:Unid=\"1afe8214f92d20830b8c6cbf7276ee69\" /><w:pgMar w:top=\"1440\" w:right=\"1800\" w:bottom=\"1440\" w:left=\"1800\" w:header=\"720\" w:footer=\"720\" w:gutter=\"0\" p18:Unid=\"b056c917bf7951c73bf779904ea33cae\" /><w:cols w:space=\"720\" p18:Unid=\"7b58637878b0ee1b3ab5dee3c91a4ae9\" /><w:docGrid w:linePitch=\"360\" p18:Unid=\"db3893a25fc50371b6e8d2bd67ac8e63\" /></w:sectPr>"
+  ],
+  [
+    "890fc717f06ee3448b07776ae09e9c62",
+    "<w:sdt xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" p18:Unid=\"890fc717f06ee3448b07776ae09e9c62\"><w:sdtPr p18:Unid=\"e5c9c87bbbdfb0801b1bab4c1c437282\"><w:docPartObj p18:Unid=\"44a000d49cd21a9af487baed2d5e32c8\"><w:docPartGallery w:val=\"Table of Contents\" p18:Unid=\"92a9b86d65df37ea62e0f4784e3a6d7f\" /><w:docPartUnique p18:Unid=\"01d54d62c4c594a620d076c1501e7e4f\" /></w:docPartObj></w:sdtPr><w:sdtContent p18:Unid=\"bea4a62e6868ab07b1e61ae779ecb303\"><w:p p18:Unid=\"61f403e7032c9b739c6f1f374b8b95ef\"><w:r p18:Unid=\"62531e9c62400487c63cd20625bc0751\"><w:t p18:Unid=\"70e4bb16f9f2f9c63cc5430c0338089d\">Table of Contents</w:t></w:r></w:p><w:p p18:Unid=\"cff26d9503e242982b48aa0dbd2bb29f\"><w:r p18:Unid=\"8f5963947b93a0aa8a445ede280568f0\"><w:t p18:Unid=\"feee488c6f6068d33f55578cf4523336\">1. Services ........ 1</w:t></w:r></w:p></w:sdtContent></w:sdt>"
+  ],
+  [
+    "eb7c4e92e69746e30df92bb8c6b04e88",
+    "<w:bookmarkStart xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" w:id=\"9\" w:name=\"services\" p18:Unid=\"eb7c4e92e69746e30df92bb8c6b04e88\" />"
+  ],
+  [
+    "364f20bbee5bfaf891f686028a2ba82b",
+    "<w:bookmarkEnd xmlns:p18=\"http://powertools.codeplex.com/2011\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" w:id=\"9\" p18:Unid=\"364f20bbee5bfaf891f686028a2ba82b\" />"
+  ]
+]

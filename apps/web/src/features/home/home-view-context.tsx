@@ -10,6 +10,13 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import {
+  homeChannelRoute,
+  homeDocumentRoute,
+  homePreviewRoute,
+  homeReminderRoute,
+  homeSplitRoute,
+} from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   type PreviewBlockTarget,
@@ -47,13 +54,6 @@ import { homeDetailParamsFromRoute, homePreviewTarget } from './home-route';
 import { isHomeDocumentType } from './home-route-schema';
 import { homeTabSearch, homeTabSearchCodec } from './home-tab-search';
 import { createHomeViewPersistence, normalizeHomeFacets } from './persistence';
-import {
-  homeChannelRoute,
-  homeDocumentRoute,
-  homePreviewRoute,
-  homeReminderRoute,
-  homeSplitRoute,
-} from './route';
 import type {
   HomeGroupBy,
   HomeTab,

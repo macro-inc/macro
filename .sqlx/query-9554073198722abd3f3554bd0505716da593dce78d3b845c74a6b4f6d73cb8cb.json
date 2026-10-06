@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.version FROM database_tables t\n           WHERE t.id = ANY($1)\n           ORDER BY t.id\n           FOR UPDATE OF t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "version",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9554073198722abd3f3554bd0505716da593dce78d3b845c74a6b4f6d73cb8cb"
+}

@@ -3,11 +3,13 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
+use entity_access::domain::models::EntityAccessReceipt;
 use entity_access::domain::ports::EntityAccessService;
 use macro_sync_service_jwt::DocumentPermissionToken;
 use messages::domain::models::{
     MessageAttribution, NewThreadAnchor, PostMessage, PostMessageNotificationPolicy,
 };
+use messages::domain::service::MessageWrite;
 use model::document::FileType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
@@ -26,7 +28,7 @@ use crate::domain::ports::{
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CommentOnDocument",
-    description = "Comment on a document on behalf of the user. Pass threadId to reply in an existing inline or Discussion thread; pass quote to start a new inline comment on a passage of a Macro markdown document; omit both to start a new Discussion comment on the document as a whole. Replies and Discussion comments support any document type. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. For an inline comment, quote the passage exactly as the document reads, as plain text without markdown syntax, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one with occurrence, counting from 1; if the text is not found, read the document again rather than guessing. Do not combine threadId with quote. occurrence only applies with quote."
+    description = "Comment on a document on behalf of the user. Pass threadId to reply in an existing inline or Discussion thread; pass quote to start a new inline comment on a passage of a Macro markdown or Word (DOCX) document; omit both to start a new Discussion comment on the document as a whole. Replies and Discussion comments support any document type. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. For an inline comment, quote the passage exactly as the document reads, as plain text without markdown syntax, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one with occurrence, counting from 1; if the text is not found, read the document again rather than guessing. Do not combine threadId with quote. occurrence only applies with quote. Comments made here stay in Macro and are not written into a Word file; for comments that must travel with a Word document to its recipient (a redline for a counterparty), use EditWordDocument's addComment operation instead."
 )]
 pub struct CommentOnDocument {
     #[schemars(description = "The id of the document to comment on.")]
@@ -43,7 +45,7 @@ pub struct CommentOnDocument {
     pub thread_id: Option<Uuid>,
 
     #[schemars(
-        description = "The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique. Starts a new inline comment on a markdown document only. Cannot be combined with threadId."
+        description = "The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique. Starts a new inline comment on a markdown or Word (DOCX) document. Cannot be combined with threadId."
     )]
     pub quote: Option<String>,
 
@@ -148,14 +150,18 @@ where
                 description: "unable to look up this document".to_string(),
                 internal_error: e.into(),
             })?;
-        if document.try_file_type() != Some(FileType::Md) {
-            return Err(ToolCallError {
-                description: "inline comments anchor to text in Macro markdown documents only; omit quote to comment on this document as a whole".to_string(),
-                internal_error: anyhow::anyhow!(
-                    "document file type {:?} is not markdown",
-                    document.file_type
-                ),
-            });
+        match document.try_file_type() {
+            Some(FileType::Md) => {}
+            Some(FileType::Docx) => return self.comment_on_docx_text(&ctx, access, quote).await,
+            _ => {
+                return Err(ToolCallError {
+                    description: "inline comments anchor to text in Macro markdown and Word documents only; omit quote to comment on this document as a whole".to_string(),
+                    internal_error: anyhow::anyhow!(
+                        "document file type {:?} does not support inline comments",
+                        document.file_type
+                    ),
+                });
+            }
         }
 
         // Placing the mark is a content change, but the one a commenter makes
@@ -243,6 +249,65 @@ where
             thread_id: message.id,
             comment_id: message.id,
             marked_text: Some(marked_text),
+        })
+    }
+}
+
+impl CommentOnDocument {
+    /// A Word document keeps its comment marks beside its collaborative
+    /// blocks, where the editor places a thread by the text it quotes and pins
+    /// it with a mark. The thread is posted with that quote and a fresh mark id;
+    /// a quote the editor cannot find shows with the comments on changed text.
+    async fn comment_on_docx_text<DSvc, ESvc, EDSvc>(
+        &self,
+        ctx: &ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
+        access: EntityAccessReceipt<MessageWrite>,
+        quote: &str,
+    ) -> ToolResult<CommentOnDocumentResponse>
+    where
+        DSvc: DocumentService + DocumentCreationService,
+        ESvc: EntityAccessService,
+        EDSvc: EditingWorkerService,
+    {
+        if self.occurrence.is_some_and(|occurrence| occurrence > 1) {
+            return Err(ToolCallError {
+                description: "comments on a Word document attach to the first appearance of the quoted text; quote a longer passage that appears only once".to_string(),
+                internal_error: anyhow::anyhow!("occurrence {:?} on a docx", self.occurrence),
+            });
+        }
+        let marked_text = quote.trim();
+        if marked_text.is_empty() {
+            return Err(ToolCallError {
+                description: "quote the passage to comment on".to_string(),
+                internal_error: anyhow::anyhow!("empty quote"),
+            });
+        }
+        let message = ctx
+            .messages
+            .post(
+                access,
+                PostMessage {
+                    id: None,
+                    attribution: MessageAttribution::ActingUser,
+                    notification_policy: PostMessageNotificationPolicy::Default,
+                    content: self.content.clone(),
+                    thread_id: None,
+                    anchor: Some(NewThreadAnchor::Markdown {
+                        mark_id: Uuid::now_v7(),
+                        marked_text: Some(marked_text.to_owned()),
+                    }),
+                    mentions: vec![],
+                    attachments: vec![],
+                    nonce: None,
+                },
+            )
+            .await
+            .map_err(comment_error("unable to post the comment"))?;
+        Ok(CommentOnDocumentResponse {
+            document_id: self.document_id,
+            thread_id: message.id,
+            comment_id: message.id,
+            marked_text: Some(marked_text.to_owned()),
         })
     }
 }

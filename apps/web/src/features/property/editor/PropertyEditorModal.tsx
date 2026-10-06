@@ -2148,54 +2148,42 @@ function DatePropertyEditor(props: {
   });
 
   return (
-    <>
-      <Show
-        when={dateOptions().length > 0}
-        fallback={
-          <Show
-            when={props.searchValue().trim()}
-            fallback={
-              <CommandMenuEmptyState>
-                Enter a date or duration
-              </CommandMenuEmptyState>
-            }
-          >
+    <Show
+      when={dateOptions().length > 0}
+      fallback={
+        <Show
+          when={props.searchValue().trim()}
+          fallback={
             <CommandMenuEmptyState>
-              No dates match "{props.searchValue()}"
+              Enter a date or duration
             </CommandMenuEmptyState>
-          </Show>
-        }
-      >
-        <CommandMenuList
-          items={dateOptions()}
-          selectedIndex={props.selectedIndex()}
-          scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
-          itemId={(_, index) => `date-option-${index}`}
-          onSelect={(option) => props.onSubmit(option.date)}
-          onItemMouseMove={(index) =>
-            listController.setSelectedIndexFromPointer(index)
           }
         >
-          {(option) => (
-            <>
-              <div class="flex-1 text-left">
-                <p class="text-sm font-medium">{option.displayText}</p>
-              </div>
-              <span class="text-xs text-ink-muted">{option.secondaryText}</span>
-            </>
-          )}
-        </CommandMenuList>
-      </Show>
-
-      <div class="p-4 border-t border-edge-muted">
-        <div class="text-xs text-ink-muted">
-          <span>Use queries like </span>
-          <code class="bg-active px-1">3d</code>,{' '}
-          <code class="bg-active px-1">1w</code>,{' '}
-          <code class="bg-active px-1">feb 17</code>, or{' '}
-          <code class="bg-active px-1">tomorrow</code>
-        </div>
-      </div>
-    </>
+          <CommandMenuEmptyState>
+            No dates match "{props.searchValue()}"
+          </CommandMenuEmptyState>
+        </Show>
+      }
+    >
+      <CommandMenuList
+        items={dateOptions()}
+        selectedIndex={props.selectedIndex()}
+        scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+        itemId={(_, index) => `date-option-${index}`}
+        onSelect={(option) => props.onSubmit(option.date)}
+        onItemMouseMove={(index) =>
+          listController.setSelectedIndexFromPointer(index)
+        }
+      >
+        {(option) => (
+          <>
+            <div class="flex-1 text-left">
+              <p class="text-sm font-medium">{option.displayText}</p>
+            </div>
+            <span class="text-xs text-ink-muted">{option.secondaryText}</span>
+          </>
+        )}
+      </CommandMenuList>
+    </Show>
   );
 }

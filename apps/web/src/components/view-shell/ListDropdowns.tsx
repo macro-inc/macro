@@ -14,6 +14,8 @@ export type ListControlOption<TId extends string> = {
   id: TId;
   label: string;
   icon?: () => JSX.Element;
+  /** Drawn in place of `label`, which still drives search. */
+  content?: () => JSX.Element;
   disabled?: boolean;
 };
 
@@ -73,7 +75,9 @@ function SingleSelectDropdown<TId extends string>(
                       {option.icon?.()}
                     </span>
                   </Show>
-                  <span class="flex-1">{option.label}</span>
+                  <span class="flex-1">
+                    {option.content?.() ?? option.label}
+                  </span>
                   <Dropdown.ItemIndicator>
                     <CheckIcon class="size-3.5 text-accent" />
                   </Dropdown.ItemIndicator>

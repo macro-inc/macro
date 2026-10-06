@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE entity_access SET access_level = $3::text::\"AccessLevel\"\n                   WHERE entity_id = $1 AND entity_type = 'call'\n                     AND source_id = $2 AND source_type = 'channel'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "59963658076b29580661b870d083b9f8ec834860f1707b4fbb50e458905a3e00"
+}

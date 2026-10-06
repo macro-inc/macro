@@ -105,6 +105,8 @@ export interface CreateCalendarEventFormControllerOptions {
   /** Editing a saved event, whose initial guests already hold an invitation. */
   isEdit?: boolean;
   calendarOptions: Accessor<EventEditorCalendarOption[]>;
+  /** Override the default account; undefined means wait for it or choose explicitly. */
+  defaultCalendarId?: Accessor<string | undefined>;
   guestOptions: Accessor<EventEditorGuestOption[]>;
   recurrenceTimeZone?: string;
   onChange?: (value: EventEditorInitialValues) => void;
@@ -174,25 +176,27 @@ export function createCalendarEventFormController(
   const availableCalendarOptions = () =>
     restrictsCalendars() ? primaryCalendarOptions() : options.calendarOptions();
 
+  const defaultCalendarId = () =>
+    options.defaultCalendarId
+      ? options.defaultCalendarId()
+      : availableCalendarOptions()[0]?.id;
   const effectiveCalendarId = () => {
     const chosen = state().calendarId;
     if (!restrictsCalendars()) {
-      return chosen ?? options.calendarOptions()[0]?.id;
+      return chosen ?? defaultCalendarId();
     }
     // The restriction also steers a selection made before it applied.
     const available = availableCalendarOptions();
     return (
-      available.find((option) => option.id === chosen)?.id ?? available[0]?.id
+      available.find((option) => option.id === chosen)?.id ??
+      defaultCalendarId()
     );
   };
 
   const calendarOptionFor = (calendarId: string | undefined) =>
     options
       .calendarOptions()
-      .find(
-        (option) =>
-          option.id === (calendarId ?? options.calendarOptions()[0]?.id)
-      ) ?? options.calendarOptions()[0];
+      .find((option) => option.id === (calendarId ?? defaultCalendarId()));
 
   const selectedCalendarOption = () => calendarOptionFor(effectiveCalendarId());
 
@@ -304,7 +308,7 @@ export function createCalendarEventFormController(
       start: initialValue().start,
       end: initialValue().end,
       recurrenceLines: initialValue().recurrenceLines,
-      calendarId: initialValue().calendarId ?? options.calendarOptions()[0]?.id,
+      calendarId: initialValue().calendarId ?? defaultCalendarId(),
       guestEmails: blanks ? [] : initialGuestEmails(),
       location: blanks ? '' : initialValue().location,
       description: blanks ? '' : initialValue().description,
@@ -447,9 +451,16 @@ export function createCalendarEventFormController(
     };
   };
 
+  const canSave = () =>
+    recurrence.canSave() &&
+    (!options.defaultCalendarId ||
+      availableCalendarOptions().some(
+        (option) => option.id === effectiveCalendarId()
+      ));
+
   const submitValues = (): EventEditorSubmitValues | undefined => {
     const time = recurrence.eventTime();
-    if (!time || !recurrence.canSave()) return undefined;
+    if (!time || !canSave()) return undefined;
     const current = state();
     const reminders = reminderUpdate();
     const outOfOffice = submittedOutOfOffice();
@@ -531,7 +542,7 @@ export function createCalendarEventFormController(
     dateRangeError: recurrence.dateRangeError,
     pastEventWarning,
     eventTime: recurrence.eventTime,
-    canSave: recurrence.canSave,
+    canSave,
     snapshot,
     isDirty,
     submitValues,

@@ -52,7 +52,7 @@ export const I_IMAGE_CONSTRAINED: ElementTransformer = {
         constrainedWidth: data.constrainedWidth ?? undefined,
         constrainedHeight: data.constrainedHeight ?? undefined,
       });
-      parent.append(imageNode);
+      parent.replace(imageNode);
     } catch (e) {
       console.error('Failed to parse m-image:', e);
       replaceElementWithUnknownMention(parent, 'Unknown Image');

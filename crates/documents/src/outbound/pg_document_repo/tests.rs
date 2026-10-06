@@ -132,6 +132,34 @@ async fn team_edit_args(repo: &TestRepo, level: Option<AccessLevel>) -> EditDocu
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn get_user_name_reads_the_name_a_user_set(pool: Pool<Postgres>) {
+    sqlx::query!(
+        "INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES ($1, 'Jacob', 'Beckerman')",
+        uuid::Uuid::parse_str("a2222222-2222-2222-2222-222222222222").unwrap(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = test_repo(pool);
+    assert_eq!(
+        repo.get_user_name("macro|teammate1@user.com")
+            .await
+            .unwrap(),
+        (Some("Jacob".to_owned()), Some("Beckerman".to_owned()))
+    );
+    // A user who never set a name has none.
+    assert_eq!(
+        repo.get_user_name("macro|teammate2@user.com")
+            .await
+            .unwrap(),
+        (None, None)
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn team_edit_exact_levels_omission_and_legacy_preservation(pool: Pool<Postgres>) {
     let repo = test_repo(pool.clone());
     let mut revision = 0;

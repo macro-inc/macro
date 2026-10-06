@@ -12,6 +12,7 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { ToolApprovalController } from '../primitives/create-tool-approval-controller';
 import type { EffortSelection } from '../state/session-config';
 import type { QuoteInsert } from '../ui';
 import type { QueueController } from './create-queue-controller';
@@ -40,6 +41,12 @@ export type AgentSessionState = {
   metadata: Accessor<SessionMetadata | undefined>;
   /** The folded transcript, ordered by turn, live-following the session. */
   messages: Accessor<FoldedMessage[]>;
+  /** Optional in galleries/replays; production reports actual answer rendering. */
+  observeRenderedText?: (
+    sessionId: string,
+    turn: number,
+    element: HTMLElement
+  ) => (() => void) | undefined;
   loadFailed: Accessor<boolean>;
   /** The load failed because the viewer is not a participant (401/403). */
   accessDenied: Accessor<boolean>;
@@ -76,8 +83,19 @@ export type AgentSessionState = {
    * the server would dispatch that head, not the next one.
    */
   sendNext: () => void;
+  /**
+   * Steer one queued message: show it as sent, move it to the front of the
+   * queue, and cancel the turn in flight so it runs next. No-op while the
+   * prompt a previous steer or send-next showed as sent is still unconfirmed.
+   */
+  steer: (actionId: string) => void;
   /** The live requests, and the action that answers each one. */
   interactions: InteractionController;
+  /**
+   * Tool calls held until the session's owner approves them, made in turns
+   * somebody else prompted.
+   */
+  toolApprovals: ToolApprovalController;
   /**
    * The session's server-side action queue: prompts sent mid-turn wait
    * there and dispatch one per turn end. The server is the only truth —

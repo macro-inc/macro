@@ -19,6 +19,13 @@ pub trait UserDeletionGateway: Send + Sync {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Delete the teams the user owns and leave the rest through the teams
+    /// service, so subscriptions, member roles, and team events are handled
+    /// instead of the membership silently cascading away with the profile.
+    fn leave_teams(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
     /// Delete documents, chats, and projects through their owning service.
     fn delete_items(
         &self,
@@ -28,6 +35,15 @@ pub trait UserDeletionGateway: Send + Sync {
     fn delete_profile(
         &self,
         user: &MacroUserIdStr<'static>,
+        account: &Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Delete the account's billing customer once every profile is gone and
+    /// before the account row that remembers the customer, so a failure here
+    /// is retried instead of orphaning the customer. Deleting the customer
+    /// also cancels any subscription it still has, so this must run after the
+    /// team subscription has been handled through `leave_teams`.
+    fn delete_billing_customer(
+        &self,
         account: &Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
     /// Delete the account only after all profiles have been cleaned up.
@@ -44,8 +60,10 @@ pub async fn delete_user_data(
     for user in users {
         gateway.delete_scheduled_actions(user).await?;
         gateway.delete_agent_sessions(user).await?;
+        gateway.leave_teams(user).await?;
         gateway.delete_items(user).await?;
         gateway.delete_profile(user, account).await?;
     }
+    gateway.delete_billing_customer(account).await?;
     gateway.delete_account(account).await
 }

@@ -1,0 +1,58 @@
+[package]
+edition = "2024"
+name = "database_sql"
+publish = false
+version = "0.1.0"
+
+[lib]
+# `cdylib` for the browser build; `rlib` so services keep linking it normally.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# The `database_sql_types` codegen binary: native developer tooling that
+# writes the TypeScript face of the wire types. Off by default so the wasm
+# build never compiles the exporter; the derives themselves need only `specta`.
+cli = ["dep:specta-serde", "dep:specta-typescript"]
+# JSON Schemas of the result cells, for agent tools that hand them back.
+schema = ["dep:schemars", "models_databases/schema"]
+
+# Needs the exporter and a filesystem to write to, which the library does not.
+# Not `export_types`, which `agent_fold` already builds into the same target.
+[[bin]]
+name = "database_sql_types"
+required-features = ["cli"]
+
+[dependencies]
+chrono = { workspace = true }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters", default-features = false }
+logos = { workspace = true }
+maybe_send = { path = "../maybe_send" }
+models_databases = { path = "../models_databases" }
+nom = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+specta = { workspace = true, features = ["chrono", "uuid"] }
+specta-serde = { workspace = true, optional = true }
+specta-typescript = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+# The wasm-bindgen shell in `wasm`, which only exists on wasm32. Target-gated
+# rather than behind a feature so a native build never resolves any of it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde-wasm-bindgen = { workspace = true }
+uuid = { workspace = true, features = ["js"] }
+wasm-bindgen = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+serde_json = { workspace = true }
+
+# The gql example talks to a live stack; the crate's own tests and the wasm
+# build never need these.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+clap = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }

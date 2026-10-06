@@ -146,10 +146,12 @@ export type ItemMention = {
     | 'color'
     | 'call'
     | 'calendar_event'
+    | 'database'
     | 'agent_session'
+    | 'initiative'
     | 'foreign'
     | 'group'
-    | 'automation'
+    | 'routine'
     | 'crm_company'
     | 'crm_contact'
     | 'skill';
@@ -211,6 +213,10 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'project') {
       fileType = 'project';
       itemType = 'project';
+    } else if (blockName === 'initiative') {
+      // A task project, never a document id.
+      fileType = 'initiative';
+      itemType = 'initiative';
     } else if (blockName === 'chat') {
       fileType = 'chat';
       itemType = 'chat';
@@ -317,12 +323,14 @@ const getDocumentMentionItemType = (
     .with('email', () => 'thread')
     .with('document', () => 'document')
     .with('agent_session', () => 'agent_session')
+    .with('database', () => 'database')
     .with('chat', () => 'chat')
     .with('channel', () => 'channel')
     .with('project', () => 'project')
+    .with('initiative', () => 'initiative')
     .with('channel_message', () => 'channel')
     .with('channel_thread', () => 'channel')
-    .with('automation', () => 'automation')
+    .with('routine', () => 'routine')
     .with('call', () => 'call')
     .with('calendar_event', () => 'calendar_event')
     .with('foreign', () => {

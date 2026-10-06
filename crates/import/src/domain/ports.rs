@@ -1,7 +1,12 @@
 //! Ports (traits) the import domain depends on.
 
-use super::models::{ImportEntity, ImportRun, ImportSource, ImportStatus, Initiator, RunStatus};
+use super::models::{
+    ImportEntity, ImportRun, ImportSource, ImportSourceBinding, ImportStatus, ImportTargetKey,
+    ImportTargetKind, ImportTargetReservation, Initiator, RunStatus, SlackConversationId,
+    SlackConversationPage, SlackMemberPage, SlackUserPage, SlackWorkspaceId,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -11,12 +16,27 @@ pub enum ImportError {
     /// AI work was refused or usage validation is temporarily unavailable.
     #[error(transparent)]
     Admission(#[from] ai_billing::AiAdmissionError),
+    /// This source does not support user-triggered discovery.
+    #[error("manual discovery is not supported for {source}", source = .0.as_ref())]
+    UnsupportedDiscovery(ImportSource),
     /// Database failure.
     #[error("database error: {0}")]
     Db(rootcause::Report),
     /// Metadata failed to (de)serialize.
     #[error("invalid import metadata: {0}")]
     Metadata(#[from] serde_json::Error),
+    /// An unidentified archive requires explicit administrator confirmation.
+    #[error("source identity requires administrator confirmation")]
+    SourceConfirmationRequired,
+    /// The team is already bound to a different Slack workspace.
+    #[error("source workspace does not match the team's binding")]
+    SourceMismatch,
+    /// Historical mappings or target shape/provenance are incompatible. No target IDs are exposed.
+    #[error("conflicting import target mapping")]
+    TargetConflict,
+    /// Completion must follow a committed reservation for exactly this UUID.
+    #[error("import target is not reserved")]
+    TargetNotReserved,
     /// Anything else.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -24,6 +44,67 @@ pub enum ImportError {
 
 /// Result alias for import operations.
 pub type Result<T> = std::result::Result<T, ImportError>;
+
+/// Errors reading a live Slack workspace.
+#[derive(Debug, Error)]
+pub enum SlackSourceError {
+    /// The user has no Slack connector.
+    #[error("Slack is not connected")]
+    NotConnected,
+    /// The connector lacks a required capability.
+    #[error("Slack connector capability unavailable: {0}")]
+    ToolsUnavailable(&'static str),
+    /// Slack temporarily refused reads due to rate limiting.
+    #[error("Slack rate limit exceeded")]
+    RateLimited {
+        /// Provider-supplied delay before retrying, when available.
+        retry_after: Option<Duration>,
+    },
+    /// The connection lacks a required Slack permission scope.
+    #[error("missing Slack scope: {0}")]
+    MissingScope(String),
+    /// Any other source failure.
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+/// Opens live Slack workspace sessions for import discovery and membership reads.
+pub trait SlackWorkspaceSource: Send + Sync + 'static {
+    /// Workspace reader scoped to one gather or one import batch.
+    type Session: SlackWorkspaceSession;
+
+    /// Open a session scoped to one gather or one import batch.
+    /// Returns [`SlackSourceError::NotConnected`] when the user has no Slack
+    /// connector, or [`SlackSourceError::ToolsUnavailable`] when the connector
+    /// lacks a needed capability.
+    fn open(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = std::result::Result<Self::Session, SlackSourceError>> + Send;
+}
+
+/// Paginated workspace reads scoped to one gather or one import batch.
+/// Pass `None` to read the first page, then the returned continuation cursor.
+pub trait SlackWorkspaceSession: Send + Sync {
+    /// List conversations visible to the connected user.
+    fn list_conversations(
+        &self,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackConversationPage, SlackSourceError>> + Send;
+
+    /// List the members of one Slack conversation.
+    fn conversation_members(
+        &self,
+        conversation: &SlackConversationId,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackMemberPage, SlackSourceError>> + Send;
+
+    /// List the workspace user directory.
+    fn list_users(
+        &self,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackUserPage, SlackSourceError>> + Send;
+}
 
 /// Persistence for the import ledger and gather runs.
 ///
@@ -173,6 +254,13 @@ pub trait ImportRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
 
+    /// IDs of the team's members. Macro user IDs encode emails, so this is
+    /// the roster the import domain matches Slack emails against.
+    fn team_members(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
+
     /// All gather runs for the user.
     fn list_runs(
         &self,
@@ -189,6 +277,16 @@ pub trait ImportRepo: Send + Sync + 'static {
         source: ImportSource,
         from: &[RunStatus],
         auto_import: bool,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// CAS a run to `running` with `auto_import = false`. Wins when no run
+    /// exists or the existing status is in `from`. Unlike `start_run`, a
+    /// successful claim always clears `auto_import`.
+    fn start_manual_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        from: &[RunStatus],
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// CAS the `running` run for `source` to `to` (ready/failed), recording
@@ -236,6 +334,71 @@ pub trait ImportRepo: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<u64>> + Send;
+}
+
+/// Narrow canonical Slack ledger persistence shared by archive and onboarding.
+///
+/// Callers authorize the explicit team before invoking this port. Target access,
+/// exact DM membership, and administrator authorization remain domain-service
+/// responsibilities: a reservation is provenance, not an access grant.
+/// Each operation commits and releases its connection before returning.
+pub trait CanonicalImportRepo: Send + Sync + 'static {
+    /// Read the durable binding; `None` means the team is not yet bound.
+    fn source_binding(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ImportSourceBinding>>> + Send;
+
+    /// Bind once, reject known mismatches, and retain the first unknown-source
+    /// confirmation timestamp. Every unidentified archive requires confirmation,
+    /// even when a known binding exists. A later known identity may resolve a
+    /// previously confirmed-unknown binding but never replace a known identity.
+    fn bind_source(
+        &self,
+        team_id: Uuid,
+        workspace_id: Option<&SlackWorkspaceId>,
+        confirmed_unknown: bool,
+    ) -> impl Future<Output = Result<ImportSourceBinding>> + Send;
+
+    /// Reserve one stable UUID, considering BOTH own imported rows (even after a
+    /// team change) and rows explicitly shared with this team. Reject ambiguous,
+    /// cross-team, non-channel or incompatible mappings rather than choosing one.
+    /// `existing_channel_id` is an optional already-authorized target to claim
+    /// (e.g. an exact-pair DM); it must agree with every historical mapping and
+    /// cannot replace a committed pending UUID. Without it, allocate UUIDv7.
+    /// Private/DM historical targets require either this explicit authorization
+    /// or an earlier ready reservation in this namespace.
+    fn reserve_target(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        key: &ImportTargetKey,
+        kind: ImportTargetKind,
+        existing_channel_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<ImportTargetReservation>> + Send;
+
+    /// Complete exactly the reserved UUID after idempotent channel creation.
+    /// Revalidate target type/team and preserve the first mapping. Private/DM
+    /// provenance is stored ONLY in the reservation, never a team-visible ledger
+    /// row. Team ledger rows may be published separately through `ImportRepo`.
+    fn complete_target(
+        &self,
+        key: &ImportTargetKey,
+        channel_id: Uuid,
+        kind: ImportTargetKind,
+    ) -> impl Future<Output = Result<ImportTargetReservation>> + Send;
+}
+
+/// Side-effect-free canonical reads, separate from reservation and legacy listings.
+pub trait ImportTargetReader: Send + Sync + 'static {
+    /// Exact IDs in an explicit bound namespace. At most 500 IDs per call; returns
+    /// one outcome per input, in order. Unknown-source confirmation is not domain
+    /// evidence. Never creates reservations, locks rows, or grants read access.
+    fn lookup_targets(
+        &self,
+        team: Uuid,
+        binding: &ImportSourceBinding,
+        channels: &[super::models::SlackConversationId],
+    ) -> impl Future<Output = Result<Vec<super::models::ImportTargetLookup>>> + Send;
 }
 
 /// System properties to set on an imported task, already normalized to
@@ -343,15 +506,16 @@ pub trait EntityCreator: Send + Sync + 'static {
         properties: &ImportedDocumentProperties,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
-    /// Create a channel, shared with `team_id` when given (public
-    /// otherwise). `participant_emails` are matched against the team roster
-    /// best-effort; matches join the channel alongside the creator. Returns
-    /// the new entity id.
+    /// Ensure the reserved Slack Team channel, using its canonical UUID and
+    /// normalized source identity. Reuse must preserve existing settings and
+    /// memberships and must not replay first-creation effects. Participant emails
+    /// are matched against the team roster best-effort on initial creation only.
+    /// Returns the persisted channel ID, never a discarded creation candidate.
     fn create_channel(
         &self,
         user: &MacroUserIdStr<'static>,
         name: &str,
-        team_id: Option<Uuid>,
+        target: &ImportTargetReservation,
         participant_emails: &[String],
-    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+    ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
 }

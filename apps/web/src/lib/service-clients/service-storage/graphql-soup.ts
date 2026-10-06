@@ -248,21 +248,40 @@ export async function dssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  const transportInit = graphqlSoupTransportRequest(init);
-  const response = await authorizedDssGraphqlFetch(input, transportInit);
-  const legacyInit = legacyProjectionRequest(transportInit);
-  if (
-    legacyInit === undefined ||
-    !(await isLegacyProjectionValidationError(response))
-  ) {
-    return response;
-  }
+  return Telemetry.span('graphql.transport', async (span) => {
+    const started = performance.now();
+    try {
+      const transportInit = graphqlSoupTransportRequest(init);
+      span.event('request_dispatch');
+      const response = await authorizedDssGraphqlFetch(input, transportInit);
+      span.setAttr('graphql.response_headers_ms', performance.now() - started);
+      span.setAttr('http.response.status_code', response.status);
+      span.event('response_headers');
+      const legacyInit = legacyProjectionRequest(transportInit);
+      if (legacyInit === undefined) return response;
 
-  // A mixed deployment remains network-correct: retry without the additive
-  // metadata field and suppress v2 local authority for this session. Backfill
-  // still refuses to checkpoint missing required Document supplements.
-  soupProjectionServerSupported = false;
-  return await authorizedDssGraphqlFetch(input, legacyInit);
+      // This includes body delivery and JSON parsing, not just validation CPU.
+      const inspectStarted = performance.now();
+      const legacy = await isLegacyProjectionValidationError(response);
+      span.setAttr(
+        'graphql.response_inspection_ms',
+        performance.now() - inspectStarted
+      );
+      span.event('response_inspected');
+      span.setAttr('graphql.legacy_retry', legacy);
+      if (!legacy) return response;
+
+      // A mixed deployment remains network-correct: retry without the additive
+      // metadata field and suppress v2 local authority for this session. Backfill
+      // still refuses to checkpoint missing required Document supplements.
+      soupProjectionServerSupported = false;
+      return await authorizedDssGraphqlFetch(input, legacyInit);
+    } catch (error) {
+      // Transport errors may contain query URLs; record a category only.
+      span.setAttr('graphql.transport_failed', true);
+      throw error;
+    }
+  });
 }
 
 const graphqlSoupClient = createClient({
@@ -275,9 +294,27 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
+const reconnectListeners = new Set<() => void>();
+
+/**
+ * Hear every reconnect of the Soup GraphQL websocket after its first
+ * connection. A subscription survives a reconnect, but nothing published
+ * while the socket was down reaches it: a listener that follows a stream
+ * refetches what it may have missed.
+ */
+export function subscribeGraphqlSoupReconnected(
+  listener: () => void
+): () => void {
+  reconnectListeners.add(listener);
+  return () => {
+    reconnectListeners.delete(listener);
+  };
+}
+
 function createGraphqlSoupWebSocketClient(
   onConnected: () => void
 ): GraphqlWsClient {
+  let connections = 0;
   const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
     dssHost,
     bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
@@ -292,7 +329,14 @@ function createGraphqlSoupWebSocketClient(
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
     retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
-    on: { connected: onConnected },
+    on: {
+      connected: () => {
+        onConnected();
+        connections += 1;
+        if (connections === 1) return;
+        for (const listener of reconnectListeners) listener();
+      },
+    },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
 }
@@ -664,7 +708,7 @@ export function mapGraphqlProperties(
       display_name: property.displayName,
       data_type: property.dataType,
       is_multi_select: property.isMultiSelect,
-      specific_entity_type: property.specificEntityType ?? undefined,
+      specific_entity_type: property.specificEntityType ?? null,
       is_system: property.isSystem,
       is_metadata: property.isMetadata,
       owner: { scope: 'system' as const },
@@ -1389,6 +1433,9 @@ function mapGraphqlReminderSchedule(entity: {
 }
 
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
+  // Rows are read by the database SQL engine, never listed as Soup items.
+  if (item.__typename === 'GraphqlSoupDatabaseRow') return null;
+
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)
@@ -1403,7 +1450,6 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             id: entity.id,
             name: entity.displayName ?? 'Untitled project',
             ownerId: entity.metadata.ownerId ?? '',
-            descriptionDocumentId: entity.descriptionDocumentId ?? null,
             createdAt: entity.metadata.createdAt ?? '',
             updatedAt: entity.metadata.updatedAt ?? '',
             viewedAt: entity.metadata.viewedAt,
@@ -1676,6 +1722,31 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
               leftAt: guest.leftAt ?? undefined,
             })),
             properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupCrmContact' },
+      (entity) =>
+        ({
+          tag: 'crmContact',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            teamId: entity.contactTeamId,
+            companyId: entity.companyId,
+            companyName: entity.companyName,
+            email: entity.email,
+            name: entity.crmContactName,
+            hidden: entity.hidden,
+            firstInteraction: entity.firstInteraction,
+            lastInteraction: entity.lastInteraction,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt,
+            properties: [],
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem

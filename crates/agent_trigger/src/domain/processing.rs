@@ -126,6 +126,7 @@ where
         }
         (
             MessageParent::Document(_)
+            | MessageParent::Call(_)
             | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_),

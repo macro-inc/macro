@@ -125,6 +125,22 @@ pub struct RequestedExternalSession {
     /// reaches the runtime the way the persona's own does: recorded on the
     /// session, then selected when the session binds on its first prompt.
     pub model: Option<String>,
+    /// Remote repository selected for this external coding session.
+    pub repo_url: Option<String>,
+}
+
+/// Validate the base branch supported by external repository provisioning.
+/// External runtimes currently create every new worktree from origin/main.
+pub fn external_repository(
+    repo_url: Option<String>,
+    branch: Option<&str>,
+) -> super::error::Result<Option<String>> {
+    if branch.is_some_and(|branch| !matches!(branch, "main" | "origin/main")) {
+        return Err(super::error::AgentSessionError::InvalidRepositorySelection(
+            "external coding sessions start from origin/main",
+        ));
+    }
+    Ok(repo_url.filter(|url| !url.trim().is_empty()))
 }
 
 /// Hands a composer request to the bot's own runtime and waits for the
@@ -316,6 +332,13 @@ pub struct OpenManagedSession {
 /// its own schedule, while a managed session's sandbox is provisioned here.
 /// That difference is why only one of them takes a workspace.
 pub trait SessionOpener: Send + Sync + 'static {
+    /// Prepare an unprompted hidden in-memory session for an authenticated user.
+    fn warm_session(
+        &self,
+        owner: Owner,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// Open a session and return the persisted row.
     fn open_external_session(
         &self,
@@ -379,6 +402,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         id: AgentSessionId,
         hash: &str,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record who prompted the turn `id` is about to run.
+    fn set_turn_prompter(
+        &self,
+        id: AgentSessionId,
+        prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Who prompted the turn `id` is running or last ran; `None` before its
+    /// first dispatch.
+    fn turn_prompter(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<TurnPrompter>>> + Send;
 
     /// The session a sandbox's egress token stands for, if any still does.
     ///
@@ -827,7 +864,7 @@ pub trait AgentSessionRealtime {
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
-    /// Tell viewers to refetch changed session metadata.
+    /// Tell viewers to refetch changed session metadata and the durable log.
     fn publish_updated(
         &self,
         _session: AgentSessionId,
@@ -1153,6 +1190,17 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// [`AgentSessionError::QueuedControlNotFound`] once it has. `actor` as
     /// on [`Self::edit_queued_control`].
     fn remove_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Run a queued action next. Moves it to the front of the queue and, when
+    /// a turn is in flight, cancels that turn so this entry dispatches ahead
+    /// of anything queued before it. [`AgentSessionError::QueuedControlNotFound`]
+    /// once it has dispatched. `actor` as on [`Self::edit_queued_control`].
+    fn steer_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,

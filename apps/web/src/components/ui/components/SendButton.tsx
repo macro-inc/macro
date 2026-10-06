@@ -6,6 +6,11 @@ import { Button, type ButtonProps } from './Button';
 
 export type SendButtonProps = Omit<ButtonProps, 'size' | 'variant'> & {
   appearance?: 'default' | 'composer';
+  /**
+   * Empty composer with a queue waiting: the same send control, ringed so it
+   * reads as flushing that queue rather than sending a new message.
+   */
+  intent?: 'send' | 'flush';
   /** Show a spinner instead of the arrow (e.g. while a send mutation is in-flight). */
   pending?: boolean;
   /** Drop the button from the layout — used to hide on mobile when the input is empty. */
@@ -24,6 +29,7 @@ export function SendButton(props: SendButtonProps) {
     'aria-label',
     'tooltip',
     'actionLabel',
+    'intent',
   ]);
   const resolved = children(() => local.children);
 
@@ -34,13 +40,22 @@ export function SendButton(props: SendButtonProps) {
       glass={false}
       size={local.appearance === 'composer' ? 'icon-composer' : 'icon-sm'}
       draggable={false}
-      aria-label={local['aria-label'] ?? 'Send'}
-      tooltip={local.tooltip ?? 'Send'}
+      aria-label={
+        local['aria-label'] ??
+        (local.intent === 'flush' ? 'Flush queued messages' : 'Send')
+      }
+      tooltip={
+        local.tooltip ??
+        (local.intent === 'flush' ? 'Flush queued messages' : 'Send')
+      }
+      data-intent={local.intent === 'flush' ? 'flush' : undefined}
       class={cn(
         'border-0 bg-ink text-surface-4 touch:size-7.5',
+        'not-touch:not-disabled:hover:text-surface-4',
+        local.intent === 'flush' && 'ring-2 ring-accent/60',
         local.appearance === 'composer'
           ? cn(
-              'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden',
+              'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:not-disabled:hover:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden',
               local.actionLabel &&
                 'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5'
             )

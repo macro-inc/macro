@@ -1,3 +1,4 @@
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   PdfDocument,
   PdfDocumentContent,
@@ -20,6 +21,7 @@ import {
   downloadPdfDocument,
   printPdfDocument,
 } from '@block-pdf/util/pdf-file-actions';
+import { SidePanel } from '@components/app/side-panel';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -142,6 +144,17 @@ export function PdfDetailDocument(props: {
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
     >
+      <SidePanel.HeaderActions>
+        <AskMacroButton
+          entity={{
+            type: 'document',
+            id: props.documentId,
+            name:
+              props.data.documentMetadata.documentName ?? 'Unknown Filename',
+            fileType: 'pdf',
+          }}
+        />
+      </SidePanel.HeaderActions>
       <PdfDocument
         documentId={props.documentId}
         documentVersionId={props.data.documentMetadata.documentVersionId}

@@ -172,16 +172,19 @@ where
         let AgentAction::Prompt(prompt) = action else {
             return Ok(());
         };
+        let session = self.sessions.get_session(session_id).await?;
+        // Every prompt names the owner and its sender, so the agent can tell
+        // a request from the person whose access it spends from anyone
+        // else's. A session owned by a bot or team has no person to name.
+        let people = session.owner_id.as_user().map(|owner| PromptPeople {
+            owner: owner.clone(),
+            sender: actor.cloned(),
+        });
         let raw_prompt = prompt.prompt.clone();
-        let session = if first_turn {
-            Some(self.sessions.get_session(session_id).await?)
-        } else {
-            None
-        };
-        let instructions = session
-            .as_ref()
+        let instructions = Some(&session)
             .filter(|session| {
-                AgentKind::for_session(session.bot_id, &session.harness).folds_instructions()
+                first_turn
+                    && AgentKind::for_session(session.bot_id, &session.harness).folds_instructions()
             })
             .and_then(|session| session.instructions.as_deref())
             .filter(|instructions| !instructions.trim().is_empty());
@@ -195,7 +198,10 @@ where
             .compose(
                 &raw_prompt,
                 instructions,
-                announce.map(|origin| &origin.parent),
+                announce
+                    .filter(|origin| !origin.reuse_origin_message)
+                    .map(|origin| &origin.parent),
+                people.as_ref(),
                 context.as_ref(),
             )
             .await?;
@@ -217,6 +223,11 @@ where
             ))
         })?;
         self.prompt_context.authorize_origin(actor, origin).await?;
+        // Assignment context is supplied privately. It was not a user message
+        // in the discussion, so do not add history or thread-reply instructions.
+        if origin.reuse_origin_message {
+            return Ok(Default::default());
+        }
         Ok(self
             .prompt_context
             .conversation_context(actor, origin)
@@ -313,6 +324,11 @@ where
         else {
             return;
         };
+        // An assignment announces a session link, not a discussion reply.
+        // Later user messages have their own origins and can still be answered.
+        if origin.reuse_origin_message {
+            return;
+        }
         let session = match self.sessions.get_session(session_id).await {
             Ok(session) => session,
             Err(error) => {

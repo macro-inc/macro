@@ -388,6 +388,34 @@ async fn cursor_drain_stops_when_non_empty_page_returns_no_cursor() {
 }
 
 #[tokio::test]
+async fn cursor_drain_publish_failure_counts_only_completed_pages() {
+    struct FailSecondPublish(AtomicUsize);
+    impl SearchEventPublisher for FailSecondPublish {
+        async fn publish(&self, _: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+            if self.0.fetch_add(1, Ordering::Relaxed) == 1 {
+                return Err(BackfillError::Publish(anyhow::anyhow!("queue unavailable")));
+            }
+            Ok(())
+        }
+    }
+    let source = CursorFakeSource::new(vec![
+        (page(vec![msg("first")]), Some(1)),
+        (page(vec![msg("failed")]), Some(2)),
+        (page(vec![msg("not-fetched")]), Some(3)),
+    ]);
+    let publisher = FailSecondPublish(AtomicUsize::new(0));
+    let (progress, cancel) = detached();
+    let error = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
+        source.fetch_page(cursor)
+    })
+    .await
+    .unwrap_err();
+    assert!(matches!(error, BackfillError::Publish(_)));
+    assert_eq!(progress.local_count(), 1);
+    assert_eq!(source.observed_cursors(), vec![None, Some(1)]);
+}
+
+#[tokio::test]
 async fn cursor_drain_stops_on_empty_page() {
     let source = CursorFakeSource::new(vec![]);
     let publisher = RecordingPublisher::default();

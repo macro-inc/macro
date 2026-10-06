@@ -202,14 +202,10 @@ export function animateDemoEntrance(
       viewport.top +
       scroller.scrollTop +
       target.offsetHeight / 2;
-    // Start the reveal 100px earlier.
-    const advance = 100;
-    start = top - scroller.clientHeight * 0.82 - advance;
-    // Finish 250px before the workspace reaches the viewport center.
-    distance = Math.max(
-      1,
-      center - scroller.clientHeight * 0.5 - 150 - advance - start
-    );
+    // Hold the readable constellation for 100px longer before it leaves.
+    start = top - scroller.clientHeight * 0.82;
+    // Keep the travel length: the reveal also finishes 100px later.
+    distance = Math.max(1, center - scroller.clientHeight * 0.5 - 150 - start);
     update();
   };
   // Once somebody uses the workspace, scrolling must never hide their work.

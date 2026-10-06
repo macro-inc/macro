@@ -22,6 +22,8 @@ pub enum GraphqlSoupEntityType {
     Call,
     /// CRM company entity.
     CrmCompany,
+    /// CRM contact entity.
+    CrmContact,
     /// Foreign entity.
     ForeignEntity,
     /// Calendar event entity.
@@ -30,6 +32,8 @@ pub enum GraphqlSoupEntityType {
     Reminder,
     /// AI coding agent session entity.
     AgentSession,
+    /// Row of a Macro database table.
+    DatabaseRow,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -73,6 +77,10 @@ pub enum GraphqlEntityType {
     ScheduledAction,
     /// Initiative entity.
     Initiative,
+    /// Macro Database entity (a collection of user-defined tables).
+    Database,
+    /// Row of a Macro Database table.
+    DatabaseRow,
 }
 
 impl GraphqlSoupEntityType {
@@ -95,17 +103,19 @@ impl GraphqlSoupEntityType {
             EntityType::ChannelMessage => Self::ChannelMessage,
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
+            EntityType::CrmContact => Self::CrmContact,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::CalendarEvent => Self::CalendarEvent,
             EntityType::Reminder => Self::Reminder,
             EntityType::AgentSession => Self::AgentSession,
             EntityType::Initiative => Self::Initiative,
+            EntityType::DatabaseRow => Self::DatabaseRow,
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
-            | EntityType::CrmContact
             | EntityType::Skill
-            | EntityType::ScheduledAction => return None,
+            | EntityType::ScheduledAction
+            | EntityType::Database => return None,
         })
     }
 
@@ -120,11 +130,13 @@ impl GraphqlSoupEntityType {
             Self::ChannelMessage => EntityType::ChannelMessage,
             Self::Call => EntityType::Call,
             Self::CrmCompany => EntityType::CrmCompany,
+            Self::CrmContact => EntityType::CrmContact,
             Self::ForeignEntity => EntityType::ForeignEntity,
             Self::CalendarEvent => EntityType::CalendarEvent,
             Self::Reminder => EntityType::Reminder,
             Self::AgentSession => EntityType::AgentSession,
             Self::Initiative => EntityType::Initiative,
+            Self::DatabaseRow => EntityType::DatabaseRow,
         }
     }
 }
@@ -152,6 +164,8 @@ impl GraphqlEntityType {
             EntityType::AgentSession => Self::AgentSession,
             EntityType::ScheduledAction => Self::ScheduledAction,
             EntityType::Initiative => Self::Initiative,
+            EntityType::Database => Self::Database,
+            EntityType::DatabaseRow => Self::DatabaseRow,
         }
     }
 
@@ -182,6 +196,8 @@ impl GraphqlEntityType {
             Self::AgentSession => EntityType::AgentSession,
             Self::ScheduledAction => EntityType::ScheduledAction,
             Self::Initiative => EntityType::Initiative,
+            Self::Database => EntityType::Database,
+            Self::DatabaseRow => EntityType::DatabaseRow,
         }
     }
 }
@@ -250,5 +266,19 @@ mod test {
         let graphql = GraphqlSoupEntityType::try_new(EntityType::Initiative).unwrap();
         assert!(matches!(graphql, GraphqlSoupEntityType::Initiative));
         assert_eq!(graphql.into_model(), EntityType::Initiative);
+    }
+
+    #[test]
+    fn database_row_round_trips_through_graphql_entity_type() {
+        let graphql = GraphqlEntityType::new(EntityType::DatabaseRow);
+        assert!(matches!(graphql, GraphqlEntityType::DatabaseRow));
+        assert!(matches!(graphql.into_model(), EntityType::DatabaseRow));
+    }
+
+    #[test]
+    fn database_row_round_trips_through_soup_entity_type() {
+        let graphql = GraphqlSoupEntityType::try_new(EntityType::DatabaseRow).unwrap();
+        assert!(matches!(graphql, GraphqlSoupEntityType::DatabaseRow));
+        assert_eq!(graphql.into_model(), EntityType::DatabaseRow);
     }
 }

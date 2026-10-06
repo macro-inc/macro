@@ -27,6 +27,7 @@ import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
+import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import {
   Badge,
   CommandMenuEmptyState,
@@ -123,7 +124,13 @@ export function CommandMenu() {
       }}
       open={CommandState.isOpen()}
     >
-      <CommandMenuInner depth={2} onSelect={handleSelect} />
+      <CommandMenuInner
+        depth={2}
+        onSelect={handleSelect}
+        onHint={() => {
+          suppressCloseAutoFocus = true;
+        }}
+      />
     </Dialog>
   );
 }
@@ -133,6 +140,8 @@ export function CommandMenuInner(props: {
   items?: () => CommandMenuItem[];
   /** Called when the user selects an item from the menu */
   onSelect?: (item: CommandMenuItem) => void;
+  /** Called when the user takes the menu's hint (it moves focus itself). */
+  onHint?: () => void;
   /**
    * When true, selecting an item only fires `onSelect` — no navigation,
    * command, or search is run. Used by the onboarding sandbox so selecting a
@@ -165,6 +174,8 @@ export function CommandMenuInner(props: {
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
   const query = debouncedDependent(CommandState.query, 60);
+
+  useDatabaseDiscoverySync(() => !props.items && CommandState.isOpen());
 
   const defaultCommandItems = props.items
     ? undefined
@@ -583,6 +594,26 @@ export function CommandMenuInner(props: {
     }
   });
 
+  const runHint = () => {
+    const hint = CommandState.hint();
+    if (!hint) return;
+    props.onHint?.();
+    CommandState.close();
+    // After the dialog has gone, so its focus trap lets the hint move focus.
+    setTimeout(hint.run);
+  };
+  // The hint's own key (e.g. ⌘P) works while the menu is open.
+  onMount(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!CommandState.hint()?.matches(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      runHint();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    onCleanup(() => document.removeEventListener('keydown', onKeyDown));
+  });
+
   const isInCommandScope = createMemo(
     () => CommandState.commandScopeCommands().length > 0
   );
@@ -652,6 +683,26 @@ export function CommandMenuInner(props: {
           autofocus
         />
       </CommandMenuShell.Header>
+
+      <Show
+        when={
+          !isInCommandScope() && !isEntityActionMode() && CommandState.hint()
+        }
+      >
+        {(hint) => (
+          <button
+            type="button"
+            class="mx-2 mt-2 flex items-center justify-between gap-2 rounded-md border border-edge-muted bg-inset px-2.5 py-1.5 text-left text-ink-muted text-xs hover:bg-hover hover:text-ink"
+            data-testid="command-menu-hint"
+            onClick={runHint}
+          >
+            <span class="truncate">{hint().message}</span>
+            <kbd class="shrink-0 rounded border border-edge-muted px-1 font-sans text-ink">
+              {hint().shortcut}
+            </kbd>
+          </button>
+        )}
+      </Show>
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <CommandMenuShell.Toolbar

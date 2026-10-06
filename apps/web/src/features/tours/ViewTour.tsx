@@ -1,5 +1,5 @@
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
-import { isMcpToolConnected } from '@app/features/setup/core/connectedTools';
+import { isMcpToolConnected } from '@app/features/tours/core/connected-tools';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableInAppTours } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';

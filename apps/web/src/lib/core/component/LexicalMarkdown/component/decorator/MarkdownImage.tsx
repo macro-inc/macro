@@ -269,12 +269,13 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         class={cn(
           'relative max-w-full my-4 grid place-items-center',
           isSelectedAsNode() && 'ring-3 ring-edge-muted',
-          state() === 'error' &&
-            'pattern-edge-muted pattern-diagonal-8 min-h-44',
+          state() === 'error' && 'pattern-edge-muted pattern-diagonal-8',
+          state() === 'error' && !effectiveDims()[0] && 'min-h-44',
           // If there are no constrained dimensions, center the image
           !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
         )}
         style={{
+          width: effectiveDims()[0] ? '100%' : undefined,
           'max-width': `${effectiveDims()[0] ? effectiveDims()[0] * scale() : 640}px`,
           'aspect-ratio':
             effectiveDims()[0] && effectiveDims()[1]
@@ -317,6 +318,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           crossorigin="anonymous"
           class={cn(
             'h-full object-contain',
+            effectiveDims()[0] > 0 && 'absolute inset-0 size-full',
             (state() === 'loading' || state() === 'error') && 'invisible',
             state() === 'loading' &&
               !effectiveDims()[0] &&
@@ -327,14 +329,12 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           ref={imageRef}
           src={imageUrl()}
           style={{
-            width: effectiveDims()[0]
-              ? `${effectiveDims()[0] * scale()}px`
-              : 'auto',
+            width: effectiveDims()[0] ? '100%' : 'auto',
           }}
         />
 
         <Show when={state() === 'error'}>
-          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted">
             <ImageIcon class="size-5" />
             <div>{ImageErrors[imageError() ?? 'FALLBACK']}</div>
           </div>

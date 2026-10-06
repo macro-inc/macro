@@ -13,8 +13,16 @@ use agent_harness::inbound::model_load::{
 use agent_harness::inbound::repositories::{
     self, AgentRepositoriesResponse, AgentRepositoryBranchesResponse, AgentRepositoryDto,
 };
+use agent_harness::inbound::tool_approvals::{
+    self, AnswerToolApprovalRequest, AnswerToolApprovalResponse, ToolApprovalAnswerDto,
+    ToolApprovalStatusDto,
+};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
+use agent_session::domain::pull_request_links::{PullRequestLinkSource, SessionPullRequestLink};
+use agent_session::inbound::axum_router::pull_requests::{
+    PullRequestSessionsResponse, PullRequestUrl, SessionPullRequestsResponse,
+};
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
     AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, ControlRequest,
@@ -53,17 +61,23 @@ impl Modify for SecurityAddon {
         claude_auth::complete,
         claude_auth::disconnect,
         axum_router::create_agent_session_handler,
+        axum_router::warm_agent_session_handler,
         axum_router::get_agent_session_handler,
         axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,
         axum_router::set_agent_session_archived_handler,
         axum_router::sharing::get_agent_session_permissions,
         axum_router::sharing::update_agent_session_permissions,
+        axum_router::pull_requests::list_session_pull_requests,
+        axum_router::pull_requests::link_session_pull_request,
+        axum_router::pull_requests::unlink_session_pull_request,
+        axum_router::pull_requests::sessions_for_pull_request,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::get_agent_session_queue_handler,
         axum_router::edit_queued_action_handler,
         axum_router::remove_queued_action_handler,
+        axum_router::steer_queued_action_handler,
         axum_router::delete_agent_session_handler,
         axum_router::put_agent_session_sandbox_size_handler,
         axum_router::get_agent_sandbox_size_handler,
@@ -75,6 +89,7 @@ impl Modify for SecurityAddon {
         changes_router::get_agent_session_changes_handler,
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
+        tool_approvals::answer_tool_approval_handler,
     ),
     components(schemas(
         claude_auth::StatusResponse,
@@ -101,6 +116,11 @@ impl Modify for SecurityAddon {
         WithAgentSessionId,
         RenameAgentSessionRequest,
         SetAgentSessionArchivedRequest,
+        PullRequestUrl,
+        SessionPullRequestsResponse,
+        PullRequestSessionsResponse,
+        SessionPullRequestLink,
+        PullRequestLinkSource,
         SessionStatusDto,
         AgentSessionLogResponse,
         AgentSessionLogEntryDto,
@@ -126,6 +146,10 @@ impl Modify for SecurityAddon {
         CaptureOutcomeDto,
         ChangesetSourceDto,
         FileChangeKindDto,
+        AnswerToolApprovalRequest,
+        AnswerToolApprovalResponse,
+        ToolApprovalAnswerDto,
+        ToolApprovalStatusDto,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),

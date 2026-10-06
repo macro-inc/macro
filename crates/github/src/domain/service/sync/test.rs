@@ -3,8 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
-        GithubError, GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
+        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef,
+        GithubAppInstallationSource, GithubAuthenticatedUser, GithubError,
+        GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
         GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestStatus,
         GithubSetupAccessToken, GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference,
         TeamTaskReference, ValidatedGithubWebhookEvent,
@@ -31,6 +32,11 @@ use foreign_entity::domain::{
         CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
     },
     ports::{ForeignEntityListQuery, ForeignEntityService},
+};
+use github_pull_requests::domain::{
+    models::{GithubPullRequestRow, GithubPullRequestWrite},
+    ports::GithubPullRequestRepository,
+    service::GithubPullRequestServiceImpl,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentBasic, DocumentMetadata};
@@ -131,6 +137,12 @@ impl DocumentService for StubDocumentService {
         &self,
         _document_id: &str,
     ) -> Result<DocumentBasic, DocumentError> {
+        unimplemented!()
+    }
+    async fn internal_get_user_display_name(
+        &self,
+        _user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
         unimplemented!()
     }
     async fn get_document_by_team_slug(
@@ -962,18 +974,19 @@ fn foreign_entity_id_from_receipt(
     })
 }
 
+#[derive(Clone)]
 struct StubForeignEntityService {
-    foreign_entities: Mutex<Vec<ForeignEntity>>,
-    create_calls: Mutex<Vec<CreateForeignEntity>>,
-    patch_calls: Mutex<Vec<(uuid::Uuid, PatchForeignEntity)>>,
+    foreign_entities: Arc<Mutex<Vec<ForeignEntity>>>,
+    create_calls: Arc<Mutex<Vec<CreateForeignEntity>>>,
+    patch_calls: Arc<Mutex<Vec<(uuid::Uuid, PatchForeignEntity)>>>,
 }
 
 impl StubForeignEntityService {
     fn new() -> Self {
         Self {
-            foreign_entities: Mutex::new(Vec::new()),
-            create_calls: Mutex::new(Vec::new()),
-            patch_calls: Mutex::new(Vec::new()),
+            foreign_entities: Arc::new(Mutex::new(Vec::new())),
+            create_calls: Arc::new(Mutex::new(Vec::new())),
+            patch_calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -1170,15 +1183,77 @@ impl NotificationIngress for StubNotificationIngress {
     }
 }
 
-type TestGithubSyncService = GithubSyncServiceImpl<
+type TestSyncServiceImpl = GithubSyncServiceImpl<
     StubDocumentService,
     StubSyncRepo,
     StubSyncClient,
-    StubForeignEntityService,
+    TestPullRequestService,
     StubNotificationIngress,
     StubRealtime,
 >;
-type TestServiceWithForeignEntityService = (TestGithubSyncService, Arc<StubForeignEntityService>);
+
+/// The sync service under test, with a handle on the foreign entities it stores.
+struct TestGithubSyncService {
+    service: TestSyncServiceImpl,
+    foreign_entity_service: StubForeignEntityService,
+}
+
+impl std::ops::Deref for TestGithubSyncService {
+    type Target = TestSyncServiceImpl;
+
+    fn deref(&self) -> &Self::Target {
+        &self.service
+    }
+}
+
+impl std::ops::DerefMut for TestGithubSyncService {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.service
+    }
+}
+
+type TestServiceWithForeignEntityService = (TestGithubSyncService, StubForeignEntityService);
+
+type TestPullRequestService =
+    GithubPullRequestServiceImpl<StubForeignEntityService, NoPullRequestRows>;
+
+struct NoPullRequestRows;
+
+impl GithubPullRequestRepository for NoPullRequestRows {
+    type Err = std::convert::Infallible;
+
+    async fn github_key_for(
+        &self,
+        _repository_id: i64,
+        _number: i64,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn upsert_row(&self, _row: &GithubPullRequestWrite) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn rename_row(&self, _from: &str, _to: &str) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn pull_request_row(
+        &self,
+        _github_key: &str,
+    ) -> Result<Option<GithubPullRequestRow>, Self::Err> {
+        Ok(None)
+    }
+}
+
+fn pull_request_service(
+    foreign_entity_service: &StubForeignEntityService,
+) -> Arc<TestPullRequestService> {
+    Arc::new(GithubPullRequestServiceImpl::new(
+        foreign_entity_service.clone(),
+        NoPullRequestRows,
+    ))
+}
 
 fn make_sync_service() -> TestGithubSyncService {
     make_sync_service_with_doc_service().0
@@ -1193,9 +1268,9 @@ fn make_sync_service_with_repo_and_notification_ingress(
     notification_ingress: StubNotificationIngress,
 ) -> TestGithubSyncService {
     let doc_service = Arc::new(StubDocumentService::new());
-    let foreign_entity_service = Arc::new(StubForeignEntityService::new());
+    let foreign_entity_service = StubForeignEntityService::new();
 
-    GithubSyncServiceImpl::new(
+    let service = GithubSyncServiceImpl::new(
         GithubSyncConfig {
             webhook_secret: "test-webhook-secret".to_string(),
             github_sync_app_url: "https://github.com/apps/test/installations/new?existing=1"
@@ -1206,17 +1281,21 @@ fn make_sync_service_with_repo_and_notification_ingress(
             installation_state_secret: "test-installation-state-secret".to_string(),
         },
         doc_service,
-        foreign_entity_service,
+        pull_request_service(&foreign_entity_service),
         notification_ingress,
         repo,
         StubSyncClient::new(),
         StubRealtime::default(),
-    )
+    );
+    TestGithubSyncService {
+        service,
+        foreign_entity_service,
+    }
 }
 
 fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocumentService>) {
     let doc_service = Arc::new(StubDocumentService::new());
-    let foreign_entity_service = Arc::new(StubForeignEntityService::new());
+    let foreign_entity_service = StubForeignEntityService::new();
 
     let service = GithubSyncServiceImpl::new(
         GithubSyncConfig {
@@ -1229,13 +1308,19 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
             installation_state_secret: "test-installation-state-secret".to_string(),
         },
         doc_service.clone(),
-        foreign_entity_service,
+        pull_request_service(&foreign_entity_service),
         StubNotificationIngress::new(),
         StubSyncRepo::new(),
         StubSyncClient::new(),
         StubRealtime::default(),
     );
-    (service, doc_service)
+    (
+        TestGithubSyncService {
+            service,
+            foreign_entity_service,
+        },
+        doc_service,
+    )
 }
 
 fn make_sync_service_with_foreign_entity_service() -> TestServiceWithForeignEntityService {
@@ -1261,6 +1346,7 @@ fn expected_pull_request_metadata(
         github_key: "my-org/my-repo/pull/42".to_string(),
         owner: "my-org".to_string(),
         repo: "my-repo".to_string(),
+        repository_id: None,
         number: 42,
         url: "https://github.com/my-org/my-repo/pull/42".to_string(),
         display_name: "my-org/my-repo#42".to_string(),
@@ -1274,6 +1360,17 @@ fn expected_pull_request_metadata(
         comments: None,
         checks: None,
         participant_github_user_ids: None,
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
+        base: None,
+        head: Some(GitRef {
+            name: Some("feature/some-branch".to_string()),
+            sha: None,
+        }),
     })
     .unwrap()
 }
@@ -1438,6 +1535,7 @@ fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
         github_key: "my-org/my-repo/pull/42".to_string(),
         owner: "my-org".to_string(),
         repo: "my-repo".to_string(),
+        repository_id: None,
         number: 42,
         url: "https://github.com/my-org/my-repo/pull/42".to_string(),
         display_name: "my-org/my-repo#42".to_string(),
@@ -1451,6 +1549,14 @@ fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
         comments: None,
         checks: None,
         participant_github_user_ids: None,
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
+        base: None,
+        head: None,
     }
 }
 
@@ -1461,6 +1567,7 @@ fn expected_pull_request_metadata_from_details(
         github_key: "my-org/my-repo/pull/42".to_string(),
         owner: "my-org".to_string(),
         repo: "my-repo".to_string(),
+        repository_id: None,
         number: 42,
         url: "https://github.com/my-org/my-repo/pull/42".to_string(),
         display_name: "my-org/my-repo#42".to_string(),
@@ -1474,6 +1581,18 @@ fn expected_pull_request_metadata_from_details(
         comments: details.comments.clone(),
         checks: details.checks.clone(),
         participant_github_user_ids: details.participant_github_user_ids.clone(),
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
+        base: None,
+        // The fixture's webhook supplies the head even when live details omit it.
+        head: Some(GitRef {
+            name: Some("feature/some-branch".to_string()),
+            sha: None,
+        }),
     })
     .unwrap()
 }
@@ -1521,6 +1640,7 @@ fn pull_request_details(
     GithubPullRequestDetails {
         title: title.to_string(),
         state: "open".to_string(),
+        repository_id: None,
         merged_at: None,
         additions,
         deletions,
@@ -1530,6 +1650,14 @@ fn pull_request_details(
         comments,
         checks,
         participant_github_user_ids: None,
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
+        base: None,
+        head: None,
     }
 }
 

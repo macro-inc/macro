@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT parent_entity_type, parent_entity_id, import_metadata, import_order FROM comms_messages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "parent_entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "import_metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "import_order",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "59744a37fe9d239158668457771988c10053706dd209eacb8e5997b601010ca6"
+}

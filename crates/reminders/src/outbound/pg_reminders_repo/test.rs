@@ -1,4 +1,6 @@
 use chrono::{Duration, TimeZone};
+mod collection;
+mod email_collection;
 use chrono_tz::America::New_York;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;

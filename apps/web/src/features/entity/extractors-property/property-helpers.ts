@@ -33,6 +33,7 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
       value: { type: 'string', value: label },
       display_order: displayOrder,
+      color: null,
       // TODO: need to properly handle dates. does not seem like these are even used/upserted anywhere?
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),
@@ -44,6 +45,7 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
       value: { type: 'string', value: 'Low' },
       display_order: 0,
+      color: null,
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),
     },
@@ -52,6 +54,7 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
       value: { type: 'string', value: 'Medium' },
       display_order: 1,
+      color: null,
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),
     },
@@ -60,6 +63,7 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
       value: { type: 'string', value: 'High' },
       display_order: 2,
+      color: null,
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),
     },
@@ -68,6 +72,7 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
       value: { type: 'string', value: 'Urgent' },
       display_order: 3,
+      color: null,
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),
     },
@@ -78,6 +83,7 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       property_definition_id: SYSTEM_PROPERTY_IDS.STAGE,
       value: { type: 'string', value: label },
       display_order: displayOrder,
+      color: null,
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),
     })
@@ -322,12 +328,52 @@ export function buildCompanyDefaultProperties(): Property[] {
         is_multi_select: false,
         is_system: true,
         owner: { scope: 'system' },
-        specific_entity_type: def.specificEntityType,
+        specific_entity_type: def.specificEntityType ?? null,
         created_at: EPOCH_ZERO.toISOString(),
         updated_at: EPOCH_ZERO.toISOString(),
       },
     })
   );
+}
+
+/**
+ * Placeholder for a task's Project property, which a task only carries once it
+ * joins a project. Lets the standard property row and editor show and set it;
+ * setting a value upserts the real row.
+ */
+export function buildTaskProjectDefaultProperty(): Property {
+  return soupPropertyToProperty({
+    id: `pending:${SYSTEM_PROPERTY_IDS.PROJECT}`,
+    definition: {
+      id: SYSTEM_PROPERTY_IDS.PROJECT,
+      display_name: 'Project',
+      data_type: 'ENTITY',
+      is_metadata: false,
+      is_multi_select: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: 'INITIATIVE',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
+    },
+  });
+}
+
+/**
+ * A task's key properties followed by its Project, or the Project placeholder
+ * when the task isn't in a project.
+ */
+export function withTaskProject(
+  keyProperties: Property[],
+  properties: Property[]
+): Property[] {
+  return [
+    ...keyProperties,
+    properties.find(
+      (property) =>
+        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+    ) ?? buildTaskProjectDefaultProperty(),
+  ];
 }
 
 /**

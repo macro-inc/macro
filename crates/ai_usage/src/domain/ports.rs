@@ -73,6 +73,8 @@ pub enum AiFeature {
     AgentRepositoryChoice,
     /// User-confirmed audio transcription.
     Dictation,
+    /// Image generation and editing.
+    ImageGeneration,
 }
 
 /// Strip a provider prefix from a routing id, yielding the bare model api id
@@ -91,12 +93,17 @@ pub fn normalize_model_id(model: &str) -> &str {
 /// The billable quantity for one AI invocation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageAmount {
-    /// Token-based inference.
+    /// Token-based inference. The dimensions are disjoint: a token counted in
+    /// one is never counted in another, whatever the provider's own reporting.
     Tokens {
-        /// Tokens consumed by the input.
+        /// Input tokens neither read from nor written to a prompt cache.
         input: u64,
-        /// Tokens generated in the output.
+        /// Tokens generated in the output, including reasoning.
         output: u64,
+        /// Input tokens read from a prompt cache.
+        cache_read: u64,
+        /// Input tokens written to a prompt cache.
+        cache_write: u64,
     },
     /// Duration-based audio inference.
     Audio {
@@ -108,12 +115,16 @@ pub enum UsageAmount {
 /// Rates for a model's billing unit.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModelPricing {
-    /// Prices per million input/output tokens (USD).
+    /// Prices per million tokens (USD), one per [`UsageAmount::Tokens`] dimension.
     Tokens {
-        /// Input token rate.
+        /// Uncached input token rate.
         input: f32,
         /// Output token rate.
         output: f32,
+        /// Cache read rate, or `None` when the model has no published one.
+        cache_read: Option<f32>,
+        /// Cache write rate, or `None` when the model has no published one.
+        cache_write: Option<f32>,
     },
     /// Price per minute of audio (USD).
     Audio {
@@ -127,7 +138,17 @@ impl ModelPricing {
     pub fn validate(self) -> Result<Self> {
         let valid = |rate: f32| rate.is_finite() && rate >= 0.0;
         let is_valid = match self {
-            Self::Tokens { input, output } => valid(input) && valid(output),
+            Self::Tokens {
+                input,
+                output,
+                cache_read,
+                cache_write,
+            } => {
+                valid(input)
+                    && valid(output)
+                    && cache_read.is_none_or(valid)
+                    && cache_write.is_none_or(valid)
+            }
             Self::Audio { per_minute } => valid(per_minute),
         };
         if is_valid {
@@ -148,18 +169,28 @@ pub struct Price {
 }
 
 impl Price {
-    /// Compute cost only when the rate and usage use the same billing unit.
+    /// Compute cost only when the rate and usage use the same billing unit and
+    /// every dimension with usage has a rate.
     pub fn compute(pricing: ModelPricing, amount: UsageAmount) -> Option<Self> {
         let total = match (pricing, amount) {
             (
-                ModelPricing::Tokens { input, output },
+                ModelPricing::Tokens {
+                    input,
+                    output,
+                    cache_read,
+                    cache_write,
+                },
                 UsageAmount::Tokens {
                     input: input_tokens,
                     output: output_tokens,
+                    cache_read: cache_read_tokens,
+                    cache_write: cache_write_tokens,
                 },
             ) => {
-                input_tokens as f64 / 1_000_000.0 * f64::from(input)
-                    + output_tokens as f64 / 1_000_000.0 * f64::from(output)
+                per_million(input_tokens, Some(input))?
+                    + per_million(output_tokens, Some(output))?
+                    + per_million(cache_read_tokens, cache_read)?
+                    + per_million(cache_write_tokens, cache_write)?
             }
             (ModelPricing::Audio { per_minute }, UsageAmount::Audio { duration }) => {
                 duration.as_secs_f64() / 60.0 * f64::from(per_minute)
@@ -170,6 +201,16 @@ impl Price {
             pricing,
             total: total as f32,
         })
+    }
+}
+
+/// The cost of `tokens` at a per-million `rate`. A dimension with tokens but no
+/// rate cannot be priced; one with no tokens needs no rate.
+fn per_million(tokens: u64, rate: Option<f32>) -> Option<f64> {
+    match (tokens, rate) {
+        (0, _) => Some(0.0),
+        (tokens, Some(rate)) => Some(tokens as f64 / 1_000_000.0 * f64::from(rate)),
+        (_, None) => None,
     }
 }
 
@@ -290,17 +331,15 @@ impl UsageContext {
     }
 
     /// Build a [`UsageEvent`] from this context plus a completion's model and
-    /// token counts.
-    pub fn into_event(self, model: String, input_tokens: u64, output_tokens: u64) -> UsageEvent {
+    /// measured usage. Token callers normalize their provider's counters into
+    /// disjoint [`UsageAmount::Tokens`] dimensions first.
+    pub fn into_event(self, model: String, amount: UsageAmount) -> UsageEvent {
         UsageEvent {
             feature: self.feature,
             user: self.user,
             entity: self.entity,
             model,
-            amount: UsageAmount::Tokens {
-                input: input_tokens,
-                output: output_tokens,
-            },
+            amount,
         }
     }
 

@@ -89,6 +89,9 @@ pub struct AgentSessionRequestedEvent {
     pub session_id: AgentSessionId,
     /// Who asked; owns the session the runtime creates.
     pub owner: String,
+    /// Repository selected by the requester, absent on older producers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_url: Option<String>,
 }
 
 /// Events that open a new session.
@@ -353,6 +356,7 @@ impl AgentSessionMacroEvent {
                     })?,
             ),
             MessageParent::Document(_)
+            | MessageParent::Call(_)
             | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => None,

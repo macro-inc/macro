@@ -34,15 +34,20 @@ vi.mock('../grouped/mail-date-groups', () => ({
 }));
 vi.mock('../transform-utils', () => ({ mapSoupPageToEntityList: vi.fn() }));
 
+import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { createGraphqlGroupedSoupAstItemsQuery } from './grouped-items';
 import { hideGraphqlSoupEntitiesAsDone } from './optimistic-done';
 
 beforeEach(() => {
   queryClient.clear();
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    userId: 'viewer',
+    authenticated: true,
+  });
 });
 
-function fixture(emailView: 'inbox' | 'drafts' = 'drafts') {
+function fixture(emailView: 'inbox' | 'drafts' | 'all' = 'drafts') {
   const local = { cachedMail: true, entities: [{ id: 'offline-draft' }] };
   const network = { entities: [{ id: 'server-draft' }] };
   const [optimistic, setOptimistic] = createSignal(true);
@@ -56,7 +61,7 @@ function fixture(emailView: 'inbox' | 'drafts' = 'drafts') {
   mocks.query.mockImplementation(
     (options: () => { onResult: typeof onResult }) => {
       onResult = options().onResult;
-      return { data: network, error: undefined };
+      return { data: { viewerId: 'viewer', data: network }, error: undefined };
     }
   );
   const root = createRoot((dispose) => ({
@@ -148,6 +153,78 @@ describe('grouped Mail pending done filtering', () => {
         await vi.waitFor(() => {
           expect(f.query.data()).toBe(data);
         });
+      } finally {
+        overlay.release();
+        f.dispose();
+      }
+    }
+  );
+
+  it.each(['local', 'network'] as const)(
+    'restores a removed %s inbox row immediately on Undo',
+    async (source) => {
+      const f = fixture('inbox');
+      if (source === 'network') {
+        f.setOptimistic(false);
+        const persistence = Promise.resolve('1');
+        f.publish(persistence);
+        await persistence;
+      }
+      const data = f[source];
+      const id = data.entities[0].id;
+      const overlay = hideGraphqlSoupEntitiesAsDone({
+        entityIds: [id],
+        notificationIds: [],
+      });
+      try {
+        await vi.waitFor(() => expect(f.query.data()?.entities).toEqual([]));
+        data.entities.length = 0; // The selected cache/server source has caught up with Done.
+        overlay.setDone(false);
+        await vi.waitFor(() =>
+          expect(f.query.data()?.entities.map((e) => e.id)).toEqual([id])
+        );
+        expect(data.entities).toEqual([]); // Undo never writes back into the source.
+      } finally {
+        overlay.release();
+        f.dispose();
+      }
+    }
+  );
+
+  it.each(['local', 'network'] as const)(
+    'updates the All done indicator in the %s projection without removing the row',
+    async (source) => {
+      const f = fixture('all');
+      const data = f[source];
+      const entity = Object.assign(data.entities[0], {
+        type: 'email',
+        done: false,
+      });
+      if (source === 'network') {
+        f.setOptimistic(false);
+        const persistence = Promise.resolve('1');
+        f.publish(persistence);
+        await persistence;
+      }
+      const overlay = hideGraphqlSoupEntitiesAsDone({
+        entityIds: [entity.id],
+        notificationIds: [],
+      });
+      try {
+        await vi.waitFor(() =>
+          expect(f.query.data()?.entities[0]).toMatchObject({
+            id: entity.id,
+            done: true,
+          })
+        );
+        expect(entity.done).toBe(false);
+        overlay.setDone(false);
+        await vi.waitFor(() =>
+          expect(f.query.data()?.entities[0]).toMatchObject({
+            id: entity.id,
+            done: false,
+          })
+        );
       } finally {
         overlay.release();
         f.dispose();

@@ -26,30 +26,35 @@ export type ConnectionState = 'connected' | 'attention' | 'disconnected';
  * The trailing action on an integration row. Defaults to a quiet text+arrow
  * "Connect" affordance (mirrors Linear's link-style connect button); pass
  * `variant` to render a neutral or destructive action (e.g. Disconnect).
+ *
+ * Renders an external link when given `href`, and a non-interactive label
+ * when given neither `href` nor `onClick` (for rows that are themselves the
+ * button, so the row keeps a single tab stop).
  */
 export function ConnectAction(props: {
-  label: string;
-  onClick: () => void;
+  label: JSX.Element;
+  onClick?: () => void;
+  href?: string;
   disabled?: boolean;
   loading?: boolean;
+  ariaLabel?: string;
   /** 'connect' shows the external-link arrow; the others are plain buttons. */
   variant?: 'connect' | 'neutral' | 'danger';
 }) {
   const variant = () => props.variant ?? 'connect';
-  return (
-    <button
-      type="button"
-      disabled={props.disabled || props.loading}
-      onClick={() => props.onClick()}
-      class={cn(
-        'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-sm font-medium',
-        'cursor-default transition-colors disabled:opacity-50',
-        'outline-none focus-visible:bg-ink/6',
-        variant() === 'danger'
-          ? 'text-ink-muted hover:bg-ink/4 hover:text-failure'
-          : 'text-ink-muted hover:bg-ink/4 hover:text-ink'
-      )}
-    >
+  const inert = () => Boolean(props.disabled || props.loading);
+  const className = () =>
+    cn(
+      'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-sm font-medium',
+      'cursor-default transition-colors',
+      'outline-none focus-visible:bg-ink/6',
+      inert() && 'opacity-50 pointer-events-none',
+      variant() === 'danger'
+        ? 'text-ink-muted hover:bg-ink/4 hover:text-failure'
+        : 'text-ink-muted hover:bg-ink/4 hover:text-ink'
+    );
+  const body = (
+    <>
       <Show when={props.loading}>
         <SpinnerIcon class="size-4 animate-spin" />
       </Show>
@@ -57,6 +62,41 @@ export function ConnectAction(props: {
       <Show when={variant() === 'connect' && !props.loading}>
         <ArrowUpRightIcon class="size-3.5 opacity-70" />
       </Show>
+    </>
+  );
+  if (props.href) {
+    return (
+      <a
+        href={props.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={props.ariaLabel}
+        aria-disabled={inert() || undefined}
+        onClick={(event) => {
+          if (inert()) event.preventDefault();
+        }}
+        class={className()}
+      >
+        {body}
+      </a>
+    );
+  }
+  if (!props.onClick) {
+    return (
+      <span aria-hidden="true" class={cn(className(), 'pointer-events-none')}>
+        {body}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={inert()}
+      aria-label={props.ariaLabel}
+      onClick={() => props.onClick?.()}
+      class={className()}
+    >
+      {body}
     </button>
   );
 }

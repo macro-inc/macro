@@ -1,18 +1,23 @@
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
+import CaretRight from '@phosphor/caret-right.svg';
+import ChartBar from '@phosphor/chart-bar.svg';
 import Clipboard from '@phosphor/clipboard-text.svg';
 import Download from '@phosphor/download-simple.svg';
 import Eraser from '@phosphor/eraser.svg';
 import Eye from '@phosphor/eye.svg';
 import FileCsv from '@phosphor/file-csv.svg';
 import FileXls from '@phosphor/file-xls.svg';
+import ImageIcon from '@phosphor/image.svg';
+import Selection from '@phosphor/selection.svg';
 import Sliders from '@phosphor/sliders-horizontal.svg';
 import SortAscending from '@phosphor/sort-ascending.svg';
 import SortDescending from '@phosphor/sort-descending.svg';
 import TextAlignLeft from '@phosphor/text-align-left.svg';
 import Upload from '@phosphor/upload-simple.svg';
 import { Dropdown } from '@ui/components/Dropdown';
-import type { JSX, ParentProps } from 'solid-js';
+import { For, type JSX, type ParentProps, Show } from 'solid-js';
+import { CHART_TYPES } from '../core/chart-builder';
 import type {
   SpreadsheetCommand,
   SpreadsheetToolbarProps,
@@ -82,6 +87,68 @@ export function PasteMenu(props: SpreadsheetToolbarProps) {
         >
           Paste values only
         </Dropdown.Item>
+      </Dropdown.Group>
+    </ActionMenu>
+  );
+}
+
+export function InsertMenu(props: SpreadsheetToolbarProps) {
+  return (
+    <ActionMenu
+      label="Insert chart or image"
+      icon={<ChartBar class="size-[18px]" />}
+      disabled={props.readonly || !props.onInsertChart}
+      onRestoreFocus={props.onRestoreFocus}
+    >
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>Chart of the selected cells</Dropdown.GroupLabel>
+        <For each={CHART_TYPES.filter((type) => !('more' in type))}>
+          {(type) => (
+            <Dropdown.Item
+              closeOnSelect
+              onSelect={() => props.onInsertChart?.(type.id)}
+            >
+              {type.label}
+            </Dropdown.Item>
+          )}
+        </For>
+        <Dropdown.Sub>
+          <Dropdown.SubTrigger>
+            More charts
+            <CaretRight class="size-3.5 shrink-0" />
+          </Dropdown.SubTrigger>
+          <Dropdown.SubContent>
+            <Dropdown.Group>
+              <For each={CHART_TYPES.filter((type) => 'more' in type)}>
+                {(type) => (
+                  <Dropdown.Item
+                    closeOnSelect
+                    onSelect={() => props.onInsertChart?.(type.id)}
+                  >
+                    {type.label}
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
+          </Dropdown.SubContent>
+        </Dropdown.Sub>
+      </Dropdown.Group>
+      <Dropdown.Separator class="my-1 h-px border-0 bg-edge-muted" />
+      <Dropdown.Group>
+        <Dropdown.Item closeOnSelect onSelect={() => props.onInsertImage?.()}>
+          <ImageIcon class="size-4 shrink-0" />
+          Image…
+        </Dropdown.Item>
+        <Show when={props.onSelectDrawings}>
+          <Dropdown.Item
+            closeOnSelect
+            onSelect={() => props.onSelectDrawings?.()}
+          >
+            <Selection class="size-4 shrink-0" />
+            Select charts and images
+            <span class="ml-auto pl-4 text-xs text-ink-muted">Ctrl Alt 5</span>
+          </Dropdown.Item>
+        </Show>
       </Dropdown.Group>
     </ActionMenu>
   );

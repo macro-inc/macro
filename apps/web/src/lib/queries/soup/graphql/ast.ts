@@ -8,12 +8,16 @@ import type {
   GraphqlChannelThreadLiteral as GraphqlChannelThreadLiteralInput,
   GraphqlChatLiteral as GraphqlChatLiteralInput,
   GraphqlCrmCompanyLiteral as GraphqlCrmCompanyLiteralInput,
+  GraphqlCrmContactLiteral,
   GraphqlDateLiteral as GraphqlDateLiteralInput,
   GraphqlDocumentLiteral as GraphqlDocumentLiteralInput,
   GraphqlEmailLiteral as GraphqlEmailLiteralInput,
   GraphqlEmailValue as GraphqlEmailValueInput,
   GraphqlEntityFilterAst as GraphqlEntityFilterAstInput,
   GraphqlForeignEntityLiteral as GraphqlForeignEntityLiteralInput,
+  GraphqlGithubPullRequestLiteral as GraphqlGithubPullRequestLiteralInput,
+  GraphqlGithubPullRequestReviewStatus,
+  GraphqlGithubPullRequestState,
   GraphqlGroupByInput,
   GroupedSoupContinuationInput as GraphqlGroupedSoupContinuationInput,
   GroupedSoupInput as GraphqlGroupedSoupInput,
@@ -60,7 +64,9 @@ type TargetAstKey =
   | 'cthf'
   | 'callf'
   | 'ccf'
+  | 'crmf'
   | 'fef'
+  | 'ghprf'
   | 'asf'
   | 'remf'
   | 'propf';
@@ -299,6 +305,10 @@ function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
       return { createdAt: mapDateLiteral(value) };
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
+    case 'prop':
+      return { property: mapPropertiesLiteral(value) };
+    case 'eap':
+      return { emailAttachmentParticipant: mapEmailValue(value) };
     default:
       unsupported(`document literal ${field}`);
   }
@@ -496,6 +506,27 @@ function mapCrmCompanyLiteral(literal: unknown): GraphqlCrmCompanyLiteralInput {
   }
 }
 
+function mapCrmContactLiteral(literal: unknown): GraphqlCrmContactLiteral {
+  if (literal === 'include') return { include: true };
+  const [field, value] = singleLiteralField(literal);
+  switch (field) {
+    case 'id':
+      return { id: mapString(value, 'id') };
+    case 'team_id':
+      return { teamId: mapString(value, 'teamId') };
+    case 'company_id':
+      return { companyId: mapString(value, 'companyId') };
+    case 'email':
+      return { email: mapString(value, 'email') };
+    case 'search':
+      return { search: mapString(value, 'search') };
+    case 'hidden':
+      return { hidden: mapBoolean(value, 'hidden') };
+    default:
+      unsupported(`crm contact literal ${field}`);
+  }
+}
+
 function mapForeignEntityLiteral(
   literal: unknown
 ): GraphqlForeignEntityLiteralInput {
@@ -513,6 +544,62 @@ function mapForeignEntityLiteral(
       return { notificationState: mapNotificationState(value) };
     default:
       unsupported(`foreign entity literal ${field}`);
+  }
+}
+
+function mapGithubPullRequestState(
+  value: unknown
+): GraphqlGithubPullRequestState {
+  const state = mapString(value, 'status');
+  if (state === 'open') return 'OPEN';
+  if (state === 'closed') return 'CLOSED';
+  if (state === 'merged') return 'MERGED';
+  unsupported(`unsupported pull request status ${state}`);
+}
+
+function mapGithubPullRequestReviewStatus(
+  value: unknown
+): GraphqlGithubPullRequestReviewStatus {
+  const status = mapString(value, 'reviewStatus');
+  if (status === 'none') return 'NONE';
+  if (status === 'required') return 'REQUIRED';
+  if (status === 'approved') return 'APPROVED';
+  if (status === 'changes_requested') return 'CHANGES_REQUESTED';
+  unsupported(`unsupported pull request review status ${status}`);
+}
+
+function mapGithubPullRequestLiteral(
+  literal: unknown
+): GraphqlGithubPullRequestLiteralInput {
+  const [field, value] = singleLiteralField(literal);
+  switch (field) {
+    case 'repo':
+      return {
+        repositoryId:
+          typeof value === 'number'
+            ? String(value)
+            : mapString(value, 'repositoryId'),
+      };
+    case 'au':
+      return { author: mapString(value, 'author') };
+    case 'st':
+      return { status: mapGithubPullRequestState(value) };
+    case 'inv':
+      return { involves: mapString(value, 'involves') };
+    case 'rr':
+      return { reviewRequested: mapString(value, 'reviewRequested') };
+    case 'draft':
+      return { draft: mapBoolean(value, 'draft') };
+    case 'as':
+      return { assignee: mapString(value, 'assignee') };
+    case 'lbl':
+      return { label: mapString(value, 'label') };
+    case 'rs':
+      return { reviewStatus: mapGithubPullRequestReviewStatus(value) };
+    case 'rb':
+      return { reviewedBy: mapString(value, 'reviewedBy') };
+    default:
+      unsupported(`github pull request literal ${field}`);
   }
 }
 
@@ -650,10 +737,19 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   if (body.ccf) {
     filters.crmCompanyFilter = compileExpr(body.ccf, mapCrmCompanyLiteral);
   }
+  if (body.crmf) {
+    filters.crmContactFilter = compileExpr(body.crmf, mapCrmContactLiteral);
+  }
   if (body.fef) {
     filters.foreignEntityFilter = compileExpr(
       body.fef,
       mapForeignEntityLiteral
+    );
+  }
+  if (body.ghprf) {
+    filters.githubPullRequestFilter = compileExpr(
+      body.ghprf,
+      mapGithubPullRequestLiteral
     );
   }
   if (body.asf) {

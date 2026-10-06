@@ -330,8 +330,7 @@ export function Account() {
   const [isDeleting, setIsDeleting] = createSignal(false);
 
   // The shared own-name cache entry (the one saveUserName invalidates), so
-  // this panel and other readers (e.g. the Getting Started checklist) can't
-  // drift.
+  // this panel and other readers can't drift.
   const userName = useOwnUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined
@@ -407,7 +406,7 @@ export function Account() {
 
   return (
     <SettingsPage title="Account">
-      <SettingsSection>
+      <SettingsSection title="Profile">
         <SettingsCard>
           <Show when={ENABLE_PROFILE_PICTURES}>
             <Show when={userId()} keyed>
@@ -645,13 +644,8 @@ export function Account() {
   );
 }
 
-function Row(props: { label: string; children?: any }) {
-  return (
-    <div class="bg-surface flex items-center justify-between gap-4 min-h-15.25 px-6 py-3">
-      <div class="text-sm">{props.label}</div>
-      <div class="text-right">{props.children}</div>
-    </div>
-  );
+function Row(props: { label: string; children?: JSX.Element }) {
+  return <SettingsRow label={props.label}>{props.children}</SettingsRow>;
 }
 
 function NotificationToggle() {

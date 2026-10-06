@@ -242,6 +242,29 @@ fn a_chat_agents_announced_turn_waits_silently() {
     assert!(actions.is_empty(), "{actions:#?}");
 }
 
+#[test]
+fn assignment_session_links_keep_completion_and_question_notifications() {
+    let mut identity = identity();
+    identity.origin = Some(ThreadOrigin::new(
+        messages::domain::models::MessageParent::parse("document", "task-1").unwrap(),
+        Uuid::from_u128(4),
+        Uuid::from_u128(4),
+    ));
+    assert!(matches!(
+        plan(&settled(identity.clone(), 0), false).as_slice(),
+        [PlannedNotification::Settled(_)]
+    ));
+    let AgentSessionLifecycleEvent::WaitingForInput(mut event) = waiting(Some(Uuid::from_u128(4)))
+    else {
+        unreachable!();
+    };
+    event.identity = identity;
+    assert!(matches!(
+        plan(&AgentSessionLifecycleEvent::WaitingForInput(event), false).as_slice(),
+        [PlannedNotification::WaitingForInput(_)]
+    ));
+}
+
 /// Only the announced turn has a reply to speak through: a chat session
 /// asking from the session view still notifies its audience, and a coding
 /// agent's chip says nothing about a question.
@@ -377,4 +400,46 @@ fn a_notify_becomes_a_realtime_and_push_request_with_its_own_id() {
         "a bot is nobody's sender"
     );
     assert_eq!(value["req"]["notification"]["tag"], "agent_session_settled");
+}
+
+#[test]
+fn a_held_tool_call_tells_only_the_owner() {
+    let approval = Uuid::from_u128(0xA99);
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        approval,
+        Some(&user("alice@macro.com")),
+        "Macro",
+        "ListEmails",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert_eq!(notify.recipients, [owner()], "only the owner can answer");
+    assert_eq!(
+        notify.metadata.question,
+        "alice asked it to use Macro ListEmails with your access. Approve or decline it."
+    );
+    assert_eq!(
+        notify.notification_id,
+        tool_approval_notification_id(SESSION, approval)
+    );
+    assert_ne!(
+        notify.notification_id,
+        tool_approval_notification_id(SESSION, Uuid::from_u128(0xA98)),
+        "each held call is its own notification"
+    );
+}
+
+#[test]
+fn a_held_tool_call_a_bot_asked_for_says_so() {
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        Uuid::from_u128(1),
+        None,
+        "Linear",
+        "create_issue",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert!(notify.metadata.question.starts_with("A bot asked it"));
 }

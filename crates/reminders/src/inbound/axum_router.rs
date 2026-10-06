@@ -1,5 +1,7 @@
 //! Axum router for reminders endpoints.
 
+pub mod email_collection;
+
 #[cfg(test)]
 mod test;
 
@@ -100,16 +102,70 @@ where
 {
     Router::new()
         .route(
+            "/email/collection",
+            get(email_collection::list_email_reminders_handler::<S, Eas, Auth>),
+        )
+        .route(
             "/email/{thread_id}",
             get(get_email_followup_handler::<S, Eas, Auth>)
                 .put(set_email_followup_handler::<S, Eas, Auth>),
         )
         .route("/", get(list_reminders_handler::<S, Eas, Auth>))
+        .route(
+            "/collection",
+            get(list_reminder_collection_handler::<S, Eas, Auth>),
+        )
         .route("/", post(create_reminder_handler::<S, Eas, Auth>))
         .route("/{id}", get(get_reminder_handler::<S, Eas, Auth>))
         .route("/{id}", patch(update_reminder_handler::<S, Eas, Auth>))
         .route("/{id}", delete(delete_reminder_handler::<S, Eas, Auth>))
         .with_state(state)
+}
+
+/// Optional filters for the single Reminders collection.
+#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct ReminderCollectionParams {
+    /// Omit to include both done and not-done occurrences.
+    pub completed: Option<bool>,
+    /// Page size, bounded to 1–500.
+    pub limit: Option<u32>,
+    /// Position returned by the previous page.
+    pub cursor: Option<String>,
+}
+
+/// Native reminder rows, ordered and paginated by the owning domain.
+#[utoipa::path(get, tag = "reminders", operation_id = "list_reminder_collection",
+    path = "/reminders/collection", params(ReminderCollectionParams),
+    responses((status = 200, body = crate::domain::collection::ReminderCollectionPage),
+        (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 500, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn list_reminder_collection_handler<S, Eas, Auth>(
+    State(state): State<RemindersRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(params): Query<ReminderCollectionParams>,
+) -> Result<Json<crate::domain::collection::ReminderCollectionPage>, ReminderError>
+where
+    S: RemindersService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let query = crate::domain::collection::CollectionQuery {
+        completed: params.completed,
+        limit: params.limit,
+        cursor: params
+            .cursor
+            .as_deref()
+            .map(crate::domain::collection::CollectionCursor::decode)
+            .transpose()?,
+    };
+    Ok(Json(
+        state
+            .service
+            .list_collection(&user.authorization.user.macro_user_id, query)
+            .await?,
+    ))
 }
 
 /// Request body for creating a reminder.

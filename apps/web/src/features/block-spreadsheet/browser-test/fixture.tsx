@@ -1,6 +1,7 @@
 import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 import '../../../index.css';
+import { CellMentionEditor } from '@app/components/cell-text-editor/CellMentionEditor';
 import { useAppSquishHandlers } from '@components/app/useAppSquishHandlers';
 import { registerHotkey, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -16,7 +17,7 @@ import {
 } from '@macro-inc/spreadsheet/cell-mentions';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
-import { CellMentionEditor } from '../components/CellMentionEditor';
+import type { SpreadsheetDocumentSource } from '../context/spreadsheet-source';
 import type { SpreadsheetWorkbookSheet } from '../core/workbook-document';
 import { createLocalSpreadsheetSource } from '../primitives/create-local-spreadsheet-source';
 import { createSpreadsheetStore } from '../primitives/create-spreadsheet-store';
@@ -41,6 +42,18 @@ function download(blob: Blob, name: string) {
   anchor.download = name;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+/** `?load=<ms>` holds the local workbook back to show the loading state. */
+function withLoadDelay(
+  source: SpreadsheetDocumentSource
+): SpreadsheetDocumentSource {
+  const delay = Number(new URLSearchParams(location.search).get('load') ?? 0);
+  if (!(delay > 0)) return source;
+  const [loaded, setLoaded] = createSignal(false);
+  const timer = setTimeout(() => setLoaded(true), delay);
+  onCleanup(() => clearTimeout(timer));
+  return { ...source, ready: () => loaded() && source.ready() };
 }
 
 function Fixture() {
@@ -84,16 +97,18 @@ function Fixture() {
         syncSource: live,
         doInitialSync: live.doInitialSync,
       })
-    : createLocalSpreadsheetSource({
-        A1: { value: 'Item', bold: true },
-        B1: { value: 'Amount', bold: true },
-        A2: { value: 'Design' },
-        B2: { value: '10' },
-        A3: { value: 'Engineering' },
-        B3: { value: '20' },
-        A4: { value: 'Total', bold: true },
-        B4: { value: '=SUM(B2:B3)', bold: true },
-      });
+    : withLoadDelay(
+        createLocalSpreadsheetSource({
+          A1: { value: 'Item', bold: true },
+          B1: { value: 'Amount', bold: true },
+          A2: { value: 'Design' },
+          B2: { value: '10' },
+          A3: { value: 'Engineering' },
+          B3: { value: '20' },
+          A4: { value: 'Total', bold: true },
+          B4: { value: '=SUM(B2:B3)', bold: true },
+        })
+      );
   const store = createSpreadsheetStore({ source, canEdit: () => !readonly() });
   window.spreadsheetFixture = {
     snapshot: () => structuredClone(store.workbook()),

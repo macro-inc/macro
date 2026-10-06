@@ -1,7 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { idToEmail } from '@core/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { getDisplayName, idToEmail, tryMacroId } from '@core/user';
 
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { usePatchChannelMutation } from '@queries/channel/channels';
@@ -20,6 +21,7 @@ import { ChannelJoinLinkButton } from './ChannelJoinLinkButton';
 import { ChannelTeamSettingsPanel } from './ChannelTeamSettingsPanel';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
 import { ParticipantsList } from './ParticipantsList';
+import { ParticipantsMobileLayout } from './ParticipantsMobileLayout';
 import { ParticipantsSearchInput } from './ParticipantsSearchInput';
 
 export function ChannelParticipantsTab(props: {
@@ -83,19 +85,25 @@ export function ChannelParticipantsTab(props: {
       const email = idToEmail(participant.user_id).toLowerCase();
       return (
         participant.user_id.toLowerCase().includes(query) ||
+        getDisplayName(tryMacroId(participant.user_id))
+          .toLowerCase()
+          .includes(query) ||
         email.includes(query) ||
         participant.role.toLowerCase().includes(query)
       );
     });
   };
 
-  const addParticipants = (participantIds: string[]) => {
+  const addParticipants = (participantIds: string[], onAdded?: () => void) => {
     if (!isEditable() || participantIds.length === 0) return;
 
-    addParticipantsMutation.mutate({
-      channelId: props.channelId,
-      participants: participantIds,
-    });
+    addParticipantsMutation.mutate(
+      {
+        channelId: props.channelId,
+        participants: participantIds,
+      },
+      { onSuccess: onAdded }
+    );
   };
 
   const removeParticipant = (participantId: string) => {
@@ -141,69 +149,122 @@ export function ChannelParticipantsTab(props: {
     );
   };
 
+  const teamSettings = () => (
+    <Show when={canManageChannel() && supportsTeamSettings()}>
+      <ChannelTeamSettingsPanel
+        isTeamChannel={isTeamChannel()}
+        autoJoinTeam={autoJoinTeam()}
+        canConvertToTeam={canConvertToTeam()}
+        conversionUnavailableReason={conversionUnavailableReason()}
+        disabled={patchChannelMutation.isPending}
+        onConvertToTeam={convertToTeamChannel}
+        onAutoJoinTeamChange={updateAutoJoinTeam}
+      />
+    </Show>
+  );
+  const bots = (inviteRequest = props.inviteBotFocusRequest) => (
+    <ChannelBotsPanel
+      channelId={props.channelId}
+      editable={isEditable()}
+      inviteFocusRequest={inviteRequest}
+      onCreateBot={props.onCreateBot}
+      onOpenBot={props.onOpenBot}
+    />
+  );
+
   // The mobile bottom chrome (dock + accessory regions) floats over the
   // layout, so the panel stack has to end above it for the participants list
   // to scroll clear of it.
   return (
-    <div class="h-full overflow-hidden flex justify-center p-2 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]">
-      <div class="max-w-200 size-full flex flex-col gap-2">
-        <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
-          <Panel.Header class="justify-between gap-2 px-6">
-            <div class="text-sm font-semibold">Participants</div>
-            <Show when={channelType() === ChannelType.private}>
-              <ChannelJoinLinkButton channelId={props.channelId} />
-            </Show>
-          </Panel.Header>
-          <Panel.Toolbar class="h-15.25 px-2">
-            <ParticipantsSearchInput
-              value={searchQuery()}
-              onInput={setSearchQuery}
-            />
-          </Panel.Toolbar>
-          <Panel.Body>
-            <div class="flex h-full flex-col">
-              <Show when={canManageChannel() && supportsTeamSettings()}>
-                <ChannelTeamSettingsPanel
-                  isTeamChannel={isTeamChannel()}
-                  autoJoinTeam={autoJoinTeam()}
-                  canConvertToTeam={canConvertToTeam()}
-                  conversionUnavailableReason={conversionUnavailableReason()}
-                  disabled={patchChannelMutation.isPending}
-                  onConvertToTeam={convertToTeamChannel}
-                  onAutoJoinTeamChange={updateAutoJoinTeam}
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <div class="h-full overflow-hidden flex justify-center p-2 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]">
+          <div class="max-w-200 size-full flex flex-col gap-2">
+            <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
+              <Panel.Header class="justify-between gap-2 px-6">
+                <div class="text-sm font-semibold">Participants</div>
+                <Show when={channelType() === ChannelType.private}>
+                  <ChannelJoinLinkButton channelId={props.channelId} />
+                </Show>
+              </Panel.Header>
+              <Panel.Toolbar class="h-15.25 px-2">
+                <ParticipantsSearchInput
+                  value={searchQuery()}
+                  onInput={setSearchQuery}
                 />
-              </Show>
-              <Show when={isEditable()}>
-                <div class="px-6 py-3 border-b border-edge-muted shrink-0">
-                  <ParticipantsAddPanel
-                    participants={participants}
-                    onAddParticipants={addParticipants}
-                  />
+              </Panel.Toolbar>
+              <Panel.Body>
+                <div class="flex h-full flex-col">
+                  {teamSettings()}
+                  <Show when={isEditable()}>
+                    <div class="px-6 py-3 border-b border-edge-muted shrink-0">
+                      <ParticipantsAddPanel
+                        participants={participants}
+                        onAddParticipants={addParticipants}
+                      />
+                    </div>
+                  </Show>
+                  <div class="relative min-h-0 flex-1">
+                    <ParticipantsList
+                      participants={filteredParticipants}
+                      searchQuery={searchQuery}
+                      currentUserId={userId() ?? undefined}
+                      editable={isEditable()}
+                      onParticipantClick={openDirectMessage}
+                      onRemoveParticipant={removeParticipant}
+                    />
+                  </div>
                 </div>
-              </Show>
-              <div class="relative min-h-0 flex-1">
-                <ParticipantsList
-                  participants={filteredParticipants}
-                  searchQuery={searchQuery}
-                  currentUserId={userId() ?? undefined}
-                  editable={isEditable()}
-                  onParticipantClick={openDirectMessage}
-                  onRemoveParticipant={removeParticipant}
-                />
-              </div>
-            </div>
-          </Panel.Body>
-        </Panel>
-        <Show when={props.botManagementEnabled}>
-          <ChannelBotsPanel
-            channelId={props.channelId}
-            editable={isEditable()}
-            inviteFocusRequest={props.inviteBotFocusRequest}
-            onCreateBot={props.onCreateBot}
-            onOpenBot={props.onOpenBot}
+              </Panel.Body>
+            </Panel>
+            <Show when={props.botManagementEnabled}>{bots()}</Show>
+          </div>
+        </div>
+      }
+    >
+      <ParticipantsMobileLayout
+        search={() => (
+          <ParticipantsSearchInput
+            value={searchQuery()}
+            onInput={setSearchQuery}
           />
-        </Show>
-      </div>
-    </div>
+        )}
+        list={() => (
+          <ParticipantsList
+            participants={filteredParticipants}
+            searchQuery={searchQuery}
+            currentUserId={userId() ?? undefined}
+            editable={isEditable()}
+            onParticipantClick={openDirectMessage}
+            onRemoveParticipant={removeParticipant}
+          />
+        )}
+        inviteLink={
+          channelType() === ChannelType.private
+            ? () => (
+                <ChannelJoinLinkButton channelId={props.channelId} iconOnly />
+              )
+            : undefined
+        }
+        addParticipants={
+          isEditable()
+            ? (onAdded) => (
+                <ParticipantsAddPanel
+                  participants={participants}
+                  onAddParticipants={(ids) => addParticipants(ids, onAdded)}
+                />
+              )
+            : undefined
+        }
+        bots={props.botManagementEnabled ? bots : undefined}
+        settings={
+          canManageChannel() && supportsTeamSettings()
+            ? teamSettings
+            : undefined
+        }
+        inviteBotFocusRequest={props.inviteBotFocusRequest}
+      />
+    </Show>
   );
 }

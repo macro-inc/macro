@@ -33,8 +33,8 @@ impl<P> Clone for UserPermissionsState<P> {
 /// Axum extractor resolving the requesting user's model entitlement from their
 /// permissions.
 ///
-/// Free users may use only [`FREE_MODEL`] (Gemini Flash); professional (paid) users
-/// may use every chat model. Backed by [`ModelAccessServiceImpl`].
+/// Free users may use only [`FREE_MODEL`] (Gemini Flash); professional (paid)
+/// users may use every chat model. Backed by [`ModelAccessServiceImpl`].
 ///
 /// Type parameter `Auth` is the authorization service implementation and `P`
 /// is the roles-and-permissions service used to look up the caller's
@@ -155,19 +155,21 @@ mod test {
     }
 
     #[test]
-    fn free_user_defaults_to_gemini_flash_and_only_has_gemini_flash() {
+    fn free_user_defaults_to_free_model_and_only_has_it() {
         let free = access(&[]);
         assert_eq!(free.best_model(), FREE_MODEL);
         assert!(free.has_access(FREE_MODEL));
-        assert!(!free.has_access("anthropic/claude-opus-5"));
+        assert!(free.has_access("anthropic/claude-haiku-4-5"));
+        assert!(!free.has_access("anthropic/claude-opus-5-5"));
+        assert!(!free.has_access("anthropic/claude-sonnet-5-5"));
     }
 
     #[test]
     fn professional_user_defaults_to_smart_and_has_everything() {
         let pro = access(&[PermissionId::ReadProfessionalFeatures]);
-        assert_eq!(pro.best_model(), "anthropic/claude-sonnet-5");
-        assert!(pro.has_access("anthropic/claude-sonnet-5"));
-        assert!(pro.has_access("anthropic/claude-opus-5"));
+        assert_eq!(pro.best_model(), "anthropic/claude-sonnet-5-5");
+        assert!(pro.has_access("anthropic/claude-sonnet-5-5"));
+        assert!(pro.has_access("anthropic/claude-opus-5-5"));
         assert!(pro.has_access(FREE_MODEL));
         assert!(pro.has_access("openai/gpt-5.5"));
     }
@@ -177,6 +179,6 @@ mod test {
     fn unrelated_permissions_stay_free() {
         let acc = access(&[PermissionId::WriteEmailTool, PermissionId::ReadDocxEditor]);
         assert!(!acc.professional());
-        assert!(!acc.has_access("anthropic/claude-opus-5"));
+        assert!(!acc.has_access("anthropic/claude-opus-5-5"));
     }
 }

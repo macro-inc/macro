@@ -9,7 +9,6 @@ const parts: EmailDemoToken[] = [
   ' and the ',
   { kind: 'md', label: 'Team rollout plan' },
   '.\n',
-  'I’ve cc’d Julia to help with setup. Does Thursday at 9 AM work for a follow-up?\n',
   'Best,\nJacob',
 ];
 const tokens = parts.flatMap((part): EmailDemoToken[] =>

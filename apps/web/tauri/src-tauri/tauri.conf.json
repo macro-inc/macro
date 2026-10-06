@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "macro",
+  "productName": "Macro",
   "version": "../../package.json",
   "identifier": "com.macro.app.prod",
   "build": {

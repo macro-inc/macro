@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_job SET registration_closed_at = now(), cancel_requested_at = now(), status = 'cancelled' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "853d49f9fb31c959a73c428da3a80d3d8a4c7f8d71faa164be649e5f4ad86dfe"
+}

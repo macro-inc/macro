@@ -87,15 +87,27 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
+| `/app/database/<uuid>` | A database with table and board views; stays at this URL rather than moving into Drive (requires the Databases flag) |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
-| `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
+| `/app/routines` | Routines list in the Agents workspace |
+| `/app/routines/new` | Opens the routine creation modal |
+| `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
+
+Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
+pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
+`/app/task-slug/...`) render without the split layout and take one part only.
+`/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
+replaced with `/app`, which goes to Home or to login. An unknown split among app
+splits (`/app/mail/~/garbage`) shows the in-split 404 instead. A split that
+navigates to a page outside the app replaces every split; Back restores them.
 
 Search-result locations use pane-local namespaces: `channels` (message/thread),
 `email-detail` (message), `markdown-detail` (node), `pdf-detail` (page and highlight
@@ -188,6 +200,12 @@ headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
 only opens or closes its children. Selecting a Drive folder or tab closes an
 inline detail into that destination; it does not navigate back to Drive's root.
+Drive's **New** menu (sidebar, or the header in narrow layouts) is headed
+**Create in &lt;folder&gt;** and creates everything in the open folder; on a tab or
+the Drive root it reads **Create in Drive**. **Folder** opens a **New folder**
+dialog with `Untitled folder` preselected; creating keeps Drive where it is, adds
+the folder to the open folder's list, and shows a toast with **Open**. Other
+items open after creation. **Database** is offered only outside folders.
 Home, Email, Tasks, Channels, and Drive keep their workspace provider mounted
 while typed child routes own the accepted inline detail. Tasks and Email replace
 the list with detail, capturing its focus and scroll state before disposal. Their child
@@ -279,6 +297,14 @@ stay centered and the preview body fills the remaining height below the divider.
 
 The outer sidebar is an icon rail; labels appear in tooltips.
 
+Open **More → Customize sidebar** to show, hide, or reorder available apps.
+On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
+handle also moves it. Touch devices offer move buttons. Home stays first and
+cannot be hidden. Verify that hovering within a destination row keeps the drag
+preview stable, dropping saves the order, and reopening retains it. In short
+desktop windows, the app list scrolls while More and the footer remain reachable.
+Touch devices retain the flag-gated Reviews tab in Tasks.
+
 - Top: buttons `Create` and `Search`. Clicking `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
   (`/`). Choose the first to open commands, or the second to open and focus
@@ -288,8 +314,10 @@ The outer sidebar is an icon rail; labels appear in tooltips.
 - Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Reminders`, `Calendar`,
   `Agents`, `Customers`. Reminders, Calendar, and Customers appear only when
   their features are enabled.
-- Bottom: button named after the user (their name, or email when unset) — menu
-  with `Command menu (Ctrl K)`, `Settings (Ctrl ;)`, `Log out`.
+- Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
+  photo as a badge in its corner. It opens Settings directly in the active
+  split (Shift-click for a new split); there is no account menu. Log out lives
+  at the bottom of the Settings sidebar, and the command menu is `Ctrl K`.
 
 Start a new AI chat from the Agents workspace; the rail has no separate
 new-chat-in-a-new-split button. Its tooltips
@@ -415,7 +443,7 @@ Settings opens its own glass sheet with a grouped main page. Select a settings
 section, use **Back to settings** to return, or **Close settings** in the top
 right to dismiss without changing the underlying app view.
 Opening Settings again starts at the grouped main page. In-app actions that
-request a specific section, including Getting Started actions, open that section
+request a specific section open that section
 directly in the sheet without replacing the current view or changing its URL.
 If a requested section is unavailable, the sheet shows an unavailable message
 and a **Back to settings** button that returns to the grouped main page.
@@ -469,7 +497,7 @@ or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.
 
-`Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
+`Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
 Document D, Task T, Project P, Reminder R, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task, Project, and Channel open dialogs.
 When calls are enabled, `C C` (Create → Call) opens `/app/meet/new`. The call is
@@ -488,32 +516,102 @@ Release, cancellation, or dragging outside
 restores the surface. Disabled controls stay still; reduced motion keeps only
 the static highlight.
 
-## Routines (automations)
+## Routines
 
-Create → Automation creates an active cron-scheduled routine. Cron routines support
-editing instructions, schedule, and the **Execution target** model/agent picker,
-Rename, the **Active** switch, Duplicate, Run Now, and History links to run chats.
-The **Active** switch next to **Run Now** pauses or resumes the routine at once,
-separately from autosave and even while the draft is invalid. A paused routine
-shows no next run in its editor; routine lists mute its title and label it
-**Paused**. Edits autosave in order and never change whether the routine is
-active. **Run Now** stays disabled until the latest valid edit saves successfully;
-it also works while paused. A failed save keeps the selection visible with
-**Changes not saved** and **Retry save**. While running, configuration cannot be
-changed, and the switch can pause the routine but cannot resume it until the run
-ends. Duplicate retains the saved execution configuration and active state, not
-unsaved edits.
-If a background refresh fails, cached cron routines stay listed and their editor
-and queued autosave remain available. An initial load failure without cached data
-shows **Unable to load automation** instead. Cached event routines remain
-backend-managed even after a refresh failure.
+Open **Agents → Routines** for your routines. Opening a routine updates the URL
+to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
+URL restores that routine; browser Back and Forward restore the list or detail.
+Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
+Saved split layouts and document/channel/spreadsheet mentions using the old
+block name also open routines; newly copied links use `/app/routines/<uuid>`.
+On the legacy Agents screen, use the **Routines** button above the list. On touch devices,
+`/app/routines` opens the routines list directly. Routines use
+full-width entity rows with **Created by**, **Status**, **Runs with**, and **Enabled**
+columns. The search field sits below the top bar, as in Projects; search by name,
+creator, or model/agent, or press **Cmd/Ctrl+F** to focus it. **Create Routine** sits
+to the right of search. Click a row to open its settings in the same pane. Toggle
+the **Enabled** checkbox property directly in the list to pause or resume it.
+Open the routine and use its **Run History** tab to see past runs.
 
-Event-triggered routines are backend-managed through the scheduled-action API.
-They do not appear in the frontend's cron-only automation lists. Opening an
-API-created event routine at `/app/automation/<uuid>` shows **Backend-managed
-routine**, not a cron editor. This surface offers no event editing, duplication,
-or run/history controls; manage those through the API. It never replaces an
-event trigger with a cron schedule. There is no event-filter composer yet.
+**Create → Routine** (U) and **Create Routine** open the same popover host as task
+and project creation. Enter a name and instructions, then choose a model or agent
+with the first property chip below the prompt. **Add trigger** follows it; each
+saved trigger becomes a chip, with another **Add trigger** always at the end.
+**Start enabled** controls whether the saved routine starts listening immediately. **Create routine** opens
+its details inside the Agents pane, retaining the sidebar. Creation has no history
+tab or templates. Unsaved drafts are retained for three minutes.
+
+**Add trigger → Scheduled** offers Hourly, Daily, Weekly, Monthly, and Custom
+(cron) in a single anchored panel. Choose the frequency and type a time, or type
+**every weekday at 9am** or **every Monday at 3:30pm**. **Run once** offers Macro’s
+natural date search (**tomorrow 9am**, **in 2 hours**) and an inline calendar with
+time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
+**Done** applies changes and **Cancel** leaves it unchanged. The panel floats over
+the composer without moving it. Recurring schedules retain their time zones;
+one-off times use the browser’s local time.
+
+The event menu groups Macro activity triggers by surface:
+
+- **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
+- **Documents:** **Document created** and **Document deleted**. Tasks are separate.
+- **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
+- **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
+
+For messages, mentions, deletion, and task changes, choose specific accessible
+channels/documents/tasks or any accessible item in the same panel. Creation
+triggers cover newly created accessible items; email covers the owner's inbox.
+Mentions match only @ mentions of the routine owner. **Any property changed**
+also includes status and priority; overlapping selectors start only one run for
+the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
+or delegated changes do not retrigger routines. Saved legacy selectors remain
+editable but are no longer offered in the new-trigger menu.
+
+A routine can combine up to sixteen trigger groups: each schedule is a group,
+and up to thirty-two activity filters share one event group;
+matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
+to remove it. The routine's top bar uses the task breadcrumb layout:
+**Routines → routine name**, followed by the three-dot menu for duplication and
+deletion. Tabs immediately beside that menu switch between **Overview** and
+**Run History**. Overview follows the project home layout: an editable title,
+a model property chip, and a plain prompt editor. A trigger card sits below the
+model: trigger chips at the top left, **Run now** at the top right, and the
+**Enabled** / **Disabled** status with **Next run** along the bottom.
+The **Run options** dropdown contains
+**Enable routine** / **Disable routine** and **Copy prompt**, which copies the
+current instructions, including unsaved edits. **Run History** uses full-width
+Soup rows for past agent sessions, with each run's
+outcome, duration, and time. Click a row or press Enter to open its session;
+Shift opens it in another split. **Back to routines** returns to the list in the
+same pane.
+
+**Disable routine** pauses immediately, including with invalid
+unsaved edits. Resuming waits for valid settings to save. Settings autosave in
+order without changing activation. **Run Now** waits for the latest valid edit
+to save; it also works while paused. A failed save keeps the draft and offers
+**Retry save**. If another editor changed the configuration, **Reload latest**
+loads those settings before further edits. While running, configuration is locked; the routine can be paused
+but cannot resume until the run ends. Completed one-offs remain visible with
+their history and do not repeat.
+
+Routines are private to their owner. Other users cannot list or open the routine
+or its history, even if they belong to the same team. Run conversations keep
+their own permissions.
+
+**Run History** shows outcome, duration, and firing time. History loads fifty
+rows at a time; **Load more runs** reveals older records. Accessible run rows
+open the agent session created by that run. Selecting a model uses the same
+Macro agent-session runtime as the new AI chat composer, with that model;
+selecting an agent uses its runtime and default model or selected override.
+Historical runs that created legacy chats still open those chats. Unavailable conversations
+remain non-clickable. Macro event routines also support editing, history, and
+activation.
+
+MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
+**ReadRoutine**, and **UpdateRoutine**. Select `target.type: "agent"` with the
+`bot.botId` from **ListAgents** as `agentId`, or `target.type: "model"` with a runtime
+model ID. `schedule.type: "once"` accepts a future RFC3339 `at` timestamp;
+`"cron"` accepts a six-field `expression` and IANA `timezone`. Routine ownership
+comes from the authenticated caller, never a model-supplied user ID.
 
 ## Command menu (Ctrl+K)
 
@@ -521,6 +619,12 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 (All / Command / Agents / Files / Tasks / Projects / Channels / People). Type a name, press Enter to open
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
+
+In `Change theme`, Up/Down previews the highlighted palette across the open app,
+including channels and spreadsheets. Moving between rows preserves the original
+palette for cancellation without briefly restoring it between previews. Esc
+restores that palette (including unsaved edits); Enter commits the highlighted
+theme. Browser and notification icons change only when a theme is committed.
 
 With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
 search cached entities without waiting for a server search. Background hydration
@@ -547,15 +651,28 @@ its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
+With CRM enabled, normal `@` menus include CRM contacts under **People** in
+documents, channels, discussions, and composers. Contact search loads paged
+GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
+and companies, and collapses duplicate full email addresses case-insensitively.
+The most recently active visible team record represents each email. An eligible
+Macro user with the same email takes precedence and keeps normal user-mention
+notifications. External contacts insert a link to their original CRM record;
+they do not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only.
+
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
 time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
 relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
 the cache or reopening the menu with unchanged data does not reorder the results.
 
-Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
-must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. The menu shows no
+Pending or failed Quick Access history, recently-viewed, skills, and cached-channel
+lookups must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation
+stays mounted and usable while the optional source loads or fails. Also hold the
+skills discovery request (`/items/soup`, skill subtype) during startup: even a
+paused or disabled discovery query must not suspend navigation or Home. Releasing
+the request should populate skills without remounting the shell. The menu shows no
 loading text: while entity rows are still loading, an empty list stays blank and
 commands remain usable; a settled empty category shows **No results found**.
 Background history or channel refetches alone must not blank a settled empty

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_meetings (id, share_token, user_id, title, scheduled_start, scheduled_end, active_call_id)\n        VALUES ($1, $1::uuid::text, $2, 'Standalone chat', $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8be1555d39091c5f68e7bb5e1716e1a0671a6defb484def3c49e8e4f1d224dcc"
+}

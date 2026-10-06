@@ -173,6 +173,28 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # slack_import_worker (portless, opt-in profile: slack-import)
+  # Build separately; never part of the default or run-dev bundle.
+  # ============================================================================
+  slack_import_worker:
+    <<: *common-env
+    profiles:
+      - slack-import
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE_NAME: slack_import_worker
+    stop_grace_period: 120s
+    depends_on:
+      - postgres
+      - search_processing_service
+      - connection_gateway
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # document_upload_finalizer (local worker)
   # LocalStack S3 ObjectCreated -> SQS consumer for document upload finalization.
   # Production uses the document_upload_finalizer_handler Lambda.
@@ -385,6 +407,10 @@ services:
       # In-network lexical address; the local default (http://localhost:8096)
       # would point at this container itself.
       - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
+      # In-network sync address; the local default (http://localhost:8787)
+      # would point at this container itself, so agent-created documents
+      # never get their initial snapshot.
+      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
     volumes:
       # The local container provider drives the host's Docker daemon, so
       # sandboxes are siblings of this container rather than children. Harmless
@@ -427,6 +453,8 @@ services:
       # Links in tool responses open the local app.
       - APP_BASE_URL=http://localhost:${FRONTEND_PORT:-3000}
       - REDIS_URL=redis://redis:6379
+      # In-network sync address, for documents its CreateDocument initializes.
+      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
     depends_on:
       - postgres
       - redis
@@ -638,16 +666,6 @@ services:
       - "8096:8096"
     depends_on:
       - sync_service
-    # Bundle the entry before running. Executing the unbundled TS directly under
-    # Bun evaluates the circular @lexical/* ESM imports in an order that triggers
-    # a TDZ ("Cannot access 'HeadingNode'/'ElementNode' before initialization");
-    # bundling hoists/orders the declarations and resolves it (matching how the
-    # worker is run normally — wrangler/esbuild bundles it first). loro-crdt
-    # stays external: bundling it emits its .wasm as a second output file
-    # (breaking --outfile) and mis-wires the wasm instantiation at runtime.
-    # The bundle must live under /app: bun resolves the external loro-crdt
-    # import relative to the bundle's path, so it needs /app/node_modules.
-    command: ["sh", "-c", "bun build src/server.ts --target=bun --external loro-crdt --outfile=/app/server.bundle.js && exec bun /app/server.bundle.js"]
     environment:
       - PORT=8096
       - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}

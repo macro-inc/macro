@@ -1,3 +1,4 @@
+import { paneRoute } from '@app/routes/app-route';
 import { describe, expect, it } from 'vitest';
 import { reviewsHostedContent } from './reviews-hosted-content';
 import { reviewsTabSearchCodec } from './reviews-tab-search';
@@ -15,12 +16,10 @@ describe('Reviews PR navigation', () => {
       id: 'reviews',
       entryMetadata: {
         search: { reviews: { tab: ['authored'] } },
-        route: {
-          matches: [
-            { id: 'view-reviews', params: {} },
-            { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
-          ],
-        },
+        route: paneRoute(
+          { id: 'view-reviews', params: {} },
+          { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } }
+        ),
       },
     });
   });

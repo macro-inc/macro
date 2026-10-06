@@ -4,7 +4,9 @@ use std::future::Future;
 
 use crate::domain::models::{
     EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubExchangeTokenResponse,
-    GithubLink, GithubPullRequestDetails, GithubPullRequestRef, GithubUserInfo,
+    GithubLink, GithubMergeMethod, GithubMergeOutcome, GithubPullRequestDetails,
+    GithubPullRequestRef, GithubRepositoryMergeSettings, GithubUserInfo,
+    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 
@@ -103,6 +105,27 @@ pub trait GithubOauth: Send + Sync + 'static {
         repo: &str,
         number: u64,
     ) -> impl Future<Output = Result<GithubPullRequestDetails, Self::Err>> + Send;
+
+    /// Reads which merge methods a repository allows, as the user sees it.
+    fn get_repository_merge_settings(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+    ) -> impl Future<Output = Result<GithubRepositoryMergeSettings, Self::Err>> + Send;
+
+    /// Merges a pull request as the user.
+    ///
+    /// GitHub declining the merge is a [`GithubMergeOutcome::Rejected`]
+    /// value, not an error: the request reached GitHub and was answered.
+    fn merge_pull_request(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        merge_method: GithubMergeMethod,
+    ) -> impl Future<Output = Result<GithubMergeOutcome, Self::Err>> + Send;
 }
 
 /// Repository for handling auth related actions.
@@ -181,4 +204,15 @@ pub trait GithubLinkService: Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'static>>,
         pull_requests: Vec<GithubPullRequestRef>,
     ) -> impl Future<Output = Result<Vec<EnrichedGithubPullRequest>, GithubError>> + Send;
+
+    /// Merges a pull request as the user, with their own GitHub grant, so
+    /// GitHub applies the user's permissions and branch protections.
+    ///
+    /// A merge GitHub declines is
+    /// [`GithubError::PullRequestMergeRejected`] with GitHub's message.
+    fn merge_pull_request(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+        request: MergeGithubPullRequestRequest,
+    ) -> impl Future<Output = Result<MergeGithubPullRequestResponse, GithubError>> + Send;
 }

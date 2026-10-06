@@ -3,6 +3,8 @@
 use agent_session::domain::model::AgentSessionId;
 use agent_session::inbound::axum_router::{CreateAgentSessionRequest, CreateSessionThread};
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use crate::config::Workspace;
 use crate::outbound::agent_session::{ApiError, HarnessApi};
 use crate::runtime::Runtime;
@@ -11,6 +13,9 @@ use crate::trigger::{TriggerWork, WorkExecutor};
 /// A failure doing an event's work.
 #[derive(Debug, thiserror::Error)]
 pub enum DispatchError {
+    /// The repository or Herdr worktree could not be prepared.
+    #[error("workspace preparation failed: {0}")]
+    Workspace(String),
     /// The service refused or could not be reached.
     #[error(transparent)]
     Api(#[from] ApiError),
@@ -24,6 +29,10 @@ pub struct Dispatcher {
     api: HarnessApi,
     runtime: Runtime,
     workspace: Workspace,
+    #[cfg(unix)]
+    workspaces: Option<crate::herdr::repositories::Workspaces>,
+    #[cfg(unix)]
+    herdr: Option<crate::herdr::Hub>,
 }
 
 impl Dispatcher {
@@ -33,7 +42,85 @@ impl Dispatcher {
             api,
             runtime,
             workspace,
+            #[cfg(unix)]
+            workspaces: None,
+            #[cfg(unix)]
+            herdr: None,
         }
+    }
+
+    /// Tell `hub` about every session this dispatcher opens or prompts, so
+    /// its herdr windows can steer them as the right user.
+    #[cfg(unix)]
+    #[must_use]
+    pub fn with_herdr(mut self, hub: crate::herdr::Hub) -> Self {
+        self.herdr = Some(hub);
+        self
+    }
+
+    /// Configure Herdr-managed repository preparation for this daemon.
+    #[cfg(unix)]
+    pub fn with_workspaces(
+        mut self,
+        workspaces: Option<crate::herdr::repositories::Workspaces>,
+    ) -> Self {
+        self.workspaces = workspaces;
+        self
+    }
+
+    async fn workspace_for(
+        &self,
+        session: AgentSessionId,
+        repo_url: Option<&str>,
+    ) -> Result<String, DispatchError> {
+        #[cfg(unix)]
+        if let Some(workspaces) = &self.workspaces {
+            let inferred;
+            let url = match repo_url.or(self.workspace.repo_url.as_deref()) {
+                Some(url) => url,
+                None => {
+                    inferred = crate::outbound::git::git(
+                        &self.workspace.path,
+                        &["remote", "get-url", "origin"],
+                    )
+                    .await
+                    .map_err(|error| {
+                        DispatchError::Workspace(format!("select a repository in Macro: {error}"))
+                    })?;
+                    &inferred
+                }
+            };
+            return workspaces
+                .prepare(&session.to_string(), url)
+                .await
+                .map(|path| path.to_string_lossy().into_owned())
+                .map_err(|error| DispatchError::Workspace(error.to_string()));
+        }
+        if repo_url.is_some() && repo_url != self.workspace.repo_url.as_deref() {
+            return Err(DispatchError::Workspace(
+                "this runtime does not manage repositories; choose a Herdr agent in macrod"
+                    .to_owned(),
+            ));
+        }
+        Ok(self.workspace.path.to_string_lossy().into_owned())
+    }
+
+    fn created(&self, session: AgentSessionId, sender: &MacroUserIdStr<'static>) {
+        #[cfg(unix)]
+        if let Some(hub) = &self.herdr {
+            hub.session_created(session, sender.clone());
+        }
+        #[cfg(not(unix))]
+        let _ = (session, sender);
+    }
+
+    fn prompted(&self, session: AgentSessionId, sender: &MacroUserIdStr<'static>) {
+        #[cfg(unix)]
+        if let Some(hub) = &self.herdr {
+            hub.owner_seen(session, sender.clone());
+        }
+        #[cfg(not(unix))]
+        let _ = (session, sender);
     }
 }
 
@@ -49,15 +136,20 @@ impl WorkExecutor for Dispatcher {
                 message_id,
                 content,
             } => {
+                let session = AgentSessionId::new_from_uuid(uuid::Uuid::new_v5(
+                    &bot.as_uuid(),
+                    thread_id.as_bytes(),
+                ));
+                let workspace = self.workspace_for(session, None).await?;
                 let request = CreateAgentSessionRequest {
                     // The service mints the id: nothing here opens a surface
                     // on it before the create answers.
-                    id: None,
+                    id: Some(session.as_uuid()),
                     // A harness serves many agents, so the token implies no
                     // bot: name the mentioned agent, and the service verifies
                     // it is bound to this harness.
                     bot_id: Some(bot.as_uuid()),
-                    workspace: Some(self.workspace.path.to_string_lossy().into_owned()),
+                    workspace: Some(workspace),
                     // External sessions carry no first prompt: this daemon is
                     // the runtime, and it delivers the mention itself through
                     // the control endpoint. Sending one here is refused.
@@ -76,6 +168,7 @@ impl WorkExecutor for Dispatcher {
                                 Some(*channel_id)
                             }
                             messages::domain::models::MessageParent::Document(_)
+                            | messages::domain::models::MessageParent::Call(_)
                             | messages::domain::models::MessageParent::Initiative(_)
                             | messages::domain::models::MessageParent::CrmCompany(_)
                             | messages::domain::models::MessageParent::CrmContact(_) => None,
@@ -103,6 +196,7 @@ impl WorkExecutor for Dispatcher {
                         session: Some(session),
                     }) => {
                         tracing::info!(%thread_id, %session, "thread already has a session; resuming it");
+                        self.prompted(session, &sender);
                         self.runtime
                             .ensure_connected()
                             .await
@@ -117,6 +211,7 @@ impl WorkExecutor for Dispatcher {
                     Err(error) => return Err(error.into()),
                 };
                 let session = AgentSessionId::new_from_uuid(created.session.id);
+                self.created(session, &sender);
                 self.runtime
                     .ensure_connected()
                     .await
@@ -133,10 +228,12 @@ impl WorkExecutor for Dispatcher {
                 Ok(())
             }
             TriggerWork::OpenRequested {
+                repo_url,
                 session,
                 bot,
                 sender,
             } => {
+                let workspace = self.workspace_for(session, repo_url.as_deref()).await?;
                 // Same create as a mention, minus the thread: the requester is
                 // waiting on this id, so the session is created under it. No
                 // prompt here - whoever asked sends their own through the
@@ -144,9 +241,9 @@ impl WorkExecutor for Dispatcher {
                 let request = CreateAgentSessionRequest {
                     id: Some(session.as_uuid()),
                     bot_id: Some(bot.as_uuid()),
-                    workspace: Some(self.workspace.path.to_string_lossy().into_owned()),
+                    workspace: Some(workspace),
                     prompt: None,
-                    repo_url: self.workspace.repo_url.clone(),
+                    repo_url: repo_url.or_else(|| self.workspace.repo_url.clone()),
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
                     thread: None,
@@ -154,6 +251,7 @@ impl WorkExecutor for Dispatcher {
                     model: None,
                 };
                 self.api.create_session(&request, &sender).await?;
+                self.created(session, &sender);
                 // Be dialed in before the prompt the requester is about to
                 // send arrives, so it lands on a runtime that is serving.
                 self.runtime
@@ -167,6 +265,7 @@ impl WorkExecutor for Dispatcher {
                 sender,
                 content,
             } => {
+                self.prompted(session, &sender);
                 self.runtime
                     .ensure_connected()
                     .await

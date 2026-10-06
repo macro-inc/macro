@@ -39,6 +39,14 @@ describe('lazy Excel worker client', () => {
     expect(worker.terminate).toHaveBeenCalledOnce();
     expect(worker.postMessage.mock.calls[0][0].bytes).not.toBe(bytes);
   });
+  it('posts an export before returning, so later in-place edits are not exported', () => {
+    vi.stubGlobal('Worker', TestWorker);
+    const cells = { A1: { value: 'before' } };
+    void exportWorkbookFile({
+      sheets: [{ name: 'Sheet1', cells, rowCount: 200, columnWidths: {} }],
+    });
+    expect(TestWorker.instances[0].postMessage).toHaveBeenCalledOnce();
+  });
   it('terminates parsing on abort, timeout and worker error', async () => {
     vi.stubGlobal('Worker', TestWorker);
     vi.useFakeTimers();
@@ -61,7 +69,7 @@ describe('lazy Excel worker client', () => {
     vi.stubGlobal('Worker', TestWorker);
     await expect(
       importWorkbookFile(new Uint8Array(XLSX_MAX_BYTES + 1))
-    ).rejects.toThrow('5 MB');
+    ).rejects.toThrow('50 MB');
     const abort = new AbortController();
     abort.abort();
     await expect(

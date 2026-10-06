@@ -1,5 +1,5 @@
+import { useNavigate } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useNavigate } from '@app/split-router';
 import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { batch, type ParentProps, Show } from 'solid-js';
@@ -48,7 +48,7 @@ export function DriveLocationMenu(
       triggerClass="block h-auto"
       onOpenCurrentSplit={() => state.navigate(props.location)}
       onOpenNewSplit={() =>
-        navigate(driveDestination(props.location), { target: 'new-split' })
+        navigate(driveDestination(props.location), { newPane: true })
       }
       onOpenFullscreen={openFullscreen}
       additionalActions={

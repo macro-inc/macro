@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
 use ai_tools::user_tool_review::user_tool_finisher;
-use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
+use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::StreamExt as _;
@@ -39,6 +39,7 @@ use tokio::sync::mpsc;
 use tracing::Instrument as _;
 
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[cfg(test)]
@@ -52,16 +53,97 @@ const PART_BUFFER: usize = 256;
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
 /// [`ai_tools::tools_for`].
 pub struct RigTurnEngine {
-    db: PgPool,
+    memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
+    native_tools: Arc<NativeTools>,
     tool_context: ToolServiceContext,
+    gate: Arc<dyn NativeToolGate>,
 }
 
 impl RigTurnEngine {
     /// An engine whose tools run against `tool_context` and whose user
-    /// memory comes from `db`.
+    /// memory comes from `db`. Every native tool runs ungated until
+    /// [`Self::with_gate`] says otherwise.
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
-        Self { db, tool_context }
+        Self {
+            memory: Arc::new(MemoryServiceImpl::new(
+                PgMemoryRepo::new(db),
+                tool_context.clone(),
+                tools_for(AiHost::Chat),
+            )),
+            native_tools: Arc::new(NativeTools::new()),
+            tool_context,
+            gate: Arc::new(UngatedNativeTools),
+        }
+    }
+
+    /// Ask `gate` before each of Macro's own tools runs.
+    #[must_use]
+    pub fn with_gate(mut self, gate: Arc<dyn NativeToolGate>) -> Self {
+        self.gate = gate;
+        self
+    }
+}
+
+/// Native tools never gated: asking the user something, and finding or
+/// loading a connected app's tools, spend nobody's access.
+const UNGATED_NATIVE_TOOLS: [&str; 3] = ["AskUser", "SearchTools", "LoadTools"];
+
+/// A turn's tools, each call to one of Macro's own asked of the gate first.
+/// Remote MCP tools are left to the egress proxy, which gates them already.
+struct GatedToolSet<Context> {
+    tools: Arc<dyn AiToolSet<Context> + Send + Sync>,
+    gate: Arc<dyn NativeToolGate>,
+    session: agent_session::domain::model::AgentSessionId,
+    awaiting: Arc<crate::domain::engine::AwaitingUser>,
+}
+
+impl<Context> AiToolSet<Context> for GatedToolSet<Context>
+where
+    Context: Send + Sync + 'static,
+{
+    fn dispatch_tool_call<'a>(
+        &'a self,
+        context: Context,
+        request_context: ai_toolset::RequestContext,
+        tool_name: &'a str,
+        json: &'a serde_json::Value,
+    ) -> ai_toolset::ToolCallFuture<'a> {
+        Box::pin(async move {
+            if !UNGATED_NATIVE_TOOLS.contains(&tool_name)
+                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
+                && let NativeToolVerdict::Refuse(reason) = {
+                    // A call held for the owner is the turn waiting on a
+                    // person, not hanging: the idle timeout leaves it be.
+                    let _waiting = self.awaiting.begin();
+                    self.gate.check(self.session, tool_name, json).await
+                }
+            {
+                return Ok(Err(ai_toolset::ToolCallError {
+                    internal_error: anyhow::anyhow!("{tool_name} was not approved"),
+                    description: reason,
+                }));
+            }
+            self.tools
+                .dispatch_tool_call(context, request_context, tool_name, json)
+                .await
+        })
+    }
+
+    fn request_schemas(&self) -> Option<Vec<ai_toolset::RequestSchema>> {
+        self.tools.request_schemas()
+    }
+
+    fn searchable_catalog(&self) -> Vec<ai_toolset::SearchableTool> {
+        self.tools.searchable_catalog()
+    }
+
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        self.tools.searchable_toolset_names()
+    }
+
+    fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ai_toolset::ToolInfo> {
+        self.tools.routing_description(tool_name)
     }
 }
 
@@ -95,6 +177,40 @@ fn tools_for_turn(
     }
 }
 
+/// Native definitions contain schemas and deserializers, not a user's context.
+/// Build both client-capability variants once, before the first prompt. Each
+/// turn still supplies its own identity, reviewer, gate, MCP tools and memory.
+struct NativeTools {
+    with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
+    without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
+    prompt: String,
+    deferred: Arc<[ai_toolset::SearchableTool]>,
+}
+
+impl NativeTools {
+    fn new() -> Self {
+        let tools = tools_for(AiHost::AgentSession);
+        let base_tools = Arc::into_inner(tools.toolset)
+            .expect("tools_for should return a fresh, uniquely owned collection");
+        let other_tools = Arc::into_inner(tools_for(AiHost::AgentSession).toolset)
+            .expect("tools_for should return a fresh, uniquely owned collection");
+        Self {
+            with_user_input: Arc::new(tools_for_turn(base_tools, true)),
+            without_user_input: Arc::new(tools_for_turn(other_tools, false)),
+            prompt: tools.prompt.to_string(),
+            deferred: tools.deferred,
+        }
+    }
+
+    fn for_turn(&self, supports_user_input: bool) -> Arc<AsyncToolCollection<InMemToolContext>> {
+        Arc::clone(if supports_user_input {
+            &self.with_user_input
+        } else {
+            &self.without_user_input
+        })
+    }
+}
+
 impl TurnEngine for RigTurnEngine {
     fn supported_models(&self) -> &[&str] {
         crate::domain::models::advertised_models()
@@ -102,12 +218,16 @@ impl TurnEngine for RigTurnEngine {
 
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
-        let db = self.db.clone();
+        let memory = Arc::clone(&self.memory);
+        let native_tools = Arc::clone(&self.native_tools);
         let tool_context = self.tool_context.clone();
+        let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
         tokio::spawn(
             agent::MeteringContext::carry(metering, async move {
-                if let Err(error) = drive_turn(db, tool_context, request, &parts).await {
+                if let Err(error) =
+                    drive_turn(&memory, &native_tools, tool_context, gate, request, &parts).await
+                {
                     let _ = parts.send(Err(error)).await;
                 }
             })
@@ -118,12 +238,16 @@ impl TurnEngine for RigTurnEngine {
 }
 
 async fn drive_turn(
-    db: PgPool,
+    memory: &MemoryServiceImpl<PgMemoryRepo>,
+    native_tools: &NativeTools,
     base_context: ToolServiceContext,
+    gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
     parts: &mpsc::Sender<Result<StreamPart, AgentError>>,
 ) -> Result<(), AgentError> {
     let TurnRequest {
+        session_id,
+        awaiting,
         owner,
         model,
         reasoning_effort,
@@ -154,21 +278,15 @@ async fn drive_turn(
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
-    let tools = tools_for(AiHost::AgentSession);
-    let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
+    let user_memory = fetch_user_memory(memory, &owner).await;
     let system_prompt = system_prompt(
-        &tools.prompt,
+        &native_tools.prompt,
         identity.as_ref(),
         instructions.as_deref(),
         user_memory.as_deref(),
     );
 
-    // `tools_for` returns a fresh Arc. Take its collection back so the
-    // in-memory runtime can widen it onto the session-specific context and
-    // add the one tool that needs the active ACP connection.
-    let base_tools = Arc::into_inner(tools.toolset)
-        .expect("tools_for should return a fresh, uniquely owned collection");
-    let toolset = Arc::new(tools_for_turn(base_tools, user_input.is_some()));
+    let toolset = native_tools.for_turn(user_input.is_some());
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context.clone();
@@ -204,12 +322,27 @@ async fn drive_turn(
             cancel.clone(),
         ));
     }
+    // Macro's own tools spend the owner's access in-process, so they ask the
+    // gate a turn somebody else prompted must pass - the one the egress
+    // proxy applies to every MCP server. Remote MCP tools already pass
+    // through that proxy and are not asked twice.
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
         Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(toolset, mcp)),
         None => toolset,
     };
+    // Most of Macro's tools go out by name only; the model loads the rest.
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(DeferredToolSet::new(
+        toolset,
+        Arc::clone(&native_tools.deferred),
+    ));
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(GatedToolSet {
+        tools: toolset,
+        gate,
+        session: session_id,
+        awaiting,
+    });
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;
@@ -290,17 +423,9 @@ fn system_prompt(
 
 /// The owner's memory block, or `None` when it is missing or failed to load.
 async fn fetch_user_memory(
-    db: &PgPool,
-    tool_context: &ToolServiceContext,
+    memory_service: &MemoryServiceImpl<PgMemoryRepo>,
     owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
-    let tools = tools_for(AiHost::Chat);
-    let tools = ToolSetWithPrompt {
-        toolset: tools.toolset,
-        prompt: tools.prompt,
-    };
-    let memory_service =
-        MemoryServiceImpl::new(PgMemoryRepo::new(db.clone()), tool_context.clone(), tools);
     match memory_service.get_or_generate_memory(owner.clone()).await {
         Ok(memory) => memory.map(|memory| memory.to_string()),
         Err(error) => {

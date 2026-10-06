@@ -13,10 +13,20 @@ import type { UsagePrice } from './usagePrice';
 export interface Usage {
   /** Audio duration in seconds, absent for token billing. */
   audio_seconds?: UsageAudioSeconds;
+  /**
+   * Input tokens read from a prompt cache; zero for audio billing.
+   * @minimum 0
+   */
+  cache_read_input_tokens: number;
+  /**
+   * Input tokens written to a prompt cache; zero for audio billing.
+   * @minimum 0
+   */
+  cache_write_input_tokens: number;
   /** Recording timestamp. */
   created_at: string;
   /**
-   * Input tokens; zero for audio billing.
+   * Uncached input tokens; zero for audio billing.
    * @minimum 0
    */
   input_tokens: number;

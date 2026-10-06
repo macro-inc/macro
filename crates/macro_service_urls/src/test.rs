@@ -622,7 +622,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
-        "https://lexical-service-dev.macroverse.workers.dev",
+        "https://dev-gateway.macro.com/lexical",
     );
     assert_eq!(
         service_urls.sync_service_url.as_ref(),
@@ -705,7 +705,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
-        "https://lexical-service-prod.macroverse.workers.dev",
+        "https://gateway.macro.com/lexical",
     );
     assert_eq!(
         service_urls.sync_service_url.as_ref(),

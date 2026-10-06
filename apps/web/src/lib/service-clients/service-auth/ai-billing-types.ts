@@ -3,19 +3,23 @@
  * (`crates/ai_billing`). Replace with the orval-generated schemas on the next
  * client regeneration (`bun run gen-api auth-service`).
  *
- * Every money field is in cents at Macro's list rate.
+ * Allowance and usage fields (`included_cents`, `used_cents`,
+ * `remaining_cents`) are cents at provider cost. Credits, overage charges,
+ * caps, packs and `uncovered_cents` are customer cents.
  */
 
 export type AiPlanTier = 'free' | 'premium' | 'max';
 
 export type AiDenyReason =
   | 'allowance_exhausted'
+  | 'free_allowance_exhausted'
   | 'overage_limit_reached'
   | 'overage_payment_failed';
 
 /** Machine-readable codes carried in 402 bodies from the AI endpoints. */
 export type AiDenyCode =
   | 'ai_allowance_exhausted'
+  | 'ai_free_allowance_exhausted'
   | 'ai_overage_limit_reached'
   | 'ai_overage_payment_failed';
 
@@ -44,6 +48,7 @@ export interface AiPlanCatalogEntry {
   tier: AiPlanTier;
   monthly_price_cents: number;
   included_ai_cents_per_seat: number;
+  purchasable: boolean;
 }
 
 export interface AiPlanCatalog {

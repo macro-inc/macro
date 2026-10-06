@@ -10,5 +10,5 @@ export type AnnotationIncrementalUpdateOneOfSevenUpdateType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AnnotationIncrementalUpdateOneOfSevenUpdateType = {
-  'edit-comment': 'edit-comment',
+  'delete-anchor': 'delete-anchor',
 } as const;

@@ -1,24 +1,30 @@
 # Image generation
 
 `image_generation_toolset()` exposes `GenerateImage` to the shared AI toolset.
-The tool mints an edit receipt for an optional destination project and invokes
-`ImageGenerationService` with the requesting user and delegated bot identity.
+The tool invokes `ImageGenerationService` with the requesting user and delegated
+bot identity.
 
 The domain service validates the prompt, resolves up to three ordered reference
 images through `ImageReferenceReader`, asks `ImageGenerator` for image bytes,
-chooses the filename, and saves through `ImageDocumentStore`. Gemini implements
-the provider port and receives references as inline image bytes.
-`DocumentsImageStore` implements the save port by calling the `documents`
-domain's `DocumentUploadService` inbound port.
+and saves through `ImageStore`. Gemini implements the provider port and receives
+references as inline image bytes. `StaticFileImageStore` uploads through the
+existing static file service client and returns the static file ID and permanent
+URL only after the byte upload succeeds. The tool creates no DSS document and
+accepts no filename or destination project.
 
 `AttachmentImageReferenceReader` uses the document and static-file domains'
 existing inbound `AttachmentService` implementations. Document references require
 view access for the acting user. Static-file IDs retain their existing bearer
 capability semantics and resolve only through configured storage; arbitrary URLs
-are not accepted. Cross-domain adapters depend only on inbound ports.
+are not accepted. Generated static file IDs can be reused for subsequent edits.
 
-Document creation, destination authorization, filename and size validation,
-byte uploads, and failure cleanup remain in the existing document upload
-lifecycle. The storage adapter uses no document repositories or outbound
-adapters. Hosts compose the provider, reference reader, and storage services in
-`ai_tools`.
+Hosts compose the provider, reference reader, and storage client in `ai_tools`.
+The frontend renders the returned SFS image directly.
+
+Usage is attributed by the domain service to the creating user (including bots
+acting for users), or the system identity for team bots with no acting user.
+Every host injects its usage recorder. Gemini records `usageMetadata` under
+`image_generation` and the requested model before decoding or saving the image,
+so provider-reported costs survive refusals, invalid image data, and upload
+failures. Responses without usage metadata emit a warning and no estimated usage.
+Pricing for the IMAGE-only Nano Banana requests is seeded in `ai_pricing`.

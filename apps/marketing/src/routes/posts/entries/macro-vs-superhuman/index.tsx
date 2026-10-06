@@ -43,9 +43,9 @@ const comparisonRows: ComparisonRow[] = [
     them: '$40 per seat per month (as part of the new Superhuman Suite)',
   },
   {
-    feature: 'Free plan',
+    feature: 'No-cost access',
     macro:
-      'Full workspace access for personal use, with limits on storage and AI',
+      'Free Guest access to a workspace, with limits on storage and AI',
     them: "Covers Grammarly, Docs, and Go — Mail isn't included until Business",
   },
   {
@@ -234,8 +234,8 @@ export default function MacroVsSuperhumanPost() {
           Macro has a <strong>unified inbox</strong> so you can triage all your
           accounts at once using familiar <code>j</code>, <code>k</code> and{' '}
           <code>e</code> shortcuts. You can also view accounts individually if
-          you want. Connect 2 emails under Macro's free plan or unlimited emails
-          with a paid plan.
+          you want. Connect 2 emails as a Guest or unlimited emails with a paid
+          plan.
         </p>
         <PostScreenshot
           src={accountsSidebar}
@@ -482,12 +482,12 @@ export default function MacroVsSuperhumanPost() {
         <p>
           Macro is one flat $40 per seat, and that includes every module: email,
           chat, docs, tasks, CRM, calls, all of it, with all AI features
-          included. We also have a free plan that covers everything for personal
-          use with some limits on storage and AI. Superhuman is also $40 a month
-          which includes Superhuman and Grammarly. Some people might use both of
-          those products but the kinds of users that need Superhuman —
-          salespeople, founders, execs — and Grammarly (more junior or foreign
-          language people) might have limited overlap.
+          included. You can also join a workspace as a Guest for free, with
+          limits on storage and AI. Superhuman is also $40 a month which
+          includes Superhuman and Grammarly. Some people might use both of those
+          products but the kinds of users that need Superhuman — salespeople,
+          founders, execs — and Grammarly (more junior or foreign language
+          people) might have limited overlap.
         </p>
 
         <h2>When to choose Macro</h2>

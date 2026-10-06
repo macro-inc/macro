@@ -17,6 +17,7 @@ mod test;
 
 use std::sync::Arc;
 
+use agent_egress::domain::approval::MACRO_SERVER_SLUG;
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
 use entity_access::domain::{
@@ -41,8 +42,8 @@ use messages::domain::{
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AnnouncedMessage, DeclinedMention, ReplyOutcome, ResolvedReply, SessionAnnouncement,
-    SessionBlocker,
+    AnnouncedMessage, DeclinedMention, HeldToolCall, ReplyOutcome, ResolvedReply,
+    SessionAnnouncement, SessionBlocker,
 };
 use crate::domain::ports::SessionAnnouncer;
 
@@ -54,6 +55,12 @@ const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 /// reader gets there.
 const NEEDS_INPUT_LEAD: &str =
     "I have a question before I can continue — open the agent session to answer it:";
+/// Said instead of an answer the thread may not carry: one that mentions
+/// something the person who asked cannot open, typically what a tool the
+/// owner approved found with the owner's access. The answer is still in the
+/// session, which the owner can read.
+const UNSHAREABLE_ANSWER: &str = "My answer mentions things you can't open here, so it stays in \
+    the agent session.";
 
 /// A chat agent's message in one state, for Lexical to compose: the link to
 /// its session, then `body`.
@@ -80,9 +87,23 @@ fn reply_body(outcome: ReplyOutcome) -> AgentChatReplyBody {
         ReplyOutcome::Cancelled => CANCELLED_FALLBACK.to_owned(),
         ReplyOutcome::Failed => ERROR_FALLBACK.to_owned(),
         ReplyOutcome::NeedsInput { question } => format!("{NEEDS_INPUT_LEAD}\n\n{question}"),
+        ReplyOutcome::AwaitingApproval(call) => awaiting_approval(&call),
         ReplyOutcome::Resumed => return AgentChatReplyBody::Pending,
     };
     AgentChatReplyBody::Markdown { markdown }
+}
+
+/// What the thread reads while a tool call waits on the owner. Only the
+/// owner can approve it, and they are notified on their own, so this names
+/// the hold for everyone else rather than asking anything of them.
+fn awaiting_approval(call: &HeldToolCall) -> String {
+    let tool = &call.tool_name;
+    if call.server_slug == MACRO_SERVER_SLUG {
+        format!("Waiting for the session owner to allow `{tool}`.")
+    } else {
+        let server = &call.server_name;
+        format!("Waiting for the session owner to allow `{tool}` from {server}.")
+    }
 }
 
 /// Whether the thread should hear about a patch. The answer, and a question
@@ -95,7 +116,10 @@ const fn patch_policy(outcome: &ReplyOutcome) -> PatchMessageNotificationPolicy 
         | ReplyOutcome::Cancelled
         | ReplyOutcome::Failed
         | ReplyOutcome::NeedsInput { .. } => PatchMessageNotificationPolicy::NotifyAsPostedMessage,
-        ReplyOutcome::Resumed => PatchMessageNotificationPolicy::Default,
+        // The owner, the one person who can act, is notified by the hold.
+        ReplyOutcome::AwaitingApproval(_) | ReplyOutcome::Resumed => {
+            PatchMessageNotificationPolicy::Default
+        }
     }
 }
 
@@ -153,6 +177,7 @@ fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnounc
         channel_id: match &announcement.origin_parent {
             MessageParent::Channel(channel_id) => Some(channel_id.to_string()),
             MessageParent::Document(_)
+            | MessageParent::Call(_)
             | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => None,
@@ -208,6 +233,20 @@ impl<Access: EntityAccessService> MessageAnnouncer<Access> {
     }
 }
 
+impl<Access> MessageAnnouncer<Access> {
+    /// A chat agent's reply saying `body`, composed by Lexical.
+    async fn compose_reply(
+        &self,
+        session_id: AgentSessionId,
+        body: AgentChatReplyBody,
+    ) -> Result<String> {
+        self.lexical
+            .compose_agent_chat_reply(&chat_reply(session_id, body))
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))
+    }
+}
+
 impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> {
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<AnnouncedMessage> {
         let access = self
@@ -217,7 +256,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 &announcement.origin_parent,
             )
             .await?;
-        let content = if announcement.is_coding {
+        let content = if announcement.shows_session_link() {
             self.lexical
                 .compose_agent_announcement(
                     (!announcement.reuse_origin_message)
@@ -293,27 +332,39 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .await?;
         let message_id = resolution.message_id;
         let notification_policy = patch_policy(&resolution.outcome);
-        let content = self
-            .lexical
-            .compose_agent_chat_reply(&chat_reply(
-                resolution.session_id,
-                reply_body(resolution.outcome),
-            ))
-            .await
-            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
-        match self
+        let body = reply_body(resolution.outcome);
+        let carries_answer = matches!(body, AgentChatReplyBody::Markdown { .. });
+        let patch = |content| MessagePatch {
+            notification_policy,
+            content: Some(content),
+            ..Default::default()
+        };
+        let content = self.compose_reply(resolution.session_id, body).await?;
+        let patched = match self
             .messages
-            .patch(
-                access,
-                message_id,
-                MessagePatch {
-                    notification_policy,
-                    content: Some(content),
-                    ..Default::default()
-                },
-            )
+            .patch(access.clone(), message_id, patch(content))
             .await
         {
+            // The message service refuses an edit whose mentions the person
+            // who asked could not open. Left there, the reply would spin
+            // forever; the answer is kept in the session instead.
+            Err(MessageError::Forbidden) if carries_answer => {
+                tracing::warn!(%message_id, "the thread may not carry this answer; pointing at the session");
+                let content = self
+                    .compose_reply(
+                        resolution.session_id,
+                        AgentChatReplyBody::Markdown {
+                            markdown: UNSHAREABLE_ANSWER.to_owned(),
+                        },
+                    )
+                    .await?;
+                self.messages
+                    .patch(access, message_id, patch(content))
+                    .await
+            }
+            patched => patched,
+        };
+        match patched {
             Ok(_) => Ok(()),
             // A participant deleted the pending reply while the agent ran:
             // they did not want the answer, and there is nowhere to put it.

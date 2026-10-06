@@ -30,7 +30,8 @@ async fn existing_channel_grants_are_visible_before_settings_are_created(pool: P
         settings.channel_share_permissions,
         Some(vec![ChannelSharePermission {
             channel_id: channel.to_string(),
-            access_level: AccessLevel::Edit
+            // `create_test_bot` is a private agent.
+            access_level: AccessLevel::View
         }])
     );
 }

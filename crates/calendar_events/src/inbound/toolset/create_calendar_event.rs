@@ -29,7 +29,10 @@ Calendar. In Macro chat this tool opens an inline composer so the user can revie
 confirm the event; use the tool to present the proposal instead of asking for a redundant \
 confirmation in prose. When the pending call is executed, the event is written to Google \
 immediately and attendees receive invitations. Other clients should confirm attendee events \
-before executing the call.\n\
+before executing the call. Do NOT use it for a prompt that came from a channel or document \
+thread — the context block names a conversation parent when it did, and there is no surface \
+to review a draft in: write the event out in your reply, ask whether to create it, and use \
+CreateConfirmedCalendarEvent once the user approves.\n\
 \n\
 The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) \
 targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. \
@@ -170,6 +173,7 @@ where
             }
         };
         let draft = CalendarEventDraft {
+            idempotency_key: None,
             title: self.title.clone(),
             description: self.description.clone(),
             location: self.location.clone(),

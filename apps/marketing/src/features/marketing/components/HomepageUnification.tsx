@@ -13,18 +13,24 @@ export function HomepageUnification(
   onMount(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     const scroller = section.parentElement!;
-    const animations: { animation: Animation; end: number; time: number }[] =
-      [];
+    const animations: {
+      animation: Animation;
+      start: number;
+      end: number;
+      time: number;
+    }[] = [];
     const hiddenSources = new Map<HTMLElement, string>();
     let overlay: HTMLDivElement | undefined;
     let prepared = false;
     let start = 0;
     let distance = 1;
     let lastProgress = -1;
+    let traveling = false;
 
     const clear = () => {
       prepared = false;
       lastProgress = -1;
+      traveling = false;
       animations.forEach(({ animation }) => animation.cancel());
       animations.length = 0;
       overlay?.remove();
@@ -48,7 +54,12 @@ export function HomepageUnification(
       });
       animation.pause();
       animation.currentTime = 0;
-      animations.push({ animation, end: delay + duration, time: 0 });
+      animations.push({
+        animation,
+        start: delay,
+        end: delay + duration,
+        time: 0,
+      });
       return animation;
     };
 
@@ -124,11 +135,12 @@ export function HomepageUnification(
           opacity: '1',
           animation: 'none',
           transform: 'none',
+          // Moving backdrop filters resample the scene beneath every bubble.
+          backdropFilter: 'none',
           willChange: 'transform, opacity',
         });
         overlay!.append(ghost);
         hiddenSources.set(source, source.style.visibility);
-        source.style.visibility = 'hidden';
         const dx = target.left + target.width / 2 - rect.left - rect.width / 2;
         const dy = target.top + target.height / 2 - rect.top - rect.height / 2;
         const scale = merges ? 0.22 : target.width / rect.width;
@@ -237,20 +249,28 @@ export function HomepageUnification(
       if (progress === lastProgress) return;
       lastProgress = progress;
       if (!prepared && progress > 0) prepare();
-      section.dataset.motion =
+      const motion =
         progress === 0 ? 'waiting' : progress === 1 ? 'complete' : 'scrubbing';
+      if (section.dataset.motion !== motion) section.dataset.motion = motion;
       // A paused timeline is only a set of keyframes. The scroll offset is its
       // sole clock: no autoplay, easing toward a target, or scroll interception.
       for (const entry of animations) {
-        const time = Math.min(entry.end, progress * 1500);
+        // Delayed and finished effects do not need seeking on every frame.
+        const time = Math.max(
+          entry.start,
+          Math.min(entry.end, progress * 1500)
+        );
         if (time === entry.time) continue;
         entry.animation.currentTime = time;
         entry.time = time;
       }
-      if (overlay) overlay.hidden = progress === 0 || progress === 1;
-      for (const [source, visibility] of hiddenSources) {
-        source.style.visibility =
-          progress > 0 && progress < 1 ? 'hidden' : visibility;
+      const active = progress > 0 && progress < 1;
+      if (active !== traveling) {
+        traveling = active;
+        if (overlay) overlay.hidden = !active;
+        for (const [source, visibility] of hiddenSources) {
+          source.style.visibility = active ? 'hidden' : visibility;
+        }
       }
     };
 
@@ -264,6 +284,11 @@ export function HomepageUnification(
       // Finish when the section reaches the upper fifth of the viewport,
       // before its heading and supporting copy are fully in view.
       distance = Math.max(1, scroller.clientHeight * 0.64);
+      // Build the travel layers before the first gesture, not in its first frame.
+      if (!reduced.matches) {
+        prepare();
+        overlay!.hidden = true;
+      }
       update();
     };
     let replayFrame = 0;

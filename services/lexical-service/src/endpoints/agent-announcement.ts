@@ -3,7 +3,10 @@ import {
   MAGIC_CHIP_AUTHORS,
   MAGIC_CHIP_STATUSES,
 } from '@macro-inc/lexical-core/nodes/MagicChipNode';
-import type { ReplyTargetParent } from '@macro-inc/lexical-core/nodes/ReplyTargetNode';
+import {
+  REPLY_TARGET_PARENT_TYPES,
+  type ReplyTargetParent,
+} from '@macro-inc/lexical-core/nodes/ReplyTargetNode';
 import { composeAgentSessionAnnouncement } from '@macro-inc/lexical-core/utils/agent-announcement';
 import { composeAgentChatReply } from '@macro-inc/lexical-core/utils/agent-chat-reply';
 import { composeAgentConnectionPrompt } from '@macro-inc/lexical-core/utils/agent-connection-prompt';
@@ -14,7 +17,7 @@ import { handleEndpointError } from '../lib/error-handler';
 import { standardErrorResponses } from '../lib/schemas';
 
 const messageParent = z.object({
-  type: z.enum(['channel', 'document']),
+  type: z.enum(REPLY_TARGET_PARENT_TYPES),
   id: z.string().min(1),
 });
 

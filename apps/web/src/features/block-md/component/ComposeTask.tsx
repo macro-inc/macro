@@ -35,6 +35,7 @@ import PaperclipIcon from '@phosphor/paperclip.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import XIcon from '@phosphor/x.svg';
 import { Modals } from '@property/component/modal';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import { InlineTagsPill } from '@property/tags';
 import type { PropertyApiValues } from '@property/types';
@@ -72,6 +73,7 @@ import {
   createTaskComposerProperties,
   createTaskWithProperties,
   defaultTaskPropertyValues,
+  taskComposerProjectValue,
 } from '../util/taskComposerProperties';
 import {
   clearTaskComposerDraft,
@@ -179,6 +181,7 @@ function isTitleSelectionAtStart() {
 }
 
 export function ComposeTaskTitleEditor(props: {
+  placeholder?: string;
   value: Accessor<string>;
   onChange: (value: string) => void;
   disabled: Accessor<boolean>;
@@ -314,7 +317,7 @@ export function ComposeTaskTitleEditor(props: {
       />
       <Show when={showPlaceholder()}>
         <div class="pointer-events-none absolute top-0 text-xl/7 font-medium text-ink-placeholder">
-          New task
+          {props.placeholder ?? 'New task'}
         </div>
       </Show>
     </div>
@@ -342,6 +345,8 @@ export interface ComposeTaskProps {
   initialContent?: string;
   placeholder?: string;
   initialAssigneeIds?: string[];
+  /** Start in this project, e.g. when composing from the project's page. */
+  initialProjectId?: string;
   /**
    * When provided, replaces the default success behavior (auto-copy link +
    * toast) so the caller can handle the created task however it needs.
@@ -376,6 +381,19 @@ export function ComposeTask(props: ComposeTaskProps) {
     return defaultTaskPropertyValues(ids);
   };
 
+  // A project the composer opens in applies on top of a restored draft too.
+  const withInitialProject = (
+    values: Record<string, PropertyApiValues>
+  ): Record<string, PropertyApiValues> =>
+    props.initialProjectId
+      ? {
+          ...values,
+          [SYSTEM_PROPERTY_IDS.PROJECT]: taskComposerProjectValue(
+            props.initialProjectId
+          ),
+        }
+      : values;
+
   // draft init logic
   const initializeFromDraft = () => {
     if (
@@ -389,7 +407,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           title: draft.title,
           content: draft.content,
           editorState: draft.editorState,
-          propertyValues: draft.propertyValues,
+          propertyValues: withInitialProject(draft.propertyValues),
           isDraftLoaded: true,
         };
       }
@@ -398,7 +416,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       title: props.initialTitle ?? '',
       content: props.initialContent ?? '',
       editorState: undefined,
-      propertyValues: getDefaultPropertyValues(),
+      propertyValues: withInitialProject(getDefaultPropertyValues()),
       isDraftLoaded: false,
     };
   };
@@ -764,7 +782,9 @@ export function ComposeTask(props: ComposeTaskProps) {
     clearTaskComposerDraft();
     setTitle('');
     setContent('');
-    setPropertyValues(reconcile(getDefaultPropertyValues()));
+    setPropertyValues(
+      reconcile(withInitialProject(getDefaultPropertyValues()))
+    );
     setTagLayoutMode('bottom');
     setIsDraftLoaded(false);
     const ed = bodyEditor();

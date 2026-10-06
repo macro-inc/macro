@@ -722,6 +722,12 @@ generate_file_types!(
     (Ps, "ps", "application/postscript", Vector),
     (Dxf, "dxf", "image/vnd.dxf", Vector),
     (Dwg, "dwg", "image/vnd.dwg", Vector),
+    (Fig, "fig", "application/x-figma", Vector),
+    // Photoshop documents (`.psb` is the large document format) are layered
+    // design files, not pictures: they belong with the design files, so
+    // nothing routes them to image viewers or decodes them as rasters.
+    (Psd, "psd", "image/vnd.adobe.photoshop", Vector),
+    (Psb, "psb", "image/vnd.adobe.photoshop", Vector),
     // 3D files
     (Stl, "stl", "model/stl", ThreeD),
     (Obj, "obj", "model/obj", ThreeD),

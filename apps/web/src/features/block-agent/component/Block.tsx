@@ -1,9 +1,9 @@
+import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
 import {
-  AgentChangesProvider,
-  AgentChangesSplit,
   ChangesHandoff,
+  ChangesSplit,
   ReviewNotesDock,
-} from '@app/features/agent-changes/agent-changes';
+} from '@app/features/changes/changes';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel } from '@components/app/side-panel';
@@ -19,10 +19,17 @@ import { blockHandleSignal } from '@core/signal/load';
 import type { NotificationSource } from '@notifications/notification-source';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
-import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
+import {
+  children,
+  createEffect,
+  createSignal,
+  on,
+  type ParentProps,
+  Show,
+  useContext,
+} from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
-import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentComposer } from './AgentComposer';
@@ -32,6 +39,14 @@ import { AgentSplitHeader } from './AgentSplitHeader';
 import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
+
+// Keep the editor mounted while another mobile accessory (Changes) is active.
+function AgentComposerRegion(props: ParentProps) {
+  const content = children(() => props.children);
+  return (
+    <FloatRegionOrInline region="accessory">{content()}</FloatRegionOrInline>
+  );
+}
 
 function AgentBlockContent(props: {
   active: boolean;
@@ -133,7 +148,7 @@ function AgentBlockContent(props: {
         <div class="size-full overflow-hidden flex">
           {/* Collapsed by default, like the other conversation-shaped blocks —
             the transcript wants the width; `]` or the header button opens it. */}
-          <SidePanel.Layout defaultOpen={false}>
+          <SidePanel.Layout defaultOpen={false} floating>
             <AgentSidePanelSections />
             <AgentSplitHeader
               session={session()}
@@ -142,11 +157,11 @@ function AgentBlockContent(props: {
             <AgentPreviewBanner />
             {/* The Changes pane opens beside the transcript; closed, the
                 transcript keeps the whole width. */}
-            <AgentChangesSplit>
+            <ChangesSplit>
               <Transcript searchTarget={searchTarget()} />
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
-              <FloatRegionOrInline region="accessory">
+              <AgentComposerRegion>
                 {/* Home/chat: re-enable pointer events on the accessory
                     contribution — the float host is pointer-transparent. */}
                 {/* pb matches ChannelInputContainer so the composer sits at
@@ -173,8 +188,8 @@ function AgentBlockContent(props: {
                     </Show>
                   </div>
                 </div>
-              </FloatRegionOrInline>
-            </AgentChangesSplit>
+              </AgentComposerRegion>
+            </ChangesSplit>
           </SidePanel.Layout>
         </div>
       </StaticMarkdownContext>
@@ -195,7 +210,6 @@ export default function BlockAgent() {
   // nowhere.
   const adoptSessionId = (sessionId: string) => {
     split?.handle.adoptContentId({ type: 'agent', nextId: sessionId });
-    forgetPendingSession(blockId);
   };
 
   return (

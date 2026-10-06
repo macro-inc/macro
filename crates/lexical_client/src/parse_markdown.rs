@@ -130,6 +130,20 @@ struct MentionsResponse {
     mentions: Vec<ExtractedMention>,
 }
 
+/// A static image to serialize through Lexical's image node and markdown transformer.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageMarkdownRequest<'a> {
+    /// Static file capability identifier.
+    pub static_file_id: &'a str,
+    /// Permanent image URL.
+    pub url: &'a str,
+    /// Intrinsic pixel width.
+    pub width: u32,
+    /// Intrinsic pixel height.
+    pub height: u32,
+}
+
 /// The Magic Chip embedded in an agent-session announcement, in the shape the
 /// lexical service `/agent-announcement` endpoint validates.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -298,6 +312,25 @@ pub enum AgentContextReplyTarget<'a> {
     None,
 }
 
+/// A person an agent session acts for or hears from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextPerson<'a> {
+    /// Their Macro user id.
+    pub id: &'a str,
+    /// How a reader names them.
+    pub name: &'a str,
+}
+
+/// Whose access an agent session runs with, and who sent the prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextPeople<'a> {
+    /// The session's owner.
+    pub owner: AgentContextPerson<'a>,
+    /// The prompt's sender; absent when a bot sent it on nobody's behalf.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender: Option<AgentContextPerson<'a>>,
+}
+
 /// The conversation an agent prompt was posted in.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -374,6 +407,8 @@ struct AgentContextRequest<'a> {
     instructions: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<&'a MessageParent>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    people: Option<&'a AgentContextPeople<'a>>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     context: Option<&'a AgentContext<'a>>,
 }
@@ -616,6 +651,22 @@ impl LexicalClient {
         Ok(data.mentions)
     }
 
+    /// Compose dimension-preserving channel markup from a real Lexical image node.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn compose_image_markdown(&self, image: &ImageMarkdownRequest<'_>) -> Result<String> {
+        let response = check_response(
+            self.client
+                .post(format!("{}/image-markdown", self.url))
+                .json(image)
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
     /// Composes the channel message announcing an agent session — a structured
     /// reply target above the session's Magic Chip — via the lexical service,
     /// so the markdown is built from real Lexical nodes.
@@ -688,6 +739,7 @@ impl LexicalClient {
         prompt_markdown: &str,
         instructions: Option<&str>,
         parent: Option<&MessageParent>,
+        people: Option<&AgentContextPeople<'_>>,
         context: Option<&AgentContext<'_>>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
@@ -698,6 +750,7 @@ impl LexicalClient {
                     prompt_markdown,
                     instructions,
                     parent,
+                    people,
                     context,
                 })
                 .send()

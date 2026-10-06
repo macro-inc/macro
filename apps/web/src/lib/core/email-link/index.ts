@@ -3,11 +3,11 @@ import { updateUserAuth } from '@core/auth';
 import { createNativeAuthSession } from '@core/auth/native-auth';
 import { toast } from '@core/component/Toast/Toast';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { currentSettingsReturnTo } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
 import type { ConsentScopes } from '@service-auth/client';
 import {
   ALREADY_INITIALIZED_CODE,
@@ -22,6 +22,7 @@ import type {
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
+import { inboxAuthorizationUrl } from './consent';
 import { rememberInboxLinkReturn } from './return-layout';
 import { requestShareInboxConfirmation } from './share-conflict';
 
@@ -30,7 +31,7 @@ const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
 >();
 
 function hasEmailLinks(query: UseQueryResult<ListLinksResponse, Error>) {
-  if (!query.data || query.error) {
+  if (!queryReadyGate(query)) {
     return false;
   }
   return query.data.links.length > 0;
@@ -218,10 +219,10 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
  *
- * `scopes` selects which permissions the consent screen asks for. Only calendar
- * entry points may request calendar access, and they pass `calendar` for an
- * inbox that is already connected so the user isn't shown mailbox permissions
- * they have already granted.
+ * `scopes` selects which permissions the consent screen asks for. Calendar
+ * entry points and reconnects of previously enabled calendars request calendar
+ * access. A healthy mailbox upgrade passes `calendar`; a revoked account needs
+ * `gmail_and_calendar` to restore both capabilities.
  *
  * On native mobile OAuth runs in a platform authentication browser via
  * the Tauri auth plugin (the app never navigates away), and the link is
@@ -262,7 +263,10 @@ export function useAddInboxFlow() {
     );
   };
 
-  const startNativeFlow = async (scopes: ConsentScopes) => {
+  const startNativeFlow = async (
+    scopes: ConsentScopes,
+    emailAddress?: string
+  ) => {
     const session = createNativeAuthSession('inbox-link-callback');
     const result = await initGmailLink.mutateAsync({
       originalUrl: session.callbackUrl,
@@ -281,7 +285,9 @@ export function useAddInboxFlow() {
       return;
     }
 
-    const auth = await session.authenticate(result.value.authorization_url);
+    const auth = await session.authenticate(
+      inboxAuthorizationUrl(result.value.authorization_url, emailAddress)
+    );
     if (!auth.success) {
       if (auth.error !== 'User canceled login') {
         toast.failure('Failed to add inbox');
@@ -292,10 +298,13 @@ export function useAddInboxFlow() {
     await completeNativeLink(result.value.link_id, false);
   };
 
-  return async (options?: { scopes?: ConsentScopes }) => {
+  return async (options?: {
+    scopes?: ConsentScopes;
+    emailAddress?: string;
+  }) => {
     const scopes = options?.scopes ?? 'gmail';
     if (isNativeMobilePlatform()) {
-      await startNativeFlow(scopes);
+      await startNativeFlow(scopes, options?.emailAddress);
       return;
     }
 
@@ -310,9 +319,11 @@ export function useAddInboxFlow() {
       // everyone on a default layout.
       rememberInboxLinkReturn(result.value.link_id, {
         url: `${toBaseRelative(window.location.pathname)}${window.location.search}${window.location.hash}`,
-        settingsReturnTo: currentSettingsReturnTo(),
       });
-      window.location.href = result.value.authorization_url;
+      window.location.href = inboxAuthorizationUrl(
+        result.value.authorization_url,
+        options?.emailAddress
+      );
     } else if (isPaymentRequired(result.error)) {
       showPaywall(PaywallKey.MULTI_INBOX);
     } else if (isTooManyPendingLinks(result.error)) {

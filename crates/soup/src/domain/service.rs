@@ -26,7 +26,7 @@ use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
-    ports::{ForeignEntityListQuery, ForeignEntityService},
+    ports::ForeignEntityListQuery,
 };
 use frecency::domain::{
     models::{
@@ -34,11 +34,15 @@ use frecency::domain::{
     },
     ports::FrecencyQueryService,
 };
+use github_pull_requests::domain::{
+    models::GithubPullRequestSortDirection, ports::GithubPullRequestListing,
+};
 use item_filters::ast::{
-    EntityFilterAst,
+    EntityFilterAst, LiteralTree,
     channel::{ChannelLiteral, ChannelThreadLiteral},
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
+    github_pull_request::GithubPullRequestLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -51,6 +55,7 @@ use models_soup::{
     call_record::SoupCallRecord,
     comms::{SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
+    crm_contact::SoupCrmContact,
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
     reminder::SoupReminder,
@@ -116,6 +121,8 @@ struct NotifiedHydrationLegs {
     comms: Option<GetChannelsRequest>,
     comms_threads: Option<GetThreadReplyRowsRequest>,
     foreign_entities: Option<(Vec<SourceId>, ForeignEntityListQuery)>,
+    /// Narrows the foreign entity leg to matching GitHub pull requests.
+    github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     reminders: Option<GetRemindersRequest<'static>>,
 }
 
@@ -211,8 +218,8 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
     call_record_service: K,
     /// the interface for interacting with CRM (companies)
     crm_service: Crm,
-    /// the interface for interacting with foreign entities
-    foreign_entity_service: F,
+    /// the interface for listing GitHub pull requests
+    github_pull_request_service: F,
     /// the interface for interacting with reminders
     reminders_service: Rem,
     /// Optional captured branch facts supplied by the owning changes domain.
@@ -229,7 +236,7 @@ where
     C: ChannelListService,
     K: CallRecordQueryService,
     Crm: CrmService,
-    F: ForeignEntityService,
+    F: GithubPullRequestListing,
     Rem: RemindersService,
 {
     /// Creates a soup service from its repository and dependent domain services.
@@ -241,7 +248,7 @@ where
         comms_service: C,
         call_record_service: K,
         crm_service: Crm,
-        foreign_entity_service: F,
+        github_pull_request_service: F,
         reminders_service: Rem,
     ) -> Self {
         SoupImpl {
@@ -251,7 +258,7 @@ where
             comms_service,
             call_record_service,
             crm_service,
-            foreign_entity_service,
+            github_pull_request_service,
             reminders_service,
             agent_branches: None,
             favorites: None,
@@ -1065,6 +1072,8 @@ where
                 foreign_entity_sources,
                 foreign_entity_ids.len() as u32,
                 foreign_entity_query,
+                legs.github_pull_request_filter.clone(),
+                SoupSortDirection::Desc,
             ),
             self.handle_reminder_request(reminder_request),
         );
@@ -1174,6 +1183,28 @@ where
                     ))
                 }),
         ))
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn handle_crm_contact_request(
+        &self,
+        req: Option<super::models::contact_listing::GetCrmContactsRequest>,
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
+        let Some(req) = req else {
+            return Ok(Vec::new().into_iter());
+        };
+        let contacts = self
+            .crm_service
+            .list_contacts_for_soup(req.user_id.as_ref(), req.access.as_ref(), req.query)
+            .await
+            .map_err(|_| SoupErr::CrmErr)?;
+        Ok(contacts
+            .into_iter()
+            .map(|contact| {
+                SoupCandidate::plain(SoupItem::CrmContact(SoupCrmContact::from(contact)))
+            })
+            .collect::<Vec<_>>()
+            .into_iter())
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -1287,21 +1318,33 @@ where
         Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
     }
 
-    #[tracing::instrument(err, skip(self, source_ids, query))]
+    #[tracing::instrument(err, skip(self, source_ids, query, github_pull_request_filter))]
     async fn handle_foreign_entity_request(
         &self,
         requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: Option<ForeignEntityListQuery>,
+        github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
+        sort_direction: SoupSortDirection,
     ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let Some(query) = query else {
             return Ok(Either::Left(None.into_iter()));
         };
 
         Ok(Either::Right(
-            self.foreign_entity_service
-                .get_foreign_entities_for_user(requesting_user, source_ids, limit, query)
+            self.github_pull_request_service
+                .list_pull_requests(
+                    requesting_user,
+                    source_ids,
+                    limit,
+                    query,
+                    github_pull_request_filter,
+                    match sort_direction {
+                        SoupSortDirection::Asc => GithubPullRequestSortDirection::Asc,
+                        SoupSortDirection::Desc => GithubPullRequestSortDirection::Desc,
+                    },
+                )
                 .await?
                 .into_iter()
                 .map(|entity| SoupCandidate::plain(foreign_entity_to_soup_item(entity))),
@@ -1575,11 +1618,13 @@ where
         }
 
         // Borrow before email's builder consumes team_receipt.
+        let crm_contact_request = req.build_crm_contact_request(team_receipt.as_ref())?;
         let mut crm_company_request = req.build_crm_company_request(&team_receipt);
         let foreign_entity_source_ids = req.build_foreign_entity_source_ids(team_receipt.as_ref());
         let metadata_source_ids = foreign_entity_source_ids.clone();
         let metadata_user = req.user.to_string();
         let foreign_entity_query = req.build_foreign_entity_query();
+        let github_pull_request_filter = req.build_github_pull_request_filter();
         let email_request = req.build_email_request(team_receipt);
         let comms_request = req.build_comms_request();
         let comms_thread_request = req.build_comms_thread_request();
@@ -1621,12 +1666,15 @@ where
                 let comms_thread_soup_fut = self.handle_comms_thread_request(comms_thread_request);
                 let call_soup_fut = self.handle_call_request(call_request);
                 let crm_company_soup_fut = self.handle_crm_company_request(crm_company_request);
+                let crm_contact_soup_fut = self.handle_crm_contact_request(crm_contact_request);
                 let reminder_soup_fut = self.handle_reminder_request(reminder_request);
                 let foreign_entity_soup_fut = self.handle_foreign_entity_request(
                     Some(req.user.to_string()),
                     foreign_entity_source_ids,
                     limit as u32,
                     foreign_entity_query,
+                    github_pull_request_filter,
+                    sort_direction,
                 );
 
                 let (
@@ -1636,6 +1684,7 @@ where
                     comms_thread_soup,
                     call_soup,
                     crm_company_soup,
+                    crm_contact_soup,
                     reminder_soup,
                     foreign_entity_soup,
                 ) = tokio::join!(
@@ -1645,6 +1694,7 @@ where
                     comms_thread_soup_fut,
                     call_soup_fut,
                     crm_company_soup_fut,
+                    crm_contact_soup_fut,
                     reminder_soup_fut,
                     foreign_entity_soup_fut,
                 );
@@ -1655,6 +1705,7 @@ where
                     .chain(comms_thread_soup?)
                     .chain(call_soup?)
                     .chain(crm_company_soup?)
+                    .chain(crm_contact_soup?)
                     .chain(reminder_soup?)
                     .chain(foreign_entity_soup?)
                     .paginate_on(limit.into(), sort_method)
@@ -1716,6 +1767,7 @@ where
                     comms_threads: comms_thread_request,
                     foreign_entities: foreign_entity_query
                         .map(|query| (foreign_entity_source_ids, query)),
+                    github_pull_request_filter,
                     reminders: reminder_request,
                 };
                 let (candidates, next) = self
@@ -1753,7 +1805,7 @@ where
             SoupOutput::Notified(page) => &mut page.items,
         };
         agent_metadata::enrich(
-            &self.foreign_entity_service,
+            &self.github_pull_request_service,
             self.agent_branches.as_deref(),
             metadata_user,
             metadata_source_ids,
@@ -1773,7 +1825,7 @@ where
     C: ChannelListService,
     K: CallRecordQueryService,
     Crm: CrmService,
-    F: ForeignEntityService,
+    F: GithubPullRequestListing,
     Rem: RemindersService,
 {
     #[tracing::instrument(err, skip(self, req, team_receipt))]

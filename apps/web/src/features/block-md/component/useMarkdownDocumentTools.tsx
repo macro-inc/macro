@@ -11,8 +11,14 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import {
+  enableHistoryComponent,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import ClockCounterClockwise from '@phosphor/clock-counter-clockwise.svg';
+import Copy from '@phosphor/copy.svg';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
@@ -20,12 +26,16 @@ import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useHistory } from '../history/HistoryContext';
 import {
   DispatchAgentButton,
   useDispatchAgentSplitFileActions,
 } from './DispatchAgentMenu';
 import { useMarkdownName } from './MarkdownNameProvider';
-import { useDownloadDocumentAsMarkdownText } from './useMarkdownDocumentDownload';
+import {
+  useCopyDocumentAsMarkdown,
+  useDownloadDocumentAsMarkdownText,
+} from './useMarkdownDocumentDownload';
 
 function useMarkdownShareModal() {
   const { documentId, kind, permissions } = useMarkdownDocument();
@@ -55,8 +65,10 @@ function useMarkdownShareModal() {
 }
 
 export function useMarkdownDocumentTools() {
-  const { documentId, kind } = useMarkdownDocument();
+  const { documentId, kind, element } = useMarkdownDocument();
+  const history = useHistory();
   const { displayName } = useMarkdownName();
+  const copyAsMarkdown = useCopyDocumentAsMarkdown();
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
   const openShare = useMarkdownShareModal();
   const dispatchAgentActions = useDispatchAgentSplitFileActions();
@@ -87,7 +99,12 @@ export function useMarkdownDocumentTools() {
       : []),
     ...(isDocument
       ? ([
-          { ...dispatchAgentActions.copyAsPrompt, group: 'file' as const },
+          {
+            group: 'sharing' as const,
+            label: 'Copy as markdown',
+            icon: Copy,
+            action: copyAsMarkdown,
+          },
         ] satisfies FileOperation[])
       : []),
     {
@@ -124,6 +141,15 @@ export function useMarkdownDocumentTools() {
   ];
 
   const menuTools: BlockTool[] = [
+    {
+      group: 'file',
+      label: 'History',
+      icon: ClockCounterClockwise,
+      condition: () => !isMobile() && isFeatureEnabled(enableHistoryComponent),
+      action: () => history.enter(),
+      focusTarget: () =>
+        element()?.querySelector<HTMLElement>('[data-history-close]') ?? null,
+    },
     {
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,

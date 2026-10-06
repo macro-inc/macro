@@ -100,7 +100,7 @@ it('clears a thread reply when switching to another conversation', () => {
   fireEvent.click(home.getByRole('button', { name: 'agents-team' }));
   fireEvent.click(
     within(screen.getByRole('log')).getAllByRole('button', {
-      name: 'Reply to message',
+      name: 'Reply',
     })[0]
   );
   expect(screen.getByRole('textbox', { name: 'Thread reply' })).toBeTruthy();

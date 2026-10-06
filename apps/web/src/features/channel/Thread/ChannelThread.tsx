@@ -43,6 +43,7 @@ export function ChannelThread(props: ThreadProps) {
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = createThreadRepliesFetchGate({
     threadId: () => props.data().id,
+    replyCount: () => thread().reply_count,
     isExpanded: props.isExpanded,
     isFindBarOpen: props.isFindBarOpen,
     targetThreadId: () => props.targetNavigation?.targetThreadId(),
@@ -188,6 +189,8 @@ export function ChannelThread(props: ThreadProps) {
     props.isReplying() || unifiedReplyBinding() !== undefined;
   const hasInlineReplyInput = () =>
     props.isReplying() && props.inputMode !== 'unified';
+  const rootRailVisible = () =>
+    !props.hideRail && (hasReplies() || hasInlineReplyInput());
   const shouldShowCollapsedIndicator = () =>
     !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
@@ -209,7 +212,11 @@ export function ChannelThread(props: ThreadProps) {
 
   createEffect(
     on(
-      [() => props.targetNavigation?.targetMessageId(), threadRowElement],
+      [
+        () => props.targetNavigation?.targetMessageId(),
+        threadRowElement,
+        () => props.targetNavigation?.requestKey?.(),
+      ],
       ([targetMessageId]) => {
         if (!targetMessageId || targetMessageId !== props.data().id) {
           targetMessageScroller.cancel();
@@ -254,8 +261,9 @@ export function ChannelThread(props: ThreadProps) {
         replyListHandle,
         canScrollToTargetReply,
         props.isExpanded,
+        () => props.targetNavigation?.requestKey?.(),
       ],
-      ([targetReplyId, handle, canScroll, isExpanded]) => {
+      ([targetReplyId, handle, canScroll, isExpanded, requestKey]) => {
         // Untracked: channel-message reconciles must not re-fire scroll.
         const replies =
           targetReplyId && canScroll && handle
@@ -264,6 +272,7 @@ export function ChannelThread(props: ThreadProps) {
               : untrack(displayReplies)
             : [];
         targetReplyNavigation.update({
+          requestKey,
           targetReplyId,
           handle,
           canScroll,
@@ -299,7 +308,7 @@ export function ChannelThread(props: ThreadProps) {
               messages carry no rail. */}
           <div class="relative">
             <Thread.RootRail
-              visible={hasReplies() || hasInlineReplyInput()}
+              visible={rootRailVisible()}
               grouped={props.listMeta?.isGroupedWithPrevious}
             />
             <MarkMessageNotifications
@@ -327,12 +336,15 @@ export function ChannelThread(props: ThreadProps) {
           </div>
           <Show when={hasReplies() || hasInlineReplyInput()}>
             <div class="relative w-full">
-              <Thread.RepliesBridgeRail />
+              <Show when={!props.hideRail}>
+                <Thread.RepliesBridgeRail />
+              </Show>
               {/* Terminal branch: the spine's final curve into the footer
                   button's left edge. Its vertical part starts exactly at the
                   last reply row's bottom (button h-8 + mb-2 + container pb). */}
               <Show
                 when={
+                  !props.hideRail &&
                   !props.monorail &&
                   (shouldShowCollapsedIndicator() || shouldShowReplyButton())
                 }
@@ -360,6 +372,7 @@ export function ChannelThread(props: ThreadProps) {
                       isThreadFocused={isThreadFocused}
                       onSelectReply={selectReply}
                       monorail={props.monorail}
+                      hideRail={props.hideRail}
                       railContinues={
                         hasInlineReplyInput() ||
                         shouldShowCollapsedIndicator() ||
@@ -380,7 +393,7 @@ export function ChannelThread(props: ThreadProps) {
                           composer, so this branch turns at the avatar's
                           center. Once replies exist, it instead joins the
                           composer at its vertical center. */}
-                      <Show when={!props.monorail}>
+                      <Show when={!props.hideRail && !props.monorail}>
                         <div
                           class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
                           style={{

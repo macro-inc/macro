@@ -1,0 +1,2 @@
+# Real-world decks are large binaries; keep them in Git LFS.
+wild/*.pptx filter=lfs diff=lfs merge=lfs -text

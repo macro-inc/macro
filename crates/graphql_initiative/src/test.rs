@@ -12,7 +12,6 @@ use models_permissions::share_permission::{
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-mod access;
 mod soup;
 
 use self::soup::RecordingSoupService;
@@ -111,7 +110,10 @@ impl SoupEntityEdges for TestSoupEdges {
         Ok(None)
     }
 
-    fn agent_session_edges(_bot_id: uuid::Uuid) -> Self::AgentSessionEdges {
+    fn agent_session_edges(
+        _session_id: uuid::Uuid,
+        _bot_id: uuid::Uuid,
+    ) -> Self::AgentSessionEdges {
         TestAgentSessionEdges { available: true }
     }
 
@@ -173,14 +175,6 @@ impl Viewer {
     ) -> async_graphql::Result<GraphqlSoupInitiative<TestSoupEdges>> {
         resolve_initiative(ctx, initiative_id).await
     }
-
-    async fn task_initiative_references(
-        &self,
-        ctx: &Context<'_>,
-        task_ids: Vec<ID>,
-    ) -> async_graphql::Result<Vec<GraphqlTaskInitiativeReference<TestSoupEdges>>> {
-        resolve_task_initiative_references(ctx, self.0.clone(), task_ids).await
-    }
 }
 
 const PROJECT_ID: &str = "00000000-0000-4000-8000-000000000001";
@@ -193,7 +187,6 @@ fn detail() -> InitiativeDetail {
     InitiativeDetail {
         id: InitiativeId::from_uuid(Uuid::parse_str(PROJECT_ID).unwrap()),
         name: "Launch".into(),
-        description_document_id: DescriptionDocumentId::from_uuid(Uuid::from_u128(2)),
         owner_id: user(),
         member_ids: vec![],
         task_ids: vec![],
@@ -210,7 +203,6 @@ fn row() -> InitiativePageRow {
         initiative: InitiativeSummary {
             id: detail.id,
             name: detail.name,
-            description_document_id: detail.description_document_id,
             updated_at: detail.updated_at,
         },
         user_access_level: AccessLevel::Edit,
@@ -268,6 +260,16 @@ impl InitiativeApi for RecordingApi {
             let mut detail = self.current_detail();
             detail.id = InitiativeId::from_uuid(id);
             Ok(detail)
+        })
+    }
+    fn ensure_description_surface(
+        &self,
+        user: MacroUserIdStr<'static>,
+        _id: Uuid,
+    ) -> ApiFuture<'_, ()> {
+        Box::pin(async move {
+            self.record(&user, "ensure_description_surface")?;
+            Ok(())
         })
     }
     fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow> {
@@ -330,56 +332,8 @@ impl InitiativeApi for RecordingApi {
             })
         })
     }
-    fn references(
-        &self,
-        user: MacroUserIdStr<'static>,
-        _ids: Vec<String>,
-    ) -> ApiFuture<'_, TaskInitiativeReferences> {
-        Box::pin(async move {
-            self.record(&user, "references")?;
-            Ok(TaskInitiativeReferences {
-                references: vec![
-                    TaskInitiativeReference::Visible {
-                        task_id: "visible".into(),
-                        initiative: InitiativeReference {
-                            id: detail().id,
-                            name: "Launch".into(),
-                        },
-                    },
-                    TaskInitiativeReference::Unavailable {
-                        task_id: "hidden".into(),
-                    },
-                    TaskInitiativeReference::None {
-                        task_id: "unassigned".into(),
-                    },
-                ],
-            })
-        })
-    }
     fn delete(&self, user: MacroUserIdStr<'static>, _id: Uuid) -> ApiFuture<'_, ()> {
         Box::pin(async move { self.record(&user, "delete") })
-    }
-    fn assign(
-        &self,
-        user: MacroUserIdStr<'static>,
-        _id: Uuid,
-        _ids: Vec<String>,
-    ) -> ApiFuture<'_, AssignTasksResponse> {
-        Box::pin(async move {
-            self.record(&user, "assign")?;
-            Ok(AssignTasksResponse { results: vec![] })
-        })
-    }
-    fn unassign(
-        &self,
-        user: MacroUserIdStr<'static>,
-        _id: Uuid,
-        _task: String,
-    ) -> ApiFuture<'_, ()> {
-        Box::pin(async move { self.record(&user, "unassign") })
-    }
-    fn clear(&self, user: MacroUserIdStr<'static>, _task: String) -> ApiFuture<'_, ()> {
-        Box::pin(async move { self.record(&user, "clear") })
     }
 }
 
@@ -420,11 +374,34 @@ async fn anonymous_queries_and_mutations_never_call_domain() {
     for query in [
         "{ user { id initiative(initiativeId: \"00000000-0000-4000-8000-000000000001\") { id } } }",
         "mutation { createInitiative(input: { name: \"Launch\" }) { id } }",
+        "mutation { ensureInitiativeDescriptionSurface(initiativeId: \"00000000-0000-4000-8000-000000000001\") }",
     ] {
         let response = schema.execute(query).await;
         assert_eq!(response.errors[0].message, "authentication required");
     }
     assert!(api.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn ensure_description_surface_returns_the_project_id_as_the_surface_id() {
+    let api = Arc::new(RecordingApi::default());
+    let response = schema(api.clone())
+        .execute(
+            Request::new(format!(
+                "mutation {{ ensureInitiativeDescriptionSurface(initiativeId: \"{PROJECT_ID}\") }}"
+            ))
+            .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["ensureInitiativeDescriptionSurface"],
+        PROJECT_ID
+    );
+    assert_eq!(
+        *api.calls.lock().unwrap(),
+        vec!["ensure_description_surface".to_string()]
+    );
 }
 
 #[tokio::test]
@@ -535,33 +512,6 @@ async fn detail_fields_load_only_when_selected_and_share_one_domain_read() {
 }
 
 #[tokio::test]
-async fn task_references_use_the_canonical_soup_entity_and_hide_inaccessible_projects() {
-    let api = Arc::new(RecordingApi::default());
-    let replica = RecordingSoupService::replica();
-    let primary = RecordingSoupService::primary(api.clone());
-    let response = schema_with_readers(api.clone(), replica.clone(), primary.clone()).execute(Request::new(
-        "{ user { taskInitiativeReferences(taskIds: [\"visible\",\"hidden\",\"unassigned\"]) { taskId state initiative { __typename id displayName metadata { ownerId } } } } }"
-    ).data(user())).await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    let references = &data["user"]["taskInitiativeReferences"];
-    assert_eq!(references[0]["state"], "VISIBLE");
-    assert_eq!(references[1]["state"], "UNAVAILABLE");
-    assert_eq!(references[2]["state"], "NONE");
-    assert_eq!(
-        references[0]["initiative"]["__typename"],
-        "GraphqlSoupInitiative"
-    );
-    assert_eq!(references[0]["initiative"]["id"], PROJECT_ID);
-    assert_eq!(references[0]["initiative"]["displayName"], "Launch");
-    assert!(references[1]["initiative"].is_null());
-    assert!(references[2]["initiative"].is_null());
-    assert_eq!(*api.calls.lock().unwrap(), ["references"]);
-    assert!(replica.calls.lock().unwrap().is_empty());
-    assert_eq!(primary.calls.lock().unwrap().len(), 1);
-}
-
-#[tokio::test]
 async fn mutation_replies_use_primary_state_and_preserve_viewed_metadata() {
     let api = Arc::new(RecordingApi::default());
     let replica = RecordingSoupService::replica();
@@ -632,7 +582,7 @@ async fn newly_created_project_uses_primary_hydration_before_replica_catches_up(
 }
 
 #[tokio::test]
-async fn missing_or_revoked_project_is_not_exposed_by_detail_or_reference() {
+async fn missing_or_revoked_project_is_not_exposed_by_detail() {
     let api = Arc::new(RecordingApi::default());
     let replica = RecordingSoupService::replica();
     let primary = RecordingSoupService::empty();
@@ -647,32 +597,9 @@ async fn missing_or_revoked_project_is_not_exposed_by_detail_or_reference() {
         .await;
     assert_eq!(response.errors[0].message, "initiative not found");
     assert!(api.calls.lock().unwrap().is_empty());
-    primary.calls.lock().unwrap().clear();
-
-    let response = schema.execute(Request::new(
-        "{ user { taskInitiativeReferences(taskIds: [\"visible\"]) { state initiative { id displayName } } } }"
-    ).data(user())).await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    let reference = &data["user"]["taskInitiativeReferences"][0];
-    assert!(reference["initiative"].is_null());
-    assert_eq!(reference["state"], "UNAVAILABLE");
-    assert_eq!(primary.calls.lock().unwrap().len(), 1);
     assert!(
         replica.calls.lock().unwrap().is_empty(),
         "revoked primary access must not fall back to stale replica data"
-    );
-
-    let response = schema
-        .execute(
-            Request::new("{ user { taskInitiativeReferences(taskIds: [\"visible\"]) { state } } }")
-                .data(user()),
-        )
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(
-        response.data.into_json().unwrap()["user"]["taskInitiativeReferences"][0]["state"],
-        "UNAVAILABLE"
     );
 }
 

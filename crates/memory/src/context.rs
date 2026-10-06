@@ -18,6 +18,7 @@ pub async fn build_tool_service_context(
         pool,
         event_task_tracker,
         config.enable_ai_usage_enforcement,
+        config.ai_pricing,
     )
     .await
 }

@@ -9,11 +9,10 @@ import {
   ProductProse,
 } from '../../features/marketing/components/product/ProductPage';
 import {
-  TaskAgentDemo,
-  TaskAttentionDemo,
-  TaskContextDemo,
-  TaskFromChannelDemo,
+  TaskAgentChannelDemo,
+  TaskFromChecklistDemo,
   TaskFromMessageDemo,
+  TaskGithubDemo,
 } from '../../features/marketing/components/tasks/TaskStories';
 import { WorkspaceDesktopDemo } from '../../features/marketing/components/WorkspaceDesktopDemo';
 import { setPageSeo } from '../utils/utilSeo';
@@ -23,63 +22,58 @@ const tasksFaq = [
     q: 'How is Macro Tasks different from Linear?',
     a: (
       <>
-        Macro keeps status, priority, assignees, and a keyboard-first workflow
-        alongside email, chat, and documents. Tasks stay connected to the
-        conversations behind them. Read the{' '}
-        <a href="/posts/linear-alternative">Macro and Linear comparison</a>.
+        We used Linear before we built this, so the basics will feel familiar:
+        keyboard shortcuts, statuses, priorities, and fast lists. The difference
+        is that tasks live next to your email, chat, and docs. You make them
+        from the conversation they came from, and they stay linked to it. Read
+        our <a href="/posts/linear-alternative">Macro vs. Linear comparison</a>.
       </>
     ),
   },
   {
     q: 'Can I turn a message or email into a task?',
-    a: 'Yes. Create a task from a chat message or email and keep it linked to the original conversation. You can also mention the task in documents and channels.',
+    a: 'Yes. Hover a message and click Task, or open an email and click Create task in the top right. The task links back to the original so whoever picks it up can read the whole thing.',
   },
   {
-    q: 'How do I organize my tasks?',
-    a: 'Use My Tasks, All Tasks, and Created by me to find the work you need. Set status, priority, and assignees, add tags, and search the task list.',
+    q: 'How do I keep track of my tasks?',
+    a: 'My Tasks shows what’s assigned to you, All Tasks shows everything your team can see, and Created by me shows what you’ve asked other people for. New assignments also land in Home next to your email and messages, so you don’t have to go looking.',
   },
   {
     q: 'Can agents work on tasks?',
     a: (
       <>
-        Assign work to an agent in a conversation. Agents can use the available
-        workspace context, update the task, and report back. Coding agents can
-        work on a fix and open a pull request. See{' '}
+        Yes. Ask @Macro in a channel to create or update tasks, or hand a task
+        to a coding agent like Claude Code or Cursor. When a pull request
+        references the task, the status updates on its own. See{' '}
         <a href="/agents">agents in Macro</a>.
       </>
     ),
   },
   {
-    q: 'Does Macro integrate with GitHub?',
+    q: 'How does the GitHub integration work?',
     a: (
       <>
-        Yes. Link tasks to branches and pull requests to track the code
-        alongside the work. Opening a linked pull request moves the task to In
-        Review; merging it completes the task. See the{' '}
-        <a href="/github">GitHub integration</a>.
+        Install the GitHub app and put the task ID in a branch name, PR title,
+        or PR description. Opening the PR moves the task to In Review, merging
+        it marks it Completed, and closing it without merging moves it back to
+        Not Started. More on <a href="/github">GitHub in Macro</a>.
       </>
     ),
   },
   {
-    q: 'Can people outside engineering use it?',
-    a: 'Yes. Tasks work for launch plans, customer follow-ups, and other team work. Teammates can follow progress alongside their email, chat, and documents.',
+    q: 'Is it only for engineering teams?',
+    a: 'No. We run launches, customer follow-ups, and plenty of non-engineering work out of it. Anything with an owner and a due date works.',
   },
   {
     q: 'Is our workspace public because Macro is open source?',
-    a: (
-      <>
-        No. Open source makes the application code available to inspect. It does
-        not make your tasks, messages, or documents public. Access to workspace
-        content follows its sharing permissions.
-      </>
-    ),
+    a: 'No. Our code is public. Your tasks, messages, and docs are not, and they follow your sharing settings.',
   },
   {
-    q: 'Is there a free plan?',
+    q: 'Can I join as a Guest for free?',
     a: (
       <>
-        Yes. Tasks are included alongside email, chat, documents, and AI. See{' '}
-        <a href="/pricing">pricing</a> for current usage limits.
+        Yes. Guest access includes tasks with email, chat, docs, and agents.
+        See <a href="/pricing">pricing</a> for the current limits.
       </>
     ),
   },
@@ -89,24 +83,24 @@ export function RouteTasks() {
   setPageSeo({
     title: 'Macro Tasks — Task management that keeps up with your team',
     description:
-      'Track tasks alongside your email, chat, and documents. Create work from conversations, assign people and agents, and follow progress through to a pull request.',
+      'Make tasks from messages, emails, and doc checklists in one click. Assign people or agents, and let GitHub pull requests update the status for you.',
     path: '/tasks',
   });
   return (
     <ProductPage>
       <ProductHero
         product="Tasks"
-        title={['Tasks for your team', 'and your agents.']}
+        title={['Task tracking without', 'the busywork.']}
         description={[
-          'Create tasks from messages and email.',
-          'Assign an owner. Let agents update the work.',
+          'Turn any message, email, or to-do into a task in one click.',
+          'It stays linked to the conversation it came from.',
         ]}
         cta="tasks_hero_get_started"
       />
       <WorkspaceDesktopDemo
         view="tasks"
         label="Explore Macro Tasks"
-        caption="Open a task, change its owner, or add a comment. This sample stays local."
+        caption="A sample workspace. Open a task, change the owner, leave a comment."
       />
       <section
         class="tasks-founder-letter"
@@ -124,18 +118,18 @@ export function RouteTasks() {
         </p>
         <p>
           Macro Tasks fixes this by tightly co-locating tasks with your team
-          chat. Tickets are so easy to create from task messages, and their
-          status gets updated automatically so they'll actually get closed.
-          After two years of dogfooding it's finally working for us. We hope you
-          like it too!
+          chat. Tickets are so easy to create from messages, and their status
+          gets updated automatically so they'll actually get closed. After two
+          years of dogfooding it's finally working for us. We hope you like it
+          too!
         </p>
         <footer>— Jacob Beckerman, CEO and founder of Macro</footer>
       </section>
       <FeaturePageSection
-        id="from-conversation"
-        title="Turn a message into a task."
+        id="from-a-message"
+        title="Any message can become a task."
         description={
-          'Create a task from a message or email.\nIts source stays linked in both directions.'
+          'Hover a message in any channel and click Task.\nThe task links back to the thread, so nobody has to ask what happened.'
         }
       >
         <div class="feature-page-visual">
@@ -143,101 +137,86 @@ export function RouteTasks() {
         </div>
         <ProductProse>
           <p>
-            A task can start from a chat message, email, or document checklist.
-            References connect it to the original request, and backlinks let you
-            navigate back. For a new task, press C then T. Add a title,
-            description, and assignee from the keyboard.
+            This is the one we use the most. Someone flags a bug in a channel,
+            you hover the message and click Task. Macro fills in the title from
+            the message, assigns whoever was @mentioned, and links the task to
+            the thread. Whoever picks it up can read the replies instead of
+            pinging you for the backstory. To start one from scratch, press C
+            then T from anywhere in Macro.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="tasks-in-channels"
-        title="Send a task right in the channel."
+        id="ask-macro"
+        title="Or just ask @Macro."
         description={
-          'Write the request, switch on Send as task, and pick an assignee.\nThe task appears in the conversation where your team is working.'
+          'Mention the Macro agent and say who’s doing what.\nOne message turns into as many assigned tasks as you need.'
         }
       >
         <div class="feature-page-visual">
-          <TaskFromChannelDemo />
+          <TaskAgentChannelDemo />
         </div>
         <ProductProse>
           <p>
-            Send a channel message as a task to create the brief and share it in
-            one action. Choose an assignee before sending. Teammates can open
-            the task from its message to change the status, add a checklist, or
-            discuss the request. The task links back to the channel, and the
-            assignee receives it in their inbox.
+            When a conversation ends with three action items, nobody wants to
+            file three tickets. Tag @Macro, tell it who owns what, and it
+            creates the tasks and replies with links. Each link shows the task’s
+            status, priority, and owner right in the channel, so you can see
+            where things stand without opening a task tracker.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="task-context"
-        title="An editable brief with real references."
+        id="from-docs-and-email"
+        title="Turn to-dos into tasks."
         description={
-          'Write a Markdown brief and checklist.\n@mention the specification, email, or call that explains the request.'
+          'Select a checklist in any doc and click Tasks. Every line becomes a real task.\nEmails get a Create task button too.'
         }
       >
         <div class="feature-page-visual">
-          <TaskContextDemo />
+          <TaskFromChecklistDemo />
         </div>
         <ProductProse>
           <p>
-            Task descriptions support Markdown and references to workspace
-            items. Link the specification, source email, or meeting recording
-            directly in the brief. Each task has a discussion for questions and
-            updates. Agents can read the brief, follow its references, and
-            update the description.
+            Meeting notes are where action items go to die. In Macro, select the
+            checkboxes in a doc and click Tasks. Each line becomes a task you
+            can assign, and the doc keeps a live link to it, so you can see
+            what’s done without leaving the notes. Email works the same way:
+            open a thread, click Create task, and the task links back to the
+            email.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="task-agents"
-        title="Agents can update the task."
+        id="github"
+        title="Closes itself when the PR merges."
         description={
-          'Ask an agent to revise the brief or turn meeting notes into a checklist.\nIts edits appear in the task your team uses.'
+          'Put the task ID in a branch or pull request.\nOpening the PR moves the task to In Review. Merging it marks it done.'
         }
       >
         <div class="feature-page-visual">
-          <TaskAgentDemo />
+          <TaskGithubDemo />
         </div>
         <ProductProse>
           <p>
-            Task tools let agents create work and update descriptions, status,
-            priority, and assignees. Ask for a specific change and review it in
-            the task. Coding agents can implement a task and open a linked pull
-            request. GitHub events move the task into review and mark it
-            complete when the code is merged.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="task-list"
-        title="My Tasks. All Tasks. Created by me."
-        description={
-          'Find your assigned work, browse the team’s tasks, or follow your requests.\nSearch by title and open the brief from the list.'
-        }
-      >
-        <div class="feature-page-visual">
-          <TaskAttentionDemo />
-        </div>
-        <ProductProse>
-          <p>
-            My Tasks shows your assignments. All Tasks shows the work you can
-            access, and Created by me tracks the requests you made. Task
-            assignments also arrive in the unified inbox, alongside emails,
-            messages, and agent responses. Open one to read the brief or update
-            its properties.
+            Nobody on our team updates ticket status by hand anymore. When a
+            pull request references a task, Macro links the two and shows the PR
+            on the task. Opening it moves the task to In Review, merging it
+            marks the task Completed, and closing it without merging puts it
+            back in Not Started. It works the same when Claude Code or Cursor
+            opens the PR, so the board stays accurate even when an agent did the
+            work.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageFaq
         id="tasks-faq-title"
-        eyebrow="Creation, ownership, and automation"
-        title="How Macro Tasks work."
+        title="Questions about Macro Tasks"
         introduction={
           <p>
-            Keyboard-first tasks, bidirectional references, agent tools, and
-            GitHub status updates.
+            If you’re coming from Linear, Jira, or Notion, most of what you know
+            carries over. The difference is where tasks come from and how they
+            stay up to date.
           </p>
         }
         items={tasksFaq}

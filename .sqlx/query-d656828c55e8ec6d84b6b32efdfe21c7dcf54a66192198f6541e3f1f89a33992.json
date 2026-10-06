@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT checkpoint_part = part_count AND checkpoint_record = 0 AS \"complete!\"\n                   FROM slack_import_conversation WHERE job_id = $1 AND slack_channel_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "complete!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d656828c55e8ec6d84b6b32efdfe21c7dcf54a66192198f6541e3f1f89a33992"
+}

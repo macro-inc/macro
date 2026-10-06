@@ -29,6 +29,9 @@ vi.mock(
   '@app/features/block-spreadsheet/queries/create-spreadsheet',
   () => ({})
 );
+vi.mock('@app/features/block-ai/queries/create-ai', () => ({}));
+vi.mock('@app/features/block-psd/queries/create-psd', () => ({}));
+vi.mock('@app/features/block-fig/queries/create-fig', () => ({}));
 vi.mock('@app/features/block-spreadsheet/queries/spreadsheet-access', () => ({
   isSpreadsheetEnabledForCurrentUser: () => false,
 }));
@@ -46,7 +49,6 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   isFeatureEnabled: (flag: { key: string }) =>
     flag.key === 'enable-projects' && host.projectFlag() === true,
 }));
-vi.mock('@block-automation/component', () => ({}));
 vi.mock('@block-md/observability', () => ({}));
 vi.mock('@channel/CreateChannelModal', () => ({}));
 vi.mock('@core/component/AI/component/input/ChatInput', () => ({}));

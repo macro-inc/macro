@@ -1,5 +1,6 @@
+import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import type { CacheHost } from '@graphql-cache/host/types';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
   createGraphqlBulkSaveEntityPropertiesMutation,
@@ -9,23 +10,17 @@ import { propertiesKeys } from '@queries/properties/keys';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type { initiativeClient } from '@service-storage/initiative';
-import {
-  type QueryClient,
-  useIsMutating,
-  useMutation,
-  useQuery,
-} from '@tanstack/solid-query';
+import { type QueryClient, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
-import type { ProjectDetail, TaskProjectReference } from '../core/project';
-import { createProjectTaskMutation } from './create-project-task';
+import { createProjectMutation } from './create-project';
 import { projectKeys } from './keys';
 import { projectDetailQueryOptions } from './project-identity';
-import { toProjectDetail } from './project-model';
 import { projectDefinitionProperties } from './project-properties';
 import { createProjectSoupSource } from './project-soup';
+import { TASK_PROJECT_PROPERTY, taskProjectValue } from './task-project';
 
 type ProjectCommands = ReturnType<ProjectsContext['createCommands']>;
 
@@ -34,10 +29,9 @@ const accessLost = (error: unknown) =>
     thrownResultErrorHasCode(error, code)
   );
 
-/** GraphQL Soup lists projects and holds the optimistic rows of their tasks. */
+/** GraphQL Soup lists projects. */
 export type ProjectSoupTransport = {
   client(): Client;
-  cacheHost(): CacheHost | undefined;
 };
 
 /** Transport and cache mechanics stay outside the feature's reactive consumers. */
@@ -80,17 +74,12 @@ export function createProjectSources(
     },
     createProjectSource(id) {
       const readEnabled = createReadGate();
-      const creating = useIsMutating(
-        () => ({ mutationKey: projectKeys.createTask._def }),
-        () => cache
-      );
       const query = useQuery(
         () => {
           const projectId = id();
           return {
             ...projectDetailQueryOptions(client, userId(), projectId),
-            enabled:
-              readEnabled() && Boolean(userId() && projectId) && !creating(),
+            enabled: readEnabled() && Boolean(userId() && projectId),
           };
         },
         () => cache
@@ -112,102 +101,28 @@ export function createProjectSources(
         },
       };
     },
-    createReferencesSource(ids) {
-      const readEnabled = createReadGate();
-      const creating = useIsMutating(
-        () => ({ mutationKey: projectKeys.createTask._def }),
-        () => cache
-      );
-      const query = useQuery(
-        () => {
-          const taskIds = [...new Set(ids())].sort();
-          return {
-            queryKey: projectKeys.taskReferences(userId(), taskIds).queryKey,
-            enabled:
-              readEnabled() &&
-              Boolean(userId() && taskIds.length) &&
-              !creating(),
-            initialData: () => {
-              if (!creating()) return undefined;
-              const projects = cache.getQueriesData<{
-                project: ProjectDetail;
-              }>({ queryKey: projectKeys.detail._def });
-              const references = new Map<string, TaskProjectReference>();
-              for (const taskId of taskIds) {
-                const project = projects.find(([, data]) =>
-                  data?.project.taskIds.includes(taskId)
-                )?.[1]?.project;
-                if (!project) return undefined;
-                references.set(taskId, {
-                  state: 'visible',
-                  id: project.id,
-                  name: project.name,
-                });
-              }
-              return references;
-            },
-            initialDataUpdatedAt: 0,
-            placeholderData: (previous) => previous,
-            queryFn: async ({ signal }) => {
-              const references = new Map<string, TaskProjectReference>();
-              for (let offset = 0; offset < taskIds.length; offset += 100) {
-                const page = await throwOnErr(() =>
-                  client.taskReferences(
-                    taskIds.slice(offset, offset + 100),
-                    signal
-                  )
-                );
-                for (const reference of page.references) {
-                  references.set(
-                    reference.taskId,
-                    reference.state === 'visible' && reference.initiative
-                      ? { state: 'visible', ...reference.initiative }
-                      : {
-                          state:
-                            reference.state === 'none' ? 'none' : 'unavailable',
-                        }
-                  );
-                }
-              }
-              return references;
-            },
-            staleTime: 30_000,
-            refetchInterval: 30_000,
-            refetchOnWindowFocus: true,
-          };
-        },
-        () => cache
-      );
-      return {
-        references: () =>
-          !readEnabled() || query.isPending || accessLost(query.error)
-            ? new Map()
-            : (query.data ?? new Map()),
-        loading: () => readEnabled() && query.isPending,
-        error: () => (readEnabled() ? (query.error ?? undefined) : undefined),
-      };
-    },
     createCommands() {
-      const createTask = createProjectTaskMutation(
-        client,
-        soup.cacheHost,
-        cache,
-        userId,
-        async () => {
-          await Promise.all([
-            refresh(),
-            cache.invalidateQueries({ queryKey: soupKeys._def }),
-          ]);
-        }
-      );
-      const create = useMutation(
-        () => ({
-          mutationFn: async (input: { name: string; shareWithTeam: boolean }) =>
-            toProjectDetail(await throwOnErr(() => client.create(input))),
-          onSuccess: refresh,
-        }),
-        () => cache
-      );
+      // A task joins a project through its Project property, set at creation.
+      // The composer starts in the project, so keep a changed or cleared value.
+      const createTask: ProjectCommands['createTask'] = (
+        projectId,
+        title,
+        content,
+        properties,
+        ...rest
+      ) =>
+        createTaskWithProperties(
+          title,
+          content,
+          properties.some(([id]) => id === SYSTEM_PROPERTY_IDS.PROJECT)
+            ? properties
+            : [
+                ...properties,
+                [SYSTEM_PROPERTY_IDS.PROJECT, taskProjectValue(projectId)],
+              ],
+          ...rest
+        );
+      const create = createProjectMutation(client, cache, userId);
       const update = useMutation(
         () => ({
           mutationFn: ({
@@ -262,45 +177,45 @@ export function createProjectSources(
           ]);
         },
       });
+      const taskProject = createGraphqlBulkSaveEntityPropertiesMutation();
       const assign = useMutation(
         () => ({
-          mutationFn: async ({
+          mutationFn: ({
             projectId,
             taskIds,
           }: {
             projectId?: string;
             taskIds: readonly string[];
-          }) => {
-            return assignProjectTasks(
-              {
-                assign: async (projectId, batch) => {
-                  const response = await throwOnErr(() =>
-                    client.assignTasks(projectId, { taskIds: batch })
-                  );
-                  return response.results.map((result) => ({
-                    taskId: result.taskId,
-                    error:
-                      result.status === 'notATask'
-                        ? 'This item is not a task.'
-                        : result.status === 'notFound'
-                          ? 'Task no longer exists.'
-                          : result.status === 'skippedNoPermission'
-                            ? 'You need edit access to this task.'
-                            : undefined,
-                  }));
-                },
-                clear: async (taskId) => {
-                  await throwOnErr(() => client.removeTask(taskId));
-                },
+          }) =>
+            assignProjectTasks(
+              async (taskId, projectId) => {
+                const result = await taskProject.mutateAsync({
+                  properties: [
+                    {
+                      entityType: 'TASK',
+                      entityId: taskId,
+                      property: TASK_PROJECT_PROPERTY,
+                      apiValues: taskProjectValue(projectId),
+                    },
+                  ],
+                });
+                if (result.error) throw result.error;
               },
               projectId,
               taskIds
-            );
-          },
-          onSettled: async () => {
+            ),
+          onSettled: async (_results, _error, { taskIds }) => {
             await Promise.all([
               refresh(),
               cache.invalidateQueries({ queryKey: soupKeys._def }),
+              ...taskIds.map((entityId) =>
+                cache.invalidateQueries({
+                  queryKey: propertiesKeys.entity({
+                    entityType: 'TASK',
+                    entityId,
+                  }).queryKey,
+                })
+              ),
             ]);
           },
         }),

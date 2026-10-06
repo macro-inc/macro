@@ -71,6 +71,8 @@ function getEntityTypePluralLabel(
       return 'chats';
     case 'COMPANY':
       return 'companies';
+    case 'CONTACT':
+      return 'contacts';
     case 'THREAD':
       return 'emails';
     case 'TASK':
@@ -215,11 +217,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       return emails().map(threadMapper);
     }
 
-    // For COMPANY type, return empty (not in quickAccess)
-    if (specificEntityType === 'COMPANY') {
-      return [];
-    }
-
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
     const additionalUsers =
@@ -285,7 +282,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const filteredEntities = createMemo(() => {
     const term = searchTerm();
-    const allEntities = entities();
+    const excludedIds = props.config.excludedIds?.();
+    const allEntities = entities().filter(
+      (entity) => !excludedIds?.has(entity.id)
+    );
     const userId = currentUserId();
 
     // List is unvirtualized — revisit if these caps grow significantly.
@@ -316,6 +316,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (needsEmailSearch() && term) {
       const localIds = new Set(localResults.map((e) => e.id));
       const serverResults = serverEmails()
+        .filter((entity) => !excludedIds?.has(entity.id))
         .filter((e) => !localIds.has(e.id))
         .filter(excludeFilter);
       return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);

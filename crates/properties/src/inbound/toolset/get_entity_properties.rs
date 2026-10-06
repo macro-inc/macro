@@ -35,6 +35,7 @@ pub enum ToolEntityType {
     Call,
     User,
     Company,
+    Contact,
 }
 
 impl From<ToolEntityType> for EntityType {
@@ -50,6 +51,7 @@ impl From<ToolEntityType> for EntityType {
             ToolEntityType::Call => EntityType::CallRecord,
             ToolEntityType::User => EntityType::User,
             ToolEntityType::Company => EntityType::Company,
+            ToolEntityType::Contact => EntityType::Contact,
         }
     }
 }
@@ -261,7 +263,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
         .then_some(match info.owner {
             PropertyOwner::User { .. } => Some(TagScope::Personal),
             PropertyOwner::Team { .. } => Some(TagScope::Team),
-            PropertyOwner::System => None,
+            PropertyOwner::Database { .. } | PropertyOwner::System => None,
         })
         .flatten();
 

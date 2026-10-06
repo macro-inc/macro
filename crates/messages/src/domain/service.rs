@@ -187,7 +187,32 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if let Some(id) = input.id {
             validate_client_id(id, chrono::Utc::now())?;
         }
-        self.post_validated(access, input).await
+        let parent = parent_from_receipt(&access)?;
+        if !matches!(parent, MessageParent::Call(_)) {
+            return self.post_validated(access, input).await;
+        }
+        let Some(client_message_id) = input.id else {
+            return self.post_validated(access, input).await;
+        };
+        let actor = actor_from_receipt(&access, &parent)?;
+        self.ensure_parent(&parent).await?;
+        // The first call message uses the call ID, so its submitted ID must be
+        // resolved separately. Replays return persisted content without delivery.
+        if let Some(message) = self
+            .repo
+            .get_by_client_message_id(&parent, &actor, client_message_id)
+            .await?
+        {
+            return Ok(message);
+        }
+        match self.post_validated(access, input).await {
+            Err(MessageError::Conflict) => self
+                .repo
+                .get_by_client_message_id(&parent, &actor, client_message_id)
+                .await?
+                .ok_or(MessageError::Conflict),
+            result => result,
+        }
     }
 
     /// Post a trusted server event once, including after long broker delays.
@@ -234,29 +259,41 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             input.mentions = self.mentions.extract(&input.content).await?;
         }
         validate_post(&parent, &input)?;
-        if matches!(input.anchor, Some(NewThreadAnchor::Spreadsheet { .. }))
+        if let Some((file_type, error)) = input.anchor.as_ref().and_then(required_file_type)
             && self
                 .repo
                 .document_file_type(&parent.entity_id())
                 .await?
                 .as_deref()
-                != Some("spreadsheet")
+                != Some(file_type)
         {
-            return Err(MessageError::Invalid(
-                "spreadsheet anchors require a native spreadsheet",
-            ));
+            return Err(MessageError::Invalid(error));
         }
         self.validate_references(&access, &input.mentions, &input.attachments)
             .await?;
-        if let Some(root) = input.thread_id {
-            self.active_thread(&parent, root).await?;
-        }
+        let canonical_root_id = match parent {
+            MessageParent::Call(call_id) => {
+                if input.thread_id.is_some_and(|root| root != call_id) {
+                    return Err(MessageError::Invalid(
+                        "call messages belong to the call thread",
+                    ));
+                }
+                Some(call_id)
+            }
+            _ => {
+                if let Some(root) = input.thread_id {
+                    self.active_thread(&parent, root).await?;
+                }
+                None
+            }
+        };
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
         let message = self
             .repo
             .create(CreateMessage {
+                canonical_root_id,
                 parent: parent.clone(),
                 actor: actor.clone(),
                 triggered_by: access
@@ -785,6 +822,7 @@ fn parent_from_receipt<P: RequiredPermission>(
         EntityType::Initiative => "initiative",
         EntityType::CrmCompany => "crm_company",
         EntityType::CrmContact => "crm_contact",
+        EntityType::Call => "call",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)
@@ -840,7 +878,44 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
     {
         return Err(MessageError::Invalid("invalid PDF comment geometry"));
     }
+    if let Some(NewThreadAnchor::Fig {
+        page_id,
+        node_id,
+        x,
+        y,
+    }) = &input.anchor
+        && (!valid_fig_anchor_id(page_id)
+            || !node_id.as_deref().is_none_or(valid_fig_anchor_id)
+            || !x.is_finite()
+            || !y.is_finite())
+    {
+        return Err(MessageError::Invalid("invalid design comment position"));
+    }
     Ok(())
+}
+
+/// Longest page or layer id a design anchor may carry. Figma ids are short
+/// (`12:34`, or a `;`-joined path for a layer inside nested instances).
+const FIG_ANCHOR_ID_LIMIT: usize = 512;
+
+/// The document file type an anchor kind belongs to, with the error for any
+/// other document. Markdown and PDF anchors are tied to their documents by
+/// the annotations and marks they name instead.
+fn required_file_type(anchor: &NewThreadAnchor) -> Option<(&'static str, &'static str)> {
+    match anchor {
+        NewThreadAnchor::Spreadsheet { .. } => Some((
+            "spreadsheet",
+            "spreadsheet anchors require a native spreadsheet",
+        )),
+        NewThreadAnchor::Fig { .. } => Some(("fig", "fig anchors require a design")),
+        NewThreadAnchor::Markdown { .. }
+        | NewThreadAnchor::PdfHighlight { .. }
+        | NewThreadAnchor::PdfPlaceable { .. } => None,
+    }
+}
+
+fn valid_fig_anchor_id(id: &str) -> bool {
+    !id.trim().is_empty() && id.len() <= FIG_ANCHOR_ID_LIMIT
 }
 
 fn valid_spreadsheet_range(range: &str) -> bool {

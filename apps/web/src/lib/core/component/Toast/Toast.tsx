@@ -798,22 +798,6 @@ function custom(
   return toastId;
 }
 
-// ─── upload helper (kept for backwards compat) ───────────────────────────────
-
-export function createUploadToast(message: string) {
-  return toaster.show(
-    (props) => (
-      <ToastContent
-        toastId={props.toastId}
-        toastType={ToastType.LOADING}
-        message={message}
-        persistent={true}
-      />
-    ),
-    { region: 'stable-toast' }
-  );
-}
-
 // ─── public API ──────────────────────────────────────────────────────────────
 
 export const toast = {

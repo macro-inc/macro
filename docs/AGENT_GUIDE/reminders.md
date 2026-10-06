@@ -6,6 +6,40 @@ controls; reminder creation is a real hosted-data mutation, so use request
 interception when checking failures and cancel any draft used only for visual
 inspection.
 
+## One collection, independent completion and schedule
+
+The Reminders workspace is one continuous list, without Active/Scheduled/Done
+tabs. Due reminders come first, then upcoming schedules, then completed history;
+ordering applies before pagination. An old saved tab opens the unified view.
+Completion is acknowledgment of an occurrence: a done recurring reminder can
+still have a future schedule. Its quiet completed check and clock appear together.
+Hover/focus reveals the native undo action; incomplete rows reveal Mark done.
+Touch keeps these actions visible. Neither control uses a filled status pill.
+Tab can focus completion and clock buttons; Enter activates that button, while
+Enter on the list row still opens its entity.
+Marking done keeps the row in the unfiltered collection. The explicit Completion
+filter can limit the collection to Done or Not done. These choices are exclusive;
+selecting the active choice again or using Clear all restores the full collection.
+
+A persistent clock beside the row metadata shows a compact exact date/time,
+human-readable repeat rule, and relevant email condition on hover or keyboard
+focus. A short timezone appears only for a foreign zone or ambiguous local hour;
+raw cron and IANA zone names never appear in the summary. Custom schedules show
+the actual next occurrence when known, without guessing a cadence. Click or tap it to
+edit using the existing reminder form. It remains available when row-hover
+actions or notification metadata are visible and on narrow/touch layouts. Paused
+and due tooltips describe those states without claiming a future firing or
+successful delivery. Completed one-shot reminders have no scheduled clock.
+
+An email-follow-up mirror's completed control opens its owning email composer
+to schedule again; it must not call generic mark-not-done. Its completion toast
+does not offer generic Undo, because the server rejects that operation.
+
+For verification, include a done recurring reminder, due and completed one-shots,
+a paused schedule, and a long recurrence. Verify hover/focus tooltips, editor
+dismissal focus, retained rows after completion, and narrow notification rows.
+Collection reads are paginated and refreshed in bulk, with no per-row polling.
+
 ## Create or edit a reminder
 
 **New reminder** opens **Remind me about…**, an entity picker with recent items.
@@ -16,8 +50,8 @@ selecting a task/document opens a time-first form with its title and icon.
 selection. **Write a reminder instead** opens the freeform form, where
 **Reminder description** is required. The **When** field accepts date language such as
 `tomorrow 9am`, `in 30 minutes`, weekdays, and explicit dates. The resolved
-weekday, date, time, and timezone appear in the **Scheduled:** preview before
-saving.
+date and time appear in the **Scheduled:** preview before saving. The
+preview includes a timezone only when it is needed to interpret that time.
 
 Quick choices are **In 30m**, **Later today** (only before 5 PM), **Tomorrow**,
 **Next week**, and **Custom**. Each choice names its resolved time. Custom reveals
@@ -95,3 +129,42 @@ ID. Unlike generic creation, retrying the same email request cannot duplicate
 it. For failure verification, intercept that endpoint and verify the time and
 condition remain, no client archive request is sent, and no navigation occurs
 before the server confirms the operation.
+
+## Email → Reminders
+
+With reminders enabled, **Reminders** appears beside **Scheduled** in Email's
+sidebar and mobile view selector. Scheduled still lists outgoing send-later
+messages. Email Reminders lists the original conversations with pending reminder
+work in the selected inboxes, ordered by nearest reminder occurrence. Multiple
+reminders on one conversation produce one email row; **+N** beside its clock
+indicates additional reminders. Opening the row opens its original conversation.
+
+Email archive status does not determine reminder membership. A snoozed email is
+already archived and remains here while its follow-up is pending; returned
+follow-ups remain until their reminder occurrence is dealt with. Cancelled or
+removed follow-ups disappear. Read, Done, Calendar, Tags and attachment filters
+apply to the original conversation before pagination. Text search is unavailable
+in this view; entering or leaving clears its saved text search. Back/forward and
+reload retain the Email tab and selected inbox scope.
+
+Clocks in this dedicated tab use the private reminder metadata returned with
+its collection pages; native email hydration supplies the original row content.
+Other Email and Soup views do not add reminder clocks or batch summary requests.
+The email check still archives/unarchives the email independently of its clock. Click, tap or keyboard-activate the clock to open the
+existing reminder editor; Cancel returns focus to that clock when it still exists.
+Returned and in-progress workflow labels describe their current state rather than
+claiming a new future firing.
+
+For verification, use more than 100 reminders, a long prefix excluded by the
+selected inbox/filter, several reminders on one email, and caller/account isolation. A sparse page can still have a
+**Load more** continuation. Follow it rather than treating that page as the end.
+A final page stays loading until its original email rows hydrate. If that page
+fails, earlier rows remain with **Couldn’t load more email. Try again**; retry
+loads the failed page without skipping ahead. In Email, Tab from the grid moves
+through native row controls; Enter on a clock opens its editor without opening
+the email. An open editor keeps the reminder selected at activation even if a
+collection refresh chooses a different nearest reminder.
+
+Check create/edit/remove/undo, reply cancellation, and due return across the Email
+Reminders list without reloading the app. Confirm ordinary Email and Soup views
+issue no reminder collection or summary requests.

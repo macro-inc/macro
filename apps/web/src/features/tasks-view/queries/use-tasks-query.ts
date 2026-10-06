@@ -17,6 +17,7 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   type EntityData,
+  getTaskReferencedEntityIds,
   isTaskEntity,
   type TaskEntityWithProperties,
 } from '@entity';
@@ -31,7 +32,8 @@ import {
   type TaskViewContext,
   taskMatchesView,
 } from '../filters/task-predicates';
-import type { TasksViewState } from '../types';
+import type { TaskReferenceScope, TasksViewState } from '../types';
+import { createAutomaticTaskPagination } from './automatic-task-pagination';
 import { buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
@@ -45,15 +47,20 @@ export type UseTasksDataSourceOptions = {
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
   isGroupExpanded: (groupId: string) => boolean;
-  taskIds?: Accessor<readonly string[]>;
+  /** Only tasks whose property references this entity. */
+  reference?: Accessor<TaskReferenceScope>;
   enabled?: Accessor<boolean>;
   networkPaused?: Accessor<boolean>;
+  /** Project lists drain all cursors instead of requiring per-group Load More. */
+  loadAll?: boolean;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
 
 export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   loadMoreGroup: (groupId: string) => Promise<void>;
+  paginationError?: Accessor<unknown>;
+  retryPagination?: () => void;
 };
 
 type TaskGroupContinuationReader = {
@@ -62,6 +69,16 @@ type TaskGroupContinuationReader = {
   isLoading: (groupId: string) => boolean;
   loadMore: (groupId: string) => Promise<void>;
 };
+
+function referencesEntity(
+  task: TaskEntityWithProperties,
+  reference: TaskReferenceScope
+) {
+  return getTaskReferencedEntityIds(
+    task,
+    reference.propertyDefinitionId
+  ).includes(reference.entityId);
+}
 
 /** Query, service search, and row assembly owned by the production Tasks view. */
 export function useTasksDataSource(
@@ -88,20 +105,24 @@ export function useTasksDataSource(
       facetContext: facetContext(),
       groupBy: state.groupBy,
       sort: state.sort,
-      taskIds: options.taskIds?.(),
+      reference: options.reference?.(),
     });
 
+  const scoped = Boolean(options.reference);
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: facetOptionsReady(),
     networkPaused: options.networkPaused?.(),
-    keepPreviousData: Boolean(options.taskIds),
-    // Project lists admit optimistic rows only where this view shows them.
-    meta: options.taskIds
+    keepPreviousData: scoped,
+    // Scoped lists admit optimistic rows only where this view shows them.
+    meta: scoped
       ? {
           insertFilter: (item) => {
             const entity = mapApiSoupItemToEntity(item);
+            const reference = options.reference?.();
             return (
-              isTaskEntity(entity) && taskMatchesView(entity, viewContext())
+              isTaskEntity(entity) &&
+              taskMatchesView(entity, viewContext()) &&
+              (!reference || referencesEntity(entity, reference))
             );
           },
         }
@@ -118,10 +139,10 @@ export function useTasksDataSource(
   const transformEntities = (entities: EntityData[]) => {
     const selected: TaskEntityWithProperties[] = [];
     const context = viewContext();
-    const memberIds = options.taskIds ? new Set(options.taskIds()) : undefined;
+    const reference = options.reference?.();
     for (const entity of entities) {
       if (!isTaskEntity(entity)) continue;
-      if (memberIds && !memberIds.has(entity.id)) continue;
+      if (reference && !referencesEntity(entity, reference)) continue;
       if (!taskMatchesView(entity, context)) continue;
 
       selected.push(attachNotifications(entity));
@@ -131,8 +152,7 @@ export function useTasksDataSource(
 
   const baseTasks = createMemo<TaskEntityWithProperties[]>((previous) => {
     if (query.isLoading) return previous;
-    if (!options.taskIds && query.isPlaceholderData && previous.length > 0)
-      return previous;
+    if (query.isPlaceholderData && previous.length > 0) return previous;
 
     return sortItems(
       transformEntities(query.data?.entities ?? []),
@@ -165,7 +185,7 @@ export function useTasksDataSource(
         userId: options.userId(),
         facets: state.facets,
         facetContext: facetContext(),
-        taskIds: options.taskIds?.(),
+        reference: options.reference?.(),
       }),
   });
 
@@ -191,6 +211,56 @@ export function useTasksDataSource(
 
   const groupQueryFor = (groupKey: string) =>
     groupedQueries.map().get(groupKey);
+
+  const automatic = createAutomaticTaskPagination({
+    enabled: () =>
+      Boolean(options.loadAll) &&
+      facetOptionsReady() &&
+      !options.networkPaused?.(),
+    scope: () =>
+      JSON.stringify([
+        queryArgs(),
+        state.search,
+        options.userId(),
+        options.enabled?.(),
+      ]),
+    sources: () => {
+      if (search.isSearching()) {
+        return [
+          {
+            id: 'search',
+            hasMore: search.hasNextPage(),
+            pending: search.isFetching(),
+            load: async () => {
+              await search.fetchNextPage();
+            },
+            error: search.error,
+          },
+        ];
+      }
+      if (query.isPending || query.isPlaceholderData) return [];
+      return [
+        {
+          id: 'list',
+          hasMore: query.hasNextPage,
+          pending: query.isFetching,
+          load: async () => {
+            await query.fetchNextPage();
+          },
+          error: () => query.error,
+        },
+        ...[...groupedQueries.map().values()].map((group) => ({
+          id: `group:${group.key}`,
+          hasMore: group.hasNextPage(),
+          pending: group.isFetchingNextPage(),
+          load: async () => {
+            await group.fetchNextPage();
+          },
+          error: group.error,
+        })),
+      ];
+    },
+  });
 
   const continuations: TaskGroupContinuationReader = {
     entities: (groupKey) =>
@@ -223,8 +293,7 @@ export function useTasksDataSource(
     (previous) => {
       if (
         !search.isSearching() &&
-        (query.isLoading ||
-          (!options.taskIds && query.isPlaceholderData && previous.length > 0))
+        (query.isLoading || (query.isPlaceholderData && previous.length > 0))
       ) {
         return previous;
       }
@@ -243,11 +312,12 @@ export function useTasksDataSource(
           const task = tasksById.get(id);
           return task ? [task] : [];
         });
+        const reference = options.reference?.();
         const continuationTasks = continuations
           .entities(group.key)
           .filter(
             (task) =>
-              (!options.taskIds || options.taskIds().includes(task.id)) &&
+              (!reference || referencesEntity(task, reference)) &&
               taskMatchesView(task, viewContext())
           );
         const entities = sortItems(
@@ -262,7 +332,7 @@ export function useTasksDataSource(
           count: group.totalCount,
         };
 
-        if (continuations.hasMore(group.key)) {
+        if (!options.loadAll && continuations.hasMore(group.key)) {
           taskGroup.loadMore = {
             scopeId: `tasks:${group.key}`,
             isLoading: continuations.isLoading(group.key),
@@ -280,13 +350,8 @@ export function useTasksDataSource(
 
   const items = createMemo(() => {
     if (options.enabled?.() === false) return [];
-    // Retained cache rows are still filtered by the current authorized membership.
-    if (options.taskIds && query.isLoading) return [];
-    const members = options.taskIds ? new Set(options.taskIds()) : undefined;
-    return rows().filter(
-      (row) =>
-        isSoupRowVisible(row, options.isGroupExpanded) &&
-        (row.kind !== 'entity' || !members || members.has(row.entity.id))
+    return rows().filter((row) =>
+      isSoupRowVisible(row, options.isGroupExpanded)
     );
   });
 
@@ -294,7 +359,6 @@ export function useTasksDataSource(
 
   const isLoading = () => {
     if (options.enabled?.() === false) return false;
-    if (options.taskIds && query.isLoading) return true;
     if (!search.isSearching()) {
       // A query held back for the tag sets is loading, not empty.
       return (query.isLoading || !facetOptionsReady()) && rows().length === 0;
@@ -316,6 +380,7 @@ export function useTasksDataSource(
   };
 
   const hasMore = () => {
+    if (options.loadAll) return false;
     if (usesServiceSearch()) return search.hasNextPage();
     return query.hasNextPage;
   };
@@ -352,5 +417,7 @@ export function useTasksDataSource(
     loadMoreGroup: continuations.loadMore,
     loadMore,
     refresh,
+    paginationError: automatic.error,
+    retryPagination: automatic.retry,
   } satisfies TasksDataSource;
 }

@@ -25,6 +25,8 @@ Empty/omitted = team's full visible list. */
   cf?: unknown;
   /** the filters that should be applied to the channel entity */
   chanf?: unknown;
+  /** Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`). */
+  crmf?: unknown;
   /** the filters that should be applied to the channel-thread entity */
   cthf?: unknown;
   /** the filters that should be applied to the document entity */
@@ -48,6 +50,8 @@ unlike the materialized [`EntityFilterAst`] used for cursors. */
   favorites_only?: ApiEntityFilterAstFavoritesOnly;
   /** the filters that should be applied to foreign entity records */
   fef?: unknown;
+  /** the filters that should be applied to GitHub pull request records, on top of `fef` */
+  ghprf?: unknown;
   /** the filters that should be applied to the project entity */
   pf?: unknown;
   /** the filters that should be applied based on entity properties */

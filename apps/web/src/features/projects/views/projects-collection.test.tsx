@@ -143,6 +143,7 @@ function selectProperty(
       id: optionId,
       value: { type: 'string', value: label },
       display_order: index,
+      color: null,
       property_definition_id: id,
       created_at: '',
       updated_at: '',
@@ -173,7 +174,6 @@ function project(
     project: {
       id,
       name,
-      descriptionDocumentId: `${id}-description`,
       updatedAt: '',
       access,
     },
@@ -216,7 +216,6 @@ function setup(
       refresh: async () => {},
     }),
     createProjectSource: unused,
-    createReferencesSource: unused,
     createPropertyDefinitionsSource: () => ({
       properties: () => options.properties ?? [status, priority],
       loading: () => false,

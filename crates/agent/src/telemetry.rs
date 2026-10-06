@@ -27,6 +27,7 @@
 mod test;
 
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
 
 use genai_telemetry::messages::{self, MediaSource};
 use genai_telemetry::{
@@ -64,6 +65,9 @@ struct Inner {
     /// [`TracedModel`] on request, consumed by [`ChatSpanHook`] on response.
     /// Holding the handle keeps the span open, so it is always taken out again.
     chat_span: Mutex<Option<tracing::Span>>,
+    /// When the parked model call was requested, until its first chunk is
+    /// recorded.
+    chat_requested_at: Mutex<Option<Instant>>,
 }
 
 impl GenAiContext {
@@ -80,6 +84,7 @@ impl GenAiContext {
             enabled,
             model: OnceLock::new(),
             chat_span: Mutex::new(None),
+            chat_requested_at: Mutex::new(None),
         }))
     }
 
@@ -158,11 +163,51 @@ impl GenAiContext {
         }
 
         *self.0.chat_span.lock().expect("chat span slot poisoned") = Some(span);
+        *self
+            .0
+            .chat_requested_at
+            .lock()
+            .expect("chat request time poisoned") = Some(Instant::now());
+    }
+
+    /// The model call in flight streamed a chunk of `kind`. The first one per
+    /// call records how long after the request it came.
+    pub(crate) fn record_chunk(&self, kind: &'static str) {
+        let Some(requested_at) = self
+            .0
+            .chat_requested_at
+            .lock()
+            .expect("chat request time poisoned")
+            .take()
+        else {
+            return;
+        };
+        if let Some(span) = self
+            .0
+            .chat_span
+            .lock()
+            .expect("chat span slot poisoned")
+            .as_ref()
+        {
+            span.set_i64(
+                attr::MACRO_CHAT_TIME_TO_FIRST_CHUNK_MS,
+                i64::try_from(requested_at.elapsed().as_millis()).unwrap_or(i64::MAX),
+            );
+            span.set_str(attr::MACRO_CHAT_FIRST_CHUNK_KIND, kind);
+        }
     }
 
     /// Record the response side of the model call whose request was recorded
     /// last, then release the parked span so it can close.
     fn record_response(&self, content: &OneOrMany<AssistantContent>) {
+        // A call whose output arrived whole streamed nothing earlier: the
+        // response is its first chunk.
+        self.record_chunk(match content.first() {
+            AssistantContent::Text(_) => "text",
+            AssistantContent::ToolCall(_) => "tool_call",
+            AssistantContent::Reasoning(_) => "reasoning",
+            AssistantContent::Image(_) => "image",
+        });
         let Some(span) = self
             .0
             .chat_span

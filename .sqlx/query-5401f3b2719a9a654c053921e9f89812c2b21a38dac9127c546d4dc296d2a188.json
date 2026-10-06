@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id FROM agent_session_tool_approval\n            WHERE agent_session_id = $1 AND request_id = $2 AND status = 'pending'\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5401f3b2719a9a654c053921e9f89812c2b21a38dac9127c546d4dc296d2a188"
+}

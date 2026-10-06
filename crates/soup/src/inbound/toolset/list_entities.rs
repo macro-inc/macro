@@ -306,7 +306,7 @@ impl EntityItem {
             },
             // `entity_filter_ast` force-filters CrmCompany and Reminder out —
             // kept loud here so a contract break is obvious, not silent.
-            SoupItem::CrmCompany(_) => {
+            SoupItem::CrmContact(_) | SoupItem::CrmCompany(_) => {
                 unreachable!("ListEntities tool does not surface CrmCompany rows")
             }
             SoupItem::Reminder(_) => {
@@ -317,6 +317,9 @@ impl EntityItem {
             }
             SoupItem::AgentSession(_) => {
                 unreachable!("ListEntities tool does not surface AgentSession rows")
+            }
+            SoupItem::DatabaseRow(_) => {
+                unreachable!("ListEntities tool does not surface DatabaseRow rows")
             }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
@@ -367,9 +370,11 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
+            | SoupItem::CrmContact(_)
             | SoupItem::ForeignEntity(_)
             | SoupItem::Reminder(_)
-            | SoupItem::AgentSession(_) => return false,
+            | SoupItem::AgentSession(_)
+            | SoupItem::DatabaseRow(_) => return false,
         };
         properties
             .iter()
@@ -569,13 +574,17 @@ impl ListEntities {
             // CrmCompany not in the tool surface — force-filter so the
             // AI never sees one.
             crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+            crm_contact_filter: None,
             foreign_entity_filter: self.foreign_entity_filter.clone(),
             // Reminders are opt-in in Soup, so leaving this unset is already
             // what keeps them out of the tool surface — no force-filter needed.
+            github_pull_request_filter: None,
             reminder_filter: None,
             // Agent sessions are opt-in too; unset keeps them off the tool surface.
             agent_session_filter: None,
             initiative_filter: None,
+            // Database rows are opt-in as well; the tool never names a table.
+            database_row_filter: None,
             properties_filter,
         };
 
@@ -644,15 +653,18 @@ impl ListEntities {
             // Preserve the upstream nil filter — no ItemType::CrmCompany
             // to toggle against.
             crm_company_filter: ast.crm_company_filter,
+            crm_contact_filter: None,
             foreign_entity_filter: if include_types.contains(&ItemType::ForeignEntity) {
                 ast.foreign_entity_filter
             } else {
                 Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))))
             },
             // Same as CrmCompany — no ItemType::Reminder to toggle against.
+            github_pull_request_filter: None,
             reminder_filter: ast.reminder_filter,
             agent_session_filter: ast.agent_session_filter,
             initiative_filter: None,
+            database_row_filter: None,
             properties_filter: ast.properties_filter,
         }
     }

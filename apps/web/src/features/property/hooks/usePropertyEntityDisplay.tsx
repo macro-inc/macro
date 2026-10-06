@@ -9,6 +9,7 @@ import { useUserId } from '@core/context/user';
 import ProjectIcon from '@phosphor/stack.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { type Accessor, createMemo, type JSX, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useProjectIdentityQuery } from '../../projects/queries/project-identity';
@@ -22,6 +23,8 @@ const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'CHAT',
   'CHANNEL',
   'THREAD',
+  'COMPANY',
+  'CONTACT',
 ] as const;
 
 type PreviewableEntityType = (typeof PREVIEWABLE_ENTITY_TYPES)[number];
@@ -67,10 +70,12 @@ export function usePropertyEntityDisplay(
     specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
-  const projectsFlag = useFeatureFlag(enableProjects);
+  const projectsFlag = createMemo(() =>
+    entityType() === 'INITIATIVE' ? useFeatureFlag(enableProjects) : undefined
+  );
   // Until Projects is enabled, a project stays the generic "Project" label.
   const projectSource = createMemo(() => {
-    if (entityType() !== 'INITIATIVE' || !projectsFlag().enabled) return;
+    if (!projectsFlag()?.().enabled) return;
     return untrack(() => {
       const userId = useUserId();
       return useProjectIdentityQuery(entityId, userId);
@@ -131,7 +136,6 @@ export function usePropertyEntityDisplay(
       })
       .with('USER', () => user.name())
       .with('CHANNEL', () => channelName() || 'Channel')
-      .with('COMPANY', () => entityId())
       .otherwise(() => {
         const item = preview();
         if (!item || item.loading) return 'Loading...';
@@ -142,7 +146,8 @@ export function usePropertyEntityDisplay(
       })
   );
 
-  const icon = createMemo(() =>
+  // Built on first read: a caller that draws its own icon pays nothing.
+  const icon = createLazyMemo(() =>
     match(entityType())
       .when(
         (type) => type === 'INITIATIVE' && projectSource(),
@@ -165,8 +170,9 @@ export function usePropertyEntityDisplay(
       .with('PROJECT', () => <CoreEntityIcon targetType="project" size="xs" />)
       .with('CHAT', () => <CoreEntityIcon targetType="chat" size="xs" />)
       .with('COMPANY', () => (
-        <CoreEntityIcon targetType="organization" size="xs" />
+        <CoreEntityIcon targetType="crm_company" size="xs" />
       ))
+      .with('CONTACT', () => <CoreEntityIcon targetType="contact" size="xs" />)
       .with('THREAD', () => <CoreEntityIcon targetType="email" size="xs" />)
       .otherwise(() => {
         if (options && 'fallbackIcon' in options) {
@@ -183,6 +189,8 @@ export function usePropertyEntityDisplay(
       .with('PROJECT', () => 'project')
       .with('TASK', () => 'task')
       .with('THREAD', () => 'email')
+      .with('COMPANY', () => 'company')
+      .with('CONTACT', () => 'contact')
       .with('DOCUMENT', () => {
         const item = preview();
         if (!item || !isAccessiblePreviewItem(item)) {

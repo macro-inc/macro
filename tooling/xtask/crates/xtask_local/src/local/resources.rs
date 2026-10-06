@@ -83,6 +83,36 @@ pub struct Queue {
     pub bindings: &'static [(&'static str, QueueForm)],
 }
 
+impl Queue {
+    /// Non-default attributes, applied after all queues exist so redrive targets resolve.
+    pub fn attributes(
+        &self,
+    ) -> std::collections::HashMap<aws_sdk_sqs::types::QueueAttributeName, String> {
+        use aws_sdk_sqs::types::QueueAttributeName;
+
+        match self.name {
+            macro_queues::SlackImportQueue::LOCAL => [
+                (QueueAttributeName::VisibilityTimeout, "900".to_string()),
+                (
+                    QueueAttributeName::RedrivePolicy,
+                    serde_json::json!({
+                        "deadLetterTargetArn": queue_arn(macro_queues::SlackImportDlq::LOCAL),
+                        "maxReceiveCount": 5,
+                    })
+                    .to_string(),
+                ),
+            ]
+            .into(),
+            macro_queues::SlackImportDlq::LOCAL => [(
+                QueueAttributeName::MessageRetentionPeriod,
+                (14 * 24 * 60 * 60).to_string(),
+            )]
+            .into(),
+            _ => Default::default(),
+        }
+    }
+}
+
 /// An S3 bucket: the name created in LocalStack and the env var pointing at it.
 pub struct Bucket {
     /// The bucket name created in LocalStack.
@@ -104,6 +134,14 @@ use QueueForm::{Name, Url};
 
 /// Every local SQS queue and the env var(s) that reference it.
 pub const QUEUES: &[Queue] = &[
+    Queue {
+        name: macro_queues::SlackImportQueue::LOCAL,
+        bindings: &[(macro_queues::SlackImportQueue::OVERRIDE_ENV_VAR_NAME, Url)],
+    },
+    Queue {
+        name: macro_queues::SlackImportDlq::LOCAL,
+        bindings: &[(macro_queues::SlackImportDlq::OVERRIDE_ENV_VAR_NAME, Url)],
+    },
     Queue {
         name: macro_queues::NotificationQueue::LOCAL,
         bindings: &[("NOTIFICATION_QUEUE", Url)],
@@ -268,6 +306,12 @@ pub const BUCKETS: &[Bucket] = &[
         // The patch behind each agent session's Changes pane.
         name: "agent-session-changes",
         env_key: "AGENT_SESSION_CHANGES_BUCKET",
+    },
+    Bucket {
+        // The patch behind each pull request's Changes pane, shared with the
+        // agent sessions that work on that pull request.
+        name: "github-pull-request-patches",
+        env_key: "GITHUB_PULL_REQUEST_PATCH_BUCKET",
     },
 ];
 
