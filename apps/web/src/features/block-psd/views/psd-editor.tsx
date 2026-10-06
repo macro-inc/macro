@@ -121,6 +121,10 @@ export function PsdEditor() {
   const view = createPsdView({ docSize: editor.docSize });
   const [spaceHeld, setSpaceHeld] = createSignal(false);
   const [typing, setTyping] = createSignal<TypeTarget>();
+  /** The Type tool was pressed and its text box is about to open. */
+  let typingSoon = false;
+  /** Keys typed meanwhile, for new text. */
+  let typedAhead = '';
   const [typingLayer, setTypingLayer] = createSignal<number>();
   const [showShortcuts, setShowShortcuts] = createSignal(false);
   const [colorTarget, setColorTarget] = createSignal<
@@ -137,7 +141,14 @@ export function PsdEditor() {
     view,
     notifyError: context.notifyError,
     panning: spaceHeld,
-    onType: (target) => setTyping(target),
+    onTypeStart: () => {
+      typingSoon = true;
+      typedAhead = '';
+    },
+    onType: (target) => {
+      typingSoon = false;
+      setTyping(target);
+    },
   });
   const commands = createPsdCommands({
     editor,
@@ -242,6 +253,19 @@ export function PsdEditor() {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"]'))
       return;
+    // Typed before the text box opened: the text's first characters.
+    if (
+      typingSoon &&
+      e.key.length === 1 &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      typedAhead += e.key;
+      return;
+    }
     if (target.closest('[role="menu"], [role="dialog"]')) return;
     if (commands.dialog()) return;
     if (e.key === ' ') {
@@ -575,6 +599,7 @@ export function PsdEditor() {
                   editor={editor}
                   view={view}
                   target={target}
+                  initialText={'at' in target ? typedAhead : ''}
                   onLayer={setTypingLayer}
                   onDone={() => {
                     setTyping(undefined);

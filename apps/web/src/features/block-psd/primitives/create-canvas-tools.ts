@@ -149,6 +149,11 @@ export interface CanvasToolsOptions {
   panning: () => boolean;
   /** Starts typing into a text layer, or new text at a canvas point. */
   onType: (target: { layer: number } | { at: Point }) => void;
+  /**
+   * The Type tool was pressed: the text box opens once the engine says
+   * what is under the pointer (keys typed meanwhile belong to it).
+   */
+  onTypeStart?: () => void;
 }
 
 export function createCanvasTools(options: CanvasToolsOptions) {
@@ -734,6 +739,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         refreshOverlay();
         return;
       case 'type':
+        options.onTypeStart?.();
         void typeAt(p);
         return;
       case 'rectangle':
@@ -986,7 +992,12 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   };
 
   const typeAt = async (p: CanvasPointer) => {
-    const hit = await engine.hitTest(p.at.x, p.at.y);
+    let hit: number | null = null;
+    try {
+      hit = await engine.hitTest(p.at.x, p.at.y);
+    } catch {
+      // New text, then.
+    }
     const row = editor.layers().find((r) => r.id === hit);
     if (row?.kind === 'text') {
       editor.chooseLayers([row.id]);

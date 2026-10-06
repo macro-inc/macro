@@ -29,6 +29,8 @@ export function TextEditor(props: {
   editor: PsdEditor;
   view: PsdView;
   target: TypeTarget;
+  /** New text typed before the box opened. */
+  initialText?: string;
   /** The layer being typed into, once there is one (for presence). */
   onLayer?: (id: number | undefined) => void;
   onDone: () => void;
@@ -70,6 +72,7 @@ export function TextEditor(props: {
       }
       input.focus();
       input.select();
+      if (props.initialText) update(props.initialText);
     };
     void load();
   });
