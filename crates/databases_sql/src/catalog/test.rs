@@ -44,6 +44,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
             columns: vec![
                 ColumnDetail {
                     column: Column {
+                        protections: vec![],
                         id: ColumnId::from_uuid(Uuid::from_u128(0xb001)),
                         table_id: DEALS,
                         property_definition_id: Uuid::from_u128(0xc001),
@@ -73,6 +74,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
                 },
                 ColumnDetail {
                     column: Column {
+                        protections: vec![],
                         id: ColumnId::from_uuid(Uuid::from_u128(0xb002)),
                         table_id: DEALS,
                         property_definition_id: Uuid::from_u128(0xc002),
@@ -121,6 +123,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
                 },
                 ColumnDetail {
                     column: Column {
+                        protections: vec![],
                         id: ColumnId::from_uuid(Uuid::from_u128(0xb003)),
                         table_id: DEALS,
                         property_definition_id: Uuid::from_u128(0xc003),
@@ -150,6 +153,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
                 },
                 ColumnDetail {
                     column: Column {
+                        protections: vec![],
                         id: ColumnId::from_uuid(Uuid::from_u128(0xb004)),
                         table_id: DEALS,
                         property_definition_id: Uuid::from_u128(0xc004),
@@ -296,6 +300,7 @@ fn a_shared_relation_definition_relates_each_table_to_its_own_target() {
         sql_name: format!("\"{name}\""),
         columns: vec![ColumnDetail {
             column: Column {
+                protections: vec![],
                 id: column,
                 table_id: id,
                 property_definition_id: LINKED,

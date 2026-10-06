@@ -351,7 +351,7 @@ const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   all: exclude('person', 'initiative', 'crm_contact'),
   channels: ['channel'],
   dms: ['dm'],
-  documents: ['note', 'document', 'snippet', 'project', 'database'],
+  documents: ['note', 'document', 'snippet', 'project', 'database', 'form'],
   tasks: ['task'],
   chats: ['chat'],
 

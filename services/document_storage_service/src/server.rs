@@ -1401,12 +1401,21 @@ pub async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         ),
     );
-    let collab_surface_service = Arc::new(collab_surface::outbound::pg_collab_surface_service(
-        db.clone(),
-        lexical_client.as_ref().clone(),
-        sync_service_client.as_ref().clone(),
-        config.document_permission_jwt.as_ref().to_string(),
-    ));
+    // Forms' ids are their surfaces' ids, so the public surface API asks the
+    // forms domain which ids are taken.
+    let collab_surface_service = Arc::new(
+        collab_surface::outbound::pg_collab_surface_service(
+            db.clone(),
+            lexical_client.as_ref().clone(),
+            sync_service_client.as_ref().clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+        )
+        .with_form_ids(Arc::new(
+            forms::outbound::collaborative_layout::RepositoryFormIds::new(Arc::new(
+                forms::outbound::pg_forms_repo::PgFormsRepo::new(db.clone()),
+            )),
+        )),
+    );
 
     let initiative_service = Arc::new(
         InitiativeServiceImpl::new(
@@ -1435,6 +1444,16 @@ pub async fn run() -> anyhow::Result<()> {
             conn_gateway_client.as_ref().clone(),
         ),
         macro_event_broker.clone(),
+    ));
+    let forms_service = Arc::new(forms::wiring::build_service(
+        db.clone(),
+        databases_service.clone(),
+        entity_access_service.clone(),
+        forms::outbound::gateway_event_publisher::GatewayFormEventPublisher::new(
+            conn_gateway_client.as_ref().clone(),
+        ),
+        macro_event_broker.clone(),
+        collab_surface_service.clone(),
     ));
 
     // Individual initiative reads preserve read-after-write consistency when a
@@ -1794,6 +1813,7 @@ pub async fn run() -> anyhow::Result<()> {
             Arc::new(email_service.clone()),
             project_service.clone(),
             databases_service.clone(),
+            forms_service.clone(),
             entity_access_service.clone(),
             Arc::new(outbound::entity_mutation::DssEntityLifecycleAdapter::new(
                 db.clone(),
@@ -1867,6 +1887,11 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         databases_state: databases::inbound::axum_router::DatabasesRouterState::new(
             databases_service,
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        forms_state: forms::inbound::axum_router::FormsRouterState::new(
+            forms_service,
             entity_access_service.clone(),
             authorization_state.clone(),
         ),

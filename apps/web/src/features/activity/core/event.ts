@@ -8,6 +8,8 @@ export type ActivityAction =
   | { kind: 'messaged' }
   | { kind: 'email-sent' }
   | { kind: 'call-started' }
+  /** Someone answered a form; attributed to the respondent when signed in. */
+  | { kind: 'responded' }
   | { kind: 'property-changed'; property: string; from: unknown; to: unknown }
   | { kind: 'participant-added'; participant: string }
   | { kind: 'participant-removed'; participant: string }
@@ -24,6 +26,7 @@ export type ActivityEntityType =
   | 'channel'
   | 'user'
   | 'database'
+  | 'form'
   | { kind: 'unsupported'; raw: string };
 
 export type ActivityEvent = {
@@ -60,7 +63,10 @@ export type PropertyEntityType =
   | 'USER';
 
 /** Entity kinds the activity UI can resolve a name, icon, and link for. */
-export type ActivityDisplayEntityType = PropertyEntityType | 'DATABASE';
+export type ActivityDisplayEntityType =
+  | PropertyEntityType
+  | 'DATABASE'
+  | 'FORM';
 
 export function toDisplayEntityType(
   entityType: ActivityEntityType
@@ -75,5 +81,6 @@ export function toDisplayEntityType(
     .with('channel', () => 'CHANNEL' as const)
     .with('user', () => 'USER' as const)
     .with('database', () => 'DATABASE' as const)
+    .with('form', () => 'FORM' as const)
     .exhaustive();
 }

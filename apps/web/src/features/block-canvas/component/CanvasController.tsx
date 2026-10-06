@@ -869,7 +869,7 @@ export function CanvasController(props: ParentProps) {
     // CRM companies/contacts aren't renderable as canvas mentions.
     if (entityType === 'crm_company') return;
     if (entityType === 'crm_contact') return;
-    if (entityType === 'database') return;
+    if (entityType === 'database' || entityType === 'form') return;
     // Nor are reminders — they have no canvas representation.
     // Nor are calendar events.
     if (entityType === 'calendar_event' || entityType === 'agent_session')

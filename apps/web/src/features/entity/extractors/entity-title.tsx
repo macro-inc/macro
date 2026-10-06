@@ -46,7 +46,11 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       { type: 'database' },
       (entity) => entity.name || blockNameToDefaultFile('database')
     )
-    .otherwise(() => 'Unknown');
+    .with(
+      { type: 'form' },
+      (entity) => entity.name || blockNameToDefaultFile('form')
+    )
+    .exhaustive();
 }
 
 function extractSearchHighlight(entity: EntityData): string | undefined {

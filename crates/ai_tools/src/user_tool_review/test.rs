@@ -336,5 +336,3 @@ async fn a_tool_the_toolset_does_not_know_as_a_user_tool_is_left_alone() {
     assert_eq!(finished, None);
     assert!(reviewer.asked.lock().unwrap().is_empty());
 }
-
-mod booking_links;

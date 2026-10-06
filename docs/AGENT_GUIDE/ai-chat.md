@@ -1492,22 +1492,17 @@ Ask the AI to find or reuse an existing booking link before creating another.
 shareable URLs (including paused links). It also supplies the revision used to
 protect edits from concurrent settings changes.
 
-`CreateBookingLink` and `EditBookingLink` open the same native booking review form
-in chat and in an agent session's elicitation. Edit title, slug, duration, location
-or Google Meet, enabled state, weekly hours, time zone, date overrides, buffers,
-notice, booking window, daily limit, questions and team hosts directly in the
-card. Create/Save accepts the complete edited draft; no extra confirmation is
-required. Cancel declines without saving. Link creation itself sends no calendar
-invitations. Guests receive an invitation only when they book through the normal
-booking page.
+Booking links are confirmed in conversation, with no special booking form. The AI
+first explains the proposed meeting details, ownership and named hosts, time zone,
+availability and date exceptions, booking rules, guest questions and whether the
+link accepts bookings. It asks whether to proceed and waits for your reply before
+calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a
+link is not approval of the proposal. IDs and revisions are discovered through
+tools; you should never be asked to enter a team ID, host ID or JSON.
 
-A successful result shows the actual saved URL and whether the link accepts
-bookings. Editing hours affects only that link, preserving other links and personal
-default availability. If another settings edit made the revision stale, ask the AI
-to read the latest link and propose the edit again rather than retrying the stale
-revision. A network/save error preserves the review for retry; repeating an
-identical successful create or edit does not create another link.
-
-For isolated UI checks, `/src/features/scheduling/browser-test/booking-ai.html`
-mounts the actual review controls with the agent elicitation sink and no remote
-writes. It includes create/edit modes and simulated save failures.
+A successful result returns the saved URL. Link creation itself sends no calendar
+invitations; guests receive an invitation when they book. Editing hours affects
+only that link. If another edit makes the revision stale, the AI reads the latest
+settings and confirms a fresh proposal. Identical retries reuse the saved link.
+Old pending booking review requests can be dismissed so the agent can resume with
+conversational confirmation.

@@ -9,6 +9,7 @@ const OWNER_PRINCIPAL_ROW = [
   'chat',
   'database',
   'document',
+  'form',
   'email',
   'initiative',
   'project',

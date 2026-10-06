@@ -128,36 +128,6 @@ function openCreationComposer(
 
 export const ACTIONS: Action[] = [
   {
-    id: 'database-query',
-    name: 'Database',
-    keywords: [
-      'query',
-      'query-database',
-      'ask',
-      'database',
-      'live',
-      'answer',
-      'sql',
-    ],
-    category: ActionCategory.MEDIA,
-    icon: LightningIcon,
-    dependencies: [DatabaseQueryNode],
-    action: (editor) => {
-      if (!isFeatureEnabled(enableDatabases)) return;
-      queueMicrotask(() =>
-        editor.update(() => {
-          $insertNodes([
-            $createDatabaseQueryNode({
-              queryId: '',
-              prompt: '',
-              displayMode: 'scalar',
-            }),
-          ]);
-        })
-      );
-    },
-  },
-  {
     id: 'paragraph',
     name: 'Normal Text',
     keywords: ['paragraph', 'text', 'none', 'normal'],
@@ -368,5 +338,35 @@ export const ACTIONS: Action[] = [
       editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
     },
     dependencies: [HorizontalRuleNode],
+  },
+  {
+    id: 'database-query',
+    name: 'Database',
+    keywords: [
+      'query',
+      'query-database',
+      'ask',
+      'database',
+      'live',
+      'answer',
+      'sql',
+    ],
+    category: ActionCategory.MEDIA,
+    icon: LightningIcon,
+    dependencies: [DatabaseQueryNode],
+    action: (editor) => {
+      if (!isFeatureEnabled(enableDatabases)) return;
+      queueMicrotask(() =>
+        editor.update(() => {
+          $insertNodes([
+            $createDatabaseQueryNode({
+              queryId: '',
+              prompt: '',
+              displayMode: 'scalar',
+            }),
+          ]);
+        })
+      );
+    },
   },
 ];

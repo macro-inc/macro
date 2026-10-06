@@ -77,6 +77,9 @@ pub enum EntityType {
     Database,
     /// The entity is a row of a table in a Macro Database
     DatabaseRow,
+    /// The entity is a Macro Form: a questionnaire whose answers land as rows
+    /// of one database table (see the `forms` crate)
+    Form,
 }
 
 impl EntityType {
@@ -128,6 +131,9 @@ impl EntityType {
             // Rows carry no `entity_access` rows of their own; access
             // resolves through the parent database.
             EntityType::DatabaseRow => false,
+            // A form's grants are `entity_access` rows, but, like a
+            // database, a form is not something you file into a project.
+            EntityType::Form => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]
