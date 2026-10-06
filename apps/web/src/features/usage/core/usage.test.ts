@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_AUTO_RELOAD,
   isUsageAvailable,
   monthlyUsagePercent,
   parseDollarInput,
+  validateAutoReload,
 } from './usage';
 
 describe('monthly usage', () => {
@@ -30,6 +32,42 @@ describe('dollar inputs', () => {
     ]) {
       expect(parseDollarInput(value)).toBeUndefined();
     }
+  });
+});
+
+describe('Auto-Reload validation', () => {
+  it('requires the target to exceed the minimum by the smallest chargeable reload', () => {
+    expect(
+      validateAutoReload({
+        ...DEFAULT_AUTO_RELOAD,
+        minimumBalanceCents: 1_000,
+        targetBalanceCents: 1_049,
+      })
+    ).toBe(
+      'Target balance must be greater than minimum balance by at least $0.50.'
+    );
+    expect(
+      validateAutoReload({
+        ...DEFAULT_AUTO_RELOAD,
+        minimumBalanceCents: 1_000,
+        targetBalanceCents: 1_050,
+      })
+    ).toBeUndefined();
+  });
+
+  it('caps the target balance at $5,000', () => {
+    expect(
+      validateAutoReload({
+        ...DEFAULT_AUTO_RELOAD,
+        targetBalanceCents: 500_001,
+      })
+    ).toBe('Target balance can be at most $5,000.');
+    expect(
+      validateAutoReload({
+        ...DEFAULT_AUTO_RELOAD,
+        targetBalanceCents: 500_000,
+      })
+    ).toBeUndefined();
   });
 });
 
