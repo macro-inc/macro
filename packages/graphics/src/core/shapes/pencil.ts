@@ -193,34 +193,71 @@ export const pencilDefinition: ShapeDefinition<'pencil'> = {
         top: targetOrigin.y + margins.top,
         bottom: targetOrigin.y + target.height - margins.bottom,
       };
-    return {
+    let points = item.geometry.points.map(
+      ([x, y, pressure]) =>
+        [
+          flatX
+            ? x +
+              (targetOrigin.x +
+                target.width / 2 -
+                (visible.x + visible.width / 2))
+            : targetSamples.left +
+              ((x - minX) * (targetSamples.right - targetSamples.left)) /
+                (maxX - minX),
+          flatY
+            ? y +
+              (targetOrigin.y +
+                target.height / 2 -
+                (visible.y + visible.height / 2))
+            : targetSamples.top +
+              ((y - minY) * (targetSamples.bottom - targetSamples.top)) /
+                (maxY - minY),
+          pressure,
+        ] as PencilPoint
+    );
+    let candidate = {
       ...item,
       geometry: pencilDefinition.freezeGeometry({
         ...item.geometry,
-        points: item.geometry.points.map(
-          ([x, y, pressure]) =>
-            [
-              flatX
-                ? x +
-                  (targetOrigin.x +
-                    target.width / 2 -
-                    (visible.x + visible.width / 2))
-                : targetSamples.left +
-                  ((x - minX) * (targetSamples.right - targetSamples.left)) /
-                    (maxX - minX),
-              flatY
-                ? y +
-                  (targetOrigin.y +
-                    target.height / 2 -
-                    (visible.y + visible.height / 2))
-                : targetSamples.top +
-                  ((y - minY) * (targetSamples.bottom - targetSamples.top)) /
-                    (maxY - minY),
-              pressure,
-            ] as PencilPoint
-        ),
+        points,
       }),
     };
+    // Perfect Freehand's pressure and smoothing can change the brush margins
+    // after a nonuniform stretch. Refine against the generated outline so the
+    // visible ink, rather than only its input samples, reaches the requested
+    // bounds while the caller keeps the opposite resize edge anchored.
+    for (let i = 0; i < 4; i++) {
+      const actual = pencilInk(candidate).bounds;
+      if (
+        (Math.abs(actual.x - targetOrigin.x) < 0.1 &&
+          Math.abs(actual.y - targetOrigin.y) < 0.1 &&
+          Math.abs(actual.width - target.width) < 0.1 &&
+          Math.abs(actual.height - target.height) < 0.1) ||
+        i === 3
+      )
+        return candidate;
+      points = points.map(([x, y, pressure]) => [
+        flatX
+          ? x +
+            (targetOrigin.x + target.width / 2 - (actual.x + actual.width / 2))
+          : targetOrigin.x + ((x - actual.x) * target.width) / actual.width,
+        flatY
+          ? y +
+            (targetOrigin.y +
+              target.height / 2 -
+              (actual.y + actual.height / 2))
+          : targetOrigin.y + ((y - actual.y) * target.height) / actual.height,
+        pressure,
+      ]);
+      candidate = {
+        ...item,
+        geometry: pencilDefinition.freezeGeometry({
+          ...item.geometry,
+          points,
+        }),
+      };
+    }
+    return candidate;
   },
   sameGeometry: (a, b) =>
     JSON.stringify(a.geometry) === JSON.stringify(b.geometry),

@@ -264,6 +264,52 @@ it('resizes a pencil to its visible ink bounds while keeping the opposite edge f
   }
 });
 
+it('keeps a curved pressure-sensitive pencil anchored by its visible ink edge', () => {
+  const editor = createGraphicsEditor(
+    createScene([
+      {
+        id: 'ink',
+        type: 'pencil',
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: translation(0, 0),
+        geometry: {
+          points: Array.from({ length: 30 }, (_, index) => {
+            const x = index * 5;
+            return [x, Math.sin(index / 4) * 35, 0.2 + index / 50] as const;
+          }),
+          simulatePressure: true,
+        },
+        appearance: {
+          fill: 'transparent',
+          stroke: 'black',
+          strokeWidth: 16,
+        },
+      },
+    ])
+  );
+  try {
+    editor.select('ink');
+    const before = worldBounds(editor.document, 'ink');
+    editor.beginTransform(
+      'ink',
+      { x: before.x + before.width / 2, y: before.y + before.height },
+      's'
+    );
+    editor.updateTransform({
+      x: before.x + before.width / 2,
+      y: before.y + before.height + 50,
+    });
+    editor.commitTransform();
+    const after = worldBounds(editor.document, 'ink');
+    expect(Math.abs(after.x - before.x)).toBeLessThan(0.1);
+    expect(Math.abs(after.y - before.y)).toBeLessThan(0.1);
+    expect(Math.abs(after.width - before.width)).toBeLessThan(0.1);
+    expect(Math.abs(after.height - (before.height + 50))).toBeLessThan(0.1);
+  } finally {
+    editor.dispose();
+  }
+});
+
 it('recomputes edge modifiers without drift, including proportional shrinking and center resizing', () => {
   const b = { x: 20, y: 30, width: 100, height: 80 };
   expect(

@@ -111,8 +111,11 @@ it('rebuilds changed ink for stroke width and resize while keeping the same DOM 
   vi.mocked(getStrokePoints).mockClear();
   editor.beginTransform('ink-0', { x: 500, y: 100 }, 'se');
   editor.updateTransform({ x: 700, y: 200 });
-  expect(getStrokePoints).toHaveBeenCalledTimes(1);
+  const resizeRebuilds = vi.mocked(getStrokePoints).mock.calls.length;
+  expect(resizeRebuilds).toBeGreaterThan(1);
+  expect(resizeRebuilds).toBeLessThanOrEqual(4);
   expect(stroke.getAttribute('d')).not.toBe(widerPath);
+  expect(getStrokePoints).toHaveBeenCalledTimes(resizeRebuilds);
   editor.commitTransform();
   editor.undo();
   expect(stroke.getAttribute('d')).toBe(widerPath);
