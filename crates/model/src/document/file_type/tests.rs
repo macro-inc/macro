@@ -156,3 +156,17 @@ fn test_split_suffix_match() {
         Some(("REPORT", "MD"))
     );
 }
+
+#[test]
+fn test_split_suffix_match_office_files() {
+    for (file_name, expected) in [
+        ("Budget.xlsm", Some(("Budget", "xlsm"))),
+        ("Old Memo.doc", Some(("Old Memo", "doc"))),
+        ("OLD MEMO.DOC", Some(("OLD MEMO", "DOC"))),
+        ("Deck.ppt", Some(("Deck", "ppt"))),
+        ("Ledger.xls", Some(("Ledger", "xls"))),
+        ("notes.mdoc", Some(("notes", "mdoc"))),
+    ] {
+        assert_eq!(FileType::split_suffix_match(file_name), expected, "{file_name}");
+    }
+}

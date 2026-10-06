@@ -2181,6 +2181,7 @@ async fn upload_folder_publishes_uploaded_event() {
                 root_folder_name: "Uploaded tree".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: Some("parent-project".to_string()),
+                folders: Vec::new(),
             },
         )
         .await
@@ -2235,6 +2236,7 @@ async fn upload_folder_with_no_project_ids_publishes_no_event() {
                 root_folder_name: "Uploaded tree".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: None,
+                folders: Vec::new(),
             },
         )
         .await
@@ -2294,6 +2296,7 @@ async fn upload_folder_compensates_after_destination_failure() {
                 root_folder_name: "Upload".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: None,
+                folders: Vec::new(),
             },
         )
         .await;

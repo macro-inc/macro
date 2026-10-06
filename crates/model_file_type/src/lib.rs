@@ -697,7 +697,14 @@ generate_file_types!(
     (Azw3, "azw3", "application/vnd.amazon.ebook", Document),
     (Djvu, "djvu", "image/vnd.djvu", Document),
     (Xls, "xls", "application/vnd.ms-excel", Document),
+    (
+        Xlsm,
+        "xlsm",
+        "application/vnd.ms-excel.sheet.macroEnabled.12",
+        Document
+    ),
     (Ppt, "ppt", "application/vnd.ms-powerpoint", Document),
+    (Doc, "doc", "application/msword", Document),
     (Pptx, "pptx", "application/xml", Document),
     (Xlsx, "xlsx", "application/xml", Document),
     // Database files
