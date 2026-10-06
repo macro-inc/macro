@@ -43,9 +43,12 @@ export const makeShareAction = () => {
     const focusedId = soup.focus.id();
 
     await execute(entities, {
-      // Shared rows stay in the list, so focus stays where the user was.
+      // Shared rows stay in the list, so focus returns to the row the user was on.
       onFinish: () => {
         soup.selection.clear();
+        if (focusedId) {
+          soup.focus.set(focusedId);
+        }
         void restoreSoupFocus(focusedId);
       },
       onCancel: () => {

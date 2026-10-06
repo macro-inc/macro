@@ -81,14 +81,14 @@ describe('makeShareAction', () => {
     expect(mocks.openBulkEditModal).not.toHaveBeenCalled();
   });
 
-  it('clears the selection on finish and keeps focus on the row the user was on', async () => {
+  it('clears the selection on finish and returns focus to the row the user was on', async () => {
     const { soup, focusSet, clear } = listState('elsewhere');
 
     await makeShareAction().executeWithSoup([spec, notes], soup);
     bulkDialog().onFinish?.();
 
     expect(clear).toHaveBeenCalledOnce();
-    expect(focusSet).not.toHaveBeenCalled();
+    expect(focusSet).toHaveBeenCalledWith('elsewhere');
     expect(mocks.restoreFocus).toHaveBeenCalledWith('elsewhere');
   });
 
