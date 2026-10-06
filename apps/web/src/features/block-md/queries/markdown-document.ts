@@ -1,8 +1,5 @@
-import {
-  fetchDocumentLocation,
-  waitForDocumentSyncServiceReady,
-} from '@queries/storage/document-location';
-import { fetchDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
+import { throwOnErr } from '@core/util/result';
+import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { createSyncServiceSource } from '@service-sync/source';
@@ -23,30 +20,8 @@ export type MarkdownDocumentData = ReturnType<
 export async function loadMarkdownDocument(
   documentId: string
 ): Promise<MarkdownDocumentData> {
-  const [bundleResult, locationResult] = await Promise.all([
-    fetchDocumentLoadBundle(documentId),
-    fetchDocumentLocation({ documentId }),
-  ]);
-
-  if (bundleResult.isErr()) {
-    throw new Error('Unable to load document metadata');
-  }
-  if (locationResult.isErr()) {
-    throw new Error('Unable to load document content');
-  }
-
-  let location = locationResult.value;
-  if (
-    location.type === 'presignedUrl' &&
-    location.content.state === 'pending'
-  ) {
-    location = await waitForDocumentSyncServiceReady({ documentId });
-  }
-  if (location.type !== 'syncServiceContent') {
-    throw new Error('Document content is not available in sync-service');
-  }
-
-  const { documentMetadata, token, userAccessLevel } = bundleResult.value;
+  const { documentMetadata, token, authorization, userAccessLevel } =
+    await throwOnErr(() => fetchSyncDocumentOpenContext(documentId));
   const permissions = match(userAccessLevel)
     .with('owner', () => ({
       canComment: true,
@@ -71,7 +46,7 @@ export async function loadMarkdownDocument(
     .exhaustive();
 
   return {
-    ...createSyncServiceSource(documentId, token),
+    ...createSyncServiceSource(documentId, token, authorization),
     metadata: documentMetadata,
     userAccessLevel,
     permissions,

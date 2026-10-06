@@ -16,3 +16,17 @@ export const agentSessionChangesKeys = createQueryKeys('agentSessionChanges', {
     queryKey: [sessionId, changesetId],
   }),
 });
+
+/** Pull request links, looked up from either side. */
+export const agentSessionPullRequestKeys = createQueryKeys(
+  'agentSessionPullRequests',
+  {
+    forPullRequest: (url: string) => ({ queryKey: [url] }),
+    forSession: (sessionId: string) => ({ queryKey: [sessionId] }),
+  }
+);
+
+/** Speculative, hidden sessions prepared for the signed-in owner. */
+export const agentSessionWarmKeys = createQueryKeys('agentSessionWarm', {
+  owner: (userId: string | undefined) => ({ queryKey: [userId] }),
+});

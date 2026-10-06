@@ -1,5 +1,6 @@
 //! Prompt-free inspection of a configured ACP subprocess.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -7,7 +8,9 @@ use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     InitializeRequest, NewSessionRequest, SessionConfigOption,
 };
-use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, Channel, Client, ConnectionTo};
+use agent_client_protocol::{Agent, Channel, Client, ConnectionTo};
+
+use crate::outbound::acp_process::AcpProcess;
 
 #[cfg(test)]
 mod test;
@@ -21,6 +24,9 @@ pub(crate) struct ProbeSubprocess {
     pub(crate) args: Vec<String>,
     /// Directory in which the executable runs.
     pub(crate) cwd: PathBuf,
+    /// Environment added on top of this process's own: the same variables
+    /// the bridge applies, so the probe inspects the harness that will run.
+    pub(crate) env: BTreeMap<String, String>,
 }
 
 /// A failure to discover an ACP agent's session configuration.
@@ -36,11 +42,6 @@ pub(crate) enum ProbeError {
     /// The bounded probe did not complete in time.
     #[error("ACP model probe timed out after {0:?}")]
     Timeout(Duration),
-    /// This platform cannot apply a subprocess working directory while
-    /// retaining `AcpAgent`'s process-group cleanup.
-    #[cfg(not(unix))]
-    #[error("ACP model probe working directories are unsupported on this platform")]
-    UnsupportedWorkingDirectory,
 }
 
 /// Run `initialize` followed by `session/new` over an already-connected ACP
@@ -73,16 +74,13 @@ async fn probe_channel(
 
 /// Spawn one configured ACP agent, perform a prompt-free model probe, and
 /// tear down that exact child connection before returning.
-///
-/// On Unix the working directory is applied by a small `/bin/sh` wrapper
-/// which immediately `exec`s the configured command. The wrapper and agent
-/// remain in the process group guarded by [`AcpAgent`].
 pub(crate) async fn probe_subprocess(
     process: &ProbeSubprocess,
     deadline: Duration,
 ) -> Result<Vec<SessionConfigOption>, ProbeError> {
     let expires = tokio::time::Instant::now() + deadline;
-    let agent = subprocess_agent(process)?;
+    let agent = AcpProcess::new(&process.command, process.args.clone(), &process.cwd)
+        .envs(process.env.clone());
     let (channel, connection) =
         agent_client_protocol::ConnectTo::<Client>::into_channel_and_future(agent);
     let mut connection = std::pin::pin!(connection);
@@ -98,8 +96,8 @@ pub(crate) async fn probe_subprocess(
         result = probe => {
             if matches!(result, Err(ProbeError::Protocol(_))) {
                 // Stdio can close before the child-exit monitor resolves. Let
-                // the SDK finish shutdown and collect the exit status before
-                // classifying the failure, within the original probe deadline.
+                // the supervisor finish shutdown and collect the exit status
+                // before classifying the failure, within the original deadline.
                 if let Ok(Err(error)) = tokio::time::timeout_at(expires, connection).await {
                     return Err(ProbeError::Process(error.to_string()));
                 }
@@ -107,25 +105,4 @@ pub(crate) async fn probe_subprocess(
             result
         },
     }
-}
-
-#[cfg(unix)]
-fn subprocess_agent(process: &ProbeSubprocess) -> Result<AcpAgent, ProbeError> {
-    // `$0` is a label, `$1` is cwd, and the remaining positional arguments
-    // are the configured command and its arguments. No configured value is
-    // interpolated into shell source.
-    let mut args = vec![
-        "-c".to_owned(),
-        "cd -- \"$1\" && shift && exec \"$@\"".to_owned(),
-        "acp-model-probe".to_owned(),
-        process.cwd.to_string_lossy().into_owned(),
-        process.command.to_string_lossy().into_owned(),
-    ];
-    args.extend(process.args.iter().cloned());
-    Ok(AcpAgent::new(AcpAgentConfig::new("/bin/sh").args(args)))
-}
-
-#[cfg(not(unix))]
-fn subprocess_agent(_process: &ProbeSubprocess) -> Result<AcpAgent, ProbeError> {
-    Err(ProbeError::UnsupportedWorkingDirectory)
 }

@@ -1,13 +1,14 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { setAutomationComposerOpen } from '@block-automation/component';
 import {
   endTrackedDocumentSpan,
   registerDocumentSpan,
@@ -18,8 +19,12 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
 import { getIconConfig } from '@core/component/EntityIcon';
+import { toast } from '@core/component/Toast/Toast';
 import {
   enableChatV3Agents,
+  enableDatabases,
+  enableFigViewer,
+  enableProjects,
   enableReminders,
   enableSnippets,
   isFeatureEnabled,
@@ -48,8 +53,10 @@ import type { Span } from '@macro-inc/observability';
 import ChatIcon from '@phosphor/chat.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import { createDatabase } from '@queries/storage/databases';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
+import { useNavigate } from '@solidjs/router';
 import {
   CommandMenuHotkeyHint,
   CommandMenuList,
@@ -72,6 +79,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { createCallCommand } from './create-call-command';
 import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName } from './types';
 
@@ -165,20 +173,15 @@ const createBlock = async (spec: {
 
   setCreateMenuOpen(false, false);
 
-  // WORKAROUND: On mobile, the navigation interceptor in createMobileSwipeLayout
-  // consumes openWithSplit calls and returns undefined instead of a SplitHandle.
-  // This means we can't show a loading spinner then replace it via split.replace(),
-  // because we never get a handle back. Instead, on mobile we skip the loading state
-  // and navigate directly to the created block after the async creation completes.
-  // If the mobile navigation interceptor is refactored to return handles, this
-  // workaround can be removed and both paths can use the loading-then-replace flow.
+  // On mobile, navigate directly after creation instead of showing an
+  // intermediate loading pane during the swipe transition.
   const showLoadingFirst = loading && !isMobile();
 
   const split = showLoadingFirst
     ? openWithSplit(
         { type: 'component', id: 'loading' },
         { referredFrom: 'launcher', preferNewSplit: spec.shouldInsert }
-      )
+      ).split
     : undefined;
 
   const id = await createFn();
@@ -307,6 +310,16 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'fig':
+      if (!isFeatureEnabled(enableFigViewer)) return;
+      createBlock({
+        blockName: 'fig',
+        loading: true,
+        createFn: () =>
+          createFigDocument({ projectId: options.projectId, source }),
+        shouldInsert,
+      });
+      return;
     case 'canvas':
       createBlock({
         blockName: 'canvas',
@@ -327,6 +340,13 @@ export function runCreateAction(
     case 'task':
       createComponent({
         componentId: 'task-compose',
+        asPopover: true,
+      });
+      return;
+    case 'initiative':
+      if (!isFeatureEnabled(enableProjects)) return;
+      createComponent({
+        componentId: 'project-compose',
         asPopover: true,
       });
       return;
@@ -362,6 +382,11 @@ export function runCreateAction(
       });
       return;
     case 'chat':
+      if (isFeatureEnabled(enableChatV3Agents)) {
+        setCreateMenuOpen(false, false);
+        openAgentComposer(useSplitLayout(), shouldInsert);
+        return;
+      }
       // On mobile the chat input doesn't autofocus on mount, so arm focus
       // within this gesture (iOS only raises the keyboard for a synchronous
       // focus). The chat mounts asynchronously, so this waits for the input.
@@ -396,6 +421,25 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'database':
+      if (!isFeatureEnabled(enableDatabases)) return;
+      createBlock({
+        blockName: 'database',
+        loading: true,
+        createFn: async () => {
+          const created = await createDatabase({
+            name: 'Untitled database',
+            source,
+          });
+          if (created.isErr()) {
+            toast.failure('Could not create the database');
+            return;
+          }
+          return created.value;
+        },
+        shouldInsert,
+      });
+      return;
     case 'code':
       createBlock({
         blockName: 'code',
@@ -414,9 +458,8 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
-    case 'automation':
-      setCreateMenuOpen(false, false);
-      setAutomationComposerOpen(true, false);
+    case 'routine':
+      createComponent({ componentId: 'routine-compose', asPopover: true });
       return;
     case 'skill':
       createComponent({
@@ -508,16 +551,16 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Automation',
-    icon: getIconConfig('automation').icon,
-    description: 'Create automation',
-    launcherHint: 'Scheduled agent runs',
-    keywords: ['new', 'make', 'add', 'schedule', 'agent'],
-    blockName: 'automation',
-    hotkeyToken: TOKENS.create.automation,
+    label: 'Routine',
+    icon: getIconConfig('routine').icon,
+    description: 'Run a model or agent on a schedule or Macro activity',
+    launcherHint: 'Schedules and activity triggers',
+    keywords: ['new', 'make', 'add', 'schedule', 'agent', 'event', 'trigger'],
+    blockName: 'routine',
+    hotkeyToken: TOKENS.create.routine,
     hotkey: 'u',
     keyDownHandler: () => {
-      runCreateAction('automation');
+      runCreateAction('routine');
       return true;
     },
   },
@@ -535,6 +578,22 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     enabled: () => isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
       runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    label: 'Database',
+    icon: getIconConfig('database').icon,
+    description: 'Create database',
+    launcherHint: 'Tables and boards',
+    keywords: ['new', 'make', 'add', 'database', 'table', 'db'],
+    blockName: 'database',
+    enabled: () => isFeatureEnabled(enableDatabases),
+    hotkeyToken: TOKENS.create.database,
+    altHotkeyToken: TOKENS.create.databaseNewSplit,
+    hotkey: 'l',
+    keyDownHandler: () => {
+      runCreateAction('database', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -577,6 +636,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 't' as const,
     keyDownHandler: () => {
       runCreateAction('task');
+      return true;
+    },
+  },
+  {
+    label: 'Project',
+    icon: getIconConfig('initiative').icon,
+    description: 'Create project',
+    keywords: ['new', 'make', 'add', 'project'],
+    blockName: 'initiative',
+    enabled: () => isFeatureEnabled(enableProjects),
+    hotkeyToken: TOKENS.create.initiative,
+    hotkey: 'p',
+    keyDownHandler: () => {
+      runCreateAction('initiative');
       return true;
     },
   },
@@ -659,6 +732,22 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    label: 'Design',
+    enabled: () => isFeatureEnabled(enableFigViewer),
+    icon: getIconConfig('fig').icon,
+    description: 'Create design',
+    launcherHint: 'Figma-compatible canvas for UI and graphics',
+    keywords: ['new', 'make', 'add', 'design', 'figma', 'mockup', 'ui'],
+    blockName: 'fig',
+    hotkeyToken: TOKENS.create.design,
+    altHotkeyToken: TOKENS.create.designNewSplit,
+    hotkey: 'i',
+    keyDownHandler: () => {
+      runCreateAction('fig', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
     label: 'Spreadsheet',
     enabled: isSpreadsheetEnabledForCurrentUser,
     icon: getIconConfig('spreadsheet').icon,
@@ -706,6 +795,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
 ];
 
+/** Router-backed commands are bound once in each host's component owner. */
+export function useCreateCommands(): CreatableBlock[] {
+  const navigate = useNavigate();
+  const quickCalls = useQuickCallsFlag();
+  return [
+    ...CREATABLE_BLOCKS,
+    createCallCommand({
+      navigate,
+      close: () => setCreateMenuOpen(false, false),
+      enabled: () => quickCalls().enabled,
+    }),
+  ];
+}
+
 /**
  * The creatable-block entries a create menu renders, with feature gating
  * applied — the single source of truth shared by the desktop menus and the
@@ -714,8 +817,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
  * run it through the same gating.
  */
 export function useCreateMenuBlocks(
-  source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
+  source: () => CreatableBlock[] | undefined = () => undefined
 ): Accessor<CreatableBlock[]> {
+  const commands = useCreateCommands();
   const spreadsheets = useSpreadsheetAccess();
   const snippetsFlag = useFeatureFlag(enableSnippets);
   // Subscribed to rather than left to the block's own `enabled`, which reads
@@ -723,12 +827,18 @@ export function useCreateMenuBlocks(
   // flag that resolves after mount would leave the menu as it was until reload.
   const remindersFlag = useFeatureFlag(enableReminders);
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
+  const projectsFlag = useFeatureFlag(enableProjects);
+  const databasesFlag = useFeatureFlag(enableDatabases);
+  const figFlag = useFeatureFlag(enableFigViewer);
   return createMemo(() => {
     remindersFlag();
     agentsFlag();
-    return source().filter((block) => {
+    databasesFlag();
+    figFlag();
+    return (source() ?? commands).filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;
+      if (block.blockName === 'initiative') return projectsFlag().enabled;
       return block.enabled?.() ?? true;
     });
   });
@@ -809,9 +919,9 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const availableBlocks = useCreateMenuBlocks(
-    () => props.blocks ?? CREATABLE_BLOCKS
-  );
+  const commands = useCreateCommands();
+  const candidates = () => props.blocks ?? commands;
+  const availableBlocks = useCreateMenuBlocks(candidates);
   const sortedBlocks = createMemo(() => sortLauncherBlocks(availableBlocks()));
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchMode = launcherSearchMode;
@@ -841,7 +951,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     item: CreatableBlock | undefined,
     shouldReturnFocus?: boolean
   ) => {
-    if (!item) return false;
+    if (!item || !availableBlocks().includes(item)) return false;
 
     trackLauncherItemUsage(item);
     item.keyDownHandler();
@@ -873,12 +983,15 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     setFocusedIndex(0);
   });
 
-  availableBlocks().forEach((item) => {
+  candidates().forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
       scopeId: launcherScope,
       description: item.description,
+      condition: () => availableBlocks().includes(item),
+      registrationType: item.registrationType,
+      runWithInputFocused: item.runWithInputFocused,
       keyDownHandler: () => {
         return runLauncherItem(item, false);
       },
@@ -890,6 +1003,9 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         hotkey: `shift+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
         description: `${item.description} in new split`,
+        condition: () => availableBlocks().includes(item),
+        registrationType: item.registrationType,
+        runWithInputFocused: item.runWithInputFocused,
         keyDownHandler: () => {
           return runLauncherItem(item);
         },
@@ -901,7 +1017,10 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     hotkey: 'c',
     scopeId: launcherScope,
     description: 'Close Launcher',
-    condition: createMenuOpen,
+    condition: () =>
+      createMenuOpen() &&
+      !availableBlocks().some((item) => item.hotkey === 'c'),
+    registrationType: 'add',
     keyDownHandler: () => {
       setCreateMenuOpen(false);
       return true;
@@ -1003,7 +1122,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   return (
     // The shared shell stopped painting its own pane (cmd+k gets one from the
     // app Dialog wrapper); this raw-Kobalte dialog carries it here.
-    <div class="create-menu-pane w-200 max-w-[calc(100vw-16px)] rounded-xl touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
+    <div class="elevated-surface create-menu-pane w-200 max-w-[calc(100vw-16px)] touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)]">
       <div
         aria-hidden="true"
         class="hidden touch:flex h-5 shrink-0 items-center justify-center"
@@ -1017,7 +1136,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="gap-2 px-4 my-1 border-b-0">
+        <CommandMenuShell.Header class="border-b-0">
           <Show
             when={searchMode()}
             fallback={

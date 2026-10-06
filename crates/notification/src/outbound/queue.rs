@@ -1,6 +1,12 @@
 //! SQS queue adapter for notification delivery.
 
+#[cfg(test)]
+mod test;
+
+use std::future::Future;
+
 use aws_sdk_sqs::Client as SqsClient;
+use futures::{StreamExt, stream};
 use rootcause::Report;
 use serde::Serialize;
 
@@ -8,6 +14,18 @@ use crate::domain::models::queue_message::{
     IngressQueueMessage, QueueMessage, RawIngressQueueMessage, RawQueueMessage,
 };
 use crate::domain::ports::{NotificationIngressQueue, NotificationQueue};
+
+const MAX_CONCURRENT_SENDS: usize = 10;
+
+/// Await every send, including after an error, without unbounded SQS fanout.
+async fn send_concurrently(
+    sends: impl IntoIterator<Item = impl Future<Output = Result<(), Report>>>,
+) -> Result<(), Report> {
+    stream::iter(sends)
+        .buffer_unordered(MAX_CONCURRENT_SENDS)
+        .fold(Ok(()), |result, next| async move { result.and(next) })
+        .await
+}
 
 /// SQS-backed implementation of the notification queue ports.
 ///
@@ -53,10 +71,11 @@ impl NotificationQueue for SqsQueue {
         &self,
         messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
-        for message in messages {
-            self.send_json(&message).await?;
-        }
-        Ok(())
+        let sends: Vec<_> = messages
+            .into_iter()
+            .map(|message| async move { self.send_json(&message).await })
+            .collect();
+        send_concurrently(sends).await
     }
 
     async fn receive_messages(&self) -> Result<Vec<RawQueueMessage>, Report> {
@@ -109,22 +128,35 @@ impl NotificationIngressQueue for SqsQueue {
             .send()
             .await?;
 
-        let messages = result
-            .messages
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|msg| {
-                let body_str = msg.body?;
-                let body = serde_json::from_str(&body_str)
-                    .inspect_err(|e| tracing::error!(error=?e, payload_length=body_str.len(), "failed to deserialize ingress queue message"))
-                    .ok()?;
-                let receipt_handle = msg.receipt_handle?;
-                Some(RawIngressQueueMessage {
+        let mut messages = Vec::new();
+        for msg in result.messages.unwrap_or_default() {
+            let (Some(body_str), Some(receipt_handle)) = (msg.body, msg.receipt_handle) else {
+                continue;
+            };
+            match serde_json::from_str(&body_str) {
+                Ok(body) => messages.push(RawIngressQueueMessage {
                     body,
                     receipt_handle,
-                })
-            })
-            .collect();
+                }),
+                Err(error) => {
+                    tracing::warn!(
+                        error = ?error,
+                        message_id = ?msg.message_id,
+                        payload_length = body_str.len(),
+                        "failed to deserialize ingress queue message; discarding message"
+                    );
+                    // Acknowledge malformed payloads rather than retrying them into the DLQ.
+                    // A failed delete must not prevent valid messages in this batch from processing.
+                    let _ = self.delete(&receipt_handle).await.inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            message_id = ?msg.message_id,
+                            "failed to delete malformed ingress queue message"
+                        );
+                    });
+                }
+            }
+        }
 
         Ok(messages)
     }

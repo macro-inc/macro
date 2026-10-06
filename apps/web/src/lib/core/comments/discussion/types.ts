@@ -44,6 +44,11 @@ export interface DiscussionSource {
   threads: Accessor<DiscussionThread[]>;
   /** Whether the current user may create/edit/delete here. */
   canEdit: Accessor<boolean>;
+  /**
+   * Delete comments the caller did not write. Document owners set this.
+   * Editing stays limited to the author.
+   */
+  canModerate?: Accessor<boolean>;
   /** Current user id, for own-comment checks. */
   currentUserId: Accessor<string | undefined>;
   /** Comment id to highlight/scroll to (deep link), or null. */

@@ -189,12 +189,13 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
           common={{
             id: props.part.toolCall ?? String(props.part.requestId),
             label: reviewed().request.tool,
-            server: undefined,
             status:
               reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
             muted: reviewed().toolOutcome.kind === 'failed',
             trailing: undefined,
           }}
+          // The tool has reported back, so nothing is still going out.
+          inFlight={false}
         />
       )}
     </Show>

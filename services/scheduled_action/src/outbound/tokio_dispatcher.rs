@@ -10,6 +10,9 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use crate::domain::models::{DispatchEvent, InProgressExecution, ScheduledAction};
 use crate::domain::ports::{ScheduledActionDispatcher, ScheduledActionExecutor};
 
+#[cfg(test)]
+mod test;
+
 const BUFFER_SIZE: usize = 1024;
 
 type SleepFuture = Pin<Box<dyn Future<Output = (Uuid, u64)> + Send>>;
@@ -34,9 +37,8 @@ fn action_sleep(id: Uuid, action: &ScheduledAction, generation: u64) -> Option<S
         return None;
     }
 
-    let cron = action.schedule.as_cron();
-    let next = cron.upcoming(action.timezone).next()?;
-    let now = Utc::now().with_timezone(&action.timezone);
+    let now = Utc::now();
+    let next = action.trigger.next_run_after(now)?;
     let duration = (next - now).to_std().unwrap_or(std::time::Duration::ZERO);
 
     Some(Box::pin(async move {

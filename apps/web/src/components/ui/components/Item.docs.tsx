@@ -206,7 +206,7 @@ function TaskDemo() {
         <Button
           size="icon-sm"
           variant="ghost"
-          class="shrink-0 rounded-full text-task"
+          class="shrink-0 text-task"
           aria-label="Complete review task"
           aria-pressed={completed()}
           onClick={() => setCompleted(!completed())}

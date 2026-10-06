@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ThreadAnchorOneOfFourMarkedText } from './threadAnchorOneOfFourMarkedText';
 import type { ThreadAnchorOneOfFourType } from './threadAnchorOneOfFourType';
 
 /**
@@ -12,5 +13,10 @@ import type { ThreadAnchorOneOfFourType } from './threadAnchorOneOfFourType';
 export type ThreadAnchorOneOfFour = {
   /** Highlight annotation UUID. */
   anchor_id: string;
+  /** The text the highlight covers, trimmed and bounded like a markdown
+snapshot. The highlight owns it and it can be edited there, so it is
+read from the highlight whenever the thread is, never stored on the
+thread. Absent when the highlight carries no text. */
+  marked_text?: ThreadAnchorOneOfFourMarkedText;
   type: ThreadAnchorOneOfFourType;
 };

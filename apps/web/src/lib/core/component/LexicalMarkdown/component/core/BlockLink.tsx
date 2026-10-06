@@ -58,7 +58,7 @@ export function openDocument(
     return;
   }
 
-  openWithSplit(
+  const result = openWithSplit(
     { type: targetBlock, id, params },
     {
       preferNewSplit: inNewSplit,
@@ -69,6 +69,7 @@ export function openDocument(
   if (isBlockNameWithLocation(targetBlock)) {
     openLocation(targetBlock, id, params);
   }
+  return result;
 }
 
 export function BlockLink(

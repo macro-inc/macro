@@ -18,6 +18,7 @@ use crate::inbound::mutation_router::{
 
 fn sample_draft() -> CalendarEventDraft {
     CalendarEventDraft {
+        idempotency_key: None,
         title: "Standup".to_string(),
         description: Some("Daily".to_string()),
         location: None,
@@ -195,10 +196,15 @@ fn rsvp_body_matches_the_router_request() {
         &CalendarRsvpScope::ThisEvent {
             recurrence_id: "k-1".to_string(),
         },
+        Some("chosen@example.com"),
     );
     let request: RsvpCalendarEventRequest = serde_json::from_value(body).unwrap();
     assert_eq!(request.response, AttendeeResponseStatus::Accepted);
     assert_eq!(request.recurrence_id.as_deref(), Some("k-1"));
+    assert_eq!(
+        request.responding_email.as_deref(),
+        Some("chosen@example.com")
+    );
 }
 
 #[test]

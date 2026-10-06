@@ -9,6 +9,7 @@
  * in-progress state would only make the switch look slower than it is.
  */
 
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { match, P } from 'ts-pattern';
 import { ActionLine } from '../../ui';
@@ -23,11 +24,26 @@ function label(part: ControlPartData): string {
       // runtime refusal, after the fact, reads differently.
       .with(
         [{ kind: 'set_model' }, { kind: P.union('pending', 'accepted') }],
-        ([control]) => `Model set to ${control.model}`
+        ([control]) => `Model set to ${modelLabel(control.model)}`
       )
       .with(
         [{ kind: 'set_model' }, { kind: 'rejected' }],
-        ([control]) => `Couldn't switch to ${control.model}`
+        ([control]) => `Couldn't switch to ${modelLabel(control.model)}`
+      )
+      .with(
+        [{ kind: 'set_config_option' }, { kind: 'pending' }],
+        ([control]) =>
+          `Setting ${configLabel(control.config_id)} to ${control.value}…`
+      )
+      .with(
+        [{ kind: 'set_config_option' }, { kind: 'accepted' }],
+        ([control]) =>
+          `${configLabel(control.config_id)} set to ${control.value}`
+      )
+      .with(
+        [{ kind: 'set_config_option' }, { kind: 'rejected' }],
+        ([control]) =>
+          `Couldn't set ${configLabel(control.config_id)} to ${control.value}`
       )
       .with(
         [{ kind: 'compact' }, { kind: 'pending' }],
@@ -51,6 +67,11 @@ function label(part: ControlPartData): string {
       .with([{ kind: 'stop' }, { kind: 'accepted' }], () => 'Stopped')
       .exhaustive()
   );
+}
+
+function configLabel(configId: string): string {
+  if (configId === 'reasoning_effort') return 'Reasoning effort';
+  return configId.replaceAll('_', ' ');
 }
 
 export function ControlPart(props: { part: ControlPartData }) {

@@ -123,8 +123,12 @@ function RegularMessageLayout(props: {
         <div class="flex items-baseline gap-1 min-w-0">
           <Message.SenderName />
           <Message.AgentBadge />
-          <Message.Timestamp class="shrink-0" format="time" />
+          <Message.Timestamp
+            class="shrink-0"
+            format={props.parent.type === 'channel' ? 'time' : 'dateAndTime'}
+          />
           <Message.EditedIndicator class="shrink-0" />
+          <Message.AgentSessionLink class="ml-auto" />
         </div>
         <Message.FromPill />
       </Message.Slot>
@@ -164,6 +168,9 @@ function GroupedMessageLayout(props: {
             messageEditor={props.messageEditor}
             class="min-w-0 flex-1"
           />
+          {/* No sender line to sit on: the link takes the top right of the
+              content row instead. */}
+          <Message.AgentSessionLink class="mt-0.5" />
         </div>
       </Message.Slot>
       <Message.Slot

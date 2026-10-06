@@ -2,7 +2,7 @@ import { tz } from '@date-fns/tz';
 import {
   compareAsc,
   compareDesc,
-  differenceInWeeks,
+  differenceInCalendarDays,
   isToday,
   isYesterday,
   toDate,
@@ -42,6 +42,20 @@ export const formatTime = (
 };
 
 /**
+ * The short timezone name in effect at `date`, e.g. 'EDT' in summer and 'EST'
+ * in winter for New York. Zones without an English abbreviation get an
+ * offset such as 'GMT+1'.
+ * @param timeZone - IANA timezone string. Defaults to system timezone.
+ */
+export const formatTimeZoneAbbreviation = (
+  date: Date,
+  timeZone?: string
+): string | undefined =>
+  new Intl.DateTimeFormat('en-US', { timeZoneName: 'short', timeZone })
+    .formatToParts(date)
+    .find((part) => part.type === 'timeZoneName')?.value;
+
+/**
  * Formats a date to a human readable string.
  * @param date - Date object or Unix timestamp in seconds
  * @param options - Optional formatting options.
@@ -68,7 +82,7 @@ export const formatDate = (
     return `${shortWeekday ? 'Yest' : 'Yesterday'} at ${time}`;
   }
 
-  if (differenceInWeeks(now, date) < 1) {
+  if (differenceInCalendarDays(now, d, timeZoneOpts) < 7) {
     const weekday = d.toLocaleDateString(undefined, {
       weekday: shortWeekday ? 'short' : 'long',
       timeZone,

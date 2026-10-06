@@ -16,6 +16,8 @@ export type AgentAction = (AgentPromptAction & {
     type: 'prompt';
 }) | (AgentSetModelAction & {
     type: 'setModel';
+}) | (AgentSetConfigOptionAction & {
+    type: 'setConfigOption';
 }) | {
     type: 'compact';
 } | {
@@ -40,6 +42,71 @@ export type AgentAction = (AgentPromptAction & {
  * not uuids and stay `None`.
  */
 export type AgentActionId = string;
+
+/**
+ * Type-specific state for one agent session setting.
+ */
+export type AgentConfigKindDto = {
+    /**
+     * Current opaque value.
+     */
+    currentValue: string;
+    /**
+     * Ordered values supplied by the agent.
+     */
+    options: Array<AgentConfigSelectOptionDto>;
+    type: 'select';
+} | {
+    /**
+     * Current value.
+     */
+    currentValue: boolean;
+    type: 'boolean';
+};
+
+/**
+ * One agent-advertised ACP session setting.
+ */
+export type AgentConfigOptionDto = AgentConfigKindDto & {
+    /**
+     * ACP semantic category, such as `model` or `thought_level`.
+     */
+    category?: string | null;
+    /**
+     * Optional explanatory copy.
+     */
+    description?: string | null;
+    /**
+     * Opaque id used to change this setting.
+     */
+    id: string;
+    /**
+     * Display label supplied by the agent.
+     */
+    name: string;
+};
+
+/**
+ * One value in an agent-advertised select.
+ */
+export type AgentConfigSelectOptionDto = {
+    /**
+     * Optional provider description of this value.
+     */
+    description?: string | null;
+    /**
+     * Optional group heading supplied by the provider.
+     */
+    group?: string | null;
+    /**
+     * Display label.
+     */
+    name: string;
+    /**
+     * Opaque value returned to the agent when selected.
+     */
+    value: string;
+};
 
 /**
  * One model picker option.
@@ -350,6 +417,10 @@ export type AgentSessionResponse = {
      */
     instructions?: string | null;
     /**
+     * Whether the session is archived and read-only.
+     */
+    isArchived: boolean;
+    /**
      * Model slug.
      */
     model: string;
@@ -402,6 +473,20 @@ export type AgentSessionResponse = {
 };
 
 /**
+ * Ask the agent to change one advertised select-style session setting.
+ */
+export type AgentSetConfigOptionAction = {
+    /**
+     * Opaque ACP config id advertised by the agent.
+     */
+    configId: string;
+    /**
+     * Opaque select value advertised for that config option.
+     */
+    value: string;
+};
+
+/**
  * Ask the agent to run on a different model from here on.
  */
 export type AgentSetModelAction = {
@@ -411,7 +496,47 @@ export type AgentSetModelAction = {
     model: string;
 };
 
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Request body for answering a held tool call.
+ */
+export type AnswerToolApprovalRequest = {
+    /**
+     * The answer.
+     */
+    answer: ToolApprovalAnswerDto;
+};
+
+/**
+ * Response body for answering a held tool call.
+ */
+export type AnswerToolApprovalResponse = {
+    /**
+     * Where the call stands now.
+     */
+    status: ToolApprovalStatusDto;
+};
+
 export type BotId = string;
+
+/**
+ * Harness names accepted by the capability-discovery endpoint.
+ */
+export type CapabilityHarnessDto = 'in-memory' | 'cursor' | 'macrod';
 
 /**
  * The latest capture attempt.
@@ -476,7 +601,7 @@ export type ChangedFileDto = {
 };
 
 /**
- * One capture of a session's changes.
+ * One changeset: the files a patch touches and what happened to each.
  *
  * Clients deserialize this, so both derives are used.
  */
@@ -506,11 +631,11 @@ export type ChangesetDto = {
      */
     head: GitRefDto;
     /**
-     * The capture's id; changes with every capture.
+     * The changeset's id; a different id means different changes.
      */
     id: string;
     /**
-     * Size of the patch `GET .../changes/patch` serves; zero when nothing
+     * Size of the patch the matching patch route serves; zero when nothing
      * changed.
      */
     patchBytes: number;
@@ -529,7 +654,7 @@ export type ChangesetDto = {
 };
 
 /**
- * The source of the captured diff, on the wire.
+ * The source of a changeset's diff, on the wire.
  */
 export type ChangesetSourceDto = 'github_pull_request';
 
@@ -623,6 +748,16 @@ export type CreateAgentSessionRequest = {
      */
     botId?: string | null;
     /**
+     * Id to create the session under, minted by the caller. Lets a surface
+     * open on the session's final id - URL, history row, references - the
+     * moment the user acts, rather than after this request answers (which
+     * for a managed sandbox can take a while). Omitted, the service mints
+     * one. Answers 409 if a session already holds the id. On an external
+     * request it is how a runtime answering a composer request names the
+     * id it was handed, so the requester waiting on that id finds the session.
+     */
+    id?: string | null;
+    /**
      * Instructions the session's runtime works under, for its whole life.
      *
      * Recorded on the session whichever runtime serves it. Only the
@@ -642,13 +777,12 @@ export type CreateAgentSessionRequest = {
     model?: string | null;
     /**
      * The user who owns the session. Ignored for user callers, who always
-     * own their own sessions, and for harness callers, whose verified acting
-     * user (owner or confirmed team member) owns the session instead;
-     * required for bot callers without verified acting-user claims.
-     *
-     * For bot callers this is a claim, not a verified fact: it is scoped to
-     * the bot's own sessions, but the named user owns the session on the
-     * bot's say-so.
+     * own their own sessions, for harness callers, whose verified acting
+     * user owns the session, and for bots that already act for a verified
+     * user. A bot without one may name a user here. That claim is trusted
+     * for the bot's own sessions. With no claim, a team bot owns the session
+     * itself only while non-user owners are enabled. Every other bot still
+     * needs an owner.
      */
     owner?: string | null;
     /**
@@ -711,10 +845,42 @@ export type CreateSessionThread = {
     messageId: string;
     parent?: null | MessageParent;
     /**
+     * Update the existing bot response reserved by a task assignment.
+     */
+    reuseOriginMessage?: boolean;
+    /**
      * Thread the session belongs to; defaults to the message itself, which
      * is how a top-level mention roots its own thread.
      */
     threadId?: string | null;
+};
+
+/**
+ * HTTP request selecting one provider to probe.
+ */
+export type DiscoverAgentCapabilitiesRequest = {
+    /**
+     * Provider to probe.
+     */
+    harness: CapabilityHarnessDto;
+    /**
+     * Required for macrod and forbidden for other targets.
+     */
+    harnessId?: string | null;
+    /**
+     * Model whose session settings should be inspected.
+     */
+    model?: string | null;
+};
+
+/**
+ * Successful capability-discovery response.
+ */
+export type DiscoverAgentCapabilitiesResponse = {
+    /**
+     * Complete ordered ACP session configuration advertised by the agent.
+     */
+    configOptions: Array<AgentConfigOptionDto>;
 };
 
 /**
@@ -898,6 +1064,30 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
+} | {
+    /**
+     * A video call and its persistent chat thread.
+     */
+    id: string;
+    type: 'call';
 };
 
 /**
@@ -972,6 +1162,31 @@ export type PromptAttachment = {
      * Where the agent can fetch the file.
      */
     uri: string;
+};
+
+/**
+ * Who associated a pull request with a session.
+ */
+export type PullRequestLinkSource = 'agent' | 'user';
+
+/**
+ * The sessions associated with a pull request.
+ */
+export type PullRequestSessionsResponse = {
+    /**
+     * Sessions associated with the pull request that the caller can view.
+     */
+    sessionIds: Array<string>;
+};
+
+/**
+ * A GitHub pull request, by URL.
+ */
+export type PullRequestUrl = {
+    /**
+     * The pull request's GitHub URL, such as `https://github.com/owner/repo/pull/12`.
+     */
+    url: string;
 };
 
 /**
@@ -1060,6 +1275,42 @@ export type SessionBot = {
 };
 
 /**
+ * A pull request associated with a session.
+ */
+export type SessionPullRequestLink = {
+    /**
+     * When the pull request was associated with the session.
+     */
+    createdAt: string;
+    /**
+     * The pull request's `owner/repo/pull/number` key.
+     */
+    githubKey: string;
+    /**
+     * The Macro user who linked it, for links a person made.
+     */
+    linkedBy?: string | null;
+    /**
+     * Who associated the pull request with the session.
+     */
+    source: PullRequestLinkSource;
+    /**
+     * The pull request's GitHub URL.
+     */
+    url: string;
+};
+
+/**
+ * The pull requests associated with a session.
+ */
+export type SessionPullRequestsResponse = {
+    /**
+     * Pull requests, oldest link first.
+     */
+    pullRequests: Array<SessionPullRequestLink>;
+};
+
+/**
  * Transport representation of a session's status, mirroring
  * [`SessionStatus`].
  */
@@ -1073,6 +1324,16 @@ export type SessionStatusDto = {
     kind: 'event';
 } | {
     kind: 'disconnected';
+};
+
+/**
+ * Request body for archiving or unarchiving an agent session.
+ */
+export type SetAgentSessionArchivedRequest = {
+    /**
+     * The requested archive state.
+     */
+    isArchived: boolean;
 };
 
 export type SharePermissionV2 = {
@@ -1129,6 +1390,16 @@ export type StatusResponse = {
     ephemeral: boolean;
 };
 
+/**
+ * How a person answers a held tool call.
+ */
+export type ToolApprovalAnswerDto = 'approve' | 'approve_and_remember' | 'deny' | 'cancel';
+
+/**
+ * Where a held tool call stands once answered.
+ */
+export type ToolApprovalStatusDto = 'pending' | 'approved' | 'denied' | 'cancelled' | 'expired';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -1155,6 +1426,23 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * A client-minted id deduplicates warm calls without creating a conversation.
+ */
+export type WarmAgentSessionRequest = {
+    /**
+     * Id reserved by this browser for its next in-memory conversation.
+     */
+    id: string;
+};
+
+/**
+ * A bounded best-effort warm attempt; absence means normal creation should proceed.
+ */
+export type WarmAgentSessionResponse = {
+    session?: null | AgentSessionResponse;
+};
+
+/**
  * Just a session id, for the preview variants that carry nothing else.
  *
  * Clients deserialize this, so both derives are used.
@@ -1165,6 +1453,49 @@ export type WithAgentSessionId = {
      */
     id: string;
 };
+
+export type DiscoverAgentCapabilitiesHandlerData = {
+    body: DiscoverAgentCapabilitiesRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-capabilities/discover';
+};
+
+export type DiscoverAgentCapabilitiesHandlerErrors = {
+    /**
+     * Invalid target
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Harness is not visible to caller
+     */
+    403: unknown;
+    /**
+     * Macrod runtime is disconnected
+     */
+    409: unknown;
+    /**
+     * Provider probe failed
+     */
+    502: unknown;
+    /**
+     * Macrod probe timed out
+     */
+    504: unknown;
+};
+
+export type DiscoverAgentCapabilitiesHandlerResponses = {
+    /**
+     * Fresh provider session capabilities
+     */
+    200: DiscoverAgentCapabilitiesResponse;
+};
+
+export type DiscoverAgentCapabilitiesHandlerResponse = DiscoverAgentCapabilitiesHandlerResponses[keyof DiscoverAgentCapabilitiesHandlerResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;
@@ -1325,10 +1656,18 @@ export type CreateAgentSessionData = {
 
 export type CreateAgentSessionErrors = {
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     403: string;
     404: string;
     422: string;
     500: string;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type CreateAgentSessionError = CreateAgentSessionErrors[keyof CreateAgentSessionErrors];
@@ -1338,6 +1677,27 @@ export type CreateAgentSessionResponses = {
 };
 
 export type CreateAgentSessionResponse2 = CreateAgentSessionResponses[keyof CreateAgentSessionResponses];
+
+export type AgentSessionsForPullRequestData = {
+    body: PullRequestUrl;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/by-pull-request';
+};
+
+export type AgentSessionsForPullRequestErrors = {
+    400: string;
+    401: string;
+    500: string;
+};
+
+export type AgentSessionsForPullRequestError = AgentSessionsForPullRequestErrors[keyof AgentSessionsForPullRequestErrors];
+
+export type AgentSessionsForPullRequestResponses = {
+    200: PullRequestSessionsResponse;
+};
+
+export type AgentSessionsForPullRequestResponse = AgentSessionsForPullRequestResponses[keyof AgentSessionsForPullRequestResponses];
 
 export type PreviewAgentSessionsData = {
     body: PreviewAgentSessionsRequest;
@@ -1362,6 +1722,19 @@ export type PreviewAgentSessionsResponses = {
 };
 
 export type PreviewAgentSessionsResponse2 = PreviewAgentSessionsResponses[keyof PreviewAgentSessionsResponses];
+
+export type WarmAgentSessionHandlerData = {
+    body: WarmAgentSessionRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/warm';
+};
+
+export type WarmAgentSessionHandlerResponses = {
+    200: WarmAgentSessionResponse;
+};
+
+export type WarmAgentSessionHandlerResponse = WarmAgentSessionHandlerResponses[keyof WarmAgentSessionHandlerResponses];
 
 export type DeleteAgentSessionData = {
     body?: never;
@@ -1412,6 +1785,32 @@ export type GetAgentSessionResponses = {
 };
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
+
+export type SetAgentSessionArchivedData = {
+    body: SetAgentSessionArchivedRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/archived';
+};
+
+export type SetAgentSessionArchivedErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type SetAgentSessionArchivedError = SetAgentSessionArchivedErrors[keyof SetAgentSessionArchivedErrors];
+
+export type SetAgentSessionArchivedResponses = {
+    204: void;
+};
+
+export type SetAgentSessionArchivedResponse = SetAgentSessionArchivedResponses[keyof SetAgentSessionArchivedResponses];
 
 export type GetAgentSessionChangesData = {
     body?: never;
@@ -1506,9 +1905,17 @@ export type ControlAgentSessionData = {
 
 export type ControlAgentSessionErrors = {
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     403: string;
     422: string;
     500: string;
+    /**
+     * AI usage validation unavailable, or replica draining; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type ControlAgentSessionError = ControlAgentSessionErrors[keyof ControlAgentSessionErrors];
@@ -1564,6 +1971,10 @@ export type RenameAgentSessionErrors = {
     400: string;
     401: string;
     403: string;
+    /**
+     * The session is archived
+     */
+    409: string;
     500: string;
 };
 
@@ -1626,6 +2037,91 @@ export type UpdateAgentSessionPermissionsResponses = {
 };
 
 export type UpdateAgentSessionPermissionsResponse = UpdateAgentSessionPermissionsResponses[keyof UpdateAgentSessionPermissionsResponses];
+
+export type UnlinkAgentSessionPullRequestData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query: {
+        /**
+         * The pull request's GitHub URL
+         */
+        url: string;
+    };
+    url: '/agent-sessions/{session_id}/pull-requests';
+};
+
+export type UnlinkAgentSessionPullRequestErrors = {
+    400: string;
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type UnlinkAgentSessionPullRequestError = UnlinkAgentSessionPullRequestErrors[keyof UnlinkAgentSessionPullRequestErrors];
+
+export type UnlinkAgentSessionPullRequestResponses = {
+    204: void;
+};
+
+export type UnlinkAgentSessionPullRequestResponse = UnlinkAgentSessionPullRequestResponses[keyof UnlinkAgentSessionPullRequestResponses];
+
+export type ListAgentSessionPullRequestsData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/pull-requests';
+};
+
+export type ListAgentSessionPullRequestsErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type ListAgentSessionPullRequestsError = ListAgentSessionPullRequestsErrors[keyof ListAgentSessionPullRequestsErrors];
+
+export type ListAgentSessionPullRequestsResponses = {
+    200: SessionPullRequestsResponse;
+};
+
+export type ListAgentSessionPullRequestsResponse = ListAgentSessionPullRequestsResponses[keyof ListAgentSessionPullRequestsResponses];
+
+export type LinkAgentSessionPullRequestData = {
+    body: PullRequestUrl;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/pull-requests';
+};
+
+export type LinkAgentSessionPullRequestErrors = {
+    400: string;
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type LinkAgentSessionPullRequestError = LinkAgentSessionPullRequestErrors[keyof LinkAgentSessionPullRequestErrors];
+
+export type LinkAgentSessionPullRequestResponses = {
+    204: void;
+};
+
+export type LinkAgentSessionPullRequestResponse = LinkAgentSessionPullRequestResponses[keyof LinkAgentSessionPullRequestResponses];
 
 export type GetAgentSessionQueueData = {
     body?: never;
@@ -1725,6 +2221,40 @@ export type EditQueuedActionResponses = {
 
 export type EditQueuedActionResponse = EditQueuedActionResponses[keyof EditQueuedActionResponses];
 
+export type SteerQueuedActionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+        /**
+         * ID the action was accepted under
+         */
+        action_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/queue/{action_id}/steer';
+};
+
+export type SteerQueuedActionErrors = {
+    401: string;
+    403: string;
+    /**
+     * Already dispatched or never queued
+     */
+    404: string;
+    500: string;
+};
+
+export type SteerQueuedActionError = SteerQueuedActionErrors[keyof SteerQueuedActionErrors];
+
+export type SteerQueuedActionResponses = {
+    204: void;
+};
+
+export type SteerQueuedActionResponse = SteerQueuedActionResponses[keyof SteerQueuedActionResponses];
+
 export type PutAgentSessionSandboxSizeData = {
     body: SandboxSizeBody;
     path: {
@@ -1750,6 +2280,48 @@ export type PutAgentSessionSandboxSizeResponses = {
 };
 
 export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];
+
+export type AnswerAgentSessionToolApprovalData = {
+    body: AnswerToolApprovalRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+        /**
+         * ID of the held tool call
+         */
+        approval_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/tool-approvals/{approval_id}';
+};
+
+export type AnswerAgentSessionToolApprovalErrors = {
+    401: string;
+    /**
+     * Not the owner, for approve or deny; or no edit access
+     */
+    403: string;
+    404: string;
+    /**
+     * Already resolved
+     */
+    409: string;
+    /**
+     * Approve for good, for a call no person asked for
+     */
+    422: string;
+    500: string;
+};
+
+export type AnswerAgentSessionToolApprovalError = AnswerAgentSessionToolApprovalErrors[keyof AnswerAgentSessionToolApprovalErrors];
+
+export type AnswerAgentSessionToolApprovalResponses = {
+    200: AnswerToolApprovalResponse;
+};
+
+export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
 
 export type DisconnectData = {
     body: EmptyRequest;

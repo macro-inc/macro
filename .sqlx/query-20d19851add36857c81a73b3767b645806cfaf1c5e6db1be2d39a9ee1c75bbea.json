@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"User\" (id, email, macro_user_id) VALUES ('macro|lifecycle@example.com', 'lifecycle@example.com', $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "20d19851add36857c81a73b3767b645806cfaf1c5e6db1be2d39a9ee1c75bbea"
+}

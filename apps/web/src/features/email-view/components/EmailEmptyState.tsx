@@ -24,9 +24,21 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       description:
         'Low-priority email like newsletters and notifications collects here. Nothing to clear right now.',
     }))
+    .with('favorites', () => ({
+      title: 'No favorite emails',
+      description: 'Star an email to keep it here for easy access.',
+    }))
     .with('sent', () => ({
       title: 'No sent email',
       description: 'Email you send will appear here.',
+    }))
+    .with('scheduled', () => ({
+      title: 'No scheduled email',
+      description: 'Email you schedule to send later will appear here.',
+    }))
+    .with('reminders', () => ({
+      title: 'No email reminders',
+      description: 'Use Remind me on an email to return to it later.',
     }))
     .with('calendar', () => ({
       title: 'No calendar email',
@@ -40,6 +52,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       title: 'No shared email',
       description: 'Threads teammates share with you will appear here.',
     }))
+    .with('archived', () => ({
+      title: 'No archived email',
+      description: 'Email you archive will appear here.',
+    }))
     .with('all', () => ({
       title: 'No email yet',
       description: 'Everything in your inbox will appear here as it arrives.',
@@ -51,7 +67,11 @@ export function EmailEmptyState() {
   const { state, setFacets, setInboxIds } = useEmailView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
-  const searchText = () => state.search.trim();
+  // Scheduled has no search or filters; text typed on another tab stays behind.
+  const searchText = () =>
+    state.tab === 'scheduled' || state.tab === 'reminders'
+      ? ''
+      : state.search.trim();
   const noInboxesSelected = () => state.inboxIds?.length === 0;
   const hasActiveFilters = () =>
     Object.values(state.facets).some((optionIds) => optionIds.length > 0);

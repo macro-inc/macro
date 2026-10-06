@@ -16,11 +16,13 @@
 #[cfg(test)]
 mod test;
 
+mod admission;
 mod deliver;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
 mod queue;
+mod warm;
 
 use std::sync::Arc;
 
@@ -39,6 +41,7 @@ use agent_session::domain::service::AgentSessionService;
 use agent_session::domain::session::PermissionPolicy;
 use bot_id::BotId;
 use dashmap::DashMap;
+use dashmap::DashSet;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
@@ -48,14 +51,14 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeclinedMention, DeliverAction,
-    HarnessCommand, HarnessDefaults, OpenSession, SessionAnnouncement, SpawnContainer,
-    is_macro_staff,
+    HarnessCommand, HarnessDefaults, OpenSession, PromptPeople, ReplyOutcome, ResolvedReply,
+    SessionAnnouncement, SpawnContainer, ToolApprovalChange, is_macro_staff,
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, AgentSessionNotifier, CommandForwarder, ContainerManager,
-    MessagePromptContext, PermissionPolicySource, PromptMentions, RuntimeConnections,
-    SandboxEgressProvisioner, SessionAnnouncer,
+    AgentPromptComposer, AgentSessionNotifier, CodingAgentSource, CommandForwarder,
+    ContainerManager, MessagePromptContext, PermissionPolicySource, PromptMentions,
+    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -92,6 +95,24 @@ impl<S: PermissionPolicySource> ErasedPermissionPolicySource for S {
     }
 }
 
+/// [`CodingAgentSource`], object-safe, erased like
+/// [`ErasedPermissionPolicySource`].
+trait ErasedCodingAgentSource: Send + Sync + 'static {
+    fn coding_agent_choice<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>>;
+}
+
+impl<S: CodingAgentSource> ErasedCodingAgentSource for S {
+    fn coding_agent_choice<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>> {
+        Box::pin(CodingAgentSource::coding_agent_choice(self, bot))
+    }
+}
+
 struct AgentHarnessInner<
     Sessions,
     Containers,
@@ -105,6 +126,7 @@ struct AgentHarnessInner<
     Notifier,
 > {
     sessions: Sessions,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -113,10 +135,15 @@ struct AgentHarnessInner<
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
     permission_policies: Box<dyn ErasedPermissionPolicySource>,
+    coding_agents: Box<dyn ErasedCodingAgentSource>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
-    /// end. In-memory beside the live actors this replica manages.
+    /// end. In-memory working copy; the session store is the durable source.
     queues: SessionQueues,
+    /// Sessions whose durable queue has been loaded into [`Self::queues`]
+    /// in this process. A restart starts empty; resume and the first local
+    /// command restore from the session store.
+    hydrated: DashSet<AgentSessionId>,
     /// The sessions with a command admitted and not yet resolved, and which
     /// turn it opened once dispatch names one. Marked the moment a
     /// turn-occupying action is admitted (queue.rs's `enqueue_then_dispatch`),
@@ -193,6 +220,9 @@ pub struct AgentHarnessService<
     >,
     workers: Arc<SessionWorkers>,
     repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
+    warm_lifecycle: Option<Arc<dyn agent_session::domain::warm::WarmSessionLifecycle>>,
+    warm_tools: Arc<dyn agent_session::domain::ports::SessionToolCatalog>,
+    warm_reservations: Arc<tokio::sync::Mutex<warm::WarmReservations>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
@@ -229,6 +259,9 @@ impl<
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
             repositories: self.repositories.clone(),
+            warm_lifecycle: self.warm_lifecycle.clone(),
+            warm_tools: Arc::clone(&self.warm_tools),
+            warm_reservations: Arc::clone(&self.warm_reservations),
         }
     }
 }
@@ -284,6 +317,7 @@ where
         egress: Egress,
         forwarder: impl CommandForwarder,
         permission_policies: impl PermissionPolicySource,
+        coding_agents: impl CodingAgentSource,
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: Lifecycle,
         pending: PendingCommands,
@@ -293,6 +327,7 @@ where
         Self {
             inner: Arc::new(AgentHarnessInner {
                 sessions,
+                admission: Arc::new(ai_billing::DisabledAiAdmissionService),
                 containers,
                 announcer,
                 runtimes,
@@ -301,8 +336,10 @@ where
                 egress,
                 forwarder: Box::new(forwarder),
                 permission_policies: Box::new(permission_policies),
+                coding_agents: Box::new(coding_agents),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
+                hydrated: DashSet::new(),
                 busy: pending,
                 lifecycle_publisher,
                 mentions,
@@ -310,7 +347,18 @@ where
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
+            warm_lifecycle: None,
+            warm_tools: Arc::new(agent_session::domain::ports::NoOpToolCatalog),
+            warm_reservations: Arc::default(),
         }
+    }
+
+    /// Configure shared admission before cloning the harness or starting workers.
+    pub fn with_admission(mut self, admission: Arc<dyn ai_billing::AiAdmissionService>) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure admission before sharing the harness")
+            .admission = admission;
+        self
     }
 
     /// Enable explicit repository choices, authorized against the owner's reachable repositories.
@@ -382,11 +430,14 @@ where
             return Ok(());
         }
 
+        let persona = self.inner.reply_persona(&session).await?;
         self.inner
             .announcer
             .announce(SessionAnnouncement {
+                reuse_origin_message: false,
                 session_id,
                 bot_id: session.bot_id,
+                is_coding: persona.is_coding,
                 origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
                 origin_message_id: prompt.origin.message_id,
@@ -468,6 +519,7 @@ where
 fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
+        HarnessError::Admission(error) => AgentSessionError::Admission(error),
         HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }

@@ -2,9 +2,12 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import {
+  type HistoryItemType,
+  type ItemType,
+  storageServiceClient,
+} from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
-import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import {
   type QueryClient,
   queryOptions,
@@ -15,7 +18,11 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
 import { queryClient } from '../client';
-import { readCachedGraphqlHistoryItems } from './graphql';
+import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
+import {
+  HISTORY_SEARCH_BUCKETS,
+  readCachedGraphqlHistoryItems,
+} from './graphql';
 import { historyKeys } from './keys';
 import { transformHistoryItem, transformHistoryResponse } from './transforms';
 import type { HistoryItem } from './types';
@@ -25,7 +32,6 @@ export type { HistoryItem } from './types';
 
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
-const HISTORY_CACHE_REFRESH_INTERVAL_MS = 250;
 
 type HistoryQueryFnResult = HistoryItem[];
 
@@ -104,22 +110,17 @@ export function useHistoryQuery() {
   createEffect(() => {
     const host = graphqlCacheHost();
     if (!host) return;
-    const refresh = leadingAndTrailing(
-      throttle,
-      () => {
-        void activeQueryClient.invalidateQueries({
-          queryKey: historyKeys.graphqlList.queryKey,
-        });
-      },
-      HISTORY_CACHE_REFRESH_INTERVAL_MS
+    onCleanup(
+      subscribeToVisibleCacheChanges(
+        host,
+        () =>
+          activeQueryClient.invalidateQueries(
+            { queryKey: historyKeys.graphqlList.queryKey },
+            { cancelRefetch: false }
+          ),
+        { searchBuckets: () => HISTORY_SEARCH_BUCKETS }
+      )
     );
-    const unsubscribe = host.onCacheChanged(refresh, {
-      includeHydration: true,
-    });
-    onCleanup(() => {
-      unsubscribe();
-      refresh.clear();
-    });
   });
 
   return useQuery<
@@ -170,7 +171,7 @@ export async function refetchHistory(): Promise<void> {
 
 type UpsertToHistoryParams = {
   itemId: string;
-  itemType: ItemType;
+  itemType: HistoryItemType;
 };
 
 type UpsertToHistoryContext = {
@@ -236,7 +237,7 @@ export function useUpsertToHistoryMutation(
  * Prefer `useUpsertToHistoryMutation` when inside a component.
  */
 export async function postNewHistoryItem(
-  itemType: ItemType,
+  itemType: HistoryItemType,
   itemId: string
 ): Promise<boolean> {
   const maybeAdded = await storageServiceClient.upsertItemToUserHistory({

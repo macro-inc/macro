@@ -104,14 +104,7 @@ export class EmailService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.EMAIL_SERVICE,
         healthCheckPath,
-        // calendar-service now owns `/calendar`; its rule at priority 140 takes
-        // over the moment this rule stops matching. Deploy this change only
-        // during cutover, and only after all of: (1) calendar-service's
-        // `/calendar` rule is deployed, (2) calendar-service has
-        // `CALENDAR_SYNC_ENABLED` on and the agent-tools client repoint is
-        // deployed, and (3) email-service has `CALENDAR_SYNC_ENABLED` off.
-        // Deploying earlier can leave `/calendar` requests and webhooks
-        // unroutable or run sync under the wrong owner.
+        // `/calendar` belongs to calendar-service (its own rule, priority 140).
         pathPatterns: ['/email', '/email/*'],
         serviceSecurityGroupId: this.serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,

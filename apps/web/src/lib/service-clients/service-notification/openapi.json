@@ -121,7 +121,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/EntityType"
             }
           },
           {
@@ -130,6 +130,16 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "snoozed_until",
+            "in": "query",
+            "description": "A future resume time. Omit to mute indefinitely.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time"
             }
           }
         ],
@@ -140,6 +150,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -176,7 +196,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/EntityType"
             }
           },
           {
@@ -1106,16 +1126,16 @@
       },
       "AgentSessionOriginParent": {
         "type": "object",
-        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface.",
+        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing.",
         "required": ["type", "id"],
         "properties": {
           "id": {
             "type": "string",
-            "description": "The channel or document id."
+            "description": "The parent entity id."
           },
           "type": {
             "type": "string",
-            "description": "`channel` or `document`."
+            "description": "`channel`, `document`, or `initiative`."
           }
         }
       },
@@ -1387,6 +1407,40 @@
           }
         ]
       },
+      "ChannelMessageReactionMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
+          {
+            "type": "object",
+            "required": ["messageId", "messageContent", "emoji"],
+            "properties": {
+              "emoji": {
+                "type": "string",
+                "description": "The emoji added by the reactor."
+              },
+              "messageContent": {
+                "type": "string",
+                "description": "The reacted-to message content."
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The reacted-to message id."
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"],
+                "description": "Optional reactor profile picture URL."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "description": "The thread root id when the reacted-to message is a reply."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a reaction added to one of the recipient's channel messages."
+      },
       "ChannelMessageSendMetadata": {
         "allOf": [
           {
@@ -1569,6 +1623,48 @@
           }
         ]
       },
+      "CrmDiscussionMetadata": {
+        "type": "object",
+        "description": "CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.",
+        "required": ["recordName", "reason", "messageId", "threadId", "text"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical shared message UUID."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/CrmDiscussionReason",
+            "description": "Semantic reason selected by the message delivery domain."
+          },
+          "recordName": {
+            "type": "string",
+            "description": "Company or contact display name."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public display name for a bot author."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "Optional avatar for push notification attachments."
+          },
+          "text": {
+            "type": "string",
+            "description": "Posted Markdown content."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical discussion root UUID."
+          }
+        }
+      },
+      "CrmDiscussionReason": {
+        "type": "string",
+        "description": "Why a CRM discussion notification was delivered.",
+        "enum": ["mention", "reply", "owner"]
+      },
       "DeviceRequest": {
         "type": "object",
         "description": "Request to register or unregister a device for push notifications.",
@@ -1666,7 +1762,9 @@
           "skill",
           "agent_session",
           "scheduled_action",
-          "initiative"
+          "initiative",
+          "database",
+          "database_row"
         ]
       },
       "ErrorResponse": {
@@ -2038,6 +2136,59 @@
           }
         }
       },
+      "InitiativeDiscussionMetadata": {
+        "type": "object",
+        "description": "Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.",
+        "required": [
+          "projectName",
+          "owner",
+          "reason",
+          "messageId",
+          "threadId",
+          "text"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical shared message UUID."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Authenticated project owner."
+          },
+          "projectName": {
+            "type": "string",
+            "description": "Name displayed in the project header."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/InitiativeDiscussionReason",
+            "description": "Semantic reason selected by the message delivery domain."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public display name for a bot author."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "Optional avatar for push notification attachments."
+          },
+          "text": {
+            "type": "string",
+            "description": "Posted Markdown content."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical discussion root UUID."
+          }
+        }
+      },
+      "InitiativeDiscussionReason": {
+        "type": "string",
+        "description": "Why a project discussion notification was delivered.",
+        "enum": ["mention", "reply", "assignee", "owner"]
+      },
       "InviteToTeamMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a team.",
@@ -2262,6 +2413,36 @@
               "tag": {
                 "type": "string",
                 "enum": ["commented_on_document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone commented, replied, or mentioned the recipient on a project.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/InitiativeDiscussionMetadata",
+                "description": "Someone commented, replied, or mentioned the recipient on a project."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["initiative_discussion"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone commented, replied, or mentioned the recipient on a CRM company or contact.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CrmDiscussionMetadata",
+                "description": "Someone commented, replied, or mentioned the recipient on a CRM company or contact."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["crm_discussion"]
               }
             }
           },
@@ -2564,6 +2745,21 @@
                 "enum": ["agent_session_mentioned"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Someone reacted to one of the user's channel messages.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelMessageReactionMetadata",
+                "description": "Someone reacted to one of the user's channel messages."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_message_reaction"]
+              }
+            }
           }
         ],
         "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
@@ -2849,7 +3045,7 @@
             "type": "string"
           },
           "item_type": {
-            "type": "string"
+            "$ref": "#/components/schemas/EntityType"
           }
         }
       },
@@ -2864,6 +3060,11 @@
           "item_type": {
             "type": "string",
             "description": "The item type"
+          },
+          "snoozed_until": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "None for permanent mutes; notifications resume automatically at this deadline."
           }
         }
       }

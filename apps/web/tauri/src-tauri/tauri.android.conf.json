@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "macro",
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        { "scheme": ["macro"], "host": "app", "appLink": false },
+        { "host": "macro.com", "path": ["/app"], "pathPrefix": ["/app/"] },
+        { "host": "dev.macro.com", "path": ["/app"], "pathPrefix": ["/app/"] },
+        { "host": "staging.macro.com", "path": ["/app"], "pathPrefix": ["/app/"] }
+      ]
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Macro",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "backgroundThrottling": "disabled",
+        "useHttpsScheme": true
+      }
+    ]
+  }
+}

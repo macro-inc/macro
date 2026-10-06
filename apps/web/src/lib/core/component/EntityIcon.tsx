@@ -25,8 +25,10 @@ import BuildingOffice from '@phosphor/building-office.svg';
 import Calendar from '@phosphor/calendar.svg';
 import ClockClockwise from '@phosphor/clock-clockwise.svg';
 import Code from '@phosphor/code.svg';
+import Database from '@phosphor/database.svg';
 import Email from '@phosphor/envelope.svg';
 import EmailRead from '@phosphor/envelope-open.svg';
+import FigmaLogo from '@phosphor/figma-logo.svg';
 import File from '@phosphor/file.svg';
 import FileArchive from '@phosphor/file-archive.svg';
 import FileCsv from '@phosphor/file-csv.svg';
@@ -34,6 +36,7 @@ import FileDashed from '@phosphor/file-dashed.svg';
 import FileDoc from '@phosphor/file-doc.svg';
 import FileHtml from '@phosphor/file-html.svg';
 import FilePdf from '@phosphor/file-pdf.svg';
+import Presentation from '@phosphor/file-ppt.svg';
 import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
@@ -47,6 +50,7 @@ import ListChecks from '@phosphor/list-checks.svg';
 import PhoneCall from '@phosphor/phone-call.svg';
 import Shapes from '@phosphor/shapes.svg';
 import Sparkle from '@phosphor/sparkle.svg';
+import Stack from '@phosphor/stack.svg';
 import Users from '@phosphor/users.svg';
 import UsersThree from '@phosphor/users-three.svg';
 import AddressBookBold from '@phosphor-icons/core/bold/address-book-bold.svg';
@@ -58,8 +62,10 @@ import BuildingOfficeBold from '@phosphor-icons/core/bold/building-office-bold.s
 import CalendarBold from '@phosphor-icons/core/bold/calendar-bold.svg';
 import ClockClockwiseBold from '@phosphor-icons/core/bold/clock-clockwise-bold.svg';
 import CodeBold from '@phosphor-icons/core/bold/code-bold.svg';
+import DatabaseBold from '@phosphor-icons/core/bold/database-bold.svg';
 import EmailBold from '@phosphor-icons/core/bold/envelope-bold.svg';
 import EmailReadBold from '@phosphor-icons/core/bold/envelope-open-bold.svg';
+import FigmaLogoBold from '@phosphor-icons/core/bold/figma-logo-bold.svg';
 import FileArchiveBold from '@phosphor-icons/core/bold/file-archive-bold.svg';
 import FileBold from '@phosphor-icons/core/bold/file-bold.svg';
 import FileCsvBold from '@phosphor-icons/core/bold/file-csv-bold.svg';
@@ -67,6 +73,7 @@ import FileDashedBold from '@phosphor-icons/core/bold/file-dashed-bold.svg';
 import FileDocBold from '@phosphor-icons/core/bold/file-doc-bold.svg';
 import FileHtmlBold from '@phosphor-icons/core/bold/file-html-bold.svg';
 import FilePdfBold from '@phosphor-icons/core/bold/file-pdf-bold.svg';
+import PresentationBold from '@phosphor-icons/core/bold/file-ppt-bold.svg';
 import FileVideoBold from '@phosphor-icons/core/bold/file-video-bold.svg';
 import FilesBold from '@phosphor-icons/core/bold/files-bold.svg';
 import FolderBold from '@phosphor-icons/core/bold/folder-simple-bold.svg';
@@ -80,6 +87,7 @@ import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
 import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
 import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
 import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
+import StackBold from '@phosphor-icons/core/bold/stack-bold.svg';
 import UsersBold from '@phosphor-icons/core/bold/users-bold.svg';
 import UsersThreeBold from '@phosphor-icons/core/bold/users-three-bold.svg';
 import type { PreviewItem } from '@queries/preview';
@@ -117,6 +125,7 @@ export type EntityWithValidIcon =
   | 'files'
   | 'crm_company'
   | 'html'
+  | 'initiative'
   | 'reminder';
 
 const ARCHIVE_EXTENSIONS = new Set(
@@ -160,6 +169,27 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-success',
     background: 'bg-success/20',
     prettyName: 'Spreadsheet',
+  },
+  pptx: {
+    icon: Presentation,
+    boldIcon: PresentationBold,
+    foreground: 'text-orange',
+    background: 'bg-orange/20',
+    prettyName: 'Presentation',
+  },
+  fig: {
+    icon: FigmaLogo,
+    boldIcon: FigmaLogoBold,
+    foreground: 'text-violet',
+    background: 'bg-violet/20',
+    prettyName: 'Figma file',
+  },
+  database: {
+    icon: Database,
+    boldIcon: DatabaseBold,
+    foreground: 'text-code',
+    background: 'bg-code/20',
+    prettyName: 'Database',
   },
   html: {
     icon: FileHtml,
@@ -385,6 +415,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-task/20',
     prettyName: 'Task',
   },
+  initiative: {
+    icon: Stack,
+    boldIcon: StackBold,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Project',
+  },
   snippet: {
     icon: BracketsCurly,
     boldIcon: BracketsCurlyBold,
@@ -399,12 +436,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-chat/20',
     prettyName: 'Skill',
   },
-  automation: {
+  routine: {
     icon: ClockClockwise,
     boldIcon: ClockClockwiseBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
-    prettyName: 'Automation',
+    prettyName: 'Routine',
   },
   crm_company: {
     icon: BuildingOffice,
@@ -441,6 +478,7 @@ export function isArchiveType(ext: string): boolean {
 }
 
 function validateEntity(entity: string): EntityWithValidIcon {
+  if (entity === 'automation') return 'routine';
   if (entity in ENTITY_ICON_CONFIGS) {
     return entity as EntityWithValidIcon;
   } else if (isBlockAlias(entity)) {
@@ -614,11 +652,16 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     )
     .with({ type: 'chat' }, () => 'chat')
     .with({ type: 'agent_session' }, () => 'agent')
+    .with({ type: 'initiative' }, () => 'initiative')
     .with({ type: 'project' }, () => 'project')
     .with({ type: 'calendar_event' }, () => 'calendar')
-    .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'reminder' }, (e) =>
+      e.referencedEntity
+        ? reminderReferenceIconType(e.referencedEntity)
+        : 'reminder'
+    )
     .with({ type: 'call' }, () => 'call')
-    .with({ type: 'automation' }, () => 'automation')
+    .with({ type: 'routine' }, () => 'routine')
     .with({ type: 'foreign' }, (e) => {
       if (e.foreignSource !== 'github_pull_request') return 'default';
       return match<unknown, EntityWithValidIcon>(e.metadata?.status)
@@ -629,6 +672,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     })
     .with({ type: 'crm_company' }, () => 'crm_company')
     .with({ type: 'crm_contact' }, () => 'contact')
+    .with({ type: 'database' }, () => 'database')
     .exhaustive();
 }
 
@@ -649,6 +693,8 @@ const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
 export function reminderReferenceIconType(
   reference: NonNullable<ReminderEntity['referencedEntity']>
 ): EntityWithValidIcon {
+  if (reference.type === 'crm_company') return 'company';
+  if (reference.type === 'crm_contact') return 'contact';
   const blockName = itemToBlockName(
     {
       type: reference.type,

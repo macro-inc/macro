@@ -324,6 +324,10 @@ export type CreateCalendarEventRequest = {
      */
     emailLinkId?: string | null;
     /**
+     * Stable retry identity, scoped to the authenticated organizer.
+     */
+    idempotencyKey?: string | null;
+    /**
      * Optional location label.
      */
     location?: string | null;
@@ -488,6 +492,10 @@ export type RsvpCalendarEventRequest = {
      * Original-start key of the occurrence the response targets.
      */
     recurrenceId?: string | null;
+    /**
+     * The owned connected address whose attendance is changed. Validated by the domain.
+     */
+    respondingEmail?: string | null;
     /**
      * The response to record for the connected account.
      */

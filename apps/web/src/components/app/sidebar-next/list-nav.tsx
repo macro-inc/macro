@@ -7,6 +7,7 @@ import {
   sidebarContent,
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import { useLocation } from '@solidjs/router';
@@ -15,6 +16,7 @@ import { createSignal, onCleanup, Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
 import { SidebarUnreadDot } from './unread-dot';
+import { useSidebarPrefs } from './use-sidebar-prefs';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
@@ -55,6 +57,7 @@ const activeContentKey = () => {
  * for that is deliberately absent until there is a data source to fill it.
  */
 export const ListNav = (props: ListNavProps) => {
+  const { hideSidebarItem } = useSidebarPrefs();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const location = useLocation();
@@ -129,22 +132,27 @@ export const ListNav = (props: ListNavProps) => {
     const isSameContent =
       activeContent?.type === expected.type && activeContent.id === expected.id;
 
-    setPendingNav({
-      itemId: props.item.id,
-      activeContentKey: activeContentKey(),
-    });
-
     if (!isSameContent || event.shiftKey) {
+      setPendingNav({
+        itemId: props.item.id,
+        activeContentKey: activeContentKey(),
+      });
       const { shiftKey } = event;
       afterNextPaint(() => {
         navigateToSidebarView({
           viewId: props.item.id,
           params: props.item.params,
           shiftKey,
-          activeSplit: globalSplitManager()?.activeSplit(),
           openWithSplit: layout.openWithSplit,
           referredFrom: 'sidebar',
         });
+        // Navigation is synchronous, so the real state now holds. Drop the
+        // press: left in place, it would claim the highlight again whenever
+        // the active content returned to what it was at press time (e.g.
+        // Settings → Agents → Settings would light up Agents).
+        setPendingNav((pending) =>
+          pending?.itemId === props.item.id ? undefined : pending
+        );
         globalSplitManager()?.returnFocus();
       });
       return;
@@ -175,13 +183,25 @@ export const ListNav = (props: ListNavProps) => {
     <SidebarOpenInSplitMenu
       content={content}
       onOpenChange={props.onContextMenuOpenChange}
-      // The trigger defaults to `w-full h-7`, which clips the square button.
-      triggerClass="size-9"
+      // The trigger defaults to `w-full h-7`, which clips the round button.
+      triggerClass="size-10"
+      additionalActions={
+        <Show when={props.item.id !== 'home'}>
+          <MenuSeparator />
+          <MenuItem
+            text="Hide from sidebar"
+            onClick={() => hideSidebarItem(props.item.id)}
+          />
+        </Show>
+      }
     >
       <Button
         variant="ghost"
         size="icon-md"
-        class="cursor-default rounded-xl"
+        class={cn(
+          'size-10 cursor-default rounded-xl',
+          isActive() && 'bg-hover text-ink'
+        )}
         label={props.item.label}
         aria-description={
           [props.unread && 'Unread items', props.activeCall && 'Active call']
@@ -194,8 +214,7 @@ export const ListNav = (props: ListNavProps) => {
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         // An attribute rather than a class-only state, so the styling can be
-        // retargeted from CSS and the `data-active` selectors the old sidebar's
-        // tests use keep working.
+        // retargeted from CSS and tests can select the active item.
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
         data-unread={props.unread ? '' : undefined}
@@ -203,29 +222,22 @@ export const ListNav = (props: ListNavProps) => {
         onMouseDown={onMouseDown}
         onClick={onClick}
       >
-        {/* Fixed geometry keeps the marker flush to the rail edge without
-            moving the glyph when selection changes. */}
-        <span
-          aria-hidden="true"
-          class={cn(
-            'absolute -left-2.5 top-1/2 h-3/4 w-1 -translate-y-1/2 rounded-r-full bg-ink-muted',
-            isActive() ? 'opacity-100' : 'opacity-0'
-          )}
-        />
-
         <NavGlyph
           icon={props.item.icon}
           iconActive={props.item.iconActive}
           filled={isActive()}
-          class={cn('size-5.5', isActive() && 'text-ink-muted')}
+          class="size-5"
         />
         <Show
           when={props.activeCall}
           fallback={<SidebarUnreadDot active={props.unread} />}
         >
+          {/* Sits outside the button box: the glyph is inset from the
+              corner, so a badge flush to it lands on the icon. The rail's
+              horizontal padding absorbs the overhang. */}
           <span
             aria-hidden="true"
-            class="pointer-events-none absolute top-0 right-0 flex size-3.5 items-center justify-center text-accent"
+            class="pointer-events-none absolute -top-0.5 -right-0.5 flex size-3 items-center justify-center text-accent"
           >
             <PhoneCallIcon class="size-full" />
           </span>

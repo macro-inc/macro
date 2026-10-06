@@ -142,7 +142,7 @@ export function Scroll(props: ScrollProps) {
             transform: `translateY(${translateY()}px)`,
             transition: 'opacity 150ms ease-in-out',
             'border-radius': `${THUMB_WIDTH * 0.5}px`,
-            'background-color': 'var(--c4)',
+            'background-color': 'var(--color-content-4)',
             height: `${thumbHeight()}px`,
             opacity: visible() ? 1 : 0,
             right: `${THUMB_INSET}px`,

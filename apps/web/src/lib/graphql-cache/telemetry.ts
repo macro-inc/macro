@@ -133,6 +133,12 @@ export const CACHE_OWNER_EVENTS = [
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
+  'owner-lock-unavailable',
+  'storage-busy',
+  'takeover-granted',
+  'superseded',
+  'stale-databases-removed',
+  'stale-database-kept',
 ] as const;
 export type CacheOwnerEvent = (typeof CACHE_OWNER_EVENTS)[number];
 
@@ -516,7 +522,12 @@ export function operationCategoryForRequest(
       () => 'inspection' as const
     )
     .with('invalidate', 'delete-records', () => 'invalidation' as const)
-    .with('teardown', 'clear', () => 'lifecycle' as const)
+    .with(
+      'teardown',
+      'clear',
+      'current-storage-generation',
+      () => 'lifecycle' as const
+    )
     .exhaustive();
 }
 

@@ -8,7 +8,7 @@ use tracing::Instrument as _;
 
 use crate::domain::{
     models::BotEvent,
-    ports::{AgentResponder, ConversationAccess, TriggerDetector, UserTimeZones},
+    ports::{AgentResponder, CommentMarks, ConversationAccess, TriggerDetector, UserTimeZones},
     service::MacroAiHandler,
 };
 
@@ -50,9 +50,35 @@ where
         responder: Arc<R>,
         detector: Arc<D>,
         time_zones: Arc<Z>,
+        marks: Arc<dyn CommentMarks>,
+    ) -> Self {
+        Self::new_with_admission(
+            messages,
+            access,
+            responder,
+            detector,
+            time_zones,
+            marks,
+            Arc::new(ai_billing::DisabledAiAdmissionService),
+        )
+    }
+
+    /// Create a router with configured response admission. The detector must
+    /// independently admit any inference it performs.
+    pub fn new_with_admission(
+        messages: Arc<dyn MessageServiceApi>,
+        access: Arc<dyn ConversationAccess>,
+        responder: Arc<R>,
+        detector: Arc<D>,
+        time_zones: Arc<Z>,
+        marks: Arc<dyn CommentMarks>,
+        admission: Arc<dyn ai_billing::AiAdmissionService>,
     ) -> Self {
         Self {
-            macro_ai: Arc::new(MacroAiHandler::new(messages, access, responder, time_zones)),
+            macro_ai: Arc::new(
+                MacroAiHandler::new(messages, access, responder, time_zones, marks)
+                    .with_admission(admission),
+            ),
             detector,
         }
     }

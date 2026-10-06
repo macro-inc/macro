@@ -1,9 +1,9 @@
 //! HTTP endpoint for sending chat messages with streaming responses.
 use super::util::chat_message::ai_request::build_chat_messages;
-use super::util::chat_message::toolset::choose_tools_prompt;
 use super::util::chat_message::{store_conversation_messages, store_incoming_message};
 use super::util::chat_permissions;
 use crate::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
+use crate::api::tool_selection::choose_tools_prompt;
 use crate::api::utils::log;
 use crate::core::constants::DEFAULT_CHAT_NAME;
 use crate::model::stream::{
@@ -15,6 +15,7 @@ use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
 use agent::{AgentLoop, StreamAccumulator};
+use ai_billing::inbound::admission::admission_status;
 use async_stream::stream;
 use attachment::FormattedParts;
 use axum::Json;
@@ -105,6 +106,9 @@ pub struct ChatMessageError {
     pub stream_id: Option<String>,
     #[serde(skip)]
     pub status: Option<StatusCode>,
+    /// Stable machine-readable code for admission errors (402 or 503).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 impl fmt::Display for ChatMessageError {
@@ -132,8 +136,9 @@ impl IntoResponse for ChatMessageError {
         (status = 200, description = "Stream initiated successfully", body = SendChatMessageResponse),
         (status = 400, description = "Bad request", body = ChatMessageError),
         (status = 401, description = "Unauthorized"),
-        (status = 402, description = "Payment required — user lacks access to the requested model"),
-        (status = 403, description = "Forbidden"),
+        (status = 402, description = "Payment required — the user's AI allowance is used up", body = ChatMessageError),
+        (status = 403, description = "Forbidden — user lacks access to the requested model", body = ChatMessageError),
+        (status = 503, description = "AI usage validation unavailable — retry later", body = ChatMessageError),
     )
 )]
 #[tracing::instrument(skip(state, model_access, user, bearer, request), fields(chat_id=?request.chat_id, user_id = %user.authorization.user.macro_user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
@@ -181,15 +186,14 @@ async fn send_chat_message_inner(
             error: format!("No access to model {}", request.model),
             stream_id: Some(stream_id.clone()),
             status: Some(StatusCode::FORBIDDEN),
+            code: None,
         });
     }
     let model = request.model.clone();
 
-    // Try to get the chat first - if it doesn't exist or no chat_id provided, create it
-    let (chat, actual_chat_id, created_new_chat) = if requested_chat_id.is_empty() {
-        // No chat_id provided - create a new chat
-        let (chat, chat_id) = create_new_chat(&ctx, &user_id, &model, &stream_id).await?;
-        (chat, chat_id, true)
+    // Resolve existing-chat permissions before admission, without creating anything.
+    let existing_chat = if requested_chat_id.is_empty() {
+        None
     } else {
         match get_chat(&ctx, &requested_chat_id, user_id.0.as_ref()).await {
             Ok(chat) => {
@@ -207,6 +211,7 @@ async fn send_chat_message_inner(
                             error: format!("Permission check failed: {:?}", e),
                             stream_id: Some(stream_id),
                             status: None,
+                            code: None,
                         });
                     }
                     Ok(access) => match access {
@@ -215,22 +220,37 @@ async fn send_chat_message_inner(
                                 error: "Insufficient permissions to send messages".to_string(),
                                 stream_id: Some(stream_id),
                                 status: None,
+                                code: None,
                             });
                         }
                         _ => (),
                     },
                 };
-                (chat, requested_chat_id, false)
+                Some(chat)
             }
             Err(_) => {
-                // Chat doesn't exist - create a new one
-                tracing::info!(
-                    requested_chat_id = %requested_chat_id,
-                    "Chat not found, creating new chat"
-                );
-                let (chat, chat_id) = create_new_chat(&ctx, &user_id, &model, &stream_id).await?;
-                (chat, chat_id, true)
+                // Preserve the missing-chat fallback, but only create after admission.
+                tracing::info!(requested_chat_id = %requested_chat_id, "Chat not found");
+                None
             }
+        }
+    };
+
+    ctx.ai_admission
+        .admit(&user_id, ai_usage::AiFeature::Chat)
+        .await
+        .map_err(|error| ChatMessageError {
+            error: error.to_string(),
+            stream_id: Some(stream_id.clone()),
+            status: Some(admission_status(error)),
+            code: Some(error.code().to_string()),
+        })?;
+
+    let (chat, actual_chat_id, created_new_chat) = match existing_chat {
+        Some(chat) => (chat, requested_chat_id, false),
+        None => {
+            let (chat, chat_id) = create_new_chat(&ctx, &user_id, &model, &stream_id).await?;
+            (chat, chat_id, true)
         }
     };
     let should_auto_rename_chat = created_new_chat || chat.messages.is_empty();
@@ -258,6 +278,7 @@ async fn send_chat_message_inner(
                 error: "Failed to store message".to_string(),
                 stream_id: Some(stream_id.clone()),
                 status: None,
+                code: None,
             }
         })?;
     let user_message_id = resolved.message_id;
@@ -293,13 +314,14 @@ async fn send_chat_message_inner(
         .flatten();
 
     // Build the chat messages
-    let tools_prompt = choose_tools_prompt(&payload, &*ctx.all_tools_prompt);
+    let tools_prompt = choose_tools_prompt(&payload.toolset, &*ctx.all_tools_prompt);
     let ai_request = build_chat_messages(&chat, &payload, all_resolved_parts).map_err(|err| {
         tracing::error!(error=?err, "failed to build chat messages");
         ChatMessageError {
             error: "Failed to build request".to_string(),
             stream_id: Some(stream_id.clone()),
             status: None,
+            code: None,
         }
     })?;
 
@@ -337,6 +359,7 @@ async fn send_chat_message_inner(
         ctx.clone(),
         ai_request,
         system_prompt,
+        request.toolset.clone(),
         (*user_id).clone(),
         jwt_token,
         actual_chat_id.clone(),
@@ -376,6 +399,7 @@ async fn create_new_chat(
                     error: "Failed to create chat".to_string(),
                     stream_id: Some(stream_id.to_string()),
                     status: None,
+                    code: None,
                 }
             })?;
     let share_permission = SharePermissionV2::new_chat_share_permission(team_default);
@@ -397,6 +421,7 @@ async fn create_new_chat(
             error: "Failed to create chat".to_string(),
             stream_id: Some(stream_id.to_string()),
             status: None,
+            code: None,
         }
     })?;
 
@@ -425,6 +450,7 @@ async fn create_new_chat(
                 error: "Failed to get chat".to_string(),
                 stream_id: Some(stream_id.to_string()),
                 status: None,
+                code: None,
             }
         })?;
 
@@ -489,6 +515,7 @@ fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: Vec<ChatMessage>,
     system_prompt: String,
+    tool_selection: ToolSet,
     user_id: MacroUserIdStr<'static>,
     jwt_token: String,
     chat_id: String,
@@ -532,12 +559,13 @@ fn stream_and_save_message(
             yield json;
         }
 
-        let mcp_tools = {
-            use mcp_select::ConnectorSelect;
-            mcp_selector.user_toolset(&user_id).await
-        };
-        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
-            Arc::new(mcp_select::CombinedToolSet::new(static_tools, mcp_tools));
+        let toolset = crate::api::tool_selection::service_tools(
+            &tool_selection,
+            static_tools,
+            &mcp_selector,
+            &user_id,
+        )
+        .await;
         // The chat is the conversation every span of this turn belongs to
         // (`gen_ai.conversation.id`), so the turns of one chat form one session
         // in the observability backend.

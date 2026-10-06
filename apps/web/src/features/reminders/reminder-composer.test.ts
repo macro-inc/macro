@@ -1,12 +1,15 @@
+import { pressedKeys, setPressedKeys } from '@core/hotkey/state';
 import type { EntityData } from '@entity';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  chooseReminderTarget,
   closeReminderComposer,
   openReminderComposer,
   openStandaloneReminderComposer,
   reminderComposerOpen,
   reminderComposerState,
+  showReminderEntityPicker,
   takeReminderCreatedHandler,
 } from './reminder-composer';
 
@@ -31,6 +34,20 @@ describe('reminder composer state', () => {
 
     expect(reminderComposerOpen()).toBe(false);
     expect(reminderComposerState.entity).toBeUndefined();
+  });
+
+  it('clears keys held during dismissal so H can reopen without a modifier reset', () => {
+    openReminderComposer(doc('doc-1', 'Q3 Contract'));
+    setPressedKeys(new Set(['escape']));
+    closeReminderComposer();
+    expect([...pressedKeys()]).toEqual([]);
+
+    // The next keydown is a plain H, rather than the stale escape+h chord.
+    setPressedKeys((held) => new Set([...held, 'h']));
+    expect([...pressedKeys()]).toEqual(['h']);
+    openReminderComposer(doc('doc-1', 'Q3 Contract'));
+    expect(reminderComposerOpen()).toBe(true);
+    closeReminderComposer();
   });
 
   // Reopening must fully replace the target, or a reminder could be attached to
@@ -63,7 +80,7 @@ describe('reminder composer standalone mode', () => {
     openStandaloneReminderComposer();
 
     expect(reminderComposerOpen()).toBe(true);
-    expect(reminderComposerState.standalone).toBe(true);
+    expect(reminderComposerState.choosing).toBe(true);
     expect(reminderComposerState.entity).toBeUndefined();
   });
 
@@ -82,7 +99,7 @@ describe('reminder composer standalone mode', () => {
     openStandaloneReminderComposer();
 
     expect(reminderComposerState.entity).toBeUndefined();
-    expect(reminderComposerState.standalone).toBe(true);
+    expect(reminderComposerState.choosing).toBe(true);
   });
 
   it('drops the standalone flag when opened for an entity', () => {
@@ -99,8 +116,8 @@ describe('reminder composer created handler', () => {
     closeReminderComposer();
   });
 
-  // The composer closes before the create request is awaited, so the follow-up
-  // has to be taken out of here first rather than read after the fact.
+  // The modal takes this only after the create request succeeds, immediately
+  // before closing clears the composer state.
   it('hands the created handler over once', () => {
     const onCreated = vi.fn();
     openReminderComposer(doc('doc-1', 'Q3 Contract'), { onCreated });
@@ -122,4 +139,18 @@ describe('reminder composer created handler', () => {
 
     expect(takeReminderCreatedHandler()).toBeUndefined();
   });
+});
+
+it('chooses an entity or freeform without retaining an old target callback', () => {
+  const onCreated = vi.fn();
+  openReminderComposer(doc('old', 'Old task'), { onCreated });
+  showReminderEntityPicker();
+  chooseReminderTarget(doc('new', 'New task'));
+  expect(reminderComposerState.entity?.id).toBe('new');
+  expect(reminderComposerState.choosing).toBeUndefined();
+  expect(takeReminderCreatedHandler()).toBeUndefined();
+  showReminderEntityPicker();
+  chooseReminderTarget();
+  expect(reminderComposerState.entity).toBeUndefined();
+  expect(reminderComposerState.standalone).toBe(true);
 });

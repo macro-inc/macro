@@ -1,17 +1,30 @@
 import { URL_PARAMS as markdownParams } from '@block-md/constants';
-import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import { Dialog } from '@kobalte/core/dialog';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Root } from './commentType';
 import { MinimizedThread } from './MinimizedThreads';
 import {
   CommentsContext,
   type CommentsContextType,
-  noopCommentOperations,
   ThreadBody,
 } from './Thread';
 
-const mocks = vi.hoisted(() => ({ unifiedDiscussions: true }));
+const mocks = vi.hoisted(() => ({
+  confirmed: vi.fn(),
+  patchThread: vi.fn(),
+}));
+vi.mock('@queries/messages/mutations', () => ({
+  usePatchThreadMutation: () => ({ mutate: mocks.patchThread }),
+}));
+vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@core/util/url', () => ({
   buildSimpleEntityUrl: (
     entity: { type: string; id: string },
@@ -23,19 +36,6 @@ vi.mock('@core/context/user', () => ({ useAuthor: () => () => 'user' }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: vi.fn() },
 }));
-vi.mock('./MessageTopRow', () => ({
-  MessageTopRow: (props: { copyLink?: () => Promise<void> }) => (
-    <button onClick={props.copyLink}>Copy comment link</button>
-  ),
-}));
-vi.mock('./Inputs', () => ({
-  EditInput: () => null,
-  NewReplyInput: () => null,
-}));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  isFeatureEnabled: () => mocks.unifiedDiscussions,
-}));
 vi.mock('@channel/Input', () => ({ ChannelInput: () => null }));
 vi.mock('@channel/Input/message-payload', () => ({
   buildPostMessageSendPayload: () => ({ message: {} }),
@@ -43,7 +43,32 @@ vi.mock('@channel/Input/message-payload', () => ({
 vi.mock('@core/messages/MessageThread', () => ({
   MessageThreadById: (props: {
     buildLink: (message: { id: string }) => string;
-  }) => <a href={props.buildLink({ id: 'comment-root' })}>Copy link</a>,
+    targetId?: string | null;
+    onClearTarget?: () => void;
+  }) => {
+    // Stands in for the message actions' delete confirmation, which the
+    // thread renders into a portal outside the card.
+    const [confirming, setConfirming] = createSignal(false);
+    return (
+      <>
+        <a href={props.buildLink({ id: 'comment-root' })}>Copy link</a>
+        <button
+          data-target={props.targetId ?? undefined}
+          onClick={() => props.onClearTarget?.()}
+        >
+          Linked comment
+        </button>
+        <button onClick={() => setConfirming(true)}>Delete</button>
+        <Dialog open={confirming()} onOpenChange={setConfirming}>
+          <Dialog.Portal>
+            <Dialog.Content>
+              <button onClick={() => mocks.confirmed()}>Confirm delete</button>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog>
+      </>
+    );
+  },
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -53,6 +78,9 @@ vi.mock(
   })
 );
 vi.mock('@ui', () => ({
+  Button: (props: ParentProps<{ onClick?: (e: MouseEvent) => void }>) => (
+    <button onClick={(e) => props.onClick?.(e)}>{props.children}</button>
+  ),
   Layer: (props: ParentProps) => props.children,
   cn: (...values: string[]) => values.join(' '),
 }));
@@ -62,7 +90,7 @@ vi.mock('./MeasureContainer', () => ({
 
 const writeText = vi.fn();
 beforeEach(() => {
-  mocks.unifiedDiscussions = true;
+  mocks.patchThread.mockReset();
   writeText.mockReset();
   vi.stubGlobal('navigator', { clipboard: { writeText } });
 });
@@ -101,6 +129,8 @@ describe('anchored comment links', () => {
     expect(view.getByText('9')).toBeTruthy();
     expect(view.queryByText('4')).toBeNull();
   });
+  // A document passes message operations exactly when it reads through the
+  // message API, which follows the flag unless a test says otherwise.
   const renderThreadBody = (
     documentType: CommentsContextType['documentType'] = 'md',
     minimized = false
@@ -115,10 +145,6 @@ describe('anchored comment links', () => {
           highlightedCommentId: () => null,
           setActiveThread: () => {},
           setThreadHeight: () => {},
-          getCommentById: () => ({ ...comment, id: 'reply', text: 'Reply' }),
-          ownedComment: () => false,
-          inComment: true,
-          commentOperations: noopCommentOperations,
           messageOperations: { createComment: async () => null },
         }}
       >
@@ -147,11 +173,38 @@ describe('anchored comment links', () => {
     }
   );
 
-  it('keeps PDF on the legacy path while its flag-on discussion is deferred', () => {
+  it('releases the comment-link highlight when the highlighted comment is clicked', () => {
+    const [highlighted, setHighlighted] = createSignal<string | null>(
+      'comment-root'
+    );
+    const view = render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: highlighted,
+          clearHighlightedComment: () => setHighlighted(null),
+          setActiveThread: () => {},
+          setThreadHeight: () => {},
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <ThreadBody comment={comment} isActive />
+      </CommentsContext.Provider>
+    ));
+    const linked = view.getByRole('button', { name: 'Linked comment' });
+    expect(linked.dataset.target).toBe('comment-root');
+    fireEvent.click(linked);
+    expect(highlighted()).toBeNull();
+    expect(linked.dataset.target).toBeUndefined();
+  });
+
+  it('renders a PDF on the message API through the message thread', () => {
     const view = renderThreadBody('pdf');
-    // The message thread (mocked as the copy-link anchor) is markdown-only.
-    expect(view.queryByRole('link')).toBeNull();
-    expect(view.getByText('Comment')).toBeTruthy();
+    const url = new URL(view.getByRole('link').getAttribute('href')!);
+    expect(url.pathname).toBe('/app/pdf/document');
   });
 
   it('expands a minimized comment in a document detail without a block provider', () => {
@@ -161,26 +214,181 @@ describe('anchored comment links', () => {
     expect(view.getByRole('link')).toBeTruthy();
   });
 
-  it.each(['md', 'task', 'snippet', 'skill', 'pdf'] as const)(
-    'copies legacy %s root and reply links without a block provider',
-    async (documentType) => {
-      mocks.unifiedDiscussions = false;
-      const view = renderThreadBody(documentType);
-      expect(view.getByText('Comment')).toBeTruthy();
-      expect(view.getByText('Reply')).toBeTruthy();
+  // The popover content, found through the thread it hosts. jsdom never runs
+  // the exit animation presence waits on, so closing leaves it mounted and
+  // only its open state changes.
+  const card = (view: ReturnType<typeof render>) =>
+    view.getByText('Copy link').closest('[data-comment-thread]')!
+      .parentElement!;
 
-      const buttons = view.getAllByRole('button', {
-        name: 'Copy comment link',
-      });
-      for (const [index, id] of ['comment-root', 'reply'].entries()) {
-        fireEvent.click(buttons[index]);
-        await waitFor(() => expect(writeText).toHaveBeenCalledTimes(index + 1));
-        const url = new URL(writeText.mock.calls[index][0]);
-        expect(url.pathname).toBe(`/app/${documentType}/document`);
-        expect(url.searchParams.get(markdownParams.commentId)).toBe(
-          documentType === 'pdf' ? null : id
-        );
-      }
-    }
-  );
+  it('keeps an expanded minimized comment open through a dialog it opens', async () => {
+    const view = renderThreadBody('md', true);
+    fireEvent.click(view.getByText('1'));
+    fireEvent.click(view.getByRole('button', { name: 'Delete' }));
+    const confirm = await screen.findByRole('button', {
+      name: 'Confirm delete',
+    });
+    // Outside-press detection arms a tick after a layer opens.
+    await new Promise((resolve) => setTimeout(resolve));
+    // The confirmation is portaled out of the card; pressing it must reach
+    // its handler instead of dismissing the card that owns it.
+    fireEvent.pointerDown(confirm);
+    fireEvent.mouseDown(confirm);
+    fireEvent.click(confirm);
+    expect(mocks.confirmed).toHaveBeenCalledTimes(1);
+    expect(card(view).hasAttribute('data-expanded')).toBe(true);
+  });
+
+  it('folds an expanded minimized comment back to its badge once resolved', async () => {
+    const [resolved, setResolved] = createSignal(false);
+    const view = render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: () => null,
+          setActiveThread: () => {},
+          setThreadHeight: () => {},
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <MinimizedThread
+          comment={{ ...comment, resolved: resolved() }}
+          layout={{ calculatedYPos: 0 }}
+          isActive={false}
+        />
+      </CommentsContext.Provider>
+    ));
+    fireEvent.click(view.getByText('1'));
+    expect(card(view).hasAttribute('data-expanded')).toBe(true);
+    setResolved(true);
+    await waitFor(() =>
+      expect(card(view).hasAttribute('data-expanded')).toBe(false)
+    );
+  });
+
+  it('dismisses an expanded minimized comment on a press outside it', async () => {
+    const view = renderThreadBody('md', true);
+    fireEvent.click(view.getByText('1'));
+    expect(view.getByRole('link')).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve));
+    fireEvent.pointerDown(document.body);
+    await waitFor(() =>
+      expect(card(view).hasAttribute('data-expanded')).toBe(false)
+    );
+  });
+
+  it.each([
+    [true, 'discards a draft as soon as a press outside dismisses it'],
+    [false, 'keeps a thread the dismissing press activated'],
+  ])('%#: %s', async (isActive) => {
+    const setActiveThread = vi.fn();
+    const view = render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: () => null,
+          setActiveThread,
+          setThreadHeight: () => {},
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <MinimizedThread
+          comment={{ ...comment, isNew: true }}
+          layout={{ calculatedYPos: 0 }}
+          isActive={isActive}
+        />
+      </CommentsContext.Provider>
+    ));
+    await new Promise((resolve) => setTimeout(resolve));
+    fireEvent.pointerDown(document.body);
+    await waitFor(() =>
+      expect(
+        view.container.ownerDocument
+          .querySelector('[data-comment-thread]')!
+          .parentElement!.hasAttribute('data-expanded')
+      ).toBe(false)
+    );
+    expect(setActiveThread.mock.calls).toEqual(isActive ? [[null]] : []);
+  });
+});
+
+describe('resolved discussions', () => {
+  const renderThread = (props: { resolved: boolean; isActive: boolean }) => {
+    const setActiveThread = vi.fn();
+    const view = render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: () => null,
+          setActiveThread,
+          setThreadHeight: () => {},
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <ThreadBody
+          comment={{
+            ...comment,
+            text: 'Fix the\n\nintro',
+            replyCount: 2,
+            resolved: props.resolved,
+          }}
+          isActive={props.isActive}
+        />
+      </CommentsContext.Provider>
+    ));
+    return { view, setActiveThread };
+  };
+
+  it('folds an inactive resolved thread to a one-line summary that opens it', () => {
+    const { view, setActiveThread } = renderThread({
+      resolved: true,
+      isActive: false,
+    });
+    expect(view.queryByRole('link')).toBeNull();
+    expect(view.getByText('Fix the intro')).toBeTruthy();
+    expect(view.getByText('2 replies')).toBeTruthy();
+    fireEvent.click(
+      view.getByRole('button', { name: 'Show resolved comment' })
+    );
+    expect(setActiveThread).toHaveBeenCalledWith('comment-root');
+  });
+
+  it('reopens an active resolved thread', () => {
+    const { view } = renderThread({ resolved: true, isActive: true });
+    expect(view.getByRole('link')).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Reopen' }));
+    expect(mocks.patchThread).toHaveBeenCalledWith({
+      parent: { type: 'document', id: 'document' },
+      rootId: 'comment-root',
+      patch: { resolved: false },
+    });
+  });
+
+  it('resolves an active open thread and releases focus so it folds', () => {
+    const { view, setActiveThread } = renderThread({
+      resolved: false,
+      isActive: true,
+    });
+    fireEvent.click(view.getByRole('button', { name: 'Resolve' }));
+    expect(mocks.patchThread).toHaveBeenCalledWith({
+      parent: { type: 'document', id: 'document' },
+      rootId: 'comment-root',
+      patch: { resolved: true },
+    });
+    expect(setActiveThread).toHaveBeenCalledWith(null);
+  });
+
+  it('offers no resolve action on an inactive open thread', () => {
+    const { view } = renderThread({ resolved: false, isActive: false });
+    expect(view.queryByRole('button', { name: 'Resolve' })).toBeNull();
+  });
 });

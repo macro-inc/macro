@@ -91,6 +91,9 @@ pub struct DocumentUpdatedMetadata {
 pub struct DocumentDeletedMetadata {
     /// The id of the deleted document.
     pub document_id: String,
+    /// Subtype captured before deletion, so consumers can distinguish tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
     /// The authenticated user who deleted the document; `None` for
     /// unauthenticated or internal callers.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
@@ -125,6 +128,17 @@ pub struct DocumentContentUploadedMetadata {
     pub document_version_id: Option<String>,
 }
 
+/// An editor reported by Sync from an authenticated session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentSyncEditor {
+    /// User or bot that performed the edit.
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub actor: Actor<'static>,
+    /// User represented by an agent, if any.
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+}
+
 /// Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -135,8 +149,7 @@ pub struct DocumentSyncContentUpdatedMetadata {
     pub file_type: FileType,
     /// Version marker for the sync snapshot, when the caller supplies one.
     pub document_version_id: Option<String>,
-    /// Who mechanically changed the content. Absent on events published
-    /// before attribution, and on human-only collab sessions.
+    /// Legacy single-editor attribution; newer Sync callers send `editors`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
     pub actor: Option<Actor<'static>>,
@@ -144,6 +157,9 @@ pub struct DocumentSyncContentUpdatedMetadata {
     /// [`Self::actor`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+    /// Distinct editors since the preceding snapshot notification.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub editors: Vec<DocumentSyncEditor>,
 }
 
 impl DocumentSyncContentUpdatedMetadata {
@@ -162,6 +178,7 @@ impl DocumentSyncContentUpdatedMetadata {
             document_version_id,
             actor: actor.and_then(|id| Actor::try_from(id).ok()),
             on_behalf_of: on_behalf_of.and_then(|id| MacroUserIdStr::try_from(id).ok()),
+            editors: Vec::new(),
         }
     }
 }
@@ -210,6 +227,13 @@ pub struct DocumentCopiedMetadata {
     /// The principal who owns the new copy.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub owner: Owner,
+    /// Who mechanically created the copy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this copy belongs on, when different from the actor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// The name of the new document.
     pub document_name: String,
     /// File type of the document, when known.

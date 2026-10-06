@@ -16,13 +16,15 @@ mod test;
 use agent_runtime_protocol::domain::action::AgentActionId;
 use bots::domain::models::BotId;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
-use macro_event_topics::MacroAgentSessionLifecycleTopic;
+use macro_event_topics::{MacroAgentSessionLifecycleTopic, MacroAgentSessionLogTopic};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::MessageParent;
 use serde::{Deserialize, Serialize};
 
-use super::model::{AgentSessionId, TurnId};
+use super::model::{
+    AgentSessionId, AgentSessionLog, LogAppended, Message, StoredAgentSessionLog, TurnId,
+};
 
 /// The thread a session was opened from, when it was.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,7 +48,11 @@ impl ThreadOrigin {
     pub fn new(parent: MessageParent, thread_id: Uuid, originating_message_id: Uuid) -> Self {
         let channel_id = match &parent {
             MessageParent::Channel(channel_id) => Some(*channel_id),
-            MessageParent::Document(_) => None,
+            MessageParent::Document(_)
+            | MessageParent::Call(_)
+            | MessageParent::Initiative(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => None,
         };
         Self {
             parent,
@@ -195,6 +201,45 @@ pub struct TurnEndedMetadata {
     pub queued_remaining: usize,
 }
 
+/// Sanitized public details of a command refused before runtime execution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct CommandFailure {
+    /// Stable public denial or unavailability code.
+    pub code: String,
+    /// Public explanation, never an internal error report.
+    pub message: String,
+    /// Whether retrying later may succeed without a policy change.
+    pub retryable: bool,
+}
+
+#[cfg(feature = "admission")]
+impl From<ai_billing::AiAdmissionError> for CommandFailure {
+    fn from(error: ai_billing::AiAdmissionError) -> Self {
+        Self {
+            code: error.code().to_owned(),
+            message: error.to_string(),
+            retryable: error.is_retryable(),
+        }
+    }
+}
+
+/// An accepted command was refused before it could start a runtime turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct CommandRejectedMetadata {
+    /// The session.
+    pub identity: SessionIdentity,
+    /// The command that will not execute.
+    pub action_id: AgentActionId,
+    /// Who submitted the command, if acting on a user's behalf.
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// The command's thread announcement, when one was created.
+    pub announcement_message_id: Option<Uuid>,
+    /// Safe details for clients and downstream consumers.
+    pub failure: CommandFailure,
+}
+
 /// A turn ended and nothing is queued: the agent has stopped working.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -250,6 +295,11 @@ pub struct SessionMentionedMetadata {
     /// The users named, already narrowed to those who can open the session
     /// and never including the author.
     pub mentioned: Vec<MacroUserIdStr<'static>>,
+    /// The channel or document message the prompt was posted as, when it
+    /// arrived from a thread rather than the session view. That message
+    /// already notified the users it named when it was posted.
+    #[serde(default)]
+    pub origin_message_id: Option<Uuid>,
 }
 
 /// The session's live actor is gone: idle teardown, transport loss, or crash.
@@ -307,6 +357,10 @@ pub enum AgentSessionLifecycleEvent {
     #[serde(rename = "agent_session.turn_ended")]
     #[strum_discriminants(strum(serialize = "agent_session.turn_ended"))]
     TurnEnded(TurnEndedMetadata),
+    /// An accepted command was refused before runtime execution.
+    #[serde(rename = "agent_session.command_rejected")]
+    #[strum_discriminants(strum(serialize = "agent_session.command_rejected"))]
+    CommandRejected(CommandRejectedMetadata),
     /// A turn ended with nothing queued behind it.
     #[serde(rename = "agent_session.settled")]
     #[strum_discriminants(strum(serialize = "agent_session.settled"))]
@@ -345,6 +399,7 @@ impl AgentSessionLifecycleEvent {
             Self::Opened(metadata) => &metadata.identity,
             Self::TurnStarted(metadata) => &metadata.identity,
             Self::TurnEnded(metadata) => &metadata.identity,
+            Self::CommandRejected(metadata) => &metadata.identity,
             Self::Settled(metadata) => &metadata.identity,
             Self::WaitingForInput(metadata) => &metadata.identity,
             Self::InputReceived(metadata) => &metadata.identity,
@@ -397,6 +452,140 @@ impl AgentSessionLifecycleMacroEvent {
 
 impl MacroEvent for AgentSessionLifecycleMacroEvent {
     type EventPayload = AgentSessionLifecycleEvent;
+
+    fn key(&self) -> &str {
+        &self.key
+    }
+
+    fn event(&self) -> &Event<Self::EventPayload> {
+        &self.event
+    }
+
+    fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
+        Self { key, event }
+    }
+}
+
+/// A run of frames appended to a session's log, published to
+/// [`MacroAgentSessionLogTopic`] and keyed by session id.
+///
+/// The connection gateway pushes the same run to the viewers this process
+/// knows about; this is for a process that serves viewers of its own, such
+/// as the GraphQL subscription in document storage. Each entry is exactly
+/// the stored row, so a subscriber folds the same bytes a reader of the
+/// durable log does.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum AgentSessionLogTopicEvent {
+    /// Frames were appended to the log, in log order.
+    #[serde(rename = "agent_session_log.appended")]
+    Appended(LogAppendedMetadata),
+}
+
+impl AgentSessionLogTopicEvent {
+    /// The session the frames belong to.
+    #[must_use]
+    pub fn session_id(&self) -> AgentSessionId {
+        match self {
+            Self::Appended(metadata) => metadata.agent_session_id,
+        }
+    }
+}
+
+impl TopicEvent for AgentSessionLogTopicEvent {
+    type Topic = MacroAgentSessionLogTopic;
+
+    const SCHEMA_VERSION: u8 = 1;
+}
+
+/// The frames one flush appended, as the log stored them.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogAppendedMetadata {
+    /// The session the frames belong to.
+    pub agent_session_id: AgentSessionId,
+    /// The frames, in the order the log holds them.
+    pub entries: Vec<LogAppendedEntry>,
+}
+
+/// One stored frame: the row's identity and time beside the frame itself.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogAppendedEntry {
+    /// Durable row identity.
+    pub id: Uuid,
+    /// When the log recorded the frame.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// The user whose action produced the frame, absent when no user did.
+    pub user_id: Option<MacroUserIdStr<'static>>,
+    /// The frame, with its direction.
+    pub content: Message,
+}
+
+impl From<&LogAppended> for AgentSessionLogTopicEvent {
+    fn from(event: &LogAppended) -> Self {
+        Self::Appended(LogAppendedMetadata {
+            agent_session_id: event.agent_session_id,
+            entries: event
+                .entries
+                .iter()
+                .map(|stored| LogAppendedEntry {
+                    id: stored.id,
+                    created_at: stored.created_at,
+                    user_id: stored.entry.user_id.clone(),
+                    content: stored.entry.content.clone(),
+                })
+                .collect(),
+        })
+    }
+}
+
+impl LogAppendedMetadata {
+    /// The frames as stored rows again, for a consumer that reads them the
+    /// way it reads the durable log.
+    #[must_use]
+    pub fn into_stored(self) -> Vec<StoredAgentSessionLog> {
+        let agent_session_id = self.agent_session_id;
+        self.entries
+            .into_iter()
+            .map(|entry| StoredAgentSessionLog {
+                id: entry.id,
+                created_at: entry.created_at,
+                entry: AgentSessionLog {
+                    agent_session_id,
+                    user_id: entry.user_id,
+                    content: entry.content,
+                },
+            })
+            .collect()
+    }
+}
+
+/// Publishable event for [`MacroAgentSessionLogTopic`], keyed by session id
+/// so one session's frames stay in order on one partition.
+#[derive(Debug, Clone)]
+pub struct AgentSessionLogMacroEvent {
+    key: String,
+    event: Event<AgentSessionLogTopicEvent>,
+}
+
+impl AgentSessionLogMacroEvent {
+    /// Wrap a run of frames for publication.
+    #[must_use]
+    pub fn new(event: AgentSessionLogTopicEvent) -> Self {
+        Self {
+            key: event.session_id().to_string(),
+            event: Event::new(event),
+        }
+    }
+
+    /// The run this event carries.
+    #[must_use]
+    pub fn into_payload(self) -> AgentSessionLogTopicEvent {
+        self.event.event
+    }
+}
+
+impl MacroEvent for AgentSessionLogMacroEvent {
+    type EventPayload = AgentSessionLogTopicEvent;
 
     fn key(&self) -> &str {
         &self.key

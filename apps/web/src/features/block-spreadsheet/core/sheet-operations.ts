@@ -13,12 +13,13 @@ import {
   selectionBounds,
 } from './grid-selection';
 import {
-  SPREADSHEET_COLUMNS,
   SPREADSHEET_MAX_CELL_LENGTH,
+  SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
   type SpreadsheetCellEdits,
   type SpreadsheetCells,
 } from './spreadsheet-document';
+import { CSV_MAX_BYTES } from './workbook-file-types';
 
 export function borderEdits(
   selection: CellSelection,
@@ -120,19 +121,20 @@ export function trimWhitespaceEdits(
 
 /** Import into the selection; a failed validation produces no partial edits. */
 export function csvImportEdits(text: string, selection: CellSelection) {
-  if (text.length > 1_000_000) throw new Error('Import a CSV up to 1 MB.');
+  if (text.length > CSV_MAX_BYTES)
+    throw new Error(`Import a CSV up to ${CSV_MAX_BYTES / 1024 / 1024} MB.`);
   if (!text.replace(/^\uFEFF/, '')) throw new Error('This CSV is empty.');
   const rows = parseClipboard(text.replace(/^\uFEFF/, ''), ',');
-  const width = Math.max(0, ...rows.map((row) => row.length));
+  const width = rows.reduce((widest, row) => Math.max(widest, row.length), 0);
   const start = selection.anchor;
   const lastRow = start.row + rows.length;
   if (!rows.length || !width) throw new Error('This CSV is empty.');
   if (
     lastRow > SPREADSHEET_MAX_ROWS ||
-    start.column + width > SPREADSHEET_COLUMNS
+    start.column + width > SPREADSHEET_MAX_COLUMNS
   )
     throw new Error(
-      'The imported table must fit within 1,000 rows and 26 columns.'
+      `The imported table must fit within ${SPREADSHEET_MAX_ROWS.toLocaleString('en-US')} rows and ${SPREADSHEET_MAX_COLUMNS.toLocaleString('en-US')} columns.`
     );
   const edits: SpreadsheetCellEdits = {};
   rows.forEach((row, index) => {

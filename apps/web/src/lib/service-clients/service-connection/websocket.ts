@@ -14,6 +14,7 @@ import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/s
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
+import { instrumentGatewaySocket } from './presence-telemetry';
 
 export { parseWebsocketPayload } from './websocket-payload';
 
@@ -55,6 +56,8 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
     maxMissedHeartbeats: 3,
   })
   .build();
+
+instrumentGatewaySocket(ws);
 
 function reconnectIfDisconnected() {
   ws.reconnectIfDisconnected();

@@ -125,6 +125,9 @@
       "@service-scheduled-action/*": [
         "./src/lib/service-clients/service-scheduled-action/*"
       ],
+      "@service-calendar/*": [
+        "./src/lib/service-clients/service-calendar/*"
+      ],
       "@service-email/*": [
         "./src/lib/service-clients/service-email/*"
       ],
@@ -140,6 +143,9 @@
       "@block-calendar/*": [
         "./src/features/block-calendar/*"
       ],
+      "@block-database/*": [
+        "./src/features/block-database/*"
+      ],
       "@block-code/*": [
         "./src/features/block-code/*"
       ],
@@ -149,20 +155,11 @@
       "@block-channel/*": [
         "./src/features/block-channel/*"
       ],
-      "@block-automation/*": [
-        "./src/features/block-automation/*"
-      ],
       "@channel/*": [
         "./src/features/channel/*"
       ],
-      "@companies/*": [
-        "./src/features/companies/*"
-      ],
       "@block-company/*": [
         "./src/features/block-company/*"
-      ],
-      "@contacts/*": [
-        "./src/features/contacts/*"
       ],
       "@block-contact/*": [
         "./src/features/block-contact/*"

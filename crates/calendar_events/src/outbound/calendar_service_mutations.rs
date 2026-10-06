@@ -74,7 +74,7 @@ impl CalendarServiceMutations {
     ) -> Result<reqwest::Response, CalendarMutationError> {
         let response = request.send().await.map_err(|error| {
             CalendarMutationError::Retryable(format!(
-                "calendar mutation request failed to reach the email service: {error}"
+                "calendar mutation request failed to reach the calendar service: {error}"
             ))
         })?;
         let status = response.status();
@@ -177,6 +177,7 @@ fn create_body(
         "reminders": draft.reminders,
         "conference": draft.conference,
         "outOfOffice": draft.out_of_office,
+        "idempotencyKey": draft.idempotency_key,
     })
 }
 
@@ -254,16 +255,19 @@ fn rsvp_body(
     calendar_id: Option<Uuid>,
     response: AttendeeResponseStatus,
     scope: &CalendarRsvpScope,
+    responding_email: Option<&str>,
 ) -> serde_json::Value {
     match scope {
         CalendarRsvpScope::All => serde_json::json!({
             "calendarId": calendar_id,
             "response": response,
+            "respondingEmail": responding_email,
             "scope": "all",
         }),
         CalendarRsvpScope::ThisEvent { recurrence_id } => serde_json::json!({
             "calendarId": calendar_id,
             "response": response,
+            "respondingEmail": responding_email,
             "scope": "this_event",
             "recurrenceId": recurrence_id,
         }),
@@ -343,7 +347,7 @@ impl CalendarMutationService for CalendarServiceMutations {
         .map(|_| ())
     }
 
-    #[tracing::instrument(skip(self, requester_id), err)]
+    #[tracing::instrument(skip(self, requester_id, responding_email), err)]
     async fn respond_to_event(
         &self,
         requester_id: &str,
@@ -351,6 +355,7 @@ impl CalendarMutationService for CalendarServiceMutations {
         calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
+        responding_email: Option<String>,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         self.event_from(
             self.request(
@@ -358,7 +363,12 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}/rsvp"),
                 requester_id,
             )
-            .json(&rsvp_body(calendar_id, response, &scope)),
+            .json(&rsvp_body(
+                calendar_id,
+                response,
+                &scope,
+                responding_email.as_deref(),
+            )),
         )
         .await
     }

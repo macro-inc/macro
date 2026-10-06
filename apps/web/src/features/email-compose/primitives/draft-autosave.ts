@@ -6,6 +6,7 @@ export function createDraftAutosave<Snapshot, Result>(options: {
   capture(): Snapshot;
   persist(snapshot: Snapshot): Promise<Result>;
   paused(): boolean;
+  onError?(error: unknown): void;
 }) {
   let pending = false;
   let queue: Promise<Result | undefined> = Promise.resolve(undefined);
@@ -21,12 +22,12 @@ export function createDraftAutosave<Snapshot, Result>(options: {
   };
   const scheduled = debounce(() => {
     if (options.paused()) return;
-    void save().catch(() => {});
+    void save().catch((error) => options.onError?.(error));
   }, 500);
   onCleanup(() => {
     const flush = pending && !options.paused();
     cancel();
-    if (flush) void save().catch(() => {});
+    if (flush) void save().catch((error) => options.onError?.(error));
   });
   return {
     save,

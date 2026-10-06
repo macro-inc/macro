@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { uploadFile } from '@core/util/upload';
 import { storageServiceClient } from '@service-storage/client';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -9,6 +11,7 @@ import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { botKeys, botProfileKeys } from '../bots/keys';
 import { channelKeys } from '../channel/keys';
 import { agentKeys } from './keys';
 
@@ -28,12 +31,17 @@ vi.mock('@service-storage/client', () => ({
   },
 }));
 
+vi.mock('@core/util/upload', () => ({
+  uploadFile: vi.fn(),
+}));
+
 import {
   type CreateAgentParams,
   useCreateAgentMutation,
   useDeleteAgentMutation,
   useUpdateAgentMutation,
 } from './agents';
+import { useUploadAgentAvatarMutation } from './avatar';
 
 const params: CreateAgentParams = {
   channelIds: ['channel-new'],
@@ -43,6 +51,7 @@ const params: CreateAgentParams = {
   harness: 'in-memory',
   name: 'Bug fixer',
   instructions: 'Fix bugs.',
+  isCoding: false,
   mcp: { scope: 'owner_connections' },
 };
 
@@ -63,6 +72,7 @@ function agent(channelIds: string[]): Agent {
     default_model: 'claude-sonnet-4-5',
     channel_scope: 'selected',
     channel_ids: channelIds,
+    is_coding: false,
     mcp: { scope: 'owner_connections' },
   };
 }
@@ -113,6 +123,12 @@ describe('agent channel-bot cache invalidation', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.channelBots('channel-other').queryKey,
     });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: botKeys.list.queryKey,
+    });
+    expect(
+      testQueryClient.getQueryData(botKeys.detail(created.bot.id).queryKey)
+    ).toEqual(created.bot);
   });
 
   it('invalidates old and new channel bot queries after editing', async () => {
@@ -120,23 +136,87 @@ describe('agent channel-bot cache invalidation', () => {
       agent(['channel-old']),
     ]);
     const updated = agent(['channel-new']);
+    const profileKey = botProfileKeys.detail(updated.bot.id).queryKey;
+    testQueryClient.setQueryData(profileKey, {
+      name: 'Previous name',
+      avatarUrl: undefined,
+      deleted: false,
+    });
     vi.mocked(storageServiceClient.updateAgent).mockResolvedValue(ok(updated));
-    const invalidateQueries = vi.spyOn(testQueryClient, 'invalidateQueries');
+    for (const id of ['channel-old', 'channel-new']) {
+      testQueryClient.setQueryData(channelKeys.channelBots(id).queryKey, []);
+    }
     const mutation = renderHook(() => useUpdateAgentMutation());
 
     await mutation.mutateAsync({ ...params, agentId: 'agent-1' });
 
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: channelKeys.channelBots('channel-old').queryKey,
+    for (const id of ['channel-old', 'channel-new']) {
+      expect(
+        testQueryClient.getQueryState(channelKeys.channelBots(id).queryKey)
+          ?.isInvalidated
+      ).toBe(true);
+    }
+    expect(
+      testQueryClient.getQueryData(botKeys.detail(updated.bot.id).queryKey)
+    ).toEqual(updated.bot);
+    expect(testQueryClient.getQueryState(profileKey)?.isInvalidated).toBe(true);
+  });
+
+  it('refreshes cached channel and bot profiles when a global team agent changes its avatar', async () => {
+    const existing = { ...agent([]), channel_scope: 'all' as const };
+    existing.bot.owner = { type: 'team', team_id: 'team-1' };
+    const updated = {
+      ...existing,
+      bot: { ...existing.bot, avatar_url: 'https://static.example/avatar.png' },
+    };
+    testQueryClient.setQueryData(agentKeys.list.queryKey, [existing]);
+    testQueryClient.setQueryData(botKeys.list.queryKey, [existing.bot]);
+    testQueryClient.setQueryData(
+      botKeys.detail(existing.bot.id).queryKey,
+      existing.bot
+    );
+    testQueryClient.setQueryData(
+      channelKeys.channelBots('channel-installed').queryKey,
+      [existing.bot]
+    );
+    vi.mocked(storageServiceClient.updateAgent).mockResolvedValue(ok(updated));
+    const mutation = renderHook(() => useUpdateAgentMutation());
+    await mutation.mutateAsync({
+      ...params,
+      agentId: existing.bot.id,
+      avatarUrl: updated.bot.avatar_url,
+      channelScope: 'all',
+      channelIds: [],
+      teamId: 'team-1',
     });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: channelKeys.channelBots('channel-new').queryKey,
-    });
+    expect(storageServiceClient.updateAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ avatar_url: updated.bot.avatar_url })
+    );
+    expect(testQueryClient.getQueryData(agentKeys.list.queryKey)).toEqual([
+      updated,
+    ]);
+    expect(
+      testQueryClient.getQueryData(botKeys.detail(existing.bot.id).queryKey)
+    ).toEqual(updated.bot);
+    expect(
+      testQueryClient.getQueryState(botKeys.list.queryKey)?.isInvalidated
+    ).toBe(true);
+    expect(
+      testQueryClient.getQueryState(
+        channelKeys.channelBots('channel-installed').queryKey
+      )?.isInvalidated
+    ).toBe(true);
   });
 
   it('removes a deleted agent and invalidates its channel bot queries', async () => {
     const existing = agent(['channel-old']);
     testQueryClient.setQueryData(agentKeys.list.queryKey, [existing]);
+    const profileKey = botProfileKeys.detail(existing.bot.id).queryKey;
+    testQueryClient.setQueryData(profileKey, {
+      name: existing.bot.name,
+      avatarUrl: undefined,
+      deleted: false,
+    });
     vi.mocked(storageServiceClient.deleteBot).mockResolvedValue(ok(undefined));
     const invalidateQueries = vi.spyOn(testQueryClient, 'invalidateQueries');
     const mutation = renderHook(() => useDeleteAgentMutation());
@@ -152,11 +232,59 @@ describe('agent channel-bot cache invalidation', () => {
     expect(
       testQueryClient.getQueryData<Agent[]>(agentKeys.list.queryKey)
     ).toEqual([]);
+    expect(testQueryClient.getQueryState(profileKey)?.isInvalidated).toBe(true);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.channelBots('channel-old').queryKey,
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.participants('channel-old').queryKey,
     });
+  });
+});
+
+describe('agent avatar uploads', () => {
+  it.each(['image/png', 'image/heic'])(
+    'uses the shared image conversion and upload pipeline for %s',
+    async (type) => {
+      vi.mocked(uploadFile).mockResolvedValue({
+        failed: false,
+        pending: false,
+        destination: 'static',
+        id: 'file-id',
+        name: 'avatar.png',
+      });
+      const mutation = renderHook(() => useUploadAgentAvatarMutation());
+      // This exceeds the JSON endpoint body limit when encoded as a data URL.
+      const file = new File([new Uint8Array(3 * 1024 * 1024)], 'avatar.png', {
+        type,
+      });
+      await expect(mutation.mutateAsync(file)).resolves.toBe(
+        staticFileIdEndpoint('file-id')
+      );
+      expect(uploadFile).toHaveBeenCalledWith(file, 'static');
+    }
+  );
+
+  it('rejects oversized images before starting an upload', async () => {
+    const mutation = renderHook(() => useUploadAgentAvatarMutation());
+    const file = new File(
+      [new Uint8Array(16 * 1000 * 1000 + 1)],
+      'avatar.png',
+      { type: 'image/png' }
+    );
+    await expect(mutation.mutateAsync(file)).rejects.toThrow('maximum 16 MB');
+    expect(uploadFile).not.toHaveBeenCalled();
+  });
+
+  it('propagates upload errors without returning an avatar URL', async () => {
+    vi.mocked(uploadFile).mockResolvedValue({
+      failed: true,
+      error: new Error('Failed to upload file'),
+      name: 'avatar.png',
+    });
+    const mutation = renderHook(() => useUploadAgentAvatarMutation());
+    await expect(
+      mutation.mutateAsync(new File(['avatar'], 'avatar.png'))
+    ).rejects.toThrow('Failed to upload file');
   });
 });

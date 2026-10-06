@@ -74,9 +74,10 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     visible: boolean
   ) => {
     calendarView.closeEventDetails();
-    for (const source of group.calendars) {
-      calendarView.setSourceVisibility(source.id, visible);
-    }
+    calendarView.setSourcesVisibility(
+      group.calendars.map((source) => source.id),
+      visible
+    );
   };
   const isAccountVisible = (group: CalendarAccountGroup) =>
     group.calendars.every((source) => calendarView.isSourceVisible(source.id));
@@ -110,7 +111,16 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     calendarView.closeEventDetails();
     match(account.action)
       .with('enable', () => {
-        startAddInbox({ scopes: 'calendar' });
+        void startAddInbox({
+          scopes: account.consentScopes,
+          emailAddress: account.emailAddress,
+        });
+      })
+      .with('reconnect', () => {
+        void startAddInbox({
+          scopes: account.consentScopes,
+          emailAddress: account.emailAddress,
+        });
       })
       .with('turnOff', () => {
         setTurnOffTarget({
@@ -153,19 +163,24 @@ type CalendarSettingsControls = ReturnType<
 
 function DesktopCalendarSettings(props: {
   controls: CalendarSettingsControls;
+  sidebar?: boolean;
 }) {
   const controls = props.controls;
   const calendarView = controls.calendarView;
 
   return (
-    <Dropdown placement="bottom-end">
+    <Dropdown placement={props.sidebar ? 'top-end' : 'bottom-end'}>
       <Dropdown.Trigger
         variant="ghost"
-        size="icon-sm"
-        class="shrink-0 rounded-lg"
+        size={props.sidebar ? 'md' : 'icon-md'}
+        class={
+          props.sidebar
+            ? 'w-full border-transparent bg-transparent'
+            : 'shrink-0 border-transparent bg-transparent'
+        }
         aria-label="Calendar settings"
       >
-        <GearIcon class="size-3.5" />
+        <GearIcon class="size-5" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)]">
         <Show when={controls.showCalendarVisibility()}>
@@ -288,11 +303,15 @@ function DesktopCalendarSettings(props: {
                   <span
                     class="shrink-0 text-xs font-medium"
                     classList={{
-                      'text-accent': account.action === 'enable',
+                      'text-accent': account.action !== 'turnOff',
                       'text-failure': account.action === 'turnOff',
                     }}
                   >
-                    {account.action === 'enable' ? 'Enable' : 'Turn off'}
+                    {match(account.action)
+                      .with('enable', () => 'Enable')
+                      .with('reconnect', () => 'Reconnect')
+                      .with('turnOff', () => 'Turn off')
+                      .exhaustive()}
                   </span>
                 </Dropdown.Item>
               )}
@@ -315,7 +334,10 @@ function DesktopCalendarSettings(props: {
   );
 }
 
-function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
+function MobileCalendarSettings(props: {
+  controls: CalendarSettingsControls;
+  sidebar?: boolean;
+}) {
   const controls = props.controls;
   const calendarView = controls.calendarView;
   const [open, setOpen] = createSignal(false);
@@ -331,8 +353,8 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
       <MobileDrawer.Trigger
         as={Button}
         variant="ghost"
-        size="icon-sm"
-        class="shrink-0 rounded-full"
+        size={props.sidebar ? 'md' : 'icon-lg'}
+        class={props.sidebar ? 'w-full rounded-full' : 'shrink-0 rounded-full'}
         aria-label="Calendar settings"
       >
         <GearIcon class="size-6" />
@@ -479,11 +501,15 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
                     <span
                       class="shrink-0 text-xs font-medium"
                       classList={{
-                        'text-accent': account.action === 'enable',
+                        'text-accent': account.action !== 'turnOff',
                         'text-failure': account.action === 'turnOff',
                       }}
                     >
-                      {account.action === 'enable' ? 'Enable' : 'Turn off'}
+                      {match(account.action)
+                        .with('enable', () => 'Enable')
+                        .with('reconnect', () => 'Reconnect')
+                        .with('turnOff', () => 'Turn off')
+                        .exhaustive()}
                     </span>
                   </MobileDrawer.Item>
                 )}
@@ -513,7 +539,10 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
  * Responsive calendar display settings menu. The turn-off confirmation lives
  * outside the menu so it survives the menu closing on select.
  */
-export function CalendarSettingsDropdown(props: { isNarrow?: boolean }) {
+export function CalendarSettingsDropdown(props: {
+  isNarrow?: boolean;
+  sidebar?: boolean;
+}) {
   const controls = createCalendarSettingsControls(
     () => props.isNarrow ?? false
   );
@@ -522,9 +551,14 @@ export function CalendarSettingsDropdown(props: { isNarrow?: boolean }) {
     <>
       <Show
         when={isMobile()}
-        fallback={<DesktopCalendarSettings controls={controls} />}
+        fallback={
+          <DesktopCalendarSettings
+            controls={controls}
+            sidebar={props.sidebar}
+          />
+        }
       >
-        <MobileCalendarSettings controls={controls} />
+        <MobileCalendarSettings controls={controls} sidebar={props.sidebar} />
       </Show>
       <TurnOffCalendarDialog
         target={controls.turnOffTarget()}

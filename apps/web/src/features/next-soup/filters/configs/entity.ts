@@ -1,3 +1,9 @@
+export {
+  crmCompanyActiveFilter,
+  crmCompanyFilter,
+  crmCompanyHiddenFilter,
+} from '../../../crm/collection-filters';
+
 import { getEntityProjectId } from '@entity';
 import { defineQueryFilters } from '../filter-store/compile';
 import {
@@ -5,9 +11,6 @@ import {
   calendarEventFilter as calendarEventPredicate,
   callsFilter as callsPredicate,
   channelsFilter as channelsPredicate,
-  crmCompanyActiveFilter as crmCompanyActivePredicate,
-  crmCompanyHiddenFilter as crmCompanyHiddenPredicate,
-  crmCompanyFilter as crmCompanyPredicate,
   doneRemindersFilter as doneRemindersPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
   firedRemindersFilter as firedRemindersPredicate,
@@ -82,12 +85,6 @@ export const calendarFilter = config({
   query: defineQueryFilters({}, { skipTargets: ['calf'] }),
 });
 
-export const crmCompanyFilter = config({
-  id: 'crm-company',
-  predicate: crmCompanyPredicate,
-  query: defineQueryFilters({}, { skipTargets: ['ccf'] }),
-});
-
 // Reminders are opt-in server-side, so unlike the other entity filters these
 // queries name `includeReminders` rather than just skipping their own target —
 // there is no `remf` entry in ID_FIELD_NAMES to skip.
@@ -145,24 +142,6 @@ export const doneRemindersFilter = config({
   query: defineQueryFilters({
     include: { includeReminders: true, reminderCompleted: true },
   }),
-});
-
-export const crmCompanyActiveFilter = config({
-  id: 'crm-company-active',
-  predicate: crmCompanyActivePredicate,
-  query: defineQueryFilters(
-    { include: { crmCompanyHidden: false } },
-    { skipTargets: ['ccf'] }
-  ),
-});
-
-export const crmCompanyHiddenFilter = config({
-  id: 'crm-company-hidden',
-  predicate: crmCompanyHiddenPredicate,
-  query: defineQueryFilters(
-    { include: { crmCompanyHidden: true } },
-    { skipTargets: ['ccf'] }
-  ),
 });
 
 export const searchSupportedFilter = config({

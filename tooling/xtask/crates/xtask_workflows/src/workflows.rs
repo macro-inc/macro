@@ -33,8 +33,10 @@ mod deploy_on_push;
 mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
+mod deploy_website;
 mod docs_check;
 mod ensure_daytona_snapshot;
+mod ios_preview;
 mod path_validation;
 mod publish_sdk;
 mod pulumi_preview_pr;
@@ -244,9 +246,19 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
     },
     WorkflowFile {
+        slug: "deploy_website",
+        file_name: "deploy_website.yml",
+        render_yaml: || render_patched(deploy_website::deploy_website, deploy_website::patch),
+    },
+    WorkflowFile {
         slug: "ensure_daytona_snapshot",
         file_name: "ensure_daytona_snapshot.yml",
         render_yaml: || render_gh_workflow(ensure_daytona_snapshot::ensure_daytona_snapshot)(),
+    },
+    WorkflowFile {
+        slug: "ios_preview",
+        file_name: "ios_preview.yml",
+        render_yaml: || render_gh_workflow(ios_preview::ios_preview)(),
     },
     WorkflowFile {
         slug: "push_local_stack_binaries",

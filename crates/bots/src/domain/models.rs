@@ -163,6 +163,60 @@ pub struct BotProfile {
     pub avatar_url: Option<String>,
 }
 
+/// Most bot ids one owner-profile request accepts, counting duplicates.
+pub const MAX_BOT_OWNER_PROFILE_IDS: usize = 100;
+
+/// Bot identity for rendering, including the sponsor and soft-delete time.
+///
+/// `owner` is none only for a registry system bot. A persisted row always has
+/// a sponsor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct BotOwnerProfile {
+    /// Bot id.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Avatar URL. Registry system bots have none.
+    pub avatar_url: Option<String>,
+    /// Soft-delete time. Absent for an active bot and for a registry system bot.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Sponsor. None only for a registry system bot.
+    pub owner: Option<BotOwner>,
+}
+
+impl BotOwnerProfile {
+    /// Profile of a first-party bot from the registry.
+    #[must_use]
+    pub fn system(bot: &bot_id::SystemBot) -> Self {
+        Self {
+            id: bot.id,
+            name: bot.name.to_owned(),
+            avatar_url: None,
+            deleted_at: None,
+            owner: None,
+        }
+    }
+
+    /// Profile of a persisted bot, including one that is soft-deleted.
+    #[must_use]
+    pub fn persisted(
+        id: BotId,
+        name: String,
+        avatar_url: Option<String>,
+        deleted_at: Option<DateTime<Utc>>,
+        owner: BotOwner,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            avatar_url,
+            deleted_at,
+            owner: Some(owner),
+        }
+    }
+}
+
 impl Bot {
     /// The [`Bot`] view of a first-party bot.
     ///
@@ -299,6 +353,11 @@ pub struct Agent {
     /// Whether the agent's sessions approve ACP permission requests without
     /// asking. `None` means always prompt. Bypass also requires the harness's opt-in.
     pub auto_accept_permissions: Option<bool>,
+    /// Whether the agent works in a repository, which decides how it answers
+    /// a channel mention: a coding agent posts a magic chip into its live
+    /// session, a chat agent replies in the thread. Chosen in the agent's
+    /// settings; the persona's word, not the runtime's.
+    pub is_coding: bool,
 }
 
 /// Request to create a persisted AI agent.
@@ -337,6 +396,9 @@ pub struct CreateAgentRequest {
     /// asking. Omit to always prompt.
     #[serde(default)]
     pub auto_accept_permissions: Option<bool>,
+    /// Whether the agent is a coding agent: a mention is answered with a magic
+    /// chip into its live session (`true`) or a reply in the thread (`false`).
+    pub is_coding: bool,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -375,6 +437,103 @@ pub struct UpdateAgentRequest {
     /// asking. Omit to always prompt.
     #[serde(default)]
     pub auto_accept_permissions: Option<bool>,
+    /// Whether the agent is a coding agent: a mention is answered with a magic
+    /// chip into its live session (`true`) or a reply in the thread (`false`).
+    pub is_coding: bool,
+}
+
+#[cfg(test)]
+mod test;
+
+/// The runtime an agent runs on: a harness slug and, for `macrod`, the
+/// registered harness serving it. Travel together because one without the
+/// other is never a valid choice.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentHarnessSelection {
+    /// Harness slug, e.g. `in-memory`, `cursor`, `claude-cloud`, or `macrod`.
+    pub harness: String,
+    /// Registered harness to run on. Required when `harness` is `macrod`,
+    /// forbidden otherwise.
+    pub harness_id: Option<HarnessId>,
+}
+
+/// Where an agent can be mentioned: everywhere its owner can use it, or
+/// exactly the listed channels.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentChannelSelection {
+    /// Whether the agent is global or channel-specific.
+    pub channel_scope: AgentChannelScope,
+    /// Selected channels. Must be non-empty only for `selected` scope.
+    pub channel_ids: Vec<Uuid>,
+}
+
+/// Request to change part of a persisted agent's instructions or settings.
+///
+/// Every field is optional; an absent field keeps the agent's current value.
+/// Ownership and the bot profile (name, handle, description, avatar) are not
+/// patchable here: the profile has [`PatchBotRequest`], and ownership changes
+/// go through [`UpdateAgentRequest`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PatchAgentRequest {
+    /// Replacement instructions, whole.
+    pub instructions: Option<String>,
+    /// Replacement runtime.
+    pub harness: Option<AgentHarnessSelection>,
+    /// Replacement model.
+    pub default_model: Option<String>,
+    /// Replacement channel availability.
+    pub channels: Option<AgentChannelSelection>,
+    /// Replacement MCP server selection.
+    pub mcp: Option<AgentMcpServers>,
+    /// Replacement permission choice: approve without asking (`true`) or
+    /// prompt (`false`). A patch cannot clear the choice back to unset; an
+    /// explicit `false` prompts exactly as unset does.
+    pub auto_accept_permissions: Option<bool>,
+    /// Replacement coding choice.
+    pub is_coding: Option<bool>,
+}
+
+impl PatchAgentRequest {
+    /// The full replacement `current` becomes once this patch is applied.
+    ///
+    /// Keeps the agent under its current owner and profile; only what the
+    /// patch names changes.
+    #[must_use]
+    pub fn apply_to(self, current: &Agent) -> UpdateAgentRequest {
+        let (harness, harness_id) = match self.harness {
+            Some(selection) => (selection.harness, selection.harness_id),
+            None => (current.harness.clone(), current.harness_id),
+        };
+        let (channel_scope, channel_ids) = match self.channels {
+            Some(selection) => (selection.channel_scope, selection.channel_ids),
+            None => (current.channel_scope, current.channel_ids.clone()),
+        };
+        UpdateAgentRequest {
+            team_id: match &current.bot.owner {
+                Some(BotOwner::Team { team_id }) => Some(*team_id),
+                Some(BotOwner::User { .. }) | None => None,
+            },
+            harness_id,
+            name: current.bot.name.clone(),
+            handle: current.bot.handle.clone(),
+            description: current.bot.description.clone(),
+            avatar_url: current.bot.avatar_url.clone(),
+            instructions: self
+                .instructions
+                .unwrap_or_else(|| current.instructions.clone()),
+            harness,
+            default_model: self
+                .default_model
+                .unwrap_or_else(|| current.default_model.clone()),
+            channel_scope,
+            channel_ids,
+            mcp: self.mcp.unwrap_or_else(|| current.mcp.clone()),
+            auto_accept_permissions: self
+                .auto_accept_permissions
+                .or(current.auto_accept_permissions),
+            is_coding: self.is_coding.unwrap_or(current.is_coding),
+        }
+    }
 }
 
 /// Channel containing a bot.

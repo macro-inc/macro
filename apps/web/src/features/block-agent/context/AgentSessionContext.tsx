@@ -12,6 +12,8 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { ToolApprovalController } from '../primitives/create-tool-approval-controller';
+import type { EffortSelection } from '../state/session-config';
 import type { QuoteInsert } from '../ui';
 import type { QueueController } from './create-queue-controller';
 import type { InteractionController } from './interaction';
@@ -28,6 +30,8 @@ export type AgentSessionState = {
   /** The session is still being created — everything else is empty because
    *  there is nothing to show yet, not because the load failed. */
   pending: Accessor<boolean>;
+  /** Unsent context from the action that opened this session. */
+  initialInput?: string;
   startupError: Accessor<string | undefined>;
   /** Session metadata, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
@@ -37,7 +41,15 @@ export type AgentSessionState = {
   metadata: Accessor<SessionMetadata | undefined>;
   /** The folded transcript, ordered by turn, live-following the session. */
   messages: Accessor<FoldedMessage[]>;
+  /** Optional in galleries/replays; production reports actual answer rendering. */
+  observeRenderedText?: (
+    sessionId: string,
+    turn: number,
+    element: HTMLElement
+  ) => (() => void) | undefined;
   loadFailed: Accessor<boolean>;
+  /** The load failed because the viewer is not a participant (401/403). */
+  accessDenied: Accessor<boolean>;
   /**
    * Retry can re-run the failed load. False when the create itself failed —
    * there is no session to refetch, so offering Retry would do nothing.
@@ -59,6 +71,8 @@ export type AgentSessionState = {
    * has no session to act on.
    */
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  /** Resolve only after the runtime confirms the selected model and effort. */
+  selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
    * Send the next queued message now: stop the running turn, and show the
    * queue head as sent under the id the server already holds it by. The
@@ -69,8 +83,19 @@ export type AgentSessionState = {
    * the server would dispatch that head, not the next one.
    */
   sendNext: () => void;
+  /**
+   * Steer one queued message: show it as sent, move it to the front of the
+   * queue, and cancel the turn in flight so it runs next. No-op while the
+   * prompt a previous steer or send-next showed as sent is still unconfirmed.
+   */
+  steer: (actionId: string) => void;
   /** The live requests, and the action that answers each one. */
   interactions: InteractionController;
+  /**
+   * Tool calls held until the session's owner approves them, made in turns
+   * somebody else prompted.
+   */
+  toolApprovals: ToolApprovalController;
   /**
    * The session's server-side action queue: prompts sent mid-turn wait
    * there and dispatch one per turn end. The server is the only truth —

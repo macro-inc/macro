@@ -14,15 +14,24 @@ use uuid::Uuid;
 
 #[derive(Default)]
 pub(super) struct Changes {
+    favorite: Option<bool>,
     snapshot: Option<Result<Vec<ExactFact>, ()>>,
     values: BTreeMap<Uuid, Result<Vec<ExactFact>, ()>>,
 }
 impl Changes {
     pub(super) fn apply(&self, base: Option<Vec<ExactFact>>) -> Option<Vec<ExactFact>> {
+        let favorite = self.favorite.map(favorite_fact).or_else(|| {
+            base.as_ref()?
+                .iter()
+                .find(|fact| fact.attribute.as_str() == "is-favorited")
+                .cloned()
+        });
         let mut result = match &self.snapshot {
             Some(snapshot) => snapshot.clone().ok()?,
             None => base?,
         };
+        result.retain(|fact| fact.attribute.as_str() != "is-favorited");
+        result.extend(favorite);
         for (definition, value) in &self.values {
             let value = value.as_ref().ok()?;
             let attributes = attributes(*definition);
@@ -36,8 +45,17 @@ impl Changes {
         let mut values = Vec::new();
         if let Some(snapshot) = &self.snapshot {
             values = snapshot.as_ref().ok()?.clone();
-            selected.extend(base.iter().map(|fact| fact.attribute.clone()));
+            selected.extend(
+                base.iter()
+                    .filter(|fact| facts::is_property_attribute(&fact.attribute))
+                    .map(|fact| fact.attribute.clone()),
+            );
             selected.extend(values.iter().map(|fact| fact.attribute.clone()));
+        }
+        if let Some(favorite) = self.favorite {
+            let fact = favorite_fact(favorite);
+            selected.insert(fact.attribute.clone());
+            values.push(fact);
         }
         for (definition, value) in &self.values {
             let value = value.as_ref().ok()?;
@@ -59,6 +77,12 @@ impl Changes {
                 })
                 .collect(),
         )
+    }
+}
+fn favorite_fact(value: bool) -> ExactFact {
+    ExactFact {
+        attribute: item_filter_index::mail::token("is-favorited"),
+        value: ExactValue::new([u8::from(value)]).expect("boolean fact is bounded"),
     }
 }
 fn attributes(definition: Uuid) -> [Token; 3] {
@@ -84,6 +108,7 @@ fn parent_key(kind: &str, id: &str) -> Option<RecordKey> {
         "PROJECT" => "GraphqlSoupProject",
         "CHAT" => "GraphqlSoupChat",
         "THREAD" => "GraphqlSoupEmailThread",
+        "DATABASE_ROW" => "GraphqlSoupDatabaseRow",
         _ => return None,
     };
     RecordKey::new(format!("{kind}:{id}")).ok()
@@ -94,6 +119,8 @@ fn is_parent(key: &EntityKey<'_>) -> bool {
         "GraphqlSoupProject:",
         "GraphqlSoupChat:",
         "GraphqlSoupEmailThread:",
+        "GraphqlSoupChannel:",
+        "GraphqlSoupDatabaseRow:",
     ]
     .iter()
     .any(|prefix| key.as_ref().starts_with(prefix))
@@ -244,11 +271,12 @@ async fn owners<S: PredicateIndexStorage>(
     let mut result = Vec::new();
     for (profile, partitions, sort) in [
         (
-            vocabulary::profile_v5(),
+            vocabulary::profile_v6(),
             vec![
                 vocabulary::document_partition(),
                 vocabulary::project_partition(),
                 vocabulary::chat_partition(),
+                vocabulary::database_row_partition(),
             ],
             vocabulary::updated_at(),
         ),
@@ -312,6 +340,15 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
     for (key, record) in &updates {
         if !is_parent(key) {
             continue;
+        }
+        if let Some(CacheValue::Bool(favorite)) = record.fields.get("isFavorited") {
+            let change = result
+                .entry(RecordKey::new(key.to_string()).map_err(error)?)
+                .or_default();
+            change.favorite = Some(*favorite);
+            if key.as_ref().starts_with("GraphqlSoupChannel:") {
+                change.snapshot = Some(Ok(vec![]));
+            }
         }
         if let Some(properties) = record.fields.get("properties") {
             if let CacheValue::List(properties) = properties {

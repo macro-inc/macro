@@ -5,20 +5,26 @@ import {
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type {
+  CalendarEvent,
+  CreateCalendarEventRequest,
+  ListCalendarsResponse,
+  RsvpCalendarEventRequest,
+  UpdateCalendarEventRequest,
+} from '@service-calendar/generated/schemas';
+import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/calendarMutationErrorCode';
 import type { Result } from 'neverthrow';
 import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
-  CalendarEvent,
-  CreateCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
+  GetScheduledResponse,
   GetThreadResponse,
   ListBackfillJobsResponse,
-  ListCalendarsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -26,11 +32,9 @@ import type {
   PatchSettingsRequest,
   PatchSettingsResponse,
   ResyncResponse,
-  RsvpCalendarEventRequest,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
-  UpdateCalendarEventRequest,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -40,8 +44,8 @@ import type {
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './generated/schemas';
-import { CalendarMutationErrorCode } from './generated/schemas/calendarMutationErrorCode';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
+import type { InvitationResolution } from './generated/schemas/invitationResolution';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
 const calendarHost: string = SERVER_HOSTS['calendar-service'];
@@ -135,6 +139,11 @@ export const SIGNATURE_IMAGES_UNRESOLVED_CODE =
   'SIGNATURE_IMAGES_UNRESOLVED' as const;
 
 export const emailClient = {
+  async getCalendarInvitations(threadId: string) {
+    return emailFetch<Record<string, InvitationResolution>>(
+      `/email/threads/${threadId}/calendar-invitations`
+    );
+  },
   async init(args?: { linkId?: string; forceShare?: boolean }) {
     const params = new URLSearchParams();
     if (args?.linkId) params.set('link_id', args.linkId);
@@ -326,6 +335,23 @@ export const emailClient = {
         }
       )
     ).map((result) => result);
+  },
+
+  async getScheduledMessages(
+    args: { offset: number; limit: number },
+    linkId?: string
+  ) {
+    const params = new URLSearchParams({
+      offset: String(args.offset),
+      limit: String(args.limit),
+    });
+    return emailFetch<GetScheduledResponse>(
+      `/email/drafts/scheduled?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: emailLinkHeaders(linkId),
+      }
+    );
   },
 
   async getLinks() {
@@ -648,5 +674,29 @@ export const emailClient = {
         errorResponseHandler: calendarMutationErrorHandler,
       }
     );
+  },
+
+  async importGmailSignature(linkId?: string) {
+    return fetchWithToken<
+      PatchSettingsResponse,
+      'NO_SIGNATURE_FOUND' | typeof SIGNATURE_IMAGES_UNRESOLVED_CODE
+    >(`${emailHost}/email/settings/import-signature`, {
+      method: 'POST',
+      headers: emailLinkHeaders(linkId),
+      errorResponseHandler: async (response) => {
+        if (response.status === 404) {
+          return { code: 'NO_SIGNATURE_FOUND' as const, message: '' };
+        }
+        // Same 422 contract as patchSettings: Gmail images that couldn't be
+        // rehosted, so nothing was saved.
+        if (response.status === 422) {
+          return { code: SIGNATURE_IMAGES_UNRESOLVED_CODE, message: '' };
+        }
+        return {
+          code: 'HTTP_ERROR' as const,
+          message: `HTTP error! status: ${response.status}`,
+        };
+      },
+    });
   },
 };

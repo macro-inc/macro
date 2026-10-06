@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+ai_billing = { path = "../ai_billing" }
 claude_cloud_agents = { path = "../claude_cloud_agents" }
 async-trait = { workspace = true }
 codex_cloud_agents = { path = "../codex_cloud_agents", features = ["postgres"] }
@@ -14,7 +15,7 @@ agent-client-protocol = { workspace = true }
 # The session-token claim shape and its signing, so the harness and the proxy
 # cannot disagree about what a token says.
 agent_egress = { path = "../agent_egress" }
-agent_fold = { path = "../agent_fold" }
+agent_fold = { path = "../folds/agent_fold" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
@@ -42,6 +43,8 @@ github = { path = "../github", default-features = false, features = [
 ] }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
+# The owner's custom MCP server rows, listed so a sandbox can be told they exist.
+mcp_client = { path = "../mcp_client" }
 pipedream_mcp = { path = "../pipedream_mcp" }
 macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
@@ -81,10 +84,11 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 channels = { path = "../channels", default-features = false }
 messages = { path = "../messages", features = ["test-utils"] }
 uuid = { workspace = true }
-agent_fold = { path = "../agent_fold", features = ["test-utils"] }
+agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 mockall = { workspace = true }
 model_user = { path = "../model_user" }
 tower = { workspace = true }
+wiremock = { workspace = true }

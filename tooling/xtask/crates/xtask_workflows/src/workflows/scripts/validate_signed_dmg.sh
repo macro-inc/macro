@@ -35,5 +35,3 @@ if [ -s "$dylib_refs" ]; then
   cat "$dylib_refs" >&2
   exit 1
 fi
-
-(cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)

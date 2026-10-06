@@ -20,8 +20,9 @@ fn web_runner() -> String {
     runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
-/// Typechecking can compile the Rust binaries used by `gen-api`, so retain the
-/// mid-size profile while sharing the web CI cache volume and remote sccache.
+/// Typechecking can compile the Rust binaries used by `gen-api`, and the app
+/// build compiles the two browser wasm packages, so retain the mid-size
+/// profile while sharing the web CI cache volume and remote sccache.
 fn typecheck_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
@@ -78,6 +79,7 @@ fn typescript() -> Job {
             "needs.path-check.outputs.api_changed == 'true'",
         ))
         .add_step(generate_api_types())
+        .add_step(check_specta_types())
         .add_step(show_sccache_stats())
         .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
@@ -105,6 +107,7 @@ fn test() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(run_tests())
+        .add_step(run_signup_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -124,10 +127,13 @@ fn build() -> Job {
         // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::mount_web_build_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
         .add_step(run_build())
+        .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -202,6 +208,25 @@ fn generate_api_types() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+/// `gen-api` covers the OpenAPI clients; the types specta writes from the
+/// wire types of the two browser wasm crates are regenerated here, so a Rust
+/// change cannot leave them behind.
+fn check_specta_types() -> Step<Run> {
+    Step::new("Check Specta Types")
+        .run(indoc::indoc! {r#"
+            just gen-agent-fold-types
+            just gen-database-sql-types
+            if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated; then
+              echo "Generated wasm wire types are stale. Run 'just gen-agent-fold-types' and 'just gen-database-sql-types' in apps/web and commit the result."
+              exit 1
+            fi
+        "#})
+        .if_condition(Expression::new(
+            "needs.path-check.outputs.api_changed == 'true'",
+        ))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
 fn show_sccache_stats() -> Step<Run> {
     Step::new("show sccache stats")
         .run("sccache --show-stats || true")
@@ -255,6 +280,14 @@ fn run_collaboration_biome() -> Step<Run> {
 fn run_tests() -> Step<Run> {
     Step::new("Test")
         .run("bunx vitest")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Sign-in, sign-up, and onboarding against their fake backends: real views in
+/// Chromium, no network, so they run on every web PR.
+fn run_signup_browser_tests() -> Step<Run> {
+    Step::new("Sign-up Browser Tests")
+        .run("just test-signup-browser")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

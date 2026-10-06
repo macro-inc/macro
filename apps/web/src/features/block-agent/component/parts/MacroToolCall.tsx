@@ -11,6 +11,7 @@ import {
   hasToolRenderer,
   RenderTool,
 } from '@core/component/AI/component/tool/handler';
+import { parseLegacyGeneratedImage } from '@core/component/AI/component/tool/legacy-generated-image';
 import ReadIcon from '@phosphor/file-text.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import ListIcon from '@phosphor/list-bullets.svg';
@@ -35,7 +36,8 @@ type ToolResponse = NamedTool<ToolName, 'response'>;
 export function MacroToolCall(props: {
   detail: MacroDetail;
   common: ToolCallCommon;
-  context?: ToolCallContext;
+  grouped?: boolean;
+  context: ToolCallContext;
 }): JSX.Element {
   const response = createMemo(() =>
     deserializeToolResponse({
@@ -43,6 +45,9 @@ export function MacroToolCall(props: {
       name: props.common.label,
       json: props.detail.output,
     }).unwrapOr(undefined)
+  );
+  const legacyImage = createMemo(() =>
+    parseLegacyGeneratedImage(props.common.label, props.detail.output)
   );
   const call = createMemo(() =>
     deserializeToolCall({
@@ -77,7 +82,7 @@ export function MacroToolCall(props: {
     ) {
       return input.name;
     }
-    return props.common.server;
+    return undefined;
   };
   const error = () => props.detail.error ?? responseError(response());
   const failure = () => error() != null;
@@ -105,7 +110,7 @@ export function MacroToolCall(props: {
     props.common.trailing == null &&
     !failure() &&
     call() !== undefined &&
-    response() !== undefined &&
+    (response() !== undefined || legacyImage() !== undefined) &&
     hasToolRenderer(props.common.label);
 
   return (
@@ -117,12 +122,16 @@ export function MacroToolCall(props: {
             name={props.common.label}
             json={props.detail.input}
             response={{ json: props.detail.output, name: props.common.label }}
-            chat_id={props.context?.sessionId ?? ''}
-            message_id={props.context?.messageId ?? ''}
-            part_index={props.context?.partIndex ?? 0}
+            chat_id={props.context.sessionId}
+            message_id={props.context.messageId}
+            part_index={props.context.partIndex}
             isComplete={true}
             renderContext={{
-              renderContext: { isStreaming: false, grouped: true },
+              renderContext: {
+                isStreaming: false,
+                grouped: props.grouped ?? true,
+                followedBy: props.context.followedBy,
+              },
             }}
           />
         </Suspense>
@@ -205,12 +214,20 @@ function MacroToolIcon(props: { name: string }): JSX.Element {
       'ReadThread',
       'ReadChat',
       'ReadProject',
+      'ReadPresentation',
+      'ReadDesign',
+      'ReadWordDocument',
       () => <ReadIcon class="size-4" />
     )
     .with('WebFetch', () => <GlobeIcon class="size-4" />)
-    .with('EditDocument', 'EditSpreadsheet', 'CreateDocument', () => (
-      <PencilIcon class="size-4" />
-    ))
+    .with(
+      'EditDocument',
+      'EditSpreadsheet',
+      'EditPresentation',
+      'EditWordDocument',
+      'CreateDocument',
+      () => <PencilIcon class="size-4" />
+    )
     .with('ListEntities', 'ListSkills', 'ListCalendarEvents', () => (
       <ListIcon class="size-4" />
     ))

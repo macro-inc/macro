@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET body_html_sanitized = $1, body_text = $2, updated_at = NOW() WHERE id = $3 AND link_id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8987bf7ad2930b97e8d0f29929f87be23c01a243354115f00227818a0307453a"
+}

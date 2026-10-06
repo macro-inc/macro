@@ -13,7 +13,6 @@ use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfoWithM
 use notification::domain::ports::NotificationRepository;
 use notification::outbound::repository::DbNotificationRepository;
 use sqlx::{Pool, Postgres};
-use stripe::CustomerId;
 use tracing::Instrument;
 
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -48,12 +47,23 @@ pub async fn handler(
         return Ok(StatusCode::OK.into_response());
     }
 
-    let macro_user = macro_db_client::macro_user::get_macro_user(&ctx.db, &fusionauth_user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get macro user");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-        })?;
+    let macro_user =
+        match macro_db_client::macro_user::get_macro_user(&ctx.db, &fusionauth_user_id).await {
+            Ok(user) => user,
+            // A retry after the final delete has nothing left to clean up.
+            Err(error)
+                if matches!(
+                    error.downcast_ref::<sqlx::Error>(),
+                    Some(sqlx::Error::RowNotFound)
+                ) =>
+            {
+                return Ok(StatusCode::OK.into_response());
+            }
+            Err(error) => {
+                tracing::error!(error=?error, "unable to get macro user");
+                return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+            }
+        };
 
     let user_ids: Vec<String> =
         macro_db_client::user::get::get_user_profiles_by_fusionauth_user_id(
@@ -66,9 +76,14 @@ pub async fn handler(
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
         })?;
 
-    // TODO: should probably make this into an event so we can handle service restarts
-    // Spawn a single tokio task to perform the user deletion
-    tokio::spawn(delete_user(ctx, macro_user, fusionauth_user_id, user_ids).in_current_span());
+    // Await the durable cleanup so FusionAuth can retry failures. Acknowledging
+    // before cleanup would strand resources if a service is unavailable.
+    delete_user(ctx, macro_user, fusionauth_user_id, user_ids)
+        .await
+        .map_err(|error| {
+            tracing::error!(error=?error, "unable to complete user deletion");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        })?;
 
     Ok(StatusCode::OK.into_response())
 }
@@ -120,34 +135,6 @@ async fn delete_user(
             }
         }
     });
-
-    // Handle stripe user deletion
-    if let Some(stripe_customer_id) = macro_user.stripe_customer_id {
-        tokio::spawn({
-            let stripe_customer_id = stripe_customer_id.clone();
-            let stripe_client = ctx.stripe_client.clone();
-            async move {
-                tracing::trace!(stripe_customer_id, "delete_stripe_customer");
-
-                let customer_id: CustomerId = match stripe_customer_id.parse() {
-                    Ok(id) => id,
-                    Err(e) => {
-                        tracing::error!(error=?e, stripe_customer_id, "unable to parse stripe customer id");
-                        return;
-                    }
-                };
-
-                if let Err(e) = stripe::Customer::delete(&stripe_client, &customer_id).await {
-                    tracing::error!(error=?e, stripe_customer_id, "unable to delete stripe customer");
-                }
-
-                tracing::trace!(
-                    stripe_customer_id,
-                    "delete_stripe_customer complete"
-                );
-            }
-        }.in_current_span());
-    }
 
     // Fixed: Create futures and await them all concurrently
     let user_info_futures = user_ids
@@ -240,34 +227,18 @@ async fn delete_user(
         .in_current_span(),
     );
 
-    // MacroDB deletion
-    tokio::spawn({
-            let user_infos = user_infos.clone();
-            let document_storage_service_client = ctx.document_storage_service_client.clone();
-            let db = ctx.db.clone();
-            let macro_user_id = macro_user.id;
-            async move {
-                for user_info in user_infos {
-                    let user_id = user_info.id.clone();
-                    tracing::trace!(user_id, "delete_document_storage_service_items");
-                    if let Err(e) = document_storage_service_client
-                    .delete_all_user_items(&user_id)
-                    .await
-                    {
-                        tracing::error!(error=?e, user_id, "unable to delete user items from document storage service");
-                    }
-                    tracing::trace!(user_id, "delete_document_storage_service_items complete");
-
-                    tracing::trace!(user_id, "delete_user_macro_db");
-                    if let Err(e) = macro_db_client::user::delete_user::delete_user(&db, &user_id, &macro_user_id).await {
-                        tracing::error!(error=?e, user_id, "delete_user_macro_db unable to delete user");
-                    }
-                    tracing::trace!(user_id, "delete_user_macro_db complete");
-
-                }
-                let _ = macro_db_client::macro_user::delete_macro_user(&db, &macro_user_id).await.inspect_err(|e| tracing::error!(error=?e, "unable to delete macro user"));
-            }
-        }.in_current_span());
+    // Use the authoritative profile ids, not the best-effort user-info lookups.
+    let users = user_ids
+        .iter()
+        .map(|id| MacroUserIdStr::try_from(id.clone()))
+        .collect::<Result<Vec<_>, _>>()?;
+    authentication_service::service::user::delete_user::delete_user_data(
+        ctx.user_deletion.as_ref(),
+        &macro_user.id,
+        &users,
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!("{error:?}"))?;
 
     Ok(())
 }

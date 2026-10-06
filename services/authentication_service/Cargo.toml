@@ -31,6 +31,10 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
+ai_billing = { path = "../../crates/ai_billing" }
+ai_usage = { path = "../../crates/ai_usage" }
+initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 codex_connection = { path = "../../crates/codex_connection" }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
@@ -79,6 +83,10 @@ github = { path = "../../crates/github", default-features = false, features = [
   "inbound",
   "link",
   "outbound",
+] }
+github_pull_requests = { path = "../../crates/github_pull_requests", default-features = false, features = [
+  "outbound",
+  "service",
 ] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }

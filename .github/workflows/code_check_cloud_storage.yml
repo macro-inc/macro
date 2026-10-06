@@ -63,6 +63,7 @@ jobs:
             - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/teardown-nix/**'
             - '.github/actions/setup-sccache/**'
+            - '.github/services-config.json'
             - .github/workflows/code_check_cloud_storage.yml
     - name: compute changed files
       if: steps.filter.outputs.should_run == 'true'
@@ -314,6 +315,7 @@ jobs:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      SCCACHE_IDLE_TIMEOUT: '0'
     services:
       postgres:
         image: pgvector/pgvector:pg18
@@ -373,6 +375,8 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Start sccache server
+      run: sccache --start-server
     - name: configure postgres for concurrent tests
       run: |
         postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg18" { print $1; exit }')"
@@ -416,7 +420,13 @@ jobs:
         # Unconstrained `-p` still runs that package's tests.
 
         : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
-        common=(--all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+        # Dependencies build without debug info, which cuts compile, link and disk cost.
+        # Workspace crates keep CARGO_PROFILE_*_DEBUG=limited, so backtraces still carry
+        # line numbers in our own code.
+        common=(
+          --config 'profile.dev.package."*".debug=false'
+          --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS"
+        )
 
         if [ "$RUST_PACKAGES" = "all" ]; then
           cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"

@@ -14,8 +14,17 @@ describe('itemTypeToReferenceEntityType', () => {
       'agent_session'
     );
   });
+  test('the initiative block names a task project, never a folder', () => {
+    expect(blockNameToItemType('initiative')).toBe('initiative');
+    expect(blockNameToItemType('project')).toBe('project');
+    expect(stringToItemType('initiative')).toBe('initiative');
+    expect(itemTypeToReferenceEntityType('initiative')).toBe('initiative');
+  });
   test('maps email to the thread type used by referencium', () => {
     expect(itemTypeToReferenceEntityType('email')).toBe('thread');
+  });
+  test('preserves the routine reference wire contract', () => {
+    expect(itemTypeToReferenceEntityType('routine')).toBe('automation');
   });
 
   test.each([
@@ -49,11 +58,19 @@ describe('stringToItemType', () => {
     'project',
     'channel',
     'crm_company',
+    'initiative',
   ])('parses %s as itself', (raw) => {
     expect(stringToItemType(raw)).toBe(raw);
   });
 
-  test.each(['crm_contact', 'automation', 'channel_message', 'bogus'])(
+  test.each(['routine', 'automation'])(
+    'reads %s references as routines',
+    (raw) => {
+      expect(stringToItemType(raw)).toBe('routine');
+    }
+  );
+
+  test.each(['crm_contact', 'channel_message', 'bogus'])(
     'rejects %s',
     (raw) => {
       expect(stringToItemType(raw)).toBeUndefined();
@@ -69,7 +86,7 @@ describe('blockNameToItemType', () => {
     ['channel', 'channel'],
     ['project', 'project'],
     ['email', 'email'],
-    ['automation', 'automation'],
+    ['routine', 'routine'],
     ['company', 'crm_company'],
     ['contact', 'crm_contact'],
     ['pr', 'foreign'],
@@ -93,6 +110,7 @@ describe('reference entity type round trip', () => {
     'calendar_event',
     'crm_company',
     'email',
+    'routine',
   ] as const satisfies readonly ItemType[])(
     '%s survives store and parse',
     (itemType) => {

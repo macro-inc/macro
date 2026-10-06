@@ -75,7 +75,7 @@ function SimilarTasksInner(props: {
 
   return (
     <Show when={entities().length > 0}>
-      <div class="shrink-0 flex flex-col gap-0.5">
+      <div class="-mx-4 shrink-0 flex flex-col gap-0.5 border-t border-edge-muted px-4 pt-3">
         <button
           type="button"
           class="flex items-center gap-1.5 px-1.5 py-1 text-xs font-medium text-ink-muted hover:text-ink"

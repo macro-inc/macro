@@ -2,6 +2,7 @@ import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filter
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSnippets } from '@core/constant/featureFlags';
 import { isSnippetEntity, type SnippetEntity } from '@entity';
+import { queryReadyGate } from '@queries/gate';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 
@@ -37,8 +38,8 @@ export function useQuickAccessSnippetsQuery() {
     () => ({ staleTime: STALE_TIME, enabled: snippetsFlag().enabled })
   );
 
-  const snippets = createMemo<SnippetEntity[]>(
-    () => query.data?.filter(isSnippetEntity) ?? []
+  const snippets = createMemo<SnippetEntity[]>(() =>
+    queryReadyGate(query) ? query.data.filter(isSnippetEntity) : []
   );
 
   return { query, snippets };

@@ -1,16 +1,10 @@
+import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
-import { openEntityInSplitFromUnifiedList } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
 
-/**
- * Edit an existing reminder — its description, its schedule, or both.
- *
- * Opens the reminder's editor the same way a row click does: through
- * {@link openEntityInSplitFromUnifiedList}, which resolves the reminder to its
- * `reminder-view` split. Single-entity only, like creating one.
- */
+/** Edit scheduling without following an attached reminder to its source. */
 export const makeEditReminderAction = () => {
   const canExecute = (entity: EntityData): boolean =>
     isFeatureEnabled(enableReminders) && entity.type === 'reminder';
@@ -21,8 +15,8 @@ export const makeEditReminderAction = () => {
     // otherwise still fire against a row that has since changed.
     if (!entity || entity.type !== 'reminder' || !canExecute(entity)) return;
 
-    openEntityInSplitFromUnifiedList(entity, {
-      splitHandle: globalSplitManager()?.activeSplit(),
+    openReminderDetail(entity.id, {
+      handle: globalSplitManager()?.activeSplit(),
       referredFrom: null,
     });
   };

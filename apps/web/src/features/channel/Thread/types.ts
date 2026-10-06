@@ -37,6 +37,8 @@ export type MessageEditState = {
 
 /** Reactive contract for positioning and releasing a channel navigation target. */
 export type ThreadTargetNavigation = {
+  /** A new request can revisit the same message without remounting the thread. */
+  requestKey?: Accessor<string | number | undefined>;
   targetThreadId: Accessor<string | undefined>;
   targetMessageId: Accessor<string | undefined>;
   targetReplyId: Accessor<string | undefined>;
@@ -70,4 +72,11 @@ export type ThreadProps = {
   onClearSelection?: () => void;
   messageListScopeId?: string;
   isNewestThread?: boolean;
+  /**
+   * A single-root thread (a document's floating comment) stacks replies under
+   * the root on one straight rail instead of indenting and branching them.
+   */
+  monorail?: boolean;
+  /** Flat chat surfaces do not draw thread connector rails. */
+  hideRail?: boolean;
 } & ThreadState;

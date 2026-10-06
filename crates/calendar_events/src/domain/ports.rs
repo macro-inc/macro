@@ -31,6 +31,9 @@ pub enum GoogleProviderErrorKind {
     ReauthRequired,
     /// The provider continuation token expired and requires a full resync.
     SyncTokenExpired,
+    /// The provider will not open push channels for this resource; only
+    /// polling can keep it in sync.
+    PushUnsupported,
 }
 
 /// Typed Google Calendar failure returned across the provider port.
@@ -511,6 +514,16 @@ pub trait CalendarRepository: Send + Sync + 'static {
         channel: GoogleWatchChannel,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
+    /// Record that the provider refused a push channel for one calendar,
+    /// under the backfill's fencing token.
+    fn record_watch_unsupported(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Resolve a push notification to the inbox whose calendar it watches.
     fn find_watch_target(
         &self,
@@ -690,6 +703,7 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
+        responding_email: Option<String>,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
 
     /// Turn calendar off for one of the requester's own connected inboxes:
@@ -930,4 +944,16 @@ pub trait CalendarReminderDispatchQueue: Send + Sync + 'static {
         &self,
         receipt_handle: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Recovery capability for callers that persist a creation key and its target calendar.
+pub trait CalendarCreationRecoveryService: CalendarMutationService {
+    /// Delete a keyed event even if a previous deletion already retired its local projection.
+    /// The current requester must still own a writable grant to the pinned calendar.
+    fn delete_created_event(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        creation_key: Uuid,
+    ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
 }

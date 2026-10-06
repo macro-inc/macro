@@ -1,4 +1,5 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
+import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -20,6 +21,8 @@ export default function BlockEmail() {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
+  const source = createEmailThreadSource(threadId, threadQuery);
+  const threadData = source.thread;
 
   // Email threads are absent from quick access, so the entity the block-level
   // commands act on has to come from here. Gated on isSuccess so the
@@ -27,7 +30,7 @@ export default function BlockEmail() {
   // never touch pending query data.
   const commandEntity = createMemo(() => {
     if (!threadQuery.isSuccess) return undefined;
-    const thread = threadQuery.data?.thread;
+    const thread = threadData();
     if (!thread) return undefined;
     return buildEntityData({
       id: thread.db_id,
@@ -47,10 +50,6 @@ export default function BlockEmail() {
   // thread, and an offline load with nothing cached gates as the retryable
   // state. Loader-level errors (e.g. an invalid source) still reach
   // DocumentBlockContainer through blockErrorSignal.
-  const threadData = createMemo(
-    (previous: typeof threadQuery.data | undefined) =>
-      threadQuery.isSuccess || threadQuery.isError ? threadQuery.data : previous
-  );
   const threadLoadResult = {
     data: threadData,
     error: () =>
@@ -62,10 +61,8 @@ export default function BlockEmail() {
 
   const title = () => {
     const data = threadData();
-    if (!data || !data.thread || data.thread.messages.length === 0) return '';
-    return displaySubject(
-      representativeThreadMessage(data.thread.messages)?.subject
-    );
+    if (!data || data.messages.length === 0) return '';
+    return displaySubject(representativeThreadMessage(data.messages)?.subject);
   };
 
   return (
@@ -76,14 +73,19 @@ export default function BlockEmail() {
             result={threadLoadResult}
             notificationSource={notificationSource}
             threadId={threadId()}
-            linkId={threadData()?.thread?.link_id}
+            linkId={threadData()?.link_id}
             debounceTime={100}
             onRetry={() => void threadQuery.refetch()}
           >
             <Show when={threadId()}>
               {(id) => (
                 <Suspense fallback={<ContentLoading />}>
-                  <EmailBlockAdapter title={title()} threadId={id} />
+                  <EmailBlockAdapter
+                    title={title()}
+                    threadId={id}
+                    source={source}
+                    threadTransport={() => threadQuery.transport}
+                  />
                 </Suspense>
               )}
             </Show>

@@ -7,6 +7,7 @@ import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { matches } from '@core/util/match';
 import {
   $convertCardToMention,
@@ -64,9 +65,13 @@ import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink } from '../core/BlockLink';
-import { ChannelMessageThreadCard } from './ChannelMessageThreadCard';
 
 false && floatWithElement;
+
+const ChannelMessageThreadCard = lazyNamed(
+  () => import('./ChannelMessageThreadCard'),
+  'ChannelMessageThreadCard'
+);
 
 const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
   const widthStr = typeof width === 'string' ? width : `${width}px`;
@@ -245,10 +250,12 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     } else {
       getElement = () => (
         <div class="p-2">
-          <ChannelMessageThreadCard
-            channelId={props.documentId}
-            messageId={msgId!}
-          />
+          <Suspense>
+            <ChannelMessageThreadCard
+              channelId={props.documentId}
+              messageId={msgId!}
+            />
+          </Suspense>
         </div>
       );
     }

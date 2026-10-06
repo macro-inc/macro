@@ -59,6 +59,7 @@ const GRAPHQL_TYPENAMES = {
   crm_company: 'GraphqlSoupCrmCompany',
   document: 'GraphqlSoupDocument',
   email: 'GraphqlSoupEmailThread',
+  initiative: 'GraphqlSoupInitiative',
   project: 'GraphqlSoupProject',
 } as const;
 
@@ -84,6 +85,8 @@ function graphqlEntityType(type: GraphqlPreviewType): EntityType {
       return 'CALL_RECORD';
     case 'crm_company':
       return 'COMPANY';
+    case 'initiative':
+      return 'INITIATIVE';
   }
 }
 
@@ -224,6 +227,15 @@ export function graphqlRecordToPreview(
         owner: record.senderEmail ?? record.senderName ?? undefined,
       };
     }
+    case 'GraphqlSoupInitiative':
+      return {
+        id: record.id,
+        type: 'initiative',
+        access: 'access',
+        loading: false,
+        rawName: record.displayName ?? '',
+        name: record.displayName ?? '',
+      };
     case 'GraphqlSoupChannel': {
       const name = record.displayName ?? record.channelDisplayName;
       if (
@@ -422,6 +434,10 @@ export async function setGraphqlPreviewName(
       ...base,
       __typename: 'GraphqlSoupEmailThread' as const,
       emailName: name,
+    }))
+    .with('initiative', () => ({
+      ...base,
+      __typename: 'GraphqlSoupInitiative' as const,
     }))
     .exhaustive();
   await writeGraphqlPreviewCache({

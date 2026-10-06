@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, agent_session_id, turn_action_id, request_id,\n                owner_id AS \"owner_id: MacroUserIdStr<'static>\",\n                requested_by AS \"requested_by: MacroUserIdStr<'static>\",\n                server_slug, server_name, tool_name, arguments, status,\n                resolved_by AS \"resolved_by: MacroUserIdStr<'static>\",\n                remembered\n            FROM agent_session_tool_approval\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "turn_action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "request_id",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "owner_id: MacroUserIdStr<'static>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "requested_by: MacroUserIdStr<'static>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "server_slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "server_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "tool_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "arguments",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "resolved_by: MacroUserIdStr<'static>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "remembered",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "3c474ee081e2218363be0fe80f4a5c0032d77d1cf8f3c98d5c8c9d3b3b11f967"
+}

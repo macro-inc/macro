@@ -223,7 +223,8 @@ impl StreamBridge {
                 );
                 Some(InvalidToolCallAction::retry(format!(
                     "The tool `{tool_name}` exists but was not loaded when you called it. \
-                     It is loaded now — call it again with the same arguments."
+                     It is loaded now and its parameters are in your tool list: call it \
+                     again, checking your arguments against them."
                 )))
             }
             None => Some(InvalidToolCallAction::retry(format!(

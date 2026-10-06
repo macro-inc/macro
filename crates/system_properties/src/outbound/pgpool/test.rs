@@ -7,6 +7,77 @@ use crate::domain::model::{PropertyRow, SystemPropertyKey};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn initiative_initialization_preserves_values_and_folder_namespace(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::service::{SystemPropertiesService, SystemPropertiesServiceImpl};
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let service = SystemPropertiesServiceImpl::new(repo.clone());
+    let entity_id = "initiative-initialization";
+    // An identical legacy folder id is a separate property owner.
+    repo.bulk_upsert_properties(vec![PropertyRow::entity_reference(
+        entity_id,
+        EntityType::Project,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        EntityType::User,
+        vec!["macro|folder@test.com".into()],
+        None,
+    )])
+    .await?;
+    service
+        .attach_initiative_properties(vec![entity_id.into()])
+        .await?;
+    repo.bulk_upsert_properties(vec![PropertyRow::entity_reference(
+        entity_id,
+        EntityType::Initiative,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        EntityType::User,
+        vec!["macro|owner@test.com".into()],
+        None,
+    )])
+    .await?;
+    service
+        .attach_initiative_properties(vec![entity_id.into()])
+        .await?;
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT entity_type AS "entity_type: EntityType", property_definition_id, values
+        FROM entity_properties
+        WHERE entity_id = $1
+        "#,
+        entity_id,
+    )
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(rows.len(), 5);
+    let initiatives: Vec<_> = rows
+        .iter()
+        .filter(|row| row.entity_type == EntityType::Initiative)
+        .collect();
+    assert_eq!(initiatives.len(), 4);
+    for row in initiatives {
+        if row.property_definition_id == SystemPropertyKey::ASSIGNEES_UUID {
+            assert_eq!(
+                row.values.as_ref().unwrap()["value"][0]["entity_id"],
+                "macro|owner@test.com"
+            );
+        } else {
+            assert!(row.values.as_ref().unwrap().is_null());
+        }
+    }
+    let folder = rows
+        .iter()
+        .find(|row| row.entity_type == EntityType::Project)
+        .unwrap();
+    assert_eq!(
+        folder.values.as_ref().unwrap()["value"][0]["entity_id"],
+        "macro|folder@test.com"
+    );
+    Ok(())
+}
+
 /// Helper to count task properties
 async fn count_task_properties(pool: &Pool<Postgres>, entity_id: &str) -> i64 {
     sqlx::query_scalar::<_, i64>(
@@ -296,6 +367,44 @@ async fn test_copy_task_properties_copies_custom_properties(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("system_properties"))
 )]
+async fn test_copy_task_properties_does_not_join_the_project(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let from_task_id = "source-task-with-props";
+    let to_task_id = "dest-task-project";
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (gen_random_uuid(), $1, 'TASK', $2, $3)
+        "#,
+        from_task_id,
+        SystemPropertyKey::PROJECT_UUID,
+        serde_json::json!({
+            "type": "EntityReference",
+            "value": [{"entity_id": "00000000-0000-0000-0000-0000000000aa", "entity_type": "INITIATIVE"}]
+        }),
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.copy_task_properties(from_task_id, to_task_id).await?;
+
+    let properties = get_task_property_values(&pool, to_task_id).await;
+    assert!(!properties.is_empty(), "other properties are copied");
+    assert!(
+        properties
+            .iter()
+            .all(|(id, _)| *id != SystemPropertyKey::PROJECT_UUID),
+        "the copy must not join the source's project"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("system_properties"))
+)]
 async fn test_copy_task_properties_overwrites_existing(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgSystemPropertiesRepository::new(pool.clone());
 
@@ -335,6 +444,102 @@ async fn test_copy_task_properties_idempotent(pool: Pool<Postgres>) -> anyhow::R
     assert_eq!(
         count, 10,
         "Should have exactly 10 properties after idempotent copies"
+    );
+
+    Ok(())
+}
+
+// ============================================================================
+// Project membership (the Project property) tests
+// ============================================================================
+
+/// Set a task property to one entity reference, the way property writes store it.
+async fn set_task_reference(
+    pool: &Pool<Postgres>,
+    task_id: &str,
+    property_definition_id: Uuid,
+    entity_id: &str,
+    entity_type: &str,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (
+            gen_random_uuid(), $1, 'TASK', $2,
+            jsonb_build_object(
+                'type', 'EntityReference',
+                'value', jsonb_build_array(jsonb_build_object(
+                    'entity_id', $3::text, 'entity_type', $4::text
+                ))
+            )
+        )
+        ON CONFLICT (entity_id, entity_type, property_definition_id)
+        DO UPDATE SET values = EXCLUDED.values
+        "#,
+        task_id,
+        property_definition_id,
+        entity_id,
+        entity_type,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    let project = SystemPropertyKey::PROJECT_UUID;
+    set_task_reference(&pool, "task-b", project, &first.to_string(), "INITIATIVE").await?;
+    set_task_reference(&pool, "task-a", project, &first.to_string(), "INITIATIVE").await?;
+    set_task_reference(&pool, "moved", project, &first.to_string(), "INITIATIVE").await?;
+    set_task_reference(&pool, "moved", project, &second.to_string(), "INITIATIVE").await?;
+    set_task_reference(
+        &pool,
+        "elsewhere",
+        project,
+        &second.to_string(),
+        "INITIATIVE",
+    )
+    .await?;
+    // Another property referencing the project, and a non-project reference, are not
+    // membership.
+    set_task_reference(
+        &pool,
+        "companies",
+        SystemPropertyKey::COMPANIES_UUID,
+        &first.to_string(),
+        "INITIATIVE",
+    )
+    .await?;
+    set_task_reference(
+        &pool,
+        "not-a-project",
+        project,
+        &first.to_string(),
+        "DOCUMENT",
+    )
+    .await?;
+
+    assert_eq!(repo.project_task_ids(first).await?, ["task-a", "task-b"]);
+    let mut projects = repo
+        .task_projects(&[
+            "task-a".to_string(),
+            "moved".to_string(),
+            "companies".to_string(),
+            "not-a-project".to_string(),
+            "unassigned".to_string(),
+        ])
+        .await?;
+    projects.sort();
+    assert_eq!(
+        projects,
+        [
+            ("moved".to_string(), second.to_string()),
+            ("task-a".to_string(), first.to_string()),
+        ]
     );
 
     Ok(())

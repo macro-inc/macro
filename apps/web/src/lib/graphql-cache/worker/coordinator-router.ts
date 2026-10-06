@@ -16,6 +16,7 @@ import {
   type CoordinatorAction,
   CoordinatorCore,
   type CoordinatorSnapshot,
+  startupPhaseMayTouchStorage,
 } from './coordinator-core';
 import {
   type ActivationFailureCode,
@@ -27,10 +28,18 @@ import {
   type EngineOpenOutcome,
   type EngineToCoordinatorEnvelope,
   type TabToCoordinatorEnvelope,
+  tabIdFromLivenessLockName,
   tabLivenessLockName,
   validateEngineToCoordinatorEnvelope,
   validateTabToCoordinatorEnvelope,
 } from './coordinator-protocol';
+import {
+  CACHE_TAKEOVER_VERSION,
+  type CacheTakeoverChannel,
+  type CacheTakeoverMessage,
+  type CacheTakeoverRequest,
+  openCacheTakeoverChannel,
+} from './coordinator-takeover';
 import {
   createEffectWorkerTransport,
   type EffectWorkerTransport,
@@ -38,6 +47,8 @@ import {
 import {
   ENGINE_ASSET_LOAD_TIMEOUT_MS,
   ENGINE_DATABASE_OPEN_TIMEOUT_MS,
+  OWNER_LOCK_WAIT_TIMEOUT_MS,
+  TAKEOVER_REPLY_TIMEOUT_MS,
 } from './startup';
 
 export interface CoordinatorMessagePort {
@@ -52,11 +63,20 @@ export type CancelLivenessWatch = () => void;
 
 export interface CoordinatorRouterOptions {
   assetLoadTimeoutMs?: number;
+  ownerLockWaitTimeoutMs?: number;
+  /** How long a takeover request waits for the holding build to agree. */
+  takeoverReplyTimeoutMs?: number;
+  openTakeoverChannel?: (
+    scope: string,
+    onMessage: (message: CacheTakeoverMessage) => void
+  ) => CacheTakeoverChannel | undefined;
   activationTimeoutMs?: number;
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
   verifyTabLockHeld?: (lockName: string) => Promise<boolean>;
   verifyOwnerLockHeld?: (lockName: string) => Promise<boolean>;
+  /** Names of every Web Lock currently held in this storage partition. */
+  queryHeldLockNames?: () => Promise<string[]>;
   watchTabLock?: (
     lockName: string,
     onReleased: () => void
@@ -72,7 +92,16 @@ type TabConnection = {
   cancelLivenessWatch: CancelLivenessWatch;
 };
 
-type PendingRegistration = { cancelled: boolean };
+type PendingRegistration = { cancelled: boolean; tabId: string };
+
+/** This coordinator's request for another build's database, per activation. */
+type PendingTakeover = {
+  tabId: string;
+  ownerEpoch: number;
+  requestId: string;
+  granted: boolean;
+  timer: ReturnType<typeof setTimeout> | undefined;
+};
 
 type EngineRoute = {
   tabId: string;
@@ -82,6 +111,8 @@ type EngineRoute = {
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+/** How many departed tab ids a long-lived coordinator remembers. */
+const DEPARTED_TAB_MEMORY = 256;
 const RECOVERY_RETRY_LIMIT = 5;
 const RECOVERY_RETRY_BASE_DELAY_MS = 100;
 
@@ -122,7 +153,7 @@ type WithoutVersion<T> = T extends unknown
   ? Omit<T, 'coordinatorVersion'>
   : never;
 
-const envelope = <T extends { coordinatorVersion: 3 }>(
+const envelope = <T extends { coordinatorVersion: 6 }>(
   value: WithoutVersion<T>
 ): T =>
   ({
@@ -138,6 +169,13 @@ export async function verifyExclusiveLockHeld(
     lockName,
     { mode: 'exclusive', ifAvailable: true },
     (lock) => lock === null
+  );
+}
+
+export async function queryHeldLockNames(): Promise<string[]> {
+  const snapshot = await navigator.locks.query();
+  return (snapshot.held ?? []).flatMap((lock) =>
+    lock.name === undefined ? [] : [lock.name]
   );
 }
 
@@ -171,6 +209,9 @@ export class CoordinatorRouter {
   private coreValue: CoordinatorCore | undefined;
   private hotCapacity: number | undefined;
   private readonly tabs = new Map<string, TabConnection>();
+  /** Recently departed tabs, whose liveness locks can outlast their
+   * departure but never belong to another build. */
+  private readonly departedTabIds = new Set<string>();
   private readonly portTabs = new Map<CoordinatorMessagePort, string>();
   private readonly pendingRegistrations = new Map<
     CoordinatorMessagePort,
@@ -186,11 +227,21 @@ export class CoordinatorRouter {
     | undefined;
 
   private readonly assetLoadTimeoutMs: number;
+  private readonly ownerLockWaitTimeoutMs: number;
+  private readonly takeoverReplyTimeoutMs: number;
+  private readonly openTakeoverChannel: NonNullable<
+    CoordinatorRouterOptions['openTakeoverChannel']
+  >;
+  private takeoverChannel: CacheTakeoverChannel | undefined;
+  private takeover: PendingTakeover | undefined;
+  /** The newest app build among this coordinator's registered pages. */
+  private buildTime = 0;
   private readonly activationTimeoutMs: number;
   private readonly heartbeatIntervalMs: number;
   private readonly heartbeatTimeoutMs: number;
   private readonly verifyTabLockHeld: (lockName: string) => Promise<boolean>;
   private readonly verifyOwnerLockHeld: (lockName: string) => Promise<boolean>;
+  private readonly queryHeldLockNames: () => Promise<string[]>;
   private readonly watchTabLock: (
     lockName: string,
     onReleased: () => void
@@ -222,6 +273,12 @@ export class CoordinatorRouter {
   constructor(options: CoordinatorRouterOptions = {}) {
     this.assetLoadTimeoutMs =
       options.assetLoadTimeoutMs ?? ENGINE_ASSET_LOAD_TIMEOUT_MS;
+    this.ownerLockWaitTimeoutMs =
+      options.ownerLockWaitTimeoutMs ?? OWNER_LOCK_WAIT_TIMEOUT_MS;
+    this.takeoverReplyTimeoutMs =
+      options.takeoverReplyTimeoutMs ?? TAKEOVER_REPLY_TIMEOUT_MS;
+    this.openTakeoverChannel =
+      options.openTakeoverChannel ?? openCacheTakeoverChannel;
     this.activationTimeoutMs =
       options.activationTimeoutMs ?? ENGINE_DATABASE_OPEN_TIMEOUT_MS;
     this.heartbeatIntervalMs =
@@ -232,6 +289,7 @@ export class CoordinatorRouter {
       options.verifyTabLockHeld ?? verifyExclusiveLockHeld;
     this.verifyOwnerLockHeld =
       options.verifyOwnerLockHeld ?? verifyExclusiveLockHeld;
+    this.queryHeldLockNames = options.queryHeldLockNames ?? queryHeldLockNames;
     this.watchTabLock = options.watchTabLock ?? watchTabLivenessLock;
     this.setTimeoutFn =
       options.setTimeout ?? globalThis.setTimeout.bind(globalThis);
@@ -374,7 +432,10 @@ export class CoordinatorRouter {
       return;
     }
 
-    const registration: PendingRegistration = { cancelled: false };
+    const registration: PendingRegistration = {
+      cancelled: false,
+      tabId: message.tabId,
+    };
     this.pendingRegistrations.set(port, registration);
     let lockHeld = false;
     try {
@@ -426,7 +487,12 @@ export class CoordinatorRouter {
     if (!this.coreValue) {
       this.coreValue = new CoordinatorCore(message.scope);
       this.hotCapacity = message.hotCapacity;
+      this.takeoverChannel = this.openTakeoverChannel(
+        message.scope,
+        (takeover) => this.handleTakeoverMessage(takeover)
+      );
     }
+    this.buildTime = Math.max(this.buildTime, message.buildTime);
     let connection: TabConnection;
     const cancelLivenessWatch = this.watchTabLock(
       message.livenessLockName,
@@ -544,7 +610,9 @@ export class CoordinatorRouter {
 
     switch (message.kind) {
       case 'engine-assets-ready': {
-        if (!core.beginEngineOpen(message.tabId, message.ownerEpoch)) {
+        // The engine now tries to take the owner lock without touching
+        // storage, and gives up by itself if another context keeps it.
+        if (!core.beginOwnerLockWait(message.tabId, message.ownerEpoch)) {
           this.failOwner(
             message.tabId,
             message.ownerEpoch,
@@ -552,6 +620,19 @@ export class CoordinatorRouter {
           );
           break;
         }
+        this.armStartupWatchdog(message.tabId, message.ownerEpoch);
+        break;
+      }
+      case 'owner-lock-acquired': {
+        if (!core.beginEngineOpen(message.tabId, message.ownerEpoch)) {
+          this.failOwner(
+            message.tabId,
+            message.ownerEpoch,
+            'unexpected owner lock acquisition'
+          );
+          break;
+        }
+        this.clearTakeover();
         this.armStartupWatchdog(message.tabId, message.ownerEpoch);
         this.sendToEngine(
           route,
@@ -562,6 +643,16 @@ export class CoordinatorRouter {
         );
         break;
       }
+      case 'owner-lock-busy':
+        void this.checkBusyOwnerLock(route);
+        break;
+      case 'owner-lock-unavailable':
+        this.closeUnavailable(
+          route.tabId,
+          route.ownerEpoch,
+          'the engine stopped retrying'
+        );
+        break;
       case 'engine-ready': {
         const actions = core.engineReady({
           ...message,
@@ -626,6 +717,7 @@ export class CoordinatorRouter {
           this.clearActivationTimer();
           this.resetRecoveryRetries();
           this.scheduleHeartbeat(message.ownerEpoch);
+          void this.allowStaleDatabaseRemoval(route);
         }
         break;
       }
@@ -684,6 +776,15 @@ export class CoordinatorRouter {
         );
         break;
       case 'activation-failed':
+        if (message.failureCode === 'storage-busy') {
+          this.closeUnavailable(
+            route.tabId,
+            route.ownerEpoch,
+            message.reason,
+            'storage-busy'
+          );
+          break;
+        }
         this.failOwner(
           message.tabId,
           message.ownerEpoch,
@@ -844,6 +945,31 @@ export class CoordinatorRouter {
         case 'schedule-reset-activation':
           this.scheduleResetActivation();
           break;
+        case 'broadcast-cache-unavailable':
+          this.broadcast(
+            envelope<CoordinatorToTabEnvelope>({
+              kind: 'cache-unavailable',
+              reason: action.reason,
+            })
+          );
+          break;
+        case 'broadcast-cache-superseded':
+          this.broadcast(
+            envelope<CoordinatorToTabEnvelope>({
+              kind: 'cache-superseded',
+              reason: action.reason,
+            })
+          );
+          break;
+        case 'notify-cache-unavailable':
+          this.postToTab(
+            action.tabId,
+            envelope<CoordinatorToTabEnvelope>({
+              kind: 'cache-unavailable',
+              reason: action.reason,
+            })
+          );
+          break;
         case 'broadcast-engine-replaced':
           this.telemetry.record({
             name: 'graphql_cache.owner',
@@ -855,6 +981,7 @@ export class CoordinatorRouter {
             envelope<CoordinatorToTabEnvelope>({
               kind: 'engine-replaced',
               ownerEpoch: action.ownerEpoch,
+              openOutcome: action.openOutcome,
             })
           );
           break;
@@ -911,10 +1038,11 @@ export class CoordinatorRouter {
       ownerEpoch: state.ownerEpoch,
       phase: state.phase,
       databaseAction: state.databaseAction,
-      timeoutMs:
-        state.phase === 'loading-assets'
-          ? this.assetLoadTimeoutMs
-          : this.activationTimeoutMs,
+      timeoutMs: match(state.phase)
+        .with('loading-assets', () => this.assetLoadTimeoutMs)
+        .with('awaiting-owner-lock', () => this.ownerLockWaitTimeoutMs)
+        .with('opening-database', () => this.activationTimeoutMs)
+        .exhaustive(),
     });
   }
 
@@ -923,15 +1051,138 @@ export class CoordinatorRouter {
     const progress = this.startupProgress();
     if (!progress) return;
     this.broadcast(progress);
+    const { phase, timeoutMs } = progress;
     this.activationTimer = this.setTimeoutFn(() => {
       this.failOwner(
         tabId,
         ownerEpoch,
-        progress.phase === 'loading-assets'
-          ? 'engine asset loading watchdog timed out'
-          : 'engine database opening watchdog timed out'
+        match(phase)
+          .with(
+            'loading-assets',
+            () => 'engine asset loading watchdog timed out'
+          )
+          .with(
+            'awaiting-owner-lock',
+            () => 'engine owner lock watchdog timed out'
+          )
+          .with(
+            'opening-database',
+            () => 'engine database opening watchdog timed out'
+          )
+          .exhaustive()
       );
-    }, progress.timeoutMs);
+    }, timeoutMs);
+  }
+
+  /** Tab ids holding this scope's liveness locks without registering here,
+   * so they belong to another coordinator: another deployed build. */
+  private async otherBuildTabIds(): Promise<string[] | undefined> {
+    const core = this.coreValue;
+    if (!core) return;
+    let names: string[];
+    try {
+      names = await this.queryHeldLockNames();
+    } catch {
+      return;
+    }
+    const known = new Set([...this.tabs.keys(), ...this.departedTabIds]);
+    for (const registration of this.pendingRegistrations.values()) {
+      known.add(registration.tabId);
+    }
+    return names.flatMap((name) => {
+      const tabId = tabIdFromLivenessLockName(core.scope, name);
+      return tabId === undefined || known.has(tabId) ? [] : [tabId];
+    });
+  }
+
+  /** This build's previous owner frees the lock within milliseconds. While
+   * another build has live tabs, the lock is likely theirs, so ask for it. */
+  private async checkBusyOwnerLock(route: EngineRoute): Promise<void> {
+    if (this.takeover?.ownerEpoch === route.ownerEpoch) return;
+    const others = await this.otherBuildTabIds();
+    const state = this.coreValue?.state;
+    if (
+      !others?.length ||
+      this.engineRoute !== route ||
+      state?.kind !== 'activating' ||
+      state.ownerEpoch !== route.ownerEpoch ||
+      state.phase !== 'awaiting-owner-lock'
+    ) {
+      return;
+    }
+    this.requestTakeover(route);
+  }
+
+  /** Fails closed without touching storage again: the owner lock stayed with
+   * another context, or it kept the database files open (`storage-busy`). */
+  private closeUnavailable(
+    tabId: string,
+    ownerEpoch: number,
+    detail: string,
+    cause: 'owner-lock' | 'storage-busy' = 'owner-lock'
+  ): void {
+    const core = this.coreValue;
+    if (!core) return;
+    const state = core.state;
+    const actions =
+      cause === 'storage-busy'
+        ? core.storageBusy(tabId, ownerEpoch)
+        : core.ownerLockUnavailable(tabId, ownerEpoch);
+    if (actions.length === 0) return;
+    this.activationStarted.delete(ownerEpoch);
+    // Storage was not changed, or a busy wipe removed only part of it, so a
+    // pending recovery wipe carries over to the next attempt exactly as after
+    // a navigation departure.
+    const interruptedResetReason =
+      state.kind === 'activating' && state.databaseAction === 'wipe-before-open'
+        ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
+        : undefined;
+    if (interruptedResetReason !== undefined) {
+      this.pendingRecoveryResetEpochs.delete(ownerEpoch);
+      this.nextRecoveryResetReason = interruptedResetReason;
+    }
+    this.telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'error',
+      ownerEvent:
+        cause === 'storage-busy' ? 'storage-busy' : 'owner-lock-unavailable',
+      errorCode: cause === 'storage-busy' ? 'opfs-io' : 'lock',
+    });
+    this.postTerminateEngine(
+      tabId,
+      ownerEpoch,
+      cause === 'storage-busy'
+        ? `cache database files stayed busy: ${detail}`
+        : `cache database owner lock is unavailable: ${detail}`
+    );
+    this.clearEngineWatchdogs();
+    this.resetRecoveryRetries();
+    this.applyActions(actions);
+  }
+
+  /** Stale databases are deleted only once no other build could still use
+   * them; the cleanup itself also skips any database whose lock is held. */
+  private async allowStaleDatabaseRemoval(route: EngineRoute): Promise<void> {
+    const others = await this.otherBuildTabIds();
+    const state = this.coreValue?.state;
+    if (
+      others === undefined ||
+      others.length > 0 ||
+      this.engineRoute !== route ||
+      state?.kind !== 'active' ||
+      state.ownerEpoch !== route.ownerEpoch
+    ) {
+      return;
+    }
+    this.postToTab(
+      route.tabId,
+      envelope<CoordinatorToTabEnvelope>({
+        kind: 'remove-stale-databases',
+        tabId: route.tabId,
+        ownerEpoch: route.ownerEpoch,
+      })
+    );
   }
 
   private scheduleResetActivation(): void {
@@ -1090,7 +1341,7 @@ export class CoordinatorRouter {
       this.activationStarted.delete(state.ownerEpoch);
       if (
         state.kind !== 'activating' ||
-        state.phase !== 'loading-assets' ||
+        startupPhaseMayTouchStorage(state.phase) ||
         state.databaseAction === 'wipe-before-open'
       ) {
         const pendingReason = this.recordPendingResetFailure(
@@ -1257,6 +1508,12 @@ export class CoordinatorRouter {
     const connection = this.tabs.get(tabId);
     if (!connection) return;
     this.tabs.delete(tabId);
+    // Tab ids are fresh per page load, so the oldest can be forgotten.
+    this.departedTabIds.add(tabId);
+    if (this.departedTabIds.size > DEPARTED_TAB_MEMORY) {
+      const [oldest] = this.departedTabIds;
+      if (oldest !== undefined) this.departedTabIds.delete(oldest);
+    }
     this.portTabs.delete(connection.port);
     connection.cancelLivenessWatch();
     connection.port.close();
@@ -1389,5 +1646,137 @@ export class CoordinatorRouter {
   private clearEngineWatchdogs(): void {
     this.clearActivationTimer();
     this.clearHeartbeatTimers();
+    this.clearTakeover();
+  }
+
+  /**
+   * Asks the build that holds the database to hand it over. The engine keeps
+   * retrying the lock meanwhile. Unless the holder agrees promptly, or the
+   * unknown tabs turn out to be this build's, this activation fails closed.
+   */
+  private requestTakeover(route: EngineRoute): void {
+    const core = this.coreValue;
+    if (!core || this.takeover?.ownerEpoch === route.ownerEpoch) return;
+    const channel = this.takeoverChannel;
+    if (!channel) {
+      this.closeUnavailable(
+        route.tabId,
+        route.ownerEpoch,
+        'another build has live tabs'
+      );
+      return;
+    }
+    const requestId = `${route.ownerEpoch}:${crypto.randomUUID()}`;
+    const takeover: PendingTakeover = {
+      tabId: route.tabId,
+      ownerEpoch: route.ownerEpoch,
+      requestId,
+      granted: false,
+      timer: undefined,
+    };
+    takeover.timer = this.setTimeoutFn(() => {
+      takeover.timer = undefined;
+      void this.expireTakeover(takeover);
+    }, this.takeoverReplyTimeoutMs);
+    this.takeover = takeover;
+    channel.post({
+      takeover: CACHE_TAKEOVER_VERSION,
+      kind: 'request',
+      scope: core.scope,
+      requestId,
+      buildTime: this.buildTime,
+    });
+  }
+
+  /**
+   * Nobody answered. The unknown liveness lock that prompted the request may
+   * belong to a tab of this build that had not registered yet, so look again:
+   * once every live tab is known, keep waiting for the engine's own retries.
+   */
+  private async expireTakeover(takeover: PendingTakeover): Promise<void> {
+    if (this.takeover !== takeover || takeover.granted) return;
+    const others = await this.otherBuildTabIds();
+    if (this.takeover !== takeover || takeover.granted) return;
+    if (others?.length === 0) {
+      this.clearTakeover();
+      return;
+    }
+    this.closeUnavailable(
+      takeover.tabId,
+      takeover.ownerEpoch,
+      'another build keeps the database'
+    );
+  }
+
+  private handleTakeoverMessage(message: CacheTakeoverMessage): void {
+    if (message.kind === 'request') {
+      this.answerTakeover(message);
+      return;
+    }
+    const takeover = this.takeover;
+    if (
+      !takeover ||
+      takeover.requestId !== message.requestId ||
+      takeover.granted
+    ) {
+      return;
+    }
+    if (takeover.timer !== undefined) this.clearTimeoutFn(takeover.timer);
+    takeover.timer = undefined;
+    if (message.decision === 'yield') {
+      takeover.granted = true;
+      this.telemetry.record({
+        name: 'graphql_cache.owner',
+        operationCategory: 'lifecycle',
+        outcome: 'success',
+        ownerEvent: 'takeover-granted',
+      });
+      return;
+    }
+    this.closeUnavailable(
+      takeover.tabId,
+      takeover.ownerEpoch,
+      'another build keeps the database'
+    );
+  }
+
+  /**
+   * Only the coordinator whose engine holds the database answers, and it
+   * yields only to a strictly newer build, so builds never trade the database
+   * back and forth and a reload never lands on an older build. An idle
+   * coordinator's tabs already run on the network; they move on silently.
+   */
+  private answerTakeover(request: CacheTakeoverRequest): void {
+    const core = this.coreValue;
+    if (!core || core.superseded) return;
+    const newer = request.buildTime > this.buildTime;
+    const holdsDatabase = core.state.kind === 'active';
+    if (holdsDatabase) {
+      this.takeoverChannel?.post({
+        takeover: CACHE_TAKEOVER_VERSION,
+        kind: 'reply',
+        scope: core.scope,
+        requestId: request.requestId,
+        decision: newer ? 'yield' : 'keep',
+      });
+    }
+    if (!newer) return;
+    const actions = core.supersede();
+    if (actions.length === 0) return;
+    if (holdsDatabase) {
+      this.telemetry.record({
+        name: 'graphql_cache.owner',
+        operationCategory: 'lifecycle',
+        outcome: 'graceful',
+        ownerEvent: 'superseded',
+      });
+    }
+    this.applyActions(actions);
+  }
+
+  private clearTakeover(): void {
+    const takeover = this.takeover;
+    this.takeover = undefined;
+    if (takeover?.timer !== undefined) this.clearTimeoutFn(takeover.timer);
   }
 }

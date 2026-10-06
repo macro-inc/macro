@@ -1,0 +1,48 @@
+<svg id="fig-crates" xmlns="http://www.w3.org/2000/svg" viewBox="530 450 660 620">
+  <style>
+    #fig-crates .line, #fig-crates .detail, #fig-crates .dash { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    #fig-crates .line { opacity: .5; stroke-width: .9px; }
+    #fig-crates .detail { opacity: .5; stroke-width: .75px; }
+    #fig-crates .dash { stroke-width: .9px; stroke-dasharray: 2.5 2.5; }
+    #fig-crates .dot { fill: currentColor; opacity: .85; }
+    #fig-crates .silhouette { fill: none; opacity: 1; stroke: currentColor; stroke-linejoin: round; stroke-width: .9px; vector-effect: non-scaling-stroke; }
+    #fig-crates .face { fill: color-mix(in srgb, color-mix(in srgb, currentColor 30%, var(--c1)) 11%, var(--b0) 89%); }
+    #fig-crates .shade { fill: color-mix(in srgb, currentColor 12%, var(--b0)); }
+  </style>
+  <g>
+    <path class="face" d="M814.9 616.8l-113.1 65.3v81.6l155.6 89.8 113.1-65.3v-81.6l-155.6-89.8Z"/>
+    <path class="shade" d="m700.5 697.5 144 82.3h27l99-56.9v65.4l-113.2 65.3-155.5-89.8-1.3-66.3Z"/>
+    <path class="silhouette" d="M814.9 616.8l-113.1 65.3v81.6l155.6 89.8 113.1-65.3v-81.6l-155.6-89.8Z"/>
+    <path class="line" d="m857.3 755.6 94-54.3M844.5 840.4v-55.3M774 800.1v-60l14.1-24.5 94.5-54.6M917.9 681.4l-94.5 54.6-14.1 24.5v60M848.1 640.3l-95.3 55-14.1 24.5v60"/>
+  </g>
+  <g>
+    <path class="face" d="m687.1 592.4-113.1 65.3v81.6l155.6 89.8 113.1-65.3v-81.6l-155.6-89.8Z"/>
+    <path class="shade" d="m572.7 673.1 144 82.3h27l99-56.9v65.3l-113.1 65.4-155.6-89.9-1.3-66.2Z"/>
+    <path class="silhouette" d="m687.1 592.4-113.1 65.3v81.6l155.6 89.8 113.1-65.3v-81.6l-155.6-89.8Z"/>
+    <path class="line" d="m729.6 731.2 94-54.3M716.7 816v-55.3M646.2 775.7v-60l14.1-24.5 94.5-54.6M790.1 657l-94.5 54.6-14.1 24.5v60M720.4 615.9l-95.3 55-14.1 24.5v60"/>
+    <path class="detail" d="m744.6 754.9 98.9-56.8v65.3l-98.2 56.7"/>
+  </g>
+  <g>
+    <path class="face" d="m984.9 714.8-113.1 65.3v81.6l155.6 89.8 113.1-65.3v-81.6l-155.6-89.8Z"/>
+    <path class="shade" d="m870.5 795.5 143.9 82.3h27l99-56.8v65.3l-113.1 65.3-155.6-89.8-1.2-66.3Z"/>
+    <path class="silhouette" d="m984.9 714.8-113.1 65.3v81.6l155.6 89.8 113.1-65.3v-81.6l-155.6-89.8Z"/>
+    <path class="line" d="m1027.3 853.6 94-54.3M1014.4 938.5v-55.3M943.9 898.2v-60l14.1-24.5 94.5-54.6M1087.8 779.5l-94.5 54.6-14.1 24.5v60M1018.1 738.3l-95.3 55-14.1 24.5v60M1050.3 929.3v-46.2l83.3-48.1M752.4 805.7v-46.2l83.3-48.1"/>
+    <path class="detail" d="m1041.4 878 99-56.9v65.3l-98.2 56.7"/>
+    <g class="dots">
+      <circle class="dot" cx="1116.2" cy="891.3" r="2.1"/><circle class="dot" cx="1120.8" cy="888.7" r="2.1"/><circle class="dot" cx="1125.4" cy="886.1" r="2.1"/>
+      <circle class="dot" cx="818.3" cy="767.7" r="2.1"/><circle class="dot" cx="822.9" cy="765.1" r="2.1"/><circle class="dot" cx="827.5" cy="762.5" r="2.1"/>
+    </g>
+  </g>
+  <g>
+    <path class="face" d="m856.9 788.3-113.1 65.3v81.6l155.6 89.8 113.1-65.3v-81.6l-155.6-89.8Z"/>
+    <path class="shade" d="m742.5 869 144 82.3h27l98.9-56.8v65.3l-113.1 65.3-155.5-89.8-1.3-66.3Z"/>
+    <path class="silhouette" d="m856.9 788.3-113.1 65.3v81.6l155.6 89.8 113.1-65.3v-81.6l-155.6-89.8Z"/>
+    <path class="line" d="m899.3 927.1 94-54.3M886.5 1012v-55.3M815.9 971.7v-60l14.1-24.5 94.5-54.6M959.8 853l-94.5 54.6-14.1 24.5v60M890.1 811.8l-95.3 55-14.1 24.5v60M751.6 932.1v-19.2M757.6 935.9v-19.2M763.7 939.7v-19.2M922.2 1002.3v-46.2l83.3-48.1"/>
+    <path class="detail" d="m913.9 951.5 99-56.9v65.3l-98.2 56.7M708.4 492.1v6M708.4 655.1v6"/>
+    <path class="dash" d="M708.4 510.1v139"/>
+    <path class="dash" opacity=".85" d="M708.4 818v115"/>
+    <g class="dots">
+      <circle class="dot" cx="988.3" cy="964.4" r="2.1"/><circle class="dot" cx="992.9" cy="961.8" r="2.1"/><circle class="dot" cx="997.5" cy="959.2" r="2.1"/>
+    </g>
+  </g>
+</svg>

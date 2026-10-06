@@ -1,3 +1,4 @@
+import { isAiDenyCode } from '@app/lib/service-clients/ai-usage-limit';
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
 import {
@@ -62,6 +63,12 @@ export type ChatController = {
 export type ChatControllerOptions = {
   onShowPaywall?: () => void;
   /**
+   * The send was refused by the AI billing gate (allowance used up, usage
+   * billing cap reached, or a failed usage charge). `reason` is the backend
+   * code; hosts open the usage-limit dialog.
+   */
+  onShowUsageLimit?: (reason: string) => void;
+  /**
    * Switch the chat to a model from a different provider. When provided, a
    * provider-outage error toast offers a "Switch model" button that calls this.
    */
@@ -124,37 +131,55 @@ export function createChatController(
           }
         })
         .with({ type: 'show_paywall' }, () => options?.onShowPaywall?.())
+        .with({ type: 'show_usage_limit' }, (e) =>
+          options?.onShowUsageLimit?.(e.reason)
+        )
         .exhaustive();
     }
   }
 
   function watchStream(newStream: ChatMessageStream) {
+    let processedPartCount = 0;
     // Watch stream data for user messages and errors
     createEffect(
       on(
         () => newStream.data(),
         (data) => {
-          const latest = data.at(-1);
-          if (!latest) return;
+          while (processedPartCount < data.length) {
+            const part = data[processedPartCount++];
 
-          match(latest)
-            .with({ type: 'error' }, (r) => {
-              const streamError =
-                'stream_error' in r ? r.stream_error : undefined;
-              dispatch({
-                type: 'stream_error',
-                streamError: streamError as string | undefined,
-              });
-            })
-            .with({ type: 'chat_user_message' }, (r) => {
-              dispatch({
-                type: 'stream_user_message',
-                messageId: r.message_id,
-                content: r.content,
-                attachments: r.attachments,
-              });
-            })
-            .otherwise(() => {});
+            match(part)
+              .with({ type: 'error' }, (r) => {
+                const streamError =
+                  'stream_error' in r ? r.stream_error : undefined;
+                dispatch({
+                  type: 'stream_error',
+                  streamError: streamError as string | undefined,
+                });
+              })
+              .with({ type: 'chat_user_message' }, (r) => {
+                dispatch({
+                  type: 'stream_user_message',
+                  messageId: r.message_id,
+                  content: r.content,
+                  attachments: r.attachments,
+                });
+              })
+              .with(
+                {
+                  type: 'chat_message_response',
+                  content: { type: 'toolCallErr' },
+                },
+                ({ content }) => {
+                  // Tool refusals can arrive inside an otherwise successful
+                  // stream. The backend prefixes their description with its
+                  // stable admission code.
+                  const code = content.description.split(':', 1)[0];
+                  if (isAiDenyCode(code)) options?.onShowUsageLimit?.(code);
+                }
+              )
+              .otherwise(() => {});
+          }
         }
       )
     );

@@ -11,15 +11,19 @@ export type ActivityAction =
   | { kind: 'property-changed'; property: string; from: unknown; to: unknown }
   | { kind: 'participant-added'; participant: string }
   | { kind: 'participant-removed'; participant: string }
+  | { kind: 'task-added'; taskId?: string }
+  | { kind: 'task-removed'; taskId?: string }
   | { kind: 'unknown'; tag: string };
 
 export type ActivityEntityType =
   | 'document'
   | 'project'
+  | 'initiative'
   | 'chat'
   | 'email-thread'
   | 'channel'
   | 'user'
+  | 'database'
   | { kind: 'unsupported'; raw: string };
 
 export type ActivityEvent = {
@@ -49,21 +53,27 @@ export type ActivityOverview = {
 export type PropertyEntityType =
   | 'DOCUMENT'
   | 'PROJECT'
+  | 'INITIATIVE'
   | 'CHAT'
   | 'THREAD'
   | 'CHANNEL'
   | 'USER';
 
-export function toPropertyEntityType(
+/** Entity kinds the activity UI can resolve a name, icon, and link for. */
+export type ActivityDisplayEntityType = PropertyEntityType | 'DATABASE';
+
+export function toDisplayEntityType(
   entityType: ActivityEntityType
-): PropertyEntityType | undefined {
+): ActivityDisplayEntityType | undefined {
   return match(entityType)
     .with({ kind: 'unsupported' }, () => undefined)
     .with('document', () => 'DOCUMENT' as const)
+    .with('initiative', () => 'INITIATIVE' as const)
     .with('project', () => 'PROJECT' as const)
     .with('chat', () => 'CHAT' as const)
     .with('email-thread', () => 'THREAD' as const)
     .with('channel', () => 'CHANNEL' as const)
     .with('user', () => 'USER' as const)
+    .with('database', () => 'DATABASE' as const)
     .exhaustive();
 }

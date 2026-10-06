@@ -3,6 +3,9 @@ mod test;
 
 use std::{marker::PhantomData, sync::Arc};
 
+use crate::edges::GraphqlAgentSessionLogEntry;
+use crate::realtime::AgentSessionLogSubscriptions;
+use agent_session::domain::model::AgentSessionId;
 use async_graphql::{Context, ID, MergedObject, MergedSubscription, Object, Schema, Subscription};
 use axum::extract::FromRef;
 use email::{
@@ -14,8 +17,9 @@ use entity_mutation::{EntityMutationService, UnavailableEntityMutationService};
 use favorites::domain::ports::FavoritesMutationService;
 use graphql_activity::{
     ActivityFeedInput, ActivityOverviewInput, ActivityReader, ActivitySubscriptionRoot,
-    ActivitySubscriptionService, GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader,
-    NoOpActivitySubscriptionService, resolve_activity_feed, resolve_activity_overview,
+    ActivitySubscriptionService, GraphqlActivityEvent, GraphqlActivityOverview,
+    GraphqlActivityPage, NoOpActivityReader, NoOpActivitySubscriptionService,
+    resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
 };
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
@@ -30,18 +34,26 @@ use graphql_favorite::{
     EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, FavoritesFilterInput,
     GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
+use graphql_initiative::{
+    GraphqlInitiativeTasksPage, InitiativeMutationRoot, InitiativeTasksInput, resolve_initiative,
+    resolve_initiative_tasks,
+};
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
 };
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
-    EntityPropertyReader, EntityPropertyWriter, NoOpEntityPropertyReader, NoOpEntityPropertyWriter,
-    PropertiesMutationRoot,
+    EntityPropertyReader, EntityPropertyWriter, GraphqlPropertyDefinition,
+    GraphqlPropertyDefinitionScope, GraphqlPropertyOption, NoOpEntityPropertyReader,
+    NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
+    load_property_options,
 };
+use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
-    GraphqlSoupEmailThread, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
-    SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_grouped_soup, resolve_soup,
+    GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupInitiative, GroupedSoup,
+    GroupedSoupInput, SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage,
+    SoupPatch, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,
     resolve_soup_email_thread, resolve_soup_updates,
 };
 use macro_authorization::{
@@ -81,6 +93,7 @@ pub struct CompleteMutationRoot<
     ChannelMutationRoot<C, A>,
     NotificationMutationRoot<N>,
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
+    InitiativeMutationRoot<E>,
 );
 
 impl<
@@ -103,6 +116,7 @@ impl<
             ChannelMutationRoot::<C, A>::new(),
             NotificationMutationRoot::<N>::new(),
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
+            InitiativeMutationRoot::<E>::default(),
         )
     }
 }
@@ -595,6 +609,48 @@ where
         resolve_soup_updates::<R, Auth, St, SoupEdges<NR, PR, ER, FR, AR, AcR>>(&self.service, ctx)
             .await
     }
+
+    /// Frames appended to one accessible agent session's log from now on,
+    /// one run per flush, in log order. Each entry is the row `agentSession.log`
+    /// serves, so a subscriber folds the same bytes a reader of the log does.
+    /// The stream ends with an error when the subscriber falls behind: rows
+    /// were missed, and the log must be refetched.
+    async fn agent_session_log_appended(
+        &self,
+        ctx: &Context<'_>,
+        session_id: ID,
+    ) -> async_graphql::Result<
+        impl async_graphql::futures_util::Stream<
+            Item = async_graphql::Result<Vec<GraphqlAgentSessionLogEntry>>,
+        > + 'static,
+    > {
+        let user_id = require_authorized_user::<Auth, St>(ctx).await?;
+        let session_id = parse_id(session_id, "sessionId")?;
+        // Access is what `agentSession` checks: a session the viewer cannot
+        // read is one they cannot follow either.
+        let accessible = resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx, user_id, session_id,
+        )
+        .await?
+        .is_some();
+        if !accessible {
+            return Err(async_graphql::Error::new("agent session not found"));
+        }
+        let subscriptions = ctx.data::<AgentSessionLogSubscriptions>()?;
+        let mut receiver = subscriptions.subscribe(AgentSessionId::new_from_uuid(session_id));
+        Ok(async_stream::stream! {
+            while let Some(rows) = receiver.recv().await {
+                yield rows
+                    .into_iter()
+                    .map(GraphqlAgentSessionLogEntry::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| async_graphql::Error::new(error.to_string()));
+            }
+            yield Err(async_graphql::Error::new(
+                "agent session log subscription closed after falling behind",
+            ));
+        })
+    }
 }
 
 /// The authenticated user and their user-scoped data.
@@ -622,6 +678,58 @@ where
         async_graphql::ID(self.user_id.to_string())
     }
 
+    /// One initiative accessible to the authenticated viewer.
+    async fn initiative(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+    ) -> async_graphql::Result<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        resolve_initiative(ctx, initiative_id).await
+    }
+
+    /// A permission-filtered page of task identifiers within an initiative.
+    async fn initiative_tasks(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+        input: Option<InitiativeTasksInput>,
+    ) -> async_graphql::Result<GraphqlInitiativeTasksPage> {
+        resolve_initiative_tasks(
+            ctx,
+            self.user_id.clone(),
+            initiative_id,
+            input.unwrap_or_default(),
+        )
+        .await
+    }
+
+    /// AI routines the authenticated user can access.
+    async fn scheduled_actions(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlScheduledAction>> {
+        resolve_scheduled_actions(ctx, self.user_id.clone()).await
+    }
+
+    /// Authorized property definitions available to this viewer.
+    async fn property_definitions(
+        &self,
+        ctx: &Context<'_>,
+        scope: GraphqlPropertyDefinitionScope,
+        for_entity_type: Option<graphql_common::GraphqlPropertyEntityType>,
+    ) -> async_graphql::Result<Vec<GraphqlPropertyDefinition<PR>>> {
+        load_property_definitions::<PR>(ctx, scope, for_entity_type).await
+    }
+
+    /// Select options available to the viewer for one property definition.
+    async fn property_options(
+        &self,
+        ctx: &Context<'_>,
+        property_definition_id: ID,
+    ) -> async_graphql::Result<Vec<GraphqlPropertyOption>> {
+        load_property_options::<PR>(ctx, property_definition_id).await
+    }
+
     /// The authenticated user's favorites in manual order, optionally
     /// restricted by entity type and entity id.
     async fn favorites(
@@ -640,6 +748,20 @@ where
         input: ActivityFeedInput,
     ) -> async_graphql::Result<GraphqlActivityPage> {
         resolve_activity_feed::<AcR>(ctx, &self.user_id, input).await
+    }
+
+    /// The newest activity on a database the authenticated user can view,
+    /// newest first. Databases are not Soup items, so this stands in for the
+    /// `activity` edge Soup entities carry.
+    async fn database_activity(
+        &self,
+        ctx: &Context<'_>,
+        database_id: ID,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlActivityEvent>> {
+        let access = Arc::<EAS>::from_ref(ctx.data::<St>()?);
+        resolve_database_activity::<AcR, EAS>(ctx, &*access, &self.user_id, database_id, limit)
+            .await
     }
 
     /// The authenticated user's activity over the trailing year, bucketed
@@ -672,6 +794,23 @@ where
             ctx,
             self.user_id.clone(),
             thread_id,
+        )
+        .await
+    }
+
+    /// Fetch one accessible agent session by id, with its protocol log
+    /// reachable through `log`.
+    async fn agent_session(
+        &self,
+        ctx: &Context<'_>,
+        session_id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSoupAgentSession<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        let session_id = parse_id(session_id, "sessionId")?;
+        resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            session_id,
         )
         .await
     }

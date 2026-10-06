@@ -4,15 +4,19 @@ use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, ResourceLink,
-    SessionNotification, TextContent,
+    SessionConfigKind, SessionConfigOptionCategory, SessionConfigSelectOptions,
+    SessionConfigValueId, SessionNotification, SetSessionConfigOptionRequest, TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
+use ai_billing::domain::{
+    AiAdmissionError, AiAdmissionService, DenyReason, DisabledAiAdmissionService,
+};
 use rig_agent::agent::StreamingError;
 use rig_agent::completion::PromptError;
 
 use super::*;
 use crate::domain::engine::TurnEngine;
-use crate::testing::{HangingEngine, ScriptedEngine};
+use crate::testing::{HangingEngine, ScriptedEngine, TestAdmission};
 use macro_user_id::user_id::MacroUserIdStr;
 
 struct Harness {
@@ -53,11 +57,24 @@ async fn with_agent<Engine, Out>(
 where
     Engine: TurnEngine,
 {
+    with_admission(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        async |connection, session, _| scenario(connection, session).await,
+    )
+    .await
+}
+
+async fn with_admission<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
     let store = Arc::new(SessionStore::new());
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -65,17 +82,19 @@ where
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
+        admission,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
         enable_dev_commands: true,
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
-    let agent = tokio::spawn(serve(state, agent_channel));
+    let agent = tokio::spawn(serve(Arc::clone(&state), agent_channel));
 
     let harness = Arc::new(Harness {
         notifications: std::sync::Mutex::new(Vec::new()),
@@ -121,7 +140,7 @@ where
                     .send_request(NewSessionRequest::new("/"))
                     .block_task()
                     .await?;
-                let out = scenario(connection, session.session_id).await;
+                let out = scenario(connection, session.session_id, state).await;
                 Ok((session.config_options, out))
             },
         )
@@ -145,20 +164,314 @@ fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
 }
 
 #[tokio::test]
+async fn direct_acp_denials_preserve_history_and_allow_retry() {
+    for failure in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ] {
+        let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+            "reply".into(),
+        )]));
+        let admission = Arc::new(TestAdmission::new(Ok(())));
+        with_admission(
+            engine.clone(),
+            admission.clone(),
+            async |connection, session, state| {
+                connection
+                    .send_request(text_prompt(&session, "first"))
+                    .block_task()
+                    .await
+                    .unwrap();
+                *admission.result.lock().unwrap() = Err(failure);
+                let error = connection
+                    .send_request(text_prompt(&session, "denied"))
+                    .block_task()
+                    .await
+                    .unwrap_err();
+                let error = serde_json::to_value(error).unwrap();
+                assert_eq!(error["message"], failure.to_string());
+                assert_eq!(error["data"]["code"], failure.code());
+                assert_eq!(error["data"]["retryable"], failure.is_retryable());
+                assert_eq!(engine.requests().len(), 1);
+                assert_eq!(state.store.get(&state.session_id).unwrap().history.len(), 2);
+                assert!(
+                    state
+                        .active_cancel
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .all(CancellationToken::is_cancelled)
+                );
+
+                // Loading and deterministic configuration still work with exhausted quota.
+                connection
+                    .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                    .block_task()
+                    .await
+                    .unwrap();
+                connection
+                    .send_request(SetSessionConfigOptionRequest::new(
+                        session.clone(),
+                        MODEL_CONFIG_ID,
+                        SessionConfigValueId::new("other-model"),
+                    ))
+                    .block_task()
+                    .await
+                    .unwrap();
+                assert_eq!(admission.calls.lock().unwrap().len(), 2);
+                *admission.result.lock().unwrap() = Ok(());
+                connection
+                    .send_request(text_prompt(&session, "retry"))
+                    .block_task()
+                    .await
+                    .unwrap();
+            },
+        )
+        .await;
+        assert_eq!(engine.requests()[1].messages, ["first", "reply", "retry"]);
+        assert_eq!(engine.requests()[1].model, "other-model");
+        assert!(
+            admission
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(user, feature)| user == "macro|owner@macro.com"
+                    && *feature == ai_usage::AiFeature::AgentSession)
+        );
+    }
+}
+
+#[tokio::test]
+async fn deterministic_commands_skip_admission_but_provider_commands_do_not() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Unavailable)));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, _| {
+            for command in ["/compact", "/ask choose | a | b"] {
+                connection
+                    .send_request(text_prompt(&session, command))
+                    .block_task()
+                    .await
+                    .unwrap();
+            }
+            assert!(admission.calls.lock().unwrap().is_empty());
+            // Unknown/development command text that reaches the provider is still gated.
+            connection
+                .send_request(text_prompt(&session, "/develop something"))
+                .block_task()
+                .await
+                .unwrap_err();
+            assert_eq!(admission.calls.lock().unwrap().len(), 1);
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
+async fn queued_turns_check_admission_only_when_they_can_execute() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Ok(())));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let lock = state.turn_lock.lock().await;
+            let prompt = connection.send_request(text_prompt(&session, "queued"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while state.active_cancel.lock().unwrap().is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            assert!(admission.calls.lock().unwrap().is_empty());
+            *admission.result.lock().unwrap() = Err(AiAdmissionError::Unavailable);
+            drop(lock);
+            prompt.block_task().await.unwrap_err();
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
+async fn cancelling_a_queued_turn_skips_admission_and_engine() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Unavailable)));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let _lock = state.turn_lock.lock().await;
+            let prompt = connection.send_request(text_prompt(&session, "cancel queued"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while state.active_cancel.lock().unwrap().is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            connection
+                .send_notification(CancelNotification::new(session))
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(5), prompt.block_task())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.stop_reason, StopReason::Cancelled);
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+    assert!(admission.calls.lock().unwrap().is_empty());
+}
+
+struct WaitingAdmission(tokio::sync::Notify);
+
+impl AiAdmissionService for WaitingAdmission {
+    fn admit<'a>(
+        &'a self,
+        _: &'a MacroUserIdStr<'_>,
+        _: ai_usage::AiFeature,
+    ) -> ai_billing::domain::AdmissionFuture<'a> {
+        Box::pin(async move {
+            self.0.notify_one();
+            std::future::pending().await
+        })
+    }
+}
+
+#[tokio::test]
+async fn cancel_during_billing_does_not_start_engine_or_write_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(WaitingAdmission(tokio::sync::Notify::new()));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let prompt = connection.send_request(text_prompt(&session, "cancel during admission"));
+            tokio::time::timeout(Duration::from_secs(5), admission.0.notified())
+                .await
+                .unwrap();
+            connection
+                .send_notification(CancelNotification::new(session))
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(5), prompt.block_task())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.stop_reason, StopReason::Cancelled);
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+            assert!(
+                state
+                    .active_cancel
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(CancellationToken::is_cancelled)
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
 async fn new_session_advertises_the_engine_supported_models() {
     let (_notifications, config_options, ()) =
         with_agent(Arc::new(ScriptedEngine::new(vec![])), async |_, _| {}).await;
 
     let selection = agent_fold::domain::model_selection::model_selection(&config_options)
         .expect("session/new should advertise a model select");
-    assert_eq!(selection.current, "test-model");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5-5");
     assert_eq!(
         selection
             .options
             .iter()
             .map(|model| (model.id.as_str(), model.name.as_str()))
             .collect::<Vec<_>>(),
-        vec![("test-model", "test-model"), ("other-model", "other-model")]
+        vec![
+            ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
+            ("other-model", "other-model")
+        ]
+    );
+
+    let effort = config_options
+        .iter()
+        .find(|option| option.id.to_string() == REASONING_EFFORT_CONFIG_ID)
+        .expect("session/new should advertise reasoning effort");
+    assert_eq!(
+        effort.category,
+        Some(SessionConfigOptionCategory::ThoughtLevel)
+    );
+    let SessionConfigKind::Select(effort) = &effort.kind else {
+        panic!("reasoning effort should be a select");
+    };
+    assert_eq!(effort.current_value.to_string(), "default");
+    let SessionConfigSelectOptions::Ungrouped(options) = &effort.options else {
+        panic!("reasoning effort should be ungrouped");
+    };
+    assert_eq!(
+        options
+            .iter()
+            .map(|option| option.value.to_string())
+            .collect::<Vec<_>>(),
+        ["default", "low", "medium", "high", "xhigh", "max"]
+    );
+}
+
+#[tokio::test]
+async fn changing_reasoning_effort_applies_to_the_next_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let (_notifications, _config_options, ()) =
+        with_agent(Arc::clone(&engine), async |connection, session| {
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    SessionConfigValueId::new("low"),
+                ))
+                .block_task()
+                .await
+                .expect("the effort selection should be accepted");
+            connection
+                .send_request(text_prompt(&session, "be quick"))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        })
+        .await;
+
+    assert_eq!(
+        engine.requests()[0].reasoning_effort,
+        agent::ReasoningEffort::Low
     );
 }
 
@@ -326,7 +639,7 @@ async fn turns_accumulate_history_and_send_the_model() {
 
     let requests = engine.requests();
     assert_eq!(requests.len(), 2);
-    assert_eq!(requests[0].model, "test-model");
+    assert_eq!(requests[0].model, "anthropic/claude-sonnet-5-5");
     assert_eq!(requests[0].messages, vec!["first".to_owned()]);
     // The second turn carries the first turn's prompt and reply.
     assert_eq!(
@@ -542,8 +855,121 @@ impl crate::domain::mcp::McpToolConnector for Arc<SpyConnector> {
     }
 }
 
-/// The servers `session/new` carries are dialed then and there, minus Macro's
-/// own, whose tools this runtime already has natively.
+async fn wait_until_asked(spy: &SpyConnector) {
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if !spy.asked.lock().expect("asked lock").is_empty() {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("connect should be spawned after session/new");
+}
+
+/// Holds `connect` until `release` is sent, and signals `started` when it
+/// begins. Used to prove the handshake does not join listing, and the first
+/// turn does.
+struct HoldConnector {
+    started: tokio::sync::mpsc::Sender<()>,
+    release: tokio::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for Arc<HoldConnector> {
+    async fn connect(
+        &self,
+        _servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<mcp_toolset::RemoteMcpToolSet> {
+        let _ = self.started.send(()).await;
+        if let Some(release) = self.release.lock().await.take() {
+            let _ = release.await;
+        }
+        None
+    }
+}
+
+fn hold_connector() -> (
+    Arc<HoldConnector>,
+    tokio::sync::mpsc::Receiver<()>,
+    tokio::sync::oneshot::Sender<()>,
+) {
+    let (started_tx, started_rx) = tokio::sync::mpsc::channel(1);
+    let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+    let connector = Arc::new(HoldConnector {
+        started: started_tx,
+        release: tokio::sync::Mutex::new(Some(release_rx)),
+    });
+    (connector, started_rx, release_tx)
+}
+
+fn test_mcp_servers() -> Vec<agent_client_protocol::schema::v1::McpServer> {
+    use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
+
+    ["macro", "linear", "notion"]
+        .into_iter()
+        .map(|name| {
+            AcpMcpServer::Http(
+                McpServerHttp::new(name, format!("https://egress.test/mcp/{name}")).headers(vec![
+                    HttpHeader::new("Authorization", "Bearer session-token"),
+                ]),
+            )
+        })
+        .collect()
+}
+
+async fn serve_with_mcp(
+    mcp: Arc<dyn crate::domain::mcp::DynMcpToolConnector>,
+    engine: Arc<dyn TurnEngine>,
+) -> (ConnectionTo<Agent>, SessionId, tokio::task::AbortHandle) {
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
+        engine,
+        admission: Arc::new(DisabledAiAdmissionService),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
+        mcp,
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
+        client_renders_forms: AtomicBool::new(false),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+    let abort = agent.abort_handle();
+    let (connection, session) = Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                let opened = connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(test_mcp_servers()))
+                    .block_task()
+                    .await?;
+                Ok((connection, opened.session_id))
+            },
+        )
+        .await
+        .expect("initialize and session/new should succeed");
+    (connection, session, abort)
+}
+
+/// The servers `session/new` carries are dialed in the background, minus
+/// Macro's own, whose tools this runtime already has natively.
 #[tokio::test]
 async fn session_new_dials_the_advertised_servers_except_macros_own() {
     use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
@@ -555,7 +981,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -563,12 +989,14 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
+        admission: Arc::new(DisabledAiAdmissionService),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         enable_dev_commands: false,
         mcp: Arc::new(Arc::clone(&spy)),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -602,12 +1030,108 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         )
         .await
         .expect("the scripted client should run clean");
+    wait_until_asked(&spy).await;
     agent.abort();
 
     assert_eq!(
         *spy.asked.lock().expect("asked lock"),
         vec![vec!["linear".to_owned(), "notion".to_owned()]]
     );
+}
+
+/// `session/new` answers while MCP listing is still held, so create is not
+/// blocked on `tools/list`.
+#[tokio::test]
+async fn session_new_does_not_wait_for_mcp_connect() {
+    let (connector, mut started, _release) = hold_connector();
+    let setup = tokio::spawn(async move {
+        serve_with_mcp(
+            Arc::new(Arc::clone(&connector)),
+            Arc::new(ScriptedEngine::new(Vec::new())) as Arc<dyn TurnEngine>,
+        )
+        .await
+    });
+    started.recv().await.expect("connect should start");
+    let (_connection, _session, abort) = tokio::time::timeout(Duration::from_millis(200), setup)
+        .await
+        .expect("session/new must not wait for MCP listing")
+        .expect("the handshake task should finish");
+    abort.abort();
+}
+
+/// The first prompt joins the in-flight connect so SearchTools still sees
+/// the catalog, even though `session/new` did not wait.
+#[tokio::test]
+async fn first_prompt_waits_for_background_mcp_connect() {
+    let (connector, mut started, release) = hold_connector();
+    let engine = Arc::new(ScriptedEngine::new(Vec::new()));
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
+        engine: Arc::clone(&engine) as Arc<dyn TurnEngine>,
+        admission: Arc::new(DisabledAiAdmissionService),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
+        mcp: Arc::new(Arc::clone(&connector)),
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
+        client_renders_forms: AtomicBool::new(false),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                let opened = connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(test_mcp_servers()))
+                    .block_task()
+                    .await?;
+                started.recv().await.expect("connect should start");
+
+                let mut prompt = std::pin::pin!(
+                    connection
+                        .send_request(text_prompt(&opened.session_id, "hi"))
+                        .block_task()
+                );
+                tokio::select! {
+                    biased;
+                    result = &mut prompt => {
+                        panic!("the prompt finished before MCP listing was released: {result:?}");
+                    }
+                    () = tokio::time::sleep(Duration::from_millis(50)) => {}
+                }
+                assert!(
+                    engine.requests().is_empty(),
+                    "the turn must not start until MCP listing finishes"
+                );
+                release.send(()).expect("release the held connect");
+                prompt
+                    .await
+                    .expect("the prompt should complete after MCP listing");
+                assert_eq!(engine.requests().len(), 1);
+                Ok(())
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
 }
 
 /// Like [`with_agent`], but the client advertises form elicitation and
@@ -648,7 +1172,7 @@ where
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -656,12 +1180,14 @@ where
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
+        admission: Arc::new(DisabledAiAdmissionService),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         client_renders_forms: AtomicBool::new(false),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
         enable_dev_commands,
     });
 
@@ -1148,6 +1674,48 @@ async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
     );
 }
 
+/// An engine whose turn waits on a person for twice the idle timeout - the
+/// way a tool call held for the owner does - and then answers.
+struct OwnerWaitingEngine;
+
+impl TurnEngine for OwnerWaitingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            {
+                let _waiting = request.awaiting.begin();
+                tokio::time::sleep(TURN_IDLE_TIMEOUT * 2).await;
+            }
+            let _ = parts.send(Ok(StreamPart::Content("approved".into()))).await;
+        });
+        receiver
+    }
+}
+
+/// Waiting on the owner to approve a tool call is not the turn hanging.
+#[tokio::test(start_paused = true)]
+async fn a_turn_waiting_on_the_owner_outlasts_the_idle_timeout() {
+    let (notifications, _config_options, response) =
+        with_agent(Arc::new(OwnerWaitingEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "read my email"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(spoken(&notifications), "approved");
+}
+
 #[tokio::test]
 async fn ask_without_form_support_explains_instead_of_asking() {
     let engine = Arc::new(ScriptedEngine::new(vec![]));
@@ -1171,3 +1739,78 @@ async fn ask_without_form_support_explains_instead_of_asking() {
 
 mod model_selection;
 mod telemetry;
+
+#[tokio::test]
+async fn effort_is_validated_and_model_changes_return_complete_options() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    with_agent(engine, async |connection, session| {
+        let selected = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                REASONING_EFFORT_CONFIG_ID,
+                "max",
+            ))
+            .block_task()
+            .await
+            .expect("Sonnet accepts max");
+        assert_eq!(
+            selected.config_options.len(),
+            2,
+            "effort response retains model control"
+        );
+        let changed = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("model accepted");
+        assert_eq!(
+            changed.config_options.len(),
+            1,
+            "unsupported model removes effort control"
+        );
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    "low"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    "unknown-model"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        let restored = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session,
+                MODEL_CONFIG_ID,
+                "anthropic/claude-sonnet-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        let SessionConfigKind::Select(effort) = &restored.config_options[1].kind else {
+            panic!("effort select");
+        };
+        assert_eq!(
+            effort.current_value.to_string(),
+            "default",
+            "invalid effort is reset on model change"
+        );
+    })
+    .await;
+}

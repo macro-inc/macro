@@ -105,11 +105,25 @@ where
             })
             .collect();
 
+        // Read beside the row rather than off it: the harness writes it at
+        // every dispatch, and a call is judged by who prompted the turn
+        // running now.
+        let prompter = self
+            .sessions
+            .turn_prompter(session.id)
+            .await
+            .map_err(|error| {
+                EgressError::Internal(rootcause::report!(
+                    "could not read who prompted the turn: {error}"
+                ))
+            })?;
+
         Ok(SessionGrant {
             session: session.id,
             owner,
             repo,
             mcp_servers,
+            prompter,
         })
     }
 }

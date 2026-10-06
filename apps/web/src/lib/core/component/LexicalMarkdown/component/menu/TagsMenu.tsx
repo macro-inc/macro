@@ -2,7 +2,8 @@ import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import PlusIcon from '@phosphor/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
-import { DEFAULT_TAG_COLOR, type TAG_COLORS } from '@property/tags/tagColors';
+import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from '@property/tags/tagColors';
+import { queryReadyGate } from '@queries/gate';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
   invalidateTags,
@@ -50,24 +51,6 @@ type PendingTagCreate = {
   value: string;
   color: string;
 };
-
-const TAG_COLOR_OPTIONS = [
-  { color: '#E5484D', name: 'Red' },
-  { color: '#E54D2E', name: 'Tomato' },
-  { color: '#F76B15', name: 'Orange' },
-  { color: '#FFB224', name: 'Amber' },
-  { color: '#F5D90A', name: 'Yellow' },
-  { color: '#46A758', name: 'Green' },
-  { color: '#12A594', name: 'Teal' },
-  { color: '#0091FF', name: 'Blue' },
-  { color: '#3E63DD', name: 'Indigo' },
-  { color: '#8E4EC6', name: 'Purple' },
-  { color: '#E93D82', name: 'Pink' },
-  { color: '#889096', name: 'Gray' },
-] as const satisfies readonly {
-  color: (typeof TAG_COLORS)[number];
-  name: string;
-}[];
 
 const FOLLOWUP_MENU_OPEN_DELAY_MS = 40;
 
@@ -176,7 +159,10 @@ export function TagsMenu(props: {
     createLabel().length >= 2 && !exactTagMatchExists();
   const createRowIndex = () => items().length;
   const itemCount = () => items().length + (showCreateRow() ? 1 : 0);
-  const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
+  const teamName = () =>
+    (queryReadyGate(currentTeamQuery) &&
+      currentTeamQuery.data?.team.name?.trim()) ||
+    'Team';
   const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
     { scope: 'team', label: `Shared with ${teamName()}` },
     { scope: 'user', label: 'Personal' },

@@ -1,3 +1,4 @@
+import { projectRouteId } from '@app/features/projects/core/route';
 import { getChannelParams } from '@channel/Channel/link';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -20,6 +21,10 @@ export function itemsPerRow(containerWidth: number): number {
 
 export function getEntityClickContent(entity: EntityData): SplitContent {
   return match(entity)
+    .with({ type: 'initiative' }, (entity) => ({
+      type: 'component' as const,
+      id: projectRouteId({ id: entity.id, section: 'overview' }),
+    }))
     .with({ type: 'document' }, (e) => ({
       type: fileTypeToBlockName(e.subType?.type ?? e.fileType),
       id: e.id,
@@ -52,8 +57,8 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
       type: 'call' as const,
       id: e.id,
     }))
-    .with({ type: 'automation' }, (e) => ({
-      type: 'automation' as const,
+    .with({ type: 'routine' }, (e) => ({
+      type: 'routine' as const,
       id: e.id,
     }))
     .with({ type: 'foreign' }, () => {
@@ -70,6 +75,9 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     })
     .with({ type: 'calendar_event' }, () => {
       throw new Error('calendar events are not openable as attachments');
+    })
+    .with({ type: 'database' }, () => {
+      throw new Error('databases are not openable as attachments');
     })
     .exhaustive();
 }

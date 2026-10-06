@@ -3,7 +3,17 @@ import { useNotificationsForEntity } from '@notifications/notification-helpers';
 import type { UnifiedNotification } from '@notifications/types';
 import type { MessageParent } from '@service-storage/messages';
 import type { JSXElement } from 'solid-js';
-import { createEffect, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  createEffect,
+  createSignal,
+  useContext,
+} from 'solid-js';
+
+/** Share exact unread matches so each message avoids scanning the channel history. */
+export const MessageNotificationIndexContext =
+  createContext<Accessor<ReadonlyMap<string, UnifiedNotification[]>>>();
 
 const MAX_MARK_ATTEMPTS = 3;
 
@@ -17,10 +27,10 @@ export function MarkMessageNotifications(props: {
   // matches metadata.messageId only; the current CHANNEL_MESSAGE entity scope
   // is thread-aware, so targeting a root also includes reply notifications.
   const notificationSource = useGlobalNotificationSource();
-  const notifications = useNotificationsForEntity(
-    notificationSource,
-    props.parent
-  );
+  const scopedIndex = useContext(MessageNotificationIndexContext);
+  const notifications = scopedIndex
+    ? () => scopedIndex().get(props.messageId) ?? []
+    : useNotificationsForEntity(notificationSource, props.parent);
   const isMessageNotification = (n: UnifiedNotification) => {
     const content = n.notification_metadata.content;
     return (
@@ -36,19 +46,28 @@ export function MarkMessageNotifications(props: {
   //
   // Not a one-shot latch: a stale refetch can land after the optimistic write
   // and flip notifications back to unviewed while this row stays mounted, so
-  // re-mark whenever the cache regresses, bounded per mount. inFlight is a
-  // signal so a regression that lands mid-mark re-runs the effect on settle.
+  // re-mark whenever the cache regresses, bounded per notification batch.
+  // New notifications get a fresh budget. inFlight is a signal so a regression
+  // that lands mid-mark re-runs the effect on settle.
   const [inFlight, setInFlight] = createSignal(false);
   let attempts = 0;
+  let attemptedIds = '';
 
   createEffect(() => {
     const unread = notifications().filter(
       (notification) =>
-        isMessageNotification(notification) && notification.state === 'unseen'
+        notification.state === 'unseen' &&
+        (scopedIndex !== undefined || isMessageNotification(notification))
     );
-    if (unread.length === 0 || inFlight() || attempts >= MAX_MARK_ATTEMPTS) {
-      return;
+    if (unread.length === 0 || inFlight()) return;
+    const ids = JSON.stringify(
+      unread.map((notification) => notification.id).sort()
+    );
+    if (ids !== attemptedIds) {
+      attemptedIds = ids;
+      attempts = 0;
     }
+    if (attempts >= MAX_MARK_ATTEMPTS) return;
     attempts += 1;
     setInFlight(true);
     void notificationSource
@@ -61,5 +80,5 @@ export function MarkMessageNotifications(props: {
       });
   });
 
-  return <>{props.children}</>;
+  return props.children;
 }

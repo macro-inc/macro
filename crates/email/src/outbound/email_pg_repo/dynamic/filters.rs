@@ -1014,7 +1014,7 @@ pub(super) fn escape_like_pattern(s: &str) -> String {
 pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
     match view {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => SqlFragment::raw(
-            " AND t.inbox_visible = TRUE AND t.latest_inbound_message_ts IS NOT NULL",
+            " AND t.inbox_visible = TRUE AND (t.latest_inbound_message_ts IS NOT NULL OR t.reminder_returned_at IS NOT NULL)",
         ),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             SqlFragment::raw(" AND t.latest_outbound_message_ts IS NOT NULL")
@@ -1091,7 +1091,7 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
             "t.latest_outbound_message_ts"
         }
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
-            "t.latest_inbound_message_ts"
+            "GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at)"
         }
         _ => "COALESCE(t.latest_non_spam_message_ts, t.updated_at)",
     }

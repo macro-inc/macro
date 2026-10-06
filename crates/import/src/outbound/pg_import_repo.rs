@@ -9,11 +9,15 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{ImportError, ImportRepo, Result};
 use chrono::{DateTime, Utc};
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::collections::HashSet;
 use std::str::FromStr;
 use uuid::Uuid;
+
+/// Canonical target transaction helpers for composition roots.
+pub mod targets;
 
 #[cfg(test)]
 mod test;
@@ -509,6 +513,23 @@ impl ImportRepo for PgImportRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn team_members(&self, team_id: Uuid) -> Result<Vec<MacroUserIdStr<'static>>> {
+        let rows = sqlx::query!("SELECT user_id FROM team_user WHERE team_id = $1", team_id,)
+            .fetch_all(&self.pool)
+            .await?;
+        let mut members = Vec::with_capacity(rows.len());
+        for row in rows {
+            match MacroUserIdStr::parse_from_str(&row.user_id).map(|id| id.into_owned()) {
+                Ok(id) => members.push(id),
+                Err(error) => {
+                    tracing::warn!(?error, %team_id, "skipping unparseable team member id");
+                }
+            }
+        }
+        Ok(members)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn list_runs(&self, user: &MacroUserIdStr<'static>) -> Result<Vec<ImportRun>> {
         let rows = sqlx::query_as!(
             ImportRunDbRow,
@@ -545,6 +566,31 @@ impl ImportRepo for PgImportRepo {
             source.as_ref(),
             &from,
             auto_import,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn start_manual_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        from: &[RunStatus],
+    ) -> Result<bool> {
+        let from = run_status_strings(from);
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO import_run (user_id, source, status, auto_import)
+            VALUES ($1, $2, 'running', false)
+            ON CONFLICT (user_id, source) DO UPDATE
+            SET status = 'running', auto_import = false, error = NULL, updated_at = NOW()
+            WHERE import_run.status::text = ANY($3::text[])
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            &from,
         )
         .execute(&self.pool)
         .await?;

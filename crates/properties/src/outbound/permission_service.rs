@@ -130,6 +130,7 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
         // entities are only visible to their owner.
         match entity_type {
             AccessEntityType::Call
+            | AccessEntityType::Initiative
             | AccessEntityType::Channel
             | AccessEntityType::CrmCompany
             | AccessEntityType::User

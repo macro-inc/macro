@@ -4,9 +4,9 @@ import {
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
 import { TZDateMini } from '@date-fns/tz';
-import type { ConferenceChange } from '@service-email/generated/schemas/conferenceChange';
-import type { EventTime } from '@service-email/generated/schemas/eventTime';
-import type { OutOfOfficeProperties } from '@service-email/generated/schemas/outOfOfficeProperties';
+import type { ConferenceChange } from '@service-calendar/generated/schemas/conferenceChange';
+import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
+import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
@@ -22,6 +22,10 @@ import {
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { CalendarEvent } from '../../types';
 import { parseLocalDate } from '../../utils/calendar-date';
+import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '../../utils/macro-call-link';
 import {
   buildRecurrenceLines,
   defaultCustomConfig,
@@ -62,7 +66,11 @@ function defaultEditorTimes(reference: Date) {
 }
 
 /** Conferencing displayed by the editor before it is submitted. */
-export type EventEditorConferenceChoice = 'none' | 'google_meet' | 'existing';
+export type EventEditorConferenceChoice =
+  | 'none'
+  | 'macro'
+  | 'google_meet'
+  | 'existing';
 
 /** Values used to initialize the shared event editor form. */
 export interface EventEditorInitialValues {
@@ -133,7 +141,9 @@ export interface EventEditorSubmitValues {
   guestEmails: string[];
   location: string;
   description: string;
-  /** Present only when conferencing should be attached, replaced, or removed. */
+  /** Selected conferencing, including client-managed Macro call links. */
+  conferenceChoice: EventEditorConferenceChoice;
+  /** Present only when provider conferencing should change. */
   conference?: ConferenceChange;
   /** Present only when the user changed the event's reminder configuration. */
   reminders?: EventReminders;
@@ -146,7 +156,8 @@ export interface EventEditorSubmitValues {
 }
 
 export function defaultEditorInitialValues(
-  reference = new Date()
+  reference = new Date(),
+  macroCallsEnabled = false
 ): EventEditorInitialValues {
   const { start, end } = defaultEditorTimes(reference);
   return {
@@ -159,7 +170,7 @@ export function defaultEditorInitialValues(
     guests: '',
     location: '',
     description: '',
-    conference: 'none',
+    conference: macroCallsEnabled ? 'macro' : 'none',
     reminders: undefined,
     eventType: undefined,
     outOfOffice: undefined,
@@ -167,12 +178,18 @@ export function defaultEditorInitialValues(
 }
 
 /** Converts a FullCalendar-style selected range into create-event values. */
-export function calendarSelectionToEditorInitialValues(selection: {
-  start: Date;
-  end: Date;
-  allDay: boolean;
-}): EventEditorInitialValues {
-  const initialValues = defaultEditorInitialValues(selection.start);
+export function calendarSelectionToEditorInitialValues(
+  selection: {
+    start: Date;
+    end: Date;
+    allDay: boolean;
+  },
+  macroCallsEnabled = false
+): EventEditorInitialValues {
+  const initialValues = defaultEditorInitialValues(
+    selection.start,
+    macroCallsEnabled
+  );
   if (selection.allDay) {
     return {
       ...initialValues,
@@ -192,6 +209,7 @@ export function calendarSelectionToEditorInitialValues(selection: {
 function initialConferenceChoice(
   event: CalendarEvent
 ): EventEditorConferenceChoice {
+  if (calendarMacroCallUrl(event)) return 'macro';
   if (!event.conferenceUrl) return 'none';
   return event.conferenceProvider === 'google_meet'
     ? 'google_meet'
@@ -215,6 +233,7 @@ export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
   const guests = eventGuestEmails(event).join(', ');
+  const content = removeCalendarMacroCall(event, calendarMacroCallUrl(event));
 
   if (event.allDay) {
     const start = isDateOnly(event.start)
@@ -231,8 +250,8 @@ export function calendarEventToEditorInitialValues(
       recurrenceLines: [...event.recurrenceLines],
       calendarId: event.calendarId ?? event.calendar.id,
       guests,
-      location: event.location ?? '',
-      description: event.description ?? '',
+      location: content.location,
+      description: content.description,
       conference: initialConferenceChoice(event),
       reminders: event.reminders,
       eventType: event.eventType,
@@ -248,8 +267,8 @@ export function calendarEventToEditorInitialValues(
     recurrenceLines: [...event.recurrenceLines],
     calendarId: event.calendarId ?? event.calendar.id,
     guests,
-    location: event.location ?? '',
-    description: event.description ?? '',
+    location: content.location,
+    description: content.description,
     conference: initialConferenceChoice(event),
     reminders: event.reminders,
     eventType: event.eventType,
@@ -499,21 +518,27 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     const choice = recurrenceChoice();
     if (choice === 'existing') return undefined;
     if (choice === 'none') return [];
-    if (choice === 'custom') {
-      return buildRecurrenceLines(
-        customConfig(),
-        options.state().allDay,
-        options.recurrenceTimeZone
-      );
+    const config =
+      choice === 'custom'
+        ? customConfig()
+        : presets().find((candidate) => candidate.id === choice)?.config;
+    if (!config) return undefined;
+    const originalConfig = initialConfig();
+    if (
+      originalConfig &&
+      options.state().allDay === initialValues().allDay &&
+      recurrenceConfigsEqual(config, originalConfig)
+    ) {
+      // Rebuilding an untouched rule can reorder fields, drop provider details
+      // like WKST, or change UNTIL precision. Preserve it so a private reminder
+      // edit does not accidentally request an organizer-only series update.
+      return initialValues().recurrenceLines;
     }
-    const preset = presets().find((candidate) => candidate.id === choice);
-    return preset
-      ? buildRecurrenceLines(
-          preset.config,
-          options.state().allDay,
-          options.recurrenceTimeZone
-        )
-      : undefined;
+    return buildRecurrenceLines(
+      config,
+      options.state().allDay,
+      options.recurrenceTimeZone
+    );
   };
   const dateRangeError = createMemo(() => {
     const current = options.state();

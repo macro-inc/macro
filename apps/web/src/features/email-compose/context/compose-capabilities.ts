@@ -1,5 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
+import type { EmailMessage } from '../../email-message/core/email-message';
 import type { EmailDraft } from '../core/email-draft';
 import type { EmailRecipient } from '../core/email-recipient';
 
@@ -66,7 +67,6 @@ export interface DraftClientHandles {
 export interface SaveEmailDraft {
   draft: EmailDraft;
   clientHandles?: DraftClientHandles;
-  sendTime?: Date | null;
   previousThreadId?: string;
   inboxId?: string;
   completingThread?: boolean;
@@ -96,6 +96,24 @@ export interface EmailAttachmentChange {
 }
 
 export interface EmailDraftStorage {
+  /** Resolve durable local drafts before mounting an editor. */
+  readDraft?(draftId: string): Promise<
+    | {
+        /** Sent records retain mutation identity but never editable content. */
+        draft?: EmailMessage;
+        persistence: 'committed' | 'queued';
+        mutationUuid?: string;
+      }
+    | undefined
+  >;
+  /** Notify mounted composers to refresh identity, without reseeding their content. */
+  watchDrafts?(
+    changed: (settlement?: {
+      mutationUuid?: string;
+      failed: boolean;
+      code?: DraftPersistFailureCode;
+    }) => void
+  ): () => void;
   saveDraft(input: SaveEmailDraft): Promise<DraftSaveResult>;
   deleteDraft(input: DeleteEmailDraft): Promise<void>;
   restoreDraft(input: {
@@ -120,9 +138,18 @@ export interface EmailAttachmentStorage {
 
 export interface EmailDelivery {
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
-  unschedule(input: { draftId: string; inboxId?: string }): Promise<void>;
+  unschedule(input: {
+    draftId: string;
+    threadId?: string;
+    inboxId?: string;
+  }): Promise<void>;
   schedule(
-    input: { draftId: string; sendTime: string },
+    input: {
+      draftId: string;
+      threadId?: string;
+      sendTime: string;
+      includeSignature?: boolean;
+    },
     inboxId?: string
   ): Promise<void>;
   archive(
@@ -137,13 +164,65 @@ export interface EmailDelivery {
   }): Promise<void>;
 }
 
+export type EmailDraftLifecycleState =
+  | {
+      type: 'editing';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      observedAt: number;
+    }
+  | {
+      type: 'scheduled';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      sendTime: string;
+      observedAt: number;
+    }
+  | {
+      type: 'sent';
+      draftId: string;
+      threadId: string;
+      inboxId: string;
+      observedAt: number;
+    }
+  | {
+      type: 'missing';
+      draftId: string;
+      threadId: string;
+      inboxId?: string;
+      observedAt: number;
+    };
+
+export interface EmailDraftLifecycleSource {
+  observe(input: {
+    draftId: Accessor<string | null | undefined>;
+    threadId: Accessor<string | null | undefined>;
+    inboxId: Accessor<string | undefined>;
+  }): {
+    state: Accessor<EmailDraftLifecycleState | undefined>;
+    /** Prior observations stay invalid after failure until a fresh read succeeds. */
+    refresh(): Promise<EmailDraftLifecycleState | undefined>;
+    /** Read one captured identity even if the observing composer has navigated away. */
+    refreshIdentity?(input: {
+      draftId: string;
+      threadId: string;
+      inboxId?: string;
+    }): Promise<EmailDraftLifecycleState | undefined>;
+  };
+}
+
 export interface EmailComposeFeedback {
   feedback: {
     success(
       message: string,
       options?: ComposeNoticeOptions
     ): number | undefined;
-    failure(message: string, options?: ComposeNoticeOptions): void;
+    failure(
+      message: string,
+      options?: ComposeNoticeOptions
+    ): number | undefined;
     alert(message: string, options?: ComposeNoticeOptions): void;
     dismiss(id: number): void;
   };
@@ -185,6 +264,8 @@ export interface EmailEditorFiles {
     directories: FileSystemDirectoryEntry[];
     dropEvent?: DragEvent;
     onUploaded(ids: string[]): void;
+    /** Videos, which email clients drop from HTML; callers attach them instead of inlining. */
+    onVideos?(files: File[]): void;
   }): void;
 }
 
@@ -193,6 +274,7 @@ export interface EmailComposeContext {
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
   delivery: EmailDelivery;
+  draftLifecycle: EmailDraftLifecycleSource;
   notices: EmailComposeFeedback;
   accounts: EmailComposeAccounts;
   connectivity: EmailConnectivity;
@@ -208,7 +290,9 @@ export interface EmailComposeContext {
 export interface ComposeNoticeOptions {
   subtext?: string;
   duration?: number;
-  actions?: { label: string; onClick: () => void }[];
+  persistent?: boolean;
+  /** `kind` picks the action's icon; actions default to undo. */
+  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;

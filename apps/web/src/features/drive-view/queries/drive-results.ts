@@ -57,6 +57,17 @@ export function driveEntityMatchesLocation(
     );
   }
 
+  if (entity.type === 'database') {
+    if (
+      !userId ||
+      location.tab === 'recent' ||
+      selection.scope === 'attachments'
+    )
+      return false;
+    if (location.tab === 'shared') return entity.ownerId !== userId;
+    return selection.scope === 'all' || entity.ownerId === userId;
+  }
+
   if (entity.type !== 'document') return false;
 
   return documentMatchesTab(entity, location.tab, selection.scope, userId);
@@ -74,6 +85,7 @@ export function orderDriveEntities(
     return [...entities];
 
   const timestamp = (entity: EntityData) => {
+    if (entity.type === 'database') return entity.createdAt;
     if (sort === 'created_at') return entity.sortTs ?? entity.createdAt;
     if (sort === 'viewed_at') return entity.sortTs ?? entity.viewedAt;
 

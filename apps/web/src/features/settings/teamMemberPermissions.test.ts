@@ -1,4 +1,8 @@
-import { type TeamMember, TeamRole } from '@service-auth/generated/schemas';
+import {
+  SeatPlan,
+  type TeamMember,
+  TeamRole,
+} from '@service-auth/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
   canRemoveTeamMember,
@@ -10,6 +14,7 @@ const ACTING_USER_ID = 'acting-user-id';
 
 function teamMember(userId: string, role: TeamRole): TeamMember {
   return {
+    plan: SeatPlan.premium,
     role,
     team_id: TEAM_ID,
     user_id: userId,

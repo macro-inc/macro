@@ -154,8 +154,8 @@ Signals are the interface; no factory imports another factory's file — Channel
    at the bottom of every cached variant — but **only if the newest page has no
    `previous_cursor`** (i.e. we're actually at the bottom of the conversation, channel-messages.ts:278).
    Returns rollback context.
-2. **mutationFn**: `postMessage({ ..., nonce: optimisticId })` — server echoes the nonce in the WS broadcast.
-3. **onSuccess**: `replaceOptimisticMessage` swaps `optimisticId → data.id` in place (no refetch);
+2. **mutationFn**: `postMessage({ ..., id: optimisticId, nonce: optimisticId })` — the server keeps the id and echoes the nonce in the WS broadcast.
+3. **onSuccess**: no id swap, since the optimistic message already carries its final id (`newMessageId`);
    refresh soup entity so channel lists re-sort.
 4. **onError**: toast + `rollbackInsertChannelMessage` (remove the optimistic row).
 5. **onSettled**: `softInvalidateTargetCaches` — `invalidateQueries({ refetchType: 'inactive' })`,
@@ -236,7 +236,7 @@ and each `*InTargetCaches` helper applies the change to all three cache families
   Channel stores both `onChange`-mirrored snapshot and `onReady` handle in signals (Channel.tsx:204–207).
 - **Send** (Channel.tsx:623–648): `buildPostMessageSendPayload({ snapshot, participantIds })`
   (`Input/message-payload.ts:96`) expands mentions (`@here` fan-out, bot re-tagging) and maps
-  attachments; then `sendMessageMutation.mutate({ channelID, senderId, optimisticId: crypto.randomUUID(), ...payload }, { onError })`.
+  attachments; then `sendMessageMutation.mutate({ channelID, senderId, optimisticId: newMessageId(), ...payload }, { onError })`.
   - **Restore-on-error**: the input cleared itself on send; `onError` restores the failed
     snapshot via `handle.restoreSnapshot(snapshot)` — but only if the user hasn't typed new
     sendable content meanwhile (`hasSendableInputContent(current)` check, :643).
@@ -286,7 +286,7 @@ messages in a `Scroll` (component/Block.tsx), `AgentInput` with an unwired `onSe
    derived messages `pending`. The confirmed row promotes it in place by action id (by
    content for a stop), a foreign row rebases the suffix behind it, a failed POST retracts
    it. Nothing is predicted about the runtime's answer: a pending stop reads as `stopping`,
-   never as a closed turn. See `crates/agent_fold/src/domain/speculation.rs`.
+   never as a closed turn. See `crates/folds/agent_fold/src/domain/speculation.rs`.
 5. **Scroll (implemented)**: reuse `ThreadList` directly, as described in section 5.
    If history restoration is later added, use its `measurements` snapshot contract,
    not the retired Virtua cache or a second pinning loop.

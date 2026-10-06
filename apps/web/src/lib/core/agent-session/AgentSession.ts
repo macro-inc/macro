@@ -11,6 +11,12 @@
  * rebases it when a foreign row lands first, and drops it if this class
  * retracts it. Listeners only ever see fold events; whether a message is
  * still on the wire is a field on the message, never a second channel.
+ *
+ * A session opened before is folded twice: first from the raw log the
+ * GraphQL cache holds from its last open, so the surface has a transcript
+ * while the fetch is on the wire, then from the fetched log, which the
+ * machine reconciles by row id. The exchange writes the fetched log back;
+ * rows the socket delivers after it are appended to the cached copy here.
  */
 
 import {
@@ -20,8 +26,16 @@ import {
   readSession,
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
+import {
+  AgentSessionLogUnavailable,
+  canFollowAgentSessionLog,
+  forgetAgentSessionLog,
+  type SessionLogWatch,
+  watchAgentSessionLog,
+} from '@queries/agent-session/log';
 import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
 import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
+import { subscribeAgentSessionUpdated } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedStreamEvent,
   TurnState,
@@ -33,8 +47,10 @@ import type {
   ControlRequest,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
+import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { v7 as uuidv7 } from 'uuid';
 import { SessionLoadTrace, traceAcquire } from './load-telemetry';
+import { frameDelivery, PromptTrace } from './prompt-telemetry';
 import { publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
@@ -65,6 +81,28 @@ export class AgentSessionReleased extends Error {
 }
 
 /**
+ * The harness answered 401/403: the viewer is not a participant of this
+ * session. Retrying cannot help, and the surface should say so rather than
+ * report a connectivity problem.
+ */
+export class AgentSessionAccessDenied extends Error {
+  constructor(readonly sessionId: string) {
+    super(`agent session is not accessible to this user: ${sessionId}`);
+    this.name = 'AgentSessionAccessDenied';
+  }
+}
+
+/** The log query answered that the viewer cannot see this session. */
+const inaccessible = (error: unknown) =>
+  error instanceof AgentSessionLogUnavailable &&
+  error.reason === 'inaccessible';
+
+const accessDenied = (errors: { code: string }[]) =>
+  errors.some(
+    (error) => error.code === 'UNAUTHORIZED' || error.code === 'FORBIDDEN'
+  );
+
+/**
  * Whether this action takes the turn, rather than riding alongside one. ACP
  * runs a prompt at a time, so these are the ones the harness queues; mirrors
  * `AgentAction::occupies_turn` in `agent_runtime_protocol`.
@@ -72,6 +110,8 @@ export class AgentSessionReleased extends Error {
 function occupiesTurn(action: AgentAction): boolean {
   return action.type === 'prompt' || action.type === 'compact';
 }
+
+const RESYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
 
 export class AgentSession {
   private static readonly open = new Map<string, AgentSession>();
@@ -96,32 +136,64 @@ export class AgentSession {
   }
 
   /**
-   * Realtime ingress: a run of persisted rows in log order, addressed by
-   * session. The socket dispatch and the replay driver both call this; a
-   * session nobody has open ignores it. The run reaches the machine as one
-   * push, so a flush of many frames costs one worker round trip.
+   * Realtime ingress over the connection gateway: a run of persisted rows
+   * in log order, addressed by session. The socket dispatch and the replay
+   * driver both call this; a session nobody has open ignores it, and so
+   * does one following its log over GraphQL, which hears the same rows
+   * there. The run reaches the machine as one push, so a flush of many
+   * frames costs one worker round trip.
    */
   static ingest(event: AgentSessionLogEvent): void {
-    AgentSession.open
-      .get(event.agentSessionId)
-      ?.enqueueAll(event.entries.map((row) => ({ kind: 'confirmed', row })));
+    const session = AgentSession.open.get(event.agentSessionId);
+    if (!session || session.followed) return;
+    void session.enqueueAll(
+      event.entries.map((row) => ({ kind: 'confirmed', row }))
+    );
   }
 
   readonly id: string;
 
   private references = 0;
   private closed = false;
-  /** The snapshot has been folded; inputs no longer wait for it. */
+  /** The fetched snapshot has been folded; inputs no longer wait for it. */
   private ready = false;
+  /**
+   * The fetched log has been folded. Before this the machine may hold the
+   * cached log, shown but frozen: live rows wait in `buffered` and fold
+   * after the fetched snapshot, which cannot have lost them.
+   */
+  private settled = false;
+  /**
+   * Live rows come from the GraphQL log subscription rather than the
+   * gateway. Decided once, when the session opens: the client either
+   * carries subscriptions or it does not.
+   */
+  private readonly followed = canFollowAgentSessionLog();
+  /**
+   * The log query in flight for the current load: cached copy, then
+   * fetched; and, when followed, the subscription delivering live rows.
+   */
+  private watch: SessionLogWatch;
+  /** The session row, fetched alongside the log and shared by warm and load. */
+  private sessionRow: Promise<
+    Awaited<ReturnType<typeof agentHarnessServiceClient.get>>
+  >;
   /** Inputs that arrived before the snapshot, in order. */
   private buffered: FoldInput[] = [];
   private readonly listeners = new Set<AgentSessionListener>();
   private readonly unsubscribeSocket: () => void;
+  private readonly unsubscribeUpdated: () => void;
+  private readonly unsubscribeReconnected: () => void;
+  private syncing = false;
+  private resyncRequested = false;
+  private resyncRetry = 0;
+  private resyncTimer?: ReturnType<typeof setTimeout>;
   /**
    * Serializes worker pushes so inputs reach the machine in the order this
    * class saw them, even though each push is its own await.
    */
   private chain: Promise<void> = Promise.resolve();
+  private warming: Promise<AgentSessionRecord | undefined>;
   private loading: Promise<AgentSessionRecord>;
   private loadFailed = false;
   /** The span for the attempt in flight, ended by whatever settles it. */
@@ -132,6 +204,8 @@ export class AgentSession {
    * wait in the server's queue.
    */
   private turn: TurnState = 'idle';
+  /** Prompts issued here still waiting for their first output. */
+  private readonly prompts = new Set<PromptTrace>();
 
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
@@ -146,8 +220,55 @@ export class AgentSession {
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
       void this.resync();
     });
+    this.unsubscribeUpdated = subscribeAgentSessionUpdated((event) => {
+      if (event.agentSessionId === this.id) void this.resync();
+    });
+    // The subscription survives a reconnect, but not the rows published
+    // while the socket was down.
+    this.unsubscribeReconnected = this.followed
+      ? subscribeGraphqlSoupReconnected(() => void this.resync())
+      : () => undefined;
     this.trace = new SessionLoadTrace(id);
+    this.watch = this.openWatch();
+    this.sessionRow = agentHarnessServiceClient.get(id);
+    this.warming = this.startWarm();
     this.loading = this.startLoad();
+    // A surface rendering the cached log has not called `load` yet when a
+    // fast failure lands, and an unobserved rejection is reported as
+    // unhandled. The failure still reaches every caller of `load`.
+    this.loading.catch(() => undefined);
+  }
+
+  /**
+   * The log query for a load, following the session when the client can:
+   * each run the subscription delivers folds like a gateway run would, and
+   * a gap in it is a reason to refetch.
+   */
+  private openWatch(): SessionLogWatch {
+    return watchAgentSessionLog(
+      this.id,
+      'cache-and-network',
+      this.followed
+        ? {
+            rows: (rows) => {
+              void this.enqueueAll(
+                rows.map((row) => ({ kind: 'confirmed', row }))
+              );
+            },
+            gap: () => void this.resync(),
+          }
+        : undefined
+    );
+  }
+
+  /**
+   * The session as the GraphQL cache last saw it, folded from the cached
+   * log: what a surface can render while {@link load} is on the wire.
+   * Resolves to nothing when there is no cached log, or when the fetched
+   * one landed first. Never fails: a cache that cannot be read is a miss.
+   */
+  warm(): Promise<AgentSessionRecord | undefined> {
+    return this.warming;
   }
 
   /**
@@ -159,6 +280,9 @@ export class AgentSession {
     if (this.loadFailed) {
       this.loadFailed = false;
       this.trace = new SessionLoadTrace(this.id);
+      this.watch.stop();
+      this.watch = this.openWatch();
+      this.sessionRow = agentHarnessServiceClient.get(this.id);
       this.loading = this.startLoad();
     }
     return this.loading;
@@ -177,13 +301,18 @@ export class AgentSession {
    * nowhere else.
    *
    * `userId` is the caller, so the pending bubble is attributed exactly as
-   * the confirmed row will be.
+   * the confirmed row will be. A prompt is traced until its first output,
+   * under `trace` when the caller started one earlier.
    */
   async issue(
     action: AgentAction,
-    options: { userId?: string } = {}
+    options: { userId?: string; trace?: PromptTrace } = {}
   ): Promise<IssueResult> {
     const actionId = uuidv7();
+    const trace =
+      action.type === 'prompt'
+        ? (options.trace ?? new PromptTrace(this.id, { newSession: false }))
+        : undefined;
     const speculated = this.reaches(action);
     if (speculated) {
       // A prompt we just folded opens a turn, so the next one belongs in the
@@ -203,7 +332,9 @@ export class AgentSession {
     // The harness adopts the id the client speculated under; the response
     // names the id it was accepted under and `issue` reconciles the two.
     const request: ControlRequest = { ...action, actionId };
-    const result = await agentHarnessServiceClient.control(this.id, request);
+    const result = trace
+      ? await this.sendPrompt(trace, actionId, request)
+      : await agentHarnessServiceClient.control(this.id, request);
 
     if (!speculated) return result;
     if (result.isErr()) {
@@ -221,7 +352,7 @@ export class AgentSession {
     // confirms it by content whatever id the harness accepted it under.
     const accepted = result.value.actionId;
     if (accepted !== actionId && action.type !== 'stop') {
-      void this.apply([
+      void this.enqueueAll([
         { kind: 'retracted', actionId },
         {
           kind: 'speculated',
@@ -232,6 +363,41 @@ export class AgentSession {
       ]);
     }
     return result;
+  }
+
+  /**
+   * Post a prompt inside its trace, and watch the fold for its output.
+   * Watched from before the POST: the confirmed row can reach the socket
+   * before the POST's answer does.
+   */
+  private async sendPrompt(
+    trace: PromptTrace,
+    actionId: string,
+    request: ControlRequest
+  ): Promise<IssueResult> {
+    trace.expect(actionId);
+    this.prompts.add(trace);
+    try {
+      const result = await trace.run(() =>
+        agentHarnessServiceClient.control(this.id, request)
+      );
+      if (result.isErr()) {
+        trace.end(
+          'failed',
+          new Error(result.error.map((error) => error.message).join(' '))
+        );
+      } else {
+        trace.accepted(result.value.actionId, result.value.status === 'queued');
+      }
+      return result;
+    } catch (error) {
+      trace.end('failed', error);
+      throw error;
+    } finally {
+      // Released while the POST was out: nothing will observe the turn.
+      if (this.closed) trace.end('released');
+      if (trace.ended) this.prompts.delete(trace);
+    }
   }
 
   /**
@@ -315,6 +481,21 @@ export class AgentSession {
     return this.chain.then(() => readSession(this.id));
   }
 
+  /** Observe mounted answer DOM only while this tab awaits that prompt's paint. */
+  observeRenderedText(
+    turn: number,
+    element: HTMLElement
+  ): (() => void) | undefined {
+    const stops = [...this.prompts].flatMap((prompt) => {
+      const stop = prompt.observeRenderedText(turn, element);
+      return stop ? [stop] : [];
+    });
+    if (stops.length === 0) return;
+    return () => {
+      for (const stop of stops) stop();
+    };
+  }
+
   release(): void {
     this.references -= 1;
     if (this.references > 0) return;
@@ -324,9 +505,49 @@ export class AgentSession {
     // Ended here rather than where the load notices: a fetch that never
     // answers never reaches that check, and an unended span never reports.
     this.trace.end('released');
+    for (const prompt of this.prompts) prompt.end('released');
+    this.prompts.clear();
     this.listeners.clear();
     this.unsubscribeSocket();
+    this.unsubscribeUpdated();
+    this.unsubscribeReconnected();
+    clearTimeout(this.resyncTimer);
+    this.watch.stop();
     closeSession(this.id);
+  }
+
+  private async startWarm(): Promise<AgentSessionRecord | undefined> {
+    const readStartedAt = performance.now();
+    // The cached log carries no session row, so the (small) row fetch is
+    // part of warming: the transcript can show only inside a session.
+    const [cached, session] = await Promise.all([
+      this.watch.cached.then((cached) => {
+        this.trace.cacheRead(
+          readStartedAt,
+          cached && { rows: cached.rows.length }
+        );
+        return cached;
+      }),
+      this.sessionRow,
+    ]);
+    // `settled` is set in the same tick as the fetched snapshot's push, so
+    // checking it here and pushing below cannot interleave with that push:
+    // a cached log never replaces a fetched one.
+    if (!cached || session.isErr() || this.closed || this.settled) {
+      return undefined;
+    }
+    const foldStartedAt = performance.now();
+    // `ready` stays false: live rows keep waiting for the fetched snapshot.
+    await this.apply([{ kind: 'snapshot', rows: cached.rows }]);
+    if (this.closed) return undefined;
+    this.trace.stage('cache_fold', foldStartedAt);
+    this.setTurn((await readSession(this.id)).metadata.turn);
+    return { session: session.value, bot: cached.bot };
+  }
+
+  /** A surface put this session's transcript on screen. */
+  rendered(kind: 'cached' | 'fetched'): void {
+    this.trace.rendered(kind);
   }
 
   private startLoad(): Promise<AgentSessionRecord> {
@@ -347,32 +568,56 @@ export class AgentSession {
   }
 
   private async fetchAndFold(): Promise<AgentSessionRecord> {
+    const fetchStartedAt = performance.now();
     const [session, log] = await Promise.all([
-      agentHarnessServiceClient.get(this.id),
-      agentHarnessServiceClient.getLog(this.id),
+      this.sessionRow.then((session) => {
+        this.trace.stage('session_fetch', fetchStartedAt);
+        return session;
+      }),
+      this.watch.fetched.then(
+        (log) => ({ ok: true as const, log }),
+        (error: unknown) => ({ ok: false as const, error })
+      ),
     ]);
+    // Released mid-fetch: the stopped watch answers with a failure that is
+    // not one.
+    if (this.closed) throw new AgentSessionReleased(this.id);
     if (session.isErr()) {
+      if (accessDenied(session.error)) {
+        this.forgetCached();
+        throw new AgentSessionAccessDenied(this.id);
+      }
       throw new Error(`agent session could not be fetched: ${this.id}`);
     }
-    if (log.isErr()) {
-      throw new Error(`agent session log could not be fetched: ${this.id}`);
+    if (!log.ok) {
+      if (inaccessible(log.error)) {
+        this.forgetCached();
+        throw new AgentSessionAccessDenied(this.id);
+      }
+      throw new Error(`agent session log could not be fetched: ${this.id}`, {
+        cause: log.error,
+      });
     }
-    if (this.closed) throw new AgentSessionReleased(this.id);
-    this.trace.fetched(log.value.entries.length);
+    this.trace.fetched(fetchStartedAt, log.log.rows.length);
 
     const foldStartedAt = performance.now();
-    await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+    this.settled = true;
+    await this.apply([{ kind: 'snapshot', rows: log.log.rows }]);
     // Inputs can keep arriving while each push is in flight; drain until a
     // check finds nothing, then flip ready so the next one goes straight in.
-    while (this.buffered.length > 0) {
-      const inputs = this.buffered;
-      this.buffered = [];
-      await this.apply(inputs);
-    }
-    this.ready = true;
+    await this.drainBuffered();
     this.trace.folded(foldStartedAt);
     this.setTurn((await readSession(this.id)).metadata.turn);
-    return { session: session.value, bot: log.value.bot };
+    if (this.resyncRequested) void this.resync();
+    return { session: session.value, bot: log.log.bot };
+  }
+
+  /** The viewer was refused: nothing cached may render for them again. */
+  private forgetCached(): void {
+    this.warming = Promise.resolve(undefined);
+    void forgetAgentSessionLog(this.id).catch((error: unknown) => {
+      console.warn('[agent-session] cached log could not be removed', error);
+    });
   }
 
   /**
@@ -380,11 +625,58 @@ export class AgentSession {
    * while it was down. Refetch, and let the machine reconcile the overlap
    * and settle any speculation the log confirmed meanwhile.
    */
-  private async resync(): Promise<void> {
-    if (!this.ready || this.closed) return;
-    const log = await agentHarnessServiceClient.getLog(this.id);
-    if (log.isErr() || this.closed) return;
-    await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+  private async resync(retrying = false): Promise<void> {
+    if (this.closed) return;
+    if (!retrying) {
+      clearTimeout(this.resyncTimer);
+      this.resyncRetry = 0;
+    }
+    this.resyncRequested = true;
+    if (!this.ready || this.syncing) return;
+    this.syncing = true;
+    this.ready = false;
+    let failed = false;
+    try {
+      do {
+        this.resyncRequested = false;
+        let log: Awaited<SessionLogWatch['fetched']> | undefined;
+        try {
+          log = await watchAgentSessionLog(this.id, 'network-only').fetched;
+        } catch (error: unknown) {
+          failed = !inaccessible(error);
+        }
+        if (this.closed) return;
+        if (log) {
+          await this.apply([{ kind: 'snapshot', rows: log.rows }]);
+          this.resyncRetry = 0;
+        }
+      } while (this.resyncRequested);
+    } catch (error: unknown) {
+      failed = true;
+      console.warn('[agent-session] log could not be refreshed', error);
+    } finally {
+      // A snapshot may predate frames received during its fetch. Replay those
+      // frames after it, retaining speculation and the fold's overlap deduping.
+      await this.drainBuffered();
+      this.syncing = false;
+      if (!this.closed && this.resyncRequested) {
+        void this.resync(true);
+      } else if (!this.closed && failed) {
+        const delay = RESYNC_RETRY_DELAYS_MS[this.resyncRetry++];
+        if (delay !== undefined)
+          this.resyncTimer = setTimeout(() => void this.resync(true), delay);
+      }
+    }
+  }
+
+  private async drainBuffered(): Promise<void> {
+    while (!this.closed && this.buffered.length > 0) {
+      const inputs = this.buffered;
+      this.buffered = [];
+      await this.apply(inputs);
+    }
+    // No await between observing an empty buffer and accepting live inputs.
+    if (!this.closed) this.ready = true;
   }
 
   private enqueue(input: FoldInput): Promise<void> {
@@ -401,12 +693,26 @@ export class AgentSession {
   }
 
   private apply(inputs: FoldInput[]): Promise<void> {
+    // Taken now, not after the chain: waiting for earlier pushes is part of
+    // what a prompt's fold stage costs.
+    const pushed = inputs.flatMap((input) =>
+      input.kind === 'confirmed' ? [input.row] : []
+    );
+    const snapshot = inputs.find((input) => input.kind === 'snapshot');
+    const delivery =
+      pushed.length > 0
+        ? frameDelivery('socket', pushed)
+        : snapshot && frameDelivery('snapshot', snapshot.rows);
     const run = this.chain.then(async () => {
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);
       if (this.closed || events.length === 0) return;
       const metadata = events.findLast((event) => event.kind === 'metadata');
       if (metadata) this.setTurn(metadata.metadata.turn);
+      for (const prompt of this.prompts) {
+        prompt.observe(events, delivery);
+        if (prompt.ended) this.prompts.delete(prompt);
+      }
       for (const listener of this.listeners) listener(events);
     });
     // A failed push must not poison the chain for every input after it.

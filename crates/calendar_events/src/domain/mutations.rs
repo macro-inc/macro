@@ -459,7 +459,7 @@ where
         }
     }
 
-    #[tracing::instrument(skip(self, requester_id), err)]
+    #[tracing::instrument(skip(self, requester_id, responding_email), err)]
     async fn respond_to_event(
         &self,
         requester_id: &str,
@@ -467,6 +467,7 @@ where
         calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
+        responding_email: Option<String>,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let target = self
             .resolve_mutation_target(requester_id, event_id, calendar_id)
@@ -477,6 +478,14 @@ where
         let Some(actor) = target.actor.as_ref() else {
             return Err(CalendarMutationError::NotAttendee);
         };
+        let selected_actor = responding_email
+            .as_deref()
+            .map(|email| {
+                actor
+                    .select(email)
+                    .ok_or(CalendarMutationError::NotAttendee)
+            })
+            .transpose()?;
         let access_token = self.fetch_token(&target.token_identity).await?;
         let outcome = self
             .provider
@@ -484,7 +493,7 @@ where
                 &access_token,
                 &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
                 target.master_provider_event_id(),
-                actor,
+                selected_actor.as_ref().unwrap_or(actor),
                 response,
                 &scope,
             )
@@ -775,7 +784,7 @@ fn provider_error(error: GoogleProviderError) -> CalendarMutationError {
         GoogleProviderErrorKind::Transient | GoogleProviderErrorKind::SyncTokenExpired => {
             CalendarMutationError::Retryable(error.to_string())
         }
-        GoogleProviderErrorKind::Permanent => {
+        GoogleProviderErrorKind::Permanent | GoogleProviderErrorKind::PushUnsupported => {
             CalendarMutationError::ProviderRejected(error.to_string())
         }
     }
@@ -787,3 +796,50 @@ fn internal(error: rootcause::Report) -> CalendarMutationError {
 
 #[cfg(test)]
 mod test;
+
+impl<R, G, T, B, N> super::ports::CalendarCreationRecoveryService
+    for CalendarMutationServiceImpl<R, G, T, B, N>
+where
+    R: CalendarRepository,
+    G: GoogleCalendarMutationProvider,
+    T: CalendarAccessTokenProvider,
+    B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
+{
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn delete_created_event(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        creation_key: Uuid,
+    ) -> Result<(), CalendarMutationError> {
+        // Resolve current access rather than interpreting an inaccessible canonical event as gone.
+        let target = self
+            .repository
+            .get_creation_target(requester_id, None, Some(calendar_id))
+            .await
+            .map_err(internal)?
+            .ok_or(CalendarMutationError::NoWritableCalendar)?;
+        if target.is_read_only {
+            return Err(CalendarMutationError::ReadOnly);
+        }
+        let access_token = self.fetch_token(&target.token_identity).await?;
+        let provider_id = super::models::creation_provider_id(creation_key, &target.owner_id);
+        self.provider
+            .delete_event(
+                &access_token,
+                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
+                &provider_id,
+            )
+            .await
+            .map_err(provider_error)?;
+        let retired = self
+            .repository
+            .remove_google_source(target.account_id, target.calendar_id, &provider_id)
+            .await
+            .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
+        self.announce_retirements(&target.owner_id, target.email_link_id, retired)
+            .await;
+        Ok(())
+    }
+}

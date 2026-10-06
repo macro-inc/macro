@@ -3,7 +3,6 @@ import CloseIcon from '@phosphor/x.svg';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
 import type { ConfirmDialogProps } from '@ui/components/ConfirmDialog';
-import { cn } from '@ui/utils/classname';
 import { createUniqueId, Show } from 'solid-js';
 import { MobileDrawer } from './MobileDrawer';
 
@@ -41,7 +40,7 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
               variant="ghost"
               size="icon-lg"
               aria-label="Close confirmation"
-              class="rounded-full bg-ink/6"
+              class="bg-ink/6"
               disabled={props.pending}
               onClick={close}
             >
@@ -60,23 +59,16 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
             <Button
               variant="ghost"
               size="xl"
-              class="min-w-0 flex-1 rounded-full bg-ink/6"
+              class="min-w-0 flex-1"
               disabled={props.pending}
               onClick={close}
             >
               {props.cancelLabel ?? 'Cancel'}
             </Button>
             <Button
-              variant="ghost"
+              variant="strong"
               size="xl"
-              class={cn(
-                'min-w-0 flex-1 rounded-full',
-                props.tone === 'danger'
-                  ? 'bg-failure-bg text-failure'
-                  : props.tone === 'success'
-                    ? 'bg-success-bg text-success'
-                    : 'bg-accent-bg text-accent'
-              )}
+              class="min-w-0 flex-1"
               disabled={props.pending}
               onClick={() => !props.pending && props.onConfirm()}
             >

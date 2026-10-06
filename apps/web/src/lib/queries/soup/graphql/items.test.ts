@@ -75,6 +75,10 @@ vi.mock('@queries/client', async () => {
 });
 
 import { queryClient } from '@queries/client';
+import {
+  delegateChannelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from '../../channel/notification-refresh';
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
 import { createGraphqlSoupAstItemsQuery } from './items';
 import {
@@ -89,9 +93,11 @@ type FakeExecution = {
   next(
     data: unknown,
     metadata?: {
-      source: 'live-network' | 'normalized-cache-hit';
+      source: 'live-network' | 'normalized-cache-hit' | 'affected-cache-reread';
       revision?: string;
-    }
+      persistence?: Promise<string | undefined>;
+    },
+    error?: CombinedError
   ): void;
 };
 
@@ -138,11 +144,13 @@ function makeFakeClient(): {
         subject.next({ operation, error, stale: false, hasNext: false }),
       next: (
         data,
-        metadata = { source: 'live-network', revision: REVISION_1 }
+        metadata = { source: 'live-network', revision: REVISION_1 },
+        error
       ) =>
         subject.next({
           operation,
           data,
+          error,
           extensions: { __macroNormalizedCache: metadata },
           stale: false,
           hasNext: false,
@@ -159,6 +167,16 @@ function makeFakeClient(): {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('createGraphqlSoupAstItemsQuery', () => {
   beforeEach(() => {
     queryClient.clear();
@@ -168,6 +186,444 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     getGraphqlSoupCacheHostMock.mockReturnValue(undefined);
     makeGraphqlSoupInputMock.mockReturnValue({
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+    });
+  });
+
+  describe('cached response errors before local reconciliation', () => {
+    function fixture() {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const local = deferred<unknown>();
+      let resetGeneration = () => {};
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => REVISION_0,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: (callback: () => void) => {
+          resetGeneration = callback;
+          return () => {};
+        },
+      });
+      entityFilterMock.mockReturnValue(local.promise);
+      const [limit, setLimit] = createSignal(50);
+      makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+        cursor ? { continuation: { cursor } } : { initial: { limit: limit() } }
+      );
+      const root = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({
+            enabled: true,
+            projection: 'channel-list',
+            keepPreviousData: true,
+          })
+        ),
+      }));
+      const error = new CombinedError({
+        networkError: new TypeError('Failed to fetch'),
+      });
+      return {
+        ...root,
+        fake,
+        error,
+        setLimit,
+        resetGeneration: () => resetGeneration(),
+        cached(empty = false, failure?: CombinedError) {
+          fake.executions.at(-1)!.next(
+            graphqlSoupPage({
+              items: empty ? [] : [{ id: 'cached-channel' }],
+              next_cursor: 'next',
+            }),
+            { source: 'normalized-cache-hit', revision: REVISION_0 },
+            failure
+          );
+        },
+        dispose() {
+          root.dispose();
+          local.resolve({ kind: 'unsupported' });
+        },
+      };
+    }
+
+    it.each([false, true])(
+      'keeps cached results quiet while reconciliation is pending (empty=%s)',
+      (empty) => {
+        const f = fixture();
+        try {
+          f.cached(empty);
+          f.fake.executions[0].fail(f.error);
+          expect(f.query.data()?.entities).toHaveLength(empty ? 0 : 1);
+          expect(f.query.error()).toBeUndefined();
+        } finally {
+          f.dispose();
+        }
+      }
+    );
+
+    it('clears an early failure when a delayed cache hit carries the same error', () => {
+      const f = fixture();
+      try {
+        f.fake.executions[0].fail(f.error);
+        expect(f.query.error()).toBe(f.error);
+        expect(f.query.data()).toBeUndefined();
+        f.cached(false, f.error);
+        expect(f.query.data()?.entities).toHaveLength(1);
+        expect(f.query.error()).toBeUndefined();
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('does not use retained data from other filters or a reset cache generation', () => {
+      const f = fixture();
+      try {
+        f.cached();
+        f.setLimit(20);
+        f.fake.executions.at(-1)!.fail(f.error);
+        expect(f.query.error()).toBe(f.error);
+        f.cached(false, f.error);
+        expect(f.query.error()).toBeUndefined();
+        f.resetGeneration();
+        expect(f.query.error()).toBe(f.error);
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('keeps a failed load-more request visible despite cached earlier pages', async () => {
+      const f = fixture();
+      try {
+        f.cached();
+        const more = f.query.fetchNextPage();
+        f.fake.executions.at(-1)!.fail(f.error);
+        await more;
+        expect(f.query.data()?.entities).toHaveLength(1);
+        expect(f.query.error()).toBe(f.error);
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it.each([
+      new CombinedError({ graphQLErrors: ['Forbidden'] }),
+      new CombinedError({
+        networkError: new TypeError('Failed to fetch'),
+        graphQLErrors: ['Resolver failed'],
+      }),
+      ...[401, 403, 503].map(
+        (status) =>
+          new CombinedError({
+            networkError: new Error('HTTP failure'),
+            response: { status },
+          })
+      ),
+    ])('does not suppress server errors with cached data: %s', (error) => {
+      const f = fixture();
+      try {
+        f.cached(false, error);
+        expect(f.query.error()).toBe(error);
+      } finally {
+        f.dispose();
+      }
+    });
+  });
+
+  describe('mixed folder contents', () => {
+    const excludedId = '00000000-0000-0000-0000-000000000000';
+    const item = (id: string, __typename = 'GraphqlSoupDocument') => ({
+      id,
+      __typename,
+      projectId: 'folder-a',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-02T00:00:00Z',
+    });
+
+    function fixture(localItems = [item('cached-document')]) {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_0;
+      let notify: (revision: string) => void = () => {};
+      const [folder, setFolder] = createSignal('folder-a');
+      const filters = () => ({
+        documentFilter: { literal: { projectId: folder() } },
+        chatFilter: { literal: { projectId: folder() } },
+        projectFilter: { literal: { projectId: folder() } },
+        emailFilter: { tree: { literal: { projectId: folder() } } },
+      });
+      makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+        cursor
+          ? { continuation: { cursor } }
+          : {
+              initial: {
+                filters: filters(),
+                emailView: 'ALL',
+                sortMethod: 'UPDATED_AT',
+                limit: 100,
+              },
+            }
+      );
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: typeof notify) => {
+          notify = callback;
+          return () => {};
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      entityFilterMock.mockImplementation(async () => ({
+        kind: 'reconciled',
+        revision,
+        keys: localItems.map((record) => `${record.__typename}:${record.id}`),
+        retainedKeys: [],
+        optimistic: false,
+      }));
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: localItems.map((record) => ({
+          recordKey: `${record.__typename}:${record.id}`,
+          record,
+        })),
+      }));
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true, localReconciliation: 'without-email' })
+        ),
+      }));
+      return {
+        fake,
+        query,
+        dispose,
+        filters,
+        setFolder,
+        ids: () => query.data()?.entities.map((entity) => entity.id),
+        push: () => {
+          revision = String(Number(revision) + 1);
+          notify(revision);
+        },
+      };
+    }
+
+    it('hydrates a never-visited folder without waiting for its mixed GraphQL response', async () => {
+      const f = fixture([
+        item('document'),
+        item('chat', 'GraphqlSoupChat'),
+        item('subfolder', 'GraphqlSoupProject'),
+      ]);
+      try {
+        await vi.waitFor(() =>
+          expect(f.ids()).toEqual(['document', 'chat', 'subfolder'])
+        );
+        expect(f.query.isLoading()).toBe(false);
+        expect(f.query.isFetching()).toBe(true);
+        expect(f.query.hasNextPage()).toBe(false);
+        expect(f.fake.executions).toHaveLength(1);
+        expect(f.fake.executions[0].variables).toMatchObject({
+          input: { initial: { filters: f.filters(), emailView: 'ALL' } },
+        });
+        expect(entityFilterMock).toHaveBeenCalledWith({
+          filters: {
+            ...f.filters(),
+            emailFilter: { tree: { literal: { threadId: excludedId } } },
+          },
+          sortMethod: 'UPDATED_AT',
+          sortDirection: 'DESC',
+          limit: 100,
+          baseline: [],
+        });
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('retains server email and cursors across local reconciliation and later pages', async () => {
+      const f = fixture();
+      const email = item('email', 'GraphqlSoupEmailThread');
+      const olderEmail = item('older-email', 'GraphqlSoupEmailThread');
+      try {
+        await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+        f.fake.executions[0].next(
+          graphqlSoupPage({
+            items: [item('server-document'), email],
+            next_cursor: 'page-2',
+          }),
+          { source: 'normalized-cache-hit' }
+        );
+        f.push();
+        await vi.waitFor(() =>
+          expect(f.ids()).toEqual(['cached-document', 'email'])
+        );
+        expect(entityFilterMock.mock.lastCall?.[0].baseline).toEqual([
+          {
+            key: 'GraphqlSoupDocument:server-document',
+            sortTimestamp: '2026-01-02T00:00:00Z',
+          },
+        ]);
+        expect(f.query.hasNextPage()).toBe(true);
+        const next = f.query.fetchNextPage();
+        expect(f.fake.executions[1].variables).toEqual({
+          input: { continuation: { cursor: 'page-2' } },
+        });
+        f.fake.executions[1].next(
+          graphqlSoupPage({ items: [olderEmail], next_cursor: null }),
+          { source: 'normalized-cache-hit' }
+        );
+        await next;
+        await vi.waitFor(() =>
+          expect(f.ids()).toEqual(['cached-document', 'email', 'older-email'])
+        );
+        expect(f.query.hasNextPage()).toBe(false);
+        const refresh = f.query.refresh();
+        f.fake.executions[2].next(
+          graphqlSoupPage({ items: [email], next_cursor: null })
+        );
+        await refresh;
+        expect(f.ids()).toEqual(['email']);
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it.each(['email-only', 'network-error'] as const)(
+      'does not mistake an empty partial projection for an empty folder: %s',
+      async (outcome) => {
+        const f = fixture([]);
+        try {
+          await vi.waitFor(() =>
+            expect(readRecordsByKeysMock).toHaveBeenCalled()
+          );
+          expect(f.query.data()).toBeUndefined();
+          expect(f.query.isLoading()).toBe(true);
+          if (outcome === 'network-error') {
+            const error = new CombinedError({
+              networkError: new Error('offline'),
+            });
+            f.fake.executions[0].fail(error);
+            expect(f.query.error()).toBe(error);
+            expect(f.query.data()).toBeUndefined();
+          } else {
+            f.fake.executions[0].next(
+              graphqlSoupPage({
+                items: [item('email', 'GraphqlSoupEmailThread')],
+                next_cursor: null,
+              })
+            );
+            expect(f.ids()).toEqual(['email']);
+          }
+        } finally {
+          f.dispose();
+        }
+      }
+    );
+
+    it.each([false, true])(
+      'requires visible local rows before suppressing loading/errors unless server data exists: %s',
+      async (hasServerData) => {
+        const f = fixture();
+        const deletion = createGraphqlSoupDeletion(['cached-document']);
+        const pending = deferred<void>();
+        const mutation = queryClient.getMutationCache().build(queryClient, {
+          mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+          onMutate: () => ({ graphqlDeletion: deletion }),
+          mutationFn: () => pending.promise,
+          onSettled: () => deletion.release(),
+        });
+        let completion: Promise<void> | undefined;
+        try {
+          await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+          if (hasServerData) {
+            f.fake.executions[0].next(
+              graphqlSoupPage({
+                items: [item('cached-document')],
+                next_cursor: null,
+              }),
+              { source: 'normalized-cache-hit' }
+            );
+          }
+          completion = mutation.execute(undefined);
+          await vi.waitFor(() =>
+            expect(mutation.state.context?.graphqlDeletion).toBe(deletion)
+          );
+          await vi.waitFor(() =>
+            expect(f.ids()).toEqual(hasServerData ? [] : undefined)
+          );
+          expect(f.query.isLoading()).toBe(!hasServerData);
+
+          const error = new CombinedError({
+            networkError: new Error('offline'),
+          });
+          f.fake.executions[0].fail(error);
+          expect(f.query.error()).toBe(hasServerData ? undefined : error);
+          expect(f.ids()).toEqual(hasServerData ? [] : undefined);
+
+          // Releasing the deletion makes the cached projection usable again.
+          deletion.release();
+          await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+          expect(f.query.error()).toBeUndefined();
+          expect(f.query.isLoading()).toBe(false);
+        } finally {
+          pending.resolve();
+          await completion;
+          deletion.release();
+          f.dispose();
+        }
+      }
+    );
+
+    it('keeps a partial projection usable when only some cached rows are pending deletion', async () => {
+      const f = fixture([item('deleted'), item('visible')]);
+      const deletion = createGraphqlSoupDeletion(['deleted']);
+      const pending = deferred<void>();
+      const mutation = queryClient.getMutationCache().build(queryClient, {
+        mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+        onMutate: () => ({ graphqlDeletion: deletion }),
+        mutationFn: () => pending.promise,
+        onSettled: () => deletion.release(),
+      });
+      let completion: Promise<void> | undefined;
+      try {
+        await vi.waitFor(() => expect(f.ids()).toEqual(['deleted', 'visible']));
+        completion = mutation.execute(undefined);
+        await vi.waitFor(() => expect(f.ids()).toEqual(['visible']));
+        expect(f.query.isLoading()).toBe(false);
+        f.fake.executions[0].fail(
+          new CombinedError({ networkError: new Error('offline') })
+        );
+        expect(f.query.error()).toBeUndefined();
+        expect(f.ids()).toEqual(['visible']);
+      } finally {
+        pending.resolve();
+        await completion;
+        deletion.release();
+        f.dispose();
+      }
+    });
+
+    it('does not leak local members across folders while a new projection is pending', async () => {
+      const f = fixture();
+      const pending = deferred<unknown>();
+      try {
+        await vi.waitFor(() => expect(f.ids()).toEqual(['cached-document']));
+        entityFilterMock.mockImplementation(() => pending.promise);
+        f.setFolder('folder-b');
+        expect(f.query.data()).toBeUndefined();
+        expect(f.query.isLoading()).toBe(true);
+        await vi.waitFor(() =>
+          expect(entityFilterMock.mock.lastCall?.[0].filters).toMatchObject({
+            documentFilter: { literal: { projectId: 'folder-b' } },
+          })
+        );
+        f.fake.executions[0].next(
+          graphqlSoupPage({ items: [item('late-folder-a')], next_cursor: null })
+        );
+        expect(f.query.data()).toBeUndefined();
+      } finally {
+        f.dispose();
+        pending.resolve({ kind: 'unsupported' });
+      }
     });
   });
 
@@ -246,6 +702,73 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     } finally {
       dispose();
+    }
+  });
+
+  it('keeps loaded channel pages registered for retry after a transient refresh failure', async () => {
+    vi.useFakeTimers();
+    const visibility = vi
+      .spyOn(document, 'hidden', 'get')
+      .mockReturnValue(false);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+      cursor ? { continuation: { cursor } } : { initial: { limit: 50 } }
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, projection: 'channel-list' })
+      ),
+    }));
+    const error = new CombinedError({ networkError: new Error('offline') });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const pageData = graphqlSoupPage({ items: [], next_cursor: null });
+    const refresh = vi
+      .fn()
+      .mockReturnValueOnce({
+        toPromise: async () => {
+          fake.executions[1].fail(error);
+          return { error };
+        },
+      })
+      .mockReturnValue({
+        toPromise: async () => {
+          fake.executions[1].next(pageData);
+          return { data: pageData };
+        },
+      });
+    fake.client.query = refresh as unknown as Client['query'];
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'next' })
+      );
+      const more = query.fetchNextPage();
+      fake.executions[1].next(pageData);
+      await more;
+      const page = getActiveGraphqlSoupRevalidations().find(
+        (entry) => entry.variables?.input?.continuation?.cursor === 'next'
+      )!;
+      expect(delegateChannelNotificationRefresh(fake.client, page)).toBe(true);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(refresh).toHaveBeenCalledOnce();
+      // The refresh still retries, but its failure does not warn over a cached page.
+      expect(query.error()).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(refresh).toHaveBeenCalledTimes(2);
+      expect(refresh).toHaveBeenLastCalledWith(page.document, page.variables, {
+        requestPolicy: 'network-only',
+      });
+      expect(query.error()).toBeUndefined();
+      query.resetToInitialPage();
+      expect(delegateChannelNotificationRefresh(fake.client, page)).toBe(false);
+    } finally {
+      dispose();
+      disposeChannelNotificationRefresh(fake.client);
+      warn.mockRestore();
+      visibility.mockRestore();
+      vi.useRealTimers();
     }
   });
 
@@ -727,6 +1250,134 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('accepts a coherent Mail page at a newer revision without repeating the filter scan', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      // Background hydration can advance the engine without a foreground push.
+      currentRevision: vi
+        .fn()
+        .mockResolvedValueOnce(REVISION_0)
+        .mockResolvedValue(REVISION_2),
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { emailView: 'ALL', sortMethod: 'UPDATED_AT', limit: 20 },
+    });
+    entityFilterMock.mockResolvedValue({
+      kind: 'mail-page',
+      revision: REVISION_2,
+      keys: [],
+      sortTimestamps: [],
+      nextCursor: null,
+      optimistic: false,
+    });
+    readRecordsByKeysMock.mockResolvedValue({
+      revision: REVISION_2,
+      records: [],
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      await vi.waitFor(() => expect(query.data()?.cachedMail).toBe(true));
+      expect(entityFilterMock).toHaveBeenCalledTimes(1);
+      expect(readRecordsByKeysMock).toHaveBeenCalledTimes(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps a newer non-Mail reconciliation authoritative after reconnect', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = REVISION_1;
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    entityFilterMock.mockImplementation(async () => ({
+      kind: 'reconciled',
+      revision,
+      keys: ['GraphqlSoupDocument:item-0'],
+      retainedKeys: [],
+      optimistic: false,
+    }));
+    readRecordsByKeysMock.mockImplementation(async () => ({
+      revision,
+      records: [
+        {
+          recordKey: 'GraphqlSoupDocument:item-0',
+          record: {
+            id: 'item-0',
+            type: 'document',
+            name: 'Hydrated local item',
+          },
+        },
+      ],
+    }));
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const names = () => query.data()?.entities.map((item) => item.name);
+    const page = (name: string) =>
+      graphqlSoupPage({
+        items: [{ id: 'item-0', type: 'document', name }],
+        next_cursor: null,
+      });
+    try {
+      fake.executions[0].next(page('Old network item'), {
+        source: 'live-network',
+        revision: REVISION_1,
+      });
+      await vi.waitFor(() => expect(names()).toEqual(['Old network item']));
+
+      // Hydration advances storage without notifying foreground readers.
+      revision = REVISION_2;
+      online.mockReturnValue(false);
+      window.dispatchEvent(new Event('offline'));
+      await vi.waitFor(() => expect(names()).toEqual(['Hydrated local item']));
+      expect(entityFilterMock.mock.calls.at(-1)?.[0]).toHaveProperty(
+        'baseline'
+      );
+      expect(entityFilterMock.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+        'mail'
+      );
+
+      online.mockReturnValue(true);
+      window.dispatchEvent(new Event('online'));
+      // Neither the synchronous publication nor a completed follow-up may
+      // restore revision 1 merely because connectivity returned.
+      expect(names()).toEqual(['Hydrated local item']);
+      await vi.waitFor(() => expect(names()).toEqual(['Hydrated local item']));
+      expect(fake.executions).toHaveLength(1);
+
+      // A genuinely newer network snapshot must still take authority.
+      revision = '3';
+      fake.executions[0].next(page('Fresh network item'), {
+        source: 'live-network',
+        revision,
+      });
+      await vi.waitFor(() => expect(names()).toEqual(['Fresh network item']));
+    } finally {
+      dispose();
+      online.mockRestore();
+    }
+  });
+
   it('paginates never-visited Mail filters offline without a server cursor or stale preview timestamps', async () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     const fake = makeFakeClient();
@@ -919,6 +1570,12 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           });
           fake.executions[0].fail(unauthorized);
           expect(query.error()).toBe(unauthorized);
+          const unavailable = new CombinedError({
+            networkError: new Error('HTTP 503'),
+            response: { status: 503 },
+          });
+          fake.executions[0].fail(unavailable);
+          expect(query.error()).toBe(unavailable);
         } else {
           expect(query.data()?.cachedMail).not.toBe(true);
           expect(query.error()).toBe(offlineError);
@@ -1005,6 +1662,125 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       } finally {
         dispose();
         online.mockRestore();
+      }
+    }
+  );
+
+  it.each([
+    { emailView: 'INBOX', networkFirst: false, delayed: true },
+    { emailView: 'DRAFTS', networkFirst: false, delayed: true },
+    { emailView: 'INBOX', networkFirst: false },
+    { emailView: 'DRAFTS', networkFirst: false },
+    { emailView: 'INBOX', networkFirst: true },
+    { emailView: 'DRAFTS', networkFirst: true },
+  ])(
+    'keeps a restored queued draft visible in $emailView (network first: $networkFirst, delayed: $delayed)',
+    async ({ emailView, networkFirst, delayed }) => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_0;
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { emailView, sortMethod: 'UPDATED_AT', limit: 20 },
+      });
+      const preview = {
+        id: 'draft-message',
+        subject: 'Offline draft',
+        snippet: 'Keep me',
+        isDraft: true,
+        senderEmail: null,
+        senderName: null,
+        senderPhotoUrl: null,
+      };
+      entityFilterMock.mockImplementation(async () => ({
+        kind: 'mail-page',
+        revision,
+        keys: ['GraphqlSoupEmailThread:local-draft'],
+        sortTimestamps: ['2026-09-28T12:00:00Z'],
+        nextCursor: null,
+        optimistic: revision !== REVISION_2,
+      }));
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: [
+          {
+            recordKey: 'GraphqlSoupEmailThread:local-draft',
+            record: {
+              __typename: 'GraphqlSoupEmailThread',
+              id: 'local-draft',
+              mailAllPreview: preview,
+              mailDraftPreview: preview,
+              mailSentPreview: null,
+            },
+          },
+        ],
+      }));
+      let dispose!: () => void;
+      let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+      createRoot((stop) => {
+        dispose = stop;
+        query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true })
+        );
+      });
+      try {
+        if (networkFirst) {
+          fake.executions[0].next(
+            graphqlSoupPage({ items: [], next_cursor: null }),
+            { source: 'live-network', revision }
+          );
+        }
+        await vi.waitFor(() =>
+          expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+            'local-draft',
+          ])
+        );
+        const write = deferred<string | undefined>();
+        revision = REVISION_1;
+        fake.executions[0].next(
+          graphqlSoupPage({ items: [], next_cursor: null }),
+          delayed
+            ? { source: 'live-network', persistence: write.promise }
+            : { source: 'live-network', revision }
+        );
+        // Keep the pending draft even before evaluation of the new revision.
+        expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+          'local-draft',
+        ]);
+        write.resolve(revision);
+        await vi.waitFor(() => expect(query.localRevision?.()).toBe(revision));
+        await vi.waitFor(() =>
+          expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+            'local-draft',
+          ])
+        );
+        expect(query.data()?.cachedMail).toBe(true);
+
+        // Once the write settles, the fresh server page takes over even if
+        // an old local row remains. Pending preservation must not retain ghosts.
+        revision = REVISION_2;
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [{ id: 'server-draft' }],
+            next_cursor: null,
+          }),
+          { source: 'live-network', revision }
+        );
+        await vi.waitFor(() =>
+          expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+            'server-draft',
+          ])
+        );
+        expect(query.data()?.cachedMail).not.toBe(true);
+      } finally {
+        dispose();
       }
     }
   );
@@ -1175,6 +1951,270 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           });
       });
     });
+  });
+
+  describe('network publication before persistence', () => {
+    function fixture() {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_0;
+      let notify: (revision: string) => void = () => {};
+      let notifyGeneration: () => void = () => {};
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: typeof notify) => {
+          notify = callback;
+          return () => {};
+        },
+        onCacheGenerationChanged: (callback: typeof notifyGeneration) => {
+          notifyGeneration = callback;
+          return () => {};
+        },
+      });
+      entityFilterMock.mockImplementation(async () => ({
+        kind: 'reconciled',
+        revision,
+        keys: ['GraphqlSoupDocument:item-0'],
+        retainedKeys: [],
+        optimistic: true,
+      }));
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: [
+          {
+            recordKey: 'GraphqlSoupDocument:item-0',
+            record: {
+              id: 'item-0',
+              type: 'document',
+              name: `Local ${revision}`,
+            },
+          },
+        ],
+      }));
+      makeGraphqlSoupInputMock.mockImplementation(({ params, cursor }) =>
+        cursor
+          ? { continuation: { cursor } }
+          : {
+              initial: {
+                limit: 50,
+                sortMethod: 'UPDATED_AT',
+                sortDirection: params.sort_direction === 'asc' ? 'ASC' : 'DESC',
+              },
+            }
+      );
+      const root = createRoot((dispose) => {
+        const [sort, setSort] = createSignal<'asc' | 'desc'>('desc');
+        const query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: { sort_direction: sort() }, body: {} }),
+          () => ({ enabled: true })
+        );
+        return { dispose, query, setSort };
+      });
+      return {
+        ...root,
+        fake,
+        names: () => root.query.data()?.entities.map((entity) => entity.name),
+        push: (next: string) => {
+          revision = next;
+          notify(next);
+        },
+        replace: () => {
+          revision = REVISION_0;
+          notifyGeneration();
+        },
+        page: (
+          name: string,
+          next_cursor: string | null = null,
+          id = 'item-0'
+        ) =>
+          graphqlSoupPage({
+            items: [{ id, type: 'document', name }],
+            next_cursor,
+          }),
+      };
+    }
+
+    it('shows network rows immediately and resumes local reconciliation after acknowledgement', async () => {
+      const f = fixture();
+      const write = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('Network'), {
+          source: 'live-network',
+          persistence: write.promise,
+        });
+        expect(f.names()).toEqual(['Network']);
+        expect(f.query.isLoading()).toBe(false);
+        await Promise.resolve();
+        expect(entityFilterMock).not.toHaveBeenCalled();
+        write.resolve(REVISION_1);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['Network']);
+        expect(entityFilterMock).not.toHaveBeenCalled();
+        f.push(REVISION_2);
+        await vi.waitFor(() => expect(f.names()).toEqual(['Local 2']));
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('does not rewind an optimistic revision that arrives before acknowledgement', async () => {
+      const f = fixture();
+      const write = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('Network'), {
+          source: 'live-network',
+          persistence: write.promise,
+        });
+        f.push(REVISION_2);
+        expect(f.names()).toEqual(['Network']);
+        write.resolve(REVISION_1);
+        await vi.waitFor(() => expect(f.names()).toEqual(['Local 2']));
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('does not reassert network authority over a newer affected cache result', async () => {
+      const f = fixture();
+      const write = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('Network'), {
+          source: 'live-network',
+          persistence: write.promise,
+        });
+        f.push(REVISION_2);
+        f.fake.executions[0].next(f.page('Optimistic'), {
+          source: 'affected-cache-reread',
+        });
+        await vi.waitFor(() => expect(f.names()).toEqual(['Local 2']));
+        write.resolve(REVISION_1);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['Local 2']);
+        f.push('3');
+        await vi.waitFor(() => expect(f.names()).toEqual(['Local 3']));
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it.each(['failed', 'rejected'] as const)(
+      'keeps successful network rows when persistence is %s',
+      async (outcome) => {
+        const f = fixture();
+        const write = deferred<string | undefined>();
+        try {
+          f.fake.executions[0].next(f.page('Network'), {
+            source: 'live-network',
+            persistence: write.promise,
+          });
+          if (outcome === 'failed') write.resolve(undefined);
+          else write.reject(new Error('cache unavailable'));
+          await Promise.resolve();
+          f.push(REVISION_1);
+          await Promise.resolve();
+          expect(f.names()).toEqual(['Network']);
+          expect(f.query.isLoading()).toBe(false);
+          expect(entityFilterMock).not.toHaveBeenCalled();
+          f.fake.executions[0].next(f.page('Recovered cache'), {
+            source: 'normalized-cache-hit',
+          });
+          await vi.waitFor(() => expect(f.names()).toEqual(['Local 1']));
+        } finally {
+          f.dispose();
+        }
+      }
+    );
+
+    it('ignores an older acknowledgement while a newer network page is pending', async () => {
+      const f = fixture();
+      const first = deferred<string | undefined>();
+      const second = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('First'), {
+          source: 'live-network',
+          persistence: first.promise,
+        });
+        f.fake.executions[0].next(f.page('Second'), {
+          source: 'live-network',
+          persistence: second.promise,
+        });
+        first.resolve(REVISION_1);
+        f.push(REVISION_1);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['Second']);
+        expect(entityFilterMock).not.toHaveBeenCalled();
+        second.resolve(REVISION_2);
+        f.push(REVISION_2);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['Second']);
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('tracks continuation-page persistence independently of the first page', async () => {
+      const f = fixture();
+      const first = deferred<string | undefined>();
+      const second = deferred<string | undefined>();
+      try {
+        f.fake.executions[0].next(f.page('First', 'next'), {
+          source: 'live-network',
+          persistence: first.promise,
+        });
+        const next = f.query.fetchNextPage();
+        await vi.waitFor(() => expect(f.fake.executions).toHaveLength(2));
+        f.fake.executions[1].next(f.page('Second', null, 'item-1'), {
+          source: 'live-network',
+          persistence: second.promise,
+        });
+        await next;
+        expect(f.names()).toEqual(['First', 'Second']);
+        first.resolve(REVISION_1);
+        f.push(REVISION_1);
+        await Promise.resolve();
+        expect(entityFilterMock).not.toHaveBeenCalled();
+        expect(f.names()).toEqual(['First', 'Second']);
+        second.resolve(REVISION_2);
+        f.push(REVISION_2);
+        await Promise.resolve();
+        expect(f.names()).toEqual(['First', 'Second']);
+        expect(entityFilterMock).not.toHaveBeenCalled();
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it.each(['input', 'generation', 'dispose'] as const)(
+      'fences acknowledgements after a change of %s',
+      async (change) => {
+        const f = fixture();
+        const write = deferred<string | undefined>();
+        try {
+          f.fake.executions[0].next(f.page('Old input'), {
+            source: 'live-network',
+            persistence: write.promise,
+          });
+          if (change === 'dispose') f.dispose();
+          else {
+            if (change === 'input') f.setSort('asc');
+            else f.replace();
+            f.fake.executions.at(-1)!.next(f.page('Current cache'), {
+              source: 'normalized-cache-hit',
+            });
+            await vi.waitFor(() => expect(f.names()).toEqual(['Local 0']));
+          }
+          const calls = entityFilterMock.mock.calls.length;
+          write.resolve(REVISION_1);
+          await Promise.resolve();
+          await Promise.resolve();
+          expect(entityFilterMock).toHaveBeenCalledTimes(calls);
+          if (change !== 'dispose') expect(f.names()).toEqual(['Local 0']);
+        } finally {
+          f.dispose();
+        }
+      }
+    );
   });
 
   it('promotes realtime local revisions without a network rerun and fences stale generations', async () => {

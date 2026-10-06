@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    BoxError, EgressTarget, GitEndpoint, McpDestination, McpServerSlug, ProxyRequest,
-    ProxyResponse, SessionToken,
+    BoxError, CustomMcpServerKey, EgressTarget, GitEndpoint, McpDestination, McpServerSlug,
+    ProxyRequest, ProxyResponse, SessionToken,
 };
 use crate::domain::service::EgressService;
 
@@ -64,7 +64,9 @@ where
     Router::new()
         .route("/health", get(health))
         .route("/mcp/{slug}", any(mcp_handler::<Service>))
+        .route("/mcp-custom/{key}", any(custom_mcp_handler::<Service>))
         .route("/mcp-macro", any(macro_mcp_handler::<Service>))
+        .route("/mcp-preview", any(preview_mcp_handler::<Service>))
         .route(
             "/git/{*path}",
             get(git_handler::<Service>).post(git_handler::<Service>),
@@ -95,6 +97,31 @@ where
         .ok_or_else(|| EgressError::Unroutable(format!("{slug} is not a server name")))?;
 
     mcp_proxy(state, McpDestination::Connected(slug), request).await
+}
+
+/// One of the owner's custom servers, on its own route: a key is not a slug,
+/// and keeping the two apart means neither can be mistaken for the other.
+#[tracing::instrument(skip_all, err, fields(%key))]
+async fn custom_mcp_handler<Service>(
+    State(state): State<EgressRouterState<Service>>,
+    Path(key): Path<String>,
+    request: Request,
+) -> Result<Response, EgressError>
+where
+    Service: EgressService,
+{
+    let key = CustomMcpServerKey::parse(&key)
+        .ok_or_else(|| EgressError::Unroutable(format!("{key} is not a server key")))?;
+
+    mcp_proxy(state, McpDestination::Custom(key), request).await
+}
+
+#[tracing::instrument(skip_all, err)]
+async fn preview_mcp_handler<Service: EgressService>(
+    State(state): State<EgressRouterState<Service>>,
+    request: Request,
+) -> Result<Response, EgressError> {
+    mcp_proxy(state, McpDestination::Preview, request).await
 }
 
 /// Macro's own MCP server, on its own route rather than under `/mcp/{slug}`:
@@ -244,7 +271,9 @@ impl IntoResponse for EgressError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::Unauthenticated(_) | Self::SessionClosed => StatusCode::UNAUTHORIZED,
-            Self::UnknownServer(_) | Self::Unroutable(_) => StatusCode::NOT_FOUND,
+            Self::UnknownServer(_) | Self::UnknownCustomServer(_) | Self::Unroutable(_) => {
+                StatusCode::NOT_FOUND
+            }
             Self::RepoUnavailable(_) => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
@@ -267,7 +296,9 @@ impl IntoResponse for EgressError {
             }
             Self::SessionClosed => "This session is no longer open.",
             Self::Unroutable(_) => "Nothing is served at that path.",
-            Self::UnknownServer(_) => "No such connected MCP server.",
+            Self::UnknownServer(_) | Self::UnknownCustomServer(_) => {
+                "No such connected MCP server."
+            }
             Self::RepoUnavailable(_) => {
                 "This session's repository is not reachable with Macro's GitHub App."
             }

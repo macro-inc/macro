@@ -26,6 +26,7 @@ import {
   type PostMessage,
 } from '@service-storage/messages';
 import { useMutation } from '@tanstack/solid-query';
+import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
 import { MessageNonceKeys } from './keys';
@@ -40,7 +41,6 @@ import {
   markTopLevelMessageDeletedInTargetCaches,
   patchTargetMessage,
   removeMessageFromTargetCaches,
-  replaceTargetMessageId,
   resolveMessageTarget,
   restoreMessageInTargetCaches,
   softInvalidateTargetCaches,
@@ -233,28 +233,6 @@ export function rollbackInsertChannelMessage(
 }
 
 /**
- * Replace an optimistic message ID with the real server-assigned ID.
- * Called in mutation onSuccess after server returns the real message.
- */
-function replaceOptimisticMessage(
-  vars: WithParent<{
-    optimisticId: string;
-    realId: string;
-    threadId?: string;
-  }>
-): void {
-  replaceTargetMessageId(
-    vars.parent,
-    resolveMessageTarget({
-      parent: vars.parent,
-      messageId: vars.optimisticId,
-      threadId: vars.threadId,
-    }),
-    vars.realId
-  );
-}
-
-/**
  * Optimistically delete a message from the channel cache.
  *
  * A channel root with thread replies is soft-deleted in place (we set
@@ -278,14 +256,19 @@ export function optimisticDeleteMessage(
     target,
   };
 
-  if (target.kind === 'top_level' && vars.parent.type !== 'channel') {
+  if (
+    target.kind === 'top_level' &&
+    vars.parent.type !== 'channel' &&
+    vars.parent.type !== 'call'
+  ) {
     context.threadState = getCachedThreadState(vars.parent, target.messageId);
   }
 
   if (
     target.kind === 'top_level' &&
-    vars.parent.type === 'channel' &&
-    topLevelMessageHasReplies(vars.parent, target.messageId)
+    (vars.parent.type === 'call' ||
+      (vars.parent.type === 'channel' &&
+        topLevelMessageHasReplies(vars.parent, target.messageId)))
   ) {
     context.previousDeletedAt =
       getTopLevelMessageDeletedAt(vars.parent, target.messageId) ?? null;
@@ -403,10 +386,19 @@ export function rollbackUpdateMessage(
   });
 }
 
+/**
+ * Mint the id of a message about to be sent. The server stores it as the
+ * message id, so it must be a UUIDv7 stamped with the current time.
+ */
+export function newMessageId(): string {
+  return uuidv7();
+}
+
 type SendMessageParams = {
   parent: MessageParent;
   message: PostMessage;
   optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
+  /** From `newMessageId`; the message's final id, not a placeholder. */
   optimisticId: string;
   senderId: string;
 };
@@ -432,9 +424,11 @@ export function useSendMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
-      // Use optimisticId as nonce - allows server to echo it back for correlation
+      // The server keeps optimisticId as the message id, so the optimistic
+      // message never changes id; it is also the nonce the server echoes.
       return entityMessagesClient.post(vars.parent, {
         ...vars.message,
+        id: vars.optimisticId,
         nonce: vars.optimisticId,
       });
     },
@@ -468,14 +462,29 @@ export function useSendMessageMutation(
 
           return { insert, updatedAt };
         },
-        onSuccess(data, variables) {
-          const threadId = variables.message.thread_id ?? undefined;
-          replaceOptimisticMessage({
-            parent: variables.parent,
-            optimisticId: variables.optimisticId,
-            realId: data.id,
-            threadId,
-          });
+        onSuccess(data, variables, context) {
+          const threadId = data.thread_id ?? undefined;
+          // A server predating client-minted ids ignores `id` and mints its
+          // own. Rebuild the optimistic row under the server id so it keeps
+          // its thread state (including the anchor) and never holds a dead id;
+          // `applyMessage` below then settles it on the server's fields.
+          // A concurrent first call message may become a reply to the root
+          // another participant just created, while retaining its client id.
+          if (
+            (data.id !== variables.optimisticId ||
+              threadId !== (variables.message.thread_id ?? undefined)) &&
+            context?.insert
+          ) {
+            rollbackInsertChannelMessage(variables.parent, context.insert);
+            optimisticInsertMessage({
+              parent: variables.parent,
+              optimisticId: data.id,
+              senderId: variables.senderId,
+              optimisticAttachments: variables.optimisticAttachments,
+              ...variables.message,
+              thread_id: threadId,
+            });
+          }
 
           // Sending is a `messaged` activity server-side; stamp the touch now
           // so the Recent order moves the channel up without waiting on the
@@ -497,7 +506,7 @@ export function useSendMessageMutation(
               attachmentsLength: variables.message.attachments?.length ?? 0,
               isThreadReply: threadId !== undefined,
             });
-          applyMessage(data, 'edited');
+          applyMessage(data, 'posted');
         },
         onError(error, vars, context) {
           console.error('failed to send message', error);
@@ -507,13 +516,15 @@ export function useSendMessageMutation(
           }
           context?.updatedAt?.rollback();
         },
-        onSettled: (_data, _error, variables) => {
+        onSettled: (data, _error, variables) => {
           softInvalidateTargetCaches(
             variables.parent,
             resolveMessageTarget({
               parent: variables.parent,
-              messageId: variables.optimisticId,
-              threadId: variables.message.thread_id ?? undefined,
+              messageId: data?.id ?? variables.optimisticId,
+              threadId:
+                (data ? data.thread_id : variables.message.thread_id) ??
+                undefined,
             })
           );
         },
@@ -705,9 +716,22 @@ export function usePatchThreadMutation() {
       applyThreadState(input.parent, state);
       return state;
     },
-    onError: () => toast.failure('Could not update discussion'),
+    // Resolving collapses the card at once; a failure restores the prior state.
+    onMutate: (input) => {
+      const { resolved } = input.patch;
+      if (resolved == null) return;
+      const previous = getCachedThreadState(input.parent, input.rootId);
+      if (!previous || previous.resolved === resolved) return;
+      applyThreadState(input.parent, { ...previous, resolved });
+      return { previous };
+    },
+    onError: (_error, input, context) => {
+      if (context?.previous) applyThreadState(input.parent, context.previous);
+      toast.failure('Could not update discussion');
+    },
   }));
 }
+
 export function useDeleteThreadMutation() {
   return useMutation(() => ({
     mutationFn: async (input: { parent: MessageParent; rootId: string }) => {

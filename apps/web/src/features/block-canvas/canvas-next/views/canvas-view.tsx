@@ -1,3 +1,4 @@
+import { useSidePanel } from '@components/app/side-panel';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   alignCommand,
@@ -70,6 +71,7 @@ export function CanvasView(props: {
 }) {
   const state = props.state,
     editor = state.editor;
+  const sidePanel = useSidePanel();
   const layout = createMemo(() =>
     selectionLayoutInfo(state.snapshot(), state.selection())
   );
@@ -223,216 +225,217 @@ export function CanvasView(props: {
       data-canvas-next
     >
       <main class="relative size-full overflow-hidden">
-        <Layer depth={2}>
-          <aside
-            class="absolute bottom-4 right-4 top-4 z-30 flex w-64 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-lg"
-            aria-label="Canvas inspector"
-          >
-            <header class="flex h-10 shrink-0 items-center justify-between px-3">
-              <span class="text-xs font-medium">Design</span>
-              <CanvasViewControls
-                scale={state.camera().scale}
-                grid={state.grid()}
-                onGrid={state.setGrid}
-                onZoom={zoom}
-                onFit={fit}
-                snapMode={state.snapMode()}
-                onSnapMode={state.setSnapMode}
-              />
-            </header>
-            <Show
-              when={state.selection().length > 0}
-              fallback={
-                <p class="border-t border-edge-muted px-3 py-4 text-xs text-ink-muted">
-                  Select an object to edit its properties.
-                </p>
-              }
+        <Show when={!sidePanel?.isOpen()}>
+          <Layer depth={2}>
+            <aside
+              class="absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-64 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-lg"
+              style={{
+                height:
+                  state.selection().length > 0
+                    ? 'calc(100% - 2rem)'
+                    : undefined,
+              }}
+              aria-label="Canvas inspector"
             >
-              <div
-                class="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-edge-muted pb-4 [scrollbar-gutter:stable]"
-                data-canvas-inspector-scroll
-              >
-                <div class="border-b border-edge-muted px-3 py-3">
-                  <h1 class="text-xs font-medium capitalize">
-                    {state.selection().length > 1
-                      ? `${state.selection().length} selected`
-                      : (selectedItem()?.type ??
-                        (state.tool() === 'select' || state.tool() === 'pan'
-                          ? 'Canvas'
-                          : state.tool()))}
-                  </h1>
-                </div>
+              <header class="flex h-10 shrink-0 items-center justify-between px-3">
+                <span class="text-xs font-medium">Design</span>
+                <CanvasViewControls
+                  scale={state.camera().scale}
+                  grid={state.grid()}
+                  onGrid={state.setGrid}
+                  onZoom={zoom}
+                  onFit={fit}
+                  snapMode={state.snapMode()}
+                  onSnapMode={state.setSnapMode}
+                />
+              </header>
+              <Show when={state.selection().length > 0}>
+                <div
+                  class="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-edge-muted pb-4 [scrollbar-gutter:stable]"
+                  data-canvas-inspector-scroll
+                >
+                  <div class="border-b border-edge-muted px-3 py-3">
+                    <h1 class="text-xs font-medium capitalize">
+                      {state.selection().length > 1
+                        ? `${state.selection().length} selected`
+                        : (selectedItem()?.type ??
+                          (state.tool() === 'select' || state.tool() === 'pan'
+                            ? 'Canvas'
+                            : state.tool()))}
+                    </h1>
+                  </div>
 
-                <SelectionLayoutInspector
-                  snapUnit={state.snapUnit()}
-                  lockAspectRatio={lockAspectRatio()}
-                  onLockAspectRatio={setLockAspectRatio}
-                  onAlign={(alignment) =>
-                    editor.execute(alignCommand, alignment)
-                  }
-                  onDistribute={(axis) =>
-                    editor.execute(distributeCommand, axis)
-                  }
-                  count={layout().count}
-                  value={(field) => layout().values[field]}
-                  onChange={(field, value) =>
-                    editor.execute(selectionLayoutCommand, {
-                      field,
-                      value,
-                      lockAspectRatio: lockAspectRatio(),
-                    })
-                  }
-                  onScrub={(field) => {
-                    const locked = lockAspectRatio();
-                    const payload = (value: number) => ({
-                      field,
-                      value,
-                      lockAspectRatio: locked,
-                    });
-                    return state.inspector.begin(
-                      (context, value) =>
-                        selectionLayoutCommand.apply(context, payload(value))
-                          .document,
-                      (value) =>
-                        editor.execute(selectionLayoutCommand, payload(value))
-                    );
-                  }}
-                  onTransform={(field) =>
-                    editor.execute(selectionLayoutCommand, { field })
-                  }
-                />
-                <StyleInspector
-                  fill={styleKinds().some(
-                    (kind) => kind === 'rectangle' || kind === 'ellipse'
-                  )}
-                  stroke={styleKinds().some((kind) =>
-                    [
-                      'rectangle',
-                      'ellipse',
-                      'connector',
-                      'arrow',
-                      'line',
-                      'pencil',
-                    ].includes(kind)
-                  )}
-                  strokePattern={styleKinds().some((kind) =>
-                    [
-                      'rectangle',
-                      'ellipse',
-                      'connector',
-                      'arrow',
-                      'line',
-                    ].includes(kind)
-                  )}
-                  corners={styleKinds().includes('rectangle')}
-                  text={styleKinds().every((kind) => kind === 'text')}
-                  canvasColors={state.canvasColors()}
-                  value={state.appearanceValue}
-                  onChange={state.style}
-                  onScrub={(key) => {
-                    const patch = (value: number) => ({
-                      [key]: key === 'opacity' ? value / 100 : value,
-                    });
-                    return state.inspector.begin(
-                      (context, value) =>
-                        styleCommand.apply(context, patch(value)).document,
-                      (value) => state.style(patch(value))
-                    );
-                  }}
-                />
-                <Show
-                  when={
-                    state.isConnectorTool() ||
-                    state.shapes().some((item) => item.type === 'connector')
-                  }
-                >
-                  <ConnectorInspector
-                    value={connectorValue()}
-                    onChange={state.connector.style}
-                  />
-                </Show>
-                <Show
-                  when={
-                    state.tool() === 'text' ||
-                    state.text.draft() ||
-                    state.shapes().some((item) => item.type === 'text') ||
-                    labelSelection()
-                  }
-                >
-                  <TextInspector
-                    label={
-                      state.text.isLabel() ||
-                      (!state.text.draft() && labelSelection())
+                  <SelectionLayoutInspector
+                    snapUnit={state.snapUnit()}
+                    lockAspectRatio={lockAspectRatio()}
+                    onLockAspectRatio={setLockAspectRatio}
+                    onAlign={(alignment) =>
+                      editor.execute(alignCommand, alignment)
                     }
-                    geometry={textGeometry()}
-                    onChange={state.text.typography}
-                    onScrub={() => state.text.scrubFontSize(state.inspector)}
-                  />
-                </Show>
-                <Show when={selectedItem()?.type === 'video'}>
-                  <button
-                    type="button"
-                    class="m-3 rounded border border-edge-muted p-2 text-xs hover:bg-hover"
-                    onClick={() =>
-                      props.assets.togglePlayback(state.selection()[0]!)
+                    onDistribute={(axis) =>
+                      editor.execute(distributeCommand, axis)
                     }
-                  >
-                    {props.assets.playing() === state.selection()[0]
-                      ? 'Pause video'
-                      : 'Play video'}
-                  </button>
-                </Show>
-                <Show when={selectedItem()?.type === 'document'}>
-                  <button
-                    type="button"
-                    class="m-3 rounded border border-edge-muted p-2 text-xs hover:bg-hover"
-                    onClick={() => {
-                      const item = selectedItem();
-                      if (item?.type === 'document')
-                        props.onOpenDocument(item.geometry);
-                    }}
-                  >
-                    Open document
-                  </button>
-                  <Show
-                    when={(() => {
-                      const item = selectedItem();
-                      return (
-                        item?.type === 'document' &&
-                        canEmbedDocument(item.geometry.fileType)
+                    count={layout().count}
+                    value={(field) => layout().values[field]}
+                    onChange={(field, value) =>
+                      editor.execute(selectionLayoutCommand, {
+                        field,
+                        value,
+                        lockAspectRatio: lockAspectRatio(),
+                      })
+                    }
+                    onScrub={(field) => {
+                      const locked = lockAspectRatio();
+                      const payload = (value: number) => ({
+                        field,
+                        value,
+                        lockAspectRatio: locked,
+                      });
+                      return state.inspector.begin(
+                        (context, value) =>
+                          selectionLayoutCommand.apply(context, payload(value))
+                            .document,
+                        (value) =>
+                          editor.execute(selectionLayoutCommand, payload(value))
                       );
-                    })()}
+                    }}
+                    onTransform={(field) =>
+                      editor.execute(selectionLayoutCommand, { field })
+                    }
+                  />
+                  <StyleInspector
+                    fill={styleKinds().some(
+                      (kind) => kind === 'rectangle' || kind === 'ellipse'
+                    )}
+                    stroke={styleKinds().some((kind) =>
+                      [
+                        'rectangle',
+                        'ellipse',
+                        'connector',
+                        'arrow',
+                        'line',
+                        'pencil',
+                      ].includes(kind)
+                    )}
+                    strokePattern={styleKinds().some((kind) =>
+                      [
+                        'rectangle',
+                        'ellipse',
+                        'connector',
+                        'arrow',
+                        'line',
+                      ].includes(kind)
+                    )}
+                    corners={styleKinds().includes('rectangle')}
+                    text={styleKinds().every((kind) => kind === 'text')}
+                    canvasColors={state.canvasColors()}
+                    value={state.appearanceValue}
+                    onChange={state.style}
+                    onScrub={(key) => {
+                      const patch = (value: number) => ({
+                        [key]: key === 'opacity' ? value / 100 : value,
+                      });
+                      return state.inspector.begin(
+                        (context, value) =>
+                          styleCommand.apply(context, patch(value)).document,
+                        (value) => state.style(patch(value))
+                      );
+                    }}
+                  />
+                  <Show
+                    when={
+                      state.isConnectorTool() ||
+                      state.shapes().some((item) => item.type === 'connector')
+                    }
                   >
+                    <ConnectorInspector
+                      value={connectorValue()}
+                      onChange={state.connector.style}
+                    />
+                  </Show>
+                  <Show
+                    when={
+                      state.tool() === 'text' ||
+                      state.text.draft() ||
+                      state.shapes().some((item) => item.type === 'text') ||
+                      labelSelection()
+                    }
+                  >
+                    <TextInspector
+                      label={
+                        state.text.isLabel() ||
+                        (!state.text.draft() && labelSelection())
+                      }
+                      geometry={textGeometry()}
+                      onChange={state.text.typography}
+                      onScrub={() => state.text.scrubFontSize(state.inspector)}
+                    />
+                  </Show>
+                  <Show when={selectedItem()?.type === 'video'}>
                     <button
                       type="button"
-                      class="mx-3 mb-3 rounded border border-edge-muted p-2 text-xs hover:bg-hover"
-                      onClick={() => {
-                        const item = selectedItem();
-                        if (item?.type !== 'document') return;
-                        state.embeds.exit();
-                        editor.execute(setDocumentDisplayCommand, {
-                          id: item.id,
-                          display:
-                            item.geometry.display === 'embed'
-                              ? 'preview'
-                              : 'embed',
-                        });
-                      }}
+                      class="m-3 rounded border border-edge-muted p-2 text-xs hover:bg-hover"
+                      onClick={() =>
+                        props.assets.togglePlayback(state.selection()[0]!)
+                      }
                     >
-                      {(() => {
-                        const item = selectedItem();
-                        return item?.type === 'document' &&
-                          item.geometry.display === 'embed'
-                          ? 'Use preview card'
-                          : 'Use full embed';
-                      })()}
+                      {props.assets.playing() === state.selection()[0]
+                        ? 'Pause video'
+                        : 'Play video'}
                     </button>
                   </Show>
-                </Show>
-              </div>
-            </Show>
-          </aside>
-        </Layer>
+                  <Show when={selectedItem()?.type === 'document'}>
+                    <button
+                      type="button"
+                      class="m-3 rounded border border-edge-muted p-2 text-xs hover:bg-hover"
+                      onClick={() => {
+                        const item = selectedItem();
+                        if (item?.type === 'document')
+                          props.onOpenDocument(item.geometry);
+                      }}
+                    >
+                      Open document
+                    </button>
+                    <Show
+                      when={(() => {
+                        const item = selectedItem();
+                        return (
+                          item?.type === 'document' &&
+                          canEmbedDocument(item.geometry.fileType)
+                        );
+                      })()}
+                    >
+                      <button
+                        type="button"
+                        class="mx-3 mb-3 rounded border border-edge-muted p-2 text-xs hover:bg-hover"
+                        onClick={() => {
+                          const item = selectedItem();
+                          if (item?.type !== 'document') return;
+                          state.embeds.exit();
+                          editor.execute(setDocumentDisplayCommand, {
+                            id: item.id,
+                            display:
+                              item.geometry.display === 'embed'
+                                ? 'preview'
+                                : 'embed',
+                          });
+                        }}
+                      >
+                        {(() => {
+                          const item = selectedItem();
+                          return item?.type === 'document' &&
+                            item.geometry.display === 'embed'
+                            ? 'Use preview card'
+                            : 'Use full embed';
+                        })()}
+                      </button>
+                    </Show>
+                  </Show>
+                </div>
+              </Show>
+            </aside>
+          </Layer>
+        </Show>
         <Show when={layers()}>
           <Card
             depth={2}

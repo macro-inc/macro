@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 
-import { installCacheCoordinatorWorker } from './cache-coordinator-runtime';
+import { installSharedCacheCoordinatorWorker } from './cache-coordinator-runtime';
 
-installCacheCoordinatorWorker();
+declare const self: SharedWorkerGlobalScope;
+
+installSharedCacheCoordinatorWorker(self);

@@ -45,8 +45,24 @@ describe('agent announcements', () => {
     if (!match?.[1]) throw new Error(`no reply target in ${markdown}`);
     return readReplyTargetData(JSON.parse(match[1]));
   };
-  it('announces under the parent the reply lives in', async () => {
-    const parent = { type: 'document' as const, id: 'doc' };
+  it('announces an assignment as a chip without a user reply target', async () => {
+    const response = await request({ chip });
+    expect(response.status).toBe(200);
+    const { markdown } = await response.json<{ markdown: string }>();
+    expect(markdown).toBe(
+      `<m-magic-chip>${JSON.stringify(chip)}</m-magic-chip>`
+    );
+    expect(markdown).not.toContain('m-reply-target');
+  });
+  it.each([
+    'channel',
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ])('announces under the %s parent the reply lives in', async (type) => {
+    const parent = { type, id: 'parent-1' };
     const response = await request({
       replyTarget: { parent, ...replyTarget },
       chip,
@@ -72,6 +88,33 @@ describe('agent announcements', () => {
       parent: { type: 'channel', id: 'chan' },
       ...replyTarget,
     });
+  });
+  it('composes a chat reply as the session link over its body', async () => {
+    const link =
+      '<m-agent-session-mention>{"id":"session","label":"Agent session"}</m-agent-session-mention>';
+    const pending = await request({
+      chatReply: { sessionId: 'session', body: { kind: 'pending' } },
+    });
+    expect(pending.status).toBe(200);
+    const { markdown: spinner } = await pending.json<{ markdown: string }>();
+    expect(spinner.startsWith(`${link}\n\n<m-await>`)).toBe(true);
+    expect(spinner.endsWith('</m-await>')).toBe(true);
+    const answered = await request({
+      chatReply: {
+        sessionId: 'session',
+        body: { kind: 'markdown', markdown: 'Sure.\n\n- done' },
+      },
+    });
+    expect(await answered.json<{ markdown: string }>()).toEqual({
+      markdown: `${link}\n\nSure.\n\n- done`,
+    });
+  });
+  it('rejects a chat reply body it does not know', async () => {
+    const response = await request({
+      chatReply: { sessionId: 'session', body: { kind: 'spinner' } },
+    });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
   });
   it('rejects an unknown connection destination', async () => {
     const response = await request({

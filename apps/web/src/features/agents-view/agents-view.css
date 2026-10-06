@@ -1984,7 +1984,7 @@
 		min-width: 150px;
 	}
 
-	/* routine block page (block-automation/component/Automation.tsx) */
+	/* routine block page (block-routine/component/Routine.tsx) */
 	:where(.agents-view, .agents-view-portal) .switch {
 		display: inline-flex;
 		align-items: center;
@@ -2103,8 +2103,10 @@
 		}
 	}
 
+	/* Bottom padding matches ChannelInputContainer (pb-2.5) so the composer
+	   sits at the same height as the channel input. */
 	:where(.agents-view, .agents-view-portal) .pane .dock {
-		padding: 0 16px 16px;
+		padding: 0 16px 10px;
 		flex-shrink: 0;
 	}
 

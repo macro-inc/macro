@@ -99,7 +99,10 @@ fn api_router(state: ApiContext) -> Router {
     let webhook_router = Router::new()
         .nest(
             "/call",
-            call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
+            call::inbound::axum_router::webhook_router(
+                state.call_webhook_state.clone(),
+                state.call_public_rate_limiter.clone(),
+            ),
         )
         .nest(
             "/cal",
@@ -249,12 +252,24 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/slack",
+            slack_integration::inbound::axum_router::slack_router(state.slack_state.clone()),
+        )
+        .nest(
             "/reminders",
             reminders::inbound::axum_router::reminders_router(state.reminders_state.clone()),
         )
         .nest(
             "/initiatives",
             initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+        )
+        .nest(
+            "/databases",
+            databases::inbound::axum_router::databases_router(state.databases_state.clone()).merge(
+                databases::inbound::starter_router::starter_router(
+                    state.database_starter_state.clone(),
+                ),
+            ),
         )
         .nest(
             "/collab_surfaces",
@@ -266,6 +281,17 @@ fn api_router(state: ApiContext) -> Router {
             "/foreign_entity",
             foreign_entity::inbound::axum_router::foreign_entity_router(
                 state.foreign_entity_state.clone(),
+            ),
+        )
+        .nest(
+            "/github_pull_requests",
+            github_pull_requests::inbound::axum_router::github_pull_requests_router(
+                state.github_pull_request_state.clone(),
+            )
+            .merge(
+                github_pull_requests::inbound::changes_router::github_pull_request_changes_router(
+                    state.github_pull_request_changes_state.clone(),
+                ),
             ),
         )
         .nest(
@@ -293,6 +319,12 @@ fn api_router(state: ApiContext) -> Router {
             "/internal",
             internal::router(state.clone())
                 .nest("/notifications", notification::router())
+                .nest(
+                    "/github",
+                    github::inbound::pull_request_index_router::pull_request_index_router(
+                        state.github_pull_request_index_state.clone(),
+                    ),
+                )
                 .nest(
                     "/search",
                     search_service::search_router()

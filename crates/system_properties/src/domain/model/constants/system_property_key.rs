@@ -100,6 +100,12 @@ define_system_properties! {
     Stage,             STAGE_UUID,              0x10, "Stage";
     CompanyOwner,      COMPANY_OWNER_UUID,      0x11, "Owner";
     Revenue,           REVENUE_UUID,            0x12, "Revenue";
+
+    // CRM associations (Companies, 0x0c, is shared with email attachments)
+    Contacts,          CONTACTS_UUID,           0x13, "Contacts";
+
+    // Projects: the one project (initiative) a task belongs to
+    Project,           PROJECT_UUID,            0x14, "Project";
 }
 
 impl SystemPropertyKey {
@@ -125,6 +131,12 @@ impl SystemPropertyKey {
                 Self::STAGE_UUID,
                 Self::COMPANY_OWNER_UUID,
                 Self::REVENUE_UUID,
+            ],
+            EntityType::Initiative => &[
+                Self::ASSIGNEES_UUID,
+                Self::STATUS_UUID,
+                Self::PRIORITY_UUID,
+                Self::DUE_DATE_UUID,
             ],
             // Other entity types don't have required properties yet
             // Add new cases here as needed:
@@ -171,7 +183,7 @@ mod tests {
     #[test]
     fn test_all_system_property_keys_returns_all_uuids() {
         let all_keys = SystemPropertyKey::all_system_property_keys();
-        assert_eq!(all_keys.len(), 18);
+        assert_eq!(all_keys.len(), 20);
         assert!(all_keys.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PRIORITY_UUID));
@@ -190,6 +202,8 @@ mod tests {
         assert!(all_keys.contains(&SystemPropertyKey::STAGE_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::COMPANY_OWNER_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::REVENUE_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::CONTACTS_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::PROJECT_UUID));
     }
 
     #[test]
@@ -286,6 +300,8 @@ mod tests {
             SystemPropertyKey::Stage,
             SystemPropertyKey::CompanyOwner,
             SystemPropertyKey::Revenue,
+            SystemPropertyKey::Contacts,
+            SystemPropertyKey::Project,
         ];
 
         for variant in variants {

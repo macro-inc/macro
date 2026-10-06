@@ -49,7 +49,7 @@ describe('PR gateway updates', () => {
     await handlePullRequestUpdated(entity);
     expect(queryClient.getQueryData(byKey)).toEqual(entity);
     expect(queryClient.getQueryData(byId)).toEqual(entity);
-    expect(refreshLists).toHaveBeenCalledOnce();
+    expect(refreshLists).not.toHaveBeenCalled();
   });
 
   it('cancels an older lookup so its null response cannot erase a push', async () => {

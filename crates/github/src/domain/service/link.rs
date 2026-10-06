@@ -1,7 +1,7 @@
 //! Github Link Service implemenation
 
 use chrono::Utc;
-use foreign_entity::domain::{models::PatchForeignEntity, ports::ForeignEntityService};
+use github_pull_requests::domain::ports::GithubPullRequestService;
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
@@ -9,8 +9,9 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubAccessToken,
-        GithubError, GithubLink, GithubPullRequestRef,
+        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubMergeMethod,
+        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestRef,
+        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -27,15 +28,20 @@ pub struct GithubLinkConfig {
 }
 
 /// The concrete github link service implementation.
-pub struct GithubLinkServiceImpl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> {
+pub struct GithubLinkServiceImpl<
+    R: GithubRepo,
+    U: GithubOauth,
+    F: Auth,
+    E: GithubPullRequestService,
+> {
     repo: R,
     oauth: U,
     auth: F,
-    foreign_entity_service: E,
+    pull_request_service: E,
     config: super::GithubLinkConfig,
 }
 
-impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService>
+impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
     GithubLinkServiceImpl<R, U, F, E>
 {
     /// Create a new github link service.
@@ -43,14 +49,14 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService>
         repo: R,
         oauth: U,
         auth: F,
-        foreign_entity_service: E,
+        pull_request_service: E,
         config: super::GithubLinkConfig,
     ) -> Self {
         Self {
             repo,
             oauth,
             auth,
-            foreign_entity_service,
+            pull_request_service,
             config,
         }
     }
@@ -100,65 +106,92 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService>
         Ok(access_token)
     }
 
-    async fn patch_pull_request_foreign_entities(&self, pull_request: &EnrichedGithubPullRequest) {
-        let foreign_entities = match self
-            .foreign_entity_service
-            .get_foreign_entities_by_foreign_entity_id(
-                &pull_request.github_key,
-                Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
-            )
+    /// The merge method for a request that named none: the first the
+    /// repository allows. When the settings cannot be read, a merge commit is
+    /// attempted and GitHub says so if the repository forbids it; the user
+    /// asked to merge, and a readable refusal beats a failed lookup.
+    async fn resolve_merge_method(
+        &self,
+        access_token: &GithubAccessToken,
+        request: &MergeGithubPullRequestRequest,
+    ) -> Result<GithubMergeMethod, GithubError> {
+        if let Some(method) = request.merge_method {
+            return Ok(method);
+        }
+
+        match self
+            .oauth
+            .get_repository_merge_settings(access_token.as_str(), &request.owner, &request.repo)
             .await
         {
-            Ok(foreign_entities) => foreign_entities,
+            Ok(settings) => {
+                settings
+                    .default_method()
+                    .ok_or_else(|| GithubError::PullRequestMergeRejected {
+                        rejection: GithubMergeRejection::NotMergeable,
+                        message: "This repository does not allow any merge method.".to_string(),
+                    })
+            }
             Err(error) => {
                 tracing::warn!(
                     error=?error,
-                    github_key=%pull_request.github_key,
-                    source=%GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-                    "failed to fetch GitHub pull request foreign entities"
+                    owner=%request.owner,
+                    repo=%request.repo,
+                    "failed to read repository merge settings, attempting a merge commit"
                 );
-                return;
+                Ok(GithubMergeMethod::Merge)
             }
-        };
+        }
+    }
 
-        for foreign_entity in foreign_entities {
-            let foreign_entity_record_id = foreign_entity.id;
-            let metadata =
-                match pull_request.foreign_entity_metadata(Some(&foreign_entity.metadata)) {
-                    Ok(metadata) => metadata,
-                    Err(error) => {
-                        tracing::warn!(
-                            error=?error,
-                            foreign_entity_record_id=%foreign_entity_record_id,
-                            github_key=%pull_request.github_key,
-                            "failed to serialize GitHub pull request foreign entity metadata"
-                        );
-                        continue;
-                    }
-                };
-
-            let patch = PatchForeignEntity {
-                metadata: Some(metadata),
-                ..PatchForeignEntity::default()
-            };
-
-            if let Err(error) = self
-                .foreign_entity_service
-                .patch_foreign_entity(foreign_entity_record_id, patch)
-                .await
-            {
+    /// The pull request as GitHub reports it after a merge, written back to
+    /// its foreign entities so the app shows it merged before the webhook
+    /// arrives. Best-effort: the merge already happened.
+    async fn refresh_merged_pull_request(
+        &self,
+        access_token: &GithubAccessToken,
+        reference: GithubPullRequestRef,
+    ) -> Option<EnrichedGithubPullRequest> {
+        let details = self
+            .oauth
+            .get_pull_request_details(
+                access_token.as_str(),
+                &reference.owner,
+                &reference.repo,
+                reference.number,
+            )
+            .await
+            .inspect_err(|error| {
                 tracing::warn!(
                     error=?error,
-                    foreign_entity_record_id=%foreign_entity_record_id,
-                    github_key=%pull_request.github_key,
-                    "failed to patch GitHub pull request foreign entity"
+                    owner=%reference.owner,
+                    repo=%reference.repo,
+                    number=reference.number,
+                    "failed to refresh GitHub pull request after merge"
                 );
-            }
+            })
+            .ok()?;
+        let pull_request = EnrichedGithubPullRequest::from_details(reference, details);
+        self.refresh_stored_pull_request(&pull_request).await;
+        Some(pull_request)
+    }
+
+    async fn refresh_stored_pull_request(&self, pull_request: &EnrichedGithubPullRequest) {
+        if let Err(error) = self
+            .pull_request_service
+            .refresh_pull_request(pull_request)
+            .await
+        {
+            tracing::warn!(
+                error=?error,
+                github_key=%pull_request.github_key,
+                "failed to refresh stored GitHub pull request"
+            );
         }
     }
 }
 
-impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLinkService
+impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> GithubLinkService
     for GithubLinkServiceImpl<R, U, F, E>
 {
     #[tracing::instrument(skip(self), err)]
@@ -180,7 +213,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
         self.repo
             .get_github_link_by_user_id(macro_user_id)
             .await
-            .map_err(|e| GithubError::Internal(e.into()))
+            .map_err(Self::link_lookup_error)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -221,7 +254,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
                 Ok(details) => {
                     let enriched_pull_request =
                         EnrichedGithubPullRequest::from_details(pull_request, details);
-                    self.patch_pull_request_foreign_entities(&enriched_pull_request)
+                    self.refresh_stored_pull_request(&enriched_pull_request)
                         .await;
                     enriched_pull_request
                 }
@@ -242,6 +275,45 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
         }
 
         Ok(enriched_pull_requests)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn merge_pull_request(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        request: MergeGithubPullRequestRequest,
+    ) -> Result<MergeGithubPullRequestResponse, GithubError> {
+        let access_token = self.validated_access_token(macro_user_id).await?;
+        let merge_method = self.resolve_merge_method(&access_token, &request).await?;
+
+        let outcome = self
+            .oauth
+            .merge_pull_request(
+                access_token.as_str(),
+                &request.owner,
+                &request.repo,
+                request.number,
+                merge_method,
+            )
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))?;
+
+        let merge = match outcome {
+            GithubMergeOutcome::Merged(merge) => merge,
+            GithubMergeOutcome::Rejected { rejection, message } => {
+                return Err(GithubError::PullRequestMergeRejected { rejection, message });
+            }
+        };
+
+        let pull_request = self
+            .refresh_merged_pull_request(&access_token, request.to_reference())
+            .await;
+
+        Ok(MergeGithubPullRequestResponse {
+            sha: merge.sha,
+            message: merge.message,
+            pull_request,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]

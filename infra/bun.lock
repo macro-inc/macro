@@ -159,6 +159,10 @@
       "name": "kafka-cluster-stack",
       "version": "0.0.0",
     },
+    "stacks/lexical-service": {
+      "name": "lexical-service-stack",
+      "version": "0.0.0",
+    },
     "stacks/link-sharing": {
       "name": "link-sharing-stack",
       "version": "0.0.0",
@@ -171,6 +175,14 @@
       "name": "mcp-server-stack",
       "version": "0.0.0",
     },
+    "stacks/monitoring": {
+      "name": "monitoring-stack",
+      "version": "0.0.0",
+      "dependencies": {
+        "@pulumi/datadog": "^4.51.0",
+        "@pulumi/pulumi": "^3.181.0",
+      },
+    },
     "stacks/notification-service": {
       "name": "notification-service-stack",
       "version": "0.0.0",
@@ -181,6 +193,10 @@
     },
     "stacks/organization-retention": {
       "name": "organization-retention-stack",
+      "version": "0.0.0",
+    },
+    "stacks/preview-gateway": {
+      "name": "preview-gateway-stack",
       "version": "0.0.0",
     },
     "stacks/search-event-queue": {
@@ -220,6 +236,14 @@
         "@pulumi/datadog": "^4.51.0",
         "@pulumi/pulumi": "^3.181.0",
         "@pulumi/synced-folder": "^0.11.1",
+      },
+    },
+    "stacks/website": {
+      "name": "@macro-inc/infra-website",
+      "dependencies": {
+        "@pulumi/aws": "^6.83.0",
+        "@pulumi/command": "^1.1.0",
+        "@pulumi/pulumi": "^3.181.0",
       },
     },
   },
@@ -300,6 +324,8 @@
     "@logdna/tail-file": ["@logdna/tail-file@2.2.0", "", {}, "sha512-XGSsWDweP80Fks16lwkAUIr54ICyBs6PsI4mpfTLQaWgEJRtY9xEV+PeyDpJ+sJEGZxqINlpmAwe/6tS1pP8Ng=="],
 
     "@macro-inc/infra-web-app": ["@macro-inc/infra-web-app@workspace:stacks/web-app"],
+
+    "@macro-inc/infra-website": ["@macro-inc/infra-website@workspace:stacks/website"],
 
     "@npmcli/agent": ["@npmcli/agent@4.0.2", "", { "dependencies": { "agent-base": "^7.1.0", "http-proxy-agent": "^7.0.0", "https-proxy-agent": "^7.0.1", "lru-cache": "^11.2.1", "socks-proxy-agent": "^8.0.3" } }, "sha512-EUEuWAxnL07Sp5/iC/1X6Xj+XThUvnbei9zfRWZdEXa7lss9RTHMhAHBeg+MZ5To9s/gGaSI+UwZTPdYMvKSeg=="],
 
@@ -653,6 +679,8 @@
 
     "lambda": ["lambda@workspace:packages/lambda"],
 
+    "lexical-service-stack": ["lexical-service-stack@workspace:stacks/lexical-service"],
+
     "link-sharing-stack": ["link-sharing-stack@workspace:stacks/link-sharing"],
 
     "lodash.camelcase": ["lodash.camelcase@4.3.0", "", {}, "sha512-TwuEnCnxbc3rAvhf/LbG7tJUDzhqXyFnv3dtzLOPgCG/hODL7WFnsbwktkD7yUV0RrreP/l1PALq/YSg6VvjlA=="],
@@ -694,6 +722,8 @@
     "minizlib": ["minizlib@3.1.0", "", { "dependencies": { "minipass": "^7.1.2" } }, "sha512-KZxYo1BUkWD2TVFLr0MQoM8vUUigWD3LlD83a/75BqC+4qE0Hb1Vo5v1FgcfaNXvfXzr+5EhQ6ing/CaBijTlw=="],
 
     "module-details-from-path": ["module-details-from-path@1.0.4", "", {}, "sha512-EGWKgxALGMgzvxYF1UyGTy0HXX/2vHLkw6+NvDKW2jypWbHpjQuj4UMcqQWXHERJhVGKikolT06G3bcKe4fi7w=="],
+
+    "monitoring-stack": ["monitoring-stack@workspace:stacks/monitoring"],
 
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
 
@@ -744,6 +774,8 @@
     "picomatch": ["picomatch@4.0.5", "", {}, "sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A=="],
 
     "postcss-selector-parser": ["postcss-selector-parser@7.1.4", "", { "dependencies": { "cssesc": "^3.0.0", "util-deprecate": "^1.0.2" } }, "sha512-HeP7D2wyhkR+XaK6v4W8oRF62Dsz4flyuczALJp61GckGm42u1saSSJ/0auvcBqxs3jMRFEcPK34At/0JBKdOg=="],
+
+    "preview-gateway-stack": ["preview-gateway-stack@workspace:stacks/preview-gateway"],
 
     "proc-log": ["proc-log@6.1.0", "", {}, "sha512-iG+GYldRf2BQ0UDUAd6JQ/RwzaQy6mXmsk/IzlYyal4A4SNFw54MeH4/tLkF4I5WoWG9SQwuqWzS99jaFQHBuQ=="],
 
@@ -884,6 +916,8 @@
     "yn": ["yn@3.1.1", "", {}, "sha512-Ux4ygGWsu2c7isFWe8Yu1YluJmqVhxqK2cLXNQA5AcC3QfbGNpM7fu0Y8b/z16pXLnFxZYvWhd3fhBY9DLmC6Q=="],
 
     "@macro-inc/infra-web-app/@pulumi/aws": ["@pulumi/aws@6.83.4", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0", "mime": "^2.0.0" } }, "sha512-mk3LhRJF6BdOq7VAWtrZpv+loLdaPxvbOVTESommiYXlSX87xXA8mytQCaeIXaivtpdj+xcBOJ8vz0A0Ktmw9g=="],
+
+    "@macro-inc/infra-website/@pulumi/aws": ["@pulumi/aws@6.83.4", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0", "mime": "^2.0.0" } }, "sha512-mk3LhRJF6BdOq7VAWtrZpv+loLdaPxvbOVTESommiYXlSX87xXA8mytQCaeIXaivtpdj+xcBOJ8vz0A0Ktmw9g=="],
 
     "@npmcli/git/ini": ["ini@6.0.0", "", {}, "sha512-IBTdIkzZNOpqm7q3dRqJvMaldXjDHWkEDfrwGEQTs5eaQMWV+djAhR+wahyNNMAa+qpbDUhBMVt4ZKNwpPm7xQ=="],
 

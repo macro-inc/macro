@@ -7,7 +7,11 @@
 //! runtime surprise on someone's laptop.
 
 pub(crate) mod acp_probe;
+pub(crate) mod acp_process;
 pub mod agent_session;
 pub mod link;
 pub mod pairing;
 pub mod stream;
+
+/// Git repository discovery and remote refresh.
+pub mod git;

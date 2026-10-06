@@ -7,6 +7,7 @@
 
 use harness_id::HarnessId;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
@@ -34,6 +35,34 @@ pub struct Config {
     pub harness: Harness,
     /// The workspace every session runs against.
     pub workspace: Workspace,
+    /// Native Herdr defaults shared by this macrod instance.
+    #[serde(default)]
+    pub herdr: HerdrSettings,
+}
+
+/// One native launch configuration, shared by all new sessions.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HerdrSettings {
+    /// Native model ID; absent uses the CLI's configured default.
+    pub model: Option<String>,
+    /// Extra native CLI arguments, already split into words.
+    pub arguments: Vec<String>,
+    /// Repository cache and worktree location; absent uses instance storage.
+    pub storage_path: Option<PathBuf>,
+    /// Switch Herdr to newly launched sessions.
+    pub focus: bool,
+}
+
+impl Default for HerdrSettings {
+    fn default() -> Self {
+        Self {
+            model: None,
+            arguments: Vec::new(),
+            storage_path: None,
+            focus: true,
+        }
+    }
 }
 
 /// Whether the approved harness is private to its owner or shared with a team.
@@ -159,18 +188,27 @@ pub struct Harness {
     /// Arguments, e.g. `["acp"]`.
     #[serde(default)]
     pub args: Vec<String>,
+    /// Environment added to the harness process and to every model probe, on
+    /// top of the daemon's own.
+    ///
+    /// ACP adapters distributed on npm bundle their own copy of the CLI they
+    /// wrap and run it unless told otherwise. A bundled CLI older than the
+    /// one the operator installed advertises a different model catalogue, so
+    /// the presets point the adapter at the installed CLI through the
+    /// variable it reads for that - `CODEX_PATH`, `CLAUDE_CODE_EXECUTABLE`.
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
 }
 
 /// The workspace every session runs against.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Workspace {
-    /// Absolute directory harnesses run in; sent as each session's
-    /// workspace at creation.
+    /// Absolute directory generic harnesses run in. Native Herdr searches
+    /// this directory for existing clones and creates a worktree per session.
     pub path: PathBuf,
-    /// Repository nominally checked out at `path`, recorded on each
-    /// session it serves. Informational: having the repo cloned there is
-    /// the operator's job.
+    /// Default repository when dispatch does not specify one. Generic
+    /// harnesses expect it at `path`; native Herdr can find or clone it.
     #[serde(default)]
     pub repo_url: Option<String>,
 }

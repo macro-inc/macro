@@ -10,7 +10,7 @@ use tui_input::Input;
 
 use super::agent_catalog::{self, DetectedAgent, PathCommands};
 use super::api::{HarnessSelfApi, Snapshot};
-use super::config_form::{ConfigForm, SETTINGS, Setting};
+use super::config_form::{ConfigForm, Setting, settings};
 use super::input::handle_text_input;
 use super::logging::LogBuffer;
 use super::platform::{BrowserTarget, copy_to_clipboard};
@@ -68,7 +68,7 @@ pub(crate) enum Mode {
     Normal,
     /// Editing one config setting's value.
     EditSetting {
-        /// Index into [`SETTINGS`].
+        /// Index into the current settings.
         index: usize,
         /// The text being typed.
         buffer: Input,
@@ -80,6 +80,11 @@ pub(crate) enum Mode {
     },
     /// Entering an arbitrary ACP command line.
     CustomAgent { buffer: Input },
+    /// A chosen agent's adapter installing; applied when the install ends.
+    InstallingAgent {
+        agent: DetectedAgent,
+        install: tokio::task::JoinHandle<Result<(), String>>,
+    },
     /// Confirming harness removal.
     ConfirmDelete,
     /// A pairing in flight: code shown, waiting for approval.
@@ -393,6 +398,56 @@ impl App {
             Mode::EditSetting { .. } => self.on_edit_key(key).await,
             Mode::AgentPicker { .. } => self.on_agent_picker_key(key).await,
             Mode::CustomAgent { .. } => self.on_custom_agent_key(key).await,
+            Mode::InstallingAgent { .. } if key.code == KeyCode::Esc => {
+                if let Mode::InstallingAgent { install, .. } =
+                    std::mem::replace(&mut self.mode, Mode::Normal)
+                {
+                    install.abort();
+                }
+                self.ok("install abandoned; the agent was not changed");
+            }
+            Mode::InstallingAgent { .. } => {}
+        }
+    }
+
+    /// Persist `agent` as the harness once its adapter is installed. A missing
+    /// adapter installs in the background so the panel keeps drawing, and
+    /// [`Self::poll_install`] applies the agent when that ends.
+    async fn select_agent(&mut self, agent: DetectedAgent) {
+        let Some(install) = agent.pending_install().cloned() else {
+            return self.apply_agent(&agent).await;
+        };
+        self.ok(format!("installing {}", install.package));
+        self.mode = Mode::InstallingAgent {
+            agent,
+            install: tokio::spawn(async move { install.run().await }),
+        };
+    }
+
+    async fn apply_agent(&mut self, agent: &DetectedAgent) {
+        self.form.apply_agent(agent);
+        self.save_config(ApplyConfig::Now).await;
+    }
+
+    pub(crate) async fn poll_install(&mut self) {
+        let Mode::InstallingAgent { install, .. } = &self.mode else {
+            return;
+        };
+        if !install.is_finished() {
+            return;
+        }
+        let Mode::InstallingAgent { agent, install } =
+            std::mem::replace(&mut self.mode, Mode::Normal)
+        else {
+            return;
+        };
+        match install.await {
+            Ok(Ok(())) => self.apply_agent(&agent).await,
+            Ok(Err(error)) => self.fail(error),
+            Err(error) => self.fail(format!(
+                "installing {} was interrupted: {error}",
+                agent.name
+            )),
         }
     }
 
@@ -416,14 +471,17 @@ impl App {
     }
 
     async fn commit_edit(&mut self, index: usize, input: String) {
-        let setting = SETTINGS[index];
+        let setting = settings(&self.config)[index];
         if let Err(message) = self.form.apply_text(setting, &input) {
             return self.fail(message);
         }
         let apply = match setting {
-            Setting::Workspace => ApplyConfig::Now,
+            Setting::Workspace
+            | Setting::HerdrModel
+            | Setting::HerdrArguments
+            | Setting::HerdrStorage => ApplyConfig::Now,
             Setting::Name => ApplyConfig::NextPairing,
-            Setting::Agent | Setting::Scope | Setting::PermissionBypass => {
+            Setting::Agent | Setting::Scope | Setting::PermissionBypass | Setting::HerdrFocus => {
                 unreachable!("not edited as text")
             }
         };
@@ -454,8 +512,7 @@ impl App {
                     let agent = self.agents.get(*selected).cloned();
                     self.mode = Mode::Normal;
                     if let Some(agent) = agent {
-                        self.form.apply_agent(&agent);
-                        self.save_config(ApplyConfig::Now).await;
+                        self.select_agent(agent).await;
                     }
                 }
             }
@@ -476,8 +533,7 @@ impl App {
             KeyCode::Enter => match agent_catalog::custom(buffer.value()) {
                 Ok(agent) => {
                     self.mode = Mode::Normal;
-                    self.form.apply_agent(&agent);
-                    self.save_config(ApplyConfig::Now).await;
+                    self.apply_agent(&agent).await;
                 }
                 Err(error) => self.fail(error),
             },
@@ -492,6 +548,8 @@ impl App {
                     self.config = config;
                     // The core reads config at start, so a save while serving
                     // means a restart to apply it.
+                    self.selected_setting =
+                        self.selected_setting.min(settings(&self.config).len() - 1);
                     if apply == ApplyConfig::Now && self.paired() {
                         if self.restart_daemon().await {
                             self.ok("saved and applied");
@@ -535,36 +593,47 @@ impl App {
                 self.selected_setting = self.selected_setting.saturating_sub(1);
             }
             KeyCode::Down | KeyCode::Char('j') if self.tab == Tab::Config => {
-                self.selected_setting = (self.selected_setting + 1).min(SETTINGS.len() - 1);
+                self.selected_setting =
+                    (self.selected_setting + 1).min(settings(&self.config).len() - 1);
             }
-            KeyCode::Enter if self.tab == Tab::Config => match SETTINGS[self.selected_setting] {
-                Setting::Agent => {
-                    let selected = self
-                        .agents
-                        .iter()
-                        .position(|agent| {
-                            agent.launch.command == self.config.harness.command
-                                && agent.launch.args == self.config.harness.args
-                        })
-                        .unwrap_or(self.agents.len());
-                    self.mode = Mode::AgentPicker { selected };
+            KeyCode::Enter if self.tab == Tab::Config => {
+                match settings(&self.config)[self.selected_setting] {
+                    Setting::Agent => {
+                        let selected = self
+                            .agents
+                            .iter()
+                            .position(|agent| {
+                                agent.launch.command == self.config.harness.command
+                                    && agent.launch.args == self.config.harness.args
+                            })
+                            .unwrap_or(self.agents.len());
+                        self.mode = Mode::AgentPicker { selected };
+                    }
+                    Setting::Scope => {
+                        self.form.toggle_scope(&self.config);
+                        self.save_config(ApplyConfig::NextPairing).await;
+                    }
+                    Setting::PermissionBypass => {
+                        self.form
+                            .set_permission_bypass(!self.config.identity.allow_permission_bypass);
+                        self.save_config(ApplyConfig::NextPairing).await;
+                    }
+                    Setting::HerdrFocus => {
+                        self.form.toggle_herdr_focus(&self.config);
+                        self.save_config(ApplyConfig::Now).await;
+                    }
+                    setting @ (Setting::Workspace
+                    | Setting::Name
+                    | Setting::HerdrModel
+                    | Setting::HerdrArguments
+                    | Setting::HerdrStorage) => {
+                        self.mode = Mode::EditSetting {
+                            index: self.selected_setting,
+                            buffer: self.form.edit_value(setting).into(),
+                        };
+                    }
                 }
-                Setting::Scope => {
-                    self.form.toggle_scope(&self.config);
-                    self.save_config(ApplyConfig::NextPairing).await;
-                }
-                Setting::PermissionBypass => {
-                    self.form
-                        .set_permission_bypass(!self.config.identity.allow_permission_bypass);
-                    self.save_config(ApplyConfig::NextPairing).await;
-                }
-                setting @ (Setting::Workspace | Setting::Name) => {
-                    self.mode = Mode::EditSetting {
-                        index: self.selected_setting,
-                        buffer: self.form.edit_value(setting).into(),
-                    };
-                }
-            },
+            }
             _ => {}
         }
     }

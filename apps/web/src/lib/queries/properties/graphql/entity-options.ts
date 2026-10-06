@@ -9,20 +9,15 @@
 
 import {
   executeOptimisticMutation,
-  inspect,
   optimisticMutationDispositionOf,
   type QueryRevalidation,
-  selectAll,
 } from '@graphql-cache/index';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils/typeGuards';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyTargetEntityType } from '@service-properties/generated/schemas/propertyTargetEntityType';
 import {
-  GroupSoupDocument,
-  GroupSoupMembershipDocument,
-  SoupDocument,
-  SoupMembershipDocument,
+  EntityPropertiesDocument,
   UpdateEntityPropertyOptionsDocument,
   type UpdateEntityPropertyOptionsMutation,
   type UpdateEntityPropertyOptionsMutationVariables,
@@ -31,6 +26,7 @@ import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
+import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import { buildOptimisticEntityPropertyOptions } from '../graphql-optimistic';
 import {
   type EntityPropertyOptionSelection,
@@ -43,6 +39,8 @@ export type GraphqlEntityPropertyOptionsInput = {
   entityId: string;
   properties: Array<{
     property: Property | PropertyDefinitionDomain;
+    /** Existing assignment identity when the picker supplies a tag definition. */
+    assignmentId?: string;
     currentOptionIds: string[];
     nextOptionIds: string[];
   }>;
@@ -57,51 +55,21 @@ function getPropertyDefinitionId(
 }
 
 /**
- * Queries that must re-read the entity after commit because a property record
- * the entity had never carried cannot be linked optimistically: the assignment
- * id arrives with the response, while `properties` is a link list on the entity
- * record that a bare record write does not extend.
- *
- * Only cached instances already holding the entity are revalidated, so an
- * unrelated loaded list is never refetched.
- *
- * Discovery reads through the id-only membership documents: a denormalized read
- * misses whenever ANY selected field was never written for ANY item in the
- * variant (a channel row carries no `properties`, so a full-item selection can
- * miss a variant that does hold the entity). Membership selects `__typename` and
- * `id` only, which every cached item has. Both membership documents select the
- * same cached fields as their list counterparts, so one inspection per field
- * finds every variant — including the single-entity ones the properties query
- * loads, which the list document then refetches as a superset.
+ * A new assignment must be linked into its entity's properties list. Re-reading
+ * that one entity updates the normalized parent for every list/detail consumer.
+ * Never inspect all cached Soup variants here: backfills can exceed the cache's
+ * inspection budget, and cache bookkeeping must not prevent the mutation.
+ * The descriptor is durable, so an offline commit also reconciles on replay.
  */
-async function newPropertyLinkRevalidations(
+function newPropertyLinkRevalidations(
+  entityType: EntityType | PropertyTargetEntityType,
   entityId: string
-): Promise<QueryRevalidation[]> {
-  const host = getGraphqlCacheHost();
-  if (!host) return [];
-
-  const [flatPages, groupedPages] = await Promise.all([
-    inspect(
-      host,
-      selectAll(SoupMembershipDocument).field('user').field('soup')
-    ),
-    inspect(
-      host,
-      selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
-    ),
-  ]);
-
-  const holdsEntity = (items: readonly { id: string }[] | undefined) =>
-    items?.some((item) => item.id === entityId) ?? false;
-
-  return [
-    ...flatPages
-      .filter(({ value }) => holdsEntity(value?.items))
-      .map(({ variables }) => ({ document: SoupDocument, variables })),
-    ...groupedPages
-      .filter(({ value }) => value?.bins.some((bin) => holdsEntity(bin.items)))
-      .map(({ variables }) => ({ document: GroupSoupDocument, variables })),
-  ];
+): QueryRevalidation[] {
+  if (!getGraphqlCacheHost()) return [];
+  const input = buildGraphqlEntitySoupInput(entityType, entityId);
+  return input
+    ? [{ document: EntityPropertiesDocument, variables: { input } }]
+    : [];
 }
 
 /**
@@ -140,13 +108,14 @@ export async function updateGraphqlEntityPropertyOptions(
   const optimisticProperties = input.properties.flatMap((update) => {
     const record = buildOptimisticEntityPropertyOptions(
       update.property,
-      update.nextOptionIds
+      update.nextOptionIds,
+      update.assignmentId
     );
     return record ? [record] : [];
   });
   const revalidations =
     optimisticProperties.length < input.properties.length
-      ? await newPropertyLinkRevalidations(input.entityId)
+      ? newPropertyLinkRevalidations(input.entityType, input.entityId)
       : [];
 
   const result = await executeOptimisticMutation(

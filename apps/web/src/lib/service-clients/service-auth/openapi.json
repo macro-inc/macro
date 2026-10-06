@@ -10,6 +10,202 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/ai-billing/credits/checkout": {
+      "post": {
+        "tags": ["ai_billing"],
+        "summary": "Start a Stripe Checkout for a credit pack. Payer only.",
+        "operationId": "create_ai_credit_checkout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditCheckoutRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCheckoutResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pack, untrusted return URL, or no payment account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "A paid plan is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the payer may buy credits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai-billing/overage": {
+      "patch": {
+        "tags": ["ai_billing"],
+        "summary": "Turn overage billing on or off and set the per-period cap. Payer only.",
+        "operationId": "update_ai_billing_overage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOverageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "A paid plan is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the payer may change billing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai-billing/plans": {
+      "get": {
+        "tags": ["ai_billing"],
+        "summary": "The plan catalog, credit packs, and overage cap bounds.",
+        "operationId": "get_ai_billing_plans",
+        "responses": {
+          "200": {
+            "description": "Plan catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanCatalogResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai-billing/summary": {
+      "get": {
+        "tags": ["ai_billing"],
+        "summary": "The caller's current-period AI usage, credits, and overage settings.",
+        "description": "Runs a settlement first so the position reflects any credits or overage\nthat were waiting to be booked.",
+        "operationId": "get_ai_billing_summary",
+        "responses": {
+          "200": {
+            "description": "Current-period position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSnapshot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/codex": {
       "get": {
         "tags": ["crate::api::codex"],
@@ -614,6 +810,105 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github_pull_requests/merge": {
+      "post": {
+        "tags": ["github_pull_requests"],
+        "summary": "Merges a GitHub pull request as the authenticated user, with their own\nGitHub grant. GitHub applies the user's permissions and the repository's\nbranch protections; a refusal is returned with GitHub's message.",
+        "operationId": "merge_github_pull_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeGithubPullRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeGithubPullRequestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user cannot push to the repository",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No GitHub link, or the pull request is not visible to the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The pull request is not mergeable as it stands, or its head moved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "",
             "content": {
               "application/json": {
@@ -3200,6 +3495,97 @@
         }
       }
     },
+    "/team/members/{member_user_id}/plan": {
+      "patch": {
+        "tags": ["teams::inbound::axum_router::patch_team_member_plan"],
+        "summary": "Moves one team member's seat between paid plans.",
+        "description": "Team admins and owners only. The team's subscription is re-billed for\nthe seat at once (prorated); the member's tier role and individual AI\nallowance follow immediately.",
+        "operationId": "patch_team_member_plan",
+        "parameters": [
+          {
+            "name": "member_user_id",
+            "in": "path",
+            "description": "The member whose seat plan changes",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTeamMemberPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The team has no active subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/non-admin-invites/toggle": {
       "post": {
         "tags": ["teams::inbound::axum_router::toggle_non_admin_invites"],
@@ -4182,7 +4568,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StripeSessionResponse"
+                  "$ref": "#/components/schemas/CheckoutSessionV2Response"
                 }
               }
             }
@@ -4209,6 +4595,96 @@
           },
           "409": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/stripe/plan": {
+      "post": {
+        "tags": ["user::stripe::change_plan"],
+        "summary": "Moves the caller's own seat between paid plans.",
+        "description": "On a team billed per seat this moves only the caller's seat (team admins\nand the owner may do so; teammates' seats are managed from team\nsettings). Members of a free team, and solo subscribers, get the price on\ntheir own subscription's seat item swapped. The proration is invoiced\nimmediately either way; roles and the AI allowance follow at once on a\nteam and from the `customer.subscription.updated` webhook for a personal\nsubscription.",
+        "operationId": "change_plan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Plan not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The team has no active subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only team admins change plans on a team",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No active subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already on this plan, or more than one active subscription",
             "content": {
               "application/json": {
                 "schema": {
@@ -4345,6 +4821,17 @@
         "type": "string",
         "enum": ["A", "B"]
       },
+      "AiBillingErrorBody": {
+        "type": "object",
+        "description": "Error response body.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error description."
+          }
+        }
+      },
       "AppleLoginRequest": {
         "type": "object",
         "required": ["id_token", "code"],
@@ -4354,6 +4841,28 @@
           },
           "id_token": {
             "type": "string"
+          }
+        }
+      },
+      "ChangePlanRequest": {
+        "type": "object",
+        "description": "Request body for switching plans",
+        "required": ["plan"],
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/SeatPlan",
+            "description": "The plan to move the active subscription to"
+          }
+        }
+      },
+      "ChangePlanResponse": {
+        "type": "object",
+        "description": "Response for a plan change",
+        "required": ["plan"],
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/SeatPlan",
+            "description": "The plan the subscription is now on"
           }
         }
       },
@@ -4372,6 +4881,23 @@
           "gaClientId": {
             "type": ["string", "null"],
             "description": "Google Analytics client ID for conversion tracking"
+          }
+        }
+      },
+      "CheckoutSessionV2Response": {
+        "type": "object",
+        "description": "Hosted checkout with the billing terms the server actually granted.",
+        "required": ["url"],
+        "properties": {
+          "trialDays": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Trial duration, absent for an immediately paid checkout.",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "description": "The opaque URL returned by Stripe."
           }
         }
       },
@@ -4531,6 +5057,21 @@
             "$ref": "#/components/schemas/CheckoutSessionMetadata",
             "description": "Tracking metadata for conversion attribution"
           },
+          "onboardingTrial": {
+            "type": "boolean",
+            "description": "Request the automatic, first-subscription 30-day Premium trial."
+          },
+          "plan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeatPlan",
+                "description": "The plan to subscribe to. Defaults to Premium."
+              }
+            ]
+          },
           "successUrl": {
             "type": "string",
             "description": "The URL to redirect to on successful checkout"
@@ -4607,6 +5148,37 @@
           }
         }
       },
+      "CreditCheckoutRequestBody": {
+        "type": "object",
+        "description": "Request body for [`create_credit_checkout_handler`].",
+        "required": ["amountCents", "successUrl", "cancelUrl"],
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Pack size, cents; one of the catalog's `credit_packs_cents`."
+          },
+          "cancelUrl": {
+            "type": "string",
+            "description": "Where Stripe returns the user on cancel. Same rules as `success_url`."
+          },
+          "successUrl": {
+            "type": "string",
+            "description": "Where Stripe returns the user after paying. Must be an `https` URL\non the origin the request came from."
+          }
+        }
+      },
+      "CreditCheckoutResponse": {
+        "type": "object",
+        "description": "Response for [`create_credit_checkout_handler`].",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The hosted Checkout URL to redirect to."
+          }
+        }
+      },
       "CursorApiKeyStatus": {
         "type": "object",
         "description": "What settings needs to render the Cursor connection.\n\nDeliberately thin. `registered` drives the whole UI; `updatedAt` lets it say\nwhen the key was last replaced, which is the only thing a user can check\nagainst their own memory when a session starts failing.\n\nDeliberately *not* reporting anything about the deployment itself. That is\noperator information: a user who sees it cannot act on it, and a service\nthat cannot reach KMS does not start.",
@@ -4660,6 +5232,16 @@
           }
         }
       },
+      "DenyReason": {
+        "type": "string",
+        "description": "Why a request was refused.",
+        "enum": [
+          "allowance_exhausted",
+          "free_allowance_exhausted",
+          "overage_limit_reached",
+          "overage_payment_failed"
+        ]
+      },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
@@ -4710,6 +5292,13 @@
             "description": "The number of added lines reported by GitHub, when enrichment succeeds.",
             "minimum": 0
           },
+          "assignees": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestUser"
+            },
+            "description": "The users assigned to the pull request, when known."
+          },
           "authorId": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -4752,6 +5341,13 @@
             "type": "string",
             "description": "The stored GitHub association key, in `owner/repo/pull/number` format."
           },
+          "labels": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestLabel"
+            },
+            "description": "The pull request's labels, when known."
+          },
           "name": {
             "type": ["string", "null"],
             "description": "The GitHub pull request title, when enrichment succeeds."
@@ -4776,6 +5372,13 @@
           "repo": {
             "type": "string",
             "description": "The GitHub repository name."
+          },
+          "reviews": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestReview"
+            },
+            "description": "Each reviewer's latest submitted review, when known. Stored metadata merges this per\nreviewer, so a write that knows one review keeps the others."
           },
           "status": {
             "oneOf": [
@@ -4948,13 +5551,30 @@
       },
       "GithubLinkStatusResponse": {
         "type": "object",
-        "required": ["reauthentication_required"],
+        "required": [
+          "reauthentication_required",
+          "github_username",
+          "github_user_id"
+        ],
         "properties": {
+          "github_user_id": {
+            "type": "string",
+            "description": "Stable ID of the authenticated user's linked GitHub account."
+          },
+          "github_username": {
+            "type": "string",
+            "description": "Login of the authenticated user's linked GitHub account."
+          },
           "reauthentication_required": {
             "type": "boolean",
             "description": "Whether the user must reauthenticate their GitHub link."
           }
         }
+      },
+      "GithubMergeMethod": {
+        "type": "string",
+        "description": "How GitHub combines a pull request's commits into its base branch.",
+        "enum": ["merge", "squash", "rebase"]
       },
       "GithubPullRequestCheckRun": {
         "type": "object",
@@ -5072,6 +5692,21 @@
           }
         }
       },
+      "GithubPullRequestLabel": {
+        "type": "object",
+        "description": "A label on a GitHub pull request.",
+        "required": ["name"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "The label color as six hex digits without a leading `#`, when known."
+          },
+          "name": {
+            "type": "string",
+            "description": "The label name, unique within its repository regardless of case."
+          }
+        }
+      },
       "GithubPullRequestRef": {
         "type": "object",
         "description": "A pull request reference that can be enriched with live GitHub data.",
@@ -5112,10 +5747,54 @@
           }
         }
       },
+      "GithubPullRequestReview": {
+        "type": "object",
+        "description": "A reviewer's latest submitted review on a pull request.",
+        "required": ["reviewerGithubUserId", "state"],
+        "properties": {
+          "reviewerGithubUserId": {
+            "type": "string",
+            "description": "The stable numeric GitHub user id of the reviewer, as a string."
+          },
+          "reviewerLogin": {
+            "type": ["string", "null"],
+            "description": "The reviewer's GitHub login, when known."
+          },
+          "state": {
+            "$ref": "#/components/schemas/GithubPullRequestReviewState",
+            "description": "What the review said."
+          },
+          "submittedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the review was submitted, when known."
+          }
+        }
+      },
+      "GithubPullRequestReviewState": {
+        "type": "string",
+        "description": "What a reviewer's latest review on a pull request said.",
+        "enum": ["approved", "changes_requested", "commented", "dismissed"]
+      },
       "GithubPullRequestStatus": {
         "type": "string",
         "description": "The normalized lifecycle status for a GitHub pull request.",
         "enum": ["open", "closed", "merged"]
+      },
+      "GithubPullRequestUser": {
+        "type": "object",
+        "description": "A GitHub user named on a pull request, such as an assignee.",
+        "required": ["githubUserId"],
+        "properties": {
+          "githubUserId": {
+            "type": "string",
+            "description": "The stable numeric GitHub user id, as a string."
+          },
+          "login": {
+            "type": ["string", "null"],
+            "description": "The user's GitHub login, when known."
+          }
+        }
       },
       "GmailLinkStatusResponse": {
         "type": "object",
@@ -5386,6 +6065,64 @@
           }
         }
       },
+      "MergeGithubPullRequestRequest": {
+        "type": "object",
+        "description": "A request to merge one pull request on the user's behalf.",
+        "required": ["owner", "repo", "number"],
+        "properties": {
+          "mergeMethod": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubMergeMethod",
+                "description": "The merge method to use. Omitted means the first method the\nrepository allows, in the order merge, squash, rebase."
+              }
+            ]
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          }
+        }
+      },
+      "MergeGithubPullRequestResponse": {
+        "type": "object",
+        "description": "Response body for a merged pull request.",
+        "required": ["sha", "message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "GitHub's own summary of the merge."
+          },
+          "pullRequest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EnrichedGithubPullRequest",
+                "description": "The pull request as GitHub reports it after the merge, when the\nrefresh succeeded."
+              }
+            ]
+          },
+          "sha": {
+            "type": "string",
+            "description": "The merge commit's SHA."
+          }
+        }
+      },
       "PasswordRequest": {
         "type": "object",
         "required": ["email", "password"],
@@ -5469,6 +6206,17 @@
           "enabled": {
             "type": "boolean",
             "description": "The resulting `crm_enabled` value after the call."
+          }
+        }
+      },
+      "PatchTeamMemberPlanRequest": {
+        "type": "object",
+        "description": "Request body for `PATCH /team/members/{member_user_id}/plan`.",
+        "required": ["plan"],
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/SeatPlan",
+            "description": "The plan to bill the member's seat at from now on."
           }
         }
       },
@@ -5574,6 +6322,78 @@
             "description": "The permission"
           }
         }
+      },
+      "PlanCatalogEntry": {
+        "type": "object",
+        "description": "One plan in the catalog.",
+        "required": [
+          "tier",
+          "monthly_price_cents",
+          "included_ai_cents_per_seat",
+          "purchasable"
+        ],
+        "properties": {
+          "included_ai_cents_per_seat": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Included AI per seat per period, in cents at provider cost. For the\nfree plan this is its monthly hard cap."
+          },
+          "monthly_price_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monthly subscription price per seat, cents."
+          },
+          "purchasable": {
+            "type": "boolean",
+            "description": "Whether a new purchase or plan move may pick this plan today."
+          },
+          "tier": {
+            "$ref": "#/components/schemas/PlanTier",
+            "description": "The tier."
+          }
+        }
+      },
+      "PlanCatalogResponse": {
+        "type": "object",
+        "description": "The plan catalog and the knobs the billing UI offers.",
+        "required": [
+          "plans",
+          "credit_packs_cents",
+          "overage_limit_min_cents",
+          "overage_limit_max_cents"
+        ],
+        "properties": {
+          "credit_packs_cents": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Credit packs a payer may buy, cents."
+          },
+          "overage_limit_max_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Largest allowed overage cap, cents."
+          },
+          "overage_limit_min_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Smallest allowed overage cap, cents."
+          },
+          "plans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanCatalogEntry"
+            },
+            "description": "Every plan, cheapest first. Clients read allowances from here rather\nthan hard-coding them; `purchasable` marks the plans a user can buy."
+          }
+        }
+      },
+      "PlanTier": {
+        "type": "string",
+        "description": "The plans a user can be on, cheapest first.",
+        "enum": ["free", "premium", "max"]
       },
       "PostGetNamesRequestBody": {
         "type": "object",
@@ -5683,6 +6503,11 @@
             "description": "The email address to resend the verification email to"
           }
         }
+      },
+      "SeatPlan": {
+        "type": "string",
+        "description": "The paid plan a seat is billed at. Every member of a paying team has one;\na team may mix them, and its Stripe subscription carries one seat item per\nplan in use.",
+        "enum": ["premium", "max"]
       },
       "SendInviteBody": {
         "type": "object",
@@ -5855,8 +6680,12 @@
       "TeamMember": {
         "type": "object",
         "description": "The team member struct",
-        "required": ["team_id", "user_id", "role"],
+        "required": ["team_id", "user_id", "role", "plan"],
         "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/SeatPlan",
+            "description": "The paid plan the member's seat is billed at. Meaningful on paying\nand enterprise teams; free-team members carry the default."
+          },
           "role": {
             "$ref": "#/components/schemas/TeamRole",
             "description": "The role of the team member"
@@ -5918,6 +6747,138 @@
           "allow_non_admin_invites": {
             "type": "boolean",
             "description": "Whether non-admin members may invite users to the team after the\ntoggle."
+          }
+        }
+      },
+      "UpdateOverageRequest": {
+        "type": "object",
+        "description": "Request body for [`update_overage_handler`].",
+        "required": ["enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Bill usage past allowance and credits."
+          },
+          "limitCents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Per-period cap on overage spend, cents. Required when enabling."
+          }
+        }
+      },
+      "UsageSnapshot": {
+        "type": "object",
+        "description": "The payer's current-period position, as shown in Billing settings and used\nby the gate.",
+        "required": [
+          "tier",
+          "unlimited",
+          "payer",
+          "can_manage_billing",
+          "seats",
+          "period_start",
+          "period_end",
+          "included_cents",
+          "used_cents",
+          "credits_consumed_cents",
+          "credit_balance_cents",
+          "overage_enabled",
+          "overage_limit_cents",
+          "overage_charged_cents",
+          "overage_suspended",
+          "uncovered_cents",
+          "remaining_cents"
+        ],
+        "properties": {
+          "blocked_reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DenyReason",
+                "description": "Why requests are refused right now, if they are."
+              }
+            ]
+          },
+          "can_manage_billing": {
+            "type": "boolean",
+            "description": "Whether the requesting user is the payer."
+          },
+          "credit_balance_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Shared prepaid credit balance, in customer cents."
+          },
+          "credits_consumed_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Shared payer credits already applied to this period, in customer cents."
+          },
+          "included_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Included AI for this user's seat this period, in cents at provider cost."
+          },
+          "overage_charged_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Shared overage charged so far this period, in customer cents."
+          },
+          "overage_enabled": {
+            "type": "boolean",
+            "description": "Whether overage billing is on."
+          },
+          "overage_limit_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Per-period overage cap, in customer cents."
+          },
+          "overage_suspended": {
+            "type": "boolean",
+            "description": "Whether overage is paused after a failed charge."
+          },
+          "payer": {
+            "type": "string",
+            "description": "The payer for this user's AI."
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Period end (exclusive)."
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Period start."
+          },
+          "remaining_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cost cents of usage this seat may still consume: its remaining allowance\nplus whatever shared credit and overage headroom pays for at the markup.\n0 when blocked."
+          },
+          "seats": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Seats billed to the payer.",
+            "minimum": 0
+          },
+          "tier": {
+            "$ref": "#/components/schemas/PlanTier",
+            "description": "The plan."
+          },
+          "uncovered_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Team-wide usage beyond per-seat allowances, at the overage markup, that\nis not yet covered by shared credits or charges (awaiting settlement).\nCustomer cents."
+          },
+          "unlimited": {
+            "type": "boolean",
+            "description": "Enterprise: never metered."
+          },
+          "used_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "AI used by this user this period, in cents at provider cost."
           }
         }
       },

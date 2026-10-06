@@ -9,6 +9,7 @@ import type {
   MessagePart,
   ToolName,
 } from '@service-agent-fold/generated/types';
+import type { ToolName as MacroToolName } from '@service-cognition/generated/tools/tool';
 import type { JSX } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ToolStatus } from '../../ui';
@@ -30,6 +31,8 @@ export type ToolCallContext = {
   partIndex: number;
   /** The turn is still in flight — the chat block's `isStreaming`. */
   inFlight: boolean;
+  /** Whether a later part of the same turn calls this tool. */
+  followedBy: (name: MacroToolName) => boolean;
 };
 
 /** Row-level facts common to every tool card, derived once by the dispatcher. */
@@ -37,8 +40,6 @@ export type ToolCallCommon = {
   /** The ACP tool call id. */
   id: string;
   label: string;
-  /** The MCP server the tool was reached over, for a tool that was. */
-  server: string | undefined;
   status: ToolStatus;
   /** The chat block's failed treatment: faded row, quiet trailing label. */
   muted: boolean;
@@ -53,9 +54,17 @@ export function toolLabel(name: ToolName): string {
   return name.kind === 'mcp' ? name.tool : name.name;
 }
 
-/** The MCP server a tool was reached over, when it was one. */
-export function toolServer(name: ToolName): string | undefined {
-  return name.kind === 'mcp' ? name.server : undefined;
+/** Whether a part after `index` calls the tool named `name`. */
+export function toolUsedAfter(
+  parts: readonly MessagePart[],
+  index: number
+): (name: MacroToolName) => boolean {
+  return (name) =>
+    parts
+      .slice(index + 1)
+      .some(
+        (part) => part.kind === 'tool_use' && toolLabel(part.name) === name
+      );
 }
 
 /** Subtitle for a call that touched paths: the path, or how many. */

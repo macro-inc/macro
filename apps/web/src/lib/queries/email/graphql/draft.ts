@@ -1,12 +1,14 @@
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import {
   executeOptimisticMutation,
+  type OptimisticResponse,
   optimisticMutationDispositionOf,
   prependUnique,
   remove,
   select,
   update,
 } from '@graphql-cache/exchange/optimistic';
+import { getActiveGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import {
   DeleteEmailDraftDocument,
   type DeleteEmailDraftMutation,
@@ -26,14 +28,21 @@ import {
   CombinedError,
   type OperationResult,
 } from '@urql/core';
+import {
+  createDraftThread,
+  type DraftThread,
+  draftThreadIsEmpty,
+  removeDraftFromThread,
+  updateDraftThread,
+} from './optimistic-thread';
 
 /**
  * Input for a durable GraphQL draft save. `draftId` is the draft's handle —
  * a client-minted id (or a server id from a fetched draft) that the server
  * resolves through a caller-scoped mapping to a server-minted row, so saves
  * queued offline replay as idempotent upserts without the handle ever
- * becoming a primary key. `threadDbId` is required: this path covers reply
- * drafts, whose thread is always known.
+ * becoming a primary key. `threadDbId` is a stable local handle for new
+ * standalone drafts, or the existing conversation ID for replies.
  *
  * The `sender*` and `optimistic*` fields are client-only — they feed the
  * optimistic draft entity and are stripped from the mutation variables.
@@ -54,6 +63,14 @@ export type GraphqlSaveEmailDraftArgs = Omit<
   optimisticBodyHtml: string | null;
   /** Preserve persisted fields this body/envelope save does not modify. */
   existingDraft?: OptimisticDraftEntity;
+  /** Complete cached conversation, when available. */
+  existingThread?: DraftThread;
+  /** Present only when this save creates a standalone local thread. */
+  newThreadOwnerId?: string;
+  /** Importance of this account's own draft sender. */
+  senderIsSignal?: boolean;
+  /** Original queue coalescing key survives adoption of server IDs. */
+  mutationUuid?: string;
 };
 
 /** Maps a REST-shaped contact to the mutation's input shape. */
@@ -89,9 +106,10 @@ export type SaveEmailDraftOutcome =
   | { kind: 'queued'; transactionId: string }
   | { kind: 'failed'; code: SaveEmailDraftFailureCode; error: CombinedError };
 
-function failureCode(error: CombinedError): SaveEmailDraftFailureCode {
-  if (error.networkError) return 'NETWORK';
-  const code = error.graphQLErrors[0]?.extensions?.code;
+/** Interpret a server code consistently for foreground and replayed writes. */
+export function draftFailureCode(
+  code: unknown
+): Exclude<SaveEmailDraftFailureCode, 'NETWORK'> {
   switch (code) {
     case 'DRAFT_ALREADY_SENT':
     case 'NOT_FOUND':
@@ -123,7 +141,9 @@ function settleDraftMutation<TData, TVariables extends AnyVariables, Payload>(
   if (result.error) {
     return {
       kind: 'failed',
-      code: failureCode(result.error),
+      code: result.error.networkError
+        ? 'NETWORK'
+        : draftFailureCode(result.error.graphQLErrors[0]?.extensions?.code),
       error: result.error,
     };
   }
@@ -161,11 +181,8 @@ function optimisticContact(
  * selects the same `EmailThreadMessageFields` fragment the thread page
  * reads, so fragment drift surfaces as a compile error in this function.
  *
- * The entity is keyed by the handle; a first save's committed response
- * arrives under the server-minted id instead. The engine skips the now
- * record-less link patch at settlement (never planting a dangling ref), so
- * the draft is briefly absent from the page until the revalidation lands —
- * subsequent saves use the adopted server id and match exactly.
+ * The cache binds the handle to the server identity atomically at settlement,
+ * rebasing later queued edits and preserving reads through the old handle.
  */
 function optimisticDraftEntity(
   args: GraphqlSaveEmailDraftArgs
@@ -175,12 +192,12 @@ function optimisticDraftEntity(
   return {
     __typename: 'GraphqlSoupEmailMessage',
     id: String(args.draftId),
-    providerId: args.providerId ?? null,
+    providerId: args.providerId ?? existing?.providerId ?? null,
     threadId: args.threadDbId,
     replyingToId: args.replyingToId != null ? String(args.replyingToId) : null,
     linkId: args.senderLinkId,
     subject: args.subject,
-    snippet: existing?.snippet ?? null,
+    snippet: args.bodyText?.trim().slice(0, 200) ?? existing?.snippet ?? null,
     internalDateTs: existing?.internalDateTs ?? null,
     sentAt: existing?.sentAt ?? null,
     isRead: true,
@@ -193,6 +210,7 @@ function optimisticDraftEntity(
     bodyHtmlSanitized: args.optimisticBodyHtml,
     bodyMacro: args.bodyMacro ?? null,
     bodyReplyless: null,
+    calendarInvitations: existing?.calendarInvitations ?? [],
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     from: { email: args.senderEmail, name: null, photoUrl: null },
@@ -226,6 +244,10 @@ export async function executeGraphqlSaveEmailDraft(
     senderEmail: _senderEmail,
     optimisticBodyHtml: _optimisticBodyHtml,
     existingDraft: _existingDraft,
+    existingThread: _existingThread,
+    newThreadOwnerId: _newThreadOwnerId,
+    senderIsSignal: _senderIsSignal,
+    mutationUuid: _mutationUuid,
     ...input
   } = args;
   const variables: SaveEmailDraftMutationVariables = { input };
@@ -234,15 +256,30 @@ export async function executeGraphqlSaveEmailDraft(
     offset: 0,
     limit: DEFAULT_THREAD_MESSAGES_LIMIT,
   };
-  const optimisticData: SaveEmailDraftMutation = {
+  const draft = optimisticDraftEntity(args);
+  // Only a newly minted thread may adopt a server identity. A reply can move
+  // to another inbox without moving its original conversation with it.
+  const localThread = args.existingThread
+    ? args.existingThread.cacheProjection === null
+    : !!args.newThreadOwnerId;
+  const canPatchThread =
+    localThread || args.existingThread?.linkId === args.senderLinkId;
+  // Keep a queued cross-inbox reply reopenable in its source conversation.
+  // Settlement replaces this layer with the actual destination thread.
+  const thread = args.existingThread
+    ? updateDraftThread(args.existingThread, draft, args.senderIsSignal ?? true)
+    : args.newThreadOwnerId
+      ? createDraftThread(
+          draft,
+          args.newThreadOwnerId,
+          args.senderIsSignal ?? true
+        )
+      : undefined;
+  const optimisticData: OptimisticResponse<SaveEmailDraftMutation> = {
     saveEmailDraft: {
       draftId: String(args.draftId),
-      draft: optimisticDraftEntity(args),
-      thread: {
-        __typename: 'GraphqlSoupEmailThread',
-        id: args.threadDbId,
-        updatedAt: new Date().toISOString(),
-      },
+      draft,
+      thread,
     },
   };
 
@@ -257,26 +294,51 @@ export async function executeGraphqlSaveEmailDraft(
       // snapshots), so an offline typing session holds one queue row per
       // draft instead of one per debounce tick. The delete reuses the key —
       // a discard supersedes any still-queued save.
-      uuid: String(args.draftId),
+      uuid: args.mutationUuid ?? String(args.draftId),
+      identityBindings: [
+        {
+          localKey: `GraphqlSoupEmailMessage:${args.draftId}`,
+          responsePath: ['saveEmailDraft', 'draft'],
+          referenceFields: [
+            'GraphqlSoupEmailDraftAttachment.draftId',
+            'GraphqlSoupEmailForwardedAttachment.draftId',
+            'GraphqlMailPreviewMessage.id',
+            'GraphqlMailDraftEntry.id',
+          ],
+        },
+        {
+          localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
+          // Keep reference-only bindings so already queued local saves still
+          // rebase through a preceding save's durable alias.
+          responsePath: localThread ? ['saveEmailDraft', 'thread'] : [],
+          referenceFields: ['GraphqlSoupEmailMessage.threadId'],
+          revalidationVariables: ['threadId'],
+        },
+      ],
       // Splice the optimistic entity into the thread page's message list so
       // draftMap sees it. Idempotent; reapplied at commit; a non-resolving
       // path is skipped and recovered by the revalidation below.
-      updates: [
-        update(
-          select<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
-            EmailThreadPageDocument,
-            threadPageVariables
-          )
-            .field('user')
-            .field('emailThread')
-            .field('messages'),
-          prependUnique({
-            __typename: 'GraphqlSoupEmailMessage',
-            id: String(args.draftId),
-          })
-        ),
-      ],
+      // A different sending inbox can create a new conversation. Never splice
+      // its committed draft back into the existing source conversation.
+      updates: canPatchThread
+        ? [
+            update(
+              select<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+                EmailThreadPageDocument,
+                threadPageVariables
+              )
+                .field('user')
+                .field('emailThread')
+                .field('messages'),
+              prependUnique({
+                __typename: 'GraphqlSoupEmailMessage',
+                id: String(args.draftId),
+              })
+            ),
+          ]
+        : [],
       revalidations: [
+        ...getActiveGraphqlSoupRevalidations(),
         {
           document: EmailThreadPageDocument,
           variables: threadPageVariables,
@@ -305,6 +367,8 @@ export type GraphqlDeleteEmailDraftArgs = {
   /** Thread the draft lives in — targets the optimistic removal from the
    * thread page's message list and the post-commit revalidation. */
   threadDbId: string;
+  existingThread?: DraftThread;
+  mutationUuid?: string;
 };
 
 /**
@@ -338,11 +402,16 @@ export async function executeGraphqlDeleteEmailDraft(
     offset: 0,
     limit: DEFAULT_THREAD_MESSAGES_LIMIT,
   };
-  const optimisticData: DeleteEmailDraftMutation = {
+  const thread = args.existingThread
+    ? removeDraftFromThread(args.existingThread, args.draftId)
+    : undefined;
+  const optimisticData: OptimisticResponse<DeleteEmailDraftMutation> = {
     deleteEmailDraft: {
       draftId: args.draftId,
       deleted: true,
-      threadDeleted: false,
+      threadDeleted: thread ? draftThreadIsEmpty(thread) : false,
+      threadId: args.threadDbId,
+      thread,
     },
   };
 
@@ -355,7 +424,24 @@ export async function executeGraphqlDeleteEmailDraft(
       // Same coalescing key as the draft's saves: a discard supersedes any
       // still-queued save of this draft — the replaced entry never replays,
       // and the delete itself is an idempotent no-op if nothing was created.
-      uuid: args.draftId,
+      uuid: args.mutationUuid ?? args.draftId,
+      identityBindings: [
+        {
+          localKey: `GraphqlSoupEmailMessage:${args.draftId}`,
+          responsePath: [],
+          deleteRecord: true,
+          referenceFields: [
+            'GraphqlMailPreviewMessage.id',
+            'GraphqlMailDraftEntry.id',
+          ],
+        },
+        {
+          localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
+          responsePath: [],
+          referenceFields: ['GraphqlSoupEmailMessage.threadId'],
+          revalidationVariables: ['threadId'],
+        },
+      ],
       // Drop the draft from the thread page's message list so draftMap
       // stops seeing it. Idempotent; reapplied at commit; a non-resolving
       // path is skipped and recovered by the revalidation below.
@@ -375,6 +461,7 @@ export async function executeGraphqlDeleteEmailDraft(
         ),
       ],
       revalidations: [
+        ...getActiveGraphqlSoupRevalidations(),
         {
           document: EmailThreadPageDocument,
           variables: threadPageVariables,

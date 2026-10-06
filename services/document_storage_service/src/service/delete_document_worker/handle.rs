@@ -14,26 +14,7 @@ pub async fn handle(
     tracing::debug!("processing delete document message");
 
     let (document_id, mut owner) = if let Some(attributes) = message.message_attributes.as_ref() {
-        let document_id = attributes
-            .get("document_id")
-            .map(|document_id| {
-                tracing::trace!(document_id=?document_id, "found document_id in message attributes");
-                document_id.string_value().unwrap_or_default()
-            })
-            .context("document_id should be a message attribute")?;
-
-        // The `user_id` attribute carries the owner principal (`macro|<email>`,
-        // `bot|<uuid>`, or a team UUID); it keeps its historical name on the wire.
-        let owner = attributes
-            .get("user_id")
-            .map(|user_id| {
-                tracing::trace!(user_id=?user_id, "found user_id in message attributes");
-                Owner::from_principal_str(user_id.string_value().unwrap_or_default())
-            })
-            .transpose()
-            .context("user_id message attribute should be an owner principal")?;
-
-        (document_id, owner)
+        document_and_owner(attributes)?
     } else {
         ctx.worker.cleanup_message(message).await?;
         anyhow::bail!("message attributes not found")
@@ -131,6 +112,25 @@ pub async fn handle(
     });
 
     Ok(())
+}
+
+pub(super) fn document_and_owner(
+    attributes: &std::collections::HashMap<String, aws_sdk_sqs::types::MessageAttributeValue>,
+) -> anyhow::Result<(&str, Option<Owner>)> {
+    let document_id = attributes
+        .get("document_id")
+        .map(|document_id| document_id.string_value().unwrap_or_default())
+        .context("document_id should be a message attribute")?;
+
+    // The `user_id` attribute carries the owner principal (`macro|<email>`,
+    // `bot|<uuid>`, or a team UUID); it keeps its historical name on the wire.
+    let owner = attributes
+        .get("user_id")
+        .map(|owner| Owner::from_principal_str(owner.string_value().unwrap_or_default()))
+        .transpose()
+        .context("user_id message attribute should be an owner principal")?;
+
+    Ok((document_id, owner))
 }
 
 pub(crate) fn document_cleanup_receipt(document_id: &str) -> EditReceipt {

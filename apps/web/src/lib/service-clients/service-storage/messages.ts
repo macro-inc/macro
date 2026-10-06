@@ -3,14 +3,35 @@ import { dssFetch } from './client';
 import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
 import type { MessageParent } from './generated/schemas/messageParent';
-import type { MessageThread } from './generated/schemas/messageThread';
+import type { MessageThread as StoredMessageThread } from './generated/schemas/messageThread';
 import type { PostMessage } from './generated/schemas/postMessage';
 import type { ThreadPatch } from './generated/schemas/threadPatch';
 import type { ThreadState } from './generated/schemas/threadState';
 
-export type { MessageParent, MessageThread, PostMessage, ThreadPatch };
-export type Message = StoredMessage & {
-  sender?: import('./generated/schemas/apiMessageSender').ApiMessageSender;
+export type { CountedReaction } from './generated/schemas/countedReaction';
+export type { MessageAttachment } from './generated/schemas/messageAttachment';
+export type { MessageParent, PostMessage, ThreadPatch };
+
+/**
+ * Presentation identity derived on the client from `sender_id` and the
+ * optional bot profile; the API stores only the principal.
+ */
+export type MessageSender = {
+  /** Sender id without the storage namespace prefix. */
+  id: string;
+  type: 'user' | 'bot';
+  /** Display name for bot senders. */
+  name?: string | null;
+  /** Avatar URL for bot senders. */
+  avatar_url?: string | null;
+  /** For an agent (bot) message, the id of the user who triggered it. */
+  triggered_by?: string | null;
+};
+
+export type Message = StoredMessage & { sender?: MessageSender };
+export type MessageThread = Omit<StoredMessageThread, 'root' | 'replies'> & {
+  root: Message;
+  replies: Message[];
 };
 export type { MessagePatch } from './generated/schemas/messagePatch';
 export type { MessageCursor };
@@ -18,7 +39,7 @@ export type { MessageCursor };
 import type { MessagePatch } from './generated/schemas/messagePatch';
 export type MessageListItem =
   import('./generated/schemas/messageListItem').MessageListItem & {
-    sender?: import('./generated/schemas/apiMessageSender').ApiMessageSender;
+    sender?: MessageSender;
   };
 export type MessageTimelinePage = Omit<
   import('./generated/schemas/messagePage').MessagePage,

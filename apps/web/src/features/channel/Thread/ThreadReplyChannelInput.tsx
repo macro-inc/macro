@@ -1,5 +1,8 @@
 import { useUserId } from '@core/context/user';
-import { useSendMessageMutation } from '@queries/messages/mutations';
+import {
+  newMessageId,
+  useSendMessageMutation,
+} from '@queries/messages/mutations';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import type { MessageParent } from '@service-storage/messages';
 import {
@@ -145,7 +148,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
           {
             parent: props.parent,
             senderId,
-            optimisticId: crypto.randomUUID(),
+            optimisticId: newMessageId(),
             ...payload,
           },
           {

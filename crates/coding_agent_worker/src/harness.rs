@@ -2,11 +2,13 @@
 //! gateway channel.
 
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::config::Harness;
 use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
-use agent_client_protocol::{AcpAgent, AcpAgentConfig, Client, ConnectTo};
+use crate::outbound::acp_process::AcpProcess;
+use agent_client_protocol::{Client, ConnectTo, LineDirection};
 use agent_runtime_protocol::domain::connection::{
     ConnectionError, ModelProbeHandler, RuntimeChannel, RuntimeConnection,
 };
@@ -28,22 +30,31 @@ pub enum BridgeError {
     Harness(String),
 }
 
-/// Spawn the harness in ACP mode and pump frames until either side ends.
+/// Observes every line crossing the harness's stdio.
+pub type LineTap = Arc<dyn Fn(&str, LineDirection) + Send + Sync>;
+
+/// Spawn the harness in ACP mode and pump frames until either side ends,
+/// handing every ACP line to `tap` when there is one.
 pub async fn bridge(
     harness: &Harness,
     cwd: &Path,
     channel: RuntimeChannel,
+    tap: Option<LineTap>,
 ) -> Result<(), BridgeError> {
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
     };
     let (mut runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
 
-    let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()))
+    let agent = AcpProcess::new(&harness.command, harness.args.clone(), cwd)
+        .envs(harness.env.clone())
         // The wire tap: every ndjson line crossing the child's stdio, plus
         // its stderr. Enable with RUST_LOG=coding_agent_worker=trace.
-        .with_debug(|line, direction| {
+        .with_debug(move |line, direction| {
             tracing::trace!(?direction, line, "acp line");
+            if let Some(tap) = &tap {
+                tap(line, direction);
+            }
         });
 
     runtime
@@ -69,6 +80,7 @@ fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {
         command: harness.command.clone().into(),
         args: harness.args.clone(),
         cwd: cwd.to_owned(),
+        env: harness.env.clone(),
     }
 }
 
@@ -90,10 +102,6 @@ impl ModelProbeHandler for HarnessModelProbes {
 fn safe_probe_error(error: ProbeError) -> String {
     match error {
         ProbeError::Timeout(_) => "the ACP model probe timed out".to_owned(),
-        #[cfg(not(unix))]
-        ProbeError::UnsupportedWorkingDirectory => {
-            "the ACP model probe cannot apply the configured working directory".to_owned()
-        }
         ProbeError::Protocol(_) => "the ACP model probe protocol failed".to_owned(),
         ProbeError::Process(_) => "the ACP model probe process failed".to_owned(),
     }

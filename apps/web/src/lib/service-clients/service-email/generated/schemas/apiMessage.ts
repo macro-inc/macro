@@ -26,6 +26,7 @@ import type { ApiMessageSentAt } from './apiMessageSentAt';
 import type { ApiMessageSizeEstimate } from './apiMessageSizeEstimate';
 import type { ApiMessageSnippet } from './apiMessageSnippet';
 import type { ApiMessageSubject } from './apiMessageSubject';
+import type { CalendarInvitation } from './calendarInvitation';
 
 /**
  * API representation of a fully assembled email message.
@@ -39,6 +40,7 @@ export interface ApiMessage {
   body_macro?: ApiMessageBodyMacro;
   body_replyless?: ApiMessageBodyReplyless;
   body_text?: ApiMessageBodyText;
+  calendar_invitations?: CalendarInvitation[];
   cc: ApiContactInfo[];
   created_at: string;
   db_id: string;

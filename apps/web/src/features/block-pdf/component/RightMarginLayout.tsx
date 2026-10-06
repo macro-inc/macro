@@ -4,19 +4,14 @@ import {
   THREAD_WIDTH,
 } from '@block-pdf/signal/viewerThreeColumnLayout';
 import { usePageCommentLayout } from '@block-pdf/store/comments/commentLayout';
-import {
-  useCreateComment,
-  useDeleteComment,
-  useUpdateComment,
-} from '@block-pdf/store/comments/commentOperations';
-import type { CommentId, ThreadId } from '@core/comments/commentType';
+import { useCreateMessageComment } from '@block-pdf/store/comments/commentOperations';
+import type { ThreadId } from '@core/comments/commentType';
 import {
   baseCommentTheme,
   CommentsContext,
   type CommentsContextType,
   Thread,
 } from '@core/comments/Thread';
-import { useUserId } from '@core/context/user';
 import { Key } from '@solid-primitives/keyed';
 import { createSelector } from 'solid-js';
 import { usePdfComments } from '../context/pdf-comments-context';
@@ -44,7 +39,6 @@ const useCommentsContext = (
 ): CommentsContextType => {
   const pdf = usePdfDocument();
   const comments = usePdfComments();
-  const commentsById = comments.byId;
   const setActiveThread = (threadId: ThreadId | null) => {
     if (threadId == null) {
       comments.clearActiveThread();
@@ -53,34 +47,16 @@ const useCommentsContext = (
     }
   };
 
-  const createComment = useCreateComment();
-  const updateComment = useUpdateComment();
-  const deleteComment = useDeleteComment();
-
-  const userId = useUserId();
-  const ownedComment = (id: CommentId) => {
-    const currentUserId = userId();
-    return (
-      currentUserId != null && commentsById().get(id)?.owner === currentUserId
-    );
-  };
-  const getCommentById = (id: CommentId) => commentsById().get(id);
+  const createComment = useCreateMessageComment();
 
   const commentsContext: CommentsContextType = {
     setActiveThread,
     setThreadHeight,
     canComment: () => !pdf.isNested() && pdf.permissions.canComment(),
     isDocumentOwner: pdf.permissions.isOwner,
-    getCommentById,
     documentId: pdf.documentId(),
     documentType: 'pdf',
-    ownedComment,
-    commentOperations: {
-      createComment,
-      deleteComment,
-      updateComment,
-    },
-    inComment: true,
+    messageOperations: { createComment },
     highlightedCommentId: () => null,
   };
 

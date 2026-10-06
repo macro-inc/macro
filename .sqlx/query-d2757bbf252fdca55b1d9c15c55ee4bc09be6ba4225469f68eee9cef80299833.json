@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendars\n            SET watch_unsupported_at = now(),\n                updated_at = now()\n            WHERE id = $1\n              AND account_id = $2\n              AND NOT is_deleted\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d2757bbf252fdca55b1d9c15c55ee4bc09be6ba4225469f68eee9cef80299833"
+}

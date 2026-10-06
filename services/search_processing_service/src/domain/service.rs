@@ -263,8 +263,11 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, &progress, &cancel, |offset| {
-            self.source.fetch_channels(&req, offset)
+        if req.channel_ids.as_ref().is_some_and(Vec::is_empty) {
+            return Ok(BackfillReceipt { enqueued: 0 });
+        }
+        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+            self.source.fetch_channels(&req, cursor)
         })
         .await
     }

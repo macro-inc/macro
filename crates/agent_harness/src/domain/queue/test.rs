@@ -197,6 +197,34 @@ fn a_requeued_entry_is_next_in_line() {
 }
 
 #[test]
+fn move_to_front_promotes_a_waiting_entry_and_keeps_the_rest() {
+    let queues = SessionQueues::new();
+    let session = AgentSessionId::TEST_A;
+    let first = prompt_entry("first");
+    let steered = prompt_entry("steer");
+    let third = prompt_entry("third");
+    queues.enqueue(session, first.clone()).unwrap();
+    queues.enqueue(session, steered.clone()).unwrap();
+    queues.enqueue(session, third.clone()).unwrap();
+
+    queues.move_to_front(session, steered.action_id).unwrap();
+    queues.move_to_front(session, steered.action_id).unwrap();
+
+    assert_eq!(
+        queues
+            .list(session)
+            .iter()
+            .map(|entry| entry.action_id)
+            .collect::<Vec<_>>(),
+        [steered.action_id, first.action_id, third.action_id]
+    );
+    assert_eq!(
+        queues.move_to_front(session, AgentActionId::mint()),
+        Err(QueueError::NotFound)
+    );
+}
+
+#[test]
 fn enqueue_front_puts_the_entry_ahead_of_waiting_work() {
     let queues = SessionQueues::new();
     let session = AgentSessionId::TEST_A;
@@ -220,6 +248,36 @@ fn enqueue_front_puts_the_entry_ahead_of_waiting_work() {
     assert_eq!(
         queues.claim_next(session).unwrap().action_id,
         waiting.action_id
+    );
+}
+
+#[test]
+fn a_snapshot_round_trips_through_the_durable_shape() {
+    let session = AgentSessionId::TEST_A;
+    let mut entry = prompt_entry("keep me");
+    entry.announce = Some(AnnounceOrigin {
+        reuse_origin_message: false,
+        parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(0xf0)),
+        thread_id: Uuid::from_u128(0xf1),
+        message_id: Uuid::from_u128(0xf2),
+    });
+    entry.announced = Some(Uuid::from_u128(0xf3));
+    let queues = SessionQueues::new();
+    queues.enqueue(session, entry.clone()).unwrap();
+
+    let stored = queues.snapshot(session)[0].to_stored().unwrap();
+    let restored = QueuedEntry::from_stored(stored).unwrap();
+    assert_eq!(restored.action_id, entry.action_id);
+    assert_eq!(prompt_text(&restored.action), "keep me");
+    assert_eq!(restored.announce, entry.announce);
+    assert_eq!(restored.announced, entry.announced);
+
+    let other = SessionQueues::new();
+    other.replace(session, vec![restored]);
+    assert_eq!(other.list(session).len(), 1);
+    assert_eq!(
+        prompt_text(&other.claim_next(session).unwrap().action),
+        "keep me"
     );
 }
 

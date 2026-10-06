@@ -65,6 +65,11 @@ test('three pages fence graceful, abrupt, stale, and worker-only ownership', asy
     pushReachedAllTabs: true,
     ownerLockContentionEpochs: [1, 2, 3, 4],
     engineReplacedEpochs: [2, 3, 4],
+    replacementStorageOutcomes: [
+      [2, 'opened-existing'],
+      [3, 'reset-storage-uncertain'],
+      [4, 'reset-storage-uncertain'],
+    ],
     protocolErrors: [],
   });
   expect(browserErrors).toEqual([]);
@@ -116,6 +121,7 @@ test('production CacheHost performs fresh init and active reread after owner los
     ],
     oldEpochRejectedBeforeReplacement: true,
     oldRequestReplayCount: 1,
+    replacementStorage: ['reset'],
     replacementActiveKeys: [[7, 9]],
     replacementReadCompleted: true,
     gracefulDrained: true,
@@ -293,12 +299,14 @@ test('production cache-wasm Turso engine preserves graceful data and atomically 
     realTursoDataPreservedGracefully: boolean;
     gracefulCloseReleasedOwnerLock: boolean;
     gracefulReplacementWaitedForPhysicalLock: boolean;
-    gracefulPendingOwnerLockRequests: number;
+    gracefulQueuedOwnerLockRequests: number;
+    gracefulRetriedHeldOwnerLock: boolean;
     abruptInflightRejected: boolean;
     abruptRequestReplayCount: number;
     abruptOwnerPageStayedAlive: boolean;
     recoveryReplacementWaitedForPhysicalLock: boolean;
-    recoveryPendingOwnerLockRequests: number;
+    recoveryQueuedOwnerLockRequests: number;
+    recoveryRetriedHeldOwnerLock: boolean;
     atomicRecoveryOpenWipedToMiss: boolean;
     recoveryDatabaseAction: string;
     ownerEpochs: number[];
@@ -310,15 +318,102 @@ test('production cache-wasm Turso engine preserves graceful data and atomically 
     realTursoDataPreservedGracefully: true,
     gracefulCloseReleasedOwnerLock: true,
     gracefulReplacementWaitedForPhysicalLock: true,
-    gracefulPendingOwnerLockRequests: 1,
+    gracefulQueuedOwnerLockRequests: 0,
+    gracefulRetriedHeldOwnerLock: true,
     abruptInflightRejected: true,
     abruptRequestReplayCount: 1,
     abruptOwnerPageStayedAlive: true,
     recoveryReplacementWaitedForPhysicalLock: true,
-    recoveryPendingOwnerLockRequests: 1,
+    recoveryQueuedOwnerLockRequests: 0,
+    recoveryRetriedHeldOwnerLock: true,
     atomicRecoveryOpenWipedToMiss: true,
     recoveryDatabaseAction: 'wipe-before-open',
     ownerEpochs: [1, 2, 3],
+    protocolErrors: [],
+  });
+  expect(browserErrors).toEqual([]);
+});
+
+test('production engine waits out a departing owner that still holds the files, and never wipes them', async ({
+  context,
+  page,
+}, testInfo) => {
+  const browserErrors: string[] = [];
+  const watch = (candidate: typeof page): void => {
+    candidate.on('console', (message) => {
+      if (message.type() === 'error') browserErrors.push(message.text());
+    });
+    candidate.on('pageerror', (error) => browserErrors.push(error.message));
+  };
+  watch(page);
+  context.on('page', watch);
+
+  await page.goto(harnessPath(testInfo.project.name, 'production-busy.html'));
+  const result = page.locator('#result');
+  await expect(result).toHaveAttribute('data-status', 'passed', {
+    timeout: 80_000,
+  });
+  const report = JSON.parse((await result.textContent()) ?? '') as Record<
+    string,
+    unknown
+  >;
+
+  expect(report).toEqual({
+    passed: true,
+    firstReplacementDatabaseAction: 'open-existing',
+    firstReplacementWaitedForFiles: true,
+    firstReplacementKeptData: true,
+    firstRecoveryAttempts: 0,
+    busyReplacementDatabaseAction: 'open-existing',
+    busyReplacementOpened: false,
+    busyReplacementTerminated: true,
+    survivorToldFilesAreOpen: true,
+    survivorReadFellBack: true,
+    retriedWhileBusy: false,
+    laterTabDatabaseAction: 'open-existing',
+    laterTabKeptData: true,
+    protocolErrors: [],
+  });
+  expect(browserErrors).toEqual([]);
+});
+
+test('a newer build takes the production database over and older builds are turned away', async ({
+  context,
+  page,
+}, testInfo) => {
+  const browserErrors: string[] = [];
+  const watch = (candidate: typeof page): void => {
+    candidate.on('console', (message) => {
+      if (message.type() === 'error') browserErrors.push(message.text());
+    });
+    candidate.on('pageerror', (error) => browserErrors.push(error.message));
+  };
+  watch(page);
+  context.on('page', watch);
+
+  await page.goto(
+    harnessPath(testInfo.project.name, 'production-takeover.html')
+  );
+  const result = page.locator('#result');
+  await expect(result).toHaveAttribute('data-status', 'passed', {
+    timeout: 80_000,
+  });
+  const report = JSON.parse((await result.textContent()) ?? '') as Record<
+    string,
+    unknown
+  >;
+
+  expect(report).toEqual({
+    passed: true,
+    newBuildDatabaseAction: 'open-existing',
+    newBuildKeptData: true,
+    oldEngineStoppedLikeNavigation: true,
+    oldTabsSentOn: true,
+    olderBuildTurnedAway: true,
+    olderBuildSentOn: false,
+    lateOldTabRunsUncached: true,
+    lateOldTabSentOn: false,
+    newBuildSentOn: false,
     protocolErrors: [],
   });
   expect(browserErrors).toEqual([]);

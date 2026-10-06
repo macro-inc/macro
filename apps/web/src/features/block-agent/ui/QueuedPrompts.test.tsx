@@ -5,7 +5,9 @@ import { QueuedPrompts } from './QueuedPrompts';
 
 const editor = vi.hoisted(() => ({
   change: undefined as ((markdown: string) => void) | undefined,
+  escape: undefined as (() => boolean) | undefined,
   markdown: 'Queued request',
+  focus: vi.fn(),
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder',
@@ -19,9 +21,13 @@ vi.mock(
           return builder;
         },
         onFocusLeave: () => builder,
+        onEscape: (callback: () => boolean) => {
+          editor.escape = callback;
+          return builder;
+        },
         lexical: { getRootElement: () => null },
         controls: {
-          focus: vi.fn(),
+          focus: editor.focus,
           getMarkdown: () => editor.markdown,
           setMarkdown: vi.fn(),
         },
@@ -55,6 +61,7 @@ vi.mock('@ui', () => ({
 beforeEach(() => {
   vi.useFakeTimers();
   editor.markdown = 'Queued request';
+  editor.focus.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -62,6 +69,79 @@ afterEach(() => {
 });
 
 describe('queued prompt access', () => {
+  it('collapses every message and opens only the selected editor', () => {
+    render(() => (
+      <QueuedPrompts
+        items={[
+          {
+            actionId: 'first',
+            kind: 'prompt',
+            prompt: 'First request\nMore detail',
+          },
+          { actionId: 'second', kind: 'prompt', prompt: 'Second request' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    ));
+    expect(screen.queryByRole('textbox')).toBeNull();
+    const first = screen.getByRole('button', {
+      name: /First request\s+More detail/,
+    });
+    const second = screen.getByRole('button', { name: 'Second request' });
+    fireEvent.click(first);
+    expect(first.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    expect(editor.focus).toHaveBeenCalledOnce();
+
+    fireEvent.click(second);
+    expect(first.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByRole('textbox').textContent).toBe('Second request');
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(document.activeElement).toBe(second);
+  });
+
+  it('opens the next prompt from composer keyboard navigation', () => {
+    let focusFromBelow: (() => void) | undefined;
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Next to send' },
+          { actionId: 'second', kind: 'prompt', prompt: 'Newest request' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+        registerFocusFromBelow={(focus) => (focusFromBelow = focus)}
+      />
+    ));
+    focusFromBelow?.();
+    expect(screen.getByRole('textbox').textContent).toBe('Next to send');
+    expect(editor.focus).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the edited preview and editor mounted when collapsed', () => {
+    const onEdit = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={onEdit}
+        onRemove={vi.fn()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    const textbox = screen.getByRole('textbox');
+    editor.markdown = 'Updated request';
+    editor.change?.(editor.markdown);
+    expect(editor.escape?.()).toBe(true);
+    expect(onEdit).toHaveBeenCalledWith('first', 'Updated request');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Updated request' }));
+    expect(screen.getByRole('textbox')).toBe(textbox);
+  });
+
   it('shows queued text without permitting edits or removal for viewers', () => {
     const onEdit = vi.fn();
     const onRemove = vi.fn();
@@ -76,6 +156,7 @@ describe('queued prompt access', () => {
       />
     ));
 
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
     const textbox = screen.getByRole('textbox');
     expect(textbox.textContent).toBe('Queued request');
     expect(textbox.getAttribute('aria-readonly')).toBe('true');
@@ -106,6 +187,7 @@ describe('queued prompt access', () => {
         onRemove={vi.fn()}
       />
     ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
     editor.markdown = 'An unsaved edit';
     editor.change?.(editor.markdown);
 
@@ -127,6 +209,7 @@ describe('queued prompt access', () => {
         onRemove={onRemove}
       />
     ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
     editor.markdown = 'An edited request';
     editor.change?.(editor.markdown);
     vi.advanceTimersByTime(400);
@@ -136,5 +219,60 @@ describe('queued prompt access', () => {
 
     expect(onEdit).toHaveBeenCalledWith('queued-1', 'An edited request');
     expect(onRemove).toHaveBeenCalledWith('queued-1');
+  });
+
+  it('steers the selected queued message without opening its editor', () => {
+    const onSteer = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Next to send' },
+          { actionId: 'second', kind: 'prompt', prompt: 'Steer this' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+        onSteer={onSteer}
+      />
+    ));
+
+    const steer = screen.getAllByRole('button', { name: 'Steer' });
+    expect(steer).toHaveLength(2);
+    // Newest is rendered first; "Steer this" is the second queued entry.
+    fireEvent.click(steer[0]);
+    expect(onSteer).toHaveBeenCalledWith('second');
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('hides steer when the turn is not in flight and disables it for viewers', () => {
+    const onSteer = vi.fn();
+    const { unmount } = render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    ));
+    expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull();
+    unmount();
+
+    render(() => (
+      <QueuedPrompts
+        disabled
+        items={[
+          { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+        onSteer={onSteer}
+      />
+    ));
+    const steer = screen.getByRole('button', {
+      name: 'Steer',
+    }) as HTMLButtonElement;
+    expect(steer.disabled).toBe(true);
+    fireEvent.click(steer);
+    expect(onSteer).not.toHaveBeenCalled();
   });
 });

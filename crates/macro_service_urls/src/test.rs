@@ -150,6 +150,23 @@ fn agent_harness_service_url_parses() {
 }
 
 #[test]
+fn scheduled_action_service_url_parses() {
+    assert_parses_for_all_environments(ScheduledActionServiceUrl::default_for_environment);
+    assert_eq!(
+        ScheduledActionServiceUrl::local().as_ref(),
+        "http://localhost:8099"
+    );
+    assert_eq!(
+        ScheduledActionServiceUrl::dev().as_ref(),
+        "https://dev-gateway.macro.com/scheduled-action"
+    );
+    assert_eq!(
+        ScheduledActionServiceUrl::prod().as_ref(),
+        "https://gateway.macro.com/scheduled-action"
+    );
+}
+
+#[test]
 fn agent_harness_service_url_has_no_trailing_slash() {
     for environment in ENVS {
         let url = AgentHarnessServiceUrl::default_for_environment(environment);
@@ -605,7 +622,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
-        "https://lexical-service-dev.macroverse.workers.dev",
+        "https://dev-gateway.macro.com/lexical",
     );
     assert_eq!(
         service_urls.sync_service_url.as_ref(),
@@ -688,7 +705,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
-        "https://lexical-service-prod.macroverse.workers.dev",
+        "https://gateway.macro.com/lexical",
     );
     assert_eq!(
         service_urls.sync_service_url.as_ref(),

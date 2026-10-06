@@ -7,9 +7,9 @@ use rootcause::Report;
 use serde::Serialize;
 
 use crate::domain::models::apple::VoipPushPayload;
-use crate::domain::models::mobile::{DeviceEndpoint, SnsTarget};
+use crate::domain::models::mobile::DeviceEndpoint;
 use crate::domain::ports::{NotificationRepository, VoipPushSender};
-use crate::outbound::mobile::{MobilePushAdapter, MobilePushOps};
+use crate::outbound::mobile::{MobilePushAdapter, MobilePushOps, SnsTarget};
 
 use super::VoipPushServiceImpl;
 
@@ -149,6 +149,7 @@ impl NotificationRepository for MockRepo {
         &self,
         _: MacroUserIdStr<'_>,
         _: &[model_entity::Entity<'_>],
+        _: &crate::domain::models::request::NotificationStatus,
     ) -> Result<Vec<uuid::Uuid>, Report> {
         unimplemented!()
     }

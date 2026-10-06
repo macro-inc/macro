@@ -27,7 +27,8 @@ const nonEmailFilters: EntityFilters = {
 };
 
 // Search has no draft/sent scoping, so those tabs (like All) search the
-// user's own threads — the same reach the legacy mail search had.
+// user's own threads — the same reach the legacy mail search had. It cannot
+// filter archive state either, so `emailMatchesTab` trims Archived hits.
 function tabFilters(tab: EmailTab): EmailFilters {
   return match(tab)
     .with('important', () => ({ importance: true, shared: 'exclude' as const }))
@@ -37,7 +38,16 @@ function tabFilters(tab: EmailTab): EmailFilters {
       shared: 'exclude' as const,
     }))
     .with('shared', () => ({ shared: 'only' as const }))
-    .with('drafts', 'sent', 'all', () => ({}))
+    .with('archived', () => ({ shared: 'exclude' as const }))
+    .with(
+      'favorites',
+      'drafts',
+      'scheduled',
+      'reminders',
+      'sent',
+      'all',
+      () => ({})
+    )
     .exhaustive();
 }
 
@@ -72,11 +82,24 @@ function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
 /** Mirrors the Email view's tab, inbox, and facet scoping for service-backed search. */
 export function buildEmailSearchRequest(
   context: EmailQueryContext,
-  search: SoupSearchRequest
+  search: SoupSearchRequest,
+  admittedIds?: readonly string[]
 ): SearchSoupQueryArgs {
+  // Both discovery and retained unread results must stay within favorites.
+  const threadIds =
+    context.tab === 'favorites'
+      ? (context.favoriteThreadIds ?? []).filter(
+          (id) => admittedIds === undefined || admittedIds.includes(id)
+        )
+      : admittedIds;
   const emailFilters: EmailFilters = {
     ...tabFilters(context.tab),
-    ...facetFilters(context.facets),
+    ...facetFilters(
+      admittedIds ? { ...context.facets, read: [] } : context.facets
+    ),
+    ...(threadIds
+      ? { email_thread_ids: threadIds.length ? [...threadIds] : [NIL_UUID] }
+      : {}),
   };
 
   if (context.inboxIds !== undefined) {

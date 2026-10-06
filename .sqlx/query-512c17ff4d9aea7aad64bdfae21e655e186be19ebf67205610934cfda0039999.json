@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT change_id, row_id, kind, columns FROM database_change_rows\n           ORDER BY change_id, row_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "change_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "row_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "columns",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "512c17ff4d9aea7aad64bdfae21e655e186be19ebf67205610934cfda0039999"
+}

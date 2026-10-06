@@ -1,0 +1,36 @@
+/* Jump links reuse the CRM line illustrations. */
+.crm-feature-links a { gap: 8px; color: #b5b5b5; font-size: 13px; }
+.crm-feature-links a:hover { color: #fff; }
+.crm-feature-illustration { display: grid; place-items: center; width: 200px; max-width: 100%; height: 124px; position: relative; isolation: isolate; }
+.crm-feature-illustration::before { content: ''; position: absolute; inset: 0; z-index: -1; background: radial-gradient(#fff4 .65px, transparent .9px); background-size: 8px 8px; mask-image: radial-gradient(ellipse, #000, transparent 70%); }
+.crm-feature-illustration .crm-feature-art { width: 100%; height: 100%; color: #888; transition: color 200ms; }
+.crm-feature-links a:hover .crm-feature-art { color: #ccc; }
+
+/* Walkthrough pointers sit over the product window they act in. */
+.crm-demo-frame { position: relative; }
+.crm-demo-pointer { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; transition: transform 600ms cubic-bezier(.2, .8, .2, 1); }
+.product-demo[data-action=stage] [data-company-property=stage],
+.product-demo[data-action=owner] [data-company-property=owner] { background: #ffffff25; box-shadow: 0 0 0 3px #ffffff0d; }
+.crm-demo-frame [data-thread-id] > .sample-message-row,
+.crm-demo-frame .sample-thread-replies .sample-message-row:last-child { animation: crm-arrive 400ms ease-out both; }
+@keyframes crm-arrive { from { opacity: 0; transform: translateY(4px); } }
+
+/* The agent section keeps the homepage pipeline and its request. */
+.crm-agent-scene .homepage-conversation { width: 100%; margin-bottom: 40px; }
+.crm-pipeline-frame { position: relative; overflow: hidden; border-radius: 16px; background: #121315; box-shadow: var(--glass-shadow); }
+.product-page .homepage-crm .mdf-frame { height: auto; padding: 0; background: transparent; overflow: visible; border-radius: 0; }
+.product-page .homepage-crm .mds-card { height: auto; max-width: none; background: transparent; box-shadow: none; border-radius: 0; }
+.product-page .homepage-crm .mdf-frame::before, .product-page .homepage-crm .mds-card::before { content: none; }
+.product-page .homepage-crm-footer { border: 0; }
+
+@media (max-width: 699px) {
+  .crm-feature-links a { font-size: 12px; }
+  .crm-feature-illustration { width: 150px; height: auto; aspect-ratio: 5 / 3; }
+  .crm-agent-scene .homepage-conversation { margin-bottom: 24px; }
+  .product-page .homepage-crm-viewport { height: 290px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crm-demo-pointer { display: none; }
+  .crm-demo-frame [data-thread-id] > .sample-message-row,
+  .crm-demo-frame .sample-thread-replies .sample-message-row:last-child { animation: none; }
+}

@@ -284,6 +284,7 @@ where
         .post(
             access,
             PostMessage {
+                id: None,
                 // External webhook bot posting on its own; no triggering user.
                 attribution: MessageAttribution::Unprompted,
                 notification_policy: Default::default(),
@@ -392,17 +393,22 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
             Self::BadRequest(_)
             | Self::Bot(BotError::BadRequest(_))
             | Self::Message(MessageError::Invalid(_)) => StatusCode::BAD_REQUEST,
+            Self::Message(MessageError::Conflict) => StatusCode::CONFLICT,
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
             Self::Message(MessageError::Forbidden) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::NotFound(_)) | Self::Message(MessageError::NotFound) => {
                 StatusCode::NOT_FOUND
             }
+            Self::Bot(BotError::Unavailable(_)) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Bot(BotError::Repo(_)) | Self::Message(MessageError::Repository(_)) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
 
-        if status == StatusCode::INTERNAL_SERVER_ERROR {
+        if matches!(
+            status,
+            StatusCode::INTERNAL_SERVER_ERROR | StatusCode::SERVICE_UNAVAILABLE
+        ) {
             tracing::error!(error=?self, "channel bot webhook handler error");
         }
 

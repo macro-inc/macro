@@ -4,6 +4,8 @@
 //! only to normalized entity objects. Explicit entity keys are projected with
 //! the ordinary denormalizer without scanning normalized storage.
 
+pub mod cache;
+
 use crate::document::{ArgValue, Document, DocumentError, FieldNode, Selection};
 use crate::meta::{self, FieldKind, TypeKind};
 use crate::value::EntityKey;
@@ -64,6 +66,8 @@ impl RecordSelection {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectedRecord {
+    /// Queue state belongs to the cache, not to the GraphQL entity schema.
+    pub identity: crate::identity::IdentityStatus,
     /// Canonical normalized-cache entity key.
     pub record_key: EntityKey<'static>,
     /// Complete fragment projection for that entity.

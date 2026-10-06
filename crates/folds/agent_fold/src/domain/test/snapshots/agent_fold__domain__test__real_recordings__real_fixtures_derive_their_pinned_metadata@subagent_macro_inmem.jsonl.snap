@@ -1,0 +1,19 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 256
+expression: machine.metadata()
+input_file: crates/agent_fold/fixtures/real/subagent_macro_inmem.jsonl
+---
+SessionMetadata {
+    harness: Macro,
+    model: None,
+    supported_models: [],
+    config_options: [],
+    title: None,
+    available_commands: [],
+    status: Some(
+        "acp_ready",
+    ),
+    pending_interactions: [],
+    turn: Idle,
+}

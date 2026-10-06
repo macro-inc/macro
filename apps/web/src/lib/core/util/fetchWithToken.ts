@@ -11,6 +11,7 @@ import {
   type SafeFetchInit,
   safeFetch,
 } from './safeFetch';
+import { redactCallLinkTokens, telemetryUrl } from './telemetryUrl';
 
 export type FetchWithTokenErrorCode = BaseFetchErrorCode;
 
@@ -203,9 +204,9 @@ export async function fetchWithToken<
     const result = await fetchWithAuth<T, CustomErrorCode>(input, init);
     if (result.isErr()) {
       Telemetry.error('fetchWithToken: fetchWithAuth failed', {
-        input: typeof input === 'string' ? input : input.url,
+        input: telemetryUrl(input),
         method: init?.method,
-        errors: JSON.stringify(result.error),
+        errors: redactCallLinkTokens(JSON.stringify(result.error)),
       });
     }
 

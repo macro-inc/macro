@@ -1,8 +1,9 @@
 import { BotAvatar } from '@channel/Bots/BotAvatar';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import CopyIcon from '@phosphor/copy.svg';
 import XIcon from '@phosphor/x.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { Button } from '@ui';
+import { Badge, Button, Item } from '@ui';
 import { Show } from 'solid-js';
 
 export function ChannelBotRow(props: {
@@ -13,55 +14,66 @@ export function ChannelBotRow(props: {
   onCopyWebhook: () => void;
   onRemove: () => void;
 }) {
+  const description = () =>
+    [`@${props.bot.handle}`, props.bot.description].filter(Boolean).join(' · ');
+  const navigationHandlers = useSplitNavigationHandler<HTMLAnchorElement>(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      props.onOpen();
+    }
+  );
+
   return (
-    <div class="group relative flex items-center gap-3 border-b border-edge-muted px-6 py-2.5 last:border-b-0 hover:bg-hover focus-within:bg-hover">
-      <button
-        type="button"
-        class="absolute inset-0 z-0 rounded-md outline-none"
+    <div class="relative">
+      <a
+        {...navigationHandlers}
+        role="link"
+        tabIndex={0}
         aria-label={`Open ${props.bot.name}`}
-        onClick={props.onOpen}
-      />
-      <div class="pointer-events-none relative z-1">
-        <BotAvatar bot={props.bot} size="lg" />
-      </div>
-      <div class="pointer-events-none relative z-1 min-w-0 flex-1">
-        <div class="flex min-w-0 items-baseline gap-1.5">
-          <span class="truncate text-sm font-medium">{props.bot.name}</span>
-          <span class="truncate text-xs text-ink-extra-muted">
-            @{props.bot.handle}
-          </span>
-        </div>
-        <Show when={props.bot.description}>
-          {(description) => (
-            <div class="mt-0.5 truncate text-xs text-ink-muted">
-              {description()}
-            </div>
-          )}
-        </Show>
-      </div>
-      <Button
-        class="relative z-1"
-        variant="outline"
-        size="sm"
-        label="Copy webhook URL"
-        onClick={props.onCopyWebhook}
+        class="block rounded-xl hover:bg-hover focus-visible:outline-2 focus-visible:outline-edge"
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          event.currentTarget.click();
+        }}
       >
-        <CopyIcon />
-        Webhook URL
-      </Button>
-      <Show when={props.editable}>
-        <Button
-          class="relative z-1"
-          variant="ghost"
-          size="icon-sm"
-          label={`Remove ${props.bot.name}`}
-          aria-label={`Remove ${props.bot.name}`}
-          disabled={props.removing}
-          onClick={props.onRemove}
-        >
-          <XIcon />
-        </Button>
-      </Show>
+        <Item class={props.editable ? 'pr-20' : 'pr-12'}>
+          <BotAvatar bot={props.bot} size="lg" />
+          <Item.Content>
+            <Item.Title class="truncate">{props.bot.name}</Item.Title>
+            <Item.Description class="truncate">
+              {description()}
+            </Item.Description>
+          </Item.Content>
+          <Item.Actions>
+            <Badge variant="outline" size="sm">
+              Bot
+            </Badge>
+          </Item.Actions>
+        </Item>
+      </a>
+      <div class="absolute right-3 top-1/2 -translate-y-1/2">
+        <Item.Actions>
+          <Button
+            size="icon-sm"
+            label="Copy webhook URL"
+            onClick={props.onCopyWebhook}
+          >
+            <CopyIcon />
+          </Button>
+          <Show when={props.editable}>
+            <Button
+              size="icon-sm"
+              label={`Remove ${props.bot.name}`}
+              disabled={props.removing}
+              onClick={props.onRemove}
+            >
+              <XIcon />
+            </Button>
+          </Show>
+        </Item.Actions>
+      </div>
     </div>
   );
 }

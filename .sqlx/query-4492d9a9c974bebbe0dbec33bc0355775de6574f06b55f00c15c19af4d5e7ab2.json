@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT entries AS \"entries: Json<Vec<StoredQueuedAction>>\"\n            FROM agent_session_queue\n            WHERE agent_session_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entries: Json<Vec<StoredQueuedAction>>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4492d9a9c974bebbe0dbec33bc0355775de6574f06b55f00c15c19af4d5e7ab2"
+}

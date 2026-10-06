@@ -9,10 +9,11 @@
 //! [`RuntimeAttachment::solo`]: agent_session::domain::connection::RuntimeAttachment::solo
 
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use agent::ReasoningEffort;
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
@@ -33,6 +34,7 @@ use agent_client_protocol::{
 };
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_session::domain::model::AgentSessionId;
+use ai_billing::domain::{AiAdmissionError, AiAdmissionService};
 use ai_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
 };
@@ -41,8 +43,10 @@ use model_owner::Owner;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
-use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+use crate::domain::admission::admit_turn;
+use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
+use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
 use crate::domain::user_input::{
     SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
@@ -62,6 +66,11 @@ mod test;
 /// cancelling, however long the user takes. The question ends with an answer,
 /// a stop, or the connection going away.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Whole milliseconds since `started`, saturating; a span field, not a clock.
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
 
 /// What this agent calls itself in the `initialize` response. The fold
 /// recognizes the harness by this name, so it is a contract, not a label.
@@ -93,6 +102,8 @@ struct TurnInput {
     messages: Vec<ChatMessage>,
     /// Model the turn runs on.
     model: String,
+    /// Reasoning effort the turn runs with.
+    reasoning_effort: ReasoningEffort,
     /// Who this agent is, for the engine's system prompt.
     identity: Option<AgentIdentity>,
     /// The session's instructions, for the engine's system prompt.
@@ -107,6 +118,8 @@ pub struct AgentState {
     pub owner: Owner,
     /// Runs the actual turns.
     pub engine: Arc<dyn TurnEngine>,
+    /// Admission for new provider-backed turns, including direct ACP requests.
+    pub admission: Arc<dyn AiAdmissionService>,
     /// Conversation state, shared with the manager so it survives reattach.
     pub store: Arc<SessionStore>,
     /// Every outstanding turn's cancellation token - the running turn and any
@@ -120,6 +133,10 @@ pub struct AgentState {
     /// The tools of those servers, once dialed; `None` until then or when
     /// there were none.
     pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
+    /// In-flight `connect_mcp` from `session/new` / `session/resume`. The
+    /// handshake does not join it; the first turn does, so SearchTools still
+    /// sees the catalog.
+    pub mcp_connect: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Whether the client advertised `elicitation.form` on `initialize`. The
     /// protocol forbids asking a mode the client did not advertise.
     pub client_renders_forms: AtomicBool,
@@ -130,18 +147,50 @@ pub struct AgentState {
 
 impl AgentState {
     /// Dial the servers a session request carried and keep their tools for
-    /// every turn that follows. Done at `session/new`/`session/resume`, the
-    /// same moment a sandboxed harness connects its servers, so the first
-    /// turn already has them.
+    /// every turn that follows. Started at `session/new`/`session/resume` so
+    /// the handshake is not held by `tools/list`; the first turn joins the
+    /// same work so SearchTools still has the catalog.
     async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
-        let tools = self.mcp.connect_dyn(dialable_servers(servers)).await;
+        let servers = dialable_servers(servers);
+        let requested = servers.len();
+        let started = Instant::now();
+        let tools = self.mcp.connect_dyn(servers).await;
+        tracing::info!(
+            servers = requested,
+            tools = tools.as_ref().map_or(0, |tools| tools.len()),
+            elapsed_ms = elapsed_ms(started),
+            "connected the session's MCP servers"
+        );
         *self
             .mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned") = tools;
     }
 
-    fn current_mcp_tools(&self) -> Option<RemoteMcpToolSet> {
+    /// Start [`Self::connect_mcp`] without joining it. `session/new` and
+    /// `session/resume` call this so create can return while listing runs.
+    fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
+        let state = Arc::clone(self);
+        let handle = tokio::spawn(async move {
+            state.connect_mcp(servers).await;
+        });
+        *self
+            .mcp_connect
+            .lock()
+            .expect("mcp connect lock should not be poisoned") = Some(handle);
+    }
+
+    /// The tools the next turn should compose, waiting out an in-flight
+    /// connect so the searchable catalog is not empty on turn one.
+    async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
+        let handle = self
+            .mcp_connect
+            .lock()
+            .expect("mcp connect lock should not be poisoned")
+            .take();
+        if let Some(handle) = handle {
+            let _ = handle.await;
+        }
         self.mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned")
@@ -179,19 +228,29 @@ impl AgentState {
 
     fn set_model(&self, model: String) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
+            if !ReasoningEffort::supported(&model).contains(&state.reasoning_effort) {
+                state.reasoning_effort = ReasoningEffort::default();
+            }
             state.model = model;
+        }
+    }
+
+    fn set_reasoning_effort(&self, reasoning_effort: ReasoningEffort) {
+        if let Some(mut state) = self.store.get_mut(&self.session_id) {
+            state.reasoning_effort = reasoning_effort;
         }
     }
 
     /// ACP model configuration backed by the engine's supported-model source
     /// and this session's current selection.
-    fn model_config_options(&self) -> Vec<SessionConfigOption> {
+    fn session_config_options(&self) -> Vec<SessionConfigOption> {
         let Some(session) = self.store.get(&self.session_id) else {
             return Vec::new();
         };
-        crate::domain::model_options::model_config_options(
+        crate::domain::model_options::session_config_options(
             &session.model,
             self.engine.supported_models(),
+            session.reasoning_effort,
         )
     }
 
@@ -202,12 +261,14 @@ impl AgentState {
             || TurnInput {
                 messages: messages_for_turn(&[], prompt),
                 model: String::new(),
+                reasoning_effort: ReasoningEffort::default(),
                 identity: None,
                 instructions: None,
             },
             |state| TurnInput {
                 messages: messages_for_turn(&state.history, prompt),
                 model: state.model.clone(),
+                reasoning_effort: state.reasoning_effort,
                 identity: state.identity.clone(),
                 instructions: state.instructions.clone(),
             },
@@ -243,33 +304,6 @@ impl AgentState {
         {
             cancel.cancel();
         }
-    }
-}
-
-/// How many questions a turn currently has out to the user. Shared between
-/// the turn's requester, which counts each question it is waiting on, and the
-/// turn loop, which reads it to tell "waiting on the user" from "hung".
-#[derive(Default)]
-struct AwaitingUser(AtomicUsize);
-
-impl AwaitingUser {
-    fn is_waiting(&self) -> bool {
-        self.0.load(Ordering::Acquire) > 0
-    }
-
-    /// Count one outstanding question until the guard drops - on an answer,
-    /// an error, or the asking future being cancelled.
-    fn begin(&self) -> AwaitingGuard<'_> {
-        self.0.fetch_add(1, Ordering::AcqRel);
-        AwaitingGuard(self)
-    }
-}
-
-struct AwaitingGuard<'a>(&'a AwaitingUser);
-
-impl Drop for AwaitingGuard<'_> {
-    fn drop(&mut self) {
-        self.0.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -521,10 +555,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
-                    state.connect_mcp(request.mcp_servers).await;
+                    state.start_connect_mcp(request.mcp_servers);
                     let responded = responder.respond(
                         NewSessionResponse::new(acp_id.clone())
-                            .config_options(state.model_config_options()),
+                            .config_options(state.session_config_options()),
                     );
                     advertise_commands(&state, &connection, acp_id);
                     responded
@@ -542,9 +576,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id.clone(), true);
-                    state.connect_mcp(request.mcp_servers).await;
+                    state.start_connect_mcp(request.mcp_servers);
                     let responded = responder.respond(
-                        ResumeSessionResponse::new().config_options(state.model_config_options()),
+                        ResumeSessionResponse::new().config_options(state.session_config_options()),
                     );
                     advertise_commands(&state, &connection, request.session_id);
                     responded
@@ -565,6 +599,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         "agent.acp.prompt",
                         agent.session.id = %state.session_id,
                         gen_ai.conversation.id = %state.session_id,
+                        agent.turn.ttft_ms = tracing::field::Empty,
+                        agent.turn.first_text_ms = tracing::field::Empty,
+                        agent.turn.admission_wait_ms = tracing::field::Empty,
+                        agent.turn.lock_wait_ms = tracing::field::Empty,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
@@ -609,13 +647,22 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     connection.spawn({
                         let connection = connection.clone();
                         async move {
-                            let stop =
+                            let result =
                                 run_turn(&state, &connection, request.session_id, prompt, cancel)
                                     .await;
-                            // A closed connection is the only way this fails,
-                            // and failing the spawned task would tear the
-                            // whole (already closing) server down.
-                            let _ = responder.respond(PromptResponse::new(stop));
+                            // A closed connection is the only way responding fails.
+                            // Admission failure must not tear down resumable state.
+                            let _ = match result {
+                                Ok(stop) => responder.respond(PromptResponse::new(stop)),
+                                Err(error) => responder.respond_with_error(
+                                    AcpError::new(-32603, error.to_string()).data(
+                                        serde_json::json!({
+                                            "code": error.code(),
+                                            "retryable": error.is_retryable(),
+                                        }),
+                                    ),
+                                ),
+                            };
                             Ok(())
                         }
                         .instrument(span)
@@ -633,20 +680,52 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     if let Err(error) = state.expect_session(&request.session_id) {
                         return responder.respond_with_error(error);
                     }
-                    if request.config_id.to_string() != MODEL_CONFIG_ID {
+                    let Some(value) = request.value.as_value_id() else {
                         return responder.respond_with_error(
-                            AcpError::invalid_params()
-                                .data(format!("unknown config option {}", request.config_id)),
-                        );
-                    }
-                    let Some(model) = request.value.as_value_id() else {
-                        return responder.respond_with_error(
-                            AcpError::invalid_params().data("the model option takes a value id"),
+                            AcpError::invalid_params().data("the config option takes a value id"),
                         );
                     };
-                    state.set_model(model.to_string());
+                    match request.config_id.to_string().as_str() {
+                        MODEL_CONFIG_ID => {
+                            if !state
+                                .engine
+                                .supported_models()
+                                .contains(&value.to_string().as_str())
+                            {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params().data("unsupported model"),
+                                );
+                            }
+                            state.set_model(value.to_string());
+                        }
+                        REASONING_EFFORT_CONFIG_ID => {
+                            let Ok(effort) = value.to_string().parse() else {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params()
+                                        .data(format!("unknown reasoning effort {value}")),
+                                );
+                            };
+                            let supported =
+                                state.store.get(&state.session_id).is_some_and(|session| {
+                                    ReasoningEffort::supported(&session.model).contains(&effort)
+                                });
+                            if !supported {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params()
+                                        .data("effort is not supported by this model"),
+                                );
+                            }
+                            state.set_reasoning_effort(effort);
+                        }
+                        _ => {
+                            return responder.respond_with_error(
+                                AcpError::invalid_params()
+                                    .data(format!("unknown config option {}", request.config_id)),
+                            );
+                        }
+                    }
                     responder.respond(SetSessionConfigOptionResponse::new(
-                        state.model_config_options(),
+                        state.session_config_options(),
                     ))
                 }
             },
@@ -676,23 +755,55 @@ async fn run_turn(
     acp_session_id: SessionId,
     prompt: UserPrompt,
     cancel: CancellationToken,
-) -> StopReason {
-    let _turn = state.turn_lock.lock().await;
+) -> Result<StopReason, AiAdmissionError> {
+    // Include lock and admission waits in time to first output.
+    let started = Instant::now();
+    // Mark every exit (including denial or a dropped connection) complete so
+    // cancelled/failed requests do not remain outstanding.
+    let _completed = cancel.clone().drop_guard();
+    let _turn = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        turn = state.turn_lock.lock() => turn,
+    };
+    let span = tracing::Span::current();
+    span.record("agent.turn.lock_wait_ms", elapsed_ms(started));
+    let admission_started = Instant::now();
+    // Check at execution time, not enqueue time. Cancellation stays responsive
+    // even if billing is slow, and neither denial nor cancellation adds history.
+    tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        result = admit_turn(state.admission.as_ref(), &state.owner) => result?,
+    }
+    span.record(
+        "agent.turn.admission_wait_ms",
+        elapsed_ms(admission_started),
+    );
+    let mcp_tools = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        tools = state.mcp_tools_for_turn() => tools,
+    };
     let TurnInput {
         messages,
         model,
+        reasoning_effort,
         identity,
         instructions,
     } = state.turn_input(&prompt);
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
+        session_id: state.session_id,
+        awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
         model,
+        reasoning_effort,
         identity,
         instructions,
         messages,
-        mcp_tools: state.current_mcp_tools(),
+        mcp_tools,
         cancel: cancel.clone(),
         user_input: requester
             .clone()
@@ -703,9 +814,31 @@ async fn run_turn(
     let mut accumulator = StreamAccumulator::new();
     let mut failure = None;
     let mut was_cancelled = false;
+    let mut first_part_seen = false;
+    let mut first_text_seen = false;
     loop {
         match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
             Ok(Some(Ok(part))) => {
+                let is_output = match &part {
+                    StreamPart::Content(text) | StreamPart::Thinking(text) => {
+                        !text.trim().is_empty()
+                    }
+                    StreamPart::ToolCall(_) => true,
+                    StreamPart::ToolResponse(_) | StreamPart::Usage(_) => false,
+                };
+                if !first_part_seen && is_output {
+                    first_part_seen = true;
+                    let ttft_ms = elapsed_ms(started);
+                    span.record("agent.turn.ttft_ms", ttft_ms);
+                    tracing::info!(ttft_ms, "the turn streamed its first part");
+                }
+                if !first_text_seen
+                    && let StreamPart::Content(text) = &part
+                    && !text.trim().is_empty()
+                {
+                    first_text_seen = true;
+                    span.record("agent.turn.first_text_ms", elapsed_ms(started));
+                }
                 if let Some(update) = update_for_part(&part) {
                     let notification = SessionNotification::new(acp_session_id.clone(), update);
                     if connection.send_notification(notification).is_err() {
@@ -761,9 +894,9 @@ async fn run_turn(
     state.push_turn(prompt, turn_parts);
 
     if was_cancelled || cancel.is_cancelled() {
-        StopReason::Cancelled
+        Ok(StopReason::Cancelled)
     } else {
-        StopReason::EndTurn
+        Ok(StopReason::EndTurn)
     }
 }
 

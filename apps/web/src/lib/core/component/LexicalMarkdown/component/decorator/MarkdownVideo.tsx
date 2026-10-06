@@ -39,6 +39,10 @@ import {
 } from '../../plugins';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { MediaButtons } from './MediaButtons';
+import {
+  MediaLoadingPlaceholder,
+  mediaFileNameFromUrl,
+} from './MediaLoadingPlaceholder';
 import { ResizeHandle } from './ResizeHandle';
 
 type VideoState = 'loading' | 'ok' | 'error';
@@ -255,7 +259,9 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             'pattern-edge-muted pattern-diagonal-8 min-h-44'
         )}
         style={{
-          'max-height': `${videoDims() ? videoDims()[1] * scale() : 640}px`,
+          'max-height': videoDims()[1]
+            ? `${videoDims()[1] * scale()}px`
+            : undefined,
           'aspect-ratio':
             videoDims()[0] && videoDims()[1]
               ? `${videoDims()[0] / videoDims()[1]}`
@@ -297,7 +303,10 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           crossorigin="anonymous"
           class={cn(
             'h-full object-contain',
-            (state() === 'loading' || state() === 'error') && 'invisible'
+            (state() === 'loading' || state() === 'error') && 'invisible',
+            state() === 'loading' &&
+              !videoDims()[0] &&
+              'absolute inset-0 size-0'
           )}
           draggable={true}
           ref={videoRef}
@@ -316,9 +325,19 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
-            <Spinner />
-          </div>
+          <Show
+            when={videoDims()[0] > 0}
+            fallback={
+              <MediaLoadingPlaceholder
+                kind="video"
+                label={mediaFileNameFromUrl(props.url)}
+              />
+            }
+          >
+            <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
+              <Spinner />
+            </div>
+          </Show>
         </Show>
 
         <Show when={uploading() && state() !== 'error'}>

@@ -44,6 +44,7 @@ use item_filters::{
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
+        github_pull_request::GithubPullRequestLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
         reminder::ReminderLiteral,
@@ -1187,6 +1188,9 @@ where
 /// Wire-format entity filter AST accepted by soup AST endpoints.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
+    /// Restrict to the authenticated viewer's favorites before pagination when true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favorites_only: Option<bool>,
     /// filters applied to canonical calendar events
     #[serde(default, rename = "calf")]
     #[schema(value_type = serde_json::Value)]
@@ -1222,6 +1226,10 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "fef")]
     #[schema(value_type = serde_json::Value)]
     pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
+    /// the filters that should be applied to GitHub pull request records, on top of `fef`
+    #[serde(default, rename = "ghprf")]
+    #[schema(value_type = serde_json::Value)]
+    pub github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     /// the filters that should be applied to the call entity
     #[serde(default, rename = "callf")]
     #[schema(value_type = serde_json::Value)]
@@ -1333,6 +1341,7 @@ impl ApiEntityFilterAst {
     #[tracing::instrument(err, skip(self))]
     fn into_entity_ast(self) -> Result<EntityFilterAst, Report> {
         let ApiEntityFilterAst {
+            favorites_only,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -1341,6 +1350,7 @@ impl ApiEntityFilterAst {
             channel_filter,
             channel_thread_filter,
             foreign_entity_filter,
+            github_pull_request_filter,
             call_filter,
             crm_company_filter,
             reminder_filter,
@@ -1399,6 +1409,7 @@ impl ApiEntityFilterAst {
         };
 
         Ok(EntityFilterAst {
+            favorites_only,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -1412,9 +1423,12 @@ impl ApiEntityFilterAst {
             call_filter,
             crm_company_filter,
             foreign_entity_filter,
+            github_pull_request_filter,
             reminder_filter,
             agent_session_filter,
             properties_filter,
+            initiative_filter: None,
+            database_row_filter: None,
         })
     }
 }

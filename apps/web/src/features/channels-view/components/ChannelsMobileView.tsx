@@ -10,23 +10,26 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
 import { isMutedItem } from '@entity/utils/notification';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import XIcon from '@phosphor/x.svg';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button } from '@ui';
+import { Button, EmptyStatePanel } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
   Match,
+  on,
   onCleanup,
   Show,
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import { useChannelsView } from '../channels-view-context';
 import type { ChannelsDataSource } from '../queries';
 import type { ChannelsQueryScope } from '../types';
 import { channelMentionsUser } from '../utils';
@@ -52,13 +55,14 @@ const LOAD_MORE_THRESHOLD = 300;
 
 export function ChannelsMobileView(props: {
   source: ChannelsDataSource;
+  searchQuery: string;
+  onClearSearch: () => void;
   tab: ChannelsQueryScope;
   onTabChange: (tab: ChannelsQueryScope) => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
-  const { state, setSelectedChannelId } = useChannelsView();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
@@ -84,6 +88,13 @@ export function ChannelsMobileView(props: {
     props.onTabChange(tab);
     viewport()?.scrollTo({ top: 0 });
   };
+
+  createEffect(
+    on(
+      () => props.searchQuery,
+      () => viewport()?.scrollTo({ top: 0 })
+    )
+  );
 
   const topInset = () => topSpacerSize.height ?? 0;
 
@@ -116,7 +127,6 @@ export function ChannelsMobileView(props: {
   });
   const openChannel = async (channel: ChannelEntity) => {
     const request = ++opening;
-    setSelectedChannelId(channel.id);
     try {
       const full = await hydrateChannelNotificationSelection(
         channel,
@@ -127,6 +137,8 @@ export function ChannelsMobileView(props: {
         splitHandle: panel.handle,
         referredFrom: 'channels',
         notificationSource,
+        channelNavigation: 'latest',
+        channelReadScope: 'top-level',
       });
     } catch (error) {
       if (request !== opening) return;
@@ -197,7 +209,32 @@ export function ChannelsMobileView(props: {
               </div>
             </Match>
             <Match when={forceEmptyState() || visibleChannels().length === 0}>
-              <ChannelsEmptyState scope={props.tab} />
+              <Show
+                when={props.searchQuery.trim()}
+                fallback={<ChannelsEmptyState scope={props.tab} />}
+              >
+                {(query) => (
+                  <EmptyStatePanel
+                    centered
+                    graphic={EmptyStateNoSearchMatchGraphic}
+                    title="No results"
+                    description={
+                      <span>
+                        No conversations match{' '}
+                        <span class="[overflow-wrap:anywhere]">
+                          “{query()}”
+                        </span>
+                      </span>
+                    }
+                    primaryAction={{
+                      label: 'Clear search',
+                      icon: XIcon,
+                      onClick: props.onClearSearch,
+                    }}
+                    class="h-auto touch:pt-0 touch:pb-(--mobile-content-inset-bottom)"
+                  />
+                )}
+              </Show>
             </Match>
             <Match when={true}>
               <Virtualizer
@@ -247,7 +284,7 @@ export function ChannelsMobileView(props: {
                       incomingCallId={channelActivity
                         .incomingCallIds()
                         .get(channel.id)}
-                      selected={state.selectedChannelId === channel.id}
+                      selected={false}
                       focused={false}
                       onActivate={() => openChannel(channel)}
                     />

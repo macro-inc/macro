@@ -21,6 +21,8 @@ agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features 
 sqlx = { workspace = true }
 uuid = { workspace = true }
 agent-client-protocol = { workspace = true }
+# The raw tail of a failed stream body, logged as it was on the wire.
+base64 = { workspace = true }
 bytes = { workspace = true }
 static_file_service_client = { path = "../static_file_service_client" }
 futures = { workspace = true }
@@ -46,6 +48,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
 
 [dev-dependencies]
-agent_fold = { path = "../agent_fold", default-features = false, features = ["test-utils"] }
+agent_fold = { path = "../folds/agent_fold", default-features = false, features = ["test-utils"] }
 insta = { version = "1.48.0", features = ["glob", "json"] }
 tokio = { workspace = true, features = ["io-std", "io-util", "sync", "time", "test-util"] }

@@ -52,8 +52,13 @@ interface EventTimeInputProps {
   /** Highlighted option; defaults to `value` on the anchor day. */
   selectedId?: string;
   onChange: (option: EventTimeOption) => void;
+  /** Called when the native control is cleared; omitted where empty is invalid UI. */
+  onClear?: () => void;
   onFocus?: () => void;
   disabled?: boolean;
+  invalid?: boolean;
+  /** Native time precision in seconds. Calendar fields keep quarter-hour slots by default. */
+  step?: number;
   hideLabel?: boolean;
   class?: string;
 }
@@ -109,12 +114,13 @@ export function EventTimeInput(props: EventTimeInputProps) {
         <input
           id={props.id}
           type="time"
-          step={900}
+          step={props.step ?? 900}
           value={props.value}
           disabled={props.disabled}
+          aria-invalid={props.invalid || undefined}
           aria-expanded={open()}
           aria-haspopup="listbox"
-          class="w-full appearance-none rounded-md border border-edge-muted bg-surface py-1.5 pr-7 pl-2 text-xs text-ink outline-none focus:border-accent disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:hidden"
+          class="w-full appearance-none rounded-md border border-edge-muted bg-control py-1.5 pr-7 pl-2 text-xs text-ink outline-none focus:border-accent aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20 disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:hidden"
           onFocus={() => {
             props.onFocus?.();
             setDropdownOpen(true);
@@ -122,7 +128,10 @@ export function EventTimeInput(props: EventTimeInputProps) {
           onClick={() => setDropdownOpen(true)}
           onInput={(event) => {
             const value = event.currentTarget.value;
-            if (value && value !== props.value) {
+            if (!value) {
+              props.onClear?.();
+              setOpen(false);
+            } else if (value !== props.value) {
               props.onChange(resolveTimeOption(options(), value));
             }
           }}

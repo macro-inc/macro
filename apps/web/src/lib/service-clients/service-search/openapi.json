@@ -645,7 +645,6 @@
           "id",
           "owner_id",
           "call_id",
-          "channel_id",
           "participant_ids",
           "call_search_results"
         ],
@@ -661,7 +660,7 @@
             }
           },
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "id": {
@@ -2164,9 +2163,17 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict results to the authenticated viewer's favorites when true."
+          },
           "foreign_entity_filters": {
             "$ref": "#/components/schemas/ForeignEntityFilters",
             "description": "the bundled [ForeignEntityFilters]"
+          },
+          "initiative_filters": {
+            "$ref": "#/components/schemas/InitiativeFilters",
+            "description": "Initiative filters. Initiatives are opt-in."
           },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
@@ -2223,7 +2230,10 @@
           "CHANNEL",
           "CHAT",
           "COMPANY",
+          "DATABASE_ROW",
+          "CONTACT",
           "DOCUMENT",
+          "INITIATIVE",
           "PROJECT",
           "TASK",
           "THREAD",
@@ -2652,6 +2662,7 @@
           "ps",
           "dxf",
           "dwg",
+          "fig",
           "stl",
           "obj",
           "fbx",
@@ -2719,6 +2730,44 @@
           "name": {
             "type": ["string", "null"],
             "description": "If the match was on the entity name, this will be present with that highlight"
+          }
+        }
+      },
+      "InitiativeFilters": {
+        "type": "object",
+        "description": "Filters for initiatives.",
+        "properties": {
+          "due_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive lower due-date bound."
+          },
+          "due_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive upper due-date bound."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+          },
+          "initiative_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Initiative ids to filter by. Empty to include all accessible initiatives."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Case-insensitive name substring."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           }
         }
       },
@@ -2971,6 +3020,7 @@
           "display_name",
           "data_type",
           "is_multi_select",
+          "specific_entity_type",
           "created_at",
           "updated_at",
           "is_system",
@@ -3083,7 +3133,22 @@
           },
           {
             "type": "object",
-            "description": "System-owned property (no user or team owner).",
+            "description": "Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user/team property namespace.",
+            "required": ["database_id", "scope"],
+            "properties": {
+              "database_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["database"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user, team, or database owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -3093,7 +3158,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
+        "description": "Defines who owns a property - user-scoped, team-scoped, database-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [
@@ -3269,7 +3334,6 @@
       "SearchGotoCallRecord": {
         "type": "object",
         "required": [
-          "channel_id",
           "transcript_id",
           "speaker_id",
           "sequence_num",
@@ -3278,7 +3342,7 @@
         ],
         "properties": {
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "ended_at": {
@@ -3549,7 +3613,6 @@
         "type": "object",
         "required": [
           "call_id",
-          "channel_id",
           "user_id",
           "participant_ids",
           "started_at",
@@ -3562,7 +3625,7 @@
             "type": "string"
           },
           "channel_id": {
-            "type": "string"
+            "type": ["string", "null"]
           },
           "channel_name": {
             "type": ["string", "null"]

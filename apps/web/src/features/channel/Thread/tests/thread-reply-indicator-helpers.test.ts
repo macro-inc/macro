@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_VISIBLE_REPLY_COUNT,
+  DEFAULT_VISIBLE_REPLY_GROUP_COUNT,
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getThreadReplyCountLabel,
@@ -9,9 +9,15 @@ import {
 
 describe('thread-reply-indicator-helpers', () => {
   it('computes the number of collapsed replies', () => {
-    expect(getCollapsedRepliesCount(0, DEFAULT_VISIBLE_REPLY_COUNT)).toBe(0);
-    expect(getCollapsedRepliesCount(2, DEFAULT_VISIBLE_REPLY_COUNT)).toBe(0);
-    expect(getCollapsedRepliesCount(5, DEFAULT_VISIBLE_REPLY_COUNT)).toBe(2);
+    expect(getCollapsedRepliesCount(0, DEFAULT_VISIBLE_REPLY_GROUP_COUNT)).toBe(
+      0
+    );
+    expect(getCollapsedRepliesCount(2, DEFAULT_VISIBLE_REPLY_GROUP_COUNT)).toBe(
+      0
+    );
+    expect(getCollapsedRepliesCount(5, DEFAULT_VISIBLE_REPLY_GROUP_COUNT)).toBe(
+      2
+    );
   });
 
   it('formats collapsed reply labels', () => {

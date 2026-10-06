@@ -6,6 +6,6 @@
  */
 
 /**
- * Set once a one-shot reminder has fired.
+ * When the owner acknowledged the occurrence; independent of future scheduling.
  */
 export type SoupReminderSoupPropertiesFieldAllOfTwoCompletedAt = string | null;

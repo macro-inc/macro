@@ -1,4 +1,4 @@
-import type { CalendarBlockEventTime } from '@block-calendar/calendar-range';
+import type { CalendarEventTime } from '@app/features/calendar-view/calendar-range';
 import CalendarBlank from '@phosphor-icons/core/regular/calendar-blank.svg';
 import CalendarDots from '@phosphor-icons/core/regular/calendar-dots.svg';
 import CalendarPlus from '@phosphor-icons/core/regular/calendar-plus.svg';
@@ -124,7 +124,7 @@ function CalendarMutationCard(props: {
   /** Instance the call targeted, for occurrence-scoped mutations. */
   occurrenceKey?: string;
   /** Locator timing to use instead of the returned event's own. */
-  openTime?: CalendarBlockEventTime;
+  openTime?: CalendarEventTime;
   renderContext: Parameters<typeof BaseTool>[0]['renderContext'];
   status?: string;
   title?: string;
@@ -223,6 +223,25 @@ export const createCalendarEventHandler = createToolRenderer({
       </Switch>
     );
   },
+});
+
+/**
+ * `CreateConfirmedCalendarEvent` creates on a confirmation the user already
+ * gave in a conversation thread, so there is no pending composer and no
+ * review to render: the response is the created event itself, shown the way
+ * `CreateCalendarEvent` shows its finished create.
+ */
+export const createConfirmedCalendarEventHandler = createToolRenderer({
+  name: 'CreateConfirmedCalendarEvent',
+  render: (ctx) => (
+    <CalendarMutationCard
+      event={ctx.response?.data}
+      icon={CalendarPlus}
+      label="Create calendar event"
+      renderContext={ctx.renderContext}
+      title={ctx.tool.data.title}
+    />
+  ),
 });
 
 export const updateCalendarEventHandler = createToolRenderer({

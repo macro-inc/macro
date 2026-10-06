@@ -6,6 +6,7 @@ query NativeProject {
         __typename
         id
         cacheProjection
+        isFavorited
         ... on GraphqlSoupProject {
           ownerId
           parentId

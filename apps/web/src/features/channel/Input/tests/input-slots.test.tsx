@@ -12,13 +12,34 @@ import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
+  agentsEnabled: false,
   cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
   mentionUsers: undefined as (() => IUser[]) | undefined,
   emitChange: undefined as ((markdown: string) => void) | undefined,
   onEnter: undefined as (() => boolean) | undefined,
+  inlineMenuOpen: false,
+  onEscape: undefined as ((event?: KeyboardEvent) => boolean) | undefined,
 }));
+
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({ StaticMarkdown: () => null })
+);
+
+vi.mock('@core/hotkey/hotkeys', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@core/hotkey/hotkeys')>();
+  return {
+    ...actual,
+    registerHotkey: (options: Parameters<typeof actual.registerHotkey>[0]) => {
+      if (options.description === 'block escape from moving up scope') {
+        editorMocks.onEscape = options.keyDownHandler;
+      }
+      return actual.registerHotkey(options);
+    },
+  };
+});
 
 // These slots render the microphone, so they run with dictation rolled out.
 // Other flags keep their real values.
@@ -99,6 +120,9 @@ vi.mock('@core/codex/flag', () => ({
 vi.mock('@core/cursor/flag', () => ({
   useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
 }));
+vi.mock('../../use-chat-v3-agents-flag', () => ({
+  useChatV3AgentsFlag: () => () => editorMocks.agentsEnabled,
+}));
 
 // Several service clients in StaticMarkdown's import graph build websocket
 // connections at module scope, which jsdom cannot do. Stub the builder so
@@ -167,6 +191,18 @@ vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: () => <span data-testid="entity-icon" />,
 }));
 
+// Input slots do not exercise rich message rendering. Keep collapsed drafts
+// outside StaticMarkdown's application/decorator import graph.
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdown: (props: { markdown: string }) => (
+      <span>{props.markdown}</span>
+    ),
+    StaticMarkdownContext: (props: { children: JSX.Element }) => props.children,
+  })
+);
+
 vi.mock('@core/component/ImagePreview', () => ({
   ImagePreview: (props: { image: { id: string } }) => (
     <div data-testid={`image-preview-${props.image.id}`} />
@@ -212,6 +248,7 @@ vi.mock(
       const controls = {
         clear: editorMocks.clear,
         focus: editorMocks.focus,
+        isInlineMenuOpen: () => editorMocks.inlineMenuOpen,
         setMarkdown: (markdown: string) => {
           editorMocks.emitChange?.(markdown);
         },
@@ -325,6 +362,8 @@ vi.mock('@queries/messages/typing', () => ({
   usePostTypingUpdateMutation: () => ({ mutate: vi.fn() }),
 }));
 
+import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
+import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import { cursorMentionUser } from '../../macroAi';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
 import { createInputAttachmentTracker } from '../attachment-tracker';
@@ -356,11 +395,14 @@ function render(ui: () => JSX.Element) {
 
 describe('Input slots', () => {
   beforeEach(() => {
+    editorMocks.agentsEnabled = false;
     editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
     editorMocks.emitChange = undefined;
     editorMocks.onEnter = undefined;
+    editorMocks.inlineMenuOpen = false;
+    editorMocks.onEscape = undefined;
     editorMocks.mentionUsers = undefined;
     vi.mocked(isMobile).mockReturnValue(false);
   });
@@ -396,6 +438,30 @@ describe('Input slots', () => {
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('existing draft');
   });
 
+  it('handles dictation and inline menus before dismissing the composer host on Escape', async () => {
+    const user = userEvent.setup();
+    const closeHost = vi.fn();
+    render(() => <ChannelInput input={baseInput} onEscape={closeHost} />);
+
+    await user.click(screen.getByRole('button', { name: 'Start dictation' }));
+    expect(editorMocks.onEscape?.()).toBe(true);
+    expect(screen.queryByRole('group', { name: 'Dictation' })).toBeNull();
+    expect(closeHost).not.toHaveBeenCalled();
+
+    editorMocks.inlineMenuOpen = true;
+    expect(editorMocks.onEscape?.()).toBe(true);
+    expect(closeHost).not.toHaveBeenCalled();
+
+    editorMocks.inlineMenuOpen = false;
+    expect(editorMocks.onEscape?.()).toBe(true);
+    expect(closeHost).toHaveBeenCalledOnce();
+  });
+
+  it('lets Escape continue when there is no menu, dictation, or host handler', () => {
+    render(() => <ChannelInput input={baseInput} />);
+    expect(editorMocks.onEscape?.()).toBe(false);
+  });
+
   it('starts dictation from the collapsed channel composer', async () => {
     vi.mocked(isMobile).mockReturnValue(true);
     const user = userEvent.setup();
@@ -421,6 +487,55 @@ describe('Input slots', () => {
     expect(editorMocks.mentionUsers?.().map((user) => user.name)).toEqual(
       expect.arrayContaining(['Cursor', 'Claude', 'Codex'])
     );
+  });
+
+  it.each([false, true])(
+    'offers one Macro entry in call chat with agents rollout %s',
+    (enabled) => {
+      editorMocks.agentsEnabled = enabled;
+      render(() => (
+        <ChannelInput
+          input={baseInput}
+          parent={{ type: 'call', id: 'call-1' }}
+          bots={() => [
+            { id: 'bot|owned', name: 'Owned agent', email: 'Owned agent' },
+            { id: 'bot|team', name: 'Team agent', email: 'Team agent' },
+          ]}
+        />
+      ));
+      const users = editorMocks.mentionUsers?.() ?? [];
+      expect(
+        users.filter((user) => user.name === 'Macro').map((user) => user.id)
+      ).toEqual([enabled ? MACRO_NEW_PRINCIPAL_ID : MACRO_AGENT_PRINCIPAL_ID]);
+      expect(users.map((user) => user.id)).toEqual(
+        expect.arrayContaining(['bot|owned', 'bot|team'])
+      );
+    }
+  );
+
+  it('offers a single Macro mention, aimed by the agents rollout', () => {
+    render(() => <ChannelInput input={baseInput} />);
+    expect(
+      editorMocks.mentionUsers?.().filter((user) => user.name === 'Macro')
+    ).toEqual([
+      {
+        id: MACRO_AGENT_PRINCIPAL_ID,
+        name: 'Macro',
+        email: 'Macro',
+      },
+    ]);
+
+    editorMocks.agentsEnabled = true;
+    render(() => <ChannelInput input={baseInput} />);
+    expect(
+      editorMocks.mentionUsers?.().filter((user) => user.name === 'Macro')
+    ).toEqual([
+      {
+        id: MACRO_NEW_PRINCIPAL_ID,
+        name: 'Macro',
+        email: 'Macro',
+      },
+    ]);
   });
 
   it('hides Cursor outside its rollout, including supplied bot entries', () => {
@@ -633,6 +748,21 @@ describe('Input slots', () => {
     ));
 
     expect(screen.getByText('Drop files to attach')).toBeTruthy();
+  });
+
+  it('drops the inline reply margin from a flat composer', () => {
+    const replyInput: InputData = { ...baseInput, mode: 'reply' };
+    const { container: inline } = render(() => (
+      <ChannelInput input={replyInput} />
+    ));
+    const { container: flat } = render(() => (
+      <ChannelInput input={replyInput} flat />
+    ));
+
+    expect(inline.querySelector('[data-input]')?.classList).toContain('mb-4');
+    const flatRoot = flat.querySelector('[data-input]');
+    expect(flatRoot?.classList).not.toContain('mb-4');
+    expect(flatRoot?.classList).toContain('mb-0');
   });
 });
 

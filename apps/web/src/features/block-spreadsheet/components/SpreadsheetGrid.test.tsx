@@ -36,6 +36,7 @@ function renderGrid(
     | 'showGridlines'
     | 'showFormulas'
     | 'columnWidths'
+    | 'hiddenColumns'
     | 'rowCount'
     | 'sheetId'
     | 'onFill'
@@ -104,6 +105,7 @@ function renderGrid(
           showGridlines={options.showGridlines}
           showFormulas={options.showFormulas}
           columnWidths={options.columnWidths}
+          hiddenColumns={options.hiddenColumns}
           onFill={options.onFill}
           onResizeColumn={options.onResizeColumn}
           values={options.values ?? {}}
@@ -677,9 +679,21 @@ it('keeps a constant number of selection overlays as ranges grow, with accurate 
   const first = view.container.querySelector('[data-selection-range]');
   view.controller.selectRange({ row: 0, column: 0 }, { row: 29, column: 25 });
   expect(view.container.querySelector('[data-selection-range]')).toBe(first);
+  // Columns outside the viewport are not rendered, like rows; every rendered
+  // cell inside the range is selected.
+  const rendered = [
+    ...view.container.querySelectorAll<HTMLElement>('[role="gridcell"]'),
+  ].filter((cell) => {
+    const row = Number(/\d+$/.exec(cell.dataset.address ?? '')?.[0]) - 1;
+    return row <= 29;
+  });
+  expect(
+    new Set(rendered.map((cell) => cell.dataset.address?.replace(/\d+$/, '')))
+      .size
+  ).toBeLessThan(26);
   expect(
     view.container.querySelectorAll('[role="gridcell"][aria-selected="true"]')
-  ).toHaveLength(30 * 26);
+  ).toHaveLength(rendered.length);
 });
 
 describe('spreadsheet presentation', () => {
@@ -997,6 +1011,26 @@ describe('cell context menu', () => {
     });
     await waitFor(() => expect(comments.add).toHaveBeenCalledWith(cell));
     expect(onCellAction).not.toHaveBeenCalled();
+  });
+
+  it('anchors a range comment to a rendered cell when its selection anchor is hidden', async () => {
+    const comments = {
+      canComment: () => true,
+      add: vi.fn(),
+      hasComment: () => false,
+      enter: vi.fn(),
+      leave: vi.fn(),
+      show: vi.fn(),
+    };
+    const view = renderGrid({}, { comments, hiddenColumns: [0] });
+    // Keep full-grid role queries outside the polling callback so they cannot
+    // starve the menu's deferred close/focus handlers on slower CI runners.
+    const anchor = view.getByRole('gridcell', { name: 'B2' });
+    view.controller.selectRange({ row: 1, column: 0 }, { row: 1, column: 25 });
+    fireEvent.keyDown(view.element, { key: 'ContextMenu' });
+    const comment = await screen.findByRole('menuitem', { name: 'Comment' });
+    fireEvent.keyDown(comment, { key: 'Enter' });
+    await waitFor(() => expect(comments.add).toHaveBeenCalledWith(anchor));
   });
 
   it('keeps the native text editing menu and does not open the cell menu over headers', async () => {

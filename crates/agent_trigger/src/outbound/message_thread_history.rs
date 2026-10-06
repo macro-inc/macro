@@ -40,6 +40,10 @@ impl<Access: EntityAccessService> InvocationAuthorizer for Access {
             match parent {
                 MessageParent::Channel(_) => EntityType::Channel,
                 MessageParent::Document(_) => EntityType::Document,
+                MessageParent::Initiative(_) => EntityType::Initiative,
+                MessageParent::CrmCompany(_) => EntityType::CrmCompany,
+                MessageParent::CrmContact(_) => EntityType::CrmContact,
+                MessageParent::Call(_) => EntityType::Call,
             },
         )
         .await

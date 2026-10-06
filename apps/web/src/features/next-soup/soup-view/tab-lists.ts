@@ -4,7 +4,7 @@ import type { TabItem } from '@core/component/Tabs';
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
   ListView,
-  | 'inbox'
+  | 'home'
   | 'agents'
   | 'mail'
   | 'documents'
@@ -12,12 +12,11 @@ export type TabbedListView = Extract<
   | 'channels'
   | 'calls'
   | 'folders'
-  | 'reminders'
 >;
 
 /** Tab definitions for each list view. */
 export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
-  inbox: [
+  home: [
     { value: 'signal', label: 'Signal' },
     { value: 'noise', label: 'Noise' },
     { value: 'all', label: 'All' },
@@ -30,7 +29,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'owned', label: 'Owned' },
     { value: 'running', label: 'Running' },
     { value: 'shared', label: 'Shared' },
-    { value: 'automations', label: 'Automations' },
+    { value: 'routines', label: 'Routines' },
     { value: 'skills', label: 'Skills' },
   ],
   mail: [
@@ -66,10 +65,5 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
   folders: [
     { value: 'owned', label: 'Owned' },
     { value: 'all', label: 'All' },
-  ],
-  reminders: [
-    { value: 'active', label: 'Active' },
-    { value: 'scheduled', label: 'Scheduled' },
-    { value: 'done', label: 'Done' },
   ],
 };

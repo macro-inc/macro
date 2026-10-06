@@ -20,10 +20,13 @@ export function AttachmentEntityList(props: {
   const hasDocuments = () => props.rows.length > 0;
 
   return (
-    <AttachmentSection label="Documents">
+    <AttachmentSection
+      label="Documents"
+      class={hasDocuments() ? 'flex-1' : undefined}
+    >
       <div class="grid grid-cols-1">
         <Show when={!hasDocuments()}>
-          <div class="py-3 text-sm text-ink-subtle">
+          <div class="px-6 py-3 text-sm text-ink-subtle">
             No documents in this channel yet.
           </div>
         </Show>

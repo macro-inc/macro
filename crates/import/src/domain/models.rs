@@ -48,19 +48,21 @@ impl ImportSource {
         ]
     }
 
-    /// The Pipedream app slug backing this source's connector.
-    pub fn pipedream_app_slug(self) -> &'static str {
+    /// The Pipedream app slugs backing this source's connector, in preference order.
+    pub fn pipedream_app_slugs(self) -> &'static [&'static str] {
         match self {
-            ImportSource::Linear => "linear",
-            ImportSource::Notion => "notion",
-            ImportSource::Slack => "slack",
+            ImportSource::Linear => &["linear"],
+            ImportSource::Notion => &["notion"],
+            // Keep the canonical fallback from docs/SLACK_LIVE_CHANNEL_IMPORT.md
+            // until live verification supports switching to `slack_v2`.
+            ImportSource::Slack => &["slack", "slack_v2"],
         }
     }
 
     /// This source's connector on both MCP stacks.
     pub fn connector_ref(self) -> mcp_select::ConnectorRef<'static> {
         mcp_select::ConnectorRef {
-            pipedream_app_slug: self.pipedream_app_slug(),
+            pipedream_app_slugs: self.pipedream_app_slugs(),
             native_server_url: self.mcp_server_url(),
         }
     }
@@ -163,6 +165,10 @@ pub enum Initiator {
     Onboarding,
     /// Staged by an AI chat session.
     Chat,
+    /// Imported from an administrator-uploaded archive.
+    Archive,
+    /// Staged by the user from Settings (the pick-channels flow).
+    Manual,
 }
 
 /// Lifecycle of a gather run (one per user × source).
@@ -196,6 +202,198 @@ pub enum RunStatus {
     Dismissed,
 }
 
+/// A stable Slack conversation ID, never a legacy channel name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SlackConversationId(String);
+
+impl SlackConversationId {
+    /// Validate the source ID without trimming or name normalization.
+    pub fn new(value: &str) -> Option<Self> {
+        valid_slack_id(value, b"CGD").then(|| Self(value.to_owned()))
+    }
+
+    /// The exact source identifier.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A stable Slack user ID.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SlackUserId(String);
+
+impl SlackUserId {
+    /// Validate the source ID without trimming or name normalization.
+    pub fn new(value: &str) -> Option<Self> {
+        valid_slack_id(value, b"UW").then(|| Self(value.to_owned()))
+    }
+
+    /// The exact source identifier.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// The kind of conversation reported by Slack.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlackConversationKind {
+    /// A public workspace channel.
+    PublicChannel,
+    /// An invite-only workspace channel.
+    PrivateChannel,
+    /// A one-to-one direct message.
+    DirectMessage,
+    /// A multi-person direct message.
+    GroupDirectMessage,
+}
+
+/// A conversation read from a live Slack workspace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackConversation {
+    /// Stable source identity.
+    pub id: SlackConversationId,
+    /// Conversation name.
+    pub name: String,
+    /// Source conversation kind, independent of the Macro target kind.
+    pub kind: SlackConversationKind,
+    /// Whether Slack has archived this conversation.
+    pub archived: bool,
+    /// Member count reported by Slack, when available.
+    pub member_count: Option<u64>,
+    /// Conversation purpose, when set.
+    pub purpose: Option<String>,
+}
+
+/// One page of live Slack conversations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackConversationPage {
+    /// Conversations on this page.
+    pub conversations: Vec<SlackConversation>,
+    /// Opaque continuation cursor; `None` means the final page.
+    pub next_cursor: Option<String>,
+}
+
+/// One page of a live Slack conversation's members.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackMemberPage {
+    /// Slack user IDs on this page.
+    pub members: Vec<SlackUserId>,
+    /// Opaque continuation cursor; `None` means the final page.
+    pub next_cursor: Option<String>,
+}
+
+/// A user read from a live Slack workspace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackUser {
+    /// Stable source identity.
+    pub id: SlackUserId,
+    /// Display name reported by Slack.
+    pub display_name: String,
+    /// Email, when the workspace exposes it.
+    pub email: Option<String>,
+    /// Whether this user is a bot.
+    pub is_bot: bool,
+    /// Whether this user has been deactivated.
+    pub deleted: bool,
+}
+
+/// One page of live Slack users.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackUserPage {
+    /// Users on this page.
+    pub users: Vec<SlackUser>,
+    /// Opaque continuation cursor; `None` means the final page.
+    pub next_cursor: Option<String>,
+}
+
+/// A stable Slack workspace ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackWorkspaceId(String);
+
+impl SlackWorkspaceId {
+    /// Validate a Slack workspace ID.
+    pub fn new(value: &str) -> Option<Self> {
+        valid_slack_id(value, b"T").then(|| Self(value.to_owned()))
+    }
+
+    /// The exact source identifier.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+fn valid_slack_id(value: &str, prefixes: &[u8]) -> bool {
+    (2..=64).contains(&value.len())
+        && prefixes.contains(&value.as_bytes()[0])
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+}
+
+/// Durable single-workspace binding for a Macro team. Absence of this row means unbound.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportSourceBinding {
+    /// Known workspace, if the source supplied identity.
+    pub workspace_id: Option<SlackWorkspaceId>,
+    /// First explicit administrator confirmation of an unidentified archive.
+    pub confirmed_unknown_at: Option<DateTime<Utc>>,
+}
+
+/// Explicit canonical namespace. This API supports only the Slack source in v1;
+/// it never derives the team from the requesting user's current membership.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportTargetKey {
+    /// Team that owns the source namespace, including private/DM provenance.
+    pub team_id: Uuid,
+    /// Stable source identity, not a name-only onboarding identifier.
+    pub foreign_id: SlackConversationId,
+}
+
+/// Allowed target shapes. Slack public channels become Team, never Public.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum ImportTargetKind {
+    /// Shared with exactly the explicitly supplied team.
+    Team,
+    /// Private channel or group DM; team provenance lives only in the reservation.
+    Private,
+    /// Two-person DM; pair validation/authorization belongs to the channel service.
+    DirectMessage,
+}
+
+/// A committed reservation survives crashes before channel creation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportTargetReservation {
+    /// Canonical source namespace.
+    pub key: ImportTargetKey,
+    /// Stable UUID to pass to idempotent channel creation, or an existing claimed target.
+    pub channel_id: Uuid,
+    /// Whether channel creation has been durably completed.
+    pub ready: bool,
+}
+
+/// Maximum exact source IDs per canonical read; validated IDs bound input bytes
+/// to 32 KiB, below the archive database batch byte ceiling.
+pub const MAX_TARGET_LOOKUP: usize = 500;
+
+/// Read-only canonical mapping state. Pending candidates are deliberately hidden.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportTargetLookup {
+    /// No unambiguous, compatible target exists.
+    Missing,
+    /// Creation has not durably completed.
+    Pending,
+    /// Existing compatible channel; provenance is not a read-access grant.
+    Ready {
+        /// Canonical channel identity.
+        channel_id: Uuid,
+        /// Persisted channel kind.
+        kind: ImportTargetKind,
+        /// Persisted name, disclose only after authorization.
+        name: String,
+    },
+}
+
 // ---------------------------------------------------------------------------
 // Per-source metadata
 // ---------------------------------------------------------------------------
@@ -207,8 +405,8 @@ const MAX_TEXT: usize = 300;
 const MAX_LONG_TEXT: usize = 4_000;
 /// Cap for summaries and purposes.
 const MAX_SUMMARY: usize = 600;
-/// Cap on Slack participant lists.
-const MAX_PARTICIPANTS: usize = 25;
+/// Cap on matched Slack participants, bounded by Macro team size, not channel size.
+const MAX_PARTICIPANTS: usize = 100;
 
 /// Truncate to a character boundary at most `max` bytes in.
 fn truncated(s: String, max: usize) -> String {
@@ -309,9 +507,18 @@ pub struct SlackChannelMeta {
     pub channel_id: Option<String>,
     /// The channel's purpose/topic, when set.
     pub purpose: Option<String>,
-    /// The channel's most relevant members, when discoverable.
+    /// Slack members matched to the Macro team roster when discovery resolved membership.
     #[serde(default)]
     pub participants: Vec<SlackParticipant>,
+    /// Total human members in the Slack channel.
+    #[serde(default)]
+    pub member_count: Option<u64>,
+    /// Whether Slack has archived this channel.
+    #[serde(default)]
+    pub archived: bool,
+    /// Whether `participants` reflects a live membership read.
+    #[serde(default)]
+    pub members_resolved: bool,
 }
 
 impl SlackChannelMeta {
@@ -329,6 +536,9 @@ impl SlackChannelMeta {
                     email: truncate_opt(p.email, MAX_TEXT),
                 })
                 .collect(),
+            member_count: self.member_count,
+            archived: self.archived,
+            members_resolved: self.members_resolved,
         }
     }
 }

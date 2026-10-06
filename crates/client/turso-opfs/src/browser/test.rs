@@ -15,6 +15,8 @@ use web_sys::{FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSyste
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+mod write_batch;
+
 #[derive(Debug)]
 struct TrackedCompletion {
     completion: Completion,
@@ -509,6 +511,7 @@ async fn real_worker_opfs_contract_and_consuming_lifecycle() {
         );
         assert_completion(&vectored, Ok(4));
         assert_eq!(main.size().expect("size after writes"), 10);
+        write_batch::check(&main);
 
         let before_overflow = main.size().expect("size before overflow probes");
         let overflow = write_completion();
@@ -1045,4 +1048,182 @@ async fn real_worker_opfs_contract_and_consuming_lifecycle() {
     assert_poisoned();
     replace_poisoned_registry_for_test().await;
     clean_pair(&uncertain_close_db).await;
+}
+
+/// Closes a raw sync handle after `delay_ms`, standing in for a terminated
+/// predecessor whose browser file lock outlives its owner Web Lock.
+fn close_after(handle: FileSystemSyncAccessHandle, delay_ms: i32) {
+    wasm_bindgen_futures::spawn_local(async move {
+        sleep_ms(delay_ms).await.expect("predecessor drain timer");
+        close_sync_handle(&handle).expect("close predecessor handle");
+    });
+}
+
+async fn assert_entry_busy(root: &FileSystemDirectoryHandle, path: &str) {
+    let error = JsFuture::from(root.remove_entry(path))
+        .await
+        .expect_err("predecessor handle locks the entry");
+    assert!(is_entry_busy(&error), "unexpected lock error: {error:?}");
+}
+
+#[wasm_bindgen_test]
+async fn owner_waits_for_a_draining_predecessor_file_lock() {
+    let nonce = js_sys::Date::now() as u64;
+    let database_name = format!("busy-entry-{nonce}.db");
+    let wal_name = format!("{database_name}-wal");
+    clean_pair(&database_name).await;
+    let root = worker_root().await.expect("worker OPFS root");
+
+    // Recovery wipe removes an entry a predecessor still briefly locks.
+    let (predecessor, _) = open_sync_handle(&root, &database_name, BusyDeadline::start())
+        .await
+        .expect("predecessor main handle");
+    assert_entry_busy(&root, &database_name).await;
+    close_after(predecessor, 40);
+    let owner = OpfsOwner::acquire(&database_name)
+        .await
+        .expect("owner lock")
+        .recovery_wipe()
+        .await
+        .expect("wipe waits for the draining predecessor");
+
+    // Opening waits the same way for a sync handle on the WAL.
+    let (predecessor, _) = open_sync_handle(&root, &wal_name, BusyDeadline::start())
+        .await
+        .expect("predecessor WAL handle");
+    assert_entry_busy(&root, &wal_name).await;
+    close_after(predecessor, 40);
+    let owner = connect_ready(open_ready(owner).await)
+        .try_close()
+        .expect("adapter-driven close")
+        .preserve()
+        .expect("preserve idle owner");
+
+    // An open that outwaits a stuck handle reports it as busy, touches
+    // nothing, and keeps the owner usable.
+    let (stuck, _) = open_sync_handle(&root, &wal_name, BusyDeadline::start())
+        .await
+        .expect("stuck WAL handle");
+    let started = performance_now();
+    let failure = owner
+        .open()
+        .await
+        .expect_err("open gives up on a lock that never drains");
+    assert!(performance_now() - started >= BUSY_ENTRY_WAIT_MS);
+    assert_eq!(failure.error().kind(), OpfsErrorKind::Busy);
+    assert_eq!(
+        failure.error().to_string(),
+        "OPFS sync handle open failed (NoModificationAllowedError)"
+    );
+    let owner = failure
+        .into_owner()
+        .expect("a busy open leaves a recoverable owner");
+    assert!(!REGISTRY.with(|registry| registry.borrow().machine.is_poisoned()));
+    close_sync_handle(&stuck).expect("close stuck WAL handle");
+
+    // A wipe that outwaits a stuck handle reports it as busy too.
+    let (stuck, _) = open_sync_handle(&root, &database_name, BusyDeadline::start())
+        .await
+        .expect("stuck main handle");
+    let started = performance_now();
+    let failure = owner
+        .recovery_wipe()
+        .await
+        .expect_err("wipe gives up on a lock that never drains");
+    assert!(performance_now() - started >= BUSY_ENTRY_WAIT_MS);
+    assert_eq!(failure.error().kind(), OpfsErrorKind::Busy);
+    assert_eq!(
+        failure.error().to_string(),
+        "OPFS path remove failed (NoModificationAllowedError)"
+    );
+    assert_poisoned();
+    close_sync_handle(&stuck).expect("close stuck handle");
+    replace_poisoned_registry_for_test().await;
+    clean_pair(&database_name).await;
+}
+
+async fn entry_exists(root: &FileSystemDirectoryHandle, path: &str) -> bool {
+    match JsFuture::from(root.get_file_handle(path)).await {
+        Ok(_) => true,
+        Err(error) if is_not_found(&error) => false,
+        Err(error) => panic!("unexpected OPFS lookup failure: {error:?}"),
+    }
+}
+
+fn registry_has_no_lock() -> bool {
+    REGISTRY.with(|registry| {
+        let registry = registry.borrow();
+        registry.pending_lock.is_none() && registry.owner_lock.is_none()
+    })
+}
+
+#[wasm_bindgen_test]
+async fn try_acquire_never_queues_and_removal_discards_both_paths() {
+    let nonce = js_sys::Date::now() as u64;
+    let database_name = format!("try-acquire-{nonce}.db");
+    let wal_name = format!("{database_name}-wal");
+    let lock_name = owner_lock_name(&database_name);
+    clean_pair(&database_name).await;
+    let root = worker_root().await.expect("worker OPFS root");
+
+    // Another holder makes the lock unavailable; nothing is claimed or queued.
+    let held = acquire_raw_web_lock(&lock_name).await;
+    assert!(
+        OpfsOwner::try_acquire(&database_name)
+            .await
+            .expect("unavailable lock is not an error")
+            .is_none()
+    );
+    assert!(registry_has_no_lock());
+    assert!(!entry_exists(&root, &database_name).await);
+    held.release().await;
+
+    // Once free, the lock is granted and the pair can be created and closed.
+    let owner = OpfsOwner::try_acquire(&database_name)
+        .await
+        .expect("free lock acquisition")
+        .expect("free lock is granted");
+    assert_eq!(owner.lock_name(), lock_name);
+    assert!(!web_lock_available(&lock_name).await);
+    let owner = connect_ready(open_ready(owner).await)
+        .try_close()
+        .expect("adapter-driven close")
+        .preserve()
+        .expect("preserve idle owner");
+    assert!(entry_exists(&root, &database_name).await);
+    assert!(entry_exists(&root, &wal_name).await);
+
+    // Removal deletes both paths without recreating them and frees the lock.
+    owner
+        .remove_and_release()
+        .await
+        .expect("remove an unused pair");
+    assert!(!entry_exists(&root, &database_name).await);
+    assert!(!entry_exists(&root, &wal_name).await);
+    assert!(web_lock_available(&lock_name).await);
+    OpfsOwner::try_acquire(&database_name)
+        .await
+        .expect("reacquire after removal")
+        .expect("lock is free after removal")
+        .remove_and_release()
+        .await
+        .expect("removing absent paths succeeds");
+
+    // A removal that cannot finish still releases without poisoning.
+    let (stuck, _) = open_sync_handle(&root, &database_name, BusyDeadline::start())
+        .await
+        .expect("stuck main handle");
+    let failure = OpfsOwner::try_acquire(&database_name)
+        .await
+        .expect("acquire beside a stuck handle")
+        .expect("lock is free beside a stuck handle")
+        .remove_and_release()
+        .await
+        .expect_err("a stuck handle blocks removal");
+    assert_eq!(failure.kind(), OpfsErrorKind::Busy);
+    assert!(!REGISTRY.with(|registry| registry.borrow().machine.is_poisoned()));
+    assert!(registry_has_no_lock());
+    assert!(web_lock_available(&lock_name).await);
+    close_sync_handle(&stuck).expect("close stuck handle");
+    clean_pair(&database_name).await;
 }

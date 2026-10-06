@@ -1,0 +1,64 @@
+fragment InitiativeDetailFields on GraphqlSoupInitiative {
+  __typename
+  id
+  displayName
+  metadata {
+    ownerId
+    createdAt
+    updatedAt
+  }
+  viewerPermission {
+    __typename
+    ... on GraphqlAccessLevelPermission {
+      accessLevel
+    }
+  }
+  properties {
+    ...SoupPropertyFields
+  }
+  taskCount
+  completedTaskCount
+  memberIds
+  taskIds
+  sharePermission {
+    __typename
+    id
+    owner
+    linkShare
+    linkShareAccessLevel
+    teamShareAccessLevel
+    channelSharePermissions {
+      channelId
+      accessLevel
+    }
+  }
+}
+
+query Initiative($initiativeId: ID!) {
+  user {
+    id
+    initiative(initiativeId: $initiativeId) {
+      ...InitiativeDetailFields
+    }
+  }
+}
+
+mutation CreateInitiative($input: CreateInitiativeInput!) {
+  createInitiative(input: $input) {
+    ...InitiativeDetailFields
+  }
+}
+
+mutation UpdateInitiative($initiativeId: ID!, $input: UpdateInitiativeInput!) {
+  updateInitiative(initiativeId: $initiativeId, input: $input) {
+    ...InitiativeDetailFields
+  }
+}
+
+mutation EnsureInitiativeDescriptionSurface($initiativeId: ID!) {
+  ensureInitiativeDescriptionSurface(initiativeId: $initiativeId)
+}
+
+mutation DeleteInitiative($initiativeId: ID!) {
+  deleteInitiative(initiativeId: $initiativeId)
+}

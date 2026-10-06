@@ -65,6 +65,7 @@
 	"workspaces": {
 		"packages": [
 			"apps/web",
+			"apps/marketing",
 			"packages/observability",
 			"packages/email-renderer",
 			"packages/collaboration",
@@ -76,7 +77,8 @@
 			"services/bots/anthropic-status-bot",
 			"services/bots/stripe-payment-bot",
 			"services/lexical-service",
-			"packages/spreadsheet"
+			"packages/spreadsheet",
+			"vendor/ironcalc/pkg"
 		],
 		"catalog": {
 			"loro-crdt": "1.16.3"

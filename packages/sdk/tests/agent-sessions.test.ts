@@ -16,6 +16,7 @@ const session: AgentSessionResponse = {
   model: 'claude-sonnet',
   modifiedAt: '2026-08-24T12:00:00Z',
   name: 'Agent Session',
+  isArchived: false,
   ownerId: 'macro|owner@example.com',
   sandboxSize: 'default',
   status: { kind: 'no_messages' },
@@ -116,6 +117,30 @@ describe('AgentSession', () => {
     );
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
     await expect(request?.json()).resolves.toEqual({ name: 'Fix Flaky Tests' });
+  });
+
+  test('archives and unarchives a session through the agent-harness service', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(input instanceof Request ? input : new Request(input));
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+    const agentSession = macro.agentSessions.byId(sessionId);
+
+    await agentSession.archive();
+    await agentSession.unarchive();
+
+    expect(requests.map((request) => request.method)).toEqual(['PUT', 'PUT']);
+    expect(requests.map((request) => request.url)).toEqual([
+      `https://agent.example.test/agent-sessions/${sessionId}/archived`,
+      `https://agent.example.test/agent-sessions/${sessionId}/archived`,
+    ]);
+    await expect(requests[0]?.json()).resolves.toEqual({ isArchived: true });
+    await expect(requests[1]?.json()).resolves.toEqual({ isArchived: false });
   });
 
   test('resizes a session sandbox through the agent-harness service', async () => {
@@ -276,7 +301,7 @@ describe('AgentSession', () => {
     });
   });
 
-  test('lists the queue and edits or removes an entry through its handle', async () => {
+  test('lists the queue and edits, steers, or removes an entry through its handle', async () => {
     const actionId = '0198a4cc-e138-7670-a308-a6b766602704';
     const requests: Request[] = [];
     globalThis.fetch = (async (input) => {
@@ -313,11 +338,13 @@ describe('AgentSession', () => {
     expect(queued?.createdAt).toBe('2026-08-24T12:01:00Z');
 
     await queued?.edit('Also update the README');
+    await queued?.steer();
     await queued?.remove();
 
     expect(requests.map((request) => request.method)).toEqual([
       'GET',
       'PUT',
+      'POST',
       'DELETE',
     ]);
     expect(requests[1]?.url).toBe(
@@ -327,6 +354,10 @@ describe('AgentSession', () => {
       prompt: 'Also update the README',
     });
     expect(requests[2]?.url).toBe(
+      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}/steer`
+    );
+    expect(requests[2]?.headers.get('authorization')).toBe('Bearer user-token');
+    expect(requests[3]?.url).toBe(
       `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`
     );
   });

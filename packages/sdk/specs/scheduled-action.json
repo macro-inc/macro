@@ -32,6 +32,18 @@
       "get": {
         "tags": ["scheduled actions"],
         "operationId": "list_scheduled_actions",
+        "parameters": [
+          {
+            "name": "include_events",
+            "in": "query",
+            "description": "Backend clients must opt in to event actions; defaults to false (cron-only).",
+            "required": false,
+            "schema": {
+              "type": ["boolean", "null"],
+              "default": false
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -40,8 +52,18 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ScheduledAction"
+                    "$ref": "#/components/schemas/ScheduledActionResponse"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -87,12 +109,32 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScheduledAction"
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "text/plain": {
@@ -116,6 +158,63 @@
       }
     },
     "/scheduled-actions/{id}": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "get_scheduled_action",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": ["scheduled actions"],
         "operationId": "update_scheduled_action",
@@ -146,7 +245,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScheduledAction"
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -163,6 +272,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Configuration changed or execution is active",
             "content": {
               "text/plain": {
                 "schema": {
@@ -234,6 +353,95 @@
         }
       }
     },
+    "/scheduled-actions/{id}/enabled": {
+      "put": {
+        "tags": ["scheduled actions"],
+        "operationId": "set_scheduled_action_enabled",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetScheduledActionEnabled"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Configuration changed or execution is active",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}/execute": {
       "post": {
         "tags": ["scheduled actions"],
@@ -260,12 +468,32 @@
               }
             }
           },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "401": {
             "description": "",
             "content": {
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -296,6 +524,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -368,6 +606,54 @@
   },
   "components": {
     "schemas": {
+      "ActionConfiguration": {
+        "type": "object",
+        "description": "Canonical client configuration. Ownership and execution state are server-owned.",
+        "required": ["name", "trigger", "kind", "task", "enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "task": {
+            "type": "object"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActionConfigurationUpdate": {
+        "type": "object",
+        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value.",
+        "required": ["name", "trigger", "kind", "task"],
+        "properties": {
+          "enabled": {
+            "type": ["boolean", "null"],
+            "description": "Still sent by clients deployed before the activation endpoint.",
+            "deprecated": true
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "task": {
+            "type": "object"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger"
+          }
+        },
+        "additionalProperties": false
+      },
       "ActionExecutionRecord": {
         "type": "object",
         "required": [
@@ -400,7 +686,7 @@
           },
           "resource_id": {
             "type": ["string", "null"],
-            "description": "ID of the primary resource produced by this run (e.g. a chat thread).\nOpaque to the scheduler; the UI interprets it based on the action kind."
+            "description": "ID of the primary resource produced by this run. Its type is recorded in\n`result`, independently of the routine's current configuration."
           },
           "result": {
             "type": "object"
@@ -415,12 +701,78 @@
         "type": "string",
         "enum": ["Agent"]
       },
+      "ActionTrigger": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["schedule", "timezone", "type"],
+            "properties": {
+              "schedule": {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["cron"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["filters", "type"],
+            "properties": {
+              "filters": {
+                "$ref": "#/components/schemas/EventFilters"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["events"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["triggers", "type"],
+            "properties": {
+              "triggers": {
+                "$ref": "#/components/schemas/RoutineTriggers"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["multiple"]
+              }
+            }
+          }
+        ],
+        "description": "A routine may run on one trigger or any of several schedules and Macro events."
+      },
       "AgentTask": {
         "type": "object",
-        "required": ["model", "prompt", "user_prompt"],
+        "required": ["prompt", "user_prompt"],
         "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentTaskAgent",
+                "description": "Absent when using Macro's agent-session runtime with a selected model."
+              }
+            ]
+          },
           "model": {
-            "type": "string"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineModelId",
+                "description": "Required for model targets; overrides the persona default for agent targets."
+              }
+            ]
           },
           "prompt": {
             "type": "string"
@@ -430,9 +782,162 @@
           }
         }
       },
-      "CreateScheduledAction": {
+      "AgentTaskAgent": {
         "type": "object",
-        "description": "Client-supplied payload for creating a scheduled action. The server fills\nin `id`, `owner` (from the authenticated user), timestamps, `claimed`, and\n`next_run_at` (derived from the cron).",
+        "description": "A persona selection, independent of its runtime and current default model.",
+        "required": ["bot_id"],
+        "properties": {
+          "bot_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
+      "CreateScheduledAction": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ActionConfiguration"
+          },
+          {
+            "$ref": "#/components/schemas/LegacyActionConfiguration"
+          }
+        ],
+        "description": "Exactly one representation is accepted, even if mixed fields agree or are null."
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EventFilter": {
+        "type": "object",
+        "description": "An event name AND an entity ID must match within the same filter.",
+        "required": ["events"],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventName"
+            }
+          },
+          "ids": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EventFilters": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/EventFilter"
+        },
+        "description": "Bounded nonempty OR of filters, canonicalized to remove duplicates."
+      },
+      "EventName": {
+        "type": "string",
+        "description": "Closed allowlist: unknown names, deletions and ambiguous attribution are not\nselectors. Adding a broker variant does not automatically enable routines.",
+        "enum": [
+          "document.created",
+          "document.updated",
+          "document.deleted",
+          "task.created",
+          "task.status_changed",
+          "task.priority_changed",
+          "task.property_changed",
+          "email.message_received",
+          "channel.created",
+          "channel.message_posted",
+          "channel.mentioned",
+          "channel.message_patched",
+          "channel.message_attachment_created"
+        ]
+      },
+      "ExecutionResource": {
+        "type": "object",
+        "description": "Transcript resource created by a run. Never infer this from current task configuration.",
+        "required": ["type", "id"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ExecutionResourceType"
+          }
+        }
+      },
+      "ExecutionResourceType": {
+        "type": "string",
+        "description": "Closed set of transcript destinations understood by routine clients.",
+        "enum": ["chat", "agent"]
+      },
+      "ExecutionResult": {
+        "type": "object",
+        "description": "Version 1 execution metadata stored in the existing JSON result column.\nNull/string column values predate this envelope and refer to legacy chats.",
+        "required": ["version"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"]
+          },
+          "resource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionResource"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "InProgressExecution": {
+        "type": "object",
+        "required": ["action_id"],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": ["string", "null"]
+          },
+          "resource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionResource",
+                "description": "Absent only in responses from legacy workers."
+              }
+            ]
+          }
+        }
+      },
+      "LegacyActionConfiguration": {
+        "type": "object",
+        "description": "Deprecated cron-only input, accepted during the compatibility rollout.",
         "required": ["name", "schedule", "kind", "timezone", "task", "enabled"],
         "properties": {
           "enabled": {
@@ -453,24 +958,53 @@
           "timezone": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
-      "EmptyResponse": {
-        "type": "object",
-        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      "RoutineModelId": {
+        "type": "string",
+        "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
       },
-      "InProgressExecution": {
-        "type": "object",
-        "required": ["action_id"],
-        "properties": {
-          "action_id": {
-            "type": "string",
-            "format": "uuid"
+      "RoutineTrigger": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["schedule", "timezone", "type"],
+            "properties": {
+              "schedule": {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["cron"]
+              }
+            }
           },
-          "chat_id": {
-            "type": ["string", "null"]
+          {
+            "type": "object",
+            "required": ["filters", "type"],
+            "properties": {
+              "filters": {
+                "$ref": "#/components/schemas/EventFilters"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["events"]
+              }
+            }
           }
-        }
+        ],
+        "description": "An individual trigger in a routine's trigger list."
+      },
+      "RoutineTriggers": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/RoutineTrigger"
+        },
+        "description": "Bounded schedules and one combined set of event filters."
       },
       "Schedule": {
         "type": "string"
@@ -480,13 +1014,12 @@
         "required": [
           "owner",
           "name",
-          "schedule",
+          "trigger",
           "kind",
           "created_at",
           "updated_at",
-          "timezone",
+          "configuration_revision",
           "task",
-          "next_run_at",
           "enabled"
         ],
         "properties": {
@@ -494,13 +1027,23 @@
             "type": ["string", "null"],
             "format": "date-time"
           },
+          "configuration_revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Independent of execution bookkeeping in `updated_at`."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "enabled": {
             "type": "boolean",
-            "description": "When false, the cron dispatcher skips this schedule. `run_now` remains\navailable regardless."
+            "description": "When false, automatic dispatch skips this action. `run_now` remains\navailable regardless."
+          },
+          "event_activated_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Event publication boundary; absent for cron actions."
           },
           "id": {
             "type": ["string", "null"],
@@ -513,22 +1056,19 @@
             "type": "string"
           },
           "next_run_at": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "date-time",
-            "description": "Time of the next scheduled firing (derived from the cron on write). UI\nuses this to render \"next run\" without having to parse the cron itself."
+            "description": "Next cron firing, absent for event-triggered actions."
           },
           "owner": {
             "type": "string",
             "description": "Who the action belongs to. Every action is user-owned today, but the\ntype no longer says so: the principal string on the wire and in the\n`owner` column is the same, and a bot- or team-owned row decodes\nrather than failing to parse."
           },
-          "schedule": {
-            "$ref": "#/components/schemas/Schedule"
-          },
           "task": {
             "type": "object"
           },
-          "timezone": {
-            "type": "string"
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger"
           },
           "updated_at": {
             "type": "string",
@@ -536,21 +1076,54 @@
           }
         }
       },
+      "ScheduledActionResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ScheduledAction"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "schedule": {
+                "type": ["string", "null"],
+                "description": "Deprecated: use `trigger.schedule`. Present only for cron actions.",
+                "deprecated": true
+              },
+              "timezone": {
+                "type": ["string", "null"],
+                "description": "Deprecated: use `trigger.timezone`. Present only for cron actions.",
+                "deprecated": true
+              }
+            }
+          }
+        ],
+        "description": "Canonical trigger plus deprecated cron fields for existing clients. Event\nresponses omit legacy fields rather than inventing a schedule or timezone."
+      },
       "ScheduledActionUpdate": {
         "oneOf": [
           {
             "type": "object",
-            "required": ["owner", "action_id", "chat_id", "type"],
+            "required": ["owner", "action_id", "type"],
             "properties": {
               "action_id": {
                 "type": "string",
                 "format": "uuid"
               },
               "chat_id": {
-                "type": "string"
+                "type": ["string", "null"]
               },
               "owner": {
                 "type": "string"
+              },
+              "resource": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionResource"
+                  }
+                ]
               },
               "type": {
                 "type": "string",
@@ -560,20 +1133,30 @@
           },
           {
             "type": "object",
-            "required": ["owner", "action_id", "chat_id", "is_success", "type"],
+            "required": ["owner", "action_id", "is_success", "type"],
             "properties": {
               "action_id": {
                 "type": "string",
                 "format": "uuid"
               },
               "chat_id": {
-                "type": "string"
+                "type": ["string", "null"]
               },
               "is_success": {
                 "type": "boolean"
               },
               "owner": {
                 "type": "string"
+              },
+              "resource": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionResource"
+                  }
+                ]
               },
               "type": {
                 "type": "string",
@@ -582,32 +1165,28 @@
             }
           }
         ],
-        "description": "Live status update for a scheduled-action run, broadcast via the connection\ngateway to the owner. Clients use the `chat_id` to navigate to the run\ntranscript and the variant tag to toggle the running indicator.\n\nSerialized with a `type` tag (`started`/`stopped`) and delivered over the\nsingle `scheduled_action_update` message type on the gateway."
+        "description": "Live status update for a scheduled-action run, broadcast via the connection\ngateway to the owner. Clients use the typed resource to navigate to the run\ntranscript and the variant tag to toggle the running indicator. `chat_id`\nremains populated only for chat runs, for older clients.\n\nSerialized with a `type` tag (`started`/`stopped`) and delivered over the\nsingle `scheduled_action_update` message type on the gateway."
       },
-      "UpdateScheduledAction": {
+      "SetScheduledActionEnabled": {
         "type": "object",
-        "description": "Client-supplied payload for updating a scheduled action. Mirrors the fields\nthe repository actually writes — `id`/`owner`/timestamps/`claimed`/\n`next_run_at` are not client-mutable.",
-        "required": ["name", "schedule", "kind", "timezone", "task", "enabled"],
+        "required": ["enabled"],
         "properties": {
           "enabled": {
             "type": "boolean"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ActionKind"
-          },
-          "name": {
-            "type": "string"
-          },
-          "schedule": {
-            "$ref": "#/components/schemas/Schedule"
-          },
-          "task": {
-            "type": "object"
-          },
-          "timezone": {
-            "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
+      },
+      "UpdateScheduledAction": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ActionConfigurationUpdate"
+          },
+          {
+            "$ref": "#/components/schemas/LegacyActionConfiguration"
+          }
+        ],
+        "description": "Full replacement of client configuration, not of server-owned action state."
       }
     }
   },

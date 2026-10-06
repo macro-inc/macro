@@ -1,7 +1,6 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
@@ -20,8 +19,9 @@ import type {
   SplitMount,
 } from '../layoutManager';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
+import { focusPopoverInput } from '../utils/focusPopoverInput';
 
-false && clickOutside;
+false;
 
 type PopoverSplitData = {
   id: string;
@@ -87,15 +87,14 @@ function PopoverSplitModal(props: {
     isSpotLight: () => false,
     isPopover: () => true,
     replace: () => {},
-    // A popover has no URL and no history to rewrite.
+    // A popover has no history to rewrite.
     adoptContentId: () => {},
+    updateCurrentEntry: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
     history: () => [],
-    getUrlSegments: () => [],
-    getUrl: () => '',
     meta: () =>
       props.popover.mount.kind === 'component'
         ? props.popover.mount.meta
@@ -179,8 +178,12 @@ function PopoverSplitModal(props: {
           open={props.popover.isOpen}
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
+          onOpenAutoFocus={(event) => focusPopoverInput(event, panelRef())}
         >
-          <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
+          <Panel
+            hideBorder
+            class="bg-transparent rounded-[inherit] *:max-h-[75vh]"
+          >
             <Content />
           </Panel>
         </Dialog>
@@ -190,6 +193,7 @@ function PopoverSplitModal(props: {
         side="bottom"
         open={props.popover.isOpen}
         onOpenChange={onOpenChange}
+        onInitialFocus={(event) => focusPopoverInput(event, panelRef())}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />

@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { compareDateDesc, type DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
+import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ChannelsGroup } from '../../../types';
@@ -41,9 +42,6 @@ export function useChannelRailActivity(
 
   const notificationActivity = createMemo(() => {
     const unreadChannelIds = new Set<string>();
-    // Channels with unread activity, newest unread notification first; the
-    // notifications are already sorted newest-first so first sight wins.
-    const unreadChannelOrder: string[] = [];
     const unreadNotificationIds = new Set<string>();
     const unreadCounts: Record<ChannelsGroup, number> = {
       channels: 0,
@@ -63,7 +61,12 @@ export function useChannelRailActivity(
         continue;
       }
       for (const notification of channel.unreadNotifications) {
-        if (notification.state !== 'unseen') continue;
+        // Mark-seen intentionally leaves the normalized state unchanged until
+        // commit. Honor the same local intent as the app-shell Chat badge.
+        const state =
+          notificationSource.withLocalState?.(notification) ??
+          notification.state;
+        if (state !== 'unseen') continue;
         notifications.push({
           id: notification.id,
           entity_id: channel.id,
@@ -81,6 +84,7 @@ export function useChannelRailActivity(
             (notification) =>
               notification.entity_type === 'channel' &&
               legacyChannelIds.has(notification.entity_id) &&
+              isUnreadChannelMessageNotification(notification) &&
               !notificationIsRead(notification)
           )
       );
@@ -92,8 +96,6 @@ export function useChannelRailActivity(
         notification.entity_id
       );
       unreadChannelIds.add(notification.entity_id);
-      if (isFirstUnreadForChannel)
-        unreadChannelOrder.push(notification.entity_id);
       unreadNotificationIds.add(notification.id);
 
       const channel = channelsById().get(notification.entity_id);
@@ -115,7 +117,6 @@ export function useChannelRailActivity(
     return {
       latestTargets,
       unreadChannelIds,
-      unreadChannelOrder,
       unreadNotificationIds,
       unreadCounts,
     };
@@ -136,6 +137,7 @@ export function useChannelRailActivity(
     notificationSource.subscribe((notification) => {
       if (
         notification.entity_type !== 'channel' ||
+        !isUnreadChannelMessageNotification(notification) ||
         notificationIsRead(notification)
       ) {
         return;
@@ -247,8 +249,6 @@ export function useChannelRailActivity(
     targetChannelId,
     targetLabel,
     unreadChannelIds: () => notificationActivity().unreadChannelIds,
-    /** Channel ids with unread activity, newest unread notification first. */
-    unreadChannelOrder: () => notificationActivity().unreadChannelOrder,
     unreadCount: (group: ChannelsGroup) =>
       notificationActivity().unreadCounts[group],
   };

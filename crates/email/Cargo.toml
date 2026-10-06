@@ -5,6 +5,8 @@ publish = false
 version = "0.1.0"
 
 [features]
+# Calendar invitation extraction and resolution against the viewer's calendar.
+calendar_invitations = ["dep:calendar_events", "dep:chrono-tz", "dep:ical", "dep:sha2", "dep:url"]
 all = [
   "ai_tools",
   "gmail_token",
@@ -40,6 +42,11 @@ outbound = ["dep:sqlx", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
+calendar_events = { path = "../calendar_events", optional = true }
+ical = { version = "0.11", default-features = false, features = ["ical"], optional = true }
+chrono-tz = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 attachment = { path = "../attachment", optional = true }
@@ -94,6 +101,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+email_db_client = { path = "../email_db_client" }
 crm = { path = "../crm", features = ["outbound"] }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

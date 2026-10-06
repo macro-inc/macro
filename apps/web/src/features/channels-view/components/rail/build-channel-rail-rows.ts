@@ -8,21 +8,19 @@ import type {
   ChannelsTab,
 } from '../../types';
 import {
+  ALL_THREADS_ROW_ID,
   type ChannelRailRow,
   type ChannelSectionRow,
   rowKeyForChannel,
   rowKeyForFavorite,
   rowKeyForLabel,
-  rowKeyForUnread,
 } from './ChannelsRailContext';
 
 export type ChannelRailItemsByScope = Record<
-  ChannelsQueryScope,
+  ChannelsQueryScope | 'threads',
   readonly ChannelEntity[]
 > & {
   favorites: readonly Favorite[];
-  /** Channels with unread activity, newest first. Empty hides the section. */
-  unread: readonly ChannelEntity[];
 };
 
 const compareChannelName = (left: ChannelEntity, right: ChannelEntity) =>
@@ -82,6 +80,21 @@ export function buildChannelRailRows(
   items: ChannelRailItemsByScope,
   channelSectionRows: readonly ChannelSectionRow[]
 ): ChannelRailRow[] {
+  if (tab === 'threads') {
+    return [
+      { kind: 'all-threads', id: ALL_THREADS_ROW_ID },
+      ...items.threads.map(
+        (channel, localIndex): ChannelRailRow => ({
+          kind: 'conversation',
+          id: rowKeyForChannel(channel.id),
+          scope: 'threads',
+          localIndex,
+          channel,
+        })
+      ),
+    ];
+  }
+
   if (tab === 'recents') {
     return items.recents.map((channel, localIndex) => ({
       kind: 'conversation',
@@ -107,23 +120,6 @@ export function buildChannelRailRows(
             id: rowKeyForFavorite(favorite),
             group: 'favorites',
             favorite,
-          })
-        )
-      );
-    }
-  }
-
-  if (items.unread.length > 0) {
-    rows.push({ kind: 'section', id: 'section:unread', group: 'unread' });
-    if (expandedGroups.unread) {
-      rows.push(
-        ...items.unread.map(
-          (channel, localIndex): ChannelRailRow => ({
-            kind: 'unread',
-            id: rowKeyForUnread(channel.id),
-            group: 'unread',
-            localIndex,
-            channel,
           })
         )
       );

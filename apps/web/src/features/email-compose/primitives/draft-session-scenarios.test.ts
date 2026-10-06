@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { message } from '../../email-message/tests/messages';
 import {
   DraftPersistRejected,
   type DraftSaveResult,
@@ -29,6 +30,88 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('draft session: reply composer', () => {
+  it('preserves the seeded ID as a handle until a save confirms it when lookup has no record', async () => {
+    const context = createComposeContext();
+    context.drafts.readDraft = vi.fn(async () => undefined);
+    context.drafts.watchDrafts = () => () => {};
+    const state = mountReplyComposer(context, undefined, {
+      draft: message('existing', { is_draft: true }),
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      await state.sendEmail();
+      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing');
+      expect(context.drafts.saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientHandles: expect.objectContaining({ draftId: 'existing' }),
+        })
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps REST lifecycle reads blocked while the seeded draft identity is unresolved', async () => {
+    const context = createComposeContext();
+    const pending =
+      Promise.withResolvers<
+        Awaited<ReturnType<NonNullable<typeof context.drafts.readDraft>>>
+      >();
+    context.drafts.readDraft = vi.fn(() => pending.promise);
+    context.drafts.watchDrafts = () => () => {};
+    const draft = message('local', { is_draft: true });
+    const state = mountReplyComposer(context, undefined, { draft });
+    const observed = vi.mocked(context.draftLifecycle.observe).mock.calls[0][0];
+    try {
+      expect(observed.draftId()).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed.draftId()).toBeUndefined();
+      pending.resolve({ draft, persistence: 'queued' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed.draftId()).toBeUndefined();
+      vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+        queued(input)
+      );
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      vi.mocked(context.drafts.readDraft).mockResolvedValue({
+        draft: message('server-1', { is_draft: true }),
+        persistence: 'committed',
+      });
+      vi.mocked(context.drafts.saveDraft).mockResolvedValue(committed());
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('still blocks send when local storage identifies the seeded draft as queued', async () => {
+    const context = createComposeContext();
+    const draft = message('existing', { is_draft: true });
+    context.drafts.readDraft = vi.fn(async () => ({
+      draft,
+      persistence: 'queued' as const,
+    }));
+    context.drafts.watchDrafts = () => () => {};
+    vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+      queued(input)
+    );
+    const state = mountReplyComposer(context, undefined, { draft });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing');
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+        'Failed to send email',
+        { subtext: 'Draft still syncing, try again' }
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('queues saves offline under one handle, refuses to send, then sends once a save commits', async () => {
     const context = createComposeContext();
     vi.mocked(context.connectivity.looksOffline).mockReturnValue(true);
@@ -219,7 +302,13 @@ describe('draft session: compose composer', () => {
             }),
           })
         );
-        expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+        if (firstSave === 'autosave') {
+          expect(context.notices.feedback.failure).toHaveBeenCalledWith(
+            'Failed to save draft'
+          );
+        } else {
+          expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+        }
       } finally {
         root.dispose();
       }
@@ -344,6 +433,8 @@ describe.each(['reply', 'compose'] as const)(
           ...root,
           send: root.sendEmail,
           schedule: root.handleSendTimeChange,
+          cancelSchedule: root.cancelSchedule,
+          addAttachment: (file: File) => root.handleAddAttachments([file]),
         };
       }
       const root = mountEmailComposer(context);
@@ -353,9 +444,80 @@ describe.each(['reply', 'compose'] as const)(
           root.state.context.onSend();
           await vi.advanceTimersByTimeAsync(0);
         },
-        schedule: root.state.context.onSendTimeChange,
+        schedule: root.state.context.schedule.onSelect,
+        cancelSchedule: root.state.context.schedule.onCancel,
+        addAttachment: (file: File) =>
+          root.state.context.onAddAttachments([{ type: 'local', file }]),
       };
     };
+
+    it('commits local schedule intent only after queued handles become server-confirmed', async () => {
+      const context = createComposeContext();
+      vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+        queued(input)
+      );
+      vi.mocked(context.attachmentStorage.uploadAttachments).mockImplementation(
+        async ({ attachments, onAttachmentAdded }) => {
+          for (const file of attachments) onAttachmentAdded?.(file, 'uploaded');
+        }
+      );
+      const root = mount(context);
+      try {
+        root.edit('Schedule once synced');
+        await root.addAttachment(new File(['bytes'], 'notes.txt'));
+        root.schedule(new Date('2027-01-01T12:00:00Z'));
+        await vi.advanceTimersByTimeAsync(600);
+        await root.send();
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+          'Failed to schedule email',
+          {
+            subtext:
+              'Draft is not ready to schedule. Resolve any save or connection errors and try again',
+          }
+        );
+        expect(
+          context.attachmentStorage.uploadAttachments
+        ).not.toHaveBeenCalled();
+        const observer = vi.mocked(context.draftLifecycle.observe).mock
+          .calls[0][0];
+        expect(observer.draftId()).toBeUndefined();
+        const [first, second] = savedInputs(context);
+        expect(first.clientHandles?.draftId).toBeTruthy();
+        expect(second.clientHandles).toEqual(first.clientHandles);
+        expect(first.draft).not.toHaveProperty('send_time');
+        expect(second.draft).not.toHaveProperty('send_time');
+
+        vi.mocked(context.drafts.saveDraft).mockResolvedValue(
+          committed('scheduled-server')
+        );
+        await root.send();
+        expect(savedInputs(context)[2].clientHandles).toEqual(
+          first.clientHandles
+        );
+        expect(
+          context.attachmentStorage.uploadAttachments
+        ).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            draftId: 'scheduled-server',
+            inboxId: 'inbox',
+          })
+        );
+        expect(context.delivery.schedule).toHaveBeenCalledExactlyOnceWith(
+          {
+            draftId: 'scheduled-server',
+            threadId: 'thread',
+            sendTime: '2027-01-01T12:00:00.000Z',
+            includeSignature: undefined,
+          },
+          'inbox'
+        );
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
+      }
+    });
 
     it('does not send or schedule over a queued update to an existing server draft', async () => {
       const context = createComposeContext();
@@ -374,12 +536,55 @@ describe.each(['reply', 'compose'] as const)(
           { subtext: 'Draft still syncing, try again' }
         );
         await root.schedule?.(new Date('2027-01-01T12:00:00Z'));
+        await root.send();
         expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+          'Failed to schedule email',
+          {
+            subtext:
+              'Draft is not ready to schedule. Resolve any save or connection errors and try again',
+          }
+        );
         vi.mocked(context.drafts.saveDraft).mockResolvedValue(
           committed('existing')
         );
+        await root.schedule?.(null);
         await root.send();
         expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('resumes saving after a schedule-locked rejection is explicitly cancelled', async () => {
+      const context = createComposeContext();
+      vi.mocked(context.drafts.saveDraft).mockResolvedValue(
+        committed('existing')
+      );
+      const root = mount(context);
+      try {
+        root.edit('Saved content');
+        await vi.advanceTimersByTimeAsync(600);
+        root.schedule(new Date('2027-01-01T12:00:00Z'));
+        vi.mocked(context.drafts.saveDraft).mockImplementationOnce(async () => {
+          context.setDraftLifecycle({
+            type: 'scheduled',
+            draftId: 'existing',
+            threadId: 'thread',
+            inboxId: 'inbox',
+            sendTime: '2027-01-01T12:00:00Z',
+            observedAt: Date.now(),
+          });
+          throw new DraftPersistRejected('INVALID');
+        });
+        await root.send();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.schedule).not.toHaveBeenCalled();
+        expect(await root.cancelSchedule()).toBe(true);
+        root.edit('Editable after cancellation');
+        await vi.advanceTimersByTimeAsync(600);
+        expect(context.drafts.saveDraft).toHaveBeenCalledTimes(3);
+        expect(savedInputs(context)[2].draft.db_id).toBe('existing');
       } finally {
         root.dispose();
       }

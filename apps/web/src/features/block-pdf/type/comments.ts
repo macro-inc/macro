@@ -4,14 +4,17 @@ import type {
   Root,
   ThreadId,
 } from '@core/comments/commentType';
-import type { Comment } from '@service-storage/generated/schemas/comment';
+import type { Message } from '@service-storage/messages';
 
+/** The discussion on a PDF anchor: a message root with its loaded reply preview. */
 export type ThreadPayload = {
-  threadId: number;
-  rootId: number;
+  threadId: ThreadId;
+  rootId: CommentId;
   anchorId: string; // uuid
   page: number;
-  comments: Comment[];
+  comments: Message[];
+  /** Total live replies of a message thread; comments holds only the loaded preview. */
+  replyCount?: number;
   isResolved: boolean;
 };
 

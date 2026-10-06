@@ -1,5 +1,7 @@
 pub mod grouping;
 
+mod exclusions;
+
 #[cfg(test)]
 mod test;
 
@@ -10,19 +12,18 @@ use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use filter_ast::Expr;
-use foreign_entity::domain::{
-    models::{ForeignEntityError, SourceId},
-    ports::ForeignEntityListQuery,
-};
+use foreign_entity::domain::{models::SourceId, ports::ForeignEntityListQuery};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
+use github_pull_requests::domain::models::GithubPullRequestError;
 use item_filters::{
     EntityFilters,
     ast::{
-        EntityFilterAst, ExpandErr,
+        EntityFilterAst, ExpandErr, LiteralTree,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         crm_company::CrmCompanyLiteral,
         email::EmailLiteral,
+        github_pull_request::GithubPullRequestLiteral,
         properties::{
             PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to,
             properties_filter_matches_propertyless,
@@ -427,6 +428,11 @@ impl SoupRequest<Option<EntityFilterAst>> {
         if self.link_ids.is_empty() {
             return None;
         }
+        // CRM-scoped requests must still reach email's authorization precheck,
+        // even when their id filter cannot match any threads.
+        if crm_scope.is_none() && exclusions::email(entity_ast) {
+            return None;
+        }
 
         // A properties filter that cannot match threads makes the email
         // branch empty, so the sub-request is skipped. Otherwise it is ANDed
@@ -514,6 +520,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_call_request(&self) -> Option<GetCallRecordsRequest> {
+        if exclusions::call(self.entity_ast()) {
+            return None;
+        }
         // A def-less tag filter (entity_type None on every literal) applies to
         // calls, which carry tags; it is folded into the call filter below and
         // rendered as a `properties.values` EXISTS by the call query. Any other
@@ -695,7 +704,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
-        if self.properties_filter_blocks_propertyless() {
+        if self.properties_filter_blocks_propertyless() || exclusions::channel(self.entity_ast()) {
             return None;
         }
         Some(GetChannelsRequest {
@@ -736,7 +745,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_comms_thread_request(&self) -> Option<GetThreadReplyRowsRequest> {
-        if self.properties_filter_blocks_propertyless() {
+        if self.properties_filter_blocks_propertyless()
+            || exclusions::channel_thread(self.entity_ast())
+        {
             return None;
         }
         let query = match &self.cursor {
@@ -782,7 +793,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_foreign_entity_query(&self) -> Option<ForeignEntityListQuery> {
-        if self.properties_filter_blocks_propertyless() {
+        if self.properties_filter_blocks_propertyless()
+            || exclusions::foreign_entity(self.entity_ast())
+        {
             return None;
         }
         match &self.cursor {
@@ -819,6 +832,12 @@ impl SoupRequest<Option<EntityFilterAst>> {
                     .and_then(|filter| filter.foreign_entity_filter.clone()),
             )),
         }
+    }
+
+    /// The request's GitHub pull request filter, which narrows its foreign entity leg.
+    pub(crate) fn build_github_pull_request_filter(&self) -> LiteralTree<GithubPullRequestLiteral> {
+        self.entity_ast()
+            .and_then(|ast| ast.github_pull_request_filter.clone())
     }
 
     pub(crate) fn build_foreign_entity_source_ids(
@@ -1271,6 +1290,20 @@ pub struct EnrichedSoupItem {
     pub notified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+impl From<SoupItem<SoupPropertiesField>> for EnrichedSoupItem {
+    /// An item enriched with its properties alone, as
+    /// [`SoupService::get_user_soup_with_properties`](super::ports::SoupService::get_user_soup_with_properties)
+    /// answers it.
+    fn from(item: SoupItem<SoupPropertiesField>) -> Self {
+        Self {
+            item,
+            frecency_score: None,
+            touched_at: None,
+            notified_at: None,
+        }
+    }
+}
+
 /// A soup request with optional grouping configuration.
 #[derive(Debug)]
 pub struct GroupedSoupRequest<T> {
@@ -1321,9 +1354,9 @@ pub enum SoupErr {
     /// role is below admin/owner.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     CrmAdminRequired,
-    /// Foreign entity lookup failed.
+    /// GitHub pull request listing failed.
     #[error(transparent)]
-    ForeignEntityErr(#[from] ForeignEntityError),
+    GithubPullRequestErr(#[from] GithubPullRequestError),
     /// Entity filter AST expansion failed.
     #[error(transparent)]
     AstErr(#[from] ExpandErr),

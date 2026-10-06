@@ -1,4 +1,12 @@
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") {
+        // Android needs cdylib, so Cargo also emits an unused iOS dylib. CallKit's
+        // Swift package is linked by Xcode into the final app, not by Cargo.
+        // Defer only this symbol in the dylib; the shipped staticlib/app link
+        // still requires Xcode to supply the real implementation.
+        println!("cargo:rustc-link-arg-cdylib=-Wl,-U,_init_plugin_call_kit");
+    }
+
     println!("cargo:rerun-if-changed=.macro-tauri-env");
     println!("cargo:rerun-if-changed=../../dist/bundle-manifest.json");
     println!("cargo:rerun-if-env-changed=MACRO_BUNDLE_UPDATE_BASE_URL");

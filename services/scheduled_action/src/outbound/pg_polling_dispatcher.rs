@@ -144,10 +144,16 @@ where
                     Ok(candidates) => {
                         let now = Utc::now();
                         for action in candidates {
+                            if !action.enabled || !action.trigger.has_schedule() {
+                                continue;
+                            }
+                            let Some(next_run_at) = action.next_run_at else {
+                                continue;
+                            };
                             // Candidates come back sorted by next_run_at ASC.
                             // The first non-due one ends the batch — anything
                             // after it is also not yet due.
-                            if action.next_run_at > now {
+                            if next_run_at > now {
                                 break;
                             }
 

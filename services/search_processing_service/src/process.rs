@@ -127,7 +127,7 @@ pub async fn process_message(
                 .context("failed to parse call_id as UUID")?;
             call::process_remove_call_record(
                 &ctx.opensearch_client,
-                channel_id,
+                Some(channel_id),
                 call_id,
                 message.index_override.as_deref(),
             )

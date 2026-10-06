@@ -4,7 +4,10 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { StructuredCompletionErrorCode } from './structuredCompletionErrorCode';
 
 export interface StructuredCompletionError {
+  /** Stable machine-readable code for admission errors (402 or 503). */
+  code?: StructuredCompletionErrorCode;
   error: string;
 }

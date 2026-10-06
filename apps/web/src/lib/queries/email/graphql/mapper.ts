@@ -1,3 +1,4 @@
+import { decodeCalendarInvitations } from '@app/features/email-message/core/calendar-invitation-schema';
 import type {
   AccessLevel,
   ApiContactInfo,
@@ -62,12 +63,12 @@ function mapMessageLabel(
   };
 }
 
-function mapMessage(
+export function mapGraphqlEmailMessage(
   message: EmailThreadMessageFieldsFragment,
   labelsByProviderId: ReadonlyMap<
     string,
     EmailThreadPageFieldsFragment['labels'][number]
-  >
+  > = new Map()
 ): ApiMessage {
   return {
     attachments: message.attachments.map((attachment) => ({
@@ -101,6 +102,8 @@ function mapMessage(
     body_html_sanitized: message.bodyHtmlSanitized,
     body_macro: message.bodyMacro,
     body_replyless: message.bodyReplyless,
+    calendar_invitations:
+      decodeCalendarInvitations(message.calendarInvitations) ?? [],
     body_text: message.bodyText,
     cc: message.cc.map(mapContact),
     created_at: message.createdAt,
@@ -145,7 +148,7 @@ export function mapGraphqlEmailThreadPage(
     latest_inbound_message_ts: thread.latestInboundMessageTs,
     link_id: thread.linkId,
     messages: thread.messages.map((message) =>
-      mapMessage(message, labelsByProviderId)
+      mapGraphqlEmailMessage(message, labelsByProviderId)
     ),
     project_id: optional(thread.projectId),
     provider_id: optional(thread.providerId),

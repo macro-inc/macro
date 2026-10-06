@@ -22,9 +22,7 @@ vi.mock('@block-pdf/store/comments/commentLayout', () => ({
 }));
 
 vi.mock('@block-pdf/store/comments/commentOperations', () => ({
-  useCreateComment: () => vi.fn(),
-  useDeleteComment: () => vi.fn(),
-  useUpdateComment: () => vi.fn(),
+  useCreateMessageComment: () => vi.fn(),
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -45,6 +43,7 @@ vi.mock('../context/pdf-comments-context', () => ({
 vi.mock('../context/pdf-document-context', () => ({
   usePdfDocument: () => ({
     documentId: () => 'document-id',
+    annotations: {},
     isNested: () => false,
     permissions: {
       canComment: () => true,

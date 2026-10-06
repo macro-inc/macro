@@ -6,13 +6,17 @@ publish = false
 
 [features]
 default = ["inbound", "outbound"]
+# Quota contracts and helper orchestration without enabling session adapters.
+admission = ["dep:ai_billing"]
 ai_tools = ["inbound", "dep:ai_toolset", "dep:async-trait", "dep:schemars"]
 # The `seed_jsonl` replay binary: an argument parser, and the Postgres
 # adapter it writes through.
 cli = ["dep:clap", "outbound"]
 # The axum router serving sessions over HTTP.
 inbound = [
+  "admission",
   "dep:axum",
+  "dep:entity_registry",
   "dep:macro_authorization",
   "entity_access/inbound",
   "macro_authorization/axum",
@@ -20,16 +24,21 @@ inbound = [
 ]
 # Postgres, the connection gateway, and the model-backed name generator.
 outbound = [
+  "admission",
   "bots/outbound",
   "dep:agent",
   "dep:ai_usage",
   "dep:connection_gateway_client",
   "dep:entity_access_db_utils",
+  "dep:entity_registry",
   "dep:entity_registry_db_utils",
   "dep:model-entity",
+  "dep:reqwest",
+  "dep:macro_authorization",
   "dep:sqlx",
   "dep:share_permission_db_utils",
   "macro_user_id/sqlx",
+  "macro_authorization/axum",
 ]
 # OpenAPI schemas for the vocabulary that reaches an HTTP boundary: the
 # router's DTOs, and the lifecycle events the webhook union carries.
@@ -38,6 +47,7 @@ schema = ["dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema"]
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 [dependencies]
+ai_billing = { path = "../ai_billing", optional = true }
 lazy-regex = { workspace = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
@@ -51,7 +61,7 @@ dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 messages = { path = "../messages", features = ["ports", "schema"] }
 mockall = { workspace = true, optional = true }
-agent_fold = { path = "../agent_fold" }
+agent_fold = { path = "../folds/agent_fold" }
 # Only the domain vocabulary; `outbound` would pull rdkafka into every
 # consumer of this crate.
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
@@ -64,6 +74,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ] }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry = { path = "../entity_registry/entity_registry", default-features = false, optional = true }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
 genai_telemetry = { path = "../genai_telemetry" }
 model-entity = { path = "../model-entity", optional = true }
@@ -75,11 +86,13 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
+reqwest = { workspace = true, optional = true }
 uuid = { workspace = true }
 sqlx = { workspace = true, features = ["json"], optional = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+bot_id = { path = "../bot_id" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
@@ -101,14 +114,14 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 model_user = { path = "../model_user" }
 non_empty = { path = "../non_empty" }
-agent_fold = { path = "../agent_fold", features = ["test-utils"] }
+agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }
 axum = { workspace = true, features = ["ws"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time", "test-util"] }
 tokio-tungstenite = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 

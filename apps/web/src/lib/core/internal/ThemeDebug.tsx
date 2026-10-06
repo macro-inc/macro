@@ -461,7 +461,7 @@ function ThemeDebug() {
               <Button variant="ghost" size="sm">
                 Cancel
               </Button>
-              <Button variant="accent" size="sm">
+              <Button variant="strong" size="sm">
                 Confirm
               </Button>
             </Panel.Footer>

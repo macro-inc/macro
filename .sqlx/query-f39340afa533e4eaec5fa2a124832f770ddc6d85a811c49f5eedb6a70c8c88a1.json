@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_overage_charge\n            SET stripe_invoice_id = COALESCE($2, stripe_invoice_id),\n                status = ($3::text)::ai_overage_charge_status,\n                updated_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f39340afa533e4eaec5fa2a124832f770ddc6d85a811c49f5eedb6a70c8c88a1"
+}

@@ -1,5 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { isMutedItem } from '@entity/utils/notification';
+import { isMutedItem, muteItemForRef } from '@entity/utils/notification';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -32,7 +32,10 @@ export function useChannelRailItemState(
 
     return {
       domId: domIdForRow(rail.railId, rowId),
-      selected: rail.selectedChannelId() === id,
+      selected:
+        rail.tab() === 'threads'
+          ? rail.threadsChannelId() === id
+          : rail.selectedChannel()?.id === id,
       focused: rail.list.focus.key() === rowId,
       muted: isMutedItem(notificationSource.mutedEntities(), {
         item_id: id,
@@ -47,17 +50,25 @@ export function useChannelRailItemState(
 
 export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
   const rail = useChannelsRail();
+  const notificationSource = useGlobalNotificationSource();
 
   return createMemo(() => {
     const current = favorite();
     const rowId = rowKeyForFavorite(current);
+    const muteItem = muteItemForRef({
+      id: current.entityId,
+      type: current.entityType,
+    });
 
     return {
       domId: domIdForRow(rail.railId, rowId),
       selected:
         current.entityType === 'channel' &&
-        rail.selectedChannelId() === current.entityId,
+        rail.selectedChannel()?.id === current.entityId,
       focused: rail.list.focus.key() === rowId,
+      muted:
+        muteItem !== undefined &&
+        isMutedItem(notificationSource.mutedEntities(), muteItem),
     };
   });
 }
@@ -78,7 +89,9 @@ export function useChannelRailFavoritesState() {
   });
 }
 
-export function useChannelRailScopeState(scope: Accessor<ChannelsQueryScope>) {
+export function useChannelRailScopeState(
+  scope: Accessor<ChannelsQueryScope | 'threads'>
+) {
   const rail = useChannelsRail();
 
   return createMemo(() => {
@@ -97,7 +110,7 @@ export function useChannelRailScopeState(scope: Accessor<ChannelsQueryScope>) {
         ? focusedRow.localIndex
         : -1;
     const targetChannelId =
-      currentScope === 'recents'
+      currentScope === 'recents' || currentScope === 'threads'
         ? undefined
         : rail.channelActivity.targetChannelId(currentScope);
     const activityIndex =
@@ -209,22 +222,6 @@ export function useChannelRailLabelState(label: Accessor<ChannelLabel>) {
         focusedRow?.kind === 'conversation' &&
         focusedRow.labelId === current.id,
       unreadCount: rail.labelUnreadCount(current),
-    };
-  });
-}
-
-export function useChannelRailUnreadState() {
-  const rail = useChannelsRail();
-
-  return createMemo(() => {
-    const rowId = rowKeyForSection('unread');
-
-    return {
-      items: rail.unreadChannels(),
-      open: rail.isGroupOpen('unread'),
-      focused: rail.list.focus.key() === rowId,
-      containsFocus: rail.list.focus.item()?.group === 'unread',
-      domId: domIdForRow(rail.railId, rowId),
     };
   });
 }

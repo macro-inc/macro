@@ -5,7 +5,6 @@ import type {
   MessageParent,
   MessageThread,
 } from '@service-storage/messages';
-import { entityMessagesClient } from '@service-storage/messages';
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
 import { MessageNonceKeys, messageKeys } from './keys';
@@ -20,7 +19,7 @@ import {
   softInvalidateTargetCaches,
   topLevelMessageHasReplies,
 } from './reconcile';
-import { getThreadRepliesQueryKey } from './thread-replies';
+import { fetchMessageThread, getThreadRepliesQueryKey } from './thread-replies';
 import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
@@ -89,6 +88,8 @@ export function applyMessage(
           created_at: message.created_at,
           updated_at: message.created_at,
           resolved: false,
+          // Only document roots can be anchored; theirs load with the thread.
+          ...(parent.type !== 'document' && { anchor: null }),
         },
         thread: { reply_count: 0, preview: [], latest_reply_at: null },
       };
@@ -98,6 +99,30 @@ export function applyMessage(
     patchTargetMessage(parent, target, normalized);
   }
   softInvalidateTargetCaches(parent, target);
+  // Calls have one thread and no mounted timeline to seed its first fetch.
+  // A view may still be showing the empty response when the first post arrives.
+  if (
+    parent.type === 'call' &&
+    change === 'posted' &&
+    !queryClient.getQueryData(getThreadRepliesQueryKey(parent, parent.id))
+  ) {
+    void refreshUnloadedCallThread(parent);
+  }
+}
+
+async function refreshUnloadedCallThread(parent: MessageParent) {
+  const queryKey = getThreadRepliesQueryKey(parent, parent.id);
+  const inFlight = queryClient
+    .getQueryCache()
+    .find({ queryKey, exact: true })?.promise;
+  if (inFlight) {
+    try {
+      await inFlight;
+    } catch {
+      // An empty call may return 404; retry after the committed first message.
+    }
+  }
+  await queryClient.invalidateQueries({ queryKey, exact: true });
 }
 
 /**
@@ -113,7 +138,8 @@ export function applyRootDeletion(
   cached?: MessageThread['state']
 ) {
   const parent = message.parent;
-  if (parent.type === 'channel' || message.thread_id) return;
+  if (parent.type === 'channel' || parent.type === 'call' || message.thread_id)
+    return;
   const state = cached ?? getCachedThreadState(parent, message.id);
   if (!state) {
     void queryClient.invalidateQueries({
@@ -164,8 +190,8 @@ export function handleMessageEvent(
   if (isRootPost && refetchTimelineAwaitingFirstPage(parent)) return;
   if (isOwnEcho) return;
   applyMessage(change.message, change.type);
-  if (isRootPost && parent.type === 'document') {
-    void loadDocumentRootState(parent, change.message.id);
+  if (isRootPost && parent.type !== 'channel') {
+    void loadDiscussionRootState(parent, change.message.id);
   }
 }
 
@@ -184,15 +210,30 @@ function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
   const refetch = () =>
     queryClient.invalidateQueries({ queryKey, exact: true });
   const inFlight = query.promise;
-  if (inFlight) void inFlight.catch(() => {}).finally(refetch);
+  if (inFlight) void refetchAfterPendingPage(inFlight, refetch);
   else void refetch();
   return true;
 }
 
-/** A live document root arrives without its anchor; its thread state carries it. */
-async function loadDocumentRootState(parent: MessageParent, rootId: string) {
+async function refetchAfterPendingPage(
+  pending: Promise<unknown>,
+  refetch: () => Promise<void>
+) {
   try {
-    const thread = await entityMessagesClient.thread(parent, rootId);
+    await pending;
+  } catch {
+    // The new message still needs a fetch if the initial page request failed.
+  }
+  await refetch();
+}
+
+/**
+ * Live discussion roots need authoritative thread state. Preserve derived senders
+ * when replacing cached roots so agent comments keep their names after live updates.
+ */
+async function loadDiscussionRootState(parent: MessageParent, rootId: string) {
+  try {
+    const thread = await fetchMessageThread(parent, rootId);
     queryClient.setQueryData<MessageThread>(
       getThreadRepliesQueryKey(parent, rootId),
       thread

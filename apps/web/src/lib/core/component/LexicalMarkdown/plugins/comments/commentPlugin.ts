@@ -15,7 +15,6 @@ import {
 } from '@macro-inc/lexical-core';
 import {
   $getNodeByKey,
-  $getRoot,
   $getSelection,
   $isRangeSelection,
   $isTextNode,
@@ -27,7 +26,6 @@ import {
   type NodeKey,
 } from 'lexical';
 import { v7 } from 'uuid';
-import { $traverseNodes } from '../../utils';
 
 interface CommentOperations {
   add: (
@@ -89,10 +87,6 @@ export const DISCARD_DRAFT_COMMENT_COMMAND = createCommand<void>(
   'DISCARD_DRAFT_COMMENT_COMMAND'
 );
 
-export const CREATE_COMMENT_COMMAND = createCommand<{
-  threadId: number;
-}>('CREATE_COMMENT_COMMAND');
-
 export const DELETE_COMMENT_COMMAND = createCommand<[string, boolean]>(
   'DELETE_COMMENT_COMMAND'
 );
@@ -101,23 +95,10 @@ export const MARK_SELECTED_COMMENT_COMMAND = createCommand<string[]>(
   'MARK_SELECTED_COMMENT_COMMAND'
 );
 
-export const REMOVE_ORPHANED_COMMENT_MARKS_COMMAND = createCommand<
-  ReadonlySet<string>
->('REMOVE_ORPHANED_COMMENT_MARKS_COMMAND');
-
-export const SET_COMMENT_THREAD_ID_COMMAND = createCommand<{
-  markId: string;
-  threadId: number;
-}>('SET_COMMENT_THREAD_ID_COMMAND');
-
 /** Persist a draft mark whose thread is identified by the mark id alone. */
 export const COMMIT_COMMENT_MARK_COMMAND = createCommand<{
   markId: string;
 }>('COMMIT_COMMENT_MARK_COMMAND');
-
-const CLEANUP_COMMENTS_COMMAND = createCommand<string[]>(
-  'CLEANUP_COMMENTS_COMMAND'
-);
 
 const generateMarkId = () => v7();
 
@@ -245,28 +226,6 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     }),
 
     editor.registerCommand(
-      CREATE_COMMENT_COMMAND,
-      (payload) => {
-        if (!draftMarkId) {
-          return false;
-        }
-        const nodeKeys = markNodeMap.get(draftMarkId);
-        if (!nodeKeys) return false;
-        for (const key of nodeKeys) {
-          let node = $getNodeByKey(key);
-          if (!node) continue;
-          if ($isCommentNode(node)) {
-            node.setThreadId(payload.threadId);
-            node.setIsDraft(false);
-            return true;
-          }
-        }
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR
-    ),
-
-    editor.registerCommand(
       CREATE_DRAFT_COMMENT_COMMAND,
       () => {
         const selection = $getSelection();
@@ -347,22 +306,6 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     ),
 
     editor.registerCommand(
-      SET_COMMENT_THREAD_ID_COMMAND,
-      ({ markId, threadId }) => {
-        const markNodeKeys = markNodeMap.get(markId);
-        if (!markNodeKeys) return false;
-        for (const key of markNodeKeys) {
-          const node: null | CommentNode = $getNodeByKey(key);
-          if (!node) continue;
-          node.setThreadId(threadId);
-          node.setIsDraft(false);
-        }
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR
-    ),
-
-    editor.registerCommand(
       COMMIT_COMMENT_MARK_COMMAND,
       ({ markId }) => {
         const markNodeKeys = markNodeMap.get(markId);
@@ -372,8 +315,7 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
           if (!node) continue;
           node.setIsDraft(false);
           // A committed message-backed mark keeps no legacy thread id: clearing
-          // the -1 draft sentinel lets the legacy orphan-mark cleanup recognize
-          // it as message-backed and leave it in the document.
+          // the -1 draft sentinel keeps it out of the saved document.
           node.setThreadId(undefined);
         }
         draftMarkId = null;
@@ -386,22 +328,6 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
       MARK_SELECTED_COMMENT_COMMAND,
       (markIds) => {
         markSelected(markIds);
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR
-    ),
-    editor.registerCommand(
-      REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
-      (validMarkIds) => {
-        $removeOrphanedCommentMarks(validMarkIds);
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR
-    ),
-    editor.registerCommand(
-      CLEANUP_COMMENTS_COMMAND,
-      (payload) => {
-        $disposeExternalDraftComments(payload);
         return true;
       },
       COMMAND_PRIORITY_EDITOR
@@ -468,55 +394,6 @@ export function commentPlugin(props: CommentPluginProps) {
   return (editor: LexicalEditor) => {
     return registerPlugin(editor, props);
   };
-}
-
-function _$disposeLocalDraftComments() {
-  $traverseNodes($getRoot(), (node) => {
-    if ($isCommentNode(node)) {
-      if (node.getIsDraft() && node.getIsLocal()) {
-        $unwrapMarkNode(node);
-      }
-    }
-  });
-}
-
-function $disposeExternalDraftComments(validPeerIds: string[]) {
-  $traverseNodes($getRoot(), (node) => {
-    if ($isCommentNode(node)) {
-      const nodePeerId = $getPeerId(node);
-      if (!nodePeerId) {
-        $unwrapMarkNode(node);
-        return;
-      }
-      if (!validPeerIds.includes(nodePeerId)) {
-        $unwrapMarkNode(node);
-      }
-    }
-  });
-}
-
-function $removeOrphanedCommentMarks(validMarkIds: ReadonlySet<string>) {
-  $traverseNodes($getRoot(), (node) => {
-    if (!$isCommentNode(node) || node.getIsDraft()) return;
-    // Marks without a stored legacy thread id belong to message-backed
-    // discussions, which this legacy reconciliation knows nothing about.
-    // Newer commits clear the id; documents saved before that keep the -1 draft
-    // sentinel, so treat it as message-backed too rather than stripping them.
-    const threadId = node.getThreadId();
-    if (threadId == null || threadId === -1) return;
-
-    const invalidIds = node.getIDs().filter((id) => !validMarkIds.has(id));
-    if (invalidIds.length === 0) return;
-
-    if (invalidIds.length === node.getIDs().length) {
-      $unwrapMarkNode(node);
-      return;
-    }
-
-    for (const id of invalidIds) {
-      node.deleteID(id);
-    }
-  });
 }
 
 function $unwrapOrRemovePeer(node: CommentNode, currentPeerId: string) {

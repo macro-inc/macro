@@ -3,14 +3,10 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import {
-  cancelAiEdit,
-  requestAiEdit,
-  toastAiEditResult,
-} from '@service-ai-editing/client';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { cancelAiEdit, requestAiEditWithToast } from '../queries/ai-edit';
 
 false && clickOutside;
 
@@ -42,12 +38,10 @@ export function DocumentAiEditBar(props: { documentId: string }) {
     collapse();
     setEditing(true);
 
-    requestAiEdit({
-      documentId: props.documentId,
-      prompt: value,
-    })
-      .then(toastAiEditResult)
-      .finally(() => setEditing(false));
+    void requestAiEditWithToast(
+      { documentId: props.documentId, prompt: value },
+      () => setEditing(false)
+    );
   };
 
   const configureEditor = () =>
@@ -96,10 +90,10 @@ export function DocumentAiEditBar(props: { documentId: string }) {
             onMouseLeave={() => setHovering(false)}
             tooltip={editing() ? 'Stop AI edit' : 'Ask AI to edit'}
             hotkey={editing() ? undefined : TOKENS.chat.input.focus}
-            variant="ghost"
+            variant="outline"
+            glass={false}
             size="sm"
-            depth={2}
-            class="gap-1.5 rounded-full border border-edge-muted px-2.5"
+            class="gap-1.5 px-2.5"
           >
             <span
               class="flex size-4 shrink-0 items-center justify-center"

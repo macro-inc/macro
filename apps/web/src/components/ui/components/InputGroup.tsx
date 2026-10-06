@@ -70,15 +70,15 @@ const INPUT_GROUP_BUTTON_SIZE: Record<InputSize, ButtonSize> = {
 /** Canonical variants for a framed input composition. */
 export const inputGroupVariants = createVariants(
   cn(
-    'group/input-group relative flex w-full min-w-0 items-center overflow-hidden rounded-md border transition-[background-color,border-color,box-shadow]',
+    'group/input-group relative flex w-full min-w-0 items-center overflow-hidden rounded-lg border transition-[background-color,border-color,box-shadow] duration-120 motion-reduce:transition-none',
     'has-[[data-slot=input-group-control]:disabled]:pointer-events-none has-[[data-slot=input-group-control]:disabled]:opacity-50',
     'has-[[data-slot=input-group-control][aria-invalid=true]]:border-failure has-[[data-slot=input-group-control][aria-invalid=true]]:ring-2 has-[[data-slot=input-group-control][aria-invalid=true]]:ring-failure/20'
   ),
   {
     variant: {
       outline: cn(
-        'border-edge-muted bg-input',
-        'has-[[data-slot=input-group-control]:focus-visible]:border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-edge-muted'
+        'border-edge-frame bg-control',
+        'has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-edge-muted'
       ),
       bare: 'border-transparent bg-transparent',
     },
@@ -138,8 +138,7 @@ function InputGroupRoot(props: InputGroupProps) {
     return size && !size.startsWith('icon-') ? (size as InputSize) : undefined;
   };
   const size = (): InputSize => local.size ?? inheritedSize() ?? 'md';
-  const variant = (): InputVariant =>
-    local.variant ?? (buttonGroup?.variant === 'ghost' ? 'bare' : 'outline');
+  const variant = (): InputVariant => local.variant ?? 'outline';
   const grouped = () => buttonGroup !== undefined;
 
   const context: InputGroupContextValue = {
@@ -172,9 +171,12 @@ function InputGroupRoot(props: InputGroupProps) {
         data-grouped={grouped() ? '' : undefined}
         role="group"
         class={cn(
-          inputGroupVariants({ size: size(), variant: variant() }),
+          inputGroupVariants({
+            size: size(),
+            variant: grouped() ? 'bare' : variant(),
+          }),
           grouped() &&
-            'flex-1 rounded-none border-0 bg-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0',
+            'flex-1 rounded-none border-0 bg-transparent outline-none has-[[data-slot=input-group-control]:focus-visible]:ring-0',
           local.class
         )}
         {...rest}
@@ -278,7 +280,7 @@ function InputGroupButton(props: InputGroupButtonProps) {
       size={local.size ?? INPUT_GROUP_BUTTON_SIZE[group.size]}
       square={local.square}
       noTouchResize={local.noTouchResize ?? true}
-      class={cn('rounded-sm', local.class)}
+      class={local.class}
       {...rest}
     />
   );

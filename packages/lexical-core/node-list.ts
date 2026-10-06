@@ -21,7 +21,9 @@ import { CommentNode } from './nodes/CommentNode';
 import { CompletionNode } from './nodes/CompletionNode';
 import { ConnectAppNode } from './nodes/ConnectAppNode';
 import { ContactMentionNode } from './nodes/ContactMentionNode';
+import { CursorSystemNotificationNode } from './nodes/CursorSystemNotificationNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
+import { DatabaseQueryNode } from './nodes/DatabaseQueryNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
 import { DiffInsertNode } from './nodes/DiffInsertNode';
@@ -71,6 +73,7 @@ export const SupportedNodeTypes = [
   TextNode,
   CodeNode,
   CustomCodeNode,
+  DatabaseQueryNode,
   HeadingNode,
   LinkNode,
   AutoLinkNode,
@@ -118,6 +121,7 @@ export const SupportedNodeTypes = [
   AwaitNode,
   MagicChipNode,
   AgentContextNode,
+  CursorSystemNotificationNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

@@ -10,6 +10,8 @@
 
 import {
   AgentSession,
+  AgentSessionAccessDenied,
+  type AgentSessionRecord,
   type IssueResult,
 } from '@core/agent-session/AgentSession';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
@@ -39,6 +41,9 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { issueSessionAction } from '../queries/issue-session-action';
+import type { EffortSelection } from '../state/session-config';
+import { configureSessionModel } from './configure-session-model';
 
 export type AgentSessionHandle = {
   /** Session row, absent until the load resolves. */
@@ -50,6 +55,8 @@ export type AgentSessionHandle = {
   /** The folded transcript, ordered by turn (prompt before reply). */
   messages: Accessor<FoldedMessage[]>;
   loadFailed: Accessor<boolean>;
+  /** The load failed because the viewer is not a participant (401/403). */
+  accessDenied: Accessor<boolean>;
   /** Re-runs a failed load. */
   retry: () => void;
   /**
@@ -57,6 +64,8 @@ export type AgentSessionHandle = {
    * log. `undefined` while the block has no session to act on.
    */
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  /** Confirm a model change, then validate and confirm its optional effort. */
+  selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
    * Show a queued action as dispatched under the id the server holds it
    * by. See {@link AgentSession.expect}.
@@ -103,6 +112,8 @@ export function createAgentSession(
   options: {
     /** The viewer, so a speculated prompt is attributed as the log will. */
     userId: Accessor<string | undefined>;
+    /** This view now owns a reference; a pending navigation may release its own. */
+    onAcquire?: () => void;
   }
 ): AgentSessionHandle {
   // Whether this block went on screen before it had a session to load.
@@ -196,44 +207,93 @@ export function createAgentSession(
       unsubscribe();
       session.release();
     });
+    options.onAcquire?.();
     return session;
   });
 
   let latestRename: AgentSessionRenamedEvent | undefined;
   let renameRefresh = 0;
+  /**
+   * The fetch failed after a cached transcript was already on screen. The
+   * resource resolved with the cached row, so its own error never fires;
+   * this carries the failure the same way.
+   */
+  const [settleFailure, setSettleFailure] = createSignal<unknown>();
+
+  const superseded = (session: AgentSession) =>
+    untrack(sessionId) !== session.id;
+
+  /**
+   * Show what the machine holds for `record`. Read after every input pushed
+   * so far, and applied before any event that arrives later: events between
+   * subscribe and here upserted into the list, and this replaces the list
+   * with a view that includes them.
+   */
+  const show = async (
+    session: AgentSession,
+    record: AgentSessionRecord,
+    kind: 'cached' | 'fetched'
+  ) => {
+    const snapshot = await session.snapshot();
+    if (superseded(session)) return;
+    batch(() => {
+      setBot(record.bot);
+      setMetadata(snapshot.metadata);
+      replace(snapshot.messages);
+    });
+    session.rendered(kind);
+  };
+
+  /** The fetched session, shown, with a rename that landed meanwhile kept. */
+  const settle = async (
+    session: AgentSession,
+    renameRefreshAtStart: number
+  ): Promise<AgentSessionResponse> => {
+    const record = await session.load();
+    if (superseded(session)) return record.session;
+    await show(session, record, 'fetched');
+    return renameRefresh > renameRefreshAtStart &&
+      latestRename?.agentSessionId === session.id
+      ? { ...record.session, name: latestRename.name }
+      : record.session;
+  };
 
   const [resource, { mutate, refetch }] = createResource(
     live,
     async (session) => {
       const renameRefreshAtStart = renameRefresh;
-      const superseded = () => untrack(sessionId) !== session.id;
 
       batch(() => {
         setList(reconcile([]));
         setBot(undefined);
         setMetadata(undefined);
+        setSettleFailure(undefined);
       });
 
-      const record = await session.load();
-      if (superseded()) return record.session;
-      // Read after every input pushed so far, and applied before any event
-      // that arrives later: events between subscribe and here upserted into
-      // the list, and this replaces the list with a view that includes them.
-      const snapshot = await session.snapshot();
-      if (superseded()) return record.session;
-
-      batch(() => {
-        setBot(record.bot);
-        setMetadata(snapshot.metadata);
-        replace(snapshot.messages);
-      });
-
-      return renameRefresh > renameRefreshAtStart &&
-        latestRename?.agentSessionId === session.id
-        ? { ...record.session, name: latestRename.name }
-        : record.session;
+      const cached = await session.warm();
+      if (!cached || superseded(session)) {
+        return settle(session, renameRefreshAtStart);
+      }
+      // A transcript from the last open goes up now; the fetched one
+      // replaces it when it lands, through the same store, so the resource
+      // resolves here and the fetch settles it in the background.
+      await show(session, cached, 'cached');
+      void settleInBackground(session, renameRefreshAtStart);
+      return cached.session;
     }
   );
+
+  async function settleInBackground(
+    session: AgentSession,
+    renameRefreshAtStart: number
+  ): Promise<void> {
+    try {
+      const fetched = await settle(session, renameRefreshAtStart);
+      if (!superseded(session)) mutate(fetched);
+    } catch (error) {
+      if (!superseded(session)) setSettleFailure(error);
+    }
+  }
 
   onCleanup(
     subscribeAgentSessionRenamed((event) => {
@@ -281,17 +341,47 @@ export function createAgentSession(
   );
 
   // A first fetch would suspend; see `openedPending`.
-  const session = () =>
-    openedPending && resource.state === 'pending' ? undefined : resource.latest;
+  //
+  // Once the load has failed, `resource.latest` rethrows the error on every
+  // read. Nothing above the block catches it, so the throw escapes Solid's
+  // update queue before the enclosing `<Suspense>` swaps its fallback back
+  // out, and the block shows a spinner forever instead of its error panel.
+  // The failure is reported through `loadFailed`; absent is what the row is.
+  const failure = () => resource.error ?? settleFailure();
+  const session = () => {
+    if (failure() !== undefined) return undefined;
+    if (openedPending && resource.state === 'pending') return undefined;
+    return resource.latest;
+  };
 
   return {
     session,
     bot,
     metadata,
     messages: () => list,
-    loadFailed: () => resource.error !== undefined,
+    loadFailed: () => failure() !== undefined,
+    accessDenied: () => failure() instanceof AgentSessionAccessDenied,
     retry: () => void refetch(),
-    issue: (action) => live()?.issue(action, { userId: options.userId() }),
+    issue: (action) => {
+      const current = live();
+      return current
+        ? issueSessionAction(current, action, { userId: options.userId() })
+        : undefined;
+    },
+    selectModel: async (model, effort) => {
+      const current = live();
+      if (!current) throw new Error('The agent session is not ready.');
+      await configureSessionModel(
+        {
+          issue: (action) =>
+            issueSessionAction(current, action, { userId: options.userId() }),
+          snapshot: () => current.snapshot(),
+          subscribe: (listener) => current.subscribe(listener),
+        },
+        model,
+        effort
+      );
+    },
     expect: (actionId, action) =>
       live()?.expect(actionId, action, { userId: options.userId() }),
     retract: (actionId) => live()?.retract(actionId),

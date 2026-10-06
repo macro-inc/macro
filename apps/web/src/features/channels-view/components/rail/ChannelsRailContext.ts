@@ -1,4 +1,5 @@
 import type { ListController } from '@app/components/list';
+import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
@@ -11,13 +12,22 @@ import type {
   ChannelListSort,
   ChannelsGroup,
   ChannelsRailSection,
+  ChannelsSortGroup,
   ChannelsTab,
 } from '../../types';
 import type { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
 type ChannelRailActivity = ReturnType<typeof useChannelRailActivity>;
 
+export const ALL_THREADS_ROW_ID = 'all-threads';
+
 export type ChannelRailRow =
+  | {
+      /** The Threads tab's unfiltered entry above the conversation list. */
+      kind: 'all-threads';
+      id: typeof ALL_THREADS_ROW_ID;
+      group?: undefined;
+    }
   | {
       kind: 'section';
       id: `section:${ChannelsRailSection}`;
@@ -28,14 +38,6 @@ export type ChannelRailRow =
       id: `favorite:${string}`;
       group: 'favorites';
       favorite: Favorite;
-    }
-  | {
-      /** A channel in the flat Unread list; the same channel also has a `conversation` row. */
-      kind: 'unread';
-      id: `unread:${string}`;
-      group: 'unread';
-      localIndex: number;
-      channel: ChannelEntity;
     }
   | {
       /** A team channel label heading inside the Channels section. */
@@ -108,9 +110,6 @@ export const rowKeyForSection = (group: ChannelsRailSection) =>
 
 export const rowKeyForLabel = (labelId: string) => `label:${labelId}` as const;
 
-export const rowKeyForUnread = (channelId: string) =>
-  `unread:${channelId}` as const;
-
 export const domIdForRow = (railId: string, rowId: string) =>
   `${railId}-${rowId}`;
 
@@ -126,7 +125,16 @@ export type ChannelsRailContext = {
   selectTab: (tab: ChannelsTab) => void;
   sources: ChannelsSources;
   favorites: Accessor<readonly Favorite[]>;
-  selectedChannelId: Accessor<string | undefined>;
+  /**
+   * A channel the rail has loaded, from its sections or fetched by id for a
+   * label or favorite row. Undefined until the fetch settles.
+   */
+  channelById: (channelId: string) => ChannelEntity | undefined;
+  selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
+  /** Whether the Threads tab is available to this user. */
+  threadsEnabled: Accessor<boolean>;
+  /** Threads tab filter: the conversation whose threads are shown, or all. */
+  threadsChannelId: Accessor<string | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;
   toggleGroup: (group: ChannelsRailSection) => void;
   /** Whether channel labels and smart tags are enabled for this user. */
@@ -141,8 +149,6 @@ export type ChannelsRailContext = {
   toggleLabel: (labelId: string) => void;
   /** The Channels section's rendered rows: label headings and channels. */
   channelSectionRows: Accessor<readonly ChannelSectionRow[]>;
-  /** Channels with unread activity, newest first, for the Unread section. */
-  unreadChannels: Accessor<readonly ChannelEntity[]>;
   /** Number of channels in the label with unread activity. */
   labelUnreadCount: (label: ChannelLabel) => number;
   /**
@@ -162,12 +168,12 @@ export type ChannelsRailContext = {
   activeDropTarget: Accessor<ChannelLabelDropTarget | undefined>;
   /** Mark every unread notification in the label's visible channels read. */
   markLabelRead: (label: ChannelLabel) => void;
-  sortBy: (group: ChannelsGroup) => ChannelListSort;
-  setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
+  sortBy: (group: ChannelsSortGroup) => ChannelListSort;
+  setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
   registerRootRef: (element: HTMLDivElement) => void;
   activateRow: (rowId: ChannelRailRow['id'], event?: MouseEvent) => void;
   registerScrollRef: (
-    group: ChannelsRailSection,
+    group: ChannelsRailSection | 'threads',
     element: HTMLDivElement
   ) => void;
   registerVirtualizer: (

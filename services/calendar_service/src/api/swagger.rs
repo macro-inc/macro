@@ -2,11 +2,9 @@ use utoipa::OpenApi;
 
 /// OpenAPI document for the calendar service.
 ///
-/// The calendar mutation operations live in the shared `calendar_events` crate
-/// and are served here (and, for cutover, also under `/calendar`). Their
-/// `utoipa::path` annotations carry the `/calendar` prefix because email-service
-/// serves the same handlers under `/email/calendar/*`; the SDK's spec sync
-/// strips that prefix so a calendar client can carry `/calendar` in its base.
+/// The calendar mutation operations live in the shared `calendar_events` crate.
+/// Their paths are root-relative; clients carry the `/calendar` gateway prefix
+/// in their base URL.
 #[derive(OpenApi)]
 #[openapi(
     paths(

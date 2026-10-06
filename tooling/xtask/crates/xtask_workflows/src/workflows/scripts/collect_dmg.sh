@@ -8,3 +8,5 @@ if [ "${#dmgs[@]}" -eq 0 ]; then
   exit 1
 fi
 cp -v "${dmgs[@]}" artifacts/
+# Nix outputs are read-only; stapler must write Apple's ticket into the copy.
+chmod u+w artifacts/*.dmg

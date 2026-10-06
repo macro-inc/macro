@@ -114,6 +114,14 @@ export type HoverCardComponentProps = {
    * real pointer movement first.
    */
   requirePointerMovement?: boolean;
+  /**
+   * Keep the card open when a pointer-down lands on its own trigger. Use
+   * when clicking the trigger shows the card instead of navigating away;
+   * otherwise the pointer-down dismisses it and the click reopens it.
+   */
+  keepOpenOnTriggerPress?: boolean;
+  /** Dismiss on outside scrolling (default: true). Disable for stationary triggers. */
+  closeOnScroll?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
   /**
@@ -299,11 +307,11 @@ export function HoverCard(props: HoverCardComponentProps) {
   // rapid scrolling never fires the close — leaving cards stranded as new
   // triggers slide under the cursor.
   createEffect(() => {
-    if (!isHoverCardOpen()) return;
+    if (!isHoverCardOpen() || props.closeOnScroll === false) return;
 
     const onScroll = (e: Event) => {
-      const target = e.target as Node | null;
-      if (contentEl && target && contentEl.contains(target)) return;
+      const target = e.target;
+      if (target instanceof Node && contentEl?.contains(target)) return;
       handleOpenChange(false);
     };
 
@@ -315,6 +323,20 @@ export function HoverCard(props: HoverCardComponentProps) {
       window.removeEventListener('scroll', onScroll, true);
     });
   });
+
+  // Kobalte forwards these to the content's DismissableLayer but leaves them
+  // out of the hover-card content types.
+  const dismissableLayerProps = {
+    onPointerDownOutside: (e: Event) => {
+      if (
+        props.keepOpenOnTriggerPress &&
+        e.target instanceof Node &&
+        entry.trigger?.contains(e.target)
+      ) {
+        e.preventDefault();
+      }
+    },
+  };
 
   return (
     <KobalteHoverCard
@@ -355,6 +377,7 @@ export function HoverCard(props: HoverCardComponentProps) {
             contentEl = el;
             props.contentRef?.(el);
           }}
+          {...dismissableLayerProps}
           class={cn(
             props.contentZIndexClass ?? 'z-tool-tip',
             props.contentClass

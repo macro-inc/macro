@@ -14,7 +14,6 @@ import { useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
 import type { CanvasView } from '../context/canvas-document-context';
 import { CanvasDocument, type CanvasDocumentMethods } from './CanvasDocument';
-import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
 export type BlockCanvasProps = {
@@ -38,48 +37,45 @@ export default function BlockCanvas(props: BlockCanvasProps) {
 
   return (
     <DocumentBlockContainer>
-      <CanvasDocument
-        documentId={documentId}
-        file={file()}
-        canEdit={canEdit()}
-        hotkeyScope={hotkeyScope()}
-        isNested={isNested}
-        portalScope="block"
-        view={props.view}
-        locationParams={locationParams}
-        onLocationChange={
-          nestedContext?.parentContext?.canvas?.onLocationChange
-        }
-        registerMethods={registerMethods}
-      >
-        {(content, state) => {
-          const Chrome = () => (
-            <Show when={!isNested} fallback={content}>
-              <SidePanel.Layout defaultOpen={false}>
-                <FileSidePanelSections />
-                <div class="flex size-full min-w-0 flex-col overflow-hidden">
-                  <TopBar next={state.mode === 'next' ? state : undefined} />
-                  {content}
-                </div>
-              </SidePanel.Layout>
-            </Show>
-          );
-          return (
-            <div
-              class="size-full select-none flex flex-col"
-              on:click={(event) => {
-                if (isNested) event.stopPropagation();
-              }}
-            >
-              <Show when={state.mode === 'legacy'} fallback={<Chrome />}>
-                <ModalsProvider>
-                  <Chrome />
-                </ModalsProvider>
-              </Show>
-            </div>
-          );
-        }}
-      </CanvasDocument>
+      <SidePanel.Root defaultOpen={false} floating>
+        <CanvasDocument
+          documentId={documentId}
+          file={file()}
+          canEdit={canEdit()}
+          hotkeyScope={hotkeyScope()}
+          isNested={isNested}
+          portalScope="block"
+          view={props.view}
+          locationParams={locationParams}
+          onLocationChange={
+            nestedContext?.parentContext?.canvas?.onLocationChange
+          }
+          registerMethods={registerMethods}
+        >
+          {(content, state) => {
+            return (
+              <div
+                class="size-full select-none flex flex-col"
+                on:click={(event) => {
+                  if (isNested) event.stopPropagation();
+                }}
+              >
+                <Show when={!isNested} fallback={content}>
+                  <SidePanel.Layout floating>
+                    <FileSidePanelSections />
+                    <div class="flex size-full min-w-0 flex-col overflow-hidden">
+                      <TopBar
+                        next={state.mode === 'next' ? state : undefined}
+                      />
+                      {content}
+                    </div>
+                  </SidePanel.Layout>
+                </Show>
+              </div>
+            );
+          }}
+        </CanvasDocument>
+      </SidePanel.Root>
     </DocumentBlockContainer>
   );
 }

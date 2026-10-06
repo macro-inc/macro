@@ -1,12 +1,18 @@
-use chrono::{DateTime, Utc};
+mod user_cleanup;
+
+use chrono::Utc;
+use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::Owner;
 use serde_json::json;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 
 use super::*;
+use crate::domain::event_runs::ConfigurationRevision;
+use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
 use crate::domain::models::{ActionKind, AlreadyRunningError, Schedule, ScheduledAction};
 use crate::domain::ports::ScheduledActionRepo;
 
@@ -22,22 +28,68 @@ fn user_owner(id: &'static str) -> Owner {
     Owner::User(user(id))
 }
 
+#[derive(Clone)]
+struct NoBots;
+
+impl BotFacts for NoBots {
+    async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
+        Ok(None)
+    }
+}
+
+#[derive(Clone)]
+struct SponsoredBy(Owner);
+
+impl BotFacts for SponsoredBy {
+    async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
+        Ok(Some(self.0.clone()))
+    }
+}
+
+fn test_repo(pool: PgPool) -> PgScheduledActionRepo<NoBots> {
+    PgScheduledActionRepo::new(
+        pool,
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
+    )
+}
+
+async fn direct_grants(pool: &PgPool, id: Uuid) -> Vec<(String, String, String)> {
+    sqlx::query!(
+        r#"
+        SELECT source_type::text AS "source_type!", source_id,
+               access_level::text AS "access_level!"
+        FROM entity_access
+        WHERE entity_id = $1 AND granted_from_project_id IS NULL
+        ORDER BY source_type::text, source_id
+        "#,
+        id,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.source_type, row.source_id, row.access_level))
+    .collect()
+}
+
 async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = macro_uuid::generate_uuid_v7();
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)"#,
+        macro_user_id,
+        id,
     )
-    .bind(macro_user_id)
-    .bind(id)
     .execute(pool)
     .await
     .expect("macro_user should insert");
-    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#)
-        .bind(id)
-        .bind(macro_user_id)
-        .execute(pool)
-        .await
-        .expect("user should insert");
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+        id,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await
+    .expect("user should insert");
 }
 
 fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
@@ -51,66 +103,53 @@ fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
         id: None,
         owner,
         name: name.to_string(),
-        schedule,
+        trigger: ActionTrigger::Cron { schedule, timezone },
         kind: ActionKind::Agent,
         created_at: now,
         updated_at: now,
-        timezone,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: None,
         task: json!({}),
         claimed: None,
-        next_run_at,
+        next_run_at: Some(next_run_at),
         enabled: true,
     }
 }
 
-async fn fetch_entity_row(pool: &PgPool, id: Uuid) -> sqlx::postgres::PgRow {
-    sqlx::query(
-        r#"
-        SELECT
-            owner_type::text AS owner_type,
-            owner_id,
-            entity_type,
-            deleted_at
-        FROM entity
-        WHERE id = $1
-        "#,
+async fn entity_row_count(pool: &PgPool, id: Uuid) -> i64 {
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity WHERE id = $1"#,
+        id
     )
-    .bind(id)
     .fetch_one(pool)
     .await
     .unwrap()
 }
 
-async fn entity_row_count(pool: &PgPool, id: Uuid) -> i64 {
-    sqlx::query_scalar("SELECT COUNT(*) FROM entity WHERE id = $1")
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .unwrap()
-}
-
 async fn scheduled_action_row_count(pool: &PgPool, id: Uuid) -> i64 {
-    sqlx::query_scalar("SELECT COUNT(*) FROM scheduled_action WHERE id = $1")
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM scheduled_action WHERE id = $1"#,
+        id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    let repo = PgScheduledActionRepo::new(pool);
+    let repo = test_repo(pool);
 
     let created = repo
         .create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
-    assert!(created.id.is_some());
+    assert_eq!(created.id.unwrap().get_version_num(), 7);
     assert_eq!(created.owner, user_owner(USER_A));
 
     let listed = repo
-        .get_actions(user(USER_A))
+        .get_owned_actions(&user(USER_A))
         .await
         .expect("list should succeed");
     assert_eq!(listed.len(), 1);
@@ -120,23 +159,23 @@ async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn other_owner_list_is_empty(pool: PgPool) {
+async fn get_owned_actions_excludes_other_principals(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
-    let repo = PgScheduledActionRepo::new(pool);
+    let repo = test_repo(pool);
 
     repo.create_action(sample_action(user_owner(USER_A), "standup"))
         .await
         .expect("create should succeed");
 
     let owner_listed = repo
-        .get_actions(user(USER_A))
+        .get_owned_actions(&user(USER_A))
         .await
         .expect("owner list should succeed");
     assert_eq!(owner_listed.len(), 1);
 
     let listed = repo
-        .get_actions(user(USER_B))
+        .get_owned_actions(&user(USER_B))
         .await
         .expect("list should succeed");
     assert!(listed.is_empty());
@@ -145,7 +184,7 @@ async fn other_owner_list_is_empty(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    let repo = PgScheduledActionRepo::new(pool);
+    let repo = test_repo(pool);
 
     let created = repo
         .create_action(sample_action(user_owner(USER_A), "standup"))
@@ -158,24 +197,76 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
         .expect("schedule has a future firing");
     let updated = repo
         .update_action(ScheduledAction {
+            configuration_revision: created.configuration_revision.next().unwrap(),
             name: "evening standup".to_string(),
-            schedule,
+            trigger: ActionTrigger::Cron {
+                schedule,
+                timezone: chrono_tz::UTC,
+            },
             enabled: false,
-            next_run_at,
+            next_run_at: Some(next_run_at),
             ..created
         })
         .await
         .expect("update should succeed");
 
     assert_eq!(updated.name, "evening standup");
-    assert_eq!(updated.schedule.as_str(), "0 0 18 * * *");
+    let ActionTrigger::Cron { schedule, .. } = updated.trigger else {
+        panic!("expected cron trigger");
+    };
+    assert_eq!(schedule.as_str(), "0 0 18 * * *");
     assert!(!updated.enabled);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn replacement_is_fenced_against_claims_and_stale_revisions(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let action = repo.create_action(event_action()).await.unwrap();
+    let id = action.id.unwrap();
+    let mut replacement = action.clone();
+    replacement.configuration_revision = action.configuration_revision.next().unwrap();
+    replacement.name = "replacement".into();
+
+    // Claim after management read, before its write.
+    let token = repo
+        .claim_action(&id, action.configuration_revision, action.next_run_at)
+        .await
+        .unwrap();
+    let error = repo.update_action(replacement.clone()).await.unwrap_err();
+    assert!(matches!(
+        error.downcast_ref(),
+        Some(ActionPolicyError::UpdateConflict)
+    ));
+    let disabled = repo
+        .update_action(ScheduledAction {
+            enabled: false,
+            configuration_revision: replacement.configuration_revision,
+            ..action
+        })
+        .await
+        .unwrap();
+    assert!(disabled.claimed.is_some());
+    repo.release_action(&id, token).await.unwrap();
+
+    // The earlier replacement is stale even after execution has finished.
+    let error = repo.update_action(replacement).await.unwrap_err();
+    assert!(matches!(
+        error.downcast_ref(),
+        Some(ActionPolicyError::UpdateConflict)
+    ));
+    let current = repo.get_action(&id).await.unwrap().unwrap();
+    assert!(!current.enabled);
+    assert_eq!(
+        current.configuration_revision,
+        disabled.configuration_revision
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn second_claim_returns_already_running(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    let repo = PgScheduledActionRepo::new(pool);
+    let repo = test_repo(pool);
 
     let created = repo
         .create_action(sample_action(user_owner(USER_A), "standup"))
@@ -183,20 +274,109 @@ async fn second_claim_returns_already_running(pool: PgPool) {
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
 
-    repo.claim_action(&id)
+    repo.claim_action(&id, created.configuration_revision, created.next_run_at)
         .await
         .expect("first claim should succeed");
     let error = repo
-        .claim_action(&id)
+        .claim_action(&id, created.configuration_revision, created.next_run_at)
         .await
         .expect_err("second claim should fail");
     assert!(error.downcast_ref::<AlreadyRunningError>().is_some());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn claims_from_snapshots_older_than_a_pause_or_update_fail(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let polled = repo
+        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .await
+        .unwrap();
+    let id = polled.id.unwrap();
+    let paused = repo
+        .update_action(ScheduledAction {
+            enabled: false,
+            configuration_revision: polled.configuration_revision.next().unwrap(),
+            ..polled.clone()
+        })
+        .await
+        .unwrap();
+    let error = repo
+        .claim_action(&id, polled.configuration_revision, polled.next_run_at)
+        .await
+        .expect_err("a snapshot from before the pause must not claim");
+    assert!(error.downcast_ref::<AlreadyRunningError>().is_some());
+    let manual = repo
+        .claim_action(&id, paused.configuration_revision, paused.next_run_at)
+        .await
+        .expect("a manual run of the paused action claims");
+    repo.release_action(&id, manual).await.unwrap();
+
+    let renamed = repo
+        .update_action(ScheduledAction {
+            name: "renamed".into(),
+            enabled: true,
+            configuration_revision: paused.configuration_revision.next().unwrap(),
+            ..paused.clone()
+        })
+        .await
+        .unwrap();
+    assert!(
+        repo.claim_action(&id, paused.configuration_revision, paused.next_run_at)
+            .await
+            .is_err()
+    );
+    repo.claim_action(&id, renamed.configuration_revision, renamed.next_run_at)
+        .await
+        .expect("the current snapshot claims");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn release_is_fenced_to_its_own_execution(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let action = repo
+        .create_action(sample_action(user_owner(USER_A), "fenced"))
+        .await
+        .unwrap();
+    let id = action.id.unwrap();
+    let revision = action.configuration_revision;
+    let old = repo
+        .claim_action(&id, revision, action.next_run_at)
+        .await
+        .unwrap();
+    repo.release_action(&id, crate::domain::event_runs::ClaimToken::generate())
+        .await
+        .unwrap();
+    assert!(
+        repo.claim_action(&id, revision, action.next_run_at)
+            .await
+            .is_err()
+    );
+    repo.release_action(&id, old).await.unwrap();
+    let current = repo
+        .claim_action(&id, revision, action.next_run_at)
+        .await
+        .unwrap();
+    assert_ne!(old, current);
+    repo.release_action(&id, old).await.unwrap();
+    assert!(
+        repo.claim_action(&id, revision, action.next_run_at)
+            .await
+            .is_err()
+    );
+    repo.release_action(&id, current).await.unwrap();
+    assert!(
+        repo.claim_action(&id, revision, action.next_run_at)
+            .await
+            .is_ok()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_action_removes_row_from_owner_list(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    let repo = PgScheduledActionRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     let created = repo
         .create_action(sample_action(user_owner(USER_A), "standup"))
@@ -204,12 +384,12 @@ async fn delete_action_removes_row_from_owner_list(pool: PgPool) {
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
 
-    repo.delete_action(&id, user(USER_A))
+    repo.delete_action(&id)
         .await
         .expect("delete should succeed");
 
     let listed = repo
-        .get_actions(user(USER_A))
+        .get_owned_actions(&user(USER_A))
         .await
         .expect("list should succeed");
     assert!(listed.is_empty());
@@ -218,7 +398,7 @@ async fn delete_action_removes_row_from_owner_list(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_action_registers_entity_row(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    let repo = PgScheduledActionRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     let created = repo
         .create_action(sample_action(user_owner(USER_A), "standup"))
@@ -226,17 +406,35 @@ async fn create_action_registers_entity_row(pool: PgPool) {
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
 
-    let row = fetch_entity_row(&pool, id).await;
-    assert_eq!(row.get::<String, _>("entity_type"), "scheduled_action");
-    assert_eq!(row.get::<String, _>("owner_type"), "user");
-    assert_eq!(row.get::<String, _>("owner_id"), USER_A);
-    assert_eq!(row.get::<Option<DateTime<Utc>>, _>("deleted_at"), None);
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            owner_type::text AS "owner_type!",
+            owner_id,
+            entity_type,
+            deleted_at
+        FROM entity
+        WHERE id = $1
+        "#,
+        id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.entity_type, "scheduled_action");
+    assert_eq!(row.owner_type, "user");
+    assert_eq!(row.owner_id, USER_A);
+    assert_eq!(row.deleted_at, None);
+    assert_eq!(
+        direct_grants(&pool, id).await,
+        vec![("user".to_owned(), USER_A.to_owned(), "owner".to_owned())]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_action_removes_entity_row(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    let repo = PgScheduledActionRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     let created = repo
         .create_action(sample_action(user_owner(USER_A), "standup"))
@@ -244,17 +442,22 @@ async fn delete_action_removes_entity_row(pool: PgPool) {
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
 
-    repo.delete_action(&id, user(USER_A))
+    repo.delete_action(&id)
         .await
         .expect("delete should succeed");
 
+    assert_eq!(scheduled_action_row_count(&pool, id).await, 0);
     assert_eq!(entity_row_count(&pool, id).await, 0);
+    assert!(direct_grants(&pool, id).await.is_empty());
+    repo.delete_action(&id)
+        .await
+        .expect("deleting a missing row succeeds");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_action_succeeds_when_entity_row_is_missing(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    let repo = PgScheduledActionRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     let created = repo
         .create_action(sample_action(user_owner(USER_A), "standup"))
@@ -262,16 +465,634 @@ async fn delete_action_succeeds_when_entity_row_is_missing(pool: PgPool) {
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
 
-    sqlx::query("DELETE FROM entity WHERE id = $1")
-        .bind(id)
+    sqlx::query!("DELETE FROM entity WHERE id = $1", id)
         .execute(&pool)
         .await
         .expect("entity row should delete");
 
-    repo.delete_action(&id, user(USER_A))
+    repo.delete_action(&id)
         .await
         .expect("delete should succeed");
 
     assert_eq!(entity_row_count(&pool, id).await, 0);
     assert_eq!(scheduled_action_row_count(&pool, id).await, 0);
+}
+
+fn event_action() -> ScheduledAction {
+    let filters = EventFilters::try_from(vec![
+        EventFilter::new(vec![EventName::DocumentCreated], None).unwrap(),
+    ])
+    .unwrap();
+    ScheduledAction {
+        trigger: ActionTrigger::Events { filters },
+        next_run_at: None,
+        event_activated_at: Some(Utc::now()),
+        ..sample_action(user_owner(USER_A), "document routine")
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn event_round_trip_and_bookkeeping_does_not_advance_configuration(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let created = repo.create_action(event_action()).await.unwrap();
+    let id = created.id.unwrap();
+    assert_eq!(id.get_version_num(), 7);
+    let before = repo.get_action(&id).await.unwrap().unwrap();
+    assert!(matches!(before.trigger, ActionTrigger::Events { .. }));
+    assert_eq!(before.next_run_at, None);
+    assert!(before.event_activated_at.is_some());
+    repo.update_next_run_at(&id).await.unwrap();
+    let after = repo.get_action(&id).await.unwrap().unwrap();
+    assert_eq!(after.updated_at, before.updated_at);
+    assert_eq!(after.next_run_at, None);
+    let token = repo
+        .claim_action(&id, before.configuration_revision, before.next_run_at)
+        .await
+        .unwrap();
+    repo.release_action(&id, token).await.unwrap();
+    repo.update_last_executed(&id, Utc::now()).await.unwrap();
+    let after = repo.get_action(&id).await.unwrap().unwrap();
+    assert_eq!(after.configuration_revision, before.configuration_revision);
+    assert_eq!(after.event_activated_at, before.event_activated_at);
+    assert_eq!(
+        serde_json::to_value(&after.trigger).unwrap(),
+        serde_json::to_value(&before.trigger).unwrap()
+    );
+
+    let filters = EventFilters::try_from(vec![
+        EventFilter::new(
+            vec![EventName::ChannelMessagePosted],
+            Some(vec![macro_uuid::generate_uuid_v7()]),
+        )
+        .unwrap(),
+    ])
+    .unwrap();
+    let updated = repo
+        .update_action(ScheduledAction {
+            trigger: ActionTrigger::Events {
+                filters: filters.clone(),
+            },
+            enabled: false,
+            configuration_revision: after.configuration_revision.next().unwrap(),
+            ..after
+        })
+        .await
+        .unwrap();
+    let ActionTrigger::Events {
+        filters: stored_filters,
+    } = updated.trigger
+    else {
+        panic!("expected event trigger");
+    };
+    assert_eq!(stored_filters, filters);
+    assert!(!updated.enabled);
+    assert_eq!(updated.next_run_at, None);
+    assert_eq!(updated.configuration_revision.get(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn lookup_update_and_delete_are_id_scoped(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let repo = test_repo(pool.clone());
+    for action in [sample_action(user_owner(USER_A), "cron"), event_action()] {
+        let created = repo.create_action(action).await.unwrap();
+        let id = created.id.unwrap();
+        let loaded = repo.get_action(&id).await.unwrap().unwrap();
+        assert_eq!(loaded.owner, user_owner(USER_A));
+
+        let updated = repo
+            .update_action(ScheduledAction {
+                owner: user_owner(USER_B),
+                name: "renamed".into(),
+                configuration_revision: loaded.configuration_revision.next().unwrap(),
+                ..loaded
+            })
+            .await
+            .unwrap();
+        assert_eq!(updated.owner, user_owner(USER_A));
+        assert_eq!(updated.name, "renamed");
+
+        let stale = repo
+            .update_action(ScheduledAction {
+                name: "stale".into(),
+                configuration_revision: loaded.configuration_revision.next().unwrap(),
+                ..updated.clone()
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            stale.downcast_ref(),
+            Some(ActionPolicyError::UpdateConflict)
+        ));
+        assert_eq!(
+            repo.get_action(&id).await.unwrap().unwrap().owner,
+            user_owner(USER_A)
+        );
+
+        repo.delete_action(&id).await.unwrap();
+        assert!(repo.get_action(&id).await.unwrap().is_none());
+        assert_eq!(entity_row_count(&pool, id).await, 0);
+        assert!(direct_grants(&pool, id).await.is_empty());
+        repo.delete_action(&id).await.unwrap();
+    }
+    assert!(
+        repo.get_action(&macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn trigger_transitions_replace_all_trigger_columns(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let cron = repo
+        .create_action(sample_action(user_owner(USER_A), "cron"))
+        .await
+        .unwrap();
+    let events = event_action();
+    let event = repo
+        .update_action(ScheduledAction {
+            trigger: events.trigger,
+            next_run_at: None,
+            event_activated_at: events.event_activated_at,
+            configuration_revision: cron.configuration_revision.next().unwrap(),
+            ..cron
+        })
+        .await
+        .unwrap();
+    assert!(matches!(event.trigger, ActionTrigger::Events { .. }));
+    assert_eq!(event.configuration_revision.get(), 2);
+    assert!(
+        repo.get_next_unclaimed_actions(10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let cron_config = sample_action(user_owner(USER_A), "cron again");
+    let cron = repo
+        .update_action(ScheduledAction {
+            trigger: cron_config.trigger,
+            next_run_at: cron_config.next_run_at,
+            event_activated_at: None,
+            configuration_revision: event.configuration_revision.next().unwrap(),
+            ..event
+        })
+        .await
+        .unwrap();
+    assert!(matches!(cron.trigger, ActionTrigger::Cron { .. }));
+    assert_eq!(cron.configuration_revision.get(), 3);
+    assert_eq!(cron.event_activated_at, None);
+    assert!(cron.next_run_at.is_some());
+    assert_eq!(repo.get_next_unclaimed_actions(10).await.unwrap().len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn polling_returns_only_enabled_unclaimed_cron_rows(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    repo.create_action(event_action()).await.unwrap();
+    let disabled = ScheduledAction {
+        enabled: false,
+        ..sample_action(user_owner(USER_A), "disabled")
+    };
+    repo.create_action(disabled).await.unwrap();
+    let claimed = repo
+        .create_action(sample_action(user_owner(USER_A), "claimed"))
+        .await
+        .unwrap();
+    repo.claim_action(
+        &claimed.id.unwrap(),
+        claimed.configuration_revision,
+        claimed.next_run_at,
+    )
+    .await
+    .unwrap();
+    let cron = repo
+        .create_action(sample_action(user_owner(USER_A), "cron"))
+        .await
+        .unwrap();
+    let candidates = repo.get_next_unclaimed_actions(1).await.unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].id, cron.id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deployed_cron_insert_remains_valid(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let next_run_at = Utc::now();
+    // Exactly the deployed writer's columns: no new discriminator, revision,
+    // activation, filters or application-generated ID.
+    let row = sqlx::query!(
+        r#"
+        INSERT INTO scheduled_action (owner, name, schedule, kind, timezone, task, next_run_at, enabled)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, trigger_type, configuration_revision, event_filters, event_activated_at
+        "#,
+        USER_A, "legacy", DAILY_9AM, "Agent", "UTC", json!({}), next_run_at, true,
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(row.trigger_type, "cron");
+    assert_eq!(row.configuration_revision, 1);
+    assert_eq!(row.event_filters, None);
+    assert_eq!(row.event_activated_at, None);
+    let repo = test_repo(pool);
+    let action = repo.get_action(&row.id).await.unwrap().unwrap();
+    assert!(matches!(action.trigger, ActionTrigger::Cron { .. }));
+    assert!(action.next_run_at.is_some());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn database_rejects_invalid_trigger_shapes(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let now = Utc::now();
+    let filters = json!([{ "events": ["document.created"] }]);
+    // SQL CHECK must reject NULL/unknown discriminators, mixed triggers, absent
+    // cron fields, absent event activation/filters, and non-array/empty filters.
+    let cases = [
+        (
+            Some("unknown"),
+            Some(DAILY_9AM),
+            Some("UTC"),
+            Some(now),
+            None,
+            None,
+            1,
+        ),
+        (Some("cron"), None, Some("UTC"), Some(now), None, None, 1),
+        (
+            Some("cron"),
+            Some(DAILY_9AM),
+            None,
+            Some(now),
+            None,
+            None,
+            1,
+        ),
+        (
+            Some("cron"),
+            Some(DAILY_9AM),
+            Some("UTC"),
+            Some(now),
+            Some(filters.clone()),
+            None,
+            1,
+        ),
+        (
+            Some("cron"),
+            Some(DAILY_9AM),
+            Some("UTC"),
+            Some(now),
+            None,
+            Some(now),
+            1,
+        ),
+        (Some("events"), None, None, None, None, Some(now), 1),
+        (
+            Some("events"),
+            None,
+            None,
+            None,
+            Some(filters.clone()),
+            None,
+            1,
+        ),
+        (
+            Some("events"),
+            Some(DAILY_9AM),
+            None,
+            None,
+            Some(filters.clone()),
+            Some(now),
+            1,
+        ),
+        (
+            Some("events"),
+            None,
+            Some("UTC"),
+            None,
+            Some(filters.clone()),
+            Some(now),
+            1,
+        ),
+        (
+            Some("events"),
+            None,
+            None,
+            Some(now),
+            Some(filters.clone()),
+            Some(now),
+            1,
+        ),
+        (
+            Some("events"),
+            None,
+            None,
+            None,
+            Some(json!(null)),
+            Some(now),
+            1,
+        ),
+        (
+            Some("events"),
+            None,
+            None,
+            None,
+            Some(json!({})),
+            Some(now),
+            1,
+        ),
+        (
+            Some("events"),
+            None,
+            None,
+            None,
+            Some(json!([])),
+            Some(now),
+            1,
+        ),
+        (
+            Some("events"),
+            None,
+            None,
+            None,
+            Some(json!(vec![filters.clone(); 33])),
+            Some(now),
+            1,
+        ),
+        (
+            Some("events"),
+            None,
+            None,
+            None,
+            Some(filters),
+            Some(now),
+            0,
+        ),
+        (None, Some(DAILY_9AM), Some("UTC"), Some(now), None, None, 1),
+    ];
+    for (trigger_type, schedule, timezone, next_run_at, filters, activated_at, revision) in cases {
+        let id = macro_uuid::generate_uuid_v7();
+        let error = sqlx::query!(
+            r#"
+            INSERT INTO scheduled_action
+                (id, owner, name, kind, task, enabled, trigger_type, schedule, timezone,
+                 next_run_at, event_filters, event_activated_at, configuration_revision)
+            VALUES ($1, $2, 'invalid', 'Agent', '{}', true, $3, $4, $5, $6, $7, $8, $9)
+            "#,
+            id,
+            USER_A,
+            trigger_type,
+            schedule,
+            timezone,
+            next_run_at,
+            filters,
+            activated_at,
+            revision,
+        )
+        .execute(&pool)
+        .await
+        .expect_err("invalid shape must fail");
+        let code = error.as_database_error().unwrap().code().unwrap();
+        assert!(
+            code == "23514" || code == "23502",
+            "expected constraint violation: {error}"
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn database_rejects_external_webhooks_and_unknown_mixed_trigger_kinds(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    for config in [
+        json!({ "type": "webhook" }),
+        json!({ "type": "multiple", "triggers": [{ "type": "webhook" }] }),
+        json!({ "type": "multiple", "triggers": [{ "type": "unknown" }] }),
+        json!({ "type": "multiple", "triggers": [] }),
+    ] {
+        let id = macro_uuid::generate_uuid_v7();
+        let kind = config["type"].as_str().unwrap().to_owned();
+        let error = sqlx::query!(
+            r#"
+            INSERT INTO scheduled_action (id, owner, name, kind, task, trigger_type, trigger_config, next_run_at, enabled)
+            VALUES ($1, $2, 'invalid', 'Agent', '{}', $3, $4, NULL, false)
+            "#,
+            id,
+            USER_A,
+            kind,
+            config,
+        )
+        .execute(&pool)
+        .await
+        .expect_err("unsupported trigger must fail before it can break list reads");
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("23514")
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn exhausted_one_off_clears_firing_and_is_not_dispatched_again(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let mut action = sample_action(user_owner(USER_A), "once");
+    action.trigger = ActionTrigger::Cron {
+        schedule: Schedule::from_cron("0 0 9 1 1 * 2000".into()).unwrap(),
+        timezone: chrono_tz::UTC,
+    };
+    action.next_run_at = Some(Utc::now() - chrono::Duration::hours(1));
+    let created = repo.create_action(action).await.unwrap();
+    let id = created.id.unwrap();
+    let token = repo
+        .claim_action(&id, created.configuration_revision, created.next_run_at)
+        .await
+        .unwrap();
+    repo.update_next_run_at(&id).await.unwrap();
+    repo.release_action(&id, token).await.unwrap();
+    assert!(
+        repo.claim_action(&id, created.configuration_revision, created.next_run_at)
+            .await
+            .is_err(),
+        "a candidate fetched by another worker must not fire again"
+    );
+    assert!(
+        repo.get_action(&id)
+            .await
+            .unwrap()
+            .unwrap()
+            .next_run_at
+            .is_none()
+    );
+    assert!(
+        repo.get_next_unclaimed_actions(10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn multiple_triggers_survive_grant_listing_and_configuration_updates(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let mut action = sample_action(user_owner(USER_A), "mixed triggers");
+    action.trigger = serde_json::from_value(json!({
+        "type": "multiple",
+        "triggers": [
+            {"type": "cron", "schedule": DAILY_9AM, "timezone": "UTC"},
+            {"type": "events", "filters": [{"events": ["document.created"]}]}
+        ]
+    }))
+    .unwrap();
+    action.event_activated_at = Some(Utc::now());
+    let mut created = repo.create_action(action).await.unwrap();
+    let id = created.id.unwrap();
+    let listed = repo.get_actions_by_ids(&[id]).await.unwrap();
+    assert_eq!(listed[0].trigger, created.trigger);
+    created.name = "renamed mixed triggers".into();
+    created.configuration_revision = created.configuration_revision.next().unwrap();
+    let updated = repo.update_action(created).await.unwrap();
+    assert_eq!(updated.trigger, listed[0].trigger);
+    assert_eq!(updated.name, "renamed mixed triggers");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_actions_by_ids_returns_another_owners_row(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let repo = test_repo(pool);
+    let own = repo
+        .create_action(sample_action(user_owner(USER_A), "own"))
+        .await
+        .unwrap();
+    let other = repo
+        .create_action(sample_action(user_owner(USER_B), "other"))
+        .await
+        .unwrap();
+
+    let rows = repo.get_actions_by_ids(&[other.id.unwrap()]).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, other.id);
+    assert_eq!(rows[0].owner, user_owner(USER_B));
+
+    let rows = repo
+        .get_actions_by_ids(&[own.id.unwrap(), other.id.unwrap()])
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_owner_create_writes_bot_and_sponsor_grants(pool: PgPool) {
+    let sponsor = user_owner(USER_A);
+    let repo = PgScheduledActionRepo::new(
+        pool.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(SponsoredBy(sponsor))),
+    );
+    let created = repo
+        .create_action(sample_action(
+            Owner::Bot(bot_id::BotId::TEST_A),
+            "bot routine",
+        ))
+        .await
+        .unwrap();
+    let bot_source = bot_id::BotId::TEST_A.into_storage_id().to_string();
+    assert_eq!(
+        direct_grants(&pool, created.id.unwrap()).await,
+        vec![
+            ("bot".to_owned(), bot_source, "owner".to_owned()),
+            ("user".to_owned(), USER_A.to_owned(), "owner".to_owned()),
+        ]
+    );
+}
+
+const BACKFILL_SQL: &str = include_str!(
+    "../../../../../crates/macro_db_client/migrations/20260929195914_backfill_scheduled_action_owner_grants.sql"
+);
+
+async fn insert_legacy_action(pool: &PgPool, id: Uuid, owner: &str) {
+    sqlx::query!(
+        r#"
+        INSERT INTO scheduled_action
+            (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled)
+        VALUES ($1, $2, 'legacy', $3, 'Agent', 'UTC', $4, $5, true)
+        "#,
+        id,
+        owner,
+        DAILY_9AM,
+        json!({}),
+        Utc::now(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn run_backfill(pool: &PgPool) -> Result<(), sqlx::Error> {
+    sqlx::raw_sql(BACKFILL_SQL).execute(pool).await?;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn backfill_owner_grants_is_idempotent_and_fails_closed(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let legacy_id = macro_uuid::generate_uuid_v7();
+    insert_legacy_action(&pool, legacy_id, USER_A).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity (id, entity_type, owner_type, owner_id)
+        VALUES ($1, 'scheduled_action', 'user', $2)
+        "#,
+        legacy_id,
+        USER_A,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(direct_grants(&pool, legacy_id).await.is_empty());
+
+    run_backfill(&pool).await.unwrap();
+    assert_eq!(
+        direct_grants(&pool, legacy_id).await,
+        vec![("user".to_owned(), USER_A.to_owned(), "owner".to_owned())]
+    );
+
+    run_backfill(&pool).await.unwrap();
+    assert_eq!(entity_row_count(&pool, legacy_id).await, 1);
+    assert_eq!(direct_grants(&pool, legacy_id).await.len(), 1);
+
+    sqlx::query!(
+        r#"
+        UPDATE entity_access
+        SET access_level = 'view'
+        WHERE entity_id = $1 AND entity_type = 'scheduled_action'
+        "#,
+        legacy_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    run_backfill(&pool).await.unwrap();
+    assert_eq!(
+        direct_grants(&pool, legacy_id).await,
+        vec![("user".to_owned(), USER_A.to_owned(), "owner".to_owned())]
+    );
+
+    let conflict_id = macro_uuid::generate_uuid_v7();
+    insert_legacy_action(&pool, conflict_id, USER_A).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity (id, entity_type, owner_type, owner_id)
+        VALUES ($1, 'scheduled_action', 'user', 'macro|other-owner@macro.com')
+        "#,
+        conflict_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(run_backfill(&pool).await.is_err());
+    assert!(direct_grants(&pool, conflict_id).await.is_empty());
 }

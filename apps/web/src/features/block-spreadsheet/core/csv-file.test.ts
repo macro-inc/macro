@@ -81,8 +81,8 @@ describe('CSV file import and export', () => {
     '',
     '"unterminated',
     'a'.repeat(10001),
-    'x\n'.repeat(1001),
-    Array(27).fill('x').join(','),
+    'x\n'.repeat(100_001),
+    Array(16_385).fill('x').join(','),
   ])('rejects invalid or oversized input atomically', (text) =>
     expect(() => decodeCsv(text)).toThrow()
   );

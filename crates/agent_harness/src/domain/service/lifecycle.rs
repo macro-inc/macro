@@ -46,6 +46,33 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
+    async fn delete_user_sessions(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> agent_session::domain::error::Result<()> {
+        loop {
+            let sessions = self
+                .inner
+                .sessions
+                .sessions_for_user_cleanup(&owner)
+                .await?;
+            if sessions.is_empty() {
+                return Ok(());
+            }
+            for session in sessions {
+                // Fail closed if a repository ever returns another principal's row.
+                if !session.owner_id.is_user(&owner) {
+                    return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                        "account cleanup returned a session owned by another principal"
+                    )));
+                }
+                // Includes replica forwarding and the per-session command queue.
+                // Teardown failure leaves the durable row available for a retry.
+                self.session_deleted(session.id).await?;
+            }
+        }
+    }
+
     async fn session_deleted(
         &self,
         id: AgentSessionId,
@@ -76,14 +103,20 @@ where
         })
     }
 
-    /// A local read on purpose: the queue lives beside the session's live
-    /// actor, and this replica answers for what it holds. A reader landing on
-    /// a non-managing replica sees an empty queue rather than an error.
+    /// The durable queue, so any replica can answer. Waiting actions live in
+    /// the session store; the managing replica's in-memory copy is a cache.
     async fn queued_controls(
         &self,
         id: AgentSessionId,
     ) -> agent_session::domain::error::Result<Vec<QueuedControl>> {
-        Ok(self.inner.queues.list(id))
+        Ok(self
+            .inner
+            .sessions
+            .list_queued_actions(id)
+            .await?
+            .iter()
+            .map(QueuedControl::from)
+            .collect())
     }
 
     async fn edit_queued_control(
@@ -113,6 +146,18 @@ where
         actor: Option<MacroUserIdStr<'static>>,
     ) -> agent_session::domain::error::Result<()> {
         self.execute(id, HarnessCommand::RemoveQueued { action_id, actor })
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
+    async fn steer_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::SteerQueued { action_id, actor })
             .await
             .map(drop)
             .map_err(into_session_error)
@@ -196,6 +241,50 @@ where
                 reason: reason.to_string(),
             },
         ));
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> crate::domain::ports::HeldToolCallObserver
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    /// Through [`execute`](AgentHarnessService::execute), not `execute_here`:
+    /// the call may have been held on any replica, and only the one managing
+    /// the session knows the turn whose reply to change.
+    fn changed(&self, id: AgentSessionId, change: crate::domain::model::ToolApprovalChange) {
+        drop(self.execute(id, HarnessCommand::ToolApproval(change)));
     }
 }
 
@@ -323,6 +412,7 @@ where
                             .permission_policy(permission_policy),
                     )
                     .await?;
+                self.restore_queue(session_id).await?;
             }
         }
         self.sessions.set_sandbox_size(session_id, size).await?;

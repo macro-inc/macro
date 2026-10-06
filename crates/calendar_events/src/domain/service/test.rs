@@ -29,6 +29,8 @@ struct FakeRepo {
     sync_retirements: Vec<RetiredCalendarEvent>,
     /// Provider calendars whose isolated sync failure was recorded, in order.
     recorded_sync_errors: Arc<Mutex<Vec<String>>>,
+    /// Calendars recorded as refusing push channels, in order.
+    recorded_watch_unsupported: Arc<Mutex<Vec<Uuid>>>,
 }
 
 impl CalendarRepository for FakeRepo {
@@ -170,6 +172,8 @@ impl CalendarRepository for FakeRepo {
             materialized_range: None,
             synced_at: self.stored_synced_at,
             watch_expires_at: None,
+            watch_unsupported_at: (!self.recorded_watch_unsupported.lock().unwrap().is_empty())
+                .then(Utc::now),
         })
     }
 
@@ -217,6 +221,20 @@ impl CalendarRepository for FakeRepo {
         _calendar_id: Uuid,
         _channel: GoogleWatchChannel,
     ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn record_watch_unsupported(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+        _account_id: Uuid,
+        calendar_id: Uuid,
+    ) -> Result<(), Report> {
+        self.recorded_watch_unsupported
+            .lock()
+            .unwrap()
+            .push(calendar_id);
         Ok(())
     }
 
@@ -718,6 +736,97 @@ impl GoogleCalendarProvider for MixedTotalFailureGoogleProvider {
     ) -> Result<GoogleWatchChannel, GoogleProviderError> {
         unreachable!("watch is disabled in these tests")
     }
+}
+
+/// Syncs one calendar whose watch call Google refuses as push-unsupported.
+#[derive(Clone, Default)]
+struct PushUnsupportedGoogleProvider {
+    watch_calls: Arc<Mutex<usize>>,
+}
+
+impl GoogleCalendarProvider for PushUnsupportedGoogleProvider {
+    async fn list_calendars(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+        Ok(vec![provider_calendar("holidays", false)])
+    }
+
+    async fn sync_events(
+        &self,
+        access_token: &str,
+        context: GoogleEventSyncContext,
+    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+        FakeGoogleProvider.sync_events(access_token, context).await
+    }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        *self.watch_calls.lock().unwrap() += 1;
+        Err(GoogleProviderError::new(
+            GoogleProviderErrorKind::PushUnsupported,
+            "Push notifications are not supported by this resource.",
+        ))
+    }
+}
+
+#[tokio::test]
+async fn push_unsupported_watch_is_recorded_and_the_account_completes() {
+    let lifecycle = FakeLifecycle::claimed();
+    let repository = FakeRepo::default();
+    let recorded_watch_unsupported = repository.recorded_watch_unsupported.clone();
+    let recorded_sync_errors = repository.recorded_sync_errors.clone();
+    let provider = PushUnsupportedGoogleProvider::default();
+    let watch_calls = provider.watch_calls.clone();
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repository,
+        provider,
+        lifecycle.clone(),
+        NoopMacroEventBroker,
+        Some(GoogleWatchConfig {
+            address: "https://gateway.example.com/calendar/notifications".to_string(),
+            token: "token".to_string(),
+        }),
+    );
+
+    let key = CalendarBackfillJobKey {
+        job_id: Uuid::now_v7(),
+        email_link_id: Uuid::now_v7(),
+    };
+    for _ in 0..2 {
+        let mut report = GoogleBackfillRunReport::default();
+        coordinator
+            .run(
+                key,
+                "macro|calendar@example.com",
+                "secret",
+                OccurrenceRange::maintenance_horizon(Utc::now()),
+                &mut report,
+            )
+            .await
+            .expect("a calendar Google will not push for still syncs by polling");
+    }
+
+    assert_eq!(
+        *recorded_watch_unsupported.lock().unwrap(),
+        vec![Uuid::nil()],
+        "the refusal is recorded once"
+    );
+    assert_eq!(
+        *watch_calls.lock().unwrap(),
+        1,
+        "the recorded refusal stops the next run from re-watching"
+    );
+    assert!(recorded_sync_errors.lock().unwrap().is_empty());
+    assert_eq!(lifecycle.completions.lock().unwrap().len(), 2);
+    assert!(lifecycle.failures.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

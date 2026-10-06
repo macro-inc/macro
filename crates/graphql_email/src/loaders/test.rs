@@ -42,6 +42,7 @@ fn mail_projection(thread_id: Uuid) -> EmailThreadMailProjection {
             has_calendar_attachment: false,
             has_thread_share: false,
         },
+        draft_state: None,
         previews: EmailThreadMailPreviews {
             all: None,
             draft: None,

@@ -1,3 +1,4 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
@@ -82,6 +83,10 @@ export type ChannelInputProps = InputCallbacks & {
   participants?: Accessor<IUser[]>;
   /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
   bots?: Accessor<IUser[]>;
+  /** Handles a failed send while preserving the composer's draft. */
+  onSendError?: (error: unknown) => void;
+  /** Dismiss the host after Escape has closed inline menus or dictation. */
+  onEscape?: () => void;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
   /** Whether to auto-focus the input on mount. Defaults to `!isTouchDevice()`. */
@@ -175,6 +180,7 @@ export function ChannelInput(props: ChannelInputProps) {
     attachmentTracker: props.attachmentTracker,
     persistenceKey: props.persistenceKey,
     callbacks: props,
+    onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
     trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
@@ -261,7 +267,7 @@ export function ChannelInput(props: ChannelInputProps) {
       ? useMessageParticipants(() => props.parent!)
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
-  // useAgentMentionUsers; participants and channel/document bots feed it here.
+  // useAgentMentionUsers; participants and parent agents feed it here.
   const mentionUsers = useAgentMentionUsers(() => [
     ...(props.participants?.() ?? parentParticipants()),
     ...(props.bots?.() ?? parentBots()),
@@ -270,6 +276,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions: !props.parent || props.parent.type === 'channel',
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     users: mentionUsers,
     scrollContainer,
@@ -390,6 +397,7 @@ export function ChannelInput(props: ChannelInputProps) {
   };
 
   props.onReady?.({
+    snapshot: inputState.snapshot,
     clear: () => markdownEditor.controls.clear(),
     focus: () => {
       // A collapsed pill hides the editor; programmatic focus implies intent
@@ -424,7 +432,10 @@ export function ChannelInput(props: ChannelInputProps) {
         return true;
       }
       // Block upstream escape handlers when ESC should close inline menus.
-      return markdownEditor.controls.isInlineMenuOpen();
+      if (markdownEditor.controls.isInlineMenuOpen()) return true;
+      if (!props.onEscape) return false;
+      props.onEscape();
+      return true;
     },
   });
 
@@ -501,7 +512,13 @@ export function ChannelInput(props: ChannelInputProps) {
   };
 
   return (
-    <Input.Root input={inputState.view()} commands={commands}>
+    <Input.Root
+      input={inputState.view()}
+      commands={commands}
+      // An inline reply's bottom margin spaces it from the thread below; a
+      // flat composer's host card already pads it.
+      class={cn(props.flat && 'mb-0')}
+    >
       <Show when={isCollapsed()}>
         {/* File picker opened from the CollapsedInput attach button. */}
         <input

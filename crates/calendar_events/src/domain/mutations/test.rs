@@ -118,6 +118,7 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
 
 fn draft() -> CalendarEventDraft {
     CalendarEventDraft {
+        idempotency_key: None,
         title: "New event".to_string(),
         description: None,
         location: None,
@@ -293,6 +294,16 @@ impl CalendarRepository for FakeRepo {
         _account_id: Uuid,
         _calendar_id: Uuid,
         _channel: GoogleWatchChannel,
+    ) -> Result<(), rootcause::Report> {
+        unreachable!()
+    }
+
+    async fn record_watch_unsupported(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+        _account_id: Uuid,
+        _calendar_id: Uuid,
     ) -> Result<(), rootcause::Report> {
         unreachable!()
     }
@@ -1644,6 +1655,8 @@ fn echo_override(
 ) -> CalendarEventOverride {
     let original_start = Utc.with_ymd_and_hms(2026, 8, 18, 20, 0, 0).unwrap();
     CalendarEventOverride {
+        sequence: None,
+        source_updated_at: None,
         recurrence_id: recurrence_id.to_string(),
         original_time: EventStart::Timed(original_start),
         time: EventTime::Timed {
@@ -1737,6 +1750,7 @@ async fn occurrence_scoped_rsvp_answers_with_the_occurrence_attendees() {
         CalendarRsvpScope::ThisEvent {
             recurrence_id: recurrence_id.to_string(),
         },
+        None,
     )
     .await
     .unwrap();
@@ -1962,6 +1976,7 @@ async fn rsvp_surfaces_attendance_and_persists_the_echo() {
                 None,
                 AttendeeResponseStatus::Accepted,
                 CalendarRsvpScope::All,
+                None,
             )
             .await,
         Err(CalendarMutationError::NotAttendee)
@@ -1983,6 +1998,7 @@ async fn rsvp_surfaces_attendance_and_persists_the_echo() {
             CalendarRsvpScope::ThisEvent {
                 recurrence_id: "2026-08-14T22:00:00+00:00".to_string(),
             },
+            None,
         )
         .await
         .unwrap();
@@ -2015,6 +2031,7 @@ async fn rsvp_addresses_the_requester_inbox_not_the_source_calendar() {
         None,
         AttendeeResponseStatus::Accepted,
         CalendarRsvpScope::All,
+        None,
     )
     .await
     .unwrap();
@@ -2050,6 +2067,7 @@ async fn rsvp_through_a_delegated_inbox_never_hands_the_subject_email_to_the_pro
         None,
         AttendeeResponseStatus::Accepted,
         CalendarRsvpScope::All,
+        None,
     )
     .await
     .unwrap();
@@ -2085,6 +2103,7 @@ async fn rsvp_through_a_delegated_inbox_without_an_own_inbox_is_not_attendee_bef
         None,
         AttendeeResponseStatus::Accepted,
         CalendarRsvpScope::All,
+        None,
     )
     .await
     .unwrap_err();
@@ -2114,6 +2133,7 @@ async fn rsvp_echo_marks_actor_inboxes_as_self() {
         None,
         AttendeeResponseStatus::Accepted,
         CalendarRsvpScope::All,
+        None,
     )
     .await
     .unwrap();
@@ -2432,5 +2452,120 @@ async fn disconnecting_an_inbox_the_requester_does_not_own_is_not_found() {
             .await,
         Err(CalendarMutationError::NotFound)
     ));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn keyed_deletion_replays_after_the_canonical_event_has_disappeared() {
+    use crate::domain::ports::CalendarCreationRecoveryService;
+    let target = creation_target(false);
+    let calendar_id = target.calendar_id;
+    let key = Uuid::now_v7();
+    let expected = crate::domain::models::creation_provider_id(key, &target.owner_id);
+    let repo = FakeRepo {
+        creation_target: Some(target),
+        mutation_target: None,
+        ..Default::default()
+    };
+    let removed = repo.removed_sources.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let svc = service(repo, provider, FakeTokens::ok());
+    svc.delete_created_event("macro|user", calendar_id, key)
+        .await
+        .unwrap();
+    svc.delete_created_event("macro|user", calendar_id, key)
+        .await
+        .unwrap();
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        [format!("delete:{expected}"), format!("delete:{expected}")]
+    );
+    assert_eq!(removed.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn keyed_deletion_requires_current_writable_calendar_access() {
+    use crate::domain::ports::CalendarCreationRecoveryService;
+    for target in [None, Some(creation_target(true))] {
+        let repo = FakeRepo {
+            creation_target: target,
+            ..Default::default()
+        };
+        let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+        let calls = provider.calls.clone();
+        assert!(
+            service(repo, provider, FakeTokens::ok())
+                .delete_created_event("macro|user", Uuid::now_v7(), Uuid::now_v7())
+                .await
+                .is_err()
+        );
+        assert!(calls.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn rsvp_uses_only_the_selected_owned_address_for_both_scopes() {
+    for scope in [
+        CalendarRsvpScope::All,
+        CalendarRsvpScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".into(),
+        },
+    ] {
+        let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+        let emails = provider.rsvp_self_emails.clone();
+        let mut target = mutation_target(false);
+        target.actor = ActorInboxes::from_owned(vec![
+            "first@example.com".into(),
+            "chosen@example.com".into(),
+        ]);
+        service(
+            FakeRepo {
+                mutation_target: Some(target),
+                ..FakeRepo::default()
+            },
+            provider,
+            FakeTokens::ok(),
+        )
+        .respond_to_event(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            AttendeeResponseStatus::Accepted,
+            scope,
+            Some("CHOSEN@example.com".into()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            *emails.lock().unwrap(),
+            vec![vec!["chosen@example.com".to_string()]]
+        );
+    }
+}
+
+#[tokio::test]
+async fn rsvp_rejects_a_selected_address_the_requester_does_not_own() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let error = service(
+        FakeRepo {
+            mutation_target: Some(mutation_target(false)),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .respond_to_event(
+        "macro|user",
+        Uuid::now_v7(),
+        None,
+        AttendeeResponseStatus::Accepted,
+        CalendarRsvpScope::All,
+        Some("someone-else@example.com".into()),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, CalendarMutationError::NotAttendee));
     assert!(calls.lock().unwrap().is_empty());
 }

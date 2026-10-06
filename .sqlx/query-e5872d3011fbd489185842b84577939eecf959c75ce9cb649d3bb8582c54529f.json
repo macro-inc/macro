@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO macro_user_info (macro_user_id, first_name, last_name)\n        VALUES ($1, $2, $3)\n        ON CONFLICT (macro_user_id) DO UPDATE\n        SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e5872d3011fbd489185842b84577939eecf959c75ce9cb649d3bb8582c54529f"
+}

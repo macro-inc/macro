@@ -1,3 +1,12 @@
+import {
+  formatIncludedAi,
+  type IncludedAiCentsByTier,
+  PLANS,
+  type Plan,
+  type PlanTier,
+} from '@app/features/paywall/plans';
+import { SlackImport } from '@app/features/slack-import/slack-import';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -6,6 +15,7 @@ import {
   NO_LINK_SHARE,
 } from '@core/component/TopBar/linkShare';
 import { UserIcon } from '@core/component/UserIcon';
+import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
@@ -28,7 +38,11 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
-import { useGithubLinkStatusQuery } from '@queries/auth';
+import {
+  useAiBillingSummaryQuery,
+  useGithubLinkStatusQuery,
+  useIncludedAiCentsByTier,
+} from '@queries/auth';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -39,7 +53,10 @@ import {
   useInviteToTeamMutation,
   useTeamInvitesQuery,
 } from '@queries/team/invites';
-import { useRemoveUserFromTeamMutation } from '@queries/team/members';
+import {
+  useRemoveUserFromTeamMutation,
+  useSetTeamMemberPlanMutation,
+} from '@queries/team/members';
 import {
   useCreateTeamWithInvitesMutation,
   useDeleteTeamMutation,
@@ -49,6 +66,7 @@ import {
   useToggleNonAdminInvitesMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
@@ -154,6 +172,98 @@ function RoleSelect(props: {
   );
 }
 
+type PlanOption = { value: PaidPlan; label: string; description: string };
+
+/** "$40 · $20 of AI" once the catalog has the allowance, otherwise "$40". */
+function planOption(plan: Plan, includedAi: string | undefined): PlanOption {
+  return {
+    value: plan.tier as PaidPlan,
+    label: plan.name,
+    description: includedAi
+      ? `$${plan.price} · ${includedAi} of AI`
+      : `$${plan.price}`,
+  };
+}
+
+/** Every paid plan a seat can be moved to, cheapest first. */
+function planOptionsFor(
+  includedAi: IncludedAiCentsByTier,
+  aiUsageBilling: boolean
+): PlanOption[] {
+  const allowance = (tier: PlanTier) =>
+    aiUsageBilling ? formatIncludedAi(includedAi[tier]) : undefined;
+  return PLANS.flatMap((plan) =>
+    plan.tier === 'free' ? [] : [planOption(plan, allowance(plan.tier))]
+  );
+}
+
+/**
+ * The plan a member's seat is billed at. Until the generated `TeamMember`
+ * schema carries `plan`, read it defensively; every seat starts on Premium.
+ */
+function memberPlan(member: TeamMember): PaidPlan {
+  const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
+  return plan === 'max' ? 'max' : 'premium';
+}
+
+function PlanSelect(props: {
+  value: PaidPlan;
+  onChange: (plan: PaidPlan) => void;
+  disabled?: boolean;
+}) {
+  const includedAi = useIncludedAiCentsByTier();
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const options = () => planOptionsFor(includedAi(), aiUsageBilling().enabled);
+  const selectedOption = () =>
+    options().find((option) => option.value === props.value) ?? options()[0];
+
+  return (
+    <Select<PlanOption>
+      options={options()}
+      value={selectedOption()}
+      onChange={(opt) => opt && props.onChange(opt.value)}
+      optionValue="value"
+      optionTextValue="label"
+      gutter={4}
+      placement="bottom-end"
+      disabled={props.disabled}
+      itemComponent={(itemProps: { item: CollectionNode<PlanOption> }) => (
+        <Select.Item
+          item={itemProps.item}
+          class="flex items-center justify-between gap-3 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
+        >
+          <Select.ItemLabel class="flex flex-col">
+            <span>{itemProps.item.rawValue.label}</span>
+            <span class="text-xs text-ink-muted">
+              {itemProps.item.rawValue.description}
+            </span>
+          </Select.ItemLabel>
+          <Select.ItemIndicator>
+            <CheckIcon class="size-3" />
+          </Select.ItemIndicator>
+        </Select.Item>
+      )}
+    >
+      <Select.Trigger
+        as={Button}
+        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
+        disabled={props.disabled}
+        aria-label="Seat plan"
+      >
+        <Select.Value<PlanOption>>
+          {(state) => state.selectedOption().label}
+        </Select.Value>
+        <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-40 p-1">
+          <Select.Listbox />
+        </Select.Content>
+      </Select.Portal>
+    </Select>
+  );
+}
+
 const emailSchema = z.string().email();
 
 type InviteEntry = { email: string };
@@ -185,7 +295,7 @@ function InviteEntryRow(props: {
             <Button
               variant="outline"
               size="icon-sm"
-              class="rounded-xs shrink-0 focus:border-accent"
+              class="shrink-0 focus:border-accent"
               tabIndex={0}
               onClick={props.onRemove}
             >
@@ -302,7 +412,7 @@ function InviteEmailsInput(props: {
       </Show>
       <Button
         variant="outline"
-        class="rounded-xs w-full justify-center focus:border-accent"
+        class="w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
         onClick={addRow}
@@ -320,8 +430,13 @@ function MemberRow(props: {
   isCurrentUser: boolean;
   canManageRemovals: boolean;
   canRemove: boolean;
+  /** Whether seat plans apply (paid team) and the viewer may change them. */
+  showPlan: boolean;
+  canEditPlan: boolean;
+  planPending: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
+  onPlanChange: (plan: PaidPlan) => void;
 }) {
   const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
@@ -335,7 +450,7 @@ function MemberRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-2 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
@@ -353,6 +468,22 @@ function MemberRow(props: {
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
+        <Show when={props.showPlan}>
+          <Show
+            when={props.canEditPlan}
+            fallback={
+              <span class="text-xs text-ink-muted capitalize">
+                {memberPlan(props.member)}
+              </span>
+            }
+          >
+            <PlanSelect
+              value={memberPlan(props.member)}
+              onChange={props.onPlanChange}
+              disabled={props.planPending}
+            />
+          </Show>
+        </Show>
         <Show
           when={props.isOwner && !isMemberOwner()}
           fallback={
@@ -378,7 +509,7 @@ function MemberRow(props: {
                   variant="ghost"
                   size="sm"
                   disabled
-                  class="rounded-xs opacity-50 cursor-not-allowed"
+                  class="opacity-50 cursor-not-allowed"
                 >
                   <TrashIcon class="size-4" />
                 </Button>
@@ -425,7 +556,7 @@ function InviteRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-2 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
@@ -481,7 +612,7 @@ function UserInviteRow(props: {
   isDeclining: boolean;
 }) {
   return (
-    <div class="flex items-center justify-between gap-3 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-3 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
@@ -497,7 +628,7 @@ function UserInviteRow(props: {
       <div class="flex items-center gap-2 shrink-0">
         <Button
           variant="outline"
-          class="px-2 py-1 rounded-xs"
+          class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}
         >
@@ -507,7 +638,7 @@ function UserInviteRow(props: {
         </Button>
         <Button
           variant="accent"
-          class="px-2 py-1 rounded-xs"
+          class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
         >
@@ -694,15 +825,13 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
-              class="rounded-xs"
               disabled={createTeamMutation.isPending}
               onClick={props.onClose}
             >
               Cancel
             </Button>
             <Button
-              variant="accent"
-              class="rounded-xs"
+              variant="strong"
               disabled={
                 createTeamMutation.isPending ||
                 !!teamNameError() ||
@@ -737,11 +866,7 @@ function EmptyTeamState() {
               Create a team to collaborate with others and manage access
               together.
             </p>
-            <Button
-              variant="accent"
-              class="rounded-xs"
-              onClick={() => setShowCreateModal(true)}
-            >
+            <Button variant="accent" onClick={() => setShowCreateModal(true)}>
               <PlusIcon class="size-4" />
               Create Team
             </Button>
@@ -793,7 +918,6 @@ function SaveCancelButtons(props: {
         <Button
           variant="accent"
           size="icon-sm"
-          class="rounded-xs"
           disabled={props.saveDisabled}
           onClick={props.onSave}
         >
@@ -806,7 +930,6 @@ function SaveCancelButtons(props: {
         <Button
           variant="ghost"
           size="icon-sm"
-          class="rounded-xs"
           disabled={props.pending}
           onClick={props.onCancel}
         >
@@ -963,6 +1086,30 @@ function TeamManagement(props: {
   });
   const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
   const canManageMemberRemovals = () => isAdminOrOwner();
+  // Seat plans only exist on teams billed per seat: enterprise teams, and
+  // paying teams, whose shared credits and overage are billed to the owner.
+  // The team API does not expose its subscription, so a paying team is
+  // recognised from the viewer's billing position: a paid tier whose payer is
+  // the team owner and whose seat count spans more than one member (a free-team
+  // owner with a personal subscription is billed for exactly one seat). A
+  // paying team of one therefore shows no seat menu; its owner moves their own
+  // seat from Billing.
+  const billingSummary = useAiBillingSummaryQuery();
+  const showSeatPlans = () => {
+    const team = teamQuery.data?.team;
+    if (!team) return false;
+    if (team.enterprise) return true;
+    return (
+      billingSummary.isSuccess &&
+      billingSummary.data.tier !== 'free' &&
+      billingSummary.data.payer === team.owner_id &&
+      billingSummary.data.seats > 1
+    );
+  };
+  const setMemberPlanMutation = useSetTeamMemberPlanMutation();
+  // Seat moves read and rewrite the subscription's item quantities, so only
+  // one may be in flight per team: every plan menu waits while one runs.
+  const planMovePending = () => setMemberPlanMutation.isPending;
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
@@ -1160,7 +1307,6 @@ function TeamManagement(props: {
             <Button
               variant="danger"
               size="sm"
-              class="rounded-xs"
               onClick={() => setShowDeleteTeamModal(true)}
             >
               <TrashIcon class="size-4" />
@@ -1288,7 +1434,6 @@ function TeamManagement(props: {
               <Button
                 variant="outline"
                 size="sm"
-                class="rounded-xs"
                 onClick={handleCopyGithubAutolinkUrl}
               >
                 <CopyIcon class="size-4" />
@@ -1351,6 +1496,7 @@ function TeamManagement(props: {
 
         <SettingsSection title="Connections">
           <SettingsCard>
+            <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
             <IntegrationRow
               icon={<GithubIcon />}
               title="GitHub App"
@@ -1392,7 +1538,6 @@ function TeamManagement(props: {
               <Button
                 variant="outline"
                 size="sm"
-                class="rounded-xs"
                 onClick={() => setShowInviteModal(true)}
               >
                 <PlusIcon class="size-4" />
@@ -1455,6 +1600,18 @@ function TeamManagement(props: {
                         currentUserRole(),
                         member
                       )}
+                      showPlan={showSeatPlans()}
+                      canEditPlan={isAdminOrOwner()}
+                      planPending={planMovePending()}
+                      onPlanChange={(plan) => {
+                        if (!props.teamId || plan === memberPlan(member))
+                          return;
+                        setMemberPlanMutation.mutate({
+                          teamId: props.teamId,
+                          userId: member.user_id,
+                          plan,
+                        });
+                      }}
                       onRemove={() => setShowRemoveModal(member)}
                       onRoleChange={(newRole) => {
                         if (!props.teamId) return;
@@ -1536,15 +1693,13 @@ function TeamManagement(props: {
             <div class="flex justify-end gap-1 pt-2">
               <Button
                 variant="ghost"
-                class="rounded-xs"
                 disabled={deleteTeamMutation.isPending}
                 onClick={() => handleDeleteTeamModalClose(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="danger"
-                class="rounded-xs"
+                variant="strong"
                 disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
                 onClick={handleDeleteTeam}
               >
@@ -1616,15 +1771,13 @@ function TeamManagement(props: {
             <div class="flex justify-end gap-1 pt-2">
               <Button
                 variant="ghost"
-                class="rounded-xs"
                 disabled={inviteToTeamMutation.isPending}
                 onClick={() => handleInviteModalClose(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant={hasValidInvites() ? 'accent' : 'ghost'}
-                class="rounded-xs"
+                variant="strong"
                 disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
                 onClick={handleInvite}
               >

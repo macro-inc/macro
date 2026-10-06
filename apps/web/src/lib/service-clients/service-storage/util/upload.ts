@@ -1,11 +1,20 @@
 import { analytics } from '@app/lib/analytics';
 import type { FileTypeString, MimeType } from '@core/block';
-import { createUploadToast, toast } from '@core/component/Toast/Toast';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  trackUpload,
+  type UploadProgressHandle,
+} from '@core/component/UploadProgress/uploadProgress';
 import { blockAcceptedMimetypeToFileExtension } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { contentHash } from '@core/util/hash';
+import {
+  getUploadFileSize,
+  nativeUploadChecksum,
+  resolveUploadSource,
+  type UploadSource,
+  uploadNativeStagedFileToPresignedUrl,
+} from '@core/mobile/nativeStagedUpload';
 import type { ResultError } from '@core/util/result';
-import { toaster } from '@kobalte/core/toast';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import {
@@ -17,10 +26,6 @@ import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl
 import { storageWS } from '@service-storage/websocket';
 import { FileTypeMap } from '../fileTypeMap';
 import { uploadDocx } from './uploadDocx';
-
-const dismissToast = (toastId: number | null) => {
-  if (toastId !== null) toaster.dismiss(toastId);
-};
 
 /**
  * Thrown when the backend rejects a document name as too long. Carries the
@@ -38,6 +43,7 @@ const uploadWithPresignedUrl = async (params: {
   buffer: ArrayBuffer;
   sha: string;
   type: MimeType;
+  onProgress?: (sent: number | null) => void;
 }) => {
   const uploadResult = await uploadToPresignedUrl(params);
   return !uploadResult.isErr();
@@ -79,15 +85,36 @@ export async function upload(
   file: File,
   options?: UploadFileOptions
 ): Promise<UploadSuccess> {
+  const name = filenameWithoutExtension(file.name) ?? file.name;
+  const progress = options?.hideProgressIndicator
+    ? undefined
+    : trackUpload(name, getUploadFileSize(file));
+
+  try {
+    const result = await uploadWithProgress(file, name, options, progress);
+    if (result.type === 'folder') {
+      // The server keeps unpacking the folder after the zip is sent.
+      void result.projectId.finally(() => progress?.done());
+    } else {
+      progress?.done();
+    }
+    return result;
+  } catch (error) {
+    progress?.done();
+    throw error;
+  }
+}
+
+async function uploadWithProgress(
+  file: File,
+  name: string,
+  options: UploadFileOptions | undefined,
+  progress: UploadProgressHandle | undefined
+): Promise<UploadSuccess> {
   const { showPaywall } = usePaywallState();
 
   // TODO: remove toast logic from dss upload util
-  const handleUploadError = (
-    err: ResultError<string>[] | Error | string,
-    toastId: number | null
-  ) => {
-    dismissToast(toastId);
-
+  const handleUploadError = (err: ResultError<string>[] | Error | string) => {
     if (Array.isArray(err) && err[0]?.code === DOCUMENT_NAME_TOO_LONG_CODE) {
       let maxLength: number | undefined;
       try {
@@ -133,21 +160,46 @@ export async function upload(
     analytics.track('upload_file', {
       fileType: fileTypeOrExtension,
       fileName: file.name,
-      fileSize: file.size,
+      fileSize: getUploadFileSize(file),
       destination: 'dss',
       folder: isZip,
     });
   }
 
-  let name = filenameWithoutExtension(file.name) ?? file.name;
-
-  // Create toast notification if needed
-  const toastId = !options?.hideProgressIndicator
-    ? createUploadToast(`Uploading ${name}`)
-    : null;
-
-  const buffer = await file.arrayBuffer();
-  const sha = await contentHash(buffer);
+  let source: UploadSource;
+  try {
+    source = await resolveUploadSource(file);
+  } catch (error) {
+    return handleUploadError(error instanceof Error ? error : String(error));
+  }
+  const { sha } = source;
+  const putFile = async (presignedUrl: string, type: MimeType) => {
+    if (source.kind === 'bytes') {
+      const sent = await uploadWithPresignedUrl({
+        presignedUrl,
+        buffer: source.buffer,
+        sha,
+        type,
+        onProgress: progress?.sending,
+      });
+      if (sent) progress?.processing();
+      return sent;
+    }
+    // The native transport doesn't report bytes sent.
+    progress?.sending(null);
+    try {
+      await uploadNativeStagedFileToPresignedUrl(
+        { ...source.staged, mimeType: type },
+        presignedUrl,
+        nativeUploadChecksum(sha)
+      );
+      progress?.processing();
+      return true;
+    } catch (error) {
+      console.error('Native staged upload failed', error);
+      return false;
+    }
+  };
 
   if (isZip && options?.unzipFolder) {
     const res = await storageServiceClient.projects.createUploadZipRequest({
@@ -156,7 +208,7 @@ export async function upload(
       parentId: options?.projectId,
     });
     if (res.isErr()) {
-      return handleUploadError(res.error, toastId);
+      return handleUploadError(res.error);
     }
 
     const { presignedUrl, requestId } = res.value;
@@ -164,26 +216,19 @@ export async function upload(
     if (
       !presignedUrl ||
       !requestId ||
-      !(await uploadWithPresignedUrl({
-        presignedUrl,
-        buffer,
-        sha,
-        type: 'application/zip',
-      }))
+      !(await putFile(presignedUrl, 'application/zip'))
     ) {
-      return handleUploadError('Failed to upload zip file', toastId);
+      return handleUploadError('Failed to upload zip file');
     }
 
     const projectIdPromise = waitBulkUploadStatus(requestId);
 
-    // Wait for upload status and dismiss toast when complete
     projectIdPromise.then((projectId) => {
       if (projectId) {
         toast.success(`Uploaded ${name}`);
       } else {
         toast.failure(`Failed to upload ${name}`);
       }
-      dismissToast(toastId);
     });
 
     return {
@@ -205,7 +250,7 @@ export async function upload(
     jobId = await uploadJobPromise;
     if (jobId == null) {
       console.error('failed to upload docx', sha);
-      return handleUploadError('Failed to upload docx file', toastId);
+      return handleUploadError('Failed to upload docx file');
     }
     if (!options?.skipWaitForDocxProcessing)
       docxProcessingPromise = processingPromise;
@@ -221,7 +266,7 @@ export async function upload(
   });
 
   if (newfile.isErr()) {
-    return handleUploadError(newfile.error, toastId);
+    return handleUploadError(newfile.error);
   }
 
   const { metadata, presignedUrl, contentType, fileType } = newfile.value;
@@ -236,17 +281,10 @@ export async function upload(
     fallbackMime ||
     'application/octet-stream') as MimeType;
 
-  if (
-    !(await uploadWithPresignedUrl({
-      presignedUrl,
-      buffer,
-      sha,
-      type: resolvedContentType,
-    }))
-  ) {
+  if (!(await putFile(presignedUrl, resolvedContentType))) {
     console.error('failed to upload', documentId, 'removing...');
     await storageServiceClient.deleteDocument({ documentId });
-    return handleUploadError('Failed to upload file', toastId);
+    return handleUploadError('Failed to upload file');
   }
 
   // Document upload finalization is owned by the backend S3 ObjectCreated
@@ -271,8 +309,6 @@ export async function upload(
   if (docxProcessingPromise) {
     await docxProcessingPromise;
   }
-
-  dismissToast(toastId);
 
   return {
     type: 'document',

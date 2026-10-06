@@ -1,9 +1,9 @@
+import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
 import {
-  AgentChangesProvider,
-  AgentChangesSplit,
   ChangesHandoff,
+  ChangesSplit,
   ReviewNotesDock,
-} from '@app/features/agent-changes/agent-changes';
+} from '@app/features/changes/changes';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel } from '@components/app/side-panel';
@@ -13,46 +13,77 @@ import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { LinkedConversationDrawer } from '@core/linked-conversation';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import type { NotificationSource } from '@notifications/notification-source';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
-import { createSignal, Show, useContext } from 'solid-js';
+import {
+  children,
+  createEffect,
+  createSignal,
+  on,
+  type ParentProps,
+  Show,
+  useContext,
+} from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
-import {
-  ORIGIN_THREAD_DRAWER_ID,
-  sessionOriginThread,
-} from '../context/origin-thread';
-import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
+import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentComposer } from './AgentComposer';
+import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { AgentSplitHeader } from './AgentSplitHeader';
+import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
+
+// Keep the editor mounted while another mobile accessory (Changes) is active.
+function AgentComposerRegion(props: ParentProps) {
+  const content = children(() => props.children);
+  return (
+    <FloatRegionOrInline region="accessory">{content()}</FloatRegionOrInline>
+  );
+}
 
 function AgentBlockContent(props: {
   active: boolean;
   notificationSource: NotificationSource;
 }) {
   const [params] = useSearchParams();
+  const routeTarget = createAgentRouteTarget();
   const [searchTarget, setSearchTarget] = createSignal(
-    parseAgentMessageTarget(params)
+    routeTarget() ?? parseAgentMessageTarget(params)
+  );
+  let routeOwnsTarget = Boolean(routeTarget());
+  createEffect(
+    on(
+      routeTarget,
+      (target) => {
+        if (target || routeOwnsTarget) {
+          routeOwnsTarget = Boolean(target);
+          setSearchTarget(target);
+        }
+      },
+      { defer: true }
+    )
   );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, unknown>) => {
       const target = parseAgentMessageTarget(params);
-      if (target) setSearchTarget(target);
+      if (target) {
+        routeOwnsTarget = false;
+        setSearchTarget(target);
+      }
     },
   });
   const {
     session,
     sessionId,
     metadata,
+    accessDenied,
     loadFailed,
     loadRetryable,
     pending,
@@ -78,10 +109,21 @@ function AgentBlockContent(props: {
         <Show
           when={startupError()}
           fallback={
-            <LoadErrorPanel
-              title="Unable to load this agent session"
-              onRetry={loadRetryable() ? retryLoad : undefined}
-            />
+            <Show
+              when={accessDenied()}
+              fallback={
+                <LoadErrorPanel
+                  title="Unable to load this agent session"
+                  onRetry={loadRetryable() ? retryLoad : undefined}
+                />
+              }
+            >
+              <EmptyStatePanel
+                centered
+                title="You don't have access to this agent session"
+                description="Ask a participant to share it with you."
+              />
+            </Show>
           }
         >
           {(error) => (
@@ -106,45 +148,48 @@ function AgentBlockContent(props: {
         <div class="size-full overflow-hidden flex">
           {/* Collapsed by default, like the other conversation-shaped blocks —
             the transcript wants the width; `]` or the header button opens it. */}
-          <SidePanel.Layout defaultOpen={false}>
+          <SidePanel.Layout defaultOpen={false} floating>
             <AgentSidePanelSections />
             <AgentSplitHeader
               session={session()}
               title={metadata()?.title ?? undefined}
             />
+            <AgentPreviewBanner />
             {/* The Changes pane opens beside the transcript; closed, the
                 transcript keeps the whole width. */}
-            <AgentChangesSplit>
+            <ChangesSplit>
               <Transcript searchTarget={searchTarget()} />
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
-              <FloatRegionOrInline region="accessory">
+              <AgentComposerRegion>
                 {/* Home/chat: re-enable pointer events on the accessory
                     contribution — the float host is pointer-transparent. */}
-                <div class="flex w-full justify-center shrink-0 px-4 pb-4.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+                {/* pb matches ChannelInputContainer so the composer sits at
+                    the same height as the channel input. */}
+                <div class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
                   <div class="macro-message-width mx-auto flex flex-col gap-2">
-                    <ChangesHandoff />
-                    <ReviewNotesDock />
-                    <AgentComposer
-                      autofocus={
-                        canAutofocusSplitContent &&
-                        !navigatedFromJK() &&
-                        !searchTarget()
+                    <Show
+                      when={!session()?.isArchived}
+                      fallback={
+                        <Show when={sessionId()}>
+                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        </Show>
                       }
-                    />
+                    >
+                      <ChangesHandoff />
+                      <ReviewNotesDock />
+                      <AgentComposer
+                        autofocus={
+                          canAutofocusSplitContent &&
+                          !navigatedFromJK() &&
+                          !searchTarget()
+                        }
+                      />
+                    </Show>
                   </div>
                 </div>
-              </FloatRegionOrInline>
-            </AgentChangesSplit>
-            <Show when={sessionOriginThread(session())}>
-              {(origin) => (
-                <LinkedConversationDrawer
-                  id={ORIGIN_THREAD_DRAWER_ID}
-                  parent={{ type: 'channel', id: origin().channelId }}
-                  messageId={origin().messageId}
-                />
-              )}
-            </Show>
+              </AgentComposerRegion>
+            </ChangesSplit>
           </SidePanel.Layout>
         </div>
       </StaticMarkdownContext>
@@ -165,7 +210,6 @@ export default function BlockAgent() {
   // nowhere.
   const adoptSessionId = (sessionId: string) => {
     split?.handle.adoptContentId({ type: 'agent', nextId: sessionId });
-    forgetPendingSession(blockId);
   };
 
   return (

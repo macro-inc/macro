@@ -16,6 +16,9 @@ pub enum MessageError {
     /// Invalid thread relation or anchor.
     #[error("{0}")]
     Invalid(&'static str),
+    /// A client-supplied message id is already taken.
+    #[error("message id already exists")]
+    Conflict,
     /// Persistence or delivery failed.
     #[error("message operation failed: {0}")]
     Repository(rootcause::Report),
@@ -87,6 +90,9 @@ pub struct MessagePage {
 /// Authenticated create command; attribution fields are never client controlled.
 #[derive(Debug, Clone)]
 pub struct CreateMessage {
+    /// Append to this canonical thread, creating its first message atomically when absent.
+    /// Its root identity is server-owned and overrides the first message's client id.
+    pub canonical_root_id: Option<Uuid>,
     /// Parent with verified actor access.
     pub parent: MessageParent,
     /// Verified actor.
@@ -201,6 +207,10 @@ pub enum MessageChange {
     ReactionChanged {
         /// Persisted message.
         message: Message,
+        /// Emoji whose membership changed.
+        emoji: String,
+        /// Whether the reaction was added (`true`) or removed (`false`).
+        added: bool,
     },
     /// Thread resolution, placement, or deletion changed.
     ThreadUpdated {
@@ -216,6 +226,14 @@ pub enum MessageChange {
     },
 }
 
+/// Persisted reaction state and whether this operation changed membership.
+pub struct ReactionResult {
+    /// Current message, including its reactions.
+    pub message: Message,
+    /// False for an idempotent add or remove that changed no rows.
+    pub changed: bool,
+}
+
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
 pub trait MessageRepository: Send + Sync + 'static {
     /// Whether the parent still exists and permits messaging lifecycle-wise.
@@ -223,11 +241,24 @@ pub trait MessageRepository: Send + Sync + 'static {
         &self,
         parent: &MessageParent,
     ) -> impl Future<Output = Result<bool, MessageError>> + Send;
+    /// File type of a live document, for document-specific anchor validation.
+    fn document_file_type(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, MessageError>> + Send;
     /// Read a message belonging to the specified parent, including root tombstones.
     fn get(
         &self,
         parent: &MessageParent,
         id: Uuid,
+    ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
+    /// Recover a call submission within its authorized parent and original sender.
+    /// Includes tombstones so retries never recreate deleted content.
+    fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
     ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
     /// Read thread state; returns deleted state so callers can reject writes.
     fn thread(
@@ -241,7 +272,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         root_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
-    /// Live messages before a prompt, in chronological order. Document context
+    /// Live messages before a prompt, in chronological order. Discussion context
     /// stays within the prompt's thread; channel context includes the timeline.
     fn preceding(
         &self,
@@ -274,7 +305,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         id: Uuid,
     ) -> impl Future<Output = Result<Message, MessageError>> + Send;
-    /// Add or remove the caller's reaction and return the current message.
+    /// Add or remove the caller's reaction and report whether membership changed.
     fn react(
         &self,
         parent: &MessageParent,
@@ -282,7 +313,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         user_id: &str,
         emoji: &str,
         add: bool,
-    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    ) -> impl Future<Output = Result<ReactionResult, MessageError>> + Send;
     /// Apply authorized thread resolution or Markdown anchor detachment.
     fn patch_thread(
         &self,
@@ -303,6 +334,40 @@ pub trait MessageRepository: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// The parent a live message belongs to; `None` once it is deleted. Grants
+    /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
+    fn parent_of(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<Option<MessageParent>, MessageError>> + Send {
+        async { Ok(None) }
+    }
+}
+
+/// Read-only message targets. Returned identities are not authorization grants.
+pub trait HistoricalMessageReader: Send + Sync + 'static {
+    /// At most 500 distinct IDs. Omit deleted messages, deleted roots, and invalid
+    /// parent/channel relationships. Never create threads or update activity.
+    fn lookup_historical_targets(
+        &self,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<super::historical::HistoricalMessageTarget>, MessageError>> + Send;
+}
+
+/// Silent historical persistence for trusted import compositions. Implementations
+/// atomically persist only messages, thread structure, reactions and user mentions:
+/// no activity, sharing, notifications, bots, contacts, broker or realtime effects.
+/// The caller authorizes the channel and owns source deduplication. Importers that
+/// also commit mappings/checkpoints must compose owning-crate transaction helpers
+/// instead of calling this standalone transaction boundary.
+pub trait HistoricalMessageRepository: Send + Sync + 'static {
+    /// Insert a bounded batch. Existing message IDs reject the whole batch; source
+    /// mappings must be resolved before calling. Roots may precede replies in an
+    /// earlier batch or appear anywhere in this one.
+    fn insert_historical(
+        &self,
+        batch: &super::historical::HistoricalBatch,
+    ) -> impl Future<Output = Result<(), MessageError>> + Send;
 }
 
 /// Publish committed changes, deriving delivery policy from the persisted parent.
@@ -389,4 +454,33 @@ impl MessageGroupRecipients for NoMessageGroups {
             "channel group mentions are unavailable",
         ))
     }
+}
+
+/// Identity of a CRM company or contact that hosts a discussion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmParentFacts {
+    /// The team that owns the record.
+    pub team_id: Uuid,
+    /// The company itself, or the contact's company.
+    pub company_id: Uuid,
+    /// Display name: a company's custom or directory name (else its primary
+    /// domain), a contact's name (else its email).
+    pub name: String,
+}
+
+/// Read-only CRM parent identity, implemented by the CRM domain. Returned facts
+/// grant nothing: callers verify capabilities before exposing them.
+pub trait CrmParentReader: Send + Sync + 'static {
+    /// The facts for a live CRM company or contact parent, or `None` once it has
+    /// been deleted or when the parent is not a CRM record.
+    fn read_crm_parent(
+        &self,
+        parent: &MessageParent,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<Option<CrmParentFacts>, rootcause::Report>>
+                + Send
+                + '_,
+        >,
+    >;
 }

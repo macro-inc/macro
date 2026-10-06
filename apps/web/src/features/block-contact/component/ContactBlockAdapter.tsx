@@ -1,8 +1,23 @@
-import { CrmCopyLinkButton } from '@companies/components/CrmCopyLinkButton';
+import {
+  Contact,
+  type ContactSection,
+  ContactTabs,
+} from '@app/features/crm/crm-contact';
+import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
-import { Contact } from '@contacts/Contact/Contact';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
 import { useBlockId } from '@core/block';
+import {
+  createParamsState,
+  ParamsProvider,
+} from '@core/component/ParamsProvider';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
+import { createSignal } from 'solid-js';
 
 /**
  * Legacy adapter: bridges the block/split-layout system to the standalone
@@ -11,14 +26,44 @@ import { useBlockId } from '@core/block';
  */
 export function ContactBlockAdapter() {
   const contactId = useBlockId();
+  const params = createParamsState();
+  const [section, setSection] = createSignal<ContactSection>('overview');
+  createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: params.navigate,
+  });
   return (
     <>
+      <SplitHeaderLeft>
+        <CollapsibleHeaderItem
+          id="contact-tabs"
+          priority={1}
+          containerClass="ph-no-capture min-w-0 h-full mx-2"
+        >
+          {(isCollapsed) => (
+            <div
+              class={
+                isCollapsed()
+                  ? 'min-w-0 overflow-x-auto scrollbar-hidden'
+                  : 'shrink-0'
+              }
+            >
+              <ContactTabs
+                value={section()}
+                onChange={setSection}
+                compact={isCollapsed()}
+              />
+            </div>
+          )}
+        </CollapsibleHeaderItem>
+      </SplitHeaderLeft>
       <SplitHeaderRight>
         <HeaderIsland>
           <CrmCopyLinkButton type="contact" id={contactId} />
         </HeaderIsland>
       </SplitHeaderRight>
-      <Contact contactId={contactId} />
+      <ParamsProvider state={params}>
+        <Contact contactId={contactId} section={section()} />
+      </ParamsProvider>
     </>
   );
 }

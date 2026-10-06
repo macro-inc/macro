@@ -34,27 +34,45 @@ export const TASK_GRID_COLUMNS = [
   },
 ] as const;
 
+/** The task's project, shown only while Projects is enabled. */
+export const TASK_PROJECT_COLUMN = {
+  id: 'initiative',
+  label: 'Project',
+  defId: SYSTEM_PROPERTY_IDS.PROJECT,
+  dataType: DataType.ENTITY,
+  isMultiSelect: false,
+  specificEntityType: EntityType.INITIATIVE,
+  width: 'var(--task-col-initiative, 8rem)',
+} as const;
+
 /** Width for the "Created By" column - only shown on wide containers */
 const CREATED_BY_COLUMN_WIDTH = 'var(--task-col-created-by, 7rem)';
 
-export type TaskGridColumn = (typeof TASK_GRID_COLUMNS)[number];
+export type TaskGridColumn =
+  | (typeof TASK_GRID_COLUMNS)[number]
+  | typeof TASK_PROJECT_COLUMN;
 
-/** Grid template for wide containers (includes Created By column) */
-export const TASK_GRID_TEMPLATE_COLUMNS_WIDE = `1rem minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
-  (c) => c.width
-).join(' ')} ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
+/**
+ * Wide-container grid (includes Created By). The project column exists only
+ * while Projects is enabled, so disabled lists keep their exact layout.
+ */
+export function taskGridTemplate(options: {
+  indicator: boolean;
+  project: boolean;
+}) {
+  const columns = [
+    ...(options.indicator ? [{ id: 'indicator', width: '1rem' }] : []),
+    { id: 'content', width: 'minmax(0, 100%)' },
+    ...TASK_GRID_COLUMNS,
+    ...(options.project ? [TASK_PROJECT_COLUMN] : []),
+    { id: 'createdBy', width: CREATED_BY_COLUMN_WIDTH },
+    { id: 'timestamp', width: 'var(--task-col-timestamp, 5rem)' },
+  ];
+  return {
+    'grid-template-columns': columns.map((column) => column.width).join(' '),
+    'grid-template-areas': `"${columns.map((column) => column.id).join(' ')}"`,
+  };
+}
 
-/** Wide template without the leading indicator (checkbox) column. */
-export const TASK_GRID_TEMPLATE_COLUMNS_WIDE_NO_INDICATOR = `minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
-  (c) => c.width
-).join(' ')} ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
-
-/** Grid template areas for wide containers (includes Created By column) */
-export const TASK_GRID_TEMPLATE_AREAS_WIDE = `"indicator content ${TASK_GRID_COLUMNS.map(
-  (c) => c.id
-).join(' ')} createdBy timestamp"`;
-
-/** Wide template areas without the leading indicator (checkbox) column. */
-export const TASK_GRID_TEMPLATE_AREAS_WIDE_NO_INDICATOR = `"content ${TASK_GRID_COLUMNS.map(
-  (c) => c.id
-).join(' ')} createdBy timestamp"`;
+/** Column span for full-width rows such as group headers. */
+export const taskGridColumnCount = (project: boolean) => (project ? 8 : 7);

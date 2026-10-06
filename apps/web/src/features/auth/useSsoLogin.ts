@@ -1,16 +1,16 @@
 import type { AnalyticsProvider } from '@app/lib/analytics';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { createNativeAuthSession } from '@core/auth/native-auth';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { RedirectLocation } from '@core/util/authRedirect';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
-import { getNativeMobilePlatform } from '@core/util/platform';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
-import { invoke } from '@tauri-apps/api/core';
+import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentProxy';
 
 export function useSsoLogin(opts?: { signupMode?: boolean }) {
   const analytics = useAnalytics();
@@ -35,26 +35,19 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
 
     if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
 
-    if (isNativeMobilePlatform()) {
+    // The hosted OAuth callback sets cookies on macro.com. A proxied browser
+    // needs the existing session-code handoff to establish cookies locally.
+    if (
+      isNativeMobilePlatform() ||
+      authUrl.pathname.startsWith(`${DEVELOPMENT_PROXY_PREFIX}/`)
+    ) {
       authUrl.searchParams.set('is_mobile', 'true');
     }
 
-    if (getNativeMobilePlatform() === 'ios') {
-      // iOS: use ASWebAuthenticationSession via tauri-plugin-auth
-      // so the auth flow stays in-app (required by App Store)
-      authUrl.searchParams.set('original_url', 'macro://login');
-
-      const result = await invoke<{
-        success: boolean;
-        token?: string;
-        error?: string;
-      }>('plugin:auth|authenticate', {
-        payload: {
-          authUrl: authUrl.toString(),
-          callbackScheme: 'macro',
-          ephemeralSession: true,
-        },
-      });
+    if (isNativeMobilePlatform()) {
+      const session = createNativeAuthSession('login');
+      authUrl.searchParams.set('original_url', session.callbackUrl);
+      const result = await session.authenticate(authUrl.toString());
 
       if (!result.success || !result.token) {
         // A canceled sheet is a deliberate user action, not a failure.

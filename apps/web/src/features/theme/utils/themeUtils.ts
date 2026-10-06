@@ -1,12 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
 import { batch, createEffect, on } from 'solid-js';
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '../constants';
-import { themeReactive } from '../signals/themeReactive';
 import {
   currentThemeId,
   darkModeTheme,
   lightModeTheme,
   liveThemeMode,
+  resolvedThemeColors,
+  setCommittedThemeAccent,
   setCurrentThemeId,
   setDarkModeTheme,
   setHtmlColor,
@@ -22,12 +23,9 @@ import {
   themes,
   userThemes,
 } from '../signals/themeSignals';
-import type {
-  ThemeColorTokens,
-  ThemeV2Tokens,
-  ThemeV3,
-} from '../types/themeTypes';
-import { getOklch } from './colorUtil';
+import type { ThemeColorTokens, ThemeV3 } from '../types/themeTypes';
+import { formatOklch } from './colorUtil';
+import { resolveThemeColors } from './resolvedThemeColors';
 import {
   isStructuralThemeToken,
   normalizeThemeColorTokens,
@@ -76,66 +74,6 @@ async function _importTheme(): Promise<void> {
 
 let renderedColorTokenKeys = new Set<string>();
 
-/** Old non-CSS integrations still consume a/b/c numeric signals. V3 does not
- * store those values; this bridge derives them from the rendered token graph. */
-const LEGACY_TOKEN_MAP = {
-  a0: 'accent',
-  a1: 'orange',
-  a2: 'lime',
-  a3: 'teal',
-  a4: 'blue',
-  b0: 'surface-0',
-  b1: 'surface-1',
-  b2: 'surface-2',
-  b3: 'edge-muted',
-  b4: 'edge',
-  c0: 'content-0',
-  c1: 'content-1',
-  c2: 'content-2',
-  c3: 'content-3',
-  c4: 'content-4',
-} as const satisfies Record<keyof ThemeV2Tokens, string>;
-
-function resolvedTokenOklch(
-  token: string
-): { l: number; c: number; h: number } | null {
-  const authored = themeColorTokens()[token];
-  if (authored) {
-    try {
-      return getOklch(authored);
-    } catch {
-      // var() and color-mix() values need the browser to resolve the graph.
-    }
-  }
-  if (typeof document === 'undefined') return null;
-
-  const probe = document.createElement('span');
-  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none';
-  probe.style.color = `var(--color-${token})`;
-  document.documentElement.append(probe);
-  const resolved = getComputedStyle(probe).color;
-  probe.remove();
-
-  try {
-    return getOklch(resolved);
-  } catch {
-    return null;
-  }
-}
-
-function syncLegacyCompatibilityTokens(): void {
-  batch(() => {
-    for (const [legacyToken, colorToken] of Object.entries(LEGACY_TOKEN_MAP)) {
-      const color = resolvedTokenOklch(colorToken);
-      if (!color) continue;
-      const target = themeReactive[legacyToken as keyof ThemeV2Tokens];
-      target.l[1](color.l);
-      target.c[1](color.c);
-      target.h[1](color.h);
-    }
-  });
-}
-
 function renderThemeColorToken(token: string, value: string): void {
   const mapped = themeTokenCssVar(token, value);
 
@@ -158,6 +96,8 @@ export function previewLiveThemeColorToken(token: string, value: string): void {
 /** Writes all VNext authored tokens to the root and updates editor state. */
 export function setLiveThemeColorTokens(tokens: ThemeColorTokens): void {
   const normalizedTokens = normalizeThemeColorTokens(tokens, liveThemeMode());
+  // Compute before invalidating styles on the live document.
+  const colors = resolveThemeColors(normalizedTokens, liveThemeMode());
   for (const key of renderedColorTokenKeys) {
     if (!(key in normalizedTokens)) {
       document.documentElement.style.removeProperty(`--color-${key}`);
@@ -168,17 +108,30 @@ export function setLiveThemeColorTokens(tokens: ThemeColorTokens): void {
     renderThemeColorToken(key, value);
   }
   renderedColorTokenKeys = new Set(Object.keys(normalizedTokens));
+  const root = document.documentElement;
+  root.dataset.themeLight = String(
+    colors['surface-0'].l > colors['content-0'].l
+  );
+  if (!normalizedTokens['accent-contrast']) {
+    root.style.setProperty(
+      '--color-accent-contrast',
+      formatOklch({
+        ...colors['content-0'],
+        l: colors.accent.l < 0.72 ? 0.97 : 0.2,
+      })
+    );
+  }
+  root.style.setProperty(
+    '--theme-comment-ink-lightness',
+    String(colors['content-1'].l)
+  );
   setThemeColorTokens(normalizedTokens);
-  syncLegacyCompatibilityTokens();
 }
 
 /** Updates one authored token immediately; persistence still happens on save. */
 export function updateLiveThemeColorToken(token: string, value: string): void {
   const next = { ...themeColorTokens(), [token]: value };
-  renderThemeColorToken(token, value);
-  renderedColorTokenKeys.add(token);
-  setThemeColorTokens(next);
-  syncLegacyCompatibilityTokens();
+  setLiveThemeColorTokens(next);
   setIsThemeSaved(false);
 }
 
@@ -188,6 +141,7 @@ let previewSnapshot: {
   colorTokens: ThemeColorTokens;
   mode: 'light' | 'dark';
 } | null = null;
+let previewEndVersion = 0;
 
 export function applyTheme(id: string): void {
   let theme = themes().find((t) => t.id === id);
@@ -200,13 +154,12 @@ export function applyTheme(id: string): void {
   // clearThemePreview doesn't revert the commit.
   previewSnapshot = null;
 
-  setLiveThemeMode(theme.mode);
-  setLiveThemeColorTokens(theme.colorTokens);
-  queueMicrotask(() => {
-    /* scuffed af */
-    setIsThemeSaved(true);
-    syncHtmlColor();
+  batch(() => {
+    setLiveThemeMode(theme.mode);
+    setLiveThemeColorTokens(theme.colorTokens);
   });
+  setIsThemeSaved(true);
+  syncCommittedColors();
 }
 
 /** Temporarily shows a theme (e.g. while it's hovered/highlighted in a picker)
@@ -219,6 +172,7 @@ export function previewTheme(id: string): void {
   if (!theme) {
     return;
   }
+  previewEndVersion++;
   if (!previewSnapshot) {
     // Snapshot the live tokens (not the selected theme id) so ending the
     // preview restores unsaved in-editor edits too.
@@ -227,19 +181,34 @@ export function previewTheme(id: string): void {
       mode: liveThemeMode(),
     };
   }
-  setLiveThemeMode(theme.mode);
-  setLiveThemeColorTokens(theme.colorTokens);
+  batch(() => {
+    setLiveThemeMode(theme.mode);
+    setLiveThemeColorTokens(theme.colorTokens);
+  });
+}
+
+/** A highlight handoff ends the old row before starting the next. Defer only
+ * the rollback so a new preview in the same turn retains the original snapshot. */
+export function scheduleThemePreviewEnd(): void {
+  const version = ++previewEndVersion;
+  queueMicrotask(() => {
+    if (version === previewEndVersion) clearThemePreview();
+  });
 }
 
 /** Ends an active theme preview, restoring the pre-preview tokens. No-op when
  *  nothing is being previewed. */
 export function clearThemePreview(): void {
+  previewEndVersion++;
   if (!previewSnapshot) {
     return;
   }
-  setLiveThemeMode(previewSnapshot.mode);
-  setLiveThemeColorTokens(previewSnapshot.colorTokens);
+  const snapshot = previewSnapshot;
   previewSnapshot = null;
+  batch(() => {
+    setLiveThemeMode(snapshot.mode);
+    setLiveThemeColorTokens(snapshot.colorTokens);
+  });
 }
 
 /** Resolves the theme id that should be live for the current "Active theme"
@@ -263,11 +232,18 @@ export function systemThemeEffect(): void {
   );
 }
 
-/** Persists the live background color, used for the pre-hydration first paint. */
-function syncHtmlColor(): void {
-  const color = resolvedTokenOklch('surface-0');
-  if (!color) return;
-  setHtmlColor({ color: `oklch(${color.l} ${color.c} ${color.h}deg)` });
+/** Only committed colors affect browser/notification icons and first paint. */
+function syncCommittedColors(): void {
+  const colors = resolvedThemeColors();
+  // index.html reads these before any JS loads to paint the boot shell.
+  setHtmlColor({
+    color: formatOklch(colors.page),
+    panel: formatOklch(colors.panel),
+    ink: formatOklch(colors.ink),
+    muted: formatOklch(colors['ink-muted']),
+    input: formatOklch(colors.input),
+  });
+  setCommittedThemeAccent(formatOklch(colors.accent));
 }
 
 export function saveTheme(name: string): void {
@@ -282,6 +258,7 @@ export function saveTheme(name: string): void {
   setUserThemes([...userThemes(), newTheme]);
   setCurrentThemeId(id);
   setIsThemeSaved(true);
+  syncCommittedColors();
 }
 
 /** Save the live V3 registry back onto an existing custom theme. */
@@ -300,6 +277,7 @@ export function updateTheme(id: string, name: string): void {
   );
   setCurrentThemeId(id);
   setIsThemeSaved(true);
+  syncCommittedColors();
 }
 
 export function deleteTheme(id: string): void {
@@ -360,11 +338,9 @@ export function applySystemTheme(): void {
 
 /** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */
 export function ensureMinimalThemeContrast() {
-  const surface = resolvedTokenOklch('surface-0');
-  const content = resolvedTokenOklch('content-0');
-  if (!surface || !content) {
-    return;
-  }
+  const colors = resolvedThemeColors();
+  const surface = colors['surface-0'];
+  const content = colors['content-0'];
   const lowContrastTheme = Math.abs(content.l - surface.l) < 0.2;
   if (lowContrastTheme) {
     applyTheme(DEFAULT_DARK_THEME);

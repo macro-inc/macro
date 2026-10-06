@@ -1,0 +1,201 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 256
+expression: machine.metadata()
+input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
+---
+SessionMetadata {
+    harness: OpenCode,
+    model: Some(
+        "openai/gpt-5.6-terra",
+    ),
+    supported_models: [
+        ModelOption {
+            id: "openai/gpt-5.4",
+            name: "OpenAI/GPT-5.4",
+            description: None,
+            group: None,
+        },
+        ModelOption {
+            id: "openai/gpt-5.5",
+            name: "OpenAI/GPT-5.5",
+            description: None,
+            group: None,
+        },
+        ModelOption {
+            id: "openai/gpt-5.6-terra",
+            name: "OpenAI/GPT-5.6 Terra",
+            description: None,
+            group: None,
+        },
+        ModelOption {
+            id: "openai/gpt-5.6-terra-fast",
+            name: "OpenAI/GPT-5.6 Terra Fast",
+            description: None,
+            group: None,
+        },
+    ],
+    config_options: [
+        SessionConfigOption {
+            id: "model",
+            name: "Model",
+            description: None,
+            category: Some(
+                "model",
+            ),
+            kind: Select {
+                current_value: "openai/gpt-5.6-terra",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "openai/gpt-5.4",
+                        name: "OpenAI/GPT-5.4",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "openai/gpt-5.5",
+                        name: "OpenAI/GPT-5.5",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "openai/gpt-5.6-terra",
+                        name: "OpenAI/GPT-5.6 Terra",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "openai/gpt-5.6-terra-fast",
+                        name: "OpenAI/GPT-5.6 Terra Fast",
+                        description: None,
+                        group: None,
+                    },
+                ],
+            },
+        },
+        SessionConfigOption {
+            id: "effort",
+            name: "Effort",
+            description: Some(
+                "Available effort levels for this model",
+            ),
+            category: Some(
+                "thought_level",
+            ),
+            kind: Select {
+                current_value: "none",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "none",
+                        name: "None",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "low",
+                        name: "Low",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "medium",
+                        name: "Medium",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "high",
+                        name: "High",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "xhigh",
+                        name: "Xhigh",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "max",
+                        name: "Max",
+                        description: None,
+                        group: None,
+                    },
+                ],
+            },
+        },
+        SessionConfigOption {
+            id: "mode",
+            name: "Session Mode",
+            description: None,
+            category: Some(
+                "mode",
+            ),
+            kind: Select {
+                current_value: "build",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "build",
+                        name: "build",
+                        description: Some(
+                            "Everyday primary agent for implementation, debugging, and moderate refactors.",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "fast",
+                        name: "fast",
+                        description: Some(
+                            "Performs small, well-specified, mechanical code changes quickly.",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "hard",
+                        name: "hard",
+                        description: Some(
+                            "Architecture, difficult bugs, large refactors, and reviewing complex plans.",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "plan",
+                        name: "plan",
+                        description: Some(
+                            "Plan mode. Disallows all edit tools.",
+                        ),
+                        group: None,
+                    },
+                ],
+            },
+        },
+    ],
+    title: None,
+    available_commands: [
+        AvailableCommand {
+            name: "dump-schema",
+            description: "Dump clean Postgres schema to a file and copy path to clipboard.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "init",
+            description: "guided AGENTS.md setup",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "qc",
+            description: "Quality gate. 5 parallel agents review changes. All must pass.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "review",
+            description: "review changes [commit|branch|pr], defaults to uncommitted",
+            input_hint: None,
+        },
+    ],
+    status: Some(
+        "acp_ready",
+    ),
+    pending_interactions: [],
+    turn: Idle,
+}

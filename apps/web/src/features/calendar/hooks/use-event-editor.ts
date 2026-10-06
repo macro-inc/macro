@@ -1,3 +1,4 @@
+import { getMeetingShareToken, getMeetingUrl } from '@channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
 import { recipientEntityMapper, useContacts } from '@core/user';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
@@ -5,9 +6,16 @@ import {
   useCreateCalendarEventMutation,
   useUpdateCalendarEventMutation,
 } from '@queries/calendar/mutations';
-import type { CalendarUpdateScope } from '@service-email/client';
-import { type Accessor, createMemo } from 'solid-js';
 import {
+  fetchMeeting,
+  useCreateMeetingMutation,
+  useUpdateMeetingMutation,
+} from '@queries/call/meetings';
+import type { CalendarUpdateScope } from '@service-email/client';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
+import {
+  buildEventTime,
   calendarEventToEditorInitialValues,
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
@@ -25,6 +33,11 @@ import {
   guestListChanged,
   viewerCanEditGuests,
 } from '../utils/event-guest-editing';
+import {
+  attachCalendarMacroCall,
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '../utils/macro-call-link';
 
 const EDIT_DISABLED_FIELDS = {
   calendar: true,
@@ -40,9 +53,33 @@ function editsPrimaryCopy(event: CalendarEvent) {
   return reminderCalendarIdOf(event) === event.calendarId;
 }
 
+function hasTimeChanged(
+  event: CalendarEvent,
+  time: EventEditorSubmitValues['time']
+) {
+  // Compare at the editor's precision, which omits seconds. An unchanged
+  // occurrence must not replace the series start or its provider time zone.
+  const initial = buildEventTime(calendarEventToEditorInitialValues(event));
+  return match([initial, time])
+    .with(
+      [{ kind: 'timed' }, { kind: 'timed' }],
+      ([before, after]) =>
+        new Date(before.startsAt).getTime() !==
+          new Date(after.startsAt).getTime() ||
+        new Date(before.endsAt).getTime() !== new Date(after.endsAt).getTime()
+    )
+    .with(
+      [{ kind: 'allDay' }, { kind: 'allDay' }],
+      ([before, after]) =>
+        before.startDate !== after.startDate || before.endDate !== after.endDate
+    )
+    .otherwise(() => true);
+}
+
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
+  macroCallsEnabled: Accessor<boolean>;
 }
 
 /** Shared create/edit query and mutation orchestration for any editor shell. */
@@ -99,31 +136,176 @@ export function useEventEditor(props: UseEventEditorProps) {
     }));
   });
 
-  const create = useCreateCalendarEventMutation({
-    onSuccess: props.onSaved,
-    onError: (error) => {
-      toast.failure('Failed to create event', { subtext: error.message });
-    },
-  });
-  const update = useUpdateCalendarEventMutation({
-    onSuccess: props.onSaved,
-    onError: (error) => {
-      toast.failure('Failed to update event', { subtext: error.message });
-    },
-  });
+  const updateMeeting = useUpdateMeetingMutation();
+  const create = useCreateCalendarEventMutation();
+  const update = useUpdateCalendarEventMutation();
 
-  const pending = () => create.isPending || update.isPending;
+  const createMeeting = useCreateMeetingMutation();
+  const [pending, setPending] = createSignal(false);
+  const [saveError, setSaveError] = createSignal<string>();
+  // If adding the link fails, retry the same saved event and meeting.
+  const [createdEvent, setCreatedEvent] = createSignal<{
+    id: string;
+    calendarId?: string;
+  }>();
+  const [createdMeeting, setCreatedMeeting] = createSignal<{
+    url: string;
+    shareToken: string;
+  }>();
+  const meetingSchedule = (values: EventEditorSubmitValues) =>
+    values.time.kind === 'timed'
+      ? {
+          scheduledStart: values.time.startsAt,
+          scheduledEnd: values.time.endsAt,
+        }
+      : {
+          scheduledStart: null,
+          scheduledEnd: null,
+        };
 
-  const save = (
+  const createScheduledMeeting = async (values: EventEditorSubmitValues) => {
+    const existing = createdMeeting();
+    if (existing) {
+      await syncScheduledMeeting(existing.shareToken, values);
+      return existing.url;
+    }
+    const meeting = await createMeeting.mutateAsync({
+      title: values.title,
+      ...meetingSchedule(values),
+    });
+    const url = getMeetingUrl(meeting.shareToken);
+    setCreatedMeeting({ url, shareToken: meeting.shareToken });
+    return url;
+  };
+
+  const syncScheduledMeeting = async (
+    shareToken: string,
+    values: EventEditorSubmitValues
+  ) => {
+    const meeting = await fetchMeeting(shareToken);
+    if (!props.macroCallsEnabled()) return;
+    await updateMeeting.mutateAsync({
+      meetingId: meeting.id,
+      ...(values.time.kind === 'allDay' ? { clearSchedule: true } : {}),
+      title: values.title,
+      ...meetingSchedule(values),
+    });
+  };
+
+  const save = async (
     values: EventEditorSubmitValues,
     scope?: CalendarUpdateScope
   ) => {
     if (pending()) return;
+    setPending(true);
+    setSaveError(undefined);
 
     const event = props.event();
-    if (event) {
+    const existingMeetingUrl = event ? calendarMacroCallUrl(event) : undefined;
+    const cleanContent = removeCalendarMacroCall(values, existingMeetingUrl);
+    const wantsMacroCall =
+      values.conferenceChoice === 'macro' &&
+      !values.outOfOffice &&
+      event?.eventType !== 'out_of_office';
+    const needsCall = () => props.macroCallsEnabled() && wantsMacroCall;
+    const canManageCall =
+      !event ||
+      (!event.isReadOnly &&
+        editsPrimaryCopy(event) &&
+        viewerCanEditGuests(event));
+    // Older events can carry both a generated Macro link and provider
+    // conferencing. Use the saved provider state when clearing either choice.
+    const conference =
+      values.conference ??
+      (canManageCall &&
+      !values.outOfOffice &&
+      event?.eventType !== 'out_of_office' &&
+      event?.conferenceUrl &&
+      (values.conferenceChoice === 'macro' ||
+        values.conferenceChoice === 'none')
+        ? 'none'
+        : undefined);
+    let calendarSaved = false;
+
+    try {
+      if (!event) {
+        const eventValues = {
+          title: values.title,
+          time: values.time,
+          calendarId: values.calendarId,
+          recurrenceLines: values.recurrenceLines ?? [],
+          location:
+            cleanContent.location === '' ? undefined : cleanContent.location,
+          description:
+            cleanContent.description === ''
+              ? undefined
+              : cleanContent.description,
+          attendees: values.guestEmails.map((email) => ({ email })),
+          ...(conference ? { conference } : {}),
+          ...(values.reminders ? { reminders: values.reminders } : {}),
+          ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
+        };
+        let created = createdEvent();
+        if (created) {
+          await update.mutateAsync({
+            eventId: created.id,
+            calendarId: created.calendarId,
+            patch: {
+              ...eventValues,
+              location: cleanContent.location,
+              description: cleanContent.description,
+            },
+          });
+        } else {
+          const result = await create.mutateAsync(eventValues);
+          created = {
+            id: result.id,
+            calendarId: values.calendarId ?? result.calendarId ?? undefined,
+          };
+          setCreatedEvent(created);
+        }
+        calendarSaved = true;
+
+        if (needsCall()) {
+          const meetingUrl = await createScheduledMeeting(values);
+          const linkedContent = attachCalendarMacroCall(
+            cleanContent,
+            meetingUrl
+          );
+          if (needsCall())
+            await update.mutateAsync({
+              eventId: created.id,
+              calendarId: created.calendarId ?? values.calendarId,
+              patch: {
+                location: linkedContent.location,
+                description: linkedContent.description,
+              },
+            });
+        }
+        props.onSaved();
+        return;
+      }
+
       const effectiveScope: CalendarUpdateScope = scope ?? 'all';
       const targetsOneOccurrence = effectiveScope === 'this_event';
+      const initialContent = removeCalendarMacroCall(event, existingMeetingUrl);
+      const content =
+        event.eventType === 'out_of_office' ||
+        (existingMeetingUrl &&
+          wantsMacroCall &&
+          cleanContent.location === initialContent.location &&
+          cleanContent.description === initialContent.description)
+          ? {
+              location: event.location ?? '',
+              description: event.description ?? '',
+            }
+          : existingMeetingUrl && wantsMacroCall
+            ? attachCalendarMacroCall(
+                cleanContent,
+                existingMeetingUrl,
+                existingMeetingUrl
+              )
+            : cleanContent;
 
       // A single occurrence has no recurrence of its own, and the provider
       // rejects a recurrence-carrying patch scoped to one event, so recurrence
@@ -136,7 +318,7 @@ export function useEventEditor(props: UseEventEditorProps) {
         values.recurrenceLines !== undefined &&
         values.recurrenceLines.join('\n') !== initialLines().join('\n');
 
-      update.mutate({
+      const updateArgs = {
         eventId: event.eventId,
         calendarId: event.calendarId,
         scope: effectiveScope,
@@ -145,10 +327,14 @@ export function useEventEditor(props: UseEventEditorProps) {
           : undefined,
         occurrenceKey: targetsOneOccurrence ? event.occurrenceKey : undefined,
         patch: {
-          title: values.title,
-          time: values.time,
-          location: values.location,
-          description: values.description,
+          ...(values.title !== event.title ? { title: values.title } : {}),
+          ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
+          ...(content.location !== (event.location ?? '')
+            ? { location: content.location }
+            : {}),
+          ...(content.description !== (event.description ?? '')
+            ? { description: content.description }
+            : {}),
           ...(recurrenceChanged
             ? { recurrenceLines: values.recurrenceLines }
             : {}),
@@ -157,26 +343,52 @@ export function useEventEditor(props: UseEventEditorProps) {
                 attendees: values.guestEmails.map((email) => ({ email })),
               }
             : {}),
-          ...(values.conference ? { conference: values.conference } : {}),
+          ...(conference ? { conference } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
         },
-      });
-      return;
-    }
+      };
+      if (Object.keys(updateArgs.patch).length > 0) {
+        await update.mutateAsync(updateArgs);
+      }
+      calendarSaved = true;
 
-    create.mutate({
-      title: values.title,
-      time: values.time,
-      calendarId: values.calendarId,
-      recurrenceLines: values.recurrenceLines ?? [],
-      location: values.location === '' ? undefined : values.location,
-      description: values.description === '' ? undefined : values.description,
-      attendees: values.guestEmails.map((email) => ({ email })),
-      ...(values.conference ? { conference: values.conference } : {}),
-      ...(values.reminders ? { reminders: values.reminders } : {}),
-      ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
-    });
+      if (needsCall() && canManageCall && !existingMeetingUrl) {
+        const meetingUrl = await createScheduledMeeting(values);
+        const linkedContent = attachCalendarMacroCall(cleanContent, meetingUrl);
+        if (needsCall())
+          await update.mutateAsync({
+            ...updateArgs,
+            patch: {
+              location: linkedContent.location,
+              description: linkedContent.description,
+            },
+          });
+      } else if (needsCall() && canManageCall && existingMeetingUrl) {
+        const shareToken = getMeetingShareToken(existingMeetingUrl);
+        if (shareToken) await syncScheduledMeeting(shareToken, values);
+      }
+      props.onSaved();
+    } catch (error) {
+      const subtext = error instanceof Error ? error.message : undefined;
+      if (calendarSaved) {
+        if (existingMeetingUrl) {
+          toast.alert('Event saved, but call details could not be updated');
+          props.onSaved();
+        } else {
+          setSaveError(
+            'Your event is saved, but its call link could not be added. Save again to retry.'
+          );
+        }
+      } else {
+        toast.failure(
+          event ? 'Failed to update event' : 'Failed to create event',
+          { subtext }
+        );
+      }
+    } finally {
+      setPending(false);
+    }
   };
 
   const showRecurringEditNotice = () =>
@@ -186,12 +398,12 @@ export function useEventEditor(props: UseEventEditorProps) {
   const disabledFields = createMemo<EventEditorDisabledFields | undefined>(
     () => {
       const event = props.event();
-      if (!event) return undefined;
+      if (!event) return createdEvent() ? EDIT_DISABLED_FIELDS : undefined;
       const editsOtherCopy = !editsPrimaryCopy(event);
       return {
         ...EDIT_DISABLED_FIELDS,
         guests: editsOtherCopy || !viewerCanEditGuests(event),
-        conference: editsOtherCopy,
+        conference: editsOtherCopy || !viewerCanEditGuests(event),
         reminders: editsOtherCopy,
       };
     }
@@ -204,6 +416,8 @@ export function useEventEditor(props: UseEventEditorProps) {
     guestOptions,
     showRecurringEditNotice,
     pending,
+    saveError,
+    eventCreated: () => createdEvent() !== undefined,
     save,
   };
 }

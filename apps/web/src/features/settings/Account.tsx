@@ -233,7 +233,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 as="div"
                 tabindex="0"
                 aria-label="Edit profile picture"
-                class="group block size-full rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="group block size-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <div class="size-full overflow-hidden rounded-full">
                   <UserIcon
@@ -286,7 +286,7 @@ function ProfilePictureRow(props: { userId: string }) {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="outline"
+                variant="ghost"
                 depth={3}
                 disabled={isRemoving()}
                 onClick={() => setShowRemoveConfirmModal(false)}
@@ -294,7 +294,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 Cancel
               </Button>
               <Button
-                variant="danger"
+                variant="strong"
                 depth={3}
                 disabled={isRemoving()}
                 onClick={handleRemove}
@@ -330,8 +330,7 @@ export function Account() {
   const [isDeleting, setIsDeleting] = createSignal(false);
 
   // The shared own-name cache entry (the one saveUserName invalidates), so
-  // this panel and other readers (e.g. the Getting Started checklist) can't
-  // drift.
+  // this panel and other readers can't drift.
   const userName = useOwnUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined
@@ -407,7 +406,7 @@ export function Account() {
 
   return (
     <SettingsPage title="Account">
-      <SettingsSection>
+      <SettingsSection title="Profile">
         <SettingsCard>
           <Show when={ENABLE_PROFILE_PICTURES}>
             <Show when={userId()} keyed>
@@ -571,7 +570,7 @@ export function Account() {
             </div>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="outline"
+                variant="ghost"
                 depth={3}
                 onClick={() => {
                   setShowDeleteModal(false);
@@ -581,7 +580,7 @@ export function Account() {
                 Cancel
               </Button>
               <Button
-                variant="danger"
+                variant="strong"
                 depth={3}
                 onClick={() => {
                   setShowDeleteConfirmModal(true);
@@ -616,7 +615,7 @@ export function Account() {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="outline"
+                variant="ghost"
                 depth={3}
                 disabled={isDeleting()}
                 onClick={() => {
@@ -627,7 +626,7 @@ export function Account() {
                 Cancel
               </Button>
               <Button
-                variant="danger"
+                variant="strong"
                 depth={3}
                 disabled={isDeleting()}
                 onClick={deleteAccountHandler}
@@ -645,13 +644,8 @@ export function Account() {
   );
 }
 
-function Row(props: { label: string; children?: any }) {
-  return (
-    <div class="bg-surface flex items-center justify-between gap-4 min-h-15.25 px-6 py-3">
-      <div class="text-sm">{props.label}</div>
-      <div class="text-right">{props.children}</div>
-    </div>
-  );
+function Row(props: { label: string; children?: JSX.Element }) {
+  return <SettingsRow label={props.label}>{props.children}</SettingsRow>;
 }
 
 function NotificationToggle() {

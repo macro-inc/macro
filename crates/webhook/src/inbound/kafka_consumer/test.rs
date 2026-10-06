@@ -39,6 +39,7 @@ fn decode_message(topic: &str, payload: &[u8]) -> Result<DeclaredMacroEvent, Eve
 
 fn document_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        sub_type: None,
         document_id: "doc_1".to_string(),
         actor_user_id: None,
         actor: None,
@@ -67,6 +68,7 @@ fn subscribes_to_all_ingestion_topics() {
         [
             "macro.documents",
             "macro.channels",
+            "macro.messages",
             "macro.webhooks",
             "macro.agent_sessions",
             "macro.agent_session_lifecycle"
@@ -174,6 +176,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_channel_event(
         &self,
         _event: Event<ChannelTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        Ok(())
+    }
+
+    async fn ingest_message_event(
+        &self,
+        _event: Event<messages::outbound::broker::MessageTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         Ok(())
     }

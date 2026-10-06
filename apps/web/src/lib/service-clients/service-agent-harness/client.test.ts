@@ -4,6 +4,7 @@ import { agentHarnessServiceClient } from './client';
 
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'agent-harness': 'https://harness.example.com' },
+  SYNC_SERVICE_HOSTS: { worker: 'https://sync.example.com' },
 }));
 vi.mock('@core/util/fetchWithToken', () => ({ fetchWithToken: vi.fn() }));
 

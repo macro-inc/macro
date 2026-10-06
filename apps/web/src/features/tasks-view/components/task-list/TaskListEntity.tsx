@@ -51,6 +51,8 @@ type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   entity: TaskEntityWithProperties;
   rowId?: string;
   showUnrollNotifications?: boolean;
+  /** Show the Project column (Projects enabled). */
+  showProject?: boolean;
 };
 
 function MaybeEntityRow(props: {
@@ -126,6 +128,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
     setSnippetContainerRef,
     chars: chars(),
     onProjectClick: props.onProjectClick,
+    showProject: props.showProject,
   });
 
   const draggable = createEntityDraggable({

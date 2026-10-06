@@ -16,12 +16,12 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
 import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
 import { type CodeBlockMode, CodeContent } from './CodeContent';
 import { CodeMarkdown } from './CodeMarkdown';
-import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
 const UploadedWorkbook = lazy(
@@ -57,15 +57,15 @@ export default function BlockCode() {
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
         <div class="size-full select-none overscroll-none overflow-hidden flex flex-col items-end relative">
-          <ModalsProvider>
-            <SidePanel.Layout defaultOpen={false}>
-              <FileSidePanelSections />
-              <div class="flex size-full min-w-0 flex-col items-end overflow-hidden">
-                <TopBar
-                  isHtmlFile={isHtmlFile()}
-                  mode={mode()}
-                  onModeChange={setMode}
-                />
+          <SidePanel.Layout defaultOpen={false} floating>
+            <FileSidePanelSections />
+            <div class="flex size-full min-w-0 flex-col items-end overflow-hidden">
+              <TopBar
+                isHtmlFile={isHtmlFile()}
+                mode={mode()}
+                onModeChange={setMode}
+              />
+              <div class="relative min-h-0 min-w-0 w-full flex-1 overflow-hidden">
                 <Show
                   when={spreadsheet()}
                   fallback={
@@ -79,17 +79,13 @@ export default function BlockCode() {
                     />
                   }
                 >
-                  <Suspense
-                    fallback={
-                      <div class="p-6 text-ink-muted">Opening spreadsheet…</div>
-                    }
-                  >
+                  <Suspense fallback={<SpreadsheetSkeleton />}>
                     <UploadedWorkbook />
                   </Suspense>
                 </Show>
               </div>
-            </SidePanel.Layout>
-          </ModalsProvider>
+            </div>
+          </SidePanel.Layout>
         </div>
       </Show>
     </DocumentBlockContainer>

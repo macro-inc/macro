@@ -16,8 +16,8 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
 
     let mut total_flagged = 0u64;
     for link_id in link_ids {
-        // Mirrors the CalendarOnly predicate in the email crate's dynamic
-        // query builder and email_db_client::threads::update::sync_thread_calendar_flag.
+        // Mirrors the CalendarOnly predicate in the email crate's dynamic query
+        // builder. Saved invitations set the flag when they are stored.
         let flagged = sqlx::query!(
             r#"
             UPDATE email_threads t

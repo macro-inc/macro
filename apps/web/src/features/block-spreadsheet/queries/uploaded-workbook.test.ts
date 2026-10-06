@@ -44,8 +44,8 @@ describe('uploaded workbook retrieval', () => {
     expect(excel).not.toHaveBeenCalled();
   });
   it.each([
-    ['xlsx', 5 * 1024 * 1024 + 1],
-    ['csv', 1_000_001],
+    ['xlsx', 50 * 1024 * 1024 + 1],
+    ['csv', 20 * 1024 * 1024 + 1],
   ] as const)(
     'rejects declared oversize %s before buffering the response',
     async (type, size) => {
@@ -65,8 +65,8 @@ describe('uploaded workbook retrieval', () => {
     const cancel = vi.fn();
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(new Uint8Array(700_000));
-        controller.enqueue(new Uint8Array(700_000));
+        controller.enqueue(new Uint8Array(15_000_000));
+        controller.enqueue(new Uint8Array(15_000_000));
       },
       cancel,
     });

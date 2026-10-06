@@ -72,6 +72,7 @@ export type {
   ConfirmDialogProps,
 } from './components/ConfirmDialog';
 export { ConfirmDialog, confirmDialog } from './components/ConfirmDialog';
+export { CopyButton, type CopyButtonProps } from './components/CopyButton';
 export type { DeleteDialogProps } from './components/DeleteDialog';
 export { DeleteDialog } from './components/DeleteDialog';
 export type { DialogProps } from './components/Dialog';
@@ -82,6 +83,7 @@ export type {
   EmptyStatePanelProps,
 } from './components/EmptyStatePanel';
 export { EmptyStatePanel } from './components/EmptyStatePanel';
+export { EntityComposer } from './components/EntityComposer';
 export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
 export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
 export { Hotkey } from './components/Hotkey';
@@ -124,6 +126,7 @@ export type {
   InputGroupVariantProps,
 } from './components/InputGroup';
 export { InputGroup, inputGroupVariants } from './components/InputGroup';
+export { InvertUtil } from './components/InvertUtil';
 export { Item, type ItemProps } from './components/Item';
 export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';

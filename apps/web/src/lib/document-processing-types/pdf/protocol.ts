@@ -1,4 +1,4 @@
-import type { Comment } from '@service-storage/generated/schemas/comment';
+import type { Message } from '@service-storage/messages';
 import { z } from 'zod';
 
 const numberSetSchema = z
@@ -21,12 +21,15 @@ export enum PdfShapeType {
   SQUARE = 'square',
 }
 
+/** A PDF comment thread: a message root and its loaded reply preview. */
 export type PdfThreadPayload = {
-  threadId: number;
-  rootId: number;
+  threadId: number | string;
+  rootId: number | string;
   anchorId: string;
   page: number;
-  comments: Comment[];
+  comments: Message[];
+  /** Total live replies of a message thread; comments holds only the loaded preview. */
+  replyCount?: number;
   isResolved: boolean;
 };
 

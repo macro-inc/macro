@@ -5,21 +5,28 @@ import {
 } from '@block-md/component/MarkdownDocument';
 import { ModalsProvider } from '@block-md/component/ModalsProvider';
 import { MarkdownSidePanelSections } from '@block-md/component/sidepanel/MarkdownSidePanelSections';
-import { OldOverlay } from '@block-md/history/OldOverlay';
+import { createMarkdownDocumentState } from '@block-md/context/markdown-document-state';
+import { createMarkdownRouteNavigation } from '@block-md/primitives/create-markdown-route-navigation';
 import {
   loadMarkdownDocument,
   type MarkdownDocumentData,
 } from '@block-md/queries/markdown-document';
 import { loadMarkdownCachedSnapshot } from '@block-md/queries/markdown-document-operations';
 import type { MarkdownDocumentKind } from '@block-md/types';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
+import { createMethodRegistration } from '@core/orchestrator';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
 import {
+  createComputed,
   createResource,
   ErrorBoundary,
   type JSX,
@@ -36,8 +43,6 @@ export type MarkdownDetailProps = {
   documentId: string;
   kind?: MarkdownDocumentKind;
   fallbackName?: string;
-  shareOpen?: boolean;
-  onShareOpenChange?: (open: boolean) => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 };
 
@@ -80,33 +85,40 @@ function MarkdownDetailContent(props: {
   kind: MarkdownDocumentKind;
   fallbackName: string;
   data: MarkdownDocumentData;
-  shareOpen?: boolean;
-  onShareOpenChange?: (open: boolean) => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
+  const orchestrator = useGlobalBlockOrchestrator();
+  const state = createMarkdownDocumentState();
+  createMarkdownRouteNavigation(() => props.documentId, state.params.navigate);
+
+  // Mention chips and notifications aim an open document at a comment or node
+  // through its block handle; without one the click only activates the view.
+  createComputed(() => {
+    const handle = orchestrator.registerBlockHandle('md', props.documentId);
+    createMethodRegistration(() => handle, {
+      goToLocationFromParams: state.params.navigate,
+    });
+  });
 
   return (
     <MarkdownDocument
       documentId={props.documentId}
       kind={props.kind}
+      state={state}
       documentSource={{ type: 'sync', source: props.data.source }}
       permissions={props.data.permissions}
       persistedName={props.data.metadata.documentName}
       fallbackName={props.fallbackName}
     >
-      <ModalsProvider
-        shareOpen={props.shareOpen}
-        onShareOpenChange={props.onShareOpenChange}
-      >
-        <OldOverlay />
+      <ModalsProvider>
         {props.children?.({
           data: props.data,
           documentMetadata: props.data.metadata,
           userAccessLevel: props.data.userAccessLevel,
         })}
-        <SidePanel.Layout headerToggle={false}>
+        <SidePanel.Layout headerToggle={false} floating>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
           </Show>
@@ -170,10 +182,13 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
               <MarkdownDetailContent
                 documentId={props.documentId}
                 kind={props.kind ?? 'document'}
-                fallbackName={props.fallbackName ?? 'Untitled'}
+                fallbackName={
+                  props.fallbackName ||
+                  blockNameToDefaultFile(
+                    props.kind && props.kind !== 'document' ? props.kind : 'md'
+                  )
+                }
                 data={data()}
-                shareOpen={props.shareOpen}
-                onShareOpenChange={props.onShareOpenChange}
                 children={props.children}
               />
             </ErrorBoundary>

@@ -10,6 +10,8 @@
 mod inputs;
 /// DataLoader-backed hydration for realtime Soup patches.
 mod loaders;
+/// Primary-backed email snapshots used only for mutation replies.
+mod mutation_thread;
 /// GraphQL objects representing Soup pages and entities.
 mod objects;
 /// Top-level Soup query resolver.
@@ -21,14 +23,18 @@ pub use loaders::{
     EmailServiceInboxReader, SoupInboxReader, SoupItemDataLoader, SoupItemLoader,
     SoupItemLoaderError, SoupItemLoaderKey, soup_item_loader,
 };
+pub use mutation_thread::{
+    EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,
+};
 pub use objects::{
-    GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
-    GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupDocument,
-    GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
-    GraphqlSoupForeignEntity, GraphqlSoupProject, GroupedSoup, SoupCacheProjection,
-    SoupEntityEdges, SoupPage, SoupPatch, SoupUpdated,
+    GraphqlSoupAgentSession, GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel,
+    GraphqlSoupChannelMessage, GraphqlSoupChannelMessagePreview, GraphqlSoupChat,
+    GraphqlSoupCrmCompany, GraphqlSoupDatabaseRow, GraphqlSoupDocument, GraphqlSoupDocumentSubType,
+    GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupInitiative,
+    GraphqlSoupProject, GroupedSoup, SoupCacheProjection, SoupEntityEdges, SoupPage, SoupPatch,
+    SoupUpdated,
 };
 pub use resolvers::{
-    SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread,
-    resolve_soup_updates,
+    SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,
+    resolve_soup_email_thread, resolve_soup_updates,
 };

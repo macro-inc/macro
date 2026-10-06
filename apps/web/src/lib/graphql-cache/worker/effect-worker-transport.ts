@@ -162,6 +162,8 @@ export interface EffectWorkerRunnerOptions<Inbound> {
   onMessage(portId: number, message: Inbound): void | Promise<void>;
   onDisconnect?: (portId: number) => void;
   onError(error: Error): void;
+  /** Releases router state when the runner exits, including a peer close frame. */
+  onClose?: () => void;
 }
 
 export interface EffectWorkerRunnerTransport<Outbound> {
@@ -207,6 +209,12 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
       )
     : undefined;
 
+  fiber.addObserver(() => {
+    closed = true;
+    if (disconnectFiber) Effect.runFork(Fiber.interrupt(disconnectFiber));
+    options.onClose?.();
+  });
+
   return {
     send(portId, message, transfers): Effect.Effect<void, Error> {
       return Effect.suspend(() => {
@@ -218,11 +226,9 @@ export function createEffectWorkerRunnerTransport<Inbound, Outbound>(
         return runner.send(portId, message, transfers);
       });
     },
-
     isClosed(): boolean {
       return closed;
     },
-
     close(): Effect.Effect<void> {
       return Effect.suspend(() => {
         closed = true;

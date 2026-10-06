@@ -33,12 +33,13 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         .runs_on("macos-15")
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
-        .add_step(install_nix_macos())
+        .add_step(steps::install_nix_macos())
         .add_step(configure_signing_identity())
         .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(nix_build_dmg())
         .add_step(collect_dmg())
         .add_step(validate_signed_dmg())
+        .add_step(notarize_dmg())
         .add_step(steps::upload_artifact(
             "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
             xtask_paths::runtime_path!("artifacts/*"),
@@ -58,12 +59,6 @@ fn assert_arm64() -> Step<Run> {
               exit 1
             fi
         "#})
-        .shell("bash")
-}
-
-fn install_nix_macos() -> Step<Run> {
-    Step::new("Install Nix")
-        .run(include_str!("scripts/install_nix_macos.sh"))
         .shell("bash")
 }
 
@@ -97,4 +92,11 @@ fn validate_signed_dmg() -> Step<Run> {
     Step::new("Validate signed DMG")
         .run(include_str!("scripts/validate_signed_dmg.sh"))
         .shell("bash")
+}
+
+fn notarize_dmg() -> Step<Run> {
+    Step::new("Notarize and staple DMG")
+        .run(include_str!("scripts/notarize_dmg.sh"))
+        .shell("bash")
+        .add_env(("DOPPLER_TOKEN", vars::MACOS_RELEASE_DOPPLER_TOKEN))
 }

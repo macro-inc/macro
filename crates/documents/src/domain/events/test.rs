@@ -71,6 +71,8 @@ fn owner_bearing_events_round_trip_all_owner_kinds_as_strings() {
                 source_document_id: "source-document".to_string(),
                 source_version_id: None,
                 owner,
+                actor: None,
+                on_behalf_of: None,
                 document_name: "copy".to_string(),
                 file_type: None,
                 project_id: None,
@@ -123,6 +125,7 @@ fn sync_content_updated_serializes_to_the_exact_envelope() {
     let event = Event::with_event_id(
         Uuid::from_u128(2),
         DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            editors: Vec::new(),
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: None,
@@ -178,6 +181,7 @@ fn optional_document_versions_support_present_and_absent_values() {
             document_version_id: None,
         }),
         DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            editors: Vec::new(),
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
@@ -226,6 +230,7 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
     );
 
     let sync_metadata = DocumentSyncContentUpdatedMetadata {
+        editors: Vec::new(),
         document_id: DOCUMENT_ID.to_string(),
         file_type: FileType::Md,
         document_version_id: None,

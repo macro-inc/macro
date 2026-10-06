@@ -1,3 +1,4 @@
+import { clearPressedKeys } from '@core/hotkey/state';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
 import { batch } from 'solid-js';
@@ -17,6 +18,7 @@ interface ReminderComposerState {
    * reminder from nothing to compose.
    */
   standalone?: boolean;
+  choosing?: boolean;
 }
 
 /** What the surface that opened the composer does once the reminder exists. */
@@ -29,10 +31,9 @@ export type ReminderCreatedHandler = () => void | Promise<void>;
 let createdHandler: ReminderCreatedHandler | undefined;
 
 /**
- * Hand the pending handler to the caller and forget it.
- *
- * Taken rather than read because the composer closes — and so clears its
- * target — before the create request is awaited.
+ * Hand the pending handler to the caller and forget it after create succeeds.
+ * A rejected create leaves it here so the preserved draft can be retried and
+ * still perform the invoking surface's follow-up exactly once.
  */
 export function takeReminderCreatedHandler():
   | ReminderCreatedHandler
@@ -67,22 +68,34 @@ export function openReminderComposer(
 }
 
 /**
- * Open the composer to create a reminder about nothing.
- *
- * There is no entity to name it after, so its description is the one field it
- * cannot skip — see `resolveStandaloneDescription`.
+ * Open reminder creation without a preselected source. The picker offers an
+ * entity association or a freeform reminder with a required description.
  */
 export function openStandaloneReminderComposer(options?: {
   onCreated?: ReminderCreatedHandler;
 }) {
   createdHandler = options?.onCreated;
   batch(() => {
-    setState(reconcile({ entity: undefined, standalone: true }));
+    setState(reconcile({ entity: undefined, choosing: true }));
     setReminderComposerOpen(true);
   });
 }
 
+/** Switch targets within the open composer, retaining the invoking callback. */
+export function chooseReminderTarget(entity?: EntityData) {
+  setState(reconcile(entity ? { entity } : { standalone: true }));
+}
+
+export function showReminderEntityPicker() {
+  // A different target must never run the original row’s archive/navigation callback.
+  createdHandler = undefined;
+  setState(reconcile({ choosing: true }));
+}
+
 export function closeReminderComposer() {
+  // Escape dismisses the dialog outside the hotkey command runner. Its keyup
+  // can be lost during focus restoration, so don't carry held keys into H.
+  if (reminderComposerOpen()) clearPressedKeys();
   createdHandler = undefined;
   batch(() => {
     setReminderComposerOpen(false);

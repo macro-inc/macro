@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, ApproveHarnessPairingData, ApproveHarnessPairingErrors, ApproveHarnessPairingResponses, AssignInitiativeTasksData, AssignInitiativeTasksErrors, AssignInitiativeTasksResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, ClaimHarnessPairingData, ClaimHarnessPairingErrors, ClaimHarnessPairingResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelLabelData, CreateChannelLabelErrors, CreateChannelLabelResponses, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCollabSurfaceTokenData, CreateCollabSurfaceTokenErrors, CreateCollabSurfaceTokenResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateCrmCommentData, CreateCrmCommentErrors, CreateCrmCommentResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateHarnessPairingData, CreateHarnessPairingErrors, CreateHarnessPairingResponses, CreateInitiativeData, CreateInitiativeErrors, CreateInitiativeResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateReminderData, CreateReminderErrors, CreateReminderResponses, CreateSkillHandlerData, CreateSkillHandlerErrors, CreateSkillHandlerResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateUserApiKeyData, CreateUserApiKeyErrors, CreateUserApiKeyResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelLabelData, DeleteChannelLabelErrors, DeleteChannelLabelResponses, DeleteChannelResponses, DeleteCollabSurfaceData, DeleteCollabSurfaceErrors, DeleteCollabSurfaceResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteCrmCommentData, DeleteCrmCommentErrors, DeleteCrmCommentResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHarnessData, DeleteHarnessErrors, DeleteHarnessResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteInitiativeData, DeleteInitiativeErrors, DeleteInitiativeResponses, DeleteMessageData, DeleteMessageErrors, DeleteMessageResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteReminderData, DeleteReminderErrors, DeleteReminderResponses, DeleteSelfHarnessData, DeleteSelfHarnessErrors, DeleteSelfHarnessResponses, DeleteUserApiKeyData, DeleteUserApiKeyErrors, DeleteUserApiKeyResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditCommentData, EditCommentErrors, EditCommentResponses, EditCrmCommentData, EditCrmCommentErrors, EditCrmCommentResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, EnsureCollabSurfaceData, EnsureCollabSurfaceErrors, EnsureCollabSurfaceResponses, EntityMessageCreateData, EntityMessageCreateResponses, EntityMessageDeleteMessageData, EntityMessageDeleteMessageResponses, EntityMessageDeleteThreadData, EntityMessageDeleteThreadResponses, EntityMessageEditData, EntityMessageEditResponses, EntityMessageGetMessageData, EntityMessageGetMessageResponses, EntityMessageGetThreadData, EntityMessageGetThreadResponses, EntityMessageLegacyData, EntityMessageLegacyResponses, EntityMessagePatchThreadData, EntityMessagePatchThreadResponses, EntityMessageReactData, EntityMessageReactResponses, EntityMessageTypingData, EntityMessageTypingResponses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, GetActiveCallsData, GetActiveCallsErrors, GetActiveCallsResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelMessagesCatchUpData, GetChannelMessagesCatchUpErrors, GetChannelMessagesCatchUpResponses, GetChannelMessagesData, GetChannelMessagesErrors, GetChannelMessagesResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCollabSurfaceData, GetCollabSurfaceErrors, GetCollabSurfaceResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactByEmailData, GetContactByEmailErrors, GetContactByEmailResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentCommentsData, GetDocumentCommentsErrors, GetDocumentCommentsResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityBySourceData, GetForeignEntityBySourceErrors, GetForeignEntityBySourceResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetHarnessPairingData, GetHarnessPairingErrors, GetHarnessPairingResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInitiativeData, GetInitiativeErrors, GetInitiativeResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetMessageWithContextData, GetMessageWithContextErrors, GetMessageWithContextResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetReminderData, GetReminderErrors, GetReminderResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetSelfBotData, GetSelfBotErrors, GetSelfBotResponses, GetSelfHarnessData, GetSelfHarnessErrors, GetSelfHarnessResponses, GetSystemSkillsHandlerData, GetSystemSkillsHandlerErrors, GetSystemSkillsHandlerResponses, GetThreadRepliesData, GetThreadRepliesErrors, GetThreadRepliesResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HandlerData, HandlerErrors, HandlerResponses, HealthHandlerData, HealthHandlerResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, InstallSyncErrors, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListChannelLabelsData, ListChannelLabelsErrors, ListChannelLabelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListCrmCommentsData, ListCrmCommentsErrors, ListCrmCommentsResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListHarnessAgentsData, ListHarnessAgentsErrors, ListHarnessAgentsResponses, ListHarnessesData, ListHarnessesErrors, ListHarnessesResponses, ListHarnessSessionsData, ListHarnessSessionsErrors, ListHarnessSessionsResponses, ListInitiativesData, ListInitiativesErrors, ListInitiativesResponses, ListOccurrencesData, ListOccurrencesErrors, ListOccurrencesResponses, ListRemindersData, ListRemindersErrors, ListRemindersResponses, ListTeamOutOfOfficeData, ListTeamOutOfOfficeErrors, ListTeamOutOfOfficeResponses, ListUserApiKeysData, ListUserApiKeysErrors, ListUserApiKeysResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, MentionPreviewsData, MentionPreviewsErrors, MentionPreviewsResponses, MessageTimelineData, MessageTimelineResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchMessageData, PatchMessageErrors, PatchMessageResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostChannelMessagesData, PostChannelMessagesErrors, PostChannelMessagesResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PostMessageData, PostMessageErrors, PostMessageResponses, PostReactionData, PostReactionErrors, PostReactionResponses, PostTypingData, PostTypingErrors, PostTypingResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PreviewSmartTagData, PreviewSmartTagErrors, PreviewSmartTagResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, PutCrmTeamStagesData, PutCrmTeamStagesErrors, PutCrmTeamStagesResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, RenameChannelLabelData, RenameChannelLabelErrors, RenameChannelLabelResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResetCrmTeamStagesData, ResetCrmTeamStagesErrors, ResetCrmTeamStagesResponses, ResolveChannelMessageData, ResolveChannelMessageErrors, ResolveChannelMessageResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SetChannelLabelData, SetChannelLabelErrors, SetChannelLabelResponses, SetChannelPictureData, SetChannelPictureErrors, SetChannelPictureResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, StreamEventsData, StreamEventsErrors, StreamEventsResponse, StreamEventsResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, TranscribeDictationData, TranscribeDictationErrors, TranscribeDictationResponses, UnassignInitiativeTaskData, UnassignInitiativeTaskErrors, UnassignInitiativeTaskResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateInitiativeData, UpdateInitiativeErrors, UpdateInitiativeResponses, UpdateReminderData, UpdateReminderErrors, UpdateReminderResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
+import type { AddFavoriteData, AddFavoriteErrors, AddFavoriteResponses, AddParticipantsData, AddParticipantsErrors, AddParticipantsResponses, AddPinHandlerData, AddPinHandlerErrors, AddPinHandlerResponses, ApplyDatabaseOpsData, ApplyDatabaseOpsErrors, ApplyDatabaseOpsResponses, ApproveHarnessPairingData, ApproveHarnessPairingErrors, ApproveHarnessPairingResponses, BulkWakeupSyncServiceDocumentsData, BulkWakeupSyncServiceDocumentsErrors, BulkWakeupSyncServiceDocumentsResponses, CallWebhookData, CallWebhookErrors, CallWebhookResponses, CancelSlackImportData, CancelSlackImportErrors, CancelSlackImportResponses, CheckActiveCallData, CheckActiveCallErrors, CheckActiveCallResponses, ClaimHarnessPairingData, ClaimHarnessPairingErrors, ClaimHarnessPairingResponses, CompleteSlackImportUploadsData, CompleteSlackImportUploadsErrors, CompleteSlackImportUploadsResponses, ConvertDatabaseColumnData, ConvertDatabaseColumnErrors, ConvertDatabaseColumnResponses, CopyDocumentData, CopyDocumentErrors, CopyDocumentResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAnchorData, CreateAnchorErrors, CreateAnchorResponses, CreateChannelData, CreateChannelErrors, CreateChannelLabelData, CreateChannelLabelErrors, CreateChannelLabelResponses, CreateChannelResponses, CreateChannelScopedBotData, CreateChannelScopedBotErrors, CreateChannelScopedBotResponses, CreateCollabSurfaceTokenData, CreateCollabSurfaceTokenErrors, CreateCollabSurfaceTokenResponses, CreateCrmCompanyData, CreateCrmCompanyErrors, CreateCrmCompanyResponses, CreateCrmContactData, CreateCrmContactErrors, CreateCrmContactResponses, CreateDatabaseData, CreateDatabaseErrors, CreateDatabaseResponses, CreateDocumentData, CreateDocumentErrors, CreateDocumentResponses, CreateEntityMentionData, CreateEntityMentionErrors, CreateEntityMentionResponses, CreateHarnessPairingData, CreateHarnessPairingErrors, CreateHarnessPairingResponses, CreateInitiativeData, CreateInitiativeErrors, CreateInitiativeResponses, CreateInstructionsHandlerData, CreateInstructionsHandlerErrors, CreateInstructionsHandlerResponses, CreateMarkdownHandlerData, CreateMarkdownHandlerErrors, CreateMarkdownHandlerResponses, CreateProjectHandlerData, CreateProjectHandlerErrors, CreateProjectHandlerResponses, CreateReminderData, CreateReminderErrors, CreateReminderResponses, CreateSkillHandlerData, CreateSkillHandlerErrors, CreateSkillHandlerResponses, CreateSlackImportData, CreateSlackImportErrors, CreateSlackImportResponses, CreateSnippetHandlerData, CreateSnippetHandlerErrors, CreateSnippetHandlerResponses, CreateTaskHandlerData, CreateTaskHandlerErrors, CreateTaskHandlerResponses, CreateUserApiKeyData, CreateUserApiKeyErrors, CreateUserApiKeyResponses, CreateViewHandlerData, CreateViewHandlerErrors, CreateViewHandlerResponses, CreateWebhookData, CreateWebhookErrors, CreateWebhookResponses, DeleteAnchorData, DeleteAnchorErrors, DeleteAnchorResponses, DeleteCallRecordData, DeleteCallRecordErrors, DeleteCallRecordResponses, DeleteChannelData, DeleteChannelErrors, DeleteChannelLabelData, DeleteChannelLabelErrors, DeleteChannelLabelResponses, DeleteChannelResponses, DeleteCollabSurfaceData, DeleteCollabSurfaceErrors, DeleteCollabSurfaceResponses, DeleteDocumentData, DeleteDocumentErrors, DeleteDocumentResponses, DeleteEntityMentionData, DeleteEntityMentionErrors, DeleteEntityMentionResponses, DeleteHarnessData, DeleteHarnessErrors, DeleteHarnessResponses, DeleteHistoryHandlerData, DeleteHistoryHandlerErrors, DeleteHistoryHandlerResponses, DeleteInitiativeData, DeleteInitiativeErrors, DeleteInitiativeResponses, DeleteProjectHandlerData, DeleteProjectHandlerErrors, DeleteProjectHandlerResponses, DeleteReminderData, DeleteReminderErrors, DeleteReminderResponses, DeleteSelfHarnessData, DeleteSelfHarnessErrors, DeleteSelfHarnessResponses, DeleteUserApiKeyData, DeleteUserApiKeyErrors, DeleteUserApiKeyResponses, DeleteUserDocumentViewLocationData, DeleteUserDocumentViewLocationErrors, DeleteUserDocumentViewLocationResponses, DeleteViewHandlerData, DeleteViewHandlerErrors, DeleteViewHandlerResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EditAnchorData, EditAnchorErrors, EditAnchorResponses, EditCallRecordData, EditCallRecordErrors, EditCallRecordResponses, EditCallTranscriptData, EditCallTranscriptErrors, EditCallTranscriptResponses, EditDocumentData, EditDocumentErrors, EditDocumentResponses, EditProjectV2Data, EditProjectV2Errors, EditProjectV2Responses, EditThreadV2Data, EditThreadV2Errors, EditThreadV2Responses, EnsureCollabSurfaceData, EnsureCollabSurfaceErrors, EnsureCollabSurfaceResponses, EnsureStarterHandlerData, EnsureStarterHandlerErrors, EnsureStarterHandlerResponses, EntityMessageCreateData, EntityMessageCreateResponses, EntityMessageDeleteMessageData, EntityMessageDeleteMessageResponses, EntityMessageDeleteThreadData, EntityMessageDeleteThreadResponses, EntityMessageEditData, EntityMessageEditResponses, EntityMessageGetMessageData, EntityMessageGetMessageResponses, EntityMessageGetThreadData, EntityMessageGetThreadResponses, EntityMessageLegacyData, EntityMessageLegacyResponses, EntityMessagePatchThreadData, EntityMessagePatchThreadResponses, EntityMessageReactData, EntityMessageReactResponses, EntityMessageTypingData, EntityMessageTypingResponses, ExcludeDefaultViewHandlerData, ExcludeDefaultViewHandlerErrors, ExcludeDefaultViewHandlerResponses, ExportDocumentData, ExportDocumentErrors, ExportDocumentResponses, FinalizeSlackImportData, FinalizeSlackImportErrors, FinalizeSlackImportResponses, GetActiveCallsData, GetActiveCallsErrors, GetActiveCallsResponses, GetActivityData, GetActivityErrors, GetActivityResponses, GetAttachmentReferencesData, GetAttachmentReferencesErrors, GetAttachmentReferencesResponses, GetBatchCallRecordPreviewData, GetBatchCallRecordPreviewErrors, GetBatchCallRecordPreviewResponses, GetBatchChannelPreviewData, GetBatchChannelPreviewErrors, GetBatchChannelPreviewResponses, GetBatchPreviewHandlerData, GetBatchPreviewHandlerErrors, GetBatchPreviewHandlerResponses, GetBatchProjectPreviewData, GetBatchProjectPreviewErrors, GetBatchProjectPreviewResponses, GetBotOwnerProfilesData, GetBotOwnerProfilesErrors, GetBotOwnerProfilesResponses, GetCallRecordData, GetCallRecordErrors, GetCallRecordResponses, GetChannelAttachmentsData, GetChannelAttachmentsErrors, GetChannelAttachmentsResponses, GetChannelData, GetChannelErrors, GetChannelJoinLinkData, GetChannelJoinLinkErrors, GetChannelJoinLinkResponses, GetChannelParticipantsData, GetChannelParticipantsErrors, GetChannelParticipantsResponses, GetChannelResponses, GetChannelsData, GetChannelsErrors, GetChannelsResponses, GetCollabSurfaceData, GetCollabSurfaceErrors, GetCollabSurfaceResponses, GetCompanyData, GetCompanyErrors, GetCompanyResponses, GetContactByEmailData, GetContactByEmailErrors, GetContactByEmailResponses, GetContactData, GetContactErrors, GetContactResponses, GetCrmTeamSettingsData, GetCrmTeamSettingsErrors, GetCrmTeamSettingsResponses, GetDatabaseData, GetDatabaseErrors, GetDatabasePermissionsData, GetDatabasePermissionsErrors, GetDatabasePermissionsResponses, GetDatabaseQueryData, GetDatabaseQueryErrors, GetDatabaseQueryResponses, GetDatabaseResponses, GetDatabaseRowHistoryData, GetDatabaseRowHistoryErrors, GetDatabaseRowHistoryResponses, GetDatabaseTableChangesData, GetDatabaseTableChangesErrors, GetDatabaseTableChangesResponses, GetDatabaseViewPositionsData, GetDatabaseViewPositionsErrors, GetDatabaseViewPositionsResponses, GetDocumentAnchorsData, GetDocumentAnchorsErrors, GetDocumentAnchorsResponses, GetDocumentBranchNameData, GetDocumentBranchNameErrors, GetDocumentBranchNameResponses, GetDocumentByTeamSlugData, GetDocumentByTeamSlugErrors, GetDocumentByTeamSlugResponses, GetDocumentData, GetDocumentErrors, GetDocumentGithubPullRequestsData, GetDocumentGithubPullRequestsErrors, GetDocumentGithubPullRequestsResponses, GetDocumentListHandlerData, GetDocumentListHandlerErrors, GetDocumentListHandlerResponses, GetDocumentLocationV3Data, GetDocumentLocationV3Errors, GetDocumentLocationV3Responses, GetDocumentPermissionsTokenData, GetDocumentPermissionsTokenErrors, GetDocumentPermissionsTokenResponses, GetDocumentPermissionsV2Data, GetDocumentPermissionsV2Errors, GetDocumentPermissionsV2Responses, GetDocumentProcessingResultData, GetDocumentProcessingResultErrors, GetDocumentProcessingResultResponses, GetDocumentResponses, GetDocumentShortIdData, GetDocumentShortIdErrors, GetDocumentShortIdResponses, GetDocumentTeamShareData, GetDocumentTeamShareErrors, GetDocumentTeamShareResponses, GetDocumentVersionData, GetDocumentVersionErrors, GetDocumentVersionResponses, GetDocumentViewsHandlerData, GetDocumentViewsHandlerErrors, GetDocumentViewsHandlerResponses, GetEmailFollowupData, GetEmailFollowupErrors, GetEmailFollowupResponses, GetEntityPermissionData, GetEntityPermissionErrors, GetEntityPermissionResponses, GetForeignEntityBySourceData, GetForeignEntityBySourceErrors, GetForeignEntityBySourceResponses, GetForeignEntityData, GetForeignEntityErrors, GetForeignEntityResponses, GetGithubPullRequestChangesData, GetGithubPullRequestChangesErrors, GetGithubPullRequestChangesPatchData, GetGithubPullRequestChangesPatchErrors, GetGithubPullRequestChangesPatchResponses, GetGithubPullRequestChangesResponses, GetGithubPullRequestData, GetGithubPullRequestErrors, GetGithubPullRequestFacetsData, GetGithubPullRequestFacetsErrors, GetGithubPullRequestFacetsResponses, GetGithubPullRequestResponses, GetHarnessPairingData, GetHarnessPairingErrors, GetHarnessPairingResponses, GetHistoryHandlerData, GetHistoryHandlerErrors, GetHistoryHandlerResponses, GetInitiativeData, GetInitiativeErrors, GetInitiativeResponses, GetInstructionsHandlerData, GetInstructionsHandlerErrors, GetInstructionsHandlerResponses, GetItemsSoupData, GetItemsSoupErrors, GetItemsSoupResponses, GetLocationHandlerData, GetLocationHandlerErrors, GetLocationHandlerResponses, GetOrCreateCallData, GetOrCreateCallErrors, GetOrCreateCallResponses, GetOrCreateDmData, GetOrCreateDmErrors, GetOrCreateDmResponses, GetOrCreatePrivateData, GetOrCreatePrivateErrors, GetOrCreatePrivateResponses, GetPendingProjectsHandlerData, GetPendingProjectsHandlerErrors, GetPendingProjectsHandlerResponses, GetPinsHandlerData, GetPinsHandlerErrors, GetPinsHandlerResponses, GetProjectContentHandlerData, GetProjectContentHandlerErrors, GetProjectContentHandlerResponses, GetProjectHandlerData, GetProjectHandlerErrors, GetProjectHandlerResponses, GetProjectPermissionsV2Data, GetProjectPermissionsV2Errors, GetProjectPermissionsV2Responses, GetProjectsHandlerData, GetProjectsHandlerErrors, GetProjectsHandlerResponses, GetProjectUserAccessLevelData, GetProjectUserAccessLevelErrors, GetProjectUserAccessLevelResponses, GetReminderData, GetReminderErrors, GetReminderResponses, GetRingStatusData, GetRingStatusErrors, GetRingStatusResponses, GetSelfBotData, GetSelfBotErrors, GetSelfBotResponses, GetSelfHarnessData, GetSelfHarnessErrors, GetSelfHarnessResponses, GetSlackImportData, GetSlackImportErrors, GetSlackImportResponses, GetSystemSkillsHandlerData, GetSystemSkillsHandlerErrors, GetSystemSkillsHandlerResponses, GetUserDocumentsHandlerData, GetUserDocumentsHandlerErrors, GetUserDocumentsHandlerResponses, GetUserDocumentViewLocationData, GetUserDocumentViewLocationErrors, GetUserDocumentViewLocationResponses, GetViewsHandlerData, GetViewsHandlerErrors, GetViewsHandlerResponses, GetWebhookData, GetWebhookErrors, GetWebhookResponses, HandlerData, HandlerErrors, HandlerResponses, HealthHandlerData, HealthHandlerResponses, ImportDatabaseTableData, ImportDatabaseTableErrors, ImportDatabaseTableResponses, InferDatabaseColumnTypeData, InferDatabaseColumnTypeErrors, InferDatabaseColumnTypeResponses, IngestTranscriptData, IngestTranscriptErrors, IngestTranscriptResponses, InitializeUserDocumentsData, InitializeUserDocumentsErrors, InitializeUserDocumentsResponses, InstallSyncData, InstallSyncErrors, JobProcessingResultHandlerData, JobProcessingResultHandlerErrors, JobProcessingResultHandlerResponses, JoinChannelByCodeData, JoinChannelByCodeErrors, JoinChannelByCodeResponses, JoinChannelData, JoinChannelErrors, JoinChannelResponses, LeaveChannelData, LeaveChannelErrors, LeaveChannelResponses, LeaveOrEndCallData, LeaveOrEndCallErrors, LeaveOrEndCallResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListBotChannelsData, ListBotChannelsErrors, ListBotChannelsResponses, ListChannelLabelsData, ListChannelLabelsErrors, ListChannelLabelsResponses, ListCompanyContactsData, ListCompanyContactsErrors, ListCompanyContactsResponses, ListDatabaseColumnCastsData, ListDatabaseColumnCastsErrors, ListDatabaseColumnCastsResponses, ListDatabasesData, ListDatabasesErrors, ListDatabasesResponses, ListEmailRemindersData, ListEmailRemindersErrors, ListEmailRemindersResponses, ListFavoritesData, ListFavoritesErrors, ListFavoritesResponses, ListHarnessAgentsData, ListHarnessAgentsErrors, ListHarnessAgentsResponses, ListHarnessesData, ListHarnessesErrors, ListHarnessesResponses, ListHarnessSessionsData, ListHarnessSessionsErrors, ListHarnessSessionsResponses, ListInitiativesData, ListInitiativesErrors, ListInitiativesResponses, ListOccurrencesData, ListOccurrencesErrors, ListOccurrencesResponses, ListReminderCollectionData, ListReminderCollectionErrors, ListReminderCollectionResponses, ListRemindersData, ListRemindersErrors, ListRemindersResponses, ListSlackImportsData, ListSlackImportsResponses, ListTeamOutOfOfficeData, ListTeamOutOfOfficeErrors, ListTeamOutOfOfficeResponses, ListUserApiKeysData, ListUserApiKeysErrors, ListUserApiKeysResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, MeetingCancelData, MeetingCancelErrors, MeetingCancelPreparationData, MeetingCancelPreparationErrors, MeetingCancelPreparationResponses, MeetingCancelResponses, MeetingCreateData, MeetingCreateErrors, MeetingCreateResponses, MeetingGuestJoinData, MeetingGuestJoinErrors, MeetingGuestJoinResponses, MeetingGuestParticipantsData, MeetingGuestParticipantsErrors, MeetingGuestParticipantsResponses, MeetingInviteData, MeetingInviteErrors, MeetingInvitePermissionsData, MeetingInvitePermissionsErrors, MeetingInvitePermissionsResponses, MeetingInviteResponses, MeetingInviteUsersData, MeetingInviteUsersErrors, MeetingInviteUsersResponses, MeetingJoinData, MeetingJoinErrors, MeetingJoinResponses, MeetingLeaveData, MeetingLeaveErrors, MeetingLeaveResponses, MeetingListActiveData, MeetingListActiveErrors, MeetingListActiveResponses, MeetingListData, MeetingListErrors, MeetingListResponses, MeetingLookupData, MeetingLookupErrors, MeetingLookupResponses, MeetingParticipantsData, MeetingParticipantsErrors, MeetingParticipantsResponses, MeetingPrepareData, MeetingPrepareErrors, MeetingPrepareResponses, MeetingShareData, MeetingShareErrors, MeetingShareResponses, MeetingUpdateData, MeetingUpdateErrors, MeetingUpdateResponses, MentionPreviewsData, MentionPreviewsErrors, MentionPreviewsResponses, MessageTimelineData, MessageTimelineResponses, PatchChannelData, PatchChannelErrors, PatchChannelResponses, PatchViewHandlerData, PatchViewHandlerErrors, PatchViewHandlerResponses, PatchWebhookData, PatchWebhookErrors, PatchWebhookResponses, PermanentlyDeleteDocumentData, PermanentlyDeleteDocumentErrors, PermanentlyDeleteDocumentResponses, PermanentlyDeleteProjectData, PermanentlyDeleteProjectErrors, PermanentlyDeleteProjectResponses, PostActivityData, PostActivityErrors, PostActivityResponses, PostChannelBotWebhookData, PostChannelBotWebhookErrors, PostChannelBotWebhookResponses, PostItemsSoupAstData, PostItemsSoupAstErrors, PostItemsSoupAstGroupedData, PostItemsSoupAstGroupedErrors, PostItemsSoupAstGroupedResponses, PostItemsSoupAstResponses, PostItemsSoupData, PostItemsSoupErrors, PostItemsSoupResponses, PresaveDocumentHandlerData, PresaveDocumentHandlerErrors, PresaveDocumentHandlerResponses, PreviewSmartTagData, PreviewSmartTagErrors, PreviewSmartTagResponses, PutCrmTeamSettingsData, PutCrmTeamSettingsErrors, PutCrmTeamSettingsResponses, PutCrmTeamStagesData, PutCrmTeamStagesErrors, PutCrmTeamStagesResponses, RecentlyDeletedData, RecentlyDeletedErrors, RecentlyDeletedResponses, RegisterSlackImportUploadsData, RegisterSlackImportUploadsErrors, RegisterSlackImportUploadsResponses, RemoveBotFromChannelByBotData, RemoveBotFromChannelByBotErrors, RemoveBotFromChannelByBotResponses, RemoveFavoriteByEntityData, RemoveFavoriteByEntityErrors, RemoveFavoriteByEntityResponses, RemoveParticipantsData, RemoveParticipantsErrors, RemoveParticipantsResponses, RemovePinHandlerData, RemovePinHandlerErrors, RemovePinHandlerResponses, RenameChannelLabelData, RenameChannelLabelErrors, RenameChannelLabelResponses, ReorderFavoritesData, ReorderFavoritesErrors, ReorderFavoritesResponses, ReorderPinsHandlerData, ReorderPinsHandlerErrors, ReorderPinsHandlerResponses, ResetCrmTeamStagesData, ResetCrmTeamStagesErrors, ResetCrmTeamStagesResponses, RevertDeleteDocumentData, RevertDeleteDocumentErrors, RevertDeleteDocumentResponses, RevertDeleteProjectData, RevertDeleteProjectErrors, RevertDeleteProjectResponses, SaveDatabaseQueryData, SaveDatabaseQueryErrors, SaveDatabaseQueryResponses, SaveDocumentHandlerData, SaveDocumentHandlerErrors, SaveDocumentHandlerResponses, SearchContactsData, SearchContactsErrors, SearchContactsResponses, SetChannelLabelData, SetChannelLabelErrors, SetChannelLabelResponses, SetChannelPictureData, SetChannelPictureErrors, SetChannelPictureResponses, SetCompanyHiddenData, SetCompanyHiddenErrors, SetCompanyHiddenResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses, SetCrmCompanyNameData, SetCrmCompanyNameErrors, SetCrmCompanyNameResponses, SetCrmContactNameData, SetCrmContactNameErrors, SetCrmContactNameResponses, SetDocumentTeamShareData, SetDocumentTeamShareErrors, SetDocumentTeamShareResponses, SetEmailFollowupData, SetEmailFollowupErrors, SetEmailFollowupResponses, SetEmailSyncData, SetEmailSyncErrors, SetEmailSyncResponses, ShareDatabaseAwarenessData, ShareDatabaseAwarenessErrors, ShareDatabaseAwarenessResponses, SimpleSaveData, SimpleSaveErrors, SimpleSaveResponses, StreamEventsData, StreamEventsErrors, StreamEventsResponse, StreamEventsResponses, ToggleShareWithTeamData, ToggleShareWithTeamErrors, ToggleShareWithTeamResponses, TranscribeDictationData, TranscribeDictationErrors, TranscribeDictationResponses, UndoDatabaseChangeData, UndoDatabaseChangeErrors, UndoDatabaseChangeResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateDatabasePermissionsData, UpdateDatabasePermissionsErrors, UpdateDatabasePermissionsResponses, UpdateInitiativeData, UpdateInitiativeErrors, UpdateInitiativeResponses, UpdateReminderData, UpdateReminderErrors, UpdateReminderResponses, UploadExtractFolderHandlerData, UploadExtractFolderHandlerErrors, UploadExtractFolderHandlerResponses, UploadFolderHandlerData, UploadFolderHandlerErrors, UploadFolderHandlerResponses, UpsertHistoryHandlerData, UpsertHistoryHandlerErrors, UpsertHistoryHandlerResponses, UpsertUserDocumentViewLocationData, UpsertUserDocumentViewLocationErrors, UpsertUserDocumentViewLocationResponses, ValidateDocumentPermissionsTokenData, ValidateDocumentPermissionsTokenErrors, ValidateDocumentPermissionsTokenResponses, ValidateWebhookData, ValidateWebhookErrors, ValidateWebhookResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -93,8 +93,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Deletes a single unthreaded anchor for a document
-     * If you need to delete a threaded anchor, see the delete comment handler
+     * Deletes a highlight and any attached discussion under the annotation policy.
      */
     public deleteAnchor<ThrowOnError extends boolean = false>(options: Options<DeleteAnchorData, ThrowOnError>): RequestResult<DeleteAnchorResponses, DeleteAnchorErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteAnchorResponses, DeleteAnchorErrors, ThrowOnError>({
@@ -130,7 +129,7 @@ export class Sdk extends HeyApiClient {
     
     /**
      * Creates an unthreaded anchor for a document
-     * If you need to create a threaded anchor, see the create comment handler
+     * Attach a discussion through the shared message API.
      */
     public createAnchor<ThrowOnError extends boolean = false>(options: Options<CreateAnchorData, ThrowOnError>): RequestResult<CreateAnchorResponses, CreateAnchorErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateAnchorResponses, CreateAnchorErrors, ThrowOnError>({
@@ -144,60 +143,21 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Deletes a single comment for a document
-     */
-    public deleteComment<ThrowOnError extends boolean = false>(options: Options<DeleteCommentData, ThrowOnError>): RequestResult<DeleteCommentResponses, DeleteCommentErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteCommentResponses, DeleteCommentErrors, ThrowOnError>({
-            url: '/annotations/comments/comment/{comment_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Edits a single comment for a document
-     */
-    public editComment<ThrowOnError extends boolean = false>(options: Options<EditCommentData, ThrowOnError>): RequestResult<EditCommentResponses, EditCommentErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<EditCommentResponses, EditCommentErrors, ThrowOnError>({
-            url: '/annotations/comments/comment/{comment_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Gets a set of comment threads for a document
-     */
-    public getDocumentComments<ThrowOnError extends boolean = false>(options: Options<GetDocumentCommentsData, ThrowOnError>): RequestResult<GetDocumentCommentsResponses, GetDocumentCommentsErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetDocumentCommentsResponses, GetDocumentCommentsErrors, ThrowOnError>({ url: '/annotations/comments/document/{document_id}', ...options });
-    }
-    
-    /**
-     * Creates a single comment for a document
-     * Optionally creates a new thread/anchor if one does not exist
-     */
-    public createComment<ThrowOnError extends boolean = false>(options: Options<CreateCommentData, ThrowOnError>): RequestResult<CreateCommentResponses, CreateCommentErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<CreateCommentResponses, CreateCommentErrors, ThrowOnError>({
-            url: '/annotations/comments/document/{document_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
      * Handler for `GET /bots/me`.
      */
     public getSelfBot<ThrowOnError extends boolean = false>(options?: Options<GetSelfBotData, ThrowOnError>): RequestResult<GetSelfBotResponses, GetSelfBotErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetSelfBotResponses, GetSelfBotErrors, ThrowOnError>({ url: '/bots/me', ...options });
+    }
+    
+    /**
+     * Handler for `GET /bots/profiles`.
+     *
+     * Returns display fields and the sponsor for each requested bot. Not a
+     * manageability check: any authenticated user or internal caller may look up
+     * ids they already have.
+     */
+    public getBotOwnerProfiles<ThrowOnError extends boolean = false>(options?: Options<GetBotOwnerProfilesData, ThrowOnError>): RequestResult<GetBotOwnerProfilesResponses, GetBotOwnerProfilesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetBotOwnerProfilesResponses, GetBotOwnerProfilesErrors, ThrowOnError>({ url: '/bots/profiles', ...options });
     }
     
     /**
@@ -251,6 +211,153 @@ export class Sdk extends HeyApiClient {
      */
     public getActiveCalls<ThrowOnError extends boolean = false>(options?: Options<GetActiveCallsData, ThrowOnError>): RequestResult<GetActiveCallsResponses, GetActiveCallsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetActiveCallsResponses, GetActiveCallsErrors, ThrowOnError>({ url: '/call/active', ...options });
+    }
+    
+    /**
+     * Handle `GET /call/join/{token}` through the call domain service.
+     */
+    public meetingLookup<ThrowOnError extends boolean = false>(options: Options<MeetingLookupData, ThrowOnError>): RequestResult<MeetingLookupResponses, MeetingLookupErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<MeetingLookupResponses, MeetingLookupErrors, ThrowOnError>({ url: '/call/join/{token}', ...options });
+    }
+    
+    /**
+     * Handle `POST /call/join/{token}` through the call domain service.
+     */
+    public meetingGuestJoin<ThrowOnError extends boolean = false>(options: Options<MeetingGuestJoinData, ThrowOnError>): RequestResult<MeetingGuestJoinResponses, MeetingGuestJoinErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MeetingGuestJoinResponses, MeetingGuestJoinErrors, ThrowOnError>({
+            url: '/call/join/{token}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Handle `POST /call/join/{token}/leave` through the call domain service.
+     */
+    public meetingLeave<ThrowOnError extends boolean = false>(options: Options<MeetingLeaveData, ThrowOnError>): RequestResult<MeetingLeaveResponses, MeetingLeaveErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MeetingLeaveResponses, MeetingLeaveErrors, ThrowOnError>({ url: '/call/join/{token}/leave', ...options });
+    }
+    
+    /**
+     * Read a standalone meeting preview without admitting a guest to the room.
+     */
+    public meetingGuestParticipants<ThrowOnError extends boolean = false>(options: Options<MeetingGuestParticipantsData, ThrowOnError>): RequestResult<MeetingGuestParticipantsResponses, MeetingGuestParticipantsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<MeetingGuestParticipantsResponses, MeetingGuestParticipantsErrors, ThrowOnError>({ url: '/call/join/{token}/participants', ...options });
+    }
+    
+    /**
+     * Handle `GET /call/meetings` through the call domain service.
+     */
+    public meetingList<ThrowOnError extends boolean = false>(options?: Options<MeetingListData, ThrowOnError>): RequestResult<MeetingListResponses, MeetingListErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<MeetingListResponses, MeetingListErrors, ThrowOnError>({ url: '/call/meetings', ...options });
+    }
+    
+    /**
+     * Handle `POST /call/meetings` through the call domain service.
+     */
+    public meetingCreate<ThrowOnError extends boolean = false>(options: Options<MeetingCreateData, ThrowOnError>): RequestResult<MeetingCreateResponses, MeetingCreateErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MeetingCreateResponses, MeetingCreateErrors, ThrowOnError>({
+            url: '/call/meetings',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * List the authenticated actor's active quick calls.
+     */
+    public meetingListActive<ThrowOnError extends boolean = false>(options?: Options<MeetingListActiveData, ThrowOnError>): RequestResult<MeetingListActiveResponses, MeetingListActiveErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<MeetingListActiveResponses, MeetingListActiveErrors, ThrowOnError>({ url: '/call/meetings/active', ...options });
+    }
+    
+    /**
+     * Read the authenticated caller's invitation capability without exposing the creator.
+     */
+    public meetingInvitePermissions<ThrowOnError extends boolean = false>(options: Options<MeetingInvitePermissionsData, ThrowOnError>): RequestResult<MeetingInvitePermissionsResponses, MeetingInvitePermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<MeetingInvitePermissionsResponses, MeetingInvitePermissionsErrors, ThrowOnError>({ url: '/call/meetings/invite/{token}', ...options });
+    }
+    
+    /**
+     * Queue an owner-authorized guest invitation email.
+     */
+    public meetingInvite<ThrowOnError extends boolean = false>(options: Options<MeetingInviteData, ThrowOnError>): RequestResult<MeetingInviteResponses, MeetingInviteErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MeetingInviteResponses, MeetingInviteErrors, ThrowOnError>({
+            url: '/call/meetings/invite/{token}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Ring registered teammates selected by the standalone meeting owner.
+     */
+    public meetingInviteUsers<ThrowOnError extends boolean = false>(options: Options<MeetingInviteUsersData, ThrowOnError>): RequestResult<MeetingInviteUsersResponses, MeetingInviteUsersErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MeetingInviteUsersResponses, MeetingInviteUsersErrors, ThrowOnError>({
+            url: '/call/meetings/invite/{token}/users',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Handle `POST /call/meetings/join/{token}` through the call domain service.
+     */
+    public meetingJoin<ThrowOnError extends boolean = false>(options: Options<MeetingJoinData, ThrowOnError>): RequestResult<MeetingJoinResponses, MeetingJoinErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MeetingJoinResponses, MeetingJoinErrors, ThrowOnError>({ url: '/call/meetings/join/{token}', ...options });
+    }
+    
+    /**
+     * Read the participant preview for an authenticated invitation holder.
+     */
+    public meetingParticipants<ThrowOnError extends boolean = false>(options: Options<MeetingParticipantsData, ThrowOnError>): RequestResult<MeetingParticipantsResponses, MeetingParticipantsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<MeetingParticipantsResponses, MeetingParticipantsErrors, ThrowOnError>({ url: '/call/meetings/join/{token}/participants', ...options });
+    }
+    
+    /**
+     * Reserve a room while the authenticated caller configures a new call.
+     */
+    public meetingPrepare<ThrowOnError extends boolean = false>(options?: Options<MeetingPrepareData, ThrowOnError>): RequestResult<MeetingPrepareResponses, MeetingPrepareErrors, ThrowOnError> {
+        return (options?.client ?? this.client).post<MeetingPrepareResponses, MeetingPrepareErrors, ThrowOnError>({ url: '/call/meetings/prepare', ...options });
+    }
+    
+    /**
+     * Cancel an unused room; the domain owns ownership and activation checks.
+     */
+    public meetingCancelPreparation<ThrowOnError extends boolean = false>(options: Options<MeetingCancelPreparationData, ThrowOnError>): RequestResult<MeetingCancelPreparationResponses, MeetingCancelPreparationErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<MeetingCancelPreparationResponses, MeetingCancelPreparationErrors, ThrowOnError>({ url: '/call/meetings/prepare/{preparation_id}', ...options });
+    }
+    
+    /**
+     * Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.
+     */
+    public meetingCancel<ThrowOnError extends boolean = false>(options: Options<MeetingCancelData, ThrowOnError>): RequestResult<MeetingCancelResponses, MeetingCancelErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<MeetingCancelResponses, MeetingCancelErrors, ThrowOnError>({ url: '/call/meetings/{meeting_id}', ...options });
+    }
+    
+    /**
+     * Handle owner-authorized meeting title and schedule edits.
+     */
+    public meetingUpdate<ThrowOnError extends boolean = false>(options: Options<MeetingUpdateData, ThrowOnError>): RequestResult<MeetingUpdateResponses, MeetingUpdateErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<MeetingUpdateResponses, MeetingUpdateErrors, ThrowOnError>({
+            url: '/call/meetings/{meeting_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -311,6 +418,13 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+    
+    /**
+     * Handle `POST /call/record/{call_id}/link` through the call domain service.
+     */
+    public meetingShare<ThrowOnError extends boolean = false>(options: Options<MeetingShareData, ThrowOnError>): RequestResult<MeetingShareResponses, MeetingShareErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MeetingShareResponses, MeetingShareErrors, ThrowOnError>({ url: '/call/record/{call_id}/link', ...options });
     }
     
     /**
@@ -404,7 +518,7 @@ export class Sdk extends HeyApiClient {
      */
     public ingestTranscript<ThrowOnError extends boolean = false>(options: Options<IngestTranscriptData, ThrowOnError>): RequestResult<IngestTranscriptResponses, IngestTranscriptErrors, ThrowOnError> {
         return (options.client ?? this.client).post<IngestTranscriptResponses, IngestTranscriptErrors, ThrowOnError>({
-            url: '/call/{channel_id}/transcript',
+            url: '/call/{room_name}/transcript',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -666,90 +780,6 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Handler for `POST /channels/{channel_id}/message`.
-     */
-    public postMessage<ThrowOnError extends boolean = false>(options: Options<PostMessageData, ThrowOnError>): RequestResult<PostMessageResponses, PostMessageErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PostMessageResponses, PostMessageErrors, ThrowOnError>({
-            url: '/channels/{channel_id}/message',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Handler for `DELETE /channels/{channel_id}/message/{message_id}`.
-     */
-    public deleteMessage<ThrowOnError extends boolean = false>(options: Options<DeleteMessageData, ThrowOnError>): RequestResult<DeleteMessageResponses, DeleteMessageErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteMessageResponses, DeleteMessageErrors, ThrowOnError>({ url: '/channels/{channel_id}/message/{message_id}', ...options });
-    }
-    
-    /**
-     * Handler for `PATCH /channels/{channel_id}/message/{message_id}`.
-     */
-    public patchMessage<ThrowOnError extends boolean = false>(options: Options<PatchMessageData, ThrowOnError>): RequestResult<PatchMessageResponses, PatchMessageErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<PatchMessageResponses, PatchMessageErrors, ThrowOnError>({
-            url: '/channels/{channel_id}/message/{message_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Handler for `GET /channels/{channel_id}/messages`.
-     */
-    public getChannelMessages<ThrowOnError extends boolean = false>(options: Options<GetChannelMessagesData, ThrowOnError>): RequestResult<GetChannelMessagesResponses, GetChannelMessagesErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetChannelMessagesResponses, GetChannelMessagesErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages', ...options });
-    }
-    
-    /**
-     * Handler for `POST /channels/{channel_id}/messages`.
-     */
-    public postChannelMessages<ThrowOnError extends boolean = false>(options: Options<PostChannelMessagesData, ThrowOnError>): RequestResult<PostChannelMessagesResponses, PostChannelMessagesErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PostChannelMessagesResponses, PostChannelMessagesErrors, ThrowOnError>({
-            url: '/channels/{channel_id}/messages',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Handler for `GET /channels/{channel_id}/messages/catch-up`.
-     */
-    public getChannelMessagesCatchUp<ThrowOnError extends boolean = false>(options: Options<GetChannelMessagesCatchUpData, ThrowOnError>): RequestResult<GetChannelMessagesCatchUpResponses, GetChannelMessagesCatchUpErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetChannelMessagesCatchUpResponses, GetChannelMessagesCatchUpErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages/catch-up', ...options });
-    }
-    
-    /**
-     * Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.
-     */
-    public getMessageWithContext<ThrowOnError extends boolean = false>(options: Options<GetMessageWithContextData, ThrowOnError>): RequestResult<GetMessageWithContextResponses, GetMessageWithContextErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetMessageWithContextResponses, GetMessageWithContextErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages/{message_id}/context', ...options });
-    }
-    
-    /**
-     * Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
-     */
-    public getThreadReplies<ThrowOnError extends boolean = false>(options: Options<GetThreadRepliesData, ThrowOnError>): RequestResult<GetThreadRepliesResponses, GetThreadRepliesErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetThreadRepliesResponses, GetThreadRepliesErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages/{message_id}/replies', ...options });
-    }
-    
-    /**
-     * Handler for `GET /channels/{channel_id}/messages/{message_id}/resolve`.
-     */
-    public resolveChannelMessage<ThrowOnError extends boolean = false>(options: Options<ResolveChannelMessageData, ThrowOnError>): RequestResult<ResolveChannelMessageResponses, ResolveChannelMessageErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<ResolveChannelMessageResponses, ResolveChannelMessageErrors, ThrowOnError>({ url: '/channels/{channel_id}/messages/{message_id}/resolve', ...options });
-    }
-    
-    /**
      * Handler for `DELETE /channels/{channel_id}/participants`.
      */
     public removeParticipants<ThrowOnError extends boolean = false>(options: Options<RemoveParticipantsData, ThrowOnError>): RequestResult<RemoveParticipantsResponses, RemoveParticipantsErrors, ThrowOnError> {
@@ -790,34 +820,6 @@ export class Sdk extends HeyApiClient {
     public setChannelPicture<ThrowOnError extends boolean = false>(options: Options<SetChannelPictureData, ThrowOnError>): RequestResult<SetChannelPictureResponses, SetChannelPictureErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetChannelPictureResponses, SetChannelPictureErrors, ThrowOnError>({
             url: '/channels/{channel_id}/profile_picture',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Handler for `POST /channels/{channel_id}/reaction`.
-     */
-    public postReaction<ThrowOnError extends boolean = false>(options: Options<PostReactionData, ThrowOnError>): RequestResult<PostReactionResponses, PostReactionErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PostReactionResponses, PostReactionErrors, ThrowOnError>({
-            url: '/channels/{channel_id}/reaction',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Handler for `POST /channels/{channel_id}/typing`.
-     */
-    public postTyping<ThrowOnError extends boolean = false>(options: Options<PostTypingData, ThrowOnError>): RequestResult<PostTypingResponses, PostTypingErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PostTypingResponses, PostTypingErrors, ThrowOnError>({
-            url: '/channels/{channel_id}/typing',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -885,58 +887,6 @@ export class Sdk extends HeyApiClient {
      */
     public getChannels<ThrowOnError extends boolean = false>(options?: Options<GetChannelsData, ThrowOnError>): RequestResult<GetChannelsResponses, GetChannelsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetChannelsResponses, GetChannelsErrors, ThrowOnError>({ url: '/comms/channels', ...options });
-    }
-    
-    /**
-     * Soft-delete a CRM comment, scoped to the requesting user's team. When it
-     * was the thread's last live comment, the thread is soft-deleted too
-     * (reported via `threadDeleted`).
-     */
-    public deleteCrmComment<ThrowOnError extends boolean = false>(options: Options<DeleteCrmCommentData, ThrowOnError>): RequestResult<DeleteCrmCommentResponses, DeleteCrmCommentErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteCrmCommentResponses, DeleteCrmCommentErrors, ThrowOnError>({ url: '/crm/comment/{comment_id}', ...options });
-    }
-    
-    /**
-     * Edit a CRM comment's text, scoped to the requesting user's team via the
-     * comment's thread → entity → company. Returns the updated comment.
-     */
-    public editCrmComment<ThrowOnError extends boolean = false>(options: Options<EditCrmCommentData, ThrowOnError>): RequestResult<EditCrmCommentResponses, EditCrmCommentErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<EditCrmCommentResponses, EditCrmCommentErrors, ThrowOnError>({
-            url: '/crm/comment/{comment_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * List the comment threads on a CRM company or contact. Access is
-     * enforced by [`EntityPermissionExtractor`] against the path's
-     * `crm_company`/`crm_contact` entity type — hidden parents are
-     * invisible to plain members. An accessible entity with no threads
-     * returns `200 []`.
-     */
-    public listCrmComments<ThrowOnError extends boolean = false>(options: Options<ListCrmCommentsData, ThrowOnError>): RequestResult<ListCrmCommentsResponses, ListCrmCommentsErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<ListCrmCommentsResponses, ListCrmCommentsErrors, ThrowOnError>({ url: '/crm/comments/{entity_type}/{entity_id}', ...options });
-    }
-    
-    /**
-     * Create a comment on a CRM company or contact — a new thread, or a reply
-     * when `threadId` is supplied. Returns the full thread (with all comments)
-     * after the insert. Team-scoped; 404 when the entity isn't owned by the
-     * team or `threadId` doesn't belong to it.
-     */
-    public createCrmComment<ThrowOnError extends boolean = false>(options: Options<CreateCrmCommentData, ThrowOnError>): RequestResult<CreateCrmCommentResponses, CreateCrmCommentErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<CreateCrmCommentResponses, CreateCrmCommentErrors, ThrowOnError>({
-            url: '/crm/comments/{entity_type}/{entity_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
     }
     
     /**
@@ -1054,6 +1004,15 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Search the caller's team's CRM contacts by email or name. Any team member
+     * may search visible contacts; admin/owner callers also match hidden
+     * contacts and contacts under hidden companies.
+     */
+    public searchContacts<ThrowOnError extends boolean = false>(options?: Options<SearchContactsData, ThrowOnError>): RequestResult<SearchContactsResponses, SearchContactsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<SearchContactsResponses, SearchContactsErrors, ThrowOnError>({ url: '/crm/contacts', ...options });
+    }
+    
+    /**
      * Look up a CRM contact by email in the caller's team. Returns a null
      * `contact` when no visible contact exists. Any team member may resolve a
      * visible contact; admin/owner callers may also resolve hidden contacts and
@@ -1153,6 +1112,217 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+    
+    /**
+     * List the caller's databases.
+     */
+    public listDatabases<ThrowOnError extends boolean = false>(options?: Options<ListDatabasesData, ThrowOnError>): RequestResult<ListDatabasesResponses, ListDatabasesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListDatabasesResponses, ListDatabasesErrors, ThrowOnError>({ url: '/databases', ...options });
+    }
+    
+    /**
+     * Create a database owned by the caller; its first table, "Table 1", holds a
+     * "Name" text column.
+     */
+    public createDatabase<ThrowOnError extends boolean = false>(options: Options<CreateDatabaseData, ThrowOnError>): RequestResult<CreateDatabaseResponses, CreateDatabaseErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateDatabaseResponses, CreateDatabaseErrors, ThrowOnError>({
+            url: '/databases',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Save an immutable query. Editing a question saves a new one.
+     */
+    public saveDatabaseQuery<ThrowOnError extends boolean = false>(options: Options<SaveDatabaseQueryData, ThrowOnError>): RequestResult<SaveDatabaseQueryResponses, SaveDatabaseQueryErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SaveDatabaseQueryResponses, SaveDatabaseQueryErrors, ThrowOnError>({
+            url: '/databases/queries',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * A saved query's definition, for its creator or a viewer of its database.
+     */
+    public getDatabaseQuery<ThrowOnError extends boolean = false>(options: Options<GetDatabaseQueryData, ThrowOnError>): RequestResult<GetDatabaseQueryResponses, GetDatabaseQueryErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDatabaseQueryResponses, GetDatabaseQueryErrors, ThrowOnError>({ url: '/databases/queries/{query_id}', ...options });
+    }
+    
+    /**
+     * Create a small example once for the authenticated user, if they have no databases.
+     */
+    public ensureStarterHandler<ThrowOnError extends boolean = false>(options?: Options<EnsureStarterHandlerData, ThrowOnError>): RequestResult<EnsureStarterHandlerResponses, EnsureStarterHandlerErrors, ThrowOnError> {
+        return (options?.client ?? this.client).post<EnsureStarterHandlerResponses, EnsureStarterHandlerErrors, ThrowOnError>({ url: '/databases/starter', ...options });
+    }
+    
+    /**
+     * Schema detail of one database.
+     */
+    public getDatabase<ThrowOnError extends boolean = false>(options: Options<GetDatabaseData, ThrowOnError>): RequestResult<GetDatabaseResponses, GetDatabaseErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDatabaseResponses, GetDatabaseErrors, ThrowOnError>({ url: '/databases/{id}', ...options });
+    }
+    
+    /**
+     * Tell a database's other viewers where the caller is.
+     */
+    public shareDatabaseAwareness<ThrowOnError extends boolean = false>(options: Options<ShareDatabaseAwarenessData, ThrowOnError>): RequestResult<ShareDatabaseAwarenessResponses, ShareDatabaseAwarenessErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<ShareDatabaseAwarenessResponses, ShareDatabaseAwarenessErrors, ThrowOnError>({
+            url: '/databases/{id}/awareness',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Undo one of your own committed changes: its inverse applies as a new,
+     * journaled batch, under the table's lock, guarded against what others
+     * changed since. A cell someone changed since is left alone and listed; a
+     * row or column you added that someone else wrote since, or a name, option,
+     * order, view or card place changed since, refuses the undo. Others'
+     * changes always stay. Redo by undoing the undo's change.
+     */
+    public undoDatabaseChange<ThrowOnError extends boolean = false>(options: Options<UndoDatabaseChangeData, ThrowOnError>): RequestResult<UndoDatabaseChangeResponses, UndoDatabaseChangeErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<UndoDatabaseChangeResponses, UndoDatabaseChangeErrors, ThrowOnError>({ url: '/databases/{id}/changes/{change}/undo', ...options });
+    }
+    
+    /**
+     * Import a new table and every row atomically; retries carry the same request ID.
+     */
+    public importDatabaseTable<ThrowOnError extends boolean = false>(options: Options<ImportDatabaseTableData, ThrowOnError>): RequestResult<ImportDatabaseTableResponses, ImportDatabaseTableErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ImportDatabaseTableResponses, ImportDatabaseTableErrors, ThrowOnError>({
+            url: '/databases/{id}/import',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Apply a batch of typed ops, the one write surface of a database: add,
+     * rename, remove and order tables and columns, change a column's type, add
+     * and change options, insert, update and delete rows, and write views and a
+     * board's card places. The ops apply in order in one transaction, so a
+     * later op may name a table, column, option or view an earlier one created
+     * under the id its client minted. Ops are last-write-wins unless the batch names
+     * base versions. A refused op, named by its index (and row and column where
+     * relevant), leaves the whole batch unwritten.
+     */
+    public applyDatabaseOps<ThrowOnError extends boolean = false>(options: Options<ApplyDatabaseOpsData, ThrowOnError>): RequestResult<ApplyDatabaseOpsResponses, ApplyDatabaseOpsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ApplyDatabaseOpsResponses, ApplyDatabaseOpsErrors, ThrowOnError>({
+            url: '/databases/{id}/ops',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read recipients for a database owned by the caller. Link and team
+     * sharing are always `null`: databases do not support them yet.
+     */
+    public getDatabasePermissions<ThrowOnError extends boolean = false>(options: Options<GetDatabasePermissionsData, ThrowOnError>): RequestResult<GetDatabasePermissionsResponses, GetDatabasePermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDatabasePermissionsResponses, GetDatabasePermissionsErrors, ThrowOnError>({ url: '/databases/{id}/permissions', ...options });
+    }
+    
+    /**
+     * Update channel recipients after proving database ownership. Turning on
+     * link or team sharing is refused; ownership cannot be changed here.
+     */
+    public updateDatabasePermissions<ThrowOnError extends boolean = false>(options: Options<UpdateDatabasePermissionsData, ThrowOnError>): RequestResult<UpdateDatabasePermissionsResponses, UpdateDatabasePermissionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateDatabasePermissionsResponses, UpdateDatabasePermissionsErrors, ThrowOnError>({
+            url: '/databases/{id}/permissions',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * What changed in a table since a version, from the change journal: the
+     * rows that changed, each once as it stands now (`insert`, `update` or
+     * `delete`), and the columns. A reader holding the table at `since` reads
+     * just those rows; it reads the table whole when a column changed, the
+     * journal is not `complete`, or the rows are `truncated`.
+     */
+    public getDatabaseTableChanges<ThrowOnError extends boolean = false>(options: Options<GetDatabaseTableChangesData, ThrowOnError>): RequestResult<GetDatabaseTableChangesResponses, GetDatabaseTableChangesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDatabaseTableChangesResponses, GetDatabaseTableChangesErrors, ThrowOnError>({ url: '/databases/{id}/tables/{table_id}/changes', ...options });
+    }
+    
+    /**
+     * What changing one column to each type of the type menu would do to its
+     * values: safe, checked (with how many values would not convert and a few
+     * of them), or never (with why). Changes nothing.
+     */
+    public listDatabaseColumnCasts<ThrowOnError extends boolean = false>(options: Options<ListDatabaseColumnCastsData, ThrowOnError>): RequestResult<ListDatabaseColumnCastsResponses, ListDatabaseColumnCastsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListDatabaseColumnCastsResponses, ListDatabaseColumnCastsErrors, ThrowOnError>({ url: '/databases/{id}/tables/{table_id}/columns/{column_id}/casts', ...options });
+    }
+    
+    /**
+     * What one column's values become under another type: the values that
+     * convert, with the options they need, for a new column of that type beside
+     * it. The column itself is left as it is: a client writes the conversion as
+     * one ops batch, a `create_column` then an `update_rows`, with the answered
+     * table version as its base version. Changes nothing.
+     */
+    public convertDatabaseColumn<ThrowOnError extends boolean = false>(options: Options<ConvertDatabaseColumnData, ThrowOnError>): RequestResult<ConvertDatabaseColumnResponses, ConvertDatabaseColumnErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ConvertDatabaseColumnResponses, ConvertDatabaseColumnErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns/{column_id}/conversion',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Settle a new empty text column's type.
+     */
+    public inferDatabaseColumnType<ThrowOnError extends boolean = false>(options: Options<InferDatabaseColumnTypeData, ThrowOnError>): RequestResult<InferDatabaseColumnTypeResponses, InferDatabaseColumnTypeErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<InferDatabaseColumnTypeResponses, InferDatabaseColumnTypeErrors, ThrowOnError>({
+            url: '/databases/{id}/tables/{table_id}/columns/{column_id}/infer-type',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * A row's history, from the change journal: every committed change that
+     * touched it, newest first, with who made it, when, and the values of the
+     * columns it touched before and after. It reads after the row is removed,
+     * so a removed row's last values stay readable.
+     */
+    public getDatabaseRowHistory<ThrowOnError extends boolean = false>(options: Options<GetDatabaseRowHistoryData, ThrowOnError>): RequestResult<GetDatabaseRowHistoryResponses, GetDatabaseRowHistoryErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDatabaseRowHistoryResponses, GetDatabaseRowHistoryErrors, ThrowOnError>({ url: '/databases/{id}/tables/{table_id}/rows/{row_id}/history', ...options });
+    }
+    
+    /**
+     * Where a board's cards sit, for drawing it: the views come with the
+     * database's detail, their cards' places from here.
+     */
+    public getDatabaseViewPositions<ThrowOnError extends boolean = false>(options: Options<GetDatabaseViewPositionsData, ThrowOnError>): RequestResult<GetDatabaseViewPositionsResponses, GetDatabaseViewPositionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDatabaseViewPositionsResponses, GetDatabaseViewPositionsErrors, ThrowOnError>({ url: '/databases/{id}/views/{view_id}/positions', ...options });
     }
     
     /**
@@ -1622,6 +1792,35 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * List the repositories and authors among the GitHub pull requests visible to the caller.
+     */
+    public getGithubPullRequestFacets<ThrowOnError extends boolean = false>(options?: Options<GetGithubPullRequestFacetsData, ThrowOnError>): RequestResult<GetGithubPullRequestFacetsResponses, GetGithubPullRequestFacetsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetGithubPullRequestFacetsResponses, GetGithubPullRequestFacetsErrors, ThrowOnError>({ url: '/github_pull_requests/facets', ...options });
+    }
+    
+    /**
+     * Get the pull request behind a foreign entity record the caller can view.
+     */
+    public getGithubPullRequest<ThrowOnError extends boolean = false>(options: Options<GetGithubPullRequestData, ThrowOnError>): RequestResult<GetGithubPullRequestResponses, GetGithubPullRequestErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetGithubPullRequestResponses, GetGithubPullRequestErrors, ThrowOnError>({ url: '/github_pull_requests/{id}', ...options });
+    }
+    
+    /**
+     * Get the changes of the pull request behind a foreign entity record the caller can view.
+     */
+    public getGithubPullRequestChanges<ThrowOnError extends boolean = false>(options: Options<GetGithubPullRequestChangesData, ThrowOnError>): RequestResult<GetGithubPullRequestChangesResponses, GetGithubPullRequestChangesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetGithubPullRequestChangesResponses, GetGithubPullRequestChangesErrors, ThrowOnError>({ url: '/github_pull_requests/{id}/changes', ...options });
+    }
+    
+    /**
+     * Get the patch of changes of the pull request behind a foreign entity record the caller can
+     * view.
+     */
+    public getGithubPullRequestChangesPatch<ThrowOnError extends boolean = false>(options: Options<GetGithubPullRequestChangesPatchData, ThrowOnError>): RequestResult<GetGithubPullRequestChangesPatchResponses, GetGithubPullRequestChangesPatchErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetGithubPullRequestChangesPatchResponses, GetGithubPullRequestChangesPatchErrors, ThrowOnError>({ url: '/github_pull_requests/{id}/changes/patch', ...options });
+    }
+    
+    /**
      * Handler for `POST /harness-pairings`.
      *
      * Unauthenticated by design: the daemon has no credential yet - obtaining one
@@ -1797,27 +1996,6 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
-    }
-    
-    /**
-     * Assign tasks the caller can edit.
-     */
-    public assignInitiativeTasks<ThrowOnError extends boolean = false>(options: Options<AssignInitiativeTasksData, ThrowOnError>): RequestResult<AssignInitiativeTasksResponses, AssignInitiativeTasksErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<AssignInitiativeTasksResponses, AssignInitiativeTasksErrors, ThrowOnError>({
-            url: '/initiatives/{initiative_id}/tasks',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Unassign one task the caller can edit.
-     */
-    public unassignInitiativeTask<ThrowOnError extends boolean = false>(options: Options<UnassignInitiativeTaskData, ThrowOnError>): RequestResult<UnassignInitiativeTaskResponses, UnassignInitiativeTaskErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<UnassignInitiativeTaskResponses, UnassignInitiativeTaskErrors, ThrowOnError>({ url: '/initiatives/{initiative_id}/tasks/{task_id}', ...options });
     }
     
     /**
@@ -2192,6 +2370,41 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Native reminder rows, ordered and paginated by the owning domain.
+     */
+    public listReminderCollection<ThrowOnError extends boolean = false>(options?: Options<ListReminderCollectionData, ThrowOnError>): RequestResult<ListReminderCollectionResponses, ListReminderCollectionErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListReminderCollectionResponses, ListReminderCollectionErrors, ThrowOnError>({ url: '/reminders/collection', ...options });
+    }
+    
+    /**
+     * List original email threads with caller-private reminder work.
+     */
+    public listEmailReminders<ThrowOnError extends boolean = false>(options?: Options<ListEmailRemindersData, ThrowOnError>): RequestResult<ListEmailRemindersResponses, ListEmailRemindersErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListEmailRemindersResponses, ListEmailRemindersErrors, ThrowOnError>({ url: '/reminders/email/collection', ...options });
+    }
+    
+    /**
+     * Read an email follow-up and reconcile inbound reply cancellation.
+     */
+    public getEmailFollowup<ThrowOnError extends boolean = false>(options: Options<GetEmailFollowupData, ThrowOnError>): RequestResult<GetEmailFollowupResponses, GetEmailFollowupErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetEmailFollowupResponses, GetEmailFollowupErrors, ThrowOnError>({ url: '/reminders/email/{thread_id}', ...options });
+    }
+    
+    /**
+     * Schedule, edit or remove one email follow-up as an idempotent operation.
+     */
+    public setEmailFollowup<ThrowOnError extends boolean = false>(options: Options<SetEmailFollowupData, ThrowOnError>): RequestResult<SetEmailFollowupResponses, SetEmailFollowupErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SetEmailFollowupResponses, SetEmailFollowupErrors, ThrowOnError>({
+            url: '/reminders/email/{thread_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Delete one of the caller's reminders.
      */
     public deleteReminder<ThrowOnError extends boolean = false>(options: Options<DeleteReminderData, ThrowOnError>): RequestResult<DeleteReminderResponses, DeleteReminderErrors, ThrowOnError> {
@@ -2252,6 +2465,81 @@ export class Sdk extends HeyApiClient {
     public patchViewHandler<ThrowOnError extends boolean = false>(options: Options<PatchViewHandlerData, ThrowOnError>): RequestResult<PatchViewHandlerResponses, PatchViewHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchViewHandlerResponses, PatchViewHandlerErrors, ThrowOnError>({
             url: '/saved_views/{saved_view_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * List this administrator's team receipts, effective server limits and source binding.
+     */
+    public listSlackImports<ThrowOnError extends boolean = false>(options?: Options<ListSlackImportsData, ThrowOnError>): RequestResult<ListSlackImportsResponses, unknown, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListSlackImportsResponses, unknown, ThrowOnError>({ url: '/slack/imports', ...options });
+    }
+    
+    /**
+     * Create or replay a job using a scoped idempotency token and full selected metadata.
+     * Missing creation timestamps and unknown message counts are represented as null.
+     */
+    public createSlackImport<ThrowOnError extends boolean = false>(options: Options<CreateSlackImportData, ThrowOnError>): RequestResult<CreateSlackImportResponses, CreateSlackImportErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateSlackImportResponses, CreateSlackImportErrors, ThrowOnError>({
+            url: '/slack/imports',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read sanitized progress; foreign jobs are indistinguishable from missing jobs.
+     */
+    public getSlackImport<ThrowOnError extends boolean = false>(options: Options<GetSlackImportData, ThrowOnError>): RequestResult<GetSlackImportResponses, GetSlackImportErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetSlackImportResponses, GetSlackImportErrors, ThrowOnError>({ url: '/slack/imports/{job_id}', ...options });
+    }
+    
+    /**
+     * Stop unclaimed work. Active leases may settle; cancellation does not roll back history.
+     */
+    public cancelSlackImport<ThrowOnError extends boolean = false>(options: Options<CancelSlackImportData, ThrowOnError>): RequestResult<CancelSlackImportResponses, CancelSlackImportErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CancelSlackImportResponses, CancelSlackImportErrors, ThrowOnError>({ url: '/slack/imports/{job_id}/cancel', ...options });
+    }
+    
+    /**
+     * Close registration idempotently; never-ready conversations are skipped, not queued work.
+     */
+    public finalizeSlackImport<ThrowOnError extends boolean = false>(options: Options<FinalizeSlackImportData, ThrowOnError>): RequestResult<FinalizeSlackImportResponses, FinalizeSlackImportErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<FinalizeSlackImportResponses, FinalizeSlackImportErrors, ThrowOnError>({ url: '/slack/imports/{job_id}/finalize', ...options });
+    }
+    
+    /**
+     * Issue short-lived, checksum/length-bound, create-only PUT grants. Do not log or persist URLs.
+     * Retry a PUT returning 412 by completing/verifying the existing object, not overwriting it.
+     */
+    public registerSlackImportUploads<ThrowOnError extends boolean = false>(options: Options<RegisterSlackImportUploadsData, ThrowOnError>): RequestResult<RegisterSlackImportUploadsResponses, RegisterSlackImportUploadsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RegisterSlackImportUploadsResponses, RegisterSlackImportUploadsErrors, ThrowOnError>({
+            url: '/slack/imports/{job_id}/uploads',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Verify storage checksums and lengths for registered objects. A seal fixes the ENTIRE
+     * descriptor set (contiguous indices, sizes and hashes), not just this completion batch.
+     * Empty uploads with a zero-part seal support shape-only or empty-history imports.
+     * Work becomes ready only after verified users metadata, a seal and every required part.
+     */
+    public completeSlackImportUploads<ThrowOnError extends boolean = false>(options: Options<CompleteSlackImportUploadsData, ThrowOnError>): RequestResult<CompleteSlackImportUploadsResponses, CompleteSlackImportUploadsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CompleteSlackImportUploadsResponses, CompleteSlackImportUploadsErrors, ThrowOnError>({
+            url: '/slack/imports/{job_id}/uploads/complete',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

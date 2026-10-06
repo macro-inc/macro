@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for the browser's slow SQL execution telemetry callback.
-version = "0.6.18"
+# Rebuild for database rows in the local filter index, after main's resumable reads.
+version = "0.6.38"
 
 [features]
 default = []
@@ -38,10 +38,10 @@ serde = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
 turso-opfs = { path = "../turso-opfs" }
+uuid = { workspace = true, features = ["js"] }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
-uuid = { workspace = true, features = ["js"] }
 wasm-bindgen-test = { workspace = true }

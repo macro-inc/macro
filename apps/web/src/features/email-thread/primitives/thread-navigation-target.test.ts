@@ -57,7 +57,8 @@ function setup(
     const [targetMessageId, setTarget] = createSignal<string | undefined>(
       target
     );
-    const host = { targetMessageId, isActive };
+    const [targetRequest, setTargetRequest] = createSignal('initial');
+    const host = { targetMessageId, targetRequest, isActive };
     const state = createEmailThreadState(source, host);
     const navigation = createThreadNavigation(
       { threadId },
@@ -72,6 +73,7 @@ function setup(
       navigation,
       fetchOlder,
       setTarget,
+      setTargetRequest,
       setFetching,
       setTouch,
       setActive,
@@ -265,6 +267,21 @@ it('does not restart a cleared target on a cache update, but supports opening it
     await vi.advanceTimersByTimeAsync(20);
     expect(fixture.state.messages.targetMessageId()).toBe('target');
     expect(fixture.container.scrollBy).toHaveBeenCalledTimes(2);
+  } finally {
+    fixture.dispose();
+  }
+});
+
+it('replays a previously handled message when a fresh route request arrives', async () => {
+  const fixture = setup('target', ['first', 'target', 'last']);
+  try {
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fixture.container.scrollBy).toHaveBeenCalledOnce();
+    expect(fixture.state.messages.targetMessageId()).toBeUndefined();
+    fixture.setTargetRequest('second-click');
+    await vi.advanceTimersByTimeAsync(20);
+    expect(fixture.container.scrollBy).toHaveBeenCalledTimes(2);
+    expect(fixture.state.messages.focusedId()).toBe('target');
   } finally {
     fixture.dispose();
   }

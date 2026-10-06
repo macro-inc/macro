@@ -30,6 +30,7 @@ export {
   getSnippetHit,
   isHitSnippetEntity,
 } from './extractors-search/snippet-entity';
+export { OwnerLabel } from './owner/owner-display';
 export { EntityProvider } from './Provider';
 export {
   createBulkCopyDssEntityMutation,
@@ -70,6 +71,7 @@ export {
   COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
   getTaskAssigneeIds,
+  getTaskReferencedEntityIds,
   getTaskStatusOptionId,
 } from './utils/task-properties';
 export {

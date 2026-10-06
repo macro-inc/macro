@@ -28,16 +28,35 @@ export class CrmNamespace {
     const { contact } = unwrap(
       await this.client.storage.getContactByEmail({
         query: { email },
-      }),
+      })
     );
     return contact ? Contact.from(this.client, contact) : undefined;
+  }
+
+  /**
+   * Search the caller's current team's CRM contacts whose email or name
+   * contains `query` (case-insensitive), most recently interacted first.
+   * An empty query lists the most recent contacts.
+   *
+   * @param opts.limit Maximum contacts to return (1-500, default 20).
+   */
+  async searchContacts(
+    query: string,
+    opts: { limit?: number } = {}
+  ): Promise<Contact[]> {
+    const { contacts } = unwrap(
+      await this.client.storage.searchContacts({
+        query: { query, limit: opts.limit },
+      })
+    );
+    return contacts.map((contact) => Contact.from(this.client, contact));
   }
 
   /** Create a CRM company for the caller's current team. */
   async createCompany(opts: CreateCrmCompanyRequest): Promise<Company> {
     return Company.from(
       this.client,
-      unwrap(await this.client.storage.createCrmCompany({ body: opts })),
+      unwrap(await this.client.storage.createCrmCompany({ body: opts }))
     );
   }
 
@@ -48,10 +67,10 @@ export class CrmNamespace {
 
   /** Partially update the caller's current team's CRM settings. */
   async updateSettings(
-    settings: UpdateCrmTeamSettingsRequest,
+    settings: UpdateCrmTeamSettingsRequest
   ): Promise<CrmTeamSettingsResponse> {
     return unwrap(
-      await this.client.storage.putCrmTeamSettings({ body: settings }),
+      await this.client.storage.putCrmTeamSettings({ body: settings })
     );
   }
 

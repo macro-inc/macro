@@ -1,14 +1,14 @@
-import { useEntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
+import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createMemo, Show, Suspense } from 'solid-js';
-import { DriveDetailView } from '../components/DriveDetailView';
+import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { DriveFileDropzone } from '../components/drive-file-dropzone';
 import { useDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { DRIVE_TABS } from '../core/types';
+import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { DriveBreadcrumbs } from './drive-breadcrumbs';
 import { DriveHeader } from './drive-header';
 import { DriveList } from './drive-list';
@@ -22,14 +22,14 @@ export function DriveLoading() {
   );
 }
 
-export function DriveWorkspace() {
+export function DriveWorkspace(props: { tour?: JSX.Element }) {
   const { state, sidebar, actions } = useDriveView();
 
   const breadcrumbs = createMemo(() =>
     driveLocationBreadcrumbs(state.value().location, sidebar.folders())
   );
 
-  const navigation = useEntityDetailNavigationStack();
+  const navigation = useDriveDetailNavigation();
 
   const panel = useSplitPanelOrThrow();
 
@@ -63,10 +63,11 @@ export function DriveWorkspace() {
             </ViewShell.Aside>
             <ViewShell.Main>
               <Show
-                when={navigation.active()}
+                when={navigation.active() || navigation.activeCallId()}
                 fallback={
                   <>
                     <DriveHeader />
+                    {props.tour}
                     <ViewShell.Content>
                       <Suspense fallback={<DriveLoading />}>
                         <DriveFileDropzone onDrop={actions.dropFiles}>
@@ -77,7 +78,9 @@ export function DriveWorkspace() {
                   </>
                 }
               >
-                <DriveDetailView breadcrumbOrderOffset={breadcrumbs().length} />
+                <Suspense fallback={<DriveLoading />}>
+                  <SplitRouter.Outlet />
+                </Suspense>
               </Show>
             </ViewShell.Main>
           </ViewShell.Root>

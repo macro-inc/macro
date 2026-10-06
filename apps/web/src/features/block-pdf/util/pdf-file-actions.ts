@@ -47,24 +47,25 @@ export async function downloadPdfDocument(
   const blob = await pdfBytes(proxy);
   const fileNameWithExtension = `${auth.fileName}.pdf`;
 
-  try {
-    // No need to export if there are no modifications.
-    // Comments live outside the modification data, so they are handled separately.
-    if (!auth.hasModifications && !auth.hasComments)
-      return downloadFile(blob, fileNameWithExtension);
+  // No need to export if there are no modifications.
+  // Comments live outside the modification data, so they are handled separately.
+  if (!auth.hasModifications && !auth.hasComments) {
+    await downloadFile(blob, fileNameWithExtension);
+    return;
+  }
 
-    const exportFile = await exportPdf({
+  let exportFile: Blob;
+  try {
+    exportFile = await exportPdf({
       documentId: auth.documentId,
       fileName: auth.fileName,
     });
-    downloadFile(exportFile, fileNameWithExtension);
-  } catch (_) {
-    try {
-      downloadFile(blob, fileNameWithExtension);
-    } catch (_) {
-      toast.failure('Unable to download file');
-    }
+  } catch (error) {
+    // Fall back to the unmodified bytes rather than downloading nothing.
+    console.error('Unable to export PDF modifications', error);
+    exportFile = blob;
   }
+  await downloadFile(exportFile, fileNameWithExtension);
 }
 
 export async function downloadDocxDocument(
@@ -76,8 +77,8 @@ export async function downloadDocxDocument(
 
   try {
     const blob = await fetchExportedDocx(auth.documentId);
-    downloadFile(blob, fileNameWithExtension);
-    toast.success('File downloaded successfully');
+    const { saved } = await downloadFile(blob, fileNameWithExtension);
+    if (saved) toast.success('File downloaded successfully');
   } catch (error) {
     console.error('Download failed:', error);
     toast.failure('Failed to download file');

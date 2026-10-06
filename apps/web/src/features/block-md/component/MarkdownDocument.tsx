@@ -9,7 +9,7 @@ import {
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import type {
   InitialSync,
-  TimeoutError,
+  SyncError,
 } from '@macro-inc/collaboration/collab/source';
 import {
   BrowserWALStore,
@@ -37,6 +37,7 @@ import {
   type MarkdownDocumentState,
 } from '../context/markdown-document-state';
 import { HistoryProvider } from '../history/HistoryContext';
+import { HistoryWorkspace } from '../history/HistoryWorkspace';
 import { resumeDocumentSpan, stampLoroSnapshotState } from '../observability';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
@@ -143,7 +144,7 @@ async function ingestLocalSnapshot(
 
 async function ingestRemoteSnapshot(
   loroManager: MarkdownLoroManager,
-  doInitialSync: () => ResultAsync<InitialSync, TimeoutError>
+  doInitialSync: () => ResultAsync<InitialSync, SyncError>
 ): Promise<SnapshotResult> {
   const sync = await doInitialSync();
   if (sync.isErr()) {
@@ -217,7 +218,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
           tabIndex={-1}
         >
           <HistoryProvider documentId={() => props.documentId}>
-            {props.children}
+            <HistoryWorkspace>{props.children}</HistoryWorkspace>
           </HistoryProvider>
         </div>
       </MarkdownNameProvider>
@@ -226,7 +227,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
 }
 
 type MarkdownSnapshotIngestOptions = {
-  doInitialSync?: () => ResultAsync<InitialSync, TimeoutError>;
+  doInitialSync?: () => ResultAsync<InitialSync, SyncError>;
   optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
   loadCachedSnapshot?: () => Promise<Uint8Array | undefined>;
   onDataReady?: () => void;

@@ -11,6 +11,10 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
 import { err, ok, type Result } from 'neverthrow';
 import type OpenAI from 'openai';
+import {
+  type AI_USAGE_LIMIT_ERROR,
+  aiUsageErrorResponseHandler,
+} from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -339,9 +343,13 @@ export const cognitionApiServiceClient = {
   /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
   async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
     return (
-      await dcsFetch<SendChatMessageResponse>(`/stream/chat/message`, {
+      await fetchWithToken<
+        SendChatMessageResponse,
+        typeof AI_USAGE_LIMIT_ERROR
+      >(`${dcsHost}/stream/chat/message`, {
         method: 'POST',
         body: JSON.stringify(args),
+        errorResponseHandler: aiUsageErrorResponseHandler,
       })
     ).map((result) => result);
   },
@@ -491,9 +499,13 @@ export const cognitionApiServiceClient = {
 
   async structuredCompletion(args: StructuredCompletionRequest) {
     return (
-      await dcsFetch<StructuredCompletionResponse>(`/structured-completion`, {
+      await fetchWithToken<
+        StructuredCompletionResponse,
+        typeof AI_USAGE_LIMIT_ERROR
+      >(`${dcsHost}/structured-completion`, {
         method: 'POST',
         body: JSON.stringify(args),
+        errorResponseHandler: aiUsageErrorResponseHandler,
       })
     ).map((result) => result);
   },

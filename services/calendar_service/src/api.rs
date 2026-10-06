@@ -15,7 +15,7 @@ mod calendar_watch;
 pub mod swagger;
 
 /// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
-/// alongside `/` so a dedicated ALB keeps working during cutover.
+/// alongside `/`, where the target group's `/health` check probes.
 const GATEWAY_PATH_PREFIX: &str = "/calendar";
 
 /// Build the application and serve it until a shutdown signal arrives.
@@ -64,10 +64,20 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
     // Calendar mutations follow the calendar sync kill switch: without sync a
     // provider write would never be reflected locally.
     if state.config.calendar_sync_enabled {
-        calendar_watch::router().merge(calendar_mutation_router(CalendarMutationRouterState::new(
-            state.calendar_mutation_service.clone(),
-            state.authorization_state.clone(),
-        )))
+        calendar_watch::router()
+            .nest(
+                "/scheduling",
+                calendar_scheduling::inbound::router::router(
+                    calendar_scheduling::inbound::router::RouterState::new(
+                        state.scheduling_service.clone(),
+                        state.authorization_state.clone(),
+                    ),
+                ),
+            )
+            .merge(calendar_mutation_router(CalendarMutationRouterState::new(
+                state.calendar_mutation_service.clone(),
+                state.authorization_state.clone(),
+            )))
     } else {
         calendar_watch::router()
     }

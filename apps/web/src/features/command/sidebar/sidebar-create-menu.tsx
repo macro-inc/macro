@@ -8,6 +8,7 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@phosphor/note-pencil.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, Hotkey, NavRow } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createSignal,
   For,
@@ -16,6 +17,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { APP_TOUR } from './tour';
 
 export type SidebarCreateMenuProps = {
   /** Only read by the built-in `row` variant, for its tooltip. */
@@ -37,6 +39,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const blocks = useCreateMenuBlocks();
+  let selectedAction: (() => void) | undefined;
 
   const isSlim = () => props.isSlim?.() ?? false;
 
@@ -47,6 +50,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     setOpen(nextOpen);
     props.onMenuOpenChange?.(nextOpen);
     if (nextOpen) {
+      selectedAction = undefined;
       setActiveScope(CREATE_MENU_COMMAND_SCOPE);
     } else {
       activateClosestDOMScope();
@@ -59,7 +63,8 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     if (!open() || context.eventType !== 'keydown') return false;
 
     if (
-      context.pressedKeysString === 'c' ||
+      (context.pressedKeysString === 'c' &&
+        !blocks().some((block) => block.hotkey === 'c')) ||
       context.pressedKeysString === 'escape'
     ) {
       setOpen(false);
@@ -76,13 +81,19 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     });
 
     if (!matchingBlock) return false;
+    if (
+      context.isEditableFocused &&
+      matchingBlock.runWithInputFocused === false
+    )
+      return false;
 
+    selectedAction = () => matchingBlock.keyDownHandler(context.event);
     setOpen(false);
-    matchingBlock.keyDownHandler?.(context.event);
     activateClosestDOMScope();
     return true;
   });
 
+  const createMenuTarget = tourTarget(APP_TOUR.createMenu);
   return (
     <Dropdown
       open={open()}
@@ -97,6 +108,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             when={props.variant === 'icon'}
             fallback={
               <Dropdown.Trigger
+                ref={createMenuTarget}
                 as={NavRow}
                 class="center h-8 bg-ink/4 text-[13px]"
                 fullWidth
@@ -127,11 +139,12 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             }
           >
             <Dropdown.Trigger
+              ref={createMenuTarget}
               as={Button}
               variant="outline"
               size="icon-sm"
               depth={1}
-              class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
+              class="size-[26px] bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
               label="Create"
               hotkey={TOKENS.global.createCommand}
               onMouseDown={(e: MouseEvent) => {
@@ -146,6 +159,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
       >
         {(trigger) => (
           <Dropdown.Trigger
+            ref={createMenuTarget}
             as={trigger()}
             // `Dropdown.Trigger` hardcodes `variant`/`size` for its default
             // `as={Button}` and spreads props after them, so both leak into a
@@ -157,15 +171,24 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
         )}
       </Show>
 
-      <Dropdown.Content class="min-w-52">
+      <Dropdown.Content
+        class="min-w-52"
+        onCloseAutoFocus={(event) => {
+          if (!selectedAction) return;
+          event.preventDefault();
+          // Finish the menu's focus restoration before opening the composer.
+          queueMicrotask(selectedAction);
+          selectedAction = undefined;
+        }}
+      >
         <Dropdown.Group>
           <For each={blocks()}>
             {(block) => (
               <Dropdown.Item
                 class="min-h-9 gap-2 px-2.5"
                 onSelect={() => {
+                  selectedAction = () => block.keyDownHandler();
                   setOpen(false);
-                  block.keyDownHandler();
                 }}
               >
                 <div class="size-4 shrink-0 flex items-center rounded-sm text-ink-muted [&_svg]:size-4">
