@@ -100,11 +100,14 @@ review requests.
 GitHub user ID. If the link-status endpoint has no identity, the list explains
 why the tab is unavailable.
 Search, filter, and sort controls appear above the list. Filters cover
-repository, author, assignee, label, and, when a GitHub identity is linked,
+priority, linked work, repository, author, assignee, label, and, when a GitHub
+identity is linked,
 reviews (Reviewed by you, Not reviewed by you, and Awaiting review from you).
 Saved review selections stay inactive, including their filter badge and empty-state
 copy, while the GitHub identity is unavailable; they resume when it returns.
-Sort offers Recently updated, Least recently updated, Newest, and Oldest. When visible PRs
+Sort offers Priority, Recently updated, Least recently updated, Newest, and Oldest;
+Priority orders the loaded rows most urgent first and keeps recency within a
+priority. When visible PRs
 have GitHub labels, a Labels section below Favorites lists them with their
 colors; choosing a label shows only PRs with it, and choosing it again clears
 it. PR rows use the shared entity layout with selection checkboxes,
@@ -112,6 +115,23 @@ author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
 authors fall back to GitHub names. The virtualized list fetches more pages as
 you scroll, including when local filtering removes most fetched rows.
+
+Each PR row shows what it links to. A priority icon before the title comes from
+the most urgent open linked task (a closed task counts only when none is open),
+otherwise from a GitHub priority label (`P0`–`P3`, `priority: high`, `urgent`,
+`critical`); the tooltip names its source. Pills before the author show the
+linked **Agent session**s (sessions an agent opened the PR from, or a person
+linked), **Customer**s (CRM companies in linked tasks' Companies property, or a
+company whose thread started a session), **Ticket**s (tasks the PR text, branch,
+or comments mention as `MACRO-<id>`, and tasks whose thread started a session),
+and **Channel**s (channels whose thread started a session). A pill with one item
+opens it (Shift-click for another split); with more it shows `+N` and opens a
+list. Items the viewer cannot access are omitted. Rows show a pulsing
+placeholder while links load. Filters add **Priority** (including No priority)
+and **Linked to** (an agent session, a ticket, a customer, a channel); these
+run on the loaded rows, which wait for their links before matching. The PR
+side panel's **Linked work** section lists the same priority, tickets,
+customers, and channels.
 
 PR rows can be added to or removed from Favorites through their context menu or
 bulk entity actions. When at least one accessible PR is favorited, Reviews shows

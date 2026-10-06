@@ -10,13 +10,18 @@ import {
   useParams,
 } from '@app/lib/split-router';
 import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
+import { prLinksTarget, usePrLinksQuery } from '@block-pr/data/pr-links-query';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { ListEntityMetadataQueryProvider } from '@entity';
+import {
+  type GithubPullRequestEntity,
+  ListEntityMetadataQueryProvider,
+} from '@entity';
 import { GithubLabelPill } from '@entity/components/GithubLabelPill';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import {
@@ -37,7 +42,12 @@ import { ReviewsSidebar } from './components/ReviewsSidebar';
 import { createReviewsListController } from './primitives/create-reviews-list-controller';
 import { useReviewsFacetsQuery } from './queries/use-reviews-facets-query';
 import { useReviewsQuery } from './queries/use-reviews-query';
-import { effectiveReviewsFilters, searchReviews } from './reviews-filter';
+import {
+  applyReviewLinks,
+  effectiveReviewsFilters,
+  hasLinkFilters,
+  searchReviews,
+} from './reviews-filter';
 import { reviewsHostedContent } from './reviews-hosted-content';
 import { reviewsTabSearch, reviewsTabSearchCodec } from './reviews-tab-search';
 import {
@@ -148,7 +158,33 @@ function ReviewsRoot() {
       { search: searchForTab(scope()) }
     );
   };
-  const reviews = createMemo(() => searchReviews(source.reviews(), search()));
+  // Links load for every fetched row, not just the searched ones, so the
+  // per-page cache entries stay stable while the search changes.
+  const links = usePrLinksQuery(() =>
+    source.reviews().map((review) => prLinksTarget(review.metadata))
+  );
+  const linksFor = (review: GithubPullRequestEntity) =>
+    links.linksFor(prLinksTarget(review.metadata).url);
+  const reviews = createMemo(() =>
+    applyReviewLinks(
+      searchReviews(source.reviews(), search()),
+      linksFor,
+      activeFilters(),
+      sort()
+    )
+  );
+  // Link filters cannot match rows before their links arrive, so an empty
+  // result waits for them instead of claiming nothing matches.
+  const listSource = {
+    ...source,
+    isLoading: () =>
+      source.isLoading() ||
+      (hasLinkFilters(activeFilters()) &&
+        links.isLoading() &&
+        reviews().length === 0),
+  };
+  const openLink = (content: SplitContent, newSplit: boolean) =>
+    layout.openWithSplit(content, { preferNewSplit: newSplit });
   const listController = createReviewsListController(reviews, openReview);
   const selectLabels = (labels: string[]) => {
     setFilters((current) => ({ ...current, label: labels }));
@@ -226,7 +262,12 @@ function ReviewsRoot() {
       <ViewShell.Content>
         <ReviewsList
           list={listController}
-          source={source}
+          source={listSource}
+          links={{
+            linksFor,
+            companyName: links.companyName,
+            onOpen: openLink,
+          }}
           scope={scope()}
           authorLogin={authorLogin()}
           authorId={authorId()}

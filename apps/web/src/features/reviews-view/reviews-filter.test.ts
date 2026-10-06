@@ -1,5 +1,7 @@
+import type { PrLinks } from '@block-pr/data/pr-links';
+import type { GithubPullRequestEntity } from '@entity';
 import { describe, expect, it } from 'vitest';
-import { effectiveReviewsFilters } from './reviews-filter';
+import { applyReviewLinks, effectiveReviewsFilters } from './reviews-filter';
 import {
   EMPTY_REVIEWS_FILTERS,
   type ReviewsFilterSelection,
@@ -30,5 +32,68 @@ describe('effective review filters', () => {
       false
     );
     expect(Object.values(active).flat()).toEqual([]);
+  });
+});
+
+describe('review link filters and priority sort', () => {
+  const review = (id: string) =>
+    ({ id, metadata: { labels: [] } }) as unknown as GithubPullRequestEntity;
+  const links = (overrides: Partial<PrLinks>): PrLinks => ({
+    sessions: [],
+    tasks: [],
+    channelIds: [],
+    companyIds: [],
+    priority: { id: 'none' },
+    ...overrides,
+  });
+  const byId: Record<string, PrLinks | undefined> = {
+    low: links({ priority: { id: 'low', source: 'label' } }),
+    urgent: links({
+      priority: { id: 'urgent', source: 'task', taskId: 't' },
+      companyIds: ['acme'],
+    }),
+    none: links({ sessions: [{ id: 's', source: 'agent' }] }),
+    pending: undefined,
+  };
+  const reviews = ['low', 'pending', 'none', 'urgent'].map(review);
+  const linksFor = (entity: GithubPullRequestEntity) => byId[entity.id];
+  const ids = (list: GithubPullRequestEntity[]) =>
+    list.map((entity) => entity.id);
+
+  it('sorts most urgent first and keeps the server order within a priority', () => {
+    expect(
+      ids(
+        applyReviewLinks(reviews, linksFor, EMPTY_REVIEWS_FILTERS, 'priority')
+      )
+    ).toEqual(['urgent', 'low', 'pending', 'none']);
+  });
+
+  it('leaves the order alone for other sorts', () => {
+    expect(
+      ids(applyReviewLinks(reviews, linksFor, EMPTY_REVIEWS_FILTERS, 'newest'))
+    ).toEqual(['low', 'pending', 'none', 'urgent']);
+  });
+
+  it('matches any selected priority or link and holds back unloaded rows', () => {
+    expect(
+      ids(
+        applyReviewLinks(
+          reviews,
+          linksFor,
+          { ...EMPTY_REVIEWS_FILTERS, priority: ['urgent', 'none'] },
+          'recently_updated'
+        )
+      )
+    ).toEqual(['none', 'urgent']);
+    expect(
+      ids(
+        applyReviewLinks(
+          reviews,
+          linksFor,
+          { ...EMPTY_REVIEWS_FILTERS, linked: ['agent', 'customer'] },
+          'recently_updated'
+        )
+      )
+    ).toEqual(['none', 'urgent']);
   });
 });
