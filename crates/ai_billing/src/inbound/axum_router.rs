@@ -3,8 +3,10 @@
 //! hooks.
 
 use crate::domain::{
-    AiPricing, BillingError, BillingService, CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS,
-    OVERAGE_LIMIT_MIN_CENTS, PaymentGateway, PlanTier, SubscriptionScope, UsageSnapshot,
+    AUTO_RELOAD_DEFAULT_MINIMUM_CENTS, AUTO_RELOAD_DEFAULT_TARGET_CENTS,
+    AUTO_RELOAD_TARGET_MAX_CENTS, AiPricing, AutoReloadThresholds, BillingError, BillingService,
+    CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS, PaymentGateway, PlanTier,
+    SubscriptionScope, UsageSnapshot,
 };
 use axum::{
     Json, Router,
@@ -58,6 +60,19 @@ pub struct PlanCatalogResponse {
     pub overage_limit_min_cents: i64,
     /// Largest allowed overage cap, cents.
     pub overage_limit_max_cents: i64,
+    /// Largest allowed automatic reload target, cents.
+    pub auto_reload_target_max_cents: i64,
+    /// Thresholds automatic reload starts from before the payer sets their own.
+    pub auto_reload_defaults: AutoReloadDefaults,
+}
+
+/// The automatic reload thresholds a payer starts from.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct AutoReloadDefaults {
+    /// Balance below which a reload fires, cents.
+    pub minimum_balance_cents: i64,
+    /// Balance a reload tops up to, cents.
+    pub target_balance_cents: i64,
 }
 
 /// Request body for [`update_overage_handler`].
@@ -69,6 +84,35 @@ pub struct UpdateOverageRequest {
     /// Per-period cap on overage spend, cents. Required when enabling.
     #[serde(default)]
     pub limit_cents: i64,
+}
+
+/// Request body for [`update_auto_reload_handler`].
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAutoReloadRequest {
+    /// Reload credits automatically, billing usage past allowance and
+    /// credits to the payer's card. Turning this off also turns off overage.
+    pub enabled: bool,
+    /// Reload once the balance drops below this, cents. Must be positive.
+    pub minimum_balance_cents: i64,
+    /// Reload the balance back up to this, cents. At least $0.50 above the
+    /// minimum and no more than the catalog's `auto_reload_target_max_cents`.
+    pub target_balance_cents: i64,
+    /// Most to reload per calendar month, cents. Omit or `null` for no limit.
+    /// Also serves as the per-period overage cap, within the catalog's
+    /// overage bounds.
+    #[serde(default)]
+    pub monthly_spend_limit_cents: Option<i64>,
+}
+
+impl From<&UpdateAutoReloadRequest> for AutoReloadThresholds {
+    fn from(req: &UpdateAutoReloadRequest) -> Self {
+        Self {
+            minimum_cents: req.minimum_balance_cents,
+            target_cents: req.target_balance_cents,
+            monthly_limit_cents: req.monthly_spend_limit_cents,
+        }
+    }
 }
 
 /// Request body for [`create_credit_checkout_handler`].
@@ -258,6 +302,10 @@ where
             patch(update_overage_handler::<B, Auth>),
         )
         .route(
+            "/ai-billing/auto-reload",
+            patch(update_auto_reload_handler::<B, Auth>),
+        )
+        .route(
             "/ai-billing/credits/checkout",
             post(create_credit_checkout_handler::<B, Auth>),
         )
@@ -324,7 +372,8 @@ pub async fn get_summary_handler<B: BillingService, Auth: MacroAuthorizationServ
     }
 }
 
-/// The plan catalog, credit packs, and overage cap bounds.
+/// The plan catalog, credit packs, overage cap bounds, and automatic reload
+/// defaults and bounds.
 #[utoipa::path(
     get,
     path = "/ai-billing/plans",
@@ -350,6 +399,11 @@ pub async fn get_plans_handler(State(pricing): State<AiPricing>) -> Json<PlanCat
         credit_packs_cents: CREDIT_PACKS_CENTS.to_vec(),
         overage_limit_min_cents: OVERAGE_LIMIT_MIN_CENTS,
         overage_limit_max_cents: OVERAGE_LIMIT_MAX_CENTS,
+        auto_reload_target_max_cents: AUTO_RELOAD_TARGET_MAX_CENTS,
+        auto_reload_defaults: AutoReloadDefaults {
+            minimum_balance_cents: AUTO_RELOAD_DEFAULT_MINIMUM_CENTS,
+            target_balance_cents: AUTO_RELOAD_DEFAULT_TARGET_CENTS,
+        },
     })
 }
 
@@ -380,6 +434,43 @@ pub async fn update_overage_handler<B: BillingService, Auth: MacroAuthorizationS
             &user.authorization.user.macro_user_id,
             req.enabled,
             req.limit_cents,
+        )
+        .await
+    {
+        Ok(snapshot) => Json(snapshot).into_response(),
+        Err(e) => error_response(e),
+    }
+}
+
+/// Turn automatic credit reloads (and with them overage) on with the given
+/// thresholds, or off. Payer only. Enabling settles right away, so a balance
+/// already under the minimum reloads immediately.
+#[utoipa::path(
+    patch,
+    path = "/ai-billing/auto-reload",
+    operation_id = "update_ai_billing_auto_reload",
+    request_body = UpdateAutoReloadRequest,
+    responses(
+        (status = 200, description = "Updated position", body = UsageSnapshot),
+        (status = 400, description = "Invalid thresholds", body = AiBillingErrorBody),
+        (status = 401, description = "Unauthorized"),
+        (status = 402, description = "A paid plan is required", body = AiBillingErrorBody),
+        (status = 403, description = "Only the payer may change billing", body = AiBillingErrorBody),
+        (status = 500, description = "Internal server error", body = AiBillingErrorBody),
+    ),
+    tag = "ai_billing"
+)]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+pub async fn update_auto_reload_handler<B: BillingService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<B>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(req): Json<UpdateAutoReloadRequest>,
+) -> Response {
+    match service
+        .update_auto_reload(
+            &user.authorization.user.macro_user_id,
+            req.enabled,
+            AutoReloadThresholds::from(&req),
         )
         .await
     {

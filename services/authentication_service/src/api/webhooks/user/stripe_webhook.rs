@@ -5,7 +5,9 @@ use crate::api::context::ApiContext;
 use crate::api::user::stripe::PaidPlan;
 
 use ai_billing::BillingService;
-use ai_billing::outbound::stripe_gateway::{PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY};
+use ai_billing::outbound::stripe_gateway::{
+    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY,
+};
 use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use anyhow::Context;
 use axum::{
@@ -228,25 +230,45 @@ async fn handle_payment_event(
         .as_ref()
         .map(|subscription| subscription.id().as_str())
     else {
-        // Our own one-off invoices: AI overage chunks. Their outcome drives
-        // whether the payer keeps overage; they never touch plan roles.
-        let is_overage_invoice = invoice
+        // Our own one-off invoices: AI overage chunks and automatic credit
+        // reloads. Their outcome drives whether the payer keeps overage or
+        // automatic reloads; they never touch plan roles.
+        let macro_purpose = invoice
             .metadata
             .as_ref()
             .and_then(|m| m.get(PURPOSE_METADATA_KEY))
-            .is_some_and(|purpose| purpose == PURPOSE_AI_OVERAGE);
-        if is_overage_invoice && let Some(invoice_id) = invoice.id.as_ref() {
-            tracing::info!(
-                event_type = ?event_type,
-                invoice_id = %invoice_id,
-                paid = !outcome.is_revoke(),
-                "processing ai overage invoice event"
-            );
-            ctx.ai_billing_service
-                .mark_overage_invoice(invoice_id.as_str(), !outcome.is_revoke())
-                .await
-                .context("failed to record ai overage invoice outcome")?;
-            return Ok(());
+            .map(String::as_str);
+        let paid = !outcome.is_revoke();
+        if let Some(invoice_id) = invoice.id.as_ref() {
+            match macro_purpose {
+                Some(PURPOSE_AI_OVERAGE) => {
+                    tracing::info!(
+                        event_type = ?event_type,
+                        invoice_id = %invoice_id,
+                        paid,
+                        "processing ai overage invoice event"
+                    );
+                    ctx.ai_billing_service
+                        .mark_overage_invoice(invoice_id.as_str(), paid)
+                        .await
+                        .context("failed to record ai overage invoice outcome")?;
+                    return Ok(());
+                }
+                Some(PURPOSE_AI_CREDIT_RELOAD) => {
+                    tracing::info!(
+                        event_type = ?event_type,
+                        invoice_id = %invoice_id,
+                        paid,
+                        "processing ai credit reload invoice event"
+                    );
+                    ctx.ai_billing_service
+                        .mark_credit_reload_invoice(invoice_id.as_str(), paid)
+                        .await
+                        .context("failed to record ai credit reload invoice outcome")?;
+                    return Ok(());
+                }
+                _ => {}
+            }
         }
         tracing::info!(
             event_type = ?event_type,
