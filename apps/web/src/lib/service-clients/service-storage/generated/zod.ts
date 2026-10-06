@@ -10599,6 +10599,44 @@ export const createTaskHandlerResponse = zod
   })
   .describe('Response for creating a task.');
 
+/**
+ * Returns the task documents each of up to 100 GitHub pull requests references, for the pull
+requests the caller can see.
+ * @summary Handler for `POST /documents/github_prs/tasks`.
+ */
+export const getGithubPullRequestTasksBody = zod
+  .object({
+    githubKeys: zod
+      .array(zod.string())
+      .describe('Pull request `owner\/repo\/pull\/number` keys, at most 100.'),
+  })
+  .describe(
+    'Request body for looking up the tasks linked to GitHub pull requests.'
+  );
+
+export const getGithubPullRequestTasksResponse = zod
+  .object({
+    pullRequests: zod
+      .array(
+        zod
+          .object({
+            githubKey: zod
+              .string()
+              .describe(
+                "The pull request's `owner\/repo\/pull\/number` key, as requested."
+              ),
+            taskIds: zod
+              .array(zod.string())
+              .describe(
+                'Ids of the task documents the pull request references, oldest link first. Empty when\nthe caller cannot see the pull request. The caller may still lack access to a task.'
+              ),
+          })
+          .describe('The tasks linked to one GitHub pull request.')
+      )
+      .describe('One entry per requested pull request, in request order.'),
+  })
+  .describe('The tasks linked to each requested GitHub pull request.');
+
 export const initializeUserDocumentsResponse = zod.object({
   success: zod.boolean().describe('Indicates if the request was successful'),
 });
