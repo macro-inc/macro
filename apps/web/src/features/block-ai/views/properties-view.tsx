@@ -5,13 +5,24 @@
  * out again.
  */
 
-import type { BlendMode, Info, Paint, Stroke } from '@core/ai-engine/types';
+import {
+  BLEND_MODES,
+  type BlendMode,
+  type Info,
+  type Paint,
+} from '@core/ai-engine/types';
 import {
   type PanelModel,
   type PanelPaint,
   PropertiesPanel,
 } from '../components/properties-panel';
-import { center, rotationOf, scaleAbout, toRect } from '../core/geometry';
+import {
+  center,
+  rotationOf,
+  scaleAbout,
+  toEdges,
+  toRect,
+} from '../core/geometry';
 import { paintCss, paintHex, paintKind, solidPaint } from '../core/paint';
 import type { AiEditor } from '../primitives/create-ai-editor';
 import type { AiViewer } from '../primitives/create-ai-viewer';
@@ -42,6 +53,9 @@ function panelPaint(paints: (Paint | null)[], containers: boolean): PanelPaint {
     mixed: containers || paints.some((p) => !same(p, first)),
   };
 }
+
+const isBlendMode = (value: string): value is BlendMode =>
+  (BLEND_MODES as readonly string[]).includes(value);
 
 const isContainer = (i: Info) =>
   i.kind === 'group' || i.kind === 'clipGroup' || i.kind === 'layer';
@@ -182,14 +196,15 @@ export function PropertiesView(props: {
             return;
           }
           const paint = solidPaint(hex);
-          if (paint)
-            void editor.updateStroke({ paint } as Partial<Stroke>, live);
+          if (paint) void editor.updateStroke({ paint }, live);
         },
         onStrokeProps: (patch, live) => void editor.updateStroke(patch, live),
         onOpacity: (value, live) =>
           void editor.setNodes({ opacity: value }, viewer.selected(), live),
-        onBlend: (mode) =>
-          void editor.setNodes({ blend: mode as BlendMode }, viewer.selected()),
+        onBlend: (mode) => {
+          if (isBlendMode(mode))
+            void editor.setNodes({ blend: mode }, viewer.selected());
+        },
         onText: (patch, live) => void changeText(patch, live),
         onAlign: (how) => void editor.align(how),
         onDistribute: (axis) => void editor.distribute(axis),
@@ -208,12 +223,7 @@ export function PropertiesView(props: {
               op: 'setArtboard',
               id: art.id,
               name: patch.name,
-              rect: patch.rect && {
-                x0: patch.rect.x,
-                y0: patch.rect.y,
-                x1: patch.rect.x + patch.rect.w,
-                y1: patch.rect.y + patch.rect.h,
-              },
+              rect: patch.rect && toEdges(patch.rect),
             },
           ]);
         },
