@@ -220,7 +220,7 @@ pub fn fold_bins(catalog: &Catalog, plan: &Plan, bins: Vec<Bin>) -> Result<Table
         })
         .collect::<Result<_, RunError>>()?;
     sort::groups(catalog, plan, &mut groups, *group_by, items);
-    Ok(groups.into_iter().map(|group| group.cells).collect())
+    Ok(window(plan, groups.into_iter().map(|group| group.cells)).collect())
 }
 
 /// Where an `ORDER BY` key lives in a group's output.

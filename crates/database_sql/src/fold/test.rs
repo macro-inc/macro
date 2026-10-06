@@ -212,6 +212,58 @@ fn bins_answer_a_count_only_group() {
 }
 
 #[test]
+fn grouped_bins_apply_limit_and_offset_after_sorting() {
+    use crate::engine::{Engine, Step};
+
+    for (window, expected) in [
+        (
+            "LIMIT 1",
+            vec![vec![
+                Some(Cell::Options(vec![WON])),
+                Some(Cell::Number(9.0)),
+            ]],
+        ),
+        (
+            "LIMIT 1 OFFSET 1",
+            vec![vec![
+                Some(Cell::Options(vec![LEAD])),
+                Some(Cell::Number(4.0)),
+            ]],
+        ),
+        ("LIMIT 0", vec![]),
+        ("LIMIT 1 OFFSET 3", vec![]),
+    ] {
+        let sql = format!(
+            "SELECT stage, COUNT(*) FROM crm.deals \
+             GROUP BY stage ORDER BY 2 DESC, stage {window}"
+        );
+        let (mut engine, step) = Engine::start(&catalog(), &sql).unwrap();
+        let Step::Bins(request) = step else {
+            panic!("expected grouped bins for {sql}");
+        };
+        let bins = vec![
+            Bin {
+                key: Some(Cell::Options(vec![LEAD])),
+                count: 4,
+            },
+            Bin {
+                key: None,
+                count: 4,
+            },
+            Bin {
+                key: Some(Cell::Options(vec![WON])),
+                count: 9,
+            },
+        ];
+        let Step::Done(outcome) = engine.feed_bins(request.id, bins).unwrap() else {
+            panic!("expected a completed read for {sql}");
+        };
+        assert_eq!(outcome.rows, expected, "{sql}");
+        assert!(outcome.row_ids.is_empty());
+    }
+}
+
+#[test]
 fn limit_and_offset_apply_after_ordering() {
     let windowed = plan("SELECT name FROM crm.deals ORDER BY name LIMIT 2 OFFSET 1");
     assert_eq!(
