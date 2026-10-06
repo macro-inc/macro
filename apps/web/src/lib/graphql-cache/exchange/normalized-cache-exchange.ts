@@ -1078,6 +1078,9 @@ export function normalizedCacheExchange(
         drainRunning = true;
         drainRequested = false;
         try {
+          // Restore can invalidate the generation while the host initializes.
+          // Finish that handshake before tagging a claim or starting its lease.
+          await host.currentRevision();
           const now = Date.now();
           // A wakeup probes immediately, but must retain a future retry
           // deadline if the durable head is not eligible yet. Consume expired
