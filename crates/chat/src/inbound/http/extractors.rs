@@ -159,7 +159,7 @@ mod test {
         let free = access(&[]);
         assert_eq!(free.best_model(), FREE_MODEL);
         assert!(free.has_access(FREE_MODEL));
-        assert!(free.has_access("anthropic/claude-haiku-4-5"));
+        assert!(!free.has_access("anthropic/claude-haiku-4-5"));
         assert!(!free.has_access("anthropic/claude-opus-5-5"));
         assert!(!free.has_access("anthropic/claude-sonnet-5-5"));
     }
