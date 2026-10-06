@@ -499,6 +499,20 @@ pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
     EntityAccessManagementService,
 >;
 
+/// Chat service for owner-checked permanent deletes. Unlike
+/// [`DssChatMutationService`] it publishes chat events, which is how search
+/// and activity learn a chat is gone.
+pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
+    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+    (),
+    EntityAccessManagementService,
+    DssEventBroker,
+>;
+
+/// State of `DELETE /internal/owned/{entity_type}/{entity_id}`.
+pub(crate) type DssOwnedPurgeState =
+    super::internal::OwnedPurgeState<DssDocumentPurger, DssChatPurgeService, ProjectService>;
+
 /// Concrete unified entity mutation service wired into GraphQL.
 pub(crate) type DssEntityMutationService =
     crate::service::entity_mutation::DssEntityMutationService<
@@ -828,6 +842,7 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
+    pub owned_purge_state: DssOwnedPurgeState,
 }
 
 env_var! {

@@ -276,6 +276,7 @@ zip = { workspace = true }
 [dev-dependencies]
 cool_asserts = "2"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 ordered-float = { workspace = true }
 
 [package.metadata.cargo-machete]

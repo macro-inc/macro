@@ -3,7 +3,8 @@ use crate::{
     api::{
         MACRO_INTERNAL_USER_ID,
         context::{
-            ApiContext, AuthorizationService, DocumentStorageServiceAuthKey, TaskPropertiesAdapter,
+            ApiContext, AuthorizationService, DocumentStorageServiceAuthKey, DssOwnedPurgeState,
+            TaskPropertiesAdapter,
         },
     },
     config::{
@@ -1809,6 +1810,21 @@ async fn run() -> anyhow::Result<()> {
         macro_event_broker.clone(),
     ));
 
+    let owned_purge_state = DssOwnedPurgeState::new(
+        document_purger.clone(),
+        Arc::new(
+            chat::domain::service::ChatServiceImpl::new_without_tools(
+                chat::outbound::postgres::PgChatRepo::new(
+                    db.clone(),
+                    owned_entity_registrar.clone(),
+                ),
+                entity_access_management_service.clone(),
+            )
+            .with_event_broker(macro_event_broker.clone()),
+        ),
+        project_service.clone(),
+    );
+
     let graphql_entity_mutation_service =
         Arc::new(service::entity_mutation::DssEntityMutationService::new(
             document_service.clone(),
@@ -2011,6 +2027,7 @@ async fn run() -> anyhow::Result<()> {
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
         },
+        owned_purge_state,
     };
 
     #[cfg(feature = "delete_document_worker")]
