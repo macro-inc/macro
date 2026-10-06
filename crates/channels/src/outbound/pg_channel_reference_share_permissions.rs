@@ -8,6 +8,7 @@ use crate::domain::{
 use anyhow::Context;
 use entity_access::domain::{models::EntityType, ports::EntityAccessService};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_file_type::FileType;
 use models_permissions::share_permission::{
     access_level::AccessLevel,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
@@ -59,13 +60,41 @@ where
                 )
                 .await
                 .context("failed to get user access level")?;
-            if let Some(level) = grant_level(item.entity_type(), access) {
-                ensure_referenced_item_visible_to_channel(&self.pool, channel_id, &item, level)
-                    .await?;
-            }
+            share_referenced_item_with_channel(&self.pool, channel_id, &item, access).await?;
         }
         Ok(())
     }
+}
+
+async fn share_referenced_item_with_channel(
+    db: &PgPool,
+    channel_id: Uuid,
+    item: &ReferencedShareItem,
+    sharer_access: Option<AccessLevel>,
+) -> anyhow::Result<()> {
+    let file_type = match item.entity_type() {
+        ReferencedShareItemType::Document => get_document_file_type(db, item.entity_id()).await?,
+        _ => None,
+    };
+    if let Some(level) = grant_level(item.entity_type(), file_type, sharer_access) {
+        ensure_referenced_item_visible_to_channel(db, channel_id, item, level).await?;
+    }
+    Ok(())
+}
+
+async fn get_document_file_type(
+    db: &PgPool,
+    document_id: &str,
+) -> anyhow::Result<Option<FileType>> {
+    let file_type = sqlx::query_scalar!(
+        r#"SELECT "fileType" as "file_type?" FROM "Document" WHERE id = $1"#,
+        document_id,
+    )
+    .fetch_optional(db)
+    .await
+    .context("failed to get document file type")?
+    .flatten();
+    Ok(file_type.and_then(|file_type| file_type.parse().ok()))
 }
 
 async fn ensure_referenced_item_visible_to_channel(

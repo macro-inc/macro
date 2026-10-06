@@ -1,6 +1,6 @@
 import {
-  formatIncludedAi,
   PLAN_BY_TIER,
+  PLAN_USAGE_LABELS,
   type PlanTier,
 } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -17,7 +17,6 @@ import {
   useAiBillingSummaryQuery,
   useChangePlanMutation,
   useCreateCheckoutSessionMutation,
-  useIncludedAiCentsByTier,
 } from '@queries/auth';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
@@ -29,22 +28,22 @@ import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 /**
  * Plan bullet points. The allowance line appears only with AI usage billing on
- * and once the plan catalog has supplied the amount.
+ * and describes usage relative to Pro.
  */
 const BILLING_PLAN_FEATURES: Record<
   PlanTier,
-  (includedAi: string | undefined) => string[]
+  (usage: string | undefined) => string[]
 > = {
-  free: (includedAi) => [
+  free: (usage) => [
     'Access to Haiku',
-    ...(includedAi ? [`${includedAi} of AI usage at cost each month`] : []),
+    ...(usage ? [usage] : []),
     'MCP access',
     '5 GB storage',
   ],
-  premium: (includedAi) => [
+  premium: (usage) => [
     'All agents',
     'All models',
-    ...(includedAi ? [`${includedAi} of AI usage at cost each month`] : []),
+    ...(usage ? [usage] : []),
     'No watermark',
     'AI projections',
     'Multiple email inboxes',
@@ -52,20 +51,17 @@ const BILLING_PLAN_FEATURES: Record<
     'Teams',
     '1 TB storage',
   ],
-  max: (includedAi) => [
-    'Everything in Premium',
-    ...(includedAi ? [`${includedAi} of AI usage at cost each month`] : []),
+  max: (usage) => [
+    'Everything in Pro',
+    ...(usage ? [usage] : []),
     'Priority support',
   ],
 };
 
 const PlanFeatures = (props: { tier: PlanTier }) => {
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
-  const includedAi = useIncludedAiCentsByTier();
   const allowance = () =>
-    aiUsageBilling().enabled
-      ? formatIncludedAi(includedAi()[props.tier])
-      : undefined;
+    aiUsageBilling().enabled ? PLAN_USAGE_LABELS[props.tier] : undefined;
   return (
     <For each={BILLING_PLAN_FEATURES[props.tier](allowance())}>
       {(label) => (
@@ -78,7 +74,7 @@ const PlanFeatures = (props: { tier: PlanTier }) => {
   );
 };
 
-/** "3 Premium seats, 1 Max seat" for a team's members. */
+/** "3 Pro seats, 1 Max seat" for a team's members. */
 function describeSeatPlans(members: TeamMember[]): string {
   const maxSeats = members.filter(
     (member) => (member as TeamMember & { plan?: PaidPlan }).plan === 'max'
@@ -86,7 +82,7 @@ function describeSeatPlans(members: TeamMember[]): string {
   const premiumSeats = members.length - maxSeats;
   const parts: string[] = [];
   if (premiumSeats > 0) {
-    parts.push(`${premiumSeats} Premium ${plural('seat', premiumSeats)}`);
+    parts.push(`${premiumSeats} Pro ${plural('seat', premiumSeats)}`);
   }
   if (maxSeats > 0) {
     parts.push(`${maxSeats} Max ${plural('seat', maxSeats)}`);
@@ -95,15 +91,11 @@ function describeSeatPlans(members: TeamMember[]): string {
 }
 
 const PlanPrice = (props: { tier: PaidPlan }) => {
-  const includedAi = useIncludedAiCentsByTier();
-  const allowance = () => formatIncludedAi(includedAi()[props.tier]);
   return (
     <p class="text-ink-extra-muted text-xs">
       ${PLAN_BY_TIER[props.tier].price} per seat / month
       <ShowFeatureFlag flag={enableAiUsageBilling}>
-        <Show when={allowance()}>
-          {(amount) => <> · includes {amount()} of AI usage at cost</>}
-        </Show>
+        <Show when={props.tier === 'max'}> · 10× usage</Show>
       </ShowFeatureFlag>
     </p>
   );
@@ -113,8 +105,6 @@ export const Billing = () => {
   const permissions = usePermissions();
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
-  const includedAi = useIncludedAiCentsByTier();
-  const premiumAllowance = () => formatIncludedAi(includedAi().premium);
   const userId = useUserId();
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
@@ -143,7 +133,7 @@ export const Billing = () => {
     return team.owner_id === uid ? 'owner' : 'member';
   });
 
-  // The billing summary knows the tier (Premium vs Max); the license status is
+  // The billing summary knows the tier (Pro vs Max); the license status is
   // the fallback while it loads or when the user is on the free plan.
   const tier = createMemo((): PlanTier => {
     if (summary.isSuccess) return summary.data.tier;
@@ -179,7 +169,7 @@ export const Billing = () => {
           ? aiUsageBilling().enabled
             ? 'Upgraded to Max. Your larger AI allowance applies right away.'
             : 'Upgraded to Max.'
-          : 'Switched to Premium.'
+          : 'Switched to Pro.'
       );
     } catch (error) {
       console.error(error);
@@ -292,7 +282,7 @@ export const Billing = () => {
                 <section class="flex flex-col gap-4 p-4">
                   <header class="flex items-center gap-2">
                     <div class="flex flex-col">
-                      <h2 class="text-lg font-medium text-ink">Premium</h2>
+                      <h2 class="text-lg font-medium text-ink">Pro</h2>
                       <PlanPrice tier="premium" />
                     </div>
                     <Button
@@ -378,13 +368,11 @@ export const Billing = () => {
                   disabled={changePlan.isPending}
                   onClick={() => void handleChangePlan('premium')}
                 >
-                  Switch to Premium
+                  Switch to Pro
                 </button>{' '}
-                ($40 per seat / month
+                (${PLAN_BY_TIER.premium.price} per seat / month
                 <ShowFeatureFlag flag={enableAiUsageBilling}>
-                  <Show when={premiumAllowance()}>
-                    {(amount) => <> with {amount()} of AI usage at cost</>}
-                  </Show>
+                  with standard usage
                 </ShowFeatureFlag>
                 ).
               </p>

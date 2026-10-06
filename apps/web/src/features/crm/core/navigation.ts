@@ -1,5 +1,10 @@
 export const CRM_VIEWS = [
   {
+    id: 'people',
+    label: 'People',
+    description: 'Contacts across your teams, combined by email',
+  },
+  {
     id: 'active',
     label: 'All companies',
     description: 'Every visible company in your CRM',

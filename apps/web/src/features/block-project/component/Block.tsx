@@ -176,7 +176,11 @@ const ProjectEntityListContent = (props: ProjectEntityListProps) => {
           emailView: 'all',
         })}
       >
-        <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
+        <SoupViewList
+          customScrollbarHidden={true}
+          scopeId={props.scopeId}
+          uploadProjectId={props.projectId}
+        />
       </SoupViewContextProvider>
     </SoupContextProvider>
   );

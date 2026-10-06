@@ -81,6 +81,7 @@ fn favorites_membership_changes_optimistically_and_rolls_back_without_a_new_quer
             .enqueue_optimistic_mutation_with_projections(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     identity_bindings: &[],
                     uuid: "00000000-0000-7000-8000-000000000007",
                     query: FAVORITE,
@@ -319,6 +320,7 @@ fn independent_property_optimism_survives_rollback_and_commits() {
                 .enqueue_optimistic_mutation_with_projections(
                     None,
                     BeginOptimisticWrite {
+                        client_metadata: None,
                         uuid: &uuid,
                         query: SET,
                         operation_name: None,

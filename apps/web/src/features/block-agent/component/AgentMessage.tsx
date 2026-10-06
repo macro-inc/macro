@@ -362,7 +362,7 @@ export function Message(props: {
                 when={failed().notice}
                 fallback={
                   <ActionLine
-                    label={`${TURN_FAILED_LABEL} — ${failed().message}`}
+                    label={TURN_FAILED_LABEL}
                     detail={failed().message}
                     failed
                   />

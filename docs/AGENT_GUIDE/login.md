@@ -115,7 +115,7 @@ redirect; after authentication the accent is saved to the user's theme and setup
 resumes at work email. Regular `/app/login` retains the direct sign-in screen.
 
 The steps are workspace color, feature interests, security, work Google account,
-personal Google account, tools, team, and the trial offer. Color selection forks
+personal Google account, tools, team, and plan selection. Color selection forks
 the default Macro Light or Macro Dark theme for the current mode and pins the
 custom accent palette; it does not modify a built-in theme. Interests are visual
 preferences only. Security and Google steps have a Read more section below the fold.
@@ -144,16 +144,22 @@ The confirmed tutorial save updates the session cache before leaving. A successf
 finish must not show "Couldn't finish setup — please try again", including when
 a background session refresh overlaps it.
 
-The trial offer contains no card fields or wallet buttons. Its primary button
-requests an automatic 30-day Premium trial through Stripe Checkout; no coupon
-code is required. Stripe collects the payment method for billing after the trial.
-Only a customer's first subscription qualifies, including canceled subscriptions
-in that check. Ineligible trial requests show an error instead of opening an
-immediately paid checkout. Standard purchases retain their existing billing terms.
-Cancellation returns to this step. A successful return
-polls the server's license state, completes onboarding, and enters the app without
-an extra confirmation click. A pending webhook shows a retryable confirmation
-state. The Guest scroll cue opens a comparison with a separate Guest continuation.
+The final screen keeps the “Free Claude & GPT for 30 days” headline and trial
+button above the fold. The “Continue with Free” scroll cue opens the pricing grid
+below, comparing Free, Pro, and Max. The grid loads monthly subscription prices
+from the billing catalog and describes Max as 10× Pro usage, without displaying
+dollar-denominated included AI allowances. Free completes onboarding without a
+card. Pro returns to the trial offer; Max starts standard paid checkout.
+The trial button requests 30 days free through Stripe Checkout, with no coupon
+required. Stripe collects the payment method for billing after the trial. Only a
+customer's first subscription qualifies, including canceled subscriptions in that
+check. Ineligible requests show an error instead of opening an immediately paid
+checkout. Invite promotions retain their own offer and terms.
+Cancellation returns to this step. A successful return polls the server's license
+state, completes onboarding, and enters the app without an extra confirmation
+click. A pending webhook shows a retryable confirmation state. If the catalog
+cannot load, Free remains available, Pro still returns to the trial offer, and
+Max checkout stays disabled until prices can be loaded with the retry action.
 Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume.
 

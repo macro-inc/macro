@@ -92,9 +92,11 @@ members = [
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
   "crates/pptx_engine",
+  "crates/psd_engine",
   "crates/predicate_index",
   "crates/prompt",
   "crates/properties_service",
@@ -451,6 +453,16 @@ opt-level = "s"
 # The fig engine's browser build (apps/web `build-fig-engine-wasm`): one
 # codegen unit and full LTO, so its rasterizing loops inline across crates.
 [profile.fig-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.psd-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.ai-engine-wasm]
 inherits = "release"
 lto = "fat"
 codegen-units = 1

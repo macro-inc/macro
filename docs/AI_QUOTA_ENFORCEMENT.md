@@ -97,7 +97,7 @@ Only two hosts participate:
 
 | Host | Gate | When disabled |
 | --- | --- | --- |
-| Authentication service | [`BillingServiceImpl::settle`](../crates/ai_billing/src/domain/service.rs) guards every caller: summary reads, overage changes, credit-purchase webhooks, and the internal settle endpoint | Returns without reading entitlements, consuming credits, or touching Stripe. Credit purchases are still booked and remain unconsumed |
+| Authentication service | [`BillingServiceImpl::settle`](../crates/ai_billing/src/domain/service.rs) guards every caller: summary reads, overage and auto-reload changes, credit-purchase webhooks, and the internal settle endpoint. It also reserves and collects automatic credit reloads | Returns without reading entitlements, consuming credits, reloading credits, or touching Stripe. Credit purchases are still booked and remain unconsumed |
 | Document cognition service | [`SettlingUsageRecorder`](../crates/ai_billing/src/outbound/settling_recorder.rs) requests settlement after counted usage lands | Usage is still recorded and counted; no settlement request is sent |
 
 Every other host composes admission through
@@ -108,6 +108,37 @@ is false, and with document cognition false the authentication service still
 settles on summary reads, overage changes, and credit purchases. Enable both
 together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
+
+Automatic credit reload is part of the same settlement. It fires only inside
+`BillingServiceImpl::settle`, so it shares the `ENABLE_AI_USAGE_BILLING` gate,
+and only for the current period, before an overage chunk is reserved: while
+overage is active (enabled, not suspended, cap above zero) and reloads are not
+reload-suspended, settlement compares the credit balance net of the period's
+uncovered usage with the payer's minimum balance and, below it, reloads up to the
+target balance. The minimum, target, and optional monthly spend limit are stored
+per payer on `ai_billing_account` (defaults `$10`, `$100`, and no limit). The
+monthly limit counts reloads Stripe may still collect (pending, paid, or failed
+with an invoice) within the UTC calendar month, independent of the Stripe period
+anchor; a remainder under the Stripe minimum charge is skipped. Each reload is one `ai_credit_reload` row reserved under the
+payer lock and collected as a one-off Stripe invoice stamped
+`macro_purpose = ai_credit_reload`; a paid invoice books an `ai_credit_ledger`
+purchase, idempotent on the invoice id. A declined invoice stays pending, which
+blocks further reloads, until the Stripe webhook reports it paid (credits are
+booked) or failed (reloads are suspended). A provider failure marks the reload
+failed and sets `auto_reload_suspended_at`; overage remains the fallback until
+the payer saves their settings again. A failed reload whose invoice reached
+Stripe keeps that invoice, and the next reservation after reloads are re-enabled
+retries it rather than opening a second one. `PATCH /ai-billing/auto-reload`
+(payer on a paid plan only) is how overage is turned on: enabling validates and
+stores the thresholds, sets `overage_enabled`, uses the monthly limit as the
+per-period overage cap (the offered maximum when there is no limit), clears both
+suspensions, and settles at once; disabling behaves like turning overage off and
+keeps the stored thresholds. A monthly limit must be at least the overage cap
+minimum (`$5`) so the cap is never raised above what the payer entered. The
+monthly limit bounds reload purchases per calendar month; the overage cap it
+seeds bounds how far *over* credits usage may run per Stripe period. They are
+not a combined budget. `GET /ai-billing/summary`
+reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
 dialog support all plans. Production activation follows the
@@ -124,8 +155,8 @@ Plan allowance copy and comparisons follow the `enable-ai-usage-billing` PostHog
 flag (`enableAiUsageBilling` in `apps/web/src/lib/core/constant/featureFlags.ts`),
 which defaults on in development builds and follows PostHog elsewhere;
 `VITE_ENABLE_AI_USAGE_BILLING` overrides it locally. Model usage multipliers have
-been removed. The Auto-Reload UI has no balance-triggered backend yet and cannot
-save outside its explicit display-only developer preview.
+been removed. The Auto-Reload dialog saves through `PATCH /ai-billing/auto-reload`
+and is the only surface that turns usage billing on.
 
 ## Public failure contracts
 

@@ -555,6 +555,7 @@ async fn main() -> anyhow::Result<()> {
             db.clone(),
             document_storage_service_client.clone(),
             teams_service.clone(),
+            onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
             stripe_client.clone(),
             config.service_internal_auth_key.to_string(),
             macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),

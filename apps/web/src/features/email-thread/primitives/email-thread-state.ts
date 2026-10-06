@@ -125,7 +125,30 @@ export function createEmailThreadState(
   const [hiddenChipFocused, setHiddenChipFocused] = createSignal(false);
   const [hoveredStop, setHoveredStop] = createSignal<HoveredThreadStop>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
-  const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
+  const [bottomReplyTarget, setBottomReplyTarget] = createSignal<{
+    threadId: string;
+    messageId: string;
+  }>();
+  // An open reply belongs to the selected message, even when sending adds
+  // a new last message to the thread.
+  const bottomReplyOpen = () => {
+    const target = bottomReplyTarget();
+    const thread = selected();
+    return (
+      !!target &&
+      target.threadId === thread?.db_id &&
+      target.messageId === thread.filtered.at(-1)?.db_id
+    );
+  };
+  const setBottomReplyOpen = (open: boolean) => {
+    const thread = selected();
+    const messageId = thread?.filtered.at(-1)?.db_id;
+    setBottomReplyTarget(
+      open && thread && messageId
+        ? { threadId: thread.db_id, messageId }
+        : undefined
+    );
+  };
   const [mobileReplyComposerOpen, setMobileReplyComposerOpen] =
     createSignal(false);
   const [mobileReplyComposerMessageId, setMobileReplyComposerMessageId] =

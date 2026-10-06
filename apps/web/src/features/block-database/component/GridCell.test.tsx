@@ -752,6 +752,58 @@ describe('grid cell', () => {
     expect(onWrite).not.toHaveBeenCalled();
   });
 
+  it.each(['9007199254740993', '-9007199254740993', '0x10', '1e309'])(
+    'keeps the numeric draft %s instead of silently coercing it on save',
+    (draft) => {
+      const onWrite = vi.fn(async () => true);
+      render(() => (
+        <GridCell
+          column={{ ...column, dataType: 'NUMBER' }}
+          value={12}
+          canEdit
+          onWrite={onWrite}
+          onAddOption={vi.fn(async () => true)}
+        />
+      ));
+      fireEvent.click(screen.getByRole('button', { name: /Name: 12/ }));
+      const input = screen.getByRole('textbox', { name: 'Edit Name' });
+      fireEvent.input(input, { target: { value: draft } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(screen.getByRole('alert').textContent).toBe(
+        'Enter a valid number'
+      );
+      expect(document.activeElement).toBe(input);
+      expect((input as HTMLInputElement).value).toBe(draft);
+      expect(onWrite).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ['9007199254740991', Number.MAX_SAFE_INTEGER],
+    ['-12.5', -12.5],
+    ['.75', 0.75],
+    ['1.25e3', 1250],
+  ])('saves the numeric draft %s without losing its value', (draft, value) => {
+    const onWrite = vi.fn(async () => true);
+    render(() => (
+      <GridCell
+        column={{ ...column, dataType: 'NUMBER' }}
+        value={12}
+        canEdit
+        onWrite={onWrite}
+        onAddOption={vi.fn(async () => true)}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /Name: 12/ }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Edit Name' }), {
+      target: { value: draft },
+    });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit Name' }), {
+      key: 'Enter',
+    });
+    expect(onWrite).toHaveBeenCalledExactlyOnceWith(value);
+  });
+
   it('opens a select through its editor control and tabs directly to a text field', async () => {
     let select: GridCellControl | undefined;
     let next: GridCellControl | undefined;

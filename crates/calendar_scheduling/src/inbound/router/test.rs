@@ -30,6 +30,9 @@ impl MacroAuthorizationService for Identity {
 }
 struct People;
 impl Directory for People {
+    async fn user_teams(&self, _: &str) -> Result<Vec<Uuid>, Error> {
+        Ok(vec![])
+    }
     async fn members(&self, _: Uuid) -> Result<Vec<TeamMember>, Error> {
         Ok(vec![
             TeamMember {

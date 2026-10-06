@@ -641,7 +641,14 @@ const Video: TypedRenderableEntity<VideoNode> = {
 const Paragraph: TypedRenderableElement<ParagraphNode> = {
   guard: (node: LexicalNode): node is ParagraphNode =>
     node.__type === 'paragraph',
-  render: (props) => <p class={props.theme.paragraph}>{props.children}</p>,
+  render: (props) => (
+    <p
+      class={props.theme.paragraph}
+      style={{ 'text-align': props.node.getFormatType() || undefined }}
+    >
+      {props.children}
+    </p>
+  ),
 };
 
 const Heading: TypedRenderableElement<HeadingNode> = {
@@ -652,6 +659,7 @@ const Heading: TypedRenderableElement<HeadingNode> = {
       <Dynamic
         component={tag}
         class={props.theme.heading?.[tag]}
+        style={{ 'text-align': props.node.getFormatType() || undefined }}
         children={props.children}
       />
     );
@@ -710,14 +718,26 @@ const ListItem: TypedRenderableElement<ListItemNode> = {
       .filter(Boolean)
       .join(' ');
 
-    return <li class={classes}>{props.children}</li>;
+    return (
+      <li
+        class={classes}
+        style={{ 'text-align': props.node.getFormatType() || undefined }}
+      >
+        {props.children}
+      </li>
+    );
   },
 };
 
 const Quote: TypedRenderableElement<QuoteNode> = {
   guard: (node: LexicalNode): node is QuoteNode => node.__type === 'quote',
   render: (props) => (
-    <blockquote class={props.theme.quote}>{props.children}</blockquote>
+    <blockquote
+      class={props.theme.quote}
+      style={{ 'text-align': props.node.getFormatType() || undefined }}
+    >
+      {props.children}
+    </blockquote>
   ),
 };
 
@@ -1066,6 +1086,24 @@ const context = createContext<{
   theme: Accessor<EditorThemeClasses>;
   lazy: Accessor<boolean>;
 }>({ editor: null, theme: () => baseTheme, lazy: () => true });
+
+/** Render a saved Lexical tree directly, preserving formats absent from Markdown. */
+export function StaticLexical(props: { serializedState: string }) {
+  const inherited = useContext(context);
+  const editor =
+    inherited.editor ?? newStaticRenderingEditor({ theme: inherited.theme() });
+  const tree = createMemo(() => {
+    const state = editor.parseEditorState(props.serializedState);
+    return state.read(() =>
+      Document({
+        rootNode: $getRoot(),
+        theme: inherited.theme(),
+        lazy: false,
+      })
+    );
+  });
+  return <>{tree()}</>;
+}
 
 export function StaticMarkdown(props: {
   markdown: string;

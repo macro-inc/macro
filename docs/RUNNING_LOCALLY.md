@@ -314,10 +314,17 @@ use that same HTTPS origin for attached local stacks.
 If your host firewall blocks Docker-to-host traffic, allow the instance's
 Docker network to reach the Vite port through `host.docker.internal`.
 Startup verifies `/app/` through the HTTPS proxy before printing “ready”;
-a listening Vite port alone is insufficient. A 502 with a proxy log such as
-`dial tcp <host-gateway>:<vite-port>: i/o timeout` indicates this firewall path
-is blocked. Firewall rules must cover the current instance's Docker network
+a listening Vite port alone is insufficient. Persistent 502s with proxy logs such
+as `dial tcp <host-gateway>:<vite-port>: i/o timeout` can indicate this firewall
+path is blocked. Firewall rules must cover the current instance's Docker network
 and frontend port, which can differ between instances.
+
+If `/app/` succeeds but the page stays blank, inspect script requests as well as
+API requests. Intermittent 502s for Vite modules can come from the burst of
+Docker-to-host connections during startup. The generated proxy limits Vite to
+16 upstream connections so module requests queue instead of exhausting the host
+listener. After applying an updated proxy configuration, restart only the
+instance's proxy and reload the page; existing databases and volumes can stay.
 
 Trust `infra/local/certs/ca.pem` in the visiting browser once (see the
 [certificate README](../infra/local/certs/README.md)), then open that URL.

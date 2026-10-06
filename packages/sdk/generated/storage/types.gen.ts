@@ -708,8 +708,8 @@ export type ApiChannelWithLatest = {
  */
 export type ApiEntityFilterAst = {
     /**
-     * Filters applied to agent sessions (wire key `asf`). Like reminders,
-     * empty/omitted returns **no** agent sessions: they are opt-in, so the
+     * Filters applied to agent sessions (wire key `asf`). An empty or
+     * omitted filter returns **no** agent sessions: they are opt-in, so the
      * caller must send `inc`, an id, or an owner to get any.
      */
     asf?: unknown;
@@ -734,6 +734,10 @@ export type ApiEntityFilterAst = {
      * the filters that should be applied to the channel entity
      */
     chanf?: unknown;
+    /**
+     * Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`).
+     */
+    crmf?: unknown;
     /**
      * the filters that should be applied to the channel-thread entity
      */
@@ -783,12 +787,6 @@ export type ApiEntityFilterAst = {
      * the filters that should be applied based on entity properties
      */
     propf?: unknown;
-    /**
-     * Filters applied to reminders (wire key `remf`). Unlike every other
-     * filter here, empty/omitted returns **no** reminders: they are opt-in,
-     * so the caller must send `inc`, an id, or an entity to get any.
-     */
-    remf?: unknown;
 };
 
 /**
@@ -3966,28 +3964,6 @@ export type CreateProjectResponse = {
 };
 
 /**
- * Request body for creating a reminder.
- */
-export type CreateReminderRequest = {
-    /**
-     * What to remind the caller about.
-     */
-    description: string;
-    /**
-     * Id of the entity to attach the reminder to. Requires `entityType`.
-     */
-    entityId?: string | null;
-    /**
-     * Type of the entity to attach the reminder to. Requires `entityId`.
-     */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
-    /**
-     * When and how often the reminder fires.
-     */
-    schedule: ReminderSchedule;
-};
-
-/**
  * Request body for creating a skill — a markdown document containing
  * instructions that AI reads and follows when the skill is referenced in an
  * AI input.
@@ -5586,7 +5562,7 @@ export type EmailFollowup = {
      */
     remindAt: string;
     /**
-     * Its ordinary reminder, used by the existing alert/management surfaces.
+     * Identity of the snooze and its delivery records.
      */
     reminderId: string;
     /**
@@ -5657,7 +5633,7 @@ export type EmailReminderCondition = 'if_no_reply' | 'regardless';
  */
 export type EmailReminderPage = {
     /**
-     * Coalesced rows in nearest-occurrence order.
+     * Original threads ordered by their snooze return time.
      */
     items: Array<EmailReminderSummary>;
     /**
@@ -5667,17 +5643,13 @@ export type EmailReminderPage = {
 };
 
 /**
- * One original thread, coalescing all of its current reminder work.
+ * An original thread with its active snooze.
  */
 export type EmailReminderSummary = {
     /**
-     * Number of eligible reminders attached to this thread.
+     * Active snooze, including the revision required for edits or removal.
      */
-    count: number;
-    /**
-     * Nearest eligible occurrence and its owning editor capability.
-     */
-    nearest: ReminderCollectionRow;
+    followup: EmailFollowup;
     /**
      * Original email identity, never a mirror reminder identity.
      */
@@ -5771,10 +5743,6 @@ export type EntityFilters = {
      * property-based filters applied across entity types
      */
     property_filters?: Array<PropertyFilter>;
-    /**
-     * the bundled [ReminderFilters]
-     */
-    reminder_filters?: ReminderFilters;
     /**
      * How the `tag_option_ids` combine: `any` (default) matches entities
      * holding at least one selected tag, `all` requires every selected tag.
@@ -6086,7 +6054,7 @@ export type FileSystemNodeWithIds = {
  * - ContentType::mime_type() - Gets MIME type for ContentType
  *
  */
-export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'fig' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'xlsm' | 'ppt' | 'doc' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'fig' | 'psd' | 'psb' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
 
 /**
  * Represents a file type update: either set to a specific type or clear to null.
@@ -9580,179 +9548,6 @@ export type RegisterUploads = {
 };
 
 /**
- * A reminder belonging to a user.
- *
- * `user_id` is deliberately absent: a reminder is only ever read by its owner,
- * so the field would be redundant on the wire.
- */
-export type Reminder = {
-    /**
-     * Set once the owner marks the reminder as dealt with. Firing does not
-     * set it — a delivered reminder is waiting on its owner, not finished.
-     */
-    completedAt?: string | null;
-    /**
-     * When the reminder was created.
-     */
-    createdAt: string;
-    /**
-     * What to remind the user about.
-     */
-    description: string;
-    /**
-     * When false, the dispatcher skips this reminder.
-     */
-    enabled: boolean;
-    /**
-     * Id of the associated entity, when the reminder is attached to one.
-     */
-    entityId?: string | null;
-    /**
-     * Type of the associated entity, when the reminder is attached to one.
-     */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
-    /**
-     * Reminder id.
-     */
-    id: string;
-    /**
-     * The next firing, derived from `schedule` on write.
-     */
-    nextRunAt: string;
-    /**
-     * When and how often the reminder fires.
-     */
-    schedule: ReminderSchedule;
-    /**
-     * When the reminder was last modified.
-     */
-    updatedAt: string;
-};
-
-/**
- * One continuous collection, including completed recurring reminders that still fire.
- */
-export type ReminderCollectionPage = {
-    /**
-     * Rows in server order.
-     */
-    items: Array<ReminderCollectionRow>;
-    /**
-     * Absent only on the final page.
-     */
-    nextCursor?: string | null;
-};
-
-/**
- * A native reminder row with its source and workflow capabilities resolved in bulk.
- */
-export type ReminderCollectionRow = {
-    emailFollowup?: null | EmailFollowup;
-    reference?: null | ReminderReference;
-    /**
-     * The caller's private reminder.
-     */
-    reminder: Reminder;
-};
-
-/**
- * Filters for reminders.
- */
-export type ReminderFilters = {
-    /**
-     * Filter on whether the owner has marked the reminder done. `None` returns
-     * both.
-     */
-    completed?: boolean | null;
-    /**
-     * Restrict to reminders attached to these entities, each `"{type}:{id}"`.
-     */
-    entities?: Array<string>;
-    /**
-     * Filter on whether the reminder's next run has come due, i.e. it has
-     * fired and is awaiting its owner. `None` returns both.
-     *
-     * Evaluated server-side against the database clock rather than a
-     * timestamp supplied by the caller: a timestamp would land in the query
-     * cache key and change on every render.
-     */
-    fired?: boolean | null;
-    /**
-     * Reminder ids to filter by. Empty to include all of the caller's reminders.
-     */
-    ids?: Array<string>;
-    /**
-     * Opt this query into reminders at all. Reminders are off by default —
-     * see [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for
-     * specific `ids` or `entities` also opts in.
-     */
-    include?: boolean;
-};
-
-/**
- * Display details of the entity a reminder is about, resolved alongside the
- * reminder itself.
- *
- * A reminder has no block of its own — it opens, and is iconed as, whatever it
- * references. Which block that is depends on the referenced document's file
- * type, so resolving it client-side would mean a second fetch per row against
- * a synchronous icon path. Reading it here keeps Soup to one round trip.
- *
- * Only documents populate these; every other entity type is identified by its
- * [`EntityType`] alone.
- */
-export type ReminderReference = {
-    /**
-     * The referenced document's file type, e.g. `md` or `pdf`.
-     */
-    fileType?: string | null;
-    /**
-     * The referenced document's sub type, e.g. `task` or `snippet`.
-     */
-    subType?: string | null;
-};
-
-/**
- * When a reminder fires.
- */
-export type ReminderSchedule = {
-    /**
-     * The instant to fire at.
-     */
-    remindAt: string;
-    type: 'once';
-} | {
-    /**
-     * Cron expression, either the conventional 5-field
-     * `min hour dom mon dow` or the 6-/7-field
-     * `sec min hour dom mon dow [year]`. A 5-field expression is stored
-     * normalized to 6 fields with a zero seconds field, so `0 9 * * *` and
-     * `0 0 9 * * *` are the same schedule and both read back as the latter.
-     */
-    cron: string;
-    /**
-     * The timezone the cron expression is evaluated in.
-     */
-    timezone: string;
-    type: 'recurring';
-};
-
-/**
- * The caller's reminders, soonest firing first.
- */
-export type RemindersList = {
-    /**
-     * Pass back as `cursor` to fetch the next page. Absent on the last page —
-     * its absence is the only end-of-list signal, since a page can be short.
-     */
-    nextCursor?: string | null;
-    /**
-     * The reminders.
-     */
-    reminders: Array<Reminder>;
-};
-
-/**
  * Request to remove participants.
  */
 export type RemoveParticipantsRequest = {
@@ -11163,6 +10958,65 @@ export type SoupCrmCompanySoupPropertiesField = {
 };
 
 /**
+ * One original CRM contact record, selected from the viewer's accessible teams.
+ */
+export type SoupCrmContactSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Parent company ID.
+     */
+    companyId: string;
+    /**
+     * Parent company's display name.
+     */
+    companyName: string;
+    /**
+     * Record creation time.
+     */
+    createdAt: string;
+    /**
+     * Full email address.
+     */
+    email: string;
+    /**
+     * Earliest interaction for this team record.
+     */
+    firstInteraction: string;
+    /**
+     * Whether the contact or parent company is hidden.
+     */
+    hidden: boolean;
+    /**
+     * Original team-owned contact ID.
+     */
+    id: string;
+    /**
+     * Latest interaction for this team record.
+     */
+    lastInteraction: string;
+    /**
+     * Team-local display name, if known.
+     */
+    name?: string | null;
+    /**
+     * Team owning this record.
+     */
+    teamId: string;
+    /**
+     * Record update time.
+     */
+    updatedAt: string;
+    /**
+     * The viewer's latest visit to this record.
+     */
+    viewedAt?: string | null;
+};
+
+/**
  * A CRM domain as displayed in Soup. Mirrors the crm crate's
  * [`CrmDomain`] with a stable wire shape that the FE can rely on.
  */
@@ -11562,16 +11416,16 @@ export type SoupItem = {
     tag: 'crmCompany';
 } | {
     /**
+     * Team-owned CRM contact.
+     */
+    data: SoupCrmContactSoupPropertiesField;
+    tag: 'crmContact';
+} | {
+    /**
      * Foreign entity item.
      */
     data: SoupForeignEntity;
     tag: 'foreignEntity';
-} | {
-    /**
-     * Reminder item.
-     */
-    data: SoupReminderSoupPropertiesField;
-    tag: 'reminder';
 } | {
     /**
      * Agent session item.
@@ -11773,105 +11627,6 @@ export type SoupProperty = {
      */
     id: string;
     value?: null | PropertyValue;
-};
-
-/**
- * The entity a reminder is about, resolved server-side.
- *
- * A reminder has no block of its own — it opens, and is iconed as, whatever it
- * references. Which block that is depends on the referenced document's file
- * type, and the client's icon path is synchronous, so this is resolved here
- * rather than costing a fetch per row.
- */
-export type SoupReminderReference = {
-    /**
-     * The referenced entity's type.
-     */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
-    /**
-     * File type, when the reference is a document — `md`, `pdf`, and so on.
-     */
-    fileType?: string | null;
-    /**
-     * The referenced entity's id.
-     */
-    id: string;
-    /**
-     * Sub type, when the reference is a task or snippet document.
-     */
-    subType?: string | null;
-};
-
-/**
- * How often a reminder fires, flattened for the wire.
- *
- * The domain's [`ReminderSchedule`] is an internally-tagged enum carrying a
- * validated cron type; Soup only needs enough to render "once" vs "every
- * weekday at 9am", so the cron is exposed as a plain string.
- */
-export type SoupReminderSchedule = {
-    /**
-     * The instant to fire at.
-     */
-    remindAt: string;
-    type: 'once';
-} | {
-    /**
-     * Cron expression, normalized to the 6-field form.
-     */
-    cron: string;
-    /**
-     * The timezone the cron expression is evaluated in.
-     */
-    timezone: string;
-    type: 'recurring';
-};
-
-/**
- * A reminder as displayed in Soup.
- *
- * Reminders are user-owned rather than shared, so unlike most Soup items they
- * carry no access metadata — the repository only ever returns the caller's own.
- */
-export type SoupReminderSoupPropertiesField = {
-    /**
-     * Properties attached to the entity.
-     */
-    properties: Array<SoupProperty>;
-} & {
-    /**
-     * When the owner acknowledged the occurrence; independent of future scheduling.
-     */
-    completedAt?: string | null;
-    /**
-     * When the reminder was created.
-     */
-    createdAt: string;
-    /**
-     * What to remind the user about. Doubles as the display name.
-     */
-    description: string;
-    /**
-     * When false, the dispatcher skips this reminder.
-     */
-    enabled: boolean;
-    /**
-     * The reminder id.
-     */
-    id: string;
-    /**
-     * The next firing. This is what Soup sorts reminders on.
-     */
-    nextRunAt: string;
-    referencedEntity?: null | SoupReminderReference;
-    /**
-     * When and how often the reminder fires.
-     */
-    schedule: SoupReminderSchedule;
-    /**
-     * When the reminder was last modified.
-     */
-    updatedAt: string;
 };
 
 /**
@@ -12952,37 +12707,6 @@ export type UpdateMeetingRequest = {
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
-/**
- * Request body for modifying a reminder. Omitted fields are left unchanged;
- * the entity association is not modifiable.
- *
- * Every field is optional but **not** nullable. `Option` here means "absent",
- * and serde cannot tell an explicit `null` from an omitted key — so a body of
- * `{"enabled": null}` would deserialize to an empty patch and be rejected as
- * having no fields to update. `nullable = false` keeps the schema from
- * advertising a value the API has no meaning for; the deserializer still
- * tolerates `null` rather than erroring on it.
- */
-export type UpdateReminderRequest = {
-    /**
-     * Mark the reminder as dealt with, or live again. Distinct from
-     * `enabled`, which controls whether the dispatcher considers it.
-     */
-    completed?: boolean;
-    /**
-     * Replacement description.
-     */
-    description?: string;
-    /**
-     * Whether the reminder should fire at all.
-     */
-    enabled?: boolean;
-    /**
-     * Replacement schedule.
-     */
-    schedule?: ReminderSchedule;
-};
-
 export type UpdateSharePermissionRequestV2 = {
     /**
      * Any channel share permissions to be created/updated/removed
@@ -13031,6 +12755,12 @@ export type UploadFolderRequest = {
      * The content of the folder
      */
     content: Array<FolderItem>;
+    /**
+     * Relative paths of folders to create even when they hold no files.
+     *
+     * Uses the same shape as [FolderItem::relative_path], root folder included.
+     */
+    folders?: Array<string>;
     /**
      * Optional parent project id to upload the folder into
      */
@@ -19368,122 +19098,6 @@ export type RecentlyDeletedResponses = {
 
 export type RecentlyDeletedResponse = RecentlyDeletedResponses[keyof RecentlyDeletedResponses];
 
-export type ListRemindersData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Restrict to reminders attached to an entity of these types.
-         */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row'>;
-        /**
-         * Restrict to reminders attached to these entity ids.
-         */
-        entityId?: Array<string>;
-        /**
-         * Include reminders that have already fired.
-         */
-        includeCompleted?: boolean;
-        /**
-         * Page size. Defaults to 100; larger values are capped at 500. A value
-         * that is not a non-negative integer is rejected by the query extractor.
-         */
-        limit?: number;
-        /**
-         * `nextCursor` from a previous page.
-         */
-        cursor?: string;
-    };
-    url: '/reminders';
-};
-
-export type ListRemindersErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListRemindersError = ListRemindersErrors[keyof ListRemindersErrors];
-
-export type ListRemindersResponses = {
-    200: RemindersList;
-};
-
-export type ListRemindersResponse = ListRemindersResponses[keyof ListRemindersResponses];
-
-export type CreateReminderData = {
-    body: CreateReminderRequest;
-    path?: never;
-    query?: never;
-    url: '/reminders';
-};
-
-export type CreateReminderErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    /**
-     * No access to the requested entity
-     */
-    403: ErrorResponse;
-    /**
-     * The requested entity does not exist
-     */
-    404: ErrorResponse;
-    /**
-     * Malformed request body (plain text)
-     */
-    422: unknown;
-    500: ErrorResponse;
-};
-
-export type CreateReminderError = CreateReminderErrors[keyof CreateReminderErrors];
-
-export type CreateReminderResponses = {
-    201: Reminder;
-};
-
-export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
-
-export type ListReminderCollectionData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Omit to include both done and not-done occurrences.
-         */
-        completed?: boolean;
-        /**
-         * Page size, bounded to 1–500.
-         */
-        limit?: number;
-        /**
-         * Position returned by the previous page.
-         */
-        cursor?: string;
-    };
-    url: '/reminders/collection';
-};
-
-export type ListReminderCollectionErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListReminderCollectionError = ListReminderCollectionErrors[keyof ListReminderCollectionErrors];
-
-export type ListReminderCollectionResponses = {
-    200: ReminderCollectionPage;
-};
-
-export type ListReminderCollectionResponse = ListReminderCollectionResponses[keyof ListReminderCollectionResponses];
-
 export type ListEmailRemindersData = {
     body?: never;
     path?: never;
@@ -19586,101 +19200,6 @@ export type SetEmailFollowupResponses = {
 };
 
 export type SetEmailFollowupResponse = SetEmailFollowupResponses[keyof SetEmailFollowupResponses];
-
-export type DeleteReminderData = {
-    body?: never;
-    path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/reminders/{id}';
-};
-
-export type DeleteReminderErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteReminderError = DeleteReminderErrors[keyof DeleteReminderErrors];
-
-export type DeleteReminderResponses = {
-    /**
-     * Reminder deleted
-     */
-    204: void;
-};
-
-export type DeleteReminderResponse = DeleteReminderResponses[keyof DeleteReminderResponses];
-
-export type GetReminderData = {
-    body?: never;
-    path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/reminders/{id}';
-};
-
-export type GetReminderErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetReminderError = GetReminderErrors[keyof GetReminderErrors];
-
-export type GetReminderResponses = {
-    200: Reminder;
-};
-
-export type GetReminderResponse = GetReminderResponses[keyof GetReminderResponses];
-
-export type UpdateReminderData = {
-    body: UpdateReminderRequest;
-    path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/reminders/{id}';
-};
-
-export type UpdateReminderErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    /**
-     * Malformed request body (plain text)
-     */
-    422: unknown;
-    500: ErrorResponse;
-};
-
-export type UpdateReminderError = UpdateReminderErrors[keyof UpdateReminderErrors];
-
-export type UpdateReminderResponses = {
-    200: Reminder;
-};
-
-export type UpdateReminderResponse = UpdateReminderResponses[keyof UpdateReminderResponses];
 
 export type GetViewsHandlerData = {
     body?: never;

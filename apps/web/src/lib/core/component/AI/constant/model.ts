@@ -57,21 +57,21 @@ export const DEFAULT_MODEL: TModel = Model.sonnet55;
 
 /**
  * Default model for free users. Free users aren't entitled to the premium
- * models (which the backend rejects with a 403), so they start on Haiku.
+ * models (which the backend rejects with a 403), so they start on Gemini Flash.
  */
-export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
+export const FREE_DEFAULT_MODEL: TModel = Model.gemini38Flash;
 
 /** Models a paid user may select. */
 export const PAID_MODELS: readonly TModel[] = Object.values(Model);
 
 /**
  * Model for database AI: question answering, the database assistant, and chats
- * opened from a database. Paid-only, like every model but {@link FREE_DEFAULT_MODEL}.
+ * opened from a database. Available on both free and paid plans.
  */
 export const DATABASE_MODEL: TModel = Model.gemini38Flash;
 
 /**
- * Models a free user may select. Free users only get Haiku
+ * Models a free user may select. Free users only get Gemini Flash
  * (`FREE_DEFAULT_MODEL`); every other model is paid-only and shows locked in
  * the selector, where selecting one opens the paywall instead of being sent
  * and rejected by the backend.

@@ -52,7 +52,6 @@ async fn favorites_are_scoped_before_pagination_and_cursor_keeps_the_filter() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopPullRequestListing,
-        NoOpRemindersService,
     );
     service.favorites = Some(Arc::new(ViewerFavorites));
     let filters = EntityFilterAst {

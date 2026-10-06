@@ -237,9 +237,11 @@ function syncCommittedColors(): void {
   const colors = resolvedThemeColors();
   // index.html reads these before any JS loads to paint the boot shell.
   setHtmlColor({
-    color: formatOklch(colors['surface-0']),
-    panel: formatOklch(colors['surface-1']),
-    ink: formatOklch(colors['content-0']),
+    color: formatOklch(colors.page),
+    panel: formatOklch(colors.panel),
+    ink: formatOklch(colors.ink),
+    muted: formatOklch(colors['ink-muted']),
+    input: formatOklch(colors.input),
   });
   setCommittedThemeAccent(formatOklch(colors.accent));
 }

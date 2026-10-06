@@ -459,6 +459,7 @@ dependencies = [
  "macro_uuid",
  "mcp_client",
  "messages",
+ "model_owner",
  "notification",
  "pipedream_mcp",
  "properties",
@@ -526,6 +527,7 @@ dependencies = [
  "prompt",
  "rig-agent",
  "rmcp",
+ "roles_and_permissions",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -818,6 +820,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_engine"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console_error_panic_hook",
+ "fig_engine",
+ "js-sys",
+ "miniz_oxide",
+ "png",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "skrifa",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "wasm-bindgen",
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
 name = "ai_projections"
 version = "0.1.0"
 dependencies = [
@@ -902,6 +925,7 @@ dependencies = [
  "bot_id",
  "bots",
  "calendar_events",
+ "calendar_scheduling",
  "call",
  "channels",
  "chat",
@@ -935,6 +959,7 @@ dependencies = [
  "lexical_client",
  "lexical_mention_extractor",
  "macro_auth",
+ "macro_authorization",
  "macro_aws_config",
  "macro_db_client",
  "macro_env",
@@ -950,6 +975,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "model_owner",
+ "model_user",
  "models_dcs",
  "models_email",
  "models_pagination",
@@ -965,7 +991,6 @@ dependencies = [
  "properties",
  "rand 0.9.4",
  "readonly_pool",
- "reminders",
  "remote_env_var",
  "reqwest 0.13.4",
  "rootcause",
@@ -1964,6 +1989,7 @@ dependencies = [
  "native_app_service",
  "non_empty",
  "notification",
+ "onboarding",
  "rand 0.9.4",
  "rate_limit",
  "redis",
@@ -3531,6 +3557,9 @@ dependencies = [
 name = "calendar_scheduling"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
  "axum",
  "calendar_events",
  "chrono",
@@ -3541,6 +3570,7 @@ dependencies = [
  "model_user",
  "reqwest 0.13.4",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
@@ -3929,6 +3959,7 @@ dependencies = [
  "mockall",
  "model-entity",
  "model-error-response",
+ "model_file_type",
  "model_notifications",
  "model_owner",
  "models_pagination",
@@ -4781,6 +4812,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "database_env_vars",
+ "docx_engine",
  "doppler-config",
  "futures",
  "http-body-util",
@@ -4799,6 +4831,7 @@ dependencies = [
  "macro_uuid",
  "model",
  "nix 0.29.0",
+ "pptx_engine",
  "remote_env_var",
  "rs-libreoffice-bindings",
  "s3_client",
@@ -4809,6 +4842,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sqs_worker",
+ "tempfile",
  "tokio",
  "tower 0.5.3",
  "tower-http",
@@ -4968,6 +5002,8 @@ dependencies = [
  "call",
  "chrono",
  "entity_access",
+ "filter_ast",
+ "item_filters",
  "kafka_util",
  "macro_authorization",
  "macro_db_migrator",
@@ -6103,7 +6139,6 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
- "reminders",
  "reqwest 0.13.4",
  "roles_and_permissions",
  "schemars 1.2.1",
@@ -6375,12 +6410,17 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
+ "macro_queues",
  "macro_service_urls",
+ "macro_uuid",
  "model",
+ "model_owner",
  "s3_key",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
+ "sqs_client",
  "sync_service_client",
  "tokio",
  "tracing",
@@ -6394,6 +6434,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "ai_billing",
+ "ai_engine",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -6453,6 +6494,7 @@ dependencies = [
  "models_properties",
  "non_empty",
  "pptx_engine",
+ "psd_engine",
  "rdkafka",
  "redis",
  "reqwest 0.13.4",
@@ -11833,7 +11875,6 @@ dependencies = [
  "prompt",
  "readonly_pool",
  "redis",
- "reminders",
  "reqwest 0.13.4",
  "rmcp",
  "roles_and_permissions",
@@ -12551,7 +12592,6 @@ dependencies = [
  "model_owner",
  "models_pagination",
  "models_properties",
- "reminders",
  "serde",
  "serde_json",
  "strum 0.27.2",
@@ -13367,6 +13407,7 @@ dependencies = [
  "generic_email_domains",
  "import",
  "macro_authorization",
+ "macro_db_migrator",
  "macro_user_id",
  "mcp_client",
  "mcp_select",
@@ -14930,6 +14971,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "psd_engine"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console_error_panic_hook",
+ "fig_engine",
+ "js-sys",
+ "miniz_oxide",
+ "png",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15536,15 +15594,10 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 name = "reminders"
 version = "0.1.0"
 dependencies = [
- "ai_toolset",
- "anyhow",
- "async-trait",
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
  "chrono",
- "chrono-tz",
- "cron",
  "email",
  "entity_access",
  "http-body-util",
@@ -15558,7 +15611,6 @@ dependencies = [
  "model_user",
  "notification",
  "rootcause",
- "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
@@ -16515,6 +16567,7 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "agent_session",
+ "ai_engine",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -16570,6 +16623,7 @@ dependencies = [
  "pdfium-render",
  "projects",
  "properties",
+ "psd_engine",
  "rdkafka",
  "rootcause",
  "rust-embed",
@@ -17737,7 +17791,6 @@ dependencies = [
  "properties",
  "readonly_pool",
  "recursion",
- "reminders",
  "rootcause",
  "schemars 1.2.1",
  "serde",

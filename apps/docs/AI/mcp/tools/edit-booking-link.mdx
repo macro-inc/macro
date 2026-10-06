@@ -1,0 +1,18 @@
+---
+title: EditBookingLink
+description: >-
+  Edit exactly one existing booking link.
+---
+
+# EditBookingLink
+
+Edit exactly one existing booking link. First read it with ListBookingLinks, preserve all settings the user did not request changing, and pass its revision and full edited draft. Changed availability applies only to this link; other links and personal default hours remain unchanged. A stale revision fails: read again and present a fresh review instead of overwriting concurrent edits. In chat and agent sessions this presents an editable review card: use it directly without an extra prose confirmation. Cancellation changes nothing. Headless clients apply their own confirmation policy before execution. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `teamId` | string | No | Existing Macro team ID, or null for a personal booking link. |
+| `eventTypeId` | string | Yes | Existing link identity returned by ListBookingLinks. |
+| `expectedRevision` | integer | Yes | Revision returned by ListBookingLinks; guards against concurrent settings changes. |
+| `draft` | BookingLinkDraft | Yes | Complete proposal reviewed and validated before saving. |

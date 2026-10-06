@@ -131,7 +131,11 @@ fn test_job_runs_signup_browser_tests_after_vitest() {
         .find("name: Cycles Import Check")
         .map_or(yaml.len(), |offset| start + offset);
     let test_job = &yaml[start..end];
+    let wasm = test_job
+        .find("just build-agent-fold-wasm")
+        .expect("build WASM before the test setup hook");
     let vitest = test_job.find("bunx vitest").expect("vitest step");
+    assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
     let browser = test_job
         .find("just test-signup-browser")
         .expect("sign-up browser step");

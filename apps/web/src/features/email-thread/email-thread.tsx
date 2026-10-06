@@ -31,6 +31,7 @@ import type {
   EmailThreadContext,
   EmailThreadSource,
 } from './context/email-thread-context';
+import { createOptimisticThreadSend } from './primitives/optimistic-send';
 import { createThreadActionAdapter } from './thread-action-adapter';
 import {
   EmailThreadSurface,
@@ -50,14 +51,18 @@ export type EmailThreadProps = Omit<
 export function EmailThread(props: EmailThreadProps) {
   // The host's load gate already owns the live query. Reuse its source so
   // mounting the body does not start a second disk read/network request.
-  const source = props.source;
   const [calendarPreferences] = useCalendarPreferences();
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
-  const compose = createEmailComposeContext({
+  const composeContext = createEmailComposeContext({
     threadTransport: props.threadTransport,
   });
+  const { source, delivery } = createOptimisticThreadSend(
+    props.source,
+    composeContext
+  );
+  const compose = { ...composeContext, delivery };
   const threadContext: EmailThreadContext = {
     source,
     viewerEmail,

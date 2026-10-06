@@ -97,11 +97,11 @@ function MentionContainer(props: {
 }) {
   return (
     <span class="pointer-events-auto">
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
+      <span class="relative top-[0.125em] size-[1em] inline-flex mx-[0.25em]">
         {props.icon}
       </span>
       <Show when={!props.collapsed}>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
           {props.text}
         </span>
       </Show>
@@ -721,7 +721,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
       trigger={
         <span class="relative">
           <span
-            class="size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
+            class="size-full py-[0.125em] cursor-default rounded-xs hover:bg-hover focus:bg-active"
             classList={{
               'bg-active text-ink': isSelectedAsNode(),
             }}

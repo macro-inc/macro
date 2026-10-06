@@ -4,7 +4,7 @@ use ratatui::style::{Style, Stylize as _};
 use ratatui::widgets::Paragraph;
 
 use super::super::layout::render_input;
-use super::super::theme::{ACCENT, DIM, WARN, card, focus_marker, focus_style};
+use super::super::theme::{ACCENT, DIM, WARN, card, focus_marker, focus_style, section};
 use crate::config::IdentityScope;
 use crate::tui::app::{App, Mode};
 use crate::tui::config_form::settings;
@@ -14,10 +14,30 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let settings = settings(&app.config);
+    let herdr_start = settings.iter().position(|setting| setting.is_herdr());
+    // A blank line and a header sit above the herdr group.
+    let row_of = |index: usize| -> u16 {
+        index as u16
+            + if herdr_start.is_some_and(|start| index >= start) {
+                2
+            } else {
+                0
+            }
+    };
+    if let Some(start) = herdr_start {
+        frame.render_widget(
+            Paragraph::new(section("Herdr", "each session in its own tab", inner.width)),
+            Rect {
+                y: inner.y + row_of(start) - 1,
+                height: 1,
+                ..inner
+            },
+        );
+    }
     for (index, setting) in settings.iter().enumerate() {
         let selected = index == app.selected_setting;
         let row = Rect {
-            y: inner.y + index as u16,
+            y: inner.y + row_of(index),
             height: 1,
             ..inner
         };
@@ -56,13 +76,13 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
         frame.render_widget(
             Paragraph::new("Warning: agents can run commands and edit files without approval.\nApplies at next pairing.")
                 .style(Style::new().fg(WARN)),
-            Rect { y: inner.y + settings.len() as u16 + 2, height: 2, ..inner },
+            Rect { y: inner.y + row_of(settings.len()) + 2, height: 2, ..inner },
         );
     }
     if app.config.identity.scope == IdentityScope::Team {
         let warning = Rect {
             x: inner.x,
-            y: inner.y + settings.len() as u16 + 1,
+            y: inner.y + row_of(settings.len()) + 1,
             width: inner.width,
             height: 1,
         };

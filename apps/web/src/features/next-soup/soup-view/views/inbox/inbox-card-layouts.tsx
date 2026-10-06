@@ -1,5 +1,4 @@
 import { ListPropertyValue } from '@app/features/next-soup/soup-view/views/tasks/list-property-value';
-import { describeReminderWhen } from '@app/features/reminders/reminder-schedule';
 import { formatCallDuration } from '@block-call/utils';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
@@ -8,7 +7,6 @@ import {
   firstPartyBotMark,
   firstPartyBotMarkTone,
 } from '@core/component/firstPartyBotMark';
-import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   inlineWrappingMarkdownTheme,
@@ -53,7 +51,6 @@ import {
 } from '@property/context/PropertiesContext';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { senderFromStorageId } from '@queries/messages/message-sender';
-import type { ItemEntity } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
@@ -124,12 +121,6 @@ const getGithubSender = (entity: EntityData, notification?: Notification) => {
 };
 
 const getTimestamp = (entity: EntityData, notification?: Notification) => {
-  // The reminder's body already says when it fires, so the timestamp says when
-  // it was set instead — the way other rows show when they arrived.
-  if (entity.type === 'reminder') {
-    return entity.createdAt != null ? String(entity.createdAt) : undefined;
-  }
-
   const messageTime =
     entity.type === 'channel'
       ? entity.latestRootMessage?.createdAt
@@ -1248,7 +1239,15 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
   return (
     <BaseCard
       {...props}
-      icon={<ActionBubble tag="new_email" />}
+      icon={
+        <ActionBubble
+          tag={
+            props.item.notification?.notification_event_type === 'reminder'
+              ? 'reminder'
+              : 'new_email'
+          }
+        />
+      }
       titleLeading={
         <Show when={text().isDraft}>
           <DraftBadge />
@@ -1258,7 +1257,12 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
     >
       <Show when={text().subject?.trim()}>
         {(subject) => (
-          <InboxCard.Content class="truncate">{subject()}</InboxCard.Content>
+          <InboxCard.Content class="truncate">
+            {props.item.notification?.notification_event_type === 'reminder'
+              ? 'Reminder: '
+              : ''}
+            {subject()}
+          </InboxCard.Content>
         )}
       </Show>
 
@@ -1514,84 +1518,6 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
   );
 }
 
-/**
- * A reminder is self-set, so there is no sender and no action to describe. Its
- * own description is the title; below it sit what it is about — a clickable chip
- * when it points at something — and when it next fires.
- */
-export function ReminderCardLayout(props: InboxCardLayoutProps) {
-  // The current description, not the notification's copy of it, so editing a
-  // reminder after it fires updates the row.
-  const description = () => props.item.entity.name;
-
-  const referenced = () =>
-    props.item.entity.type === 'reminder'
-      ? props.item.entity.referencedEntity
-      : undefined;
-
-  // When it next comes due — a one-shot's firing time, or a recurring one's
-  // cadence — so the row says when as well as what.
-  const when = () =>
-    props.item.entity.type === 'reminder'
-      ? describeReminderWhen(props.item.entity)
-      : undefined;
-
-  return (
-    <BaseCard
-      {...props}
-      // Always the bell, never the referenced entity's icon: the row is a
-      // reminder first, and the thing it points at is named right below.
-      icon={<BellSimpleIcon class={AVATAR_GLYPH_CLASS} />}
-      // The reminder's own text, not a generic "Reminder" — its name is the
-      // title, with a fallback only for the rare empty description.
-      title={description() || 'Reminder'}
-    >
-      {/* A reminder fills the two body lines its three-line neighbors use, so
-          the list rhythm stays even: what it is about (a chip, when there's
-          something to point at) and when it fires. */}
-      <div class="min-h-[2lh] min-w-0">
-        <Show when={referenced()}>
-          {(reference) => (
-            <InboxCard.Content class="truncate">
-              {/* Its own click target: the chip opens what the reminder is
-                  about, while a click anywhere else on the row opens the editor.
-                  `ItemPreview` navigates but does not stop propagation itself. */}
-              <span onClick={(event) => event.stopPropagation()}>
-                <ReminderReferenceChip
-                  id={reference().id}
-                  type={reference().type}
-                />
-              </span>
-            </InboxCard.Content>
-          )}
-        </Show>
-        <Show when={when()}>
-          {(text) => (
-            <InboxCard.Content class="truncate">{text()}</InboxCard.Content>
-          )}
-        </Show>
-      </div>
-    </BaseCard>
-  );
-}
-
-/**
- * What the reminder is about, as an inline mention chip — the same icon, name,
- * and hover preview a document mention gets inside a message. `ItemPreview`
- * resolves the name and handles the deleted / no-access cases; the classes
- * strip its default boxed-button look back to inline text.
- */
-function ReminderReferenceChip(props: ItemEntity) {
-  return (
-    <ItemPreview
-      {...props}
-      class="inline-flex h-auto max-w-full rounded-none px-0 align-[-0.15em] ring-0 hover:bg-transparent border-none"
-      iconClass="mr-1 size-3.5"
-      textClass="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2"
-    />
-  );
-}
-
 export function GenericCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() => ({
     title: props.item.entity.name
@@ -1681,9 +1607,6 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
       </Match>
       <Match when={props.item.entity.type === 'agent_session'}>
         <AgentSessionCardLayout {...props} />
-      </Match>
-      <Match when={props.item.entity.type === 'reminder'}>
-        <ReminderCardLayout {...props} />
       </Match>
       <Match when={props.item.entity.type === 'calendar_event'}>
         <CalendarEventCardLayout {...props} />

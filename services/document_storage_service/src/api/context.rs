@@ -130,8 +130,7 @@ use properties::{
 };
 use readonly_pool::ReadOnlyPool;
 use reminders::{
-    domain::service::RemindersServiceImpl, inbound::axum_router::RemindersRouterState,
-    outbound::pg_reminders_repo::PgRemindersRepo,
+    inbound::axum_router::RemindersRouterState, outbound::pg_reminders_repo::PgRemindersRepo,
 };
 use search_service::SearchHandlerState;
 use soup::{
@@ -199,7 +198,6 @@ pub(crate) type DssSoupService = SoupImpl<
     call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     DssCrmService,
     GithubPullRequestServiceType,
-    RemindersServiceType,
 >;
 
 type DssSoupState =
@@ -623,7 +621,6 @@ pub(crate) type DssSlackState = slack_integration::inbound::axum_router::SlackRo
 /// Type alias for the reminders service.
 pub(crate) type RemindersServiceType =
     reminders::domain::email_followup::reminder_service::EmailRemindersService<
-        RemindersServiceImpl<PgRemindersRepo>,
         PgRemindersRepo,
         DssEmailService,
         reminders::domain::ports::SystemClock,

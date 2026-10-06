@@ -1,6 +1,5 @@
 import './ListEntity.css';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { ReminderRowSchedule } from '@app/features/reminders/views/reminder-row-schedule';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
@@ -38,11 +37,7 @@ import {
   isHitSnippetComplete,
   isHitSnippetEntity,
 } from '../extractors-search/snippet-entity';
-import {
-  isChannelEntity,
-  isEmailEntity,
-  isReminderEntity,
-} from '../types/entity';
+import { isChannelEntity, isEmailEntity } from '../types/entity';
 import { isWithNotification } from '../types/notification';
 import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
@@ -103,19 +98,7 @@ export function ListEntity(props: ListEntityProps) {
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
   const leadingAction = children(() => props.leadingAction);
-  const scheduleStatus = children(() => (
-    <>
-      {props.scheduleStatus}
-      <Show when={isReminderEntity(props.entity) && props.entity}>
-        {(entity) => (
-          <ReminderRowSchedule
-            entity={entity()}
-            onToggleDone={props.onToggleReminderDone}
-          />
-        )}
-      </Show>
-    </>
-  ));
+  const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);

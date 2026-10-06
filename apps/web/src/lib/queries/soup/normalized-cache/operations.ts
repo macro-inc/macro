@@ -858,10 +858,6 @@ export function buildSingleEntityFilter(
       ...base,
       calendar_event_filters: { calendar_event_ids: [entityId] },
     }))
-    .with('reminder', () => ({
-      ...base,
-      reminder_filters: { ids: [entityId] },
-    }))
     .with('initiative', () => ({
       ...base,
       initiative_filters: { initiative_ids: [entityId] },
@@ -872,6 +868,9 @@ export function buildSingleEntityFilter(
     }))
     .with('databaseRow', () => {
       throw new Error('Database rows are read through GraphQL Soup only');
+    })
+    .with('crmContact', () => {
+      throw new Error('CRM contacts are read through GraphQL Soup only');
     })
     .exhaustive();
 }

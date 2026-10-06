@@ -273,6 +273,7 @@ fn optimistic_bucket_moves_overlay_borrowed_catalogs_through_settlement() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        client_metadata: None,
                         uuid: "00000000-0000-4000-8000-000000000001",
                         query: mutation,
                         operation_name: None,

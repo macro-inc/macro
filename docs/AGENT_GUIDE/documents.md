@@ -96,7 +96,7 @@ the panel beneath the formatting and formula bars. While a workbook opens, a
 shimmering placeholder grid (status "Opening spreadsheet…") stands in for it, and
 formula cells show a short shimmer bar until their first results arrive; wait for
 real cell text before reading values. They have the `.spreadsheet` file type; uploading an
-Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
+Excel (`.xlsx`, `.xlsm`) or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
 
 You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets. A large workbook shows a progress bar on **Import workbook** while it is written; the page stays responsive, and one undo removes the whole import.
 
@@ -276,7 +276,13 @@ protection). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
-while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
+while the preview was open. Encrypted files are rejected. Macro-enabled `.xlsm`
+workbooks import like `.xlsx` (here and as uploads), without their macros: VBA
+projects, Excel 4.0 macro sheets and form/ActiveX controls are dropped with an
+import note, and **Download as Excel** writes a macro-free `.xlsx`; an uploaded
+`.xlsm` keeps its macros in the original download. A legacy `.xls`
+is rejected here with a hint to upload it instead; uploads convert it (see
+[Legacy Office uploads](#legacy-office-uploads)).
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
 current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, shapes, text boxes, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas and rich text are not fully supported; review import notes before conversion.
@@ -419,6 +425,39 @@ check both source/formula and displayed result in the sheet and another connecte
 client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
+
+## Folder uploads
+
+Dropping a folder (or choosing one with the folder picker) zips it in the browser
+and imports it as a folder tree: each subfolder becomes a folder, including empty
+ones, and each file becomes a document. The folder picker cannot see empty
+subfolders, so only dropped folders keep them. Office lock files (`~$…`),
+`Thumbs.db`, `desktop.ini`, `__MACOSX` and hidden files or folders are skipped.
+Extension case does not matter (`REPORT.DOCX` imports as `.docx`). If some files
+fail, the rest of the tree still appears and a toast says some files could not be
+uploaded. The unzip runs in the upload extractor Lambda, which the local stack
+does not run; verify folder imports against a deployed backend.
+
+## Legacy Office uploads
+
+Uploaded legacy binary Office files are converted to their OpenXML equivalents
+on the server: `.doc` → `.docx`, `.ppt` → `.pptx`, `.xls` → `.xlsx`. This also
+applies to files inside an uploaded folder. The document keeps its id and name;
+its file type changes and the converted file becomes its latest version.
+Converted Word files then go through the regular DOCX pipeline, and converted
+workbooks open in the uploaded-workbook preview, where **Edit in Macro** imports
+them into a native spreadsheet.
+
+While a legacy file uploaded in the last 10 minutes is converting, its view shows
+**Converting … to a PowerPoint presentation…** (or Word document / Excel
+workbook) with **Download** still available for the original. When the
+conversion lands, the split reopens in the right block (workbooks switch in
+place). If conversion fails or takes over 3 minutes, the view falls back to
+**No preview available**, and the original stays downloadable. Legacy files
+uploaded before conversion existed are not converted.
+
+Conversion runs in the convert service through the upload finalizer Lambda,
+neither of which the local stack runs, so verify it against a deployed backend.
 
 ## Presentations (PowerPoint)
 
@@ -1520,6 +1559,325 @@ colors, or absent glows. Wait for the tiles to sharpen after zooming. The
 fixture preserves imported text outlines, but
 its substitute fonts do not verify the appearance of newly edited text.
 
+## Photoshop editor
+
+Uploaded `.psd` and `.psb` files open in the `psd` block
+(`/app/psd/<documentId>`), and **Photoshop file** in the create menu (key
+**H**, also in project create menus) makes a new 1920 × 1080 document with a
+white Background. Both are behind the `enable-psd-editor` PostHog flag (on
+by default in development builds; `ENABLE_PSD_EDITOR` overrides it); with
+the flag off the block offers the file for download. The file is read,
+composited, and edited by the Rust `psd_engine` compiled to WebAssembly, in
+one worker. The canvas draws 512 px tiles from a pyramid of scales (the
+nearest one shows while zooming, then it sharpens) and redraws only what an
+edit changed. How Macro AI and search read these files is under
+[Photoshop and Illustrator documents](#photoshop-and-illustrator-documents).
+
+People with edit access get the editor; others get the same view read-only
+(no painting or editing tools, no editing shortcuts). Documents the editor
+cannot edit as they are (CMYK, Lab, Indexed, Bitmap, Duotone, Multichannel,
+32-bit) open read-only with a bar (`psd-notice`, reason in
+`psd-notice-readonly`) whose **Convert to RGB** (`psd-notice-convert`, also
+Image > Mode > RGB Color) converts them to 8-bit RGB; the same bar lists
+parts of the file that could not be read (`psd-notice-warnings`), and
+`psd-notice-dismiss` hides it. Edits save automatically 1.5 s after the last
+change and when the tab is hidden, as a new document version through
+`PUT /documents/{id}/simple_save`; `psd-save-state` (`data-state` is `saved`,
+`unsaved`, `saving`, or `error`) shows where that stands.
+
+Everyone with the document open edits it live, as in the Figma editor:
+changes go through the sync service as Loro maps of each changed layer's
+state and pixel tiles (see `psd_engine::collab`); the stored file stays the
+base everyone opens, and the first editor seeds the shared copy. Undo takes
+back only your own steps. Of the people editing, one (the lowest peer id)
+stores the merged file. Presence: other people's pointers with name tags
+(`psd-peer-cursor`, `data-peer="<name>"`), their selections' outlines in
+their colors, and their avatars at the top right of the canvas
+(`psd-collaborators`, one `psd-collaborator` per person); clicking an avatar
+follows their view (`psd-following`) until **Stop**. Without the sync
+service the document opens read-only, and for editors a bar
+(`psd-session-notice`) explains why, with **Retry** (`psd-session-action`);
+a file stored outside the session (an upload, an AI edit) turns open copies
+read-only with **Reload**.
+
+The editor (`psd-editor`) is laid out as Photoshop is:
+
+- **Menu bar** (`psd-menu-bar`): File, Edit, Image, Layer, Select, Filter,
+  and View (`psd-menu-file` … `psd-menu-view`); items carry ids such as
+  `psd-menu-new-layer`, `psd-menu-image-size`, `psd-menu-filter-gaussianBlur`,
+  `psd-menu-adjust-levels`, `psd-menu-flatten`, `psd-menu-export-png`, and
+  `psd-menu-download`. Filters (Gaussian Blur, Unsharp Mask, Add Noise,
+  Mosaic, Motion Blur) and Image > Adjustments open a dialog
+  (`psd-filter-dialog`, `psd-adjust-dialog`) at the top right that previews
+  on the canvas; OK keeps it as one step, Cancel or Escape drops it. Image
+  Size (`psd-image-size`), Canvas Size (`psd-canvas-size`), Resolution,
+  Feather (⇧F6), Expand, and Contract open small dialogs (`*-ok`,
+  `*-cancel`).
+- **Options bar** (`psd-options-bar`, tool name in `psd-options-tool`): the
+  tool's settings (brush size, hardness, opacity, flow, spacing, pressure;
+  marquee feather; wand and bucket tolerance; gradient style and method;
+  type size), and **Fit Screen** / **100%** (`psd-zoom-fit`,
+  `psd-zoom-100`). During Free Transform (⌘/Ctrl+T) and Crop it shows the
+  box's size with commit and cancel (`psd-options-commit`,
+  `psd-options-cancel`; Enter and Escape do the same).
+- **Toolbar** (`psd-toolbar`, `psd-tool-<tool>` with `aria-pressed`;
+  clicking the tool in use again, or right-clicking, lists its group's
+  other tools, `psd-tool-option-<tool>`):
+  Move **V** (auto-selects the layer under the pointer; arrows nudge, ⇧ by
+  10), Marquee **M** (rectangle, ellipse; ⇧ adds, ⌥ subtracts, ⇧⌥
+  intersects), Lasso **L** (freehand, polygonal), Magic Wand **W**, Crop
+  **C**, Eyedropper **I**, Brush and Pencil **B** (`[` and `]` size, digits
+  opacity), Eraser **E**, Gradient and Paint Bucket **G**, Type **T**,
+  Rectangle and Ellipse **U** (shape layers in the foreground color), Hand
+  **H** (or hold Space), and Zoom **Z** (⌥ zooms out). ⇧ with a tool's key
+  cycles its group. Below, the foreground and background swatches
+  (`psd-foreground-color`, `psd-background-color`; clicking one opens the
+  Color tab), **X** swaps them (`psd-swap-colors`) and **D** resets them
+  (`psd-default-colors`).
+- **Canvas** (`psd-canvas`, with the zoom and size in `psd-status`, zoom in
+  `psd-zoom`): wheel scrolls; pinch, ⌥-wheel, or ⌘/Ctrl-wheel zooms; ⌘0 fits,
+  ⌘1 is 100%, ⌘+ and ⌘− step. Selections show marching ants; guides from
+  the file are drawn. Pasting an image (⌘V) or dropping image files places
+  them as new layers; ⌘C copies the selected pixels as PNG, ⇧⌘C copies
+  merged.
+- **Panels** (`psd-panels`): tabs **Properties** and **Color**
+  (`psd-tab-properties`, `psd-tab-color`) over the Layers panel.
+  Properties (`psd-properties-panel`) shows the active layer's kind and
+  bounds (`psd-layer-bounds`) and its settings: text (font, style, size,
+  leading, tracking, color, alignment `psd-text-align-<left|center|right>`,
+  faux styles, and **Edit text…** `psd-text-edit`), fill and shape layers
+  (solid color or gradient with its style and method, the shape's stroke,
+  `psd-stroke-add`), adjustment layers, masks (density, feather, enabled),
+  and the layer style's effects on or off. Color (`psd-color-panel`) edits
+  the foreground or background (`psd-color-target-foreground`,
+  `psd-color-target-background`) with a saturation and brightness area,
+  hue strip, hex, RGB, and HSB (`psd-color-hex`, `psd-color-r`, …).
+- **Layers panel** (`psd-layers-panel`): the active layer's blend mode
+  (`psd-blend-mode`), Opacity and Fill (`psd-layer-opacity`,
+  `psd-layer-fill`; drag their labels to scrub), and locks
+  (`psd-lock-transparency`, `psd-lock-pixels`, `psd-lock-position`,
+  `psd-lock-all`); then the layers top first (`psd-layer-row`,
+  `data-layer-id`, `data-layer-name`), each with visibility
+  (`psd-layer-visibility`), group disclosure (`psd-layer-disclosure`), the
+  thumbnail (artboards show a frame, `psd-layer-artboard`, and Properties
+  titles them Artboard), the mask (`psd-layer-mask`, with its thumbnail
+  `psd-layer-mask-thumbnail`; clicking it makes painting edit the mask),
+  and the layer style marker (`psd-layer-effects`, click toggles).
+  Click chooses, ⌘/Ctrl-click adds, ⇧-click picks a range, double-click
+  renames (`psd-layer-rename`), dragging reorders or moves into groups, and
+  right-click (or `psd-layer-menu`) opens the layer's menu (duplicate,
+  delete, group, clipping mask, masks, rasterize, merge down, export). The
+  bottom buttons add a fill or adjustment layer (`psd-new-adjustment`), a
+  mask (`psd-add-mask`), a group (`psd-new-group`), and a layer
+  (`psd-new-layer`, ⇧⌘N), and delete (`psd-delete-layer`).
+
+Typing: with Type, click the canvas for new text, or a text layer to edit
+it. A box under the text (`psd-text-editing`, field `psd-text-input`)
+takes the typing; each keystroke lays the layer out again on the canvas.
+New text becomes a layer at the first character, named after its first
+line (the name follows the text until someone renames the layer); Escape
+or ⌘/Ctrl+Enter finishes, and the whole typing is one undo step. Text left
+empty is removed. Other shortcuts: ⌘Z / ⇧⌘Z (Ctrl+Y), ⌘A, ⌘D, ⇧⌘I, ⌘J,
+⇧⌘J, ⌘E, ⌘G, ⇧⌘G, ⌥⌘G (clipping mask), ⌥⌫ and ⌘⌫ fill with the
+foreground and background, ⌫ clears the selection or deletes the layer,
+and ⌘/ (or the keyboard button) lists them all (`psd-shortcuts`).
+
+To exercise the editor without a backend, run the browser fixture from
+`apps/web` (build the engine first with `just ensure-psd-engine-wasm`):
+
+```sh
+bunx vite --config src/features/block-psd/browser-test/vite.config.ts
+# http://127.0.0.1:3020/?new
+```
+
+`?new` opens a new document (`&size=800x600` for another size), `?file=`
+a file from the directory `PSD_CORPUS_DIR` names, `?readonly` a viewer,
+and `?reload` reopens each save to check it round-trips. `?collab`
+(`&people=alice,bob`) puts several people side by side on one document
+through an in-page sync server; `window.psdFixture` exposes `engine()`,
+`saves()`, `downloads()`, `errors()`, `notices()`, and `collab`. Its
+Playwright suites run with
+`bunx playwright test --config src/features/block-psd/browser-test/playwright.config.ts`
+(`PSD_BROWSER_PORT` picks another port than 3020; set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed).
+
+## Illustrator editor
+
+Uploaded `.ai` files open in the `ai` block (`/app/ai/<documentId>`), and
+**Illustrator file** in the create menu (key **V**, also in project create
+menus) makes a new one with a single 1920 × 1080 artboard. Both are behind
+the `enable-ai-editor` PostHog flag (on by default in development builds;
+`ENABLE_AI_EDITOR` overrides it); with the flag off the block offers the
+file for download. The file is read, rendered, and edited by the Rust
+`ai_engine` compiled to WebAssembly, in a primary worker plus up to three
+tile-raster helpers; the canvas composites tiles at the device pixel ratio
+over a gray pasteboard and redraws only what an edit changed.
+
+People with edit access get the editor; others get the same view read-only
+(only the selection, direct selection, hand, and zoom tools; no editing
+keys). Edits save automatically 1.5 s after the last change, when the tab
+is hidden, and on close, as a new document version through
+`PUT /documents/{id}/simple_save`. Saving writes a standard PDF-based `.ai`
+that Illustrator and PDF readers open; an unedited file is written back
+byte for byte. Names given in the Layers and Artboards panels are saved
+with it (`/MacroName` marked content and a `/MacroArtboard` page key, which
+other readers ignore). For files Illustrator saved, a dismissible note
+(`ai-illustrator-note`) says that Illustrator-only editing data (live
+effects and the like) is not kept, and what the engine could not read
+faithfully is listed in `ai-warnings`.
+
+Everyone with the file open edits it live. Changes go through the sync
+service as the Loro maps `aiMeta`, `aiDoc`, `aiNodes`, and `aiImages`
+(`ai_engine::collab`); the stored `.ai` stays the base everyone opens, and
+the first person who can edit seeds the shared copy. Each person creates
+objects in an id session (1–4095) picked at random among those the people
+present do not use, published in their presence. Undo takes back only your
+own changes. Of the people editing, one (the lowest peer id) stores the
+merged file, and the saved file becomes the new base. Presence: pointers
+with name tags (`ai-peer-cursor`, `data-peer="<name>"`), outlines of what
+others selected in their colors, and avatars at the top right
+(`ai-collaborators`, one `ai-collaborator` per person; a click shows their
+view). When the sync service is unreachable the file opens read-only with
+a bar (`ai-session-notice`, **Retry** is `ai-session-action`); a file
+stored outside the session (a new upload) starts the shared copy over, and
+people still in it get a **Reload** bar.
+
+Layout and test hooks (root `ai-editor`, canvas `ai-canvas`):
+
+- **Left panel**: the main menu (`ai-main-menu`: `ai-menu-download` for the
+  `.ai`, `ai-menu-export-png` and `ai-menu-export-png-2x` for the active
+  artboard, then the view items) and the tabs `ai-tab-layers` and
+  `ai-tab-artboards`.
+- **Layers** (`ai-layers-panel`, tree `ai-layer-tree`): rows
+  (`ai-layer-row`, `data-layer-id` is the engine's node id, `data-kind`
+  `layer`/`group`/`clipGroup`/`path`/`text`/`image`/`artwork`,
+  `aria-selected`) list top-most first, as Illustrator does. A click
+  selects (⇧ a range, ⌘/Ctrl toggles) and the canvas follows; a row's
+  `ai-layer-toggle` expands it, layers show their color (`ai-layer-color`,
+  a click cycles it), and hovering shows `ai-layer-lock` and
+  `ai-layer-visibility`. Double-click renames (`ai-layer-rename`). Rows
+  drag to restack, and into groups and other layers. `ai-layer-new` adds a
+  layer on top; `ai-layer-delete` deletes the selection.
+- **Artboards** (`ai-artboards-panel`): `ai-artboard-row` per artboard
+  (click fits it in the window, double-click renames in
+  `ai-artboard-rename`, hover `ai-artboard-delete`) and `ai-artboard-new`.
+- **Toolbar** (`ai-toolbar`, floating on the canvas): `ai-tool-<tool>` for
+  `select` (V), `direct` (A), `pen` (P), `type` (T), `line` (\\),
+  `rectangle` (M), `ellipse` (L), `polygon`, `star`, `eyedropper` (I),
+  `artboard` (⇧O), `hand` (H), and `zoom` (Z); below them the fill and
+  stroke new objects get, or the selection has (`ai-swatch-fill`,
+  `ai-swatch-stroke`, each with a color picker and `…-none`),
+  `ai-swap-colors` (⇧X), and `ai-default-colors` (D).
+- **Properties** (`ai-properties`, title `ai-selection-title`): with
+  nothing selected, the active artboard (`ai-artboard-section`). Otherwise
+  Transform (`ai-field-x`, `-y`, `-w`, `-h` measure outlines without
+  strokes, as Illustrator does; `ai-field-rotation`, flips), Appearance
+  (`ai-fill-hex`, `ai-stroke-hex` take hex or `none`, `ai-field-stroke-width`,
+  `ai-stroke-cap`, `ai-stroke-join`, `ai-field-dash`, `ai-field-opacity`,
+  `ai-blend`; gradients show as swatches without a hex field), Character
+  and Paragraph for text (font picker, `ai-font-style`,
+  `ai-field-font-size`, `ai-field-tracking`, `ai-field-line-height`,
+  `ai-text-align`), Align (`ai-align-left|center|right|top|middle|bottom`,
+  `ai-distribute-horizontal|vertical`), Pathfinder
+  (`ai-pathfinder-unite|subtract|intersect|exclude`), and Quick actions
+  (`ai-arrange-front|forward|backward|back`, `ai-action-group`,
+  `-ungroup`, `-clip`, `-release`, `-outline`).
+- **Status bar** (`ai-status-bar`, bottom center): `ai-undo`, `ai-redo`,
+  `ai-save-state` (`data-state` is `saved`, `unsaved`, `saving`, or
+  `error`), and the zoom menu (`ai-zoom-menu`: `ai-zoom-fit`,
+  `ai-zoom-fit-all`, `ai-zoom-100`, `ai-outline-toggle`).
+- **Canvas gestures**: scroll pans, ⌘/Ctrl or ⌥ + scroll and pinches zoom,
+  Space or the middle button drags to pan. The selection tool selects (⇧
+  adds), draws marquees, moves (⇧ constrains, ⌥ drags a copy), scales by
+  the eight handles (⇧ keeps proportions, ⌥ from the center), and rotates
+  just outside a corner (⇧ by 45°); double-click enters a group or edits
+  text. Direct selection drags anchor points and, once an anchor is
+  chosen, its handles (⌥ breaks a smooth point). Shape tools drag out a box
+  (⇧ square, ⌥ from the center; a click makes a 100 pt one). The pen clicks
+  corners and drags smooth points, closes on its first point, and Enter
+  or Escape ends an open path. The type tool clicks for point text, drags
+  for area text, or clicks into text to edit it; typing happens in an
+  overlay (`ai-text-editing`, input `ai-text-input`, `ai-text-caret`,
+  `ai-text-selection`), and Escape or a click outside ends it. The
+  eyedropper gives the selection the clicked object's fill and stroke.
+  The artboard tool chooses, moves (with the artwork on it), resizes, and
+  draws artboards; Delete deletes the chosen one. Image files dropped on
+  the canvas or pasted are placed (at most 1000 pt long).
+- **Shortcuts** (⌘ is Ctrl off macOS): ⌘Z/⇧⌘Z, ⌘C/⌘X/⌘V (pastes 10 pt
+  further each time), ⌘D duplicate, Delete, arrows nudge 1 pt (⇧ 10 pt),
+  ⌘A / ⇧⌘A select all / none, ⌘G / ⇧⌘G group / ungroup, ⌘7 / ⌥⌘7 make /
+  release clipping mask, ⌘] / ⌘[ forward / backward and ⇧⌘] / ⇧⌘[ front
+  / back, ⇧⌘O create outlines, ⌘Y outline view, ⌘0 fit artboard, ⌥⌘0 fit
+  all, ⌘1 actual size, ⌘+ / ⌘- zoom. While the editor has focus its keys
+  come before the app's; keys it does not use, and Escape with nothing to
+  deselect, stay the app's.
+
+The editor has a browser fixture that needs no backend. From `apps/web`
+(build the engine first with `just ensure-ai-engine-wasm`):
+
+```sh
+bunx vite --config src/features/block-ai/browser-test/vite.config.ts
+# http://127.0.0.1:3021/?sample
+```
+
+`?new` opens a blank document as the create menu makes it, `?sample` a
+sample built with the engine (an 800 × 600 artboard with a red rectangle,
+a blue circle, and the text "Hello" on "Layer 1", and an empty layer
+"Notes"), and `?file=<name>` a file from the directory named by
+`AI_CORPUS_DIR` (with a trailing slash); the header also opens a local
+`.ai`. Saves stay in memory (`?reload` reopens each one); `?readonly`
+opens it as a viewer would. `window.aiFixture` exposes `engine()`,
+`saves()`, `errors()`, `notices()`, `downloads()`, `fontRequests()`, and
+`rowsOf(bytes)`. `?collab` (with `&people=alice,bob`, the default, and
+`&sample` or `&file=`) shows several people side by side
+(`ai-person-<Name>` holds each editor), each with the real shared-document
+session over an in-page sync server; `window.aiFixture.collab` has
+`people()` (each `engine()`, `session()`, `saves()`, `status()`,
+`peers()`), `storeOutside()`, `reopen(name)`, `setReachable(bool)`, and
+`stored()`. The Playwright suite runs with
+`bunx playwright test --config src/features/block-ai/browser-test/playwright.config.ts`
+(`AI_BROWSER_PORT` picks another port than 3021; set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed). The sections above were verified on this fixture; the
+`/app/ai` route itself needs a backend with an uploaded `.ai`.
+
+## Photoshop and Illustrator documents
+
+Uploaded `.psd` and `.psb` files are Photoshop documents (file types `psd`
+and `psb`, the second Photoshop's large document format) and `.ai` files are
+Illustrator documents (`ai`). All three are design files in the `vector`
+association, beside Figma designs, so a Photoshop document is never handled
+as a picture, despite its `image/vnd.adobe.photoshop` media type: the image
+block and image attachments for the agent skip it. The backend reads these
+documents with the Rust `psd_engine` and `ai_engine`, the same engines the
+browser editors run as WebAssembly.
+
+Macro AI reads them with `ReadPhotoshopDocument` and
+`ReadIllustratorDocument` (`ReadContent` returns the same description, and
+attaching one points the agent at its tool):
+
+- Photoshop: the canvas size, color mode, bit depth, and resolution, then
+  the layer tree from top to bottom with each layer's kind (pixels, group,
+  text, shape, fill, adjustment, or smart object), name, id, visibility,
+  opacity, blend mode, position, and size, and the text of text layers with
+  their font, size, and color (`psd_engine::describe::outline`).
+- Illustrator: the artboards with their names, positions, and sizes in
+  points, then the layer tree from top to bottom with each object's kind,
+  name, id, position, size, fill, and stroke, and the text of text objects
+  with their fonts (`ai_engine::describe::outline`).
+
+Descriptions stop at about 60,000 characters. The tools open files up to
+300 MB; a Photoshop document whose layers decode to more than 512 MB of
+pixels is reported as too large to read, and Illustrator files saved by
+version 8 or earlier (PostScript rather than PDF) as unreadable. The tools
+read the stored file and cannot edit these documents.
+
+Search indexes a document's layer and object names and the text of its text
+layers as one chunk, so content search finds a poster by its headline.
+Documents the engines cannot read (old or damaged files, or Photoshop
+documents beyond 256 MB of decoded pixels) are indexed by name only.
+
 ## Create and type
 
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
@@ -2068,10 +2426,10 @@ still follow normal CRDT collaboration semantics when they reconnect.
 
 ## HTML preview tabs
 
-HTML documents show `Render` and `Code` bubble tabs in a left-aligned row above
-the content, below the header, in both standalone desktop blocks and Drive
-detail views. Switch to Code to inspect or edit the source, then back to Render
-to see the current preview. Other code file types do not show this row.
+HTML documents show `Render` and `Code` inset tabs in the top bar in both
+standalone desktop blocks and Drive detail views. Switch to Code to inspect or
+edit the source, then back to Render to see the current preview. Other code file
+types do not show these tabs.
 
 ## Large-document undo checks
 

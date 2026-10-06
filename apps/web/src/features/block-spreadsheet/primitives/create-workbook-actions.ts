@@ -78,9 +78,9 @@ export function createWorkbookActions(options: {
   }
   async function importExcel(file: File) {
     if (!options.store.canEdit()) return;
-    if (!/\.xlsx$/i.test(file.name)) {
+    if (!/\.xls[xm]$/i.test(file.name)) {
       setNotice(
-        'Choose an .xlsx Excel workbook. Other file formats are not supported here.'
+        'Choose an .xlsx or .xlsm Excel workbook. Other file formats are not supported here.'
       );
       return;
     }

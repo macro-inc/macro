@@ -116,6 +116,8 @@ export type QueryRevalidation = {
 export type OptimisticMutationOptions = {
   /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
   uuid: string;
+  /** Opaque durable client correlation; never included in GraphQL variables. */
+  clientMetadata?: Record<string, unknown>;
   identityBindings?: readonly IdentityBindingWire[];
   /** Runs after durable layer installation, independently of HTTP settlement. */
   onEnqueued?: () => void;
@@ -134,6 +136,8 @@ export type OptimisticResponse<T> = T extends readonly (infer Item)[]
 export type OptimisticMutationContext<TData = unknown> = {
   uuid: string;
   optimisticResponse: TData;
+  /** Opaque durable client correlation; never included in GraphQL variables. */
+  clientMetadata?: Record<string, unknown>;
   identityBindings?: IdentityBindingWire[];
   linkPatches: OptimisticLinkPatchWire[];
   revalidations: QueryRevalidationWire[];
@@ -470,6 +474,7 @@ export function executeOptimisticMutation<
   }
   const context: OptimisticMutationContext<OptimisticResponse<TData>> = {
     uuid: options.uuid,
+    clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
     identityBindings: options.identityBindings
       ? [...options.identityBindings]
@@ -516,6 +521,7 @@ export function optimisticContextOf(
     }
     return {
       uuid: context.uuid,
+      clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
       identityBindings: context.identityBindings,
       linkPatches: Array.isArray(context.linkPatches)

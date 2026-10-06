@@ -66,11 +66,11 @@ fn skill_only_filter() -> EntityFilterAst {
         )))),
         call_filter: Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil())))),
         crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+        crm_contact_filter: None,
         foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil())))),
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         // Reminders are opt-in: leaving the filter empty excludes them.
         github_pull_request_filter: None,
-        reminder_filter: None,
         initiative_filter: None,
         // Agent sessions and database rows are opt-in as well.
         agent_session_filter: None,

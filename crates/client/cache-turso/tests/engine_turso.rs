@@ -203,6 +203,7 @@ fn optimistic_hydration_retry_complete_and_reopen_run_over_turso() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000001008",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -242,6 +243,7 @@ fn optimistic_hydration_retry_complete_and_reopen_run_over_turso() {
                 },
                 200,
                 "offline".into(),
+                false,
             )
             .await
             .unwrap();
@@ -318,6 +320,7 @@ fn stale_local_head_and_storage_settlement_races_report_stale_claims() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000001009",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -335,6 +338,7 @@ fn stale_local_head_and_storage_settlement_races_report_stale_claims() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000001010",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -419,6 +423,7 @@ fn optimistic_discard_restores_durable_base_over_turso() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000001011",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),

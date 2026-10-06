@@ -41,7 +41,10 @@ import type {
 import { type Accessor, createSignal } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 import { issueSessionAction } from '../queries/issue-session-action';
-import { configureSessionModel } from './configure-session-model';
+import {
+  configureSessionModel,
+  sessionConfigReported,
+} from './configure-session-model';
 
 export type PendingSession = {
   /** The session's id, once the create has made it real. */
@@ -190,20 +193,17 @@ export function startPendingSession(
         // A warm claim releases its server reservation before creation answers.
         replenishWarmAgentSession(result.value.session.ownerId);
         void refetchSoupEntity(created, 'agentSession', { created: true });
-        // Hold the block in preflight while selected settings are confirmed,
-        // then adopt the session before issuing the first prompt so that prompt
-        // is folded speculatively while its POST is in flight.
-        if (
-          options.modelOverride ||
-          options.effortOverride ||
-          prompt ||
-          options.attachments?.length
-        ) {
+        // The create already starts the session on `modelOverride`, so only
+        // an effort holds the block in preflight. Then adopt the session before
+        // issuing the first prompt so that prompt is folded speculatively while
+        // its POST is in flight.
+        if (options.effortOverride || prompt || options.attachments?.length) {
           const session = AgentSession.acquire(created);
           try {
-            if (options.modelOverride || options.effortOverride) {
+            if (options.effortOverride) {
               await session.load();
               trace?.stage('loaded');
+              await sessionConfigReported(session);
               await configureSessionModel(
                 session,
                 options.modelOverride,

@@ -333,7 +333,14 @@ const FRONTEND_VITE: &str = r#"    handle {
         # Vite, whose backend proxy would send them straight back here.
         @backend_root path BACKEND_PREFIXES
         respond @backend_root 404
-        reverse_proxy host.docker.internal:{$VITE_PORT}
+        reverse_proxy host.docker.internal:{$VITE_PORT} {
+            # Vite loads many modules concurrently. Bound Docker-to-host
+            # connections so the burst cannot exhaust the host listener and
+            # fail module imports with dial timeouts / 502s.
+            transport http {
+                max_conns_per_host 16
+            }
+        }
     }
 "#;
 

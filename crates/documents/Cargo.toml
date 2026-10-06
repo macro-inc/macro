@@ -13,6 +13,7 @@ required-features = ["backfill_binary"]
 purge = ["ports", "outbound", "dep:macro_db_client", "dep:sqs_client", "dep:comms_db_client"]
 ai_tools = [
   "dep:ai_billing",
+  "dep:ai_engine",
   "dep:ai_toolset",
   "dep:ai_usage",
   "dep:fig_engine",
@@ -22,6 +23,7 @@ ai_tools = [
   "dep:macro_db_client",
   "dep:model_file_type",
   "dep:pptx_engine",
+  "dep:psd_engine",
   "dep:schemars",
   "dep:sha2",
   "document_create_adapters",
@@ -181,8 +183,10 @@ lexical_client = { path = "../lexical_client", optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 messages = { path = "../messages", optional = true, features = ["ports"] }
 model_file_type = { path = "../model_file_type", optional = true }
+ai_engine = { path = "../ai_engine", optional = true }
 fig_engine = { path = "../fig_engine", optional = true }
 pptx_engine = { path = "../pptx_engine", optional = true, features = ["embedded-fonts", "schema"] }
+psd_engine = { path = "../psd_engine", optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }

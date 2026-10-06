@@ -32,7 +32,6 @@ import {
   ChannelTabProvider,
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
-import { ChannelTabLayout, ChannelTabs } from '@channel/Channel/ChannelTabs';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import { CHANNEL_TAB_ICONS } from '@channel/Channel/channel-tab-icons';
 import {
@@ -72,7 +71,6 @@ import {
 import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
@@ -201,6 +199,9 @@ function NewTop(props: { channelId: string }) {
         channelType={channelType()!}
         participants={participants() ?? []}
         channelName={channelName() ?? 'New Channel'}
+        tabs={tabs()}
+        activeTab={activeTab()}
+        onTabChange={setActiveTab}
       />
       <SplitTitleFileMenu>
         <BlockSplitFileMenu
@@ -528,53 +529,48 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           pendingJoinCall={pendingJoinCall}
           onHandled={() => setPendingJoinCall(false)}
         />
-        <ChannelTabLayout
+        <div
           class={cn(
-            'h-full px-2 touch:px-0',
+            'h-full flex flex-col px-2 touch:px-0',
             // The channel block is full-frame on mobile (messages scroll
             // behind the chrome); the other tabs still need to start below
             // the status bar + floating header.
             activeTab() !== 'messages' &&
               'touch:pt-(--mobile-content-inset-top)'
           )}
-          tabs={
-            <Show when={!isTouchDevice()}>
-              <Suspense>
-                <ChannelTabs channelId={channelId} />
-              </Suspense>
-            </Show>
-          }
         >
-          <Switch>
-            <Match when={activeTab() === 'messages'}>
-              <ChannelMessages
-                autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-              />
-            </Match>
-            <Match when={activeTab() === 'attachments'}>
-              <ChannelAttachmentsTab channelId={channelId} />
-            </Match>
-            <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-              <ChannelCallsTab channelId={channelId} />
-            </Match>
-            <Match when={activeTab() === 'participants'}>
-              <ChannelParticipantsTab
-                channelId={channelId}
-                botManagementEnabled={botManagement.enabled()}
-                onCreateBot={botManagement.openCreateBot}
-                inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                onOpenBot={botManagement.openBot}
-              />
-            </Match>
-            <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-              <ChannelCallTab
-                channelId={channelId}
-                pendingJoin={pendingJoinCall}
-              />
-            </Match>
-          </Switch>
+          <div class="flex min-h-0 flex-1 flex-col" data-channel-tab-content>
+            <Switch>
+              <Match when={activeTab() === 'messages'}>
+                <ChannelMessages
+                  autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                />
+              </Match>
+              <Match when={activeTab() === 'attachments'}>
+                <ChannelAttachmentsTab channelId={channelId} />
+              </Match>
+              <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
+                <ChannelCallsTab channelId={channelId} />
+              </Match>
+              <Match when={activeTab() === 'participants'}>
+                <ChannelParticipantsTab
+                  channelId={channelId}
+                  botManagementEnabled={botManagement.enabled()}
+                  onCreateBot={botManagement.openCreateBot}
+                  inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                  onOpenBot={botManagement.openBot}
+                />
+              </Match>
+              <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
+                <ChannelCallTab
+                  channelId={channelId}
+                  pendingJoin={pendingJoinCall}
+                />
+              </Match>
+            </Switch>
+          </div>
           <NewTop channelId={channelId} />
-        </ChannelTabLayout>
+        </div>
       </ChannelTabProvider>
     </ChannelSurface>
   );

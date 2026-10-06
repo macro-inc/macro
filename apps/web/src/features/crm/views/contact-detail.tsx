@@ -1,5 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
-import { createMemo, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import {
   type ContactSection,
@@ -23,7 +23,6 @@ export function Contact(props: {
   contactId: string;
   section?: ContactSection;
   headerToggle?: boolean;
-  navigation?: JSX.Element;
   onOpenCompany?: (companyId: string) => boolean;
 }) {
   const context = useCrmContext();
@@ -53,7 +52,6 @@ export function Contact(props: {
       defaultOpen={false}
     >
       <div class="flex size-full min-h-0 min-w-0 flex-col">
-        {props.navigation}
         <div class="min-h-0 min-w-0 flex-1">
           <Switch>
             <Match when={section() === 'overview'}>
