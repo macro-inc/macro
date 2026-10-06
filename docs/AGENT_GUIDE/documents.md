@@ -2068,10 +2068,10 @@ still follow normal CRDT collaboration semantics when they reconnect.
 
 ## HTML preview tabs
 
-HTML documents show `Render` and `Code` bubble tabs in a left-aligned row above
-the content, below the header, in both standalone desktop blocks and Drive
-detail views. Switch to Code to inspect or edit the source, then back to Render
-to see the current preview. Other code file types do not show this row.
+HTML documents show `Render` and `Code` inset tabs in the top bar in both
+standalone desktop blocks and Drive detail views. Switch to Code to inspect or
+edit the source, then back to Render to see the current preview. Other code file
+types do not show these tabs.
 
 ## Large-document undo checks
 

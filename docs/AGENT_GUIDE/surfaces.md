@@ -13,7 +13,7 @@ Low-emphasis right-aligned split-header actions (including Calendar's touch/prev
 New event and Channel's idle Call and Ask Macro) are borderless with a rounded-xl
 background on hover. Emphasized variants retain their treatment, including an
 active call's green ink and outline frame. Channel, company, contact, and project
-content tabs use bubble tabs in a separate row below the header. Button sizes do not change variant colors or framing; individual
+content tabs use inset controls in the top bar. Button sizes do not change variant colors or framing; individual
 framed controls default to glass on touch and flat on desktop. Use `glass={true}`
 to enable glass on all devices, or `glass={false}` to disable it everywhere.
 Embedded and low-emphasis actions use `ghost`; inline calendar-invitation text
@@ -1694,9 +1694,9 @@ the toggle to dismiss it; the open state is not restored on a later visit.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
-A company is laid out like a project. Below its split header or embedded
-breadcrumb header, a separate bubble-tab row shows `Overview`, `Team`, `Emails`,
-`Files`, `Tasks`, and `Calls`. Narrow rows scroll horizontally with text labels. Overview shows the name, pills
+A company is laid out like a project. Its split header or embedded breadcrumb
+header shows inset `Overview`, `Team`, `Emails`, `Files`, `Tasks`, and `Calls`
+tabs, collapsing to icons when narrow. Overview shows the name, pills
 for each domain and `Last interacted`, the generated description and the
 Discussion. Team lists the contacts with `Add contact`. Emails keeps the
 `Signal`/`All` and `Team`/`Me` toggles. Files lists non-task documents whose
