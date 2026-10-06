@@ -51,10 +51,21 @@ pub fn dialable_servers(servers: Vec<AcpMcpServer>) -> Vec<McpServerHttp> {
 pub trait McpToolConnector: Send + Sync + 'static {
     /// Connect to every server, skipping any that fail, and return the tools
     /// found. `None` when no server yielded any tool.
+    ///
+    /// A connector may return sessions it already has open. Callers still
+    /// await this before the first turn that needs the tools, and a hit
+    /// returns without dialing.
     fn connect(
         &self,
         servers: Vec<McpServerHttp>,
     ) -> impl Future<Output = Option<RemoteMcpToolSet>> + Send;
+
+    /// Drop pooled sessions authenticated with `token`.
+    ///
+    /// Connectors that do not keep sessions across [`connect`](Self::connect)
+    /// calls do nothing. Called when a session is torn down, so a token that
+    /// will never be presented again does not leave its upstream sessions open.
+    fn release(&self, _token: &str) {}
 }
 
 /// Erased form of [`McpToolConnector`] for storage on the agent state.
@@ -64,6 +75,9 @@ pub trait DynMcpToolConnector: Send + Sync + 'static {
         &self,
         servers: Vec<McpServerHttp>,
     ) -> std::pin::Pin<Box<dyn Future<Output = Option<RemoteMcpToolSet>> + Send + '_>>;
+
+    /// See [`McpToolConnector::release`].
+    fn release_dyn(&self, token: &str);
 }
 
 impl<C: McpToolConnector> DynMcpToolConnector for C {
@@ -72,6 +86,10 @@ impl<C: McpToolConnector> DynMcpToolConnector for C {
         servers: Vec<McpServerHttp>,
     ) -> std::pin::Pin<Box<dyn Future<Output = Option<RemoteMcpToolSet>> + Send + '_>> {
         Box::pin(self.connect(servers))
+    }
+
+    fn release_dyn(&self, token: &str) {
+        self.release(token);
     }
 }
 

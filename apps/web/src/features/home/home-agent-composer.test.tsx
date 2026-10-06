@@ -171,3 +171,7 @@ it('ignores suggested context that finishes after leaving Home', async () => {
     'Newer Home draft'
   );
 });
+
+vi.mock('@queries/agent-session/warm', () => ({
+  useWarmAgentSessionQuery: vi.fn(),
+}));

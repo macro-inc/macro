@@ -62,6 +62,14 @@ struct Openings {
 }
 
 impl SessionOpener for Openings {
+    async fn warm_session(
+        &self,
+        _owner: model_owner::Owner,
+        _id: AgentSessionId,
+    ) -> crate::domain::error::Result<Option<crate::domain::model::AgentSession>> {
+        Ok(None)
+    }
+
     async fn open_managed_session(
         &self,
         request: OpenManagedSession,

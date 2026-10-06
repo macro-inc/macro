@@ -25,3 +25,8 @@ export const agentSessionPullRequestKeys = createQueryKeys(
     forSession: (sessionId: string) => ({ queryKey: [sessionId] }),
   }
 );
+
+/** Speculative, hidden sessions prepared for the signed-in owner. */
+export const agentSessionWarmKeys = createQueryKeys('agentSessionWarm', {
+  owner: (userId: string | undefined) => ({ queryKey: [userId] }),
+});
