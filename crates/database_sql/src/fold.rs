@@ -147,10 +147,10 @@ fn fold_joined(catalog: &Catalog, plan: &Plan, rows: Vec<Row>) -> (Table, Vec<Ro
         Shape::Rows(columns) => {
             let mut rows = rows;
             sort::rows(catalog, plan, &mut rows);
-            let projected = rows.into_iter().map(|mut row| {
+            let projected = rows.into_iter().map(|row| {
                 let cells: Vec<Option<Cell>> = columns
                     .iter()
-                    .map(|column| row.cells.remove(column))
+                    .map(|column| row.cells.get(column).cloned())
                     .collect();
                 (row.id, cells)
             });

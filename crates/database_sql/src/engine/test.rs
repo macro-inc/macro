@@ -2,6 +2,7 @@ use models_databases::position::Position;
 use models_databases::{DatabaseId, OptionId, RowId};
 use std::collections::HashMap;
 
+mod projection;
 mod transcripts;
 
 use filter_ast::Expr;
