@@ -12,6 +12,7 @@ use serde::Serialize;
 mod colors;
 mod design;
 mod handoff;
+mod lift;
 pub mod prototype;
 mod variables;
 pub use colors::page_colors;
@@ -19,6 +20,7 @@ pub use design::{DesignInfo, StyleInfo, design_info, local_styles};
 pub use handoff::{
     Exportable, FrameAids, GridInfo, GuideInfo, LayoutAids, exportables, grid_info, layout_aids,
 };
+pub use lift::{LiftPlan, LiftRun, lift_plan};
 pub use variables::{CollectionInfo, variables};
 
 /// One row of the layers panel.
@@ -156,6 +158,11 @@ pub struct NodeInfo {
     /// Relative to the containing frame (or page), as Figma shows them.
     pub x: f64,
     pub y: f64,
+    /// How moving the layer on the page changes `x` and `y`: `[m00, m01,
+    /// m10, m11]`, the linear part of the containing frame's inverse
+    /// transform (identity on the page), so the editor can show where a
+    /// layer it is dragging will land.
+    pub panel_move: [f64; 4],
     pub width: f64,
     pub height: f64,
     pub rotation: f64,
@@ -258,6 +265,7 @@ fn paint_info(p: &Paint, size: Vec2) -> PaintInfo {
             info.scale_mode = Some(enum_name(&img.scale_mode));
             info.image_hash = img.hash.as_deref().map(str::to_owned);
         }
+        PaintKind::Pattern(_) => info.kind = "PATTERN".into(),
         PaintKind::Unsupported(kind) => info.kind = kind.to_ascii_uppercase(),
     }
     info
@@ -297,15 +305,12 @@ pub fn node_info(doc: &Document, scene: &Scene, i: SceneIdx) -> NodeInfo {
     let props = scene.props(doc, i);
     let node = scene.node(i);
     let size = props.size();
-    let origin = node.world.apply(Vec2::default());
-    let (x, y) = match coordinate_parent(scene, doc, i) {
-        Some(p) => {
-            let inv = scene.node(p).world.invert().unwrap_or_default();
-            let local = inv.apply(origin);
-            (local.x, local.y)
-        }
-        None => (origin.x, origin.y),
-    };
+    let origin = node.world.panel_origin(size);
+    let space = coordinate_parent(scene, doc, i)
+        .map(|p| scene.node(p).world.invert().unwrap_or_default())
+        .unwrap_or_default();
+    let local = space.apply(origin);
+    let (x, y) = (local.x, local.y);
     let node_type = props.node_type();
     let main_component = (node_type == NodeType::Instance)
         .then(|| {
@@ -400,9 +405,10 @@ pub fn node_info(doc: &Document, scene: &Scene, i: SceneIdx) -> NodeInfo {
         type_label: node_type.label(),
         x,
         y,
+        panel_move: [space.m00, space.m01, space.m10, space.m11],
         width: size.x,
         height: size.y,
-        rotation: node.world.rotation_degrees(),
+        rotation: node.world.panel_rotation_degrees(),
         bounds: scene.frame_bounds(doc, i),
         opacity: props.opacity(),
         blend_mode: enum_name(&props.blend_mode()),

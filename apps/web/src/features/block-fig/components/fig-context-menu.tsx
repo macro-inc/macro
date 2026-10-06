@@ -51,7 +51,7 @@ export function FigContextMenu(props: {
       <DropdownMenu.Portal>
         <ContextMenuContent
           contentComponent={DropdownMenu.Content}
-          class="w-60 text-xs"
+          class="fig-editor-theme w-60 text-xs"
           // The chosen action decides where focus goes (a rename field).
           onCloseAutoFocus={(e) => e.preventDefault()}
         >

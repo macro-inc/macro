@@ -1631,7 +1631,7 @@ export function SpreadsheetGrid(props: {
                               'var(--spreadsheet-cell-padding-y)',
                             'line-height': CELL_LINE_HEIGHT,
                           }}
-                          class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-surface text-ink select-none"
+                          class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-panel text-ink select-none"
                           classList={{
                             'font-semibold': look()?.bold ?? cell()?.bold,
                             'tabular-nums': numeric(),
@@ -1771,7 +1771,7 @@ export function SpreadsheetGrid(props: {
                                 (isTouchDevice() && !!props.referenceSelection)
                               }
                               onSelectionChange={props.onTextSelection}
-                              class="absolute inset-0 size-full resize-none overflow-hidden bg-surface px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
+                              class="absolute inset-0 size-full resize-none overflow-hidden bg-panel px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
                               value={props.draft}
                               onInput={props.onDraft}
                               onKeyDown={editKeyDown}

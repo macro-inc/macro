@@ -34,10 +34,7 @@ export function Homepage() {
           onContinue={() => {}}
           action={
             <div class="homepage-hero-action mt-6 flex justify-center pb-5">
-              <a
-                class="site-nav-start homepage-hero-cta"
-                href={import.meta.env.DEV ? '/onboarding-preview.html' : '/app'}
-              >
+              <a class="site-nav-start homepage-hero-cta" href="/app/signup">
                 Get Started
               </a>
             </div>

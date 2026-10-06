@@ -376,6 +376,9 @@ export type BlockDefinition<
   /** The component for the block. */
   component: BlockComponent<Name>;
 
+  /** Lightweight placeholder while the block's component or data loads. */
+  loading?: Component;
+
   /** flag to indicate wether this block should enable collaborative features. */
   liveTrackingEnabled?: boolean;
 

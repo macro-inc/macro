@@ -21,6 +21,7 @@ vi.mock('@entity/extractors-property/property-helpers', () => ({
 }));
 
 import type { SoupQuery } from '@service-storage/graphql/generated/graphql';
+import type { ProjectFilters } from '../core/project';
 import {
   createProjectSoupSource,
   projectSoupInput,
@@ -103,6 +104,106 @@ describe('project Soup source', () => {
     expect(second.rows()?.[0].project.id).toBe('cached');
     refresh.resolve();
   });
+  function offlineFixture(empty = false) {
+    let failure: CombinedError | undefined;
+    const [filters, setFilters] = createSignal<ProjectFilters>({
+      sort: 'updated',
+    });
+    const exchange: Exchange = () => (operations) =>
+      pipe(
+        operations,
+        mergeMap((operation) =>
+          fromPromise(
+            Promise.resolve({
+              operation,
+              error: failure,
+              data: failure
+                ? undefined
+                : {
+                    user: {
+                      id: 'viewer',
+                      soup: {
+                        items: empty ? [] : [initiative('cached')],
+                        nextCursor: 'next',
+                      },
+                    },
+                  },
+              stale: false,
+              hasNext: false,
+            })
+          )
+        )
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [cacheExchange, exchange],
+    });
+    const source = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createProjectSoupSource(
+        () => client,
+        filters,
+        () => true
+      );
+    });
+    return {
+      source,
+      setFilters,
+      fail: (error: CombinedError) => {
+        failure = error;
+      },
+    };
+  }
+
+  it.each([false, true])(
+    'keeps a cached collection quiet on refresh failure (empty=%s)',
+    async (empty) => {
+      const f = offlineFixture(empty);
+      await vi.waitFor(() =>
+        expect(f.source.rows()).toHaveLength(empty ? 0 : 1)
+      );
+      const error = new CombinedError({
+        networkError: new TypeError('Failed to fetch'),
+      });
+      f.fail(error);
+      await expect(f.source.refresh()).rejects.toBe(error);
+      expect(f.source.rows()).toHaveLength(empty ? 0 : 1);
+      expect(f.source.error()).toBeUndefined();
+    }
+  );
+
+  it('keeps errors for uncached filters and pagination visible', async () => {
+    const f = offlineFixture();
+    await vi.waitFor(() => expect(f.source.rows()).toHaveLength(1));
+    const error = new CombinedError({
+      networkError: new TypeError('Failed to fetch'),
+    });
+    f.fail(error);
+    await f.source.loadMore();
+    expect(f.source.rows()).toHaveLength(1);
+    expect(f.source.error()).toBe(error);
+    f.setFilters({ query: 'not cached' });
+    await vi.waitFor(() => expect(f.source.error()).toBe(error));
+    expect(f.source.rows()).toBeUndefined();
+  });
+
+  it.each([
+    new CombinedError({ graphQLErrors: ['Forbidden'] }),
+    ...[401, 403, 503].map(
+      (status) =>
+        new CombinedError({
+          networkError: new Error('HTTP failure'),
+          response: { status },
+        })
+    ),
+  ])('preserves server errors alongside cached projects: %s', async (error) => {
+    const f = offlineFixture();
+    await vi.waitFor(() => expect(f.source.rows()).toHaveLength(1));
+    f.fail(error);
+    await expect(f.source.refresh()).rejects.toBe(error);
+    expect(f.source.error()).toBe(error);
+  });
+
   it('scopes all filters to initiatives and excludes folders and task documents', () => {
     const input = projectSoupInput({
       query: 'Roadmap',

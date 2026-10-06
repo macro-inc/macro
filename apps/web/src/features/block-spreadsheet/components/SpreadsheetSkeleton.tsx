@@ -29,7 +29,7 @@ export function SpreadsheetSkeleton(props: { label?: string }) {
       role="status"
       aria-busy="true"
       aria-label={label()}
-      class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface opacity-100 transition-opacity duration-300 starting:opacity-0"
+      class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel opacity-100 transition-opacity duration-300 starting:opacity-0"
     >
       <span class="sr-only">{label()}…</span>
       <div

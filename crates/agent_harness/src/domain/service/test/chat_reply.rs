@@ -4,7 +4,9 @@
 //! is what the domain asked of it and when.
 
 use super::*;
-use crate::domain::model::{ReplyOutcome, ResolvedReply, TaskAssignmentOrigin};
+use crate::domain::model::{
+    HeldToolCall, ReplyOutcome, ResolvedReply, TaskAssignmentOrigin, ToolApprovalChange,
+};
 use crate::domain::notifications::PlannedNotification;
 
 /// A mention of a bot whose sessions the in-memory runtime serves.
@@ -482,6 +484,104 @@ mod elicitation {
             ReplyOutcome::Answered("Sent from your primary inbox.".to_owned())
         );
     }
+}
+
+/// Tool calls held for the owner's approval: the reply names the oldest one
+/// waiting, says nothing new while a later one joins it, moves on to the
+/// next when the oldest settles, and is pending again once none wait.
+#[tokio::test]
+async fn held_tool_calls_are_told_in_the_thread_until_none_wait() {
+    let ((service, _, containers, announcer, _), turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = chat_session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+    let pending = announcer.announced_messages()[0].message_id;
+    let list_entities = HeldToolCall {
+        approval_id: "approval-1".to_owned(),
+        server_slug: "macro".to_owned(),
+        server_name: "Macro".to_owned(),
+        tool_name: "ListEntities".to_owned(),
+    };
+    let create_issue = HeldToolCall {
+        approval_id: "approval-2".to_owned(),
+        server_slug: "linear".to_owned(),
+        server_name: "Linear".to_owned(),
+        tool_name: "create_issue".to_owned(),
+    };
+
+    for change in [
+        ToolApprovalChange::Held(list_entities.clone()),
+        ToolApprovalChange::Held(create_issue.clone()),
+        ToolApprovalChange::Settled {
+            approval_id: "approval-1".to_owned(),
+        },
+        ToolApprovalChange::Settled {
+            approval_id: "approval-2".to_owned(),
+        },
+    ] {
+        service
+            .execute(id, HarnessCommand::ToolApproval(change))
+            .await
+            .expect("a held call change is handled");
+    }
+
+    let resolved = announcer.resolved();
+    assert_eq!(
+        resolved
+            .iter()
+            .map(|reply| (reply.message_id, reply.outcome.clone()))
+            .collect::<Vec<_>>(),
+        [
+            (pending, ReplyOutcome::AwaitingApproval(list_entities)),
+            (pending, ReplyOutcome::AwaitingApproval(create_issue)),
+            (pending, ReplyOutcome::Resumed),
+        ]
+    );
+    assert!(
+        turns.notifier.notified().is_empty(),
+        "{:#?}",
+        turns.notifier.notified()
+    );
+
+    says(&agent, "Here are your files.");
+    agent.completes_prompt().await;
+    turns.lifecycle_published(4).await;
+    let resolved = announcer.resolved();
+    assert_eq!(resolved.len(), 4, "{resolved:#?}");
+    assert_eq!(
+        resolved[3].outcome,
+        ReplyOutcome::Answered("Here are your files.".to_owned())
+    );
+}
+
+/// A call settled after its turn ended - the release on turn end - has no
+/// reply left to change.
+#[tokio::test]
+async fn a_held_call_settled_after_its_turn_changes_nothing() {
+    let ((service, _, containers, announcer, _), turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = chat_session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+    says(&agent, "Done.");
+    agent.completes_prompt().await;
+    turns.lifecycle_published(4).await;
+
+    service
+        .execute(
+            id,
+            HarnessCommand::ToolApproval(ToolApprovalChange::Settled {
+                approval_id: "approval-1".to_owned(),
+            }),
+        )
+        .await
+        .expect("a late settle is handled");
+
+    assert_eq!(
+        one_resolved(&announcer).outcome,
+        ReplyOutcome::Answered("Done.".to_owned())
+    );
 }
 
 #[tokio::test]

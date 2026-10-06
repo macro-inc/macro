@@ -470,6 +470,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             dss_url,
             ai_tools::pipedream_client_from_env()?,
         ),
+        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+            macro_service_urls::AgentHarnessServiceUrl::new()?,
+            config.internal_api_key.to_string(),
+        )?,
         project_tool_context,
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
@@ -480,6 +484,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         admission: ai_billing::composition::pg_admission_service(
             db.clone(),
             config.enable_ai_usage_enforcement,
+            config.ai_pricing(),
         ),
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),

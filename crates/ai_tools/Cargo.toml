@@ -16,6 +16,7 @@ initiative = { path = "../initiative", default-features = false, features = ["po
 initiative_description = { path = "../initiative_description" }
 activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
 agent = { path = "../agent" }
+agent_session = { path = "../agent_session", features = ["ai_tools"] }
 ai_usage = { path = "../ai_usage" }
 anthropic = { path = "../anthropic", features = ["toolset"] }
 attachment = { path = "../attachment" }

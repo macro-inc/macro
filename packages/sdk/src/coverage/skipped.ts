@@ -33,9 +33,12 @@ export const agentHarnessExcluded = [
   'loadAgentModelsHandler',
   'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
+  // Speculative page warm-up requires a signed-in user and is app-internal.
+  'warmAgentSessionHandler',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog = [
+  'answerAgentSessionToolApproval',
   'getAgentSessionPermissions',
   'updateAgentSessionPermissions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
@@ -89,6 +92,7 @@ export const authExcluded = [
   'listCursorModels',
   'listGtmInviteLinks',
   'logout',
+  'mergeGithubPullRequest',
   'oauth2Callback',
   'oauthRedirect',
   'passwordLogin',
@@ -159,6 +163,8 @@ export const cognitionExcluded = [
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'rejectToolCall',
+  // Channel discovery shares the app-only import workflow below.
+  'discoverHandler',
   'runImportHandler',
   'dismissRunHandler',
   'retryGatherHandler',

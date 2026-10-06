@@ -49,6 +49,13 @@ const Operation = z.discriminatedUnion('type', [
     paragraph: Id,
     style: z.string().min(1),
   }),
+  z.object({
+    type: z.literal('addComment'),
+    paragraph: Id,
+    find: optional(z.string().min(1)),
+    occurrence: Occurrence,
+    text: z.string().min(1),
+  }),
 ]);
 
 const DocxBody = z.object({
@@ -63,6 +70,8 @@ const DocxBody = z.object({
     z.object({
       action: z.literal('edit'),
       operations: z.array(Operation).min(1).max(MAX_DOCX_OPERATIONS),
+      trackChanges: Flag,
+      author: optional(z.string().trim().min(1).max(200)),
     }),
   ]),
 });

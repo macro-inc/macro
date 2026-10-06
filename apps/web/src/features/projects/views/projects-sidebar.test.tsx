@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { CombinedError } from '@urql/core';
 import {
   type Accessor,
   createResource,
@@ -137,6 +138,75 @@ it('keeps the heading and create action available while rows suspend', async () 
   } finally {
     resource.dispose();
   }
+});
+
+it.each([false, true])(
+  'does not resurrect a response-free refresh error with cached rows (empty=%s)',
+  async (empty) => {
+    const [error, setError] = createSignal<Error | undefined>(
+      new Error('Previous failure')
+    );
+    const { onOpen } = setup({
+      ...(empty ? { rows: () => [] } : {}),
+      error,
+      hasMore: () => !empty,
+      refresh: vi.fn(async () => {
+        setError(undefined);
+        throw new CombinedError({
+          networkError: new TypeError('Failed to fetch'),
+        });
+      }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    if (empty) {
+      expect(screen.getByText('No projects yet')).toBeTruthy();
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+      expect(onOpen).toHaveBeenCalled();
+      expect(
+        screen.getByRole('button', { name: 'Load more projects' })
+      ).toBeTruthy();
+    }
+  }
+);
+
+it.each([
+  new Error('Unexpected application failure'),
+  new CombinedError({ graphQLErrors: ['Forbidden'] }),
+  new CombinedError({
+    networkError: new Error('HTTP error'),
+    response: { status: 403 },
+  }),
+])(
+  'keeps a rejected refresh visible when it is not a transport-only failure: %s',
+  async (failure) => {
+    const [error, setError] = createSignal<Error | undefined>(
+      new Error('Previous failure')
+    );
+    const refresh = vi.fn(async () => {
+      setError(undefined);
+      throw failure;
+    });
+    setup({ error, refresh });
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(await screen.findByRole('alert')).toBeTruthy();
+  }
+);
+
+it('keeps transport failures visible without cached rows', async () => {
+  const [error, setError] = createSignal<Error | undefined>(
+    new Error('Previous failure')
+  );
+  const refresh = vi.fn(async () => {
+    setError(undefined);
+    throw new CombinedError({ networkError: new TypeError('Failed to fetch') });
+  });
+  setup({ rows: () => undefined, error, refresh });
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  expect(await screen.findByRole('alert')).toBeTruthy();
 });
 
 it('guards pagination while pending and supports retry after a failed read', async () => {

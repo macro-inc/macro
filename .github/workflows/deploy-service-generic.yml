@@ -25,6 +25,7 @@ on:
           - email-suppression
           - image-proxy-service
           - lambda-aggregate-frecency
+          - lexical-service
           - link-sharing
           - mcp-server
           - notification-service

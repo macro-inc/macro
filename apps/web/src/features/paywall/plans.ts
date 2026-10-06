@@ -1,26 +1,40 @@
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-
 export type PlanTier = 'free' | 'premium' | 'max';
 export type Plan = {
   tier: PlanTier;
   name: string;
   price: number;
   highlighted: boolean;
-  /**
-   * AI usage included each month, in dollars at Macro's list rate. Equal to the
-   * plan price: the plan's AI allowance is worth what the plan costs.
-   */
-  aiIncluded: number;
 };
+
+/**
+ * Included AI per seat per period in cents at provider cost, by tier. The
+ * backend owns these numbers; read them from the plan catalog with
+ * `useIncludedAiCentsByTier` (`@queries/auth`) rather than hard-coding them.
+ * Empty until the catalog has loaded.
+ */
+export type IncludedAiCentsByTier = Partial<Record<PlanTier, number>>;
+
+/** "$20" for whole dollars, "$12.50" otherwise; undefined while unknown. */
+export function formatIncludedAi(
+  cents: number | undefined
+): string | undefined {
+  if (cents === undefined) return undefined;
+  const dollars = cents / 100;
+  return Number.isInteger(dollars)
+    ? `$${dollars.toLocaleString()}`
+    : `$${dollars.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+}
 /** Tiers that correspond to real Stripe products. Excludes 'free'. */
 export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
 const FREE_PLAN = {
   tier: 'free',
-  name: 'Free',
+  name: 'Guest',
   price: 0,
   highlighted: false,
-  aiIncluded: 0,
 } as const satisfies Plan;
 
 const PREMIUM_PLAN = {
@@ -28,7 +42,6 @@ const PREMIUM_PLAN = {
   name: 'Premium',
   price: 40,
   highlighted: true,
-  aiIncluded: 40,
 } as const satisfies Plan;
 
 const MAX_PLAN = {
@@ -36,13 +49,12 @@ const MAX_PLAN = {
   name: 'Max',
   price: 200,
   highlighted: false,
-  aiIncluded: 200,
 } as const satisfies Plan;
 
 export const PLANS = [
   FREE_PLAN,
   PREMIUM_PLAN,
-  // MAX_PLAN,
+  MAX_PLAN,
 ] as const satisfies Plan[];
 
 export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
@@ -54,19 +66,31 @@ export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
 interface PlanFeature {
   label: string;
   values: Record<PlanTier, string>;
-  devOnly?: boolean;
+  /** Shown only while the `enable-ai-usage-billing` flag is on. */
+  aiUsageBilling?: boolean;
 }
 
-const planFeatures: PlanFeature[] = [
-  {
+/**
+ * The allowance row; amounts come from the plan catalog, "—" until it loads.
+ * Free's amount is its monthly hard cap.
+ */
+function includedAiRow(includedAi: IncludedAiCentsByTier): PlanFeature {
+  const perMonth = (tier: PlanTier) => {
+    const amount = formatIncludedAi(includedAi[tier]);
+    return amount ? `${amount} / mo at cost` : '—';
+  };
+  return {
     label: 'AI usage included',
-    devOnly: true,
+    aiUsageBilling: true,
     values: {
-      free: 'Limited',
-      premium: '$40 / mo',
-      max: '$200 / mo',
+      free: perMonth('free'),
+      premium: perMonth('premium'),
+      max: perMonth('max'),
     },
-  },
+  };
+}
+
+const PLAN_FEATURE_ROWS: PlanFeature[] = [
   {
     label: 'AI Agent',
     values: {
@@ -77,9 +101,9 @@ const planFeatures: PlanFeature[] = [
   },
   {
     label: 'Beyond included',
-    devOnly: true,
+    aiUsageBilling: true,
     values: {
-      free: '—',
+      free: 'Upgrade to continue',
       premium: 'Credits or usage billing',
       max: 'Credits or usage billing',
     },
@@ -94,6 +118,18 @@ const planFeatures: PlanFeature[] = [
   },
 ];
 
-export const PLAN_FEATURES = planFeatures.filter(
-  (feature) => !feature.devOnly || DEV_MODE_ENV
-);
+/**
+ * The plan comparison rows. The AI usage rows (included allowance and what
+ * covers usage beyond it) appear only while AI usage billing is on; callers
+ * read `enableAiUsageBilling` and pass its value, and pass the catalog's
+ * allowances from `useIncludedAiCentsByTier` so the amounts are never
+ * hard-coded here.
+ */
+export function planFeatures(
+  aiUsageBilling: boolean,
+  includedAi: IncludedAiCentsByTier = {}
+) {
+  return [includedAiRow(includedAi), ...PLAN_FEATURE_ROWS].filter(
+    (feature) => !feature.aiUsageBilling || aiUsageBilling
+  );
+}

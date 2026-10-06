@@ -105,7 +105,7 @@ test('edits, selections, and pointers reach the other person', async ({
 
   // Undo is Alice's own, and Bob sees it.
   await alice.click({ position: { x: 10, y: 10 } });
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(0);
   await expect.poll(() => pixel(bob, 0.25, 0.76)).not.toEqual([217, 217, 217]);
 
@@ -117,6 +117,44 @@ test('edits, selections, and pointers reach the other person', async ({
       )
     )
     .toEqual(expect.arrayContaining([true, false]));
+});
+
+test('the other person sees a layer move while it is dragged', async ({
+  page,
+}) => {
+  await open(page);
+  const alice = person(page, 'Alice').getByTestId('fig-canvas');
+  await drawRectangle(page, alice, [0.1, 0.72], [0.4, 0.8]);
+  await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(1);
+  /** Where a person's engine has the rectangle. */
+  const left = (who: number) =>
+    page.evaluate(async (index) => {
+      const engine = window.figFixture.collab?.people()[index]?.engine();
+      if (!engine) return undefined;
+      const row = (await engine.layers(0)).find(
+        (r) => r.name === 'Rectangle 1'
+      );
+      const [g] = row ? await engine.geometry(0, [row.id]) : [];
+      return g?.bounds.x;
+    }, who);
+  const start = (await left(1)) ?? 0;
+  // Alice drags it right (her canvas draws the move itself) and holds it.
+  const box = await alice.boundingBox();
+  if (!box) throw new Error('no canvas');
+  const y = box.y + box.height * 0.76;
+  await page.mouse.move(box.x + box.width * 0.25, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.25 + 120, y, { steps: 8 });
+  // Bob sees it move before she lets go …
+  await expect.poll(() => left(1)).toBeGreaterThan(start + 10);
+  await page.mouse.up();
+  // … and they agree where it landed.
+  await expect
+    .poll(async () => {
+      const [a, b] = [await left(0), await left(1)];
+      return a !== undefined && a === b && a > start + 10;
+    })
+    .toBe(true);
 });
 
 test('both people’s layers appear on both sides, and following shows the other view', async ({
@@ -147,4 +185,66 @@ test('both people’s layers appear on both sides, and following shows the other
   // Bob moving his own view stops following.
   await bob.click({ position: { x: 10, y: 10 } });
   await expect(person(page, 'Bob').getByTestId('fig-following')).toHaveCount(0);
+});
+
+test('a file stored outside the design starts it over, and the others reload', async ({
+  page,
+}) => {
+  await open(page);
+  const alice = person(page, 'Alice').getByTestId('fig-canvas');
+  await drawRectangle(page, alice, [0.1, 0.72], [0.4, 0.8]);
+  await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(1);
+  // The merged file is stored, and reopening it keeps the rectangle once.
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.figFixture.collab?.people().some((p) => p.saves() > 0)
+      )
+    )
+    .toBe(true);
+  await page.evaluate(() => window.figFixture.collab?.reopen('Bob'));
+  await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(1);
+
+  // A new upload replaces the stored file; whoever opens it next gets it
+  // without the changes made on the old one.
+  await page.evaluate(() => window.figFixture.collab?.storeOutside());
+  await page.evaluate(() => window.figFixture.collab?.reopen('Bob'));
+  await expect(person(page, 'Bob').getByTestId('fig-page')).toHaveText([
+    'Page 1',
+  ]);
+  await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(0);
+  // Alice's copy is out of date: read-only, with a way to reload.
+  const notice = person(page, 'Alice').getByTestId('fig-session-notice');
+  await expect(notice).toContainText('replaced');
+  await expect(
+    person(page, 'Alice').getByTestId('fig-tool-rectangle')
+  ).toBeHidden();
+  await notice.getByTestId('fig-session-action').click();
+  await expect(person(page, 'Alice').getByTestId('fig-page')).toHaveText([
+    'Page 1',
+  ]);
+  await expect(
+    person(page, 'Alice').getByTestId('fig-tool-rectangle')
+  ).toBeVisible();
+  await expect.poll(() => layersNamed(page, 0, 'Rectangle 1')).toBe(0);
+});
+
+test('an unreachable sync service opens the design read-only, with retry', async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => {
+    window.figFixture.collab?.setReachable(false);
+    window.figFixture.collab?.reopen('Bob');
+  });
+  const bob = person(page, 'Bob');
+  await expect(bob.getByTestId('fig-session-notice')).toContainText(
+    'read-only'
+  );
+  await expect(bob.getByTestId('fig-layer-row').first()).toBeVisible();
+  await expect(bob.getByTestId('fig-tool-rectangle')).toBeHidden();
+  await page.evaluate(() => window.figFixture.collab?.setReachable(true));
+  await bob.getByTestId('fig-session-action').click();
+  await expect(bob.getByTestId('fig-tool-rectangle')).toBeVisible();
+  await expect(bob.getByTestId('fig-session-notice')).toHaveCount(0);
 });

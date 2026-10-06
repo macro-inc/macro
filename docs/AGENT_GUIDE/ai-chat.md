@@ -5,6 +5,16 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Checking first-response latency
+
+From outside an editor, press `c`, then `a`, type a prompt, and press Enter.
+Repeat with the default model and with an explicit model/effort selection.
+The first visible output and the first answer text should appear as they arrive;
+later chunks can arrive in batches. Reasoning or a tool row should not delay the
+first prose. Verify a second prompt and a reload preserve the complete answer.
+Selected model and effort must be confirmed before the first prompt; settings
+already confirmed by the runtime do not need another control request.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and
@@ -51,10 +61,11 @@ legacy list and flag-gated composer flows remain available.
 
 While an agent works, a draft can be sent to its queue. Above the queue,
 **Send next** explicitly interrupts the current turn and sends the oldest queued
-message. The empty composer offers the same action when messages are queued;
-with a draft it offers **Send**. With no draft or queue, the busy composer offers
-**Stop**. Send-next actions disable during stopping/starting and for read-only
-sessions.
+message. The empty composer offers the same action as **Flush queued messages**
+with a ringed send arrow; with a draft it offers **Send**. Each queued row offers
+**Steer** while a turn is running, to interrupt it and send that row next. With no
+draft or queue, the busy composer offers **Stop**. Send-next actions disable and
+Steer is hidden during stopping/starting and for read-only sessions.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Home composer, enter multiple lines and tap Send, attach, or the model control;
@@ -120,14 +131,33 @@ or stop.
 **Ask AI** in search (including Tab), the command menu, and mobile search opens
 an agent session. A nonempty search query is sent as the first prompt once the
 session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split, while command-menu and mobile actions open a new split.
+its current split into the Agents workspace, while command-menu and mobile
+actions open a new split.
 
-**Ask Macro** and **Chat with Agent** on documents, PDFs, spreadsheets, email,
-channels, calls, and projects also open agent sessions. Their entity mention stays
+**Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
+code files, images, canvases, spreadsheets, email, channels, calls, and projects
+also open agent sessions. Like command-menu Ask AI, they open the bare session in
+a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
 in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
 and selected range; channel-message actions retain the referenced message.
 Add a question and press Send to submit that context. These actions do not create
 legacy cognition chats, regardless of the Agents workspace feature flag.
+
+## Dispatching coding agents from chat
+
+Ask a chat agent to delegate a coding task, including the repository and branch
+when relevant. The agent uses `ListCodingAgents` to discover your available coding
+agents, chooses one using its description and runtime defaults, and calls
+`DispatchCodingAgent` with that agent's ID and a self-contained task prompt.
+The available-agents tool row expands to show the returned names and descriptions.
+
+A successful dispatch starts a separate coding session and displays its live
+Magic Chip directly in the reply, outside collapsed tool groups. The chip follows
+the dispatched turn, including progress, output, permission requests, and a linked
+pull request. **Open session** opens the coding conversation in another split so
+you can follow up there. Reloading the chat restores the same session card.
+Failed dispatches do not show a successful session card. If no coding agents are
+available, configure one in Agents before retrying.
 
 ## Where chats live
 
@@ -152,6 +182,30 @@ the shimmer.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Connections page. Personal Gmail/GitHub account links remain under Settings →
   Integrations.
+
+  To recreate Slack channels, open **Settings → Connections → Slack → Import
+  channels** (or **Connections → Slack** from the Agents workspace). The card
+  appears only for a connected, enabled Pipedream Slack account. Click **Find
+  channels** (or **Refresh** on subsequent visits), then wait for discovery and
+  member checks to update live. Search by name, purpose, or Slack channel id;
+  archived channels stay hidden until **Show archived** is checked. Select
+  individual channels or **Select all visible**, then click **Import 1 channel**
+  or **Import N channels**.
+  Filtering does not clear selections. Rows progress from **Importing…** to an
+  **Imported** link; channels already imported by another team member show
+  **by a teammate** and cannot be selected again. Imported channels appear under
+  **Channels**, with the Slack name and matched Macro teammates. Member counts
+  show how many Slack members are on your team; unchecked membership is labeled
+  separately. Unmatched members are not invited. Messages, files, private
+  channels, and direct messages are not imported, and there is no ongoing sync.
+  A failed discovery shows its error and **Retry**; an empty completed discovery
+  shows **No public channels found**. If member checks reach their time budget,
+  discovered channels remain available with unchecked membership rather than a
+  discovery failure. Conversations with unknown visibility are not listed.
+  If both Slack connector aliases are connected, the Slack page manages `slack`
+  first; `slack_v2` remains a separate row in Connections where it can be disabled
+  or disconnected.
+
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
@@ -268,6 +322,11 @@ the shimmer.
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
   the owner must have access through the connected GitHub App.
+  Paired macrod agents also receive the repository choice. With native Herdr,
+  macrod finds an existing clone or clones it using local Git credentials, then
+  creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
+  and cannot be changed for local sessions. The native Claude/Codex TUI remains
+  interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
   a model selected from its submenu overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
@@ -303,6 +362,32 @@ the shimmer.
   code and click **Look up**. Review the request and click **Approve** to connect.
   The setup guide contains configuration and pairing screenshots in that order.
   Enter the code from your own terminal, not the example screenshot.
+  Run inside a herdr pane, macrod's Quickstart also offers **Claude Code in herdr**
+  and **Codex in herdr**: each session of an agent on that runtime opens a herdr
+  tab in the directory macrod started from, running the real Claude Code or Codex
+  TUI. The session page streams its tool calls and replies, and its permission
+  prompts appear as approvals. Other runtimes started inside herdr get a live
+  view tab per session that can prompt and interrupt it; approvals stay in Macro.
+  Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
+  Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
+  check their result and any confirmation in Herdr. For Claude, use `/fast on`
+  or `/fast off`, or bare `/fast` to open its native controls. Available speed
+  tiers depend on the native agent, model, and account. Claude also offers
+  `/effort` with an optional level, `auto`, or `status`. In Codex sessions,
+  `/effort` shows the current effort and available choices in Macro. Send
+  `/effort high` (or another supported level) to change it and wait for native
+  confirmation; `/effort default` restores the model's default. This preserves
+  the current model. `/model` still opens the picker in Herdr. Macro's model dropdown
+  changes the model of an idle native session after native confirmation and
+  displays the model identified by the session (Codex's live footer, or native
+  transcript metadata). Unexpected native dialogs must be completed in Herdr.
+  For Codex, open the current model's submenu to select **Reasoning effort**.
+  Choices come from the installed Codex catalog; the selected effort is confirmed
+  from the native session and shown beside the model. Local Herdr changes and
+  `/effort` also update this menu. The effort submenu appears once the native
+  session starts on the first prompt, before its first reply; a startup screen
+  that temporarily hides the footer is retried during the turn. The menu does not list
+  installed native skills or session-switching commands such as `/resume`.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.
   Runtime and short model lists use styled dropdown buttons: open the field and
@@ -319,7 +404,11 @@ the shimmer.
   use the same growing, initially single-line input with the model selector on
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
-  choose another. Stop, queued-message advancement, and quoting remain available.
+  choose another. An unsent message in that session — the text and attached
+  files that finished uploading — stays when you leave for a channel, another
+  session, or Home and come back, including after reload. Sending or clearing
+  the input removes only that session's draft. Stop, queued-message advancement,
+  and quoting remain available.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
   Unarchive is also available from the title dropdown.
@@ -456,11 +545,15 @@ than treating it as approval or repeatedly sending the prompt.
 
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
-Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
-are hidden outside frontend development mode. Normal paid-model access rules
-still apply everywhere. Backend enforcement does not depend on those frontend
-controls, and enabling it does not enable credit collection; that needs
-`ENABLE_AI_USAGE_BILLING`. There is no new upgrade prompt in this rollout.
+Settings → Usage is visible for every plan. In production,
+`enable-ai-usage-billing` activates its controls and the AI usage-limit dialog;
+until then Usage shows the October 8, 2026 announcement and disabled controls.
+Dev and local remain active regardless of the flag.
+Usage displays the current period as a **Monthly limit** percentage; its info
+button explains that AI agent chat and AI document editing count toward the limit.
+Plan allowance copy and comparisons still follow `enable-ai-usage-billing`.
+Model pickers have no usage multipliers. Normal paid-model access rules still
+apply. Backend enforcement and credit collection remain independent policies.
 
 Session creation and spending controls also return 402/503 for admission failures.
 Waiting prompts are checked again before execution: exhaustion removes rejected
@@ -480,24 +573,40 @@ must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
 quota, but Macro-funded tools and helpers still check independently.
 
-In dev, paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
-usage rates). When it is used up and no credits or usage billing cover the
-request, sending a message answers HTTP 402 and the app opens the
-**AI usage limit** dialog (title `You've used this month's included AI`, or the
-spending-limit / failed-charge variants). It shows the same meter and controls
-as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
-`Open billing settings` button, and no Max purchase or upgrade control. Team
-members who are not the payer see a note to ask the team owner to add credits
-or turn on usage billing.
+Every plan includes a monthly AI allowance per seat, measured at provider cost;
+paid usage beyond it is billed at a markup. All of the numbers come from Doppler
+(`AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
+for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
+`AI_USAGE_OVERAGE_MARKUP_PERCENT`), never from code. When a paid allowance is
+used up and no credits or usage billing cover the request, sending a message
+answers HTTP 402 and the app opens the **AI usage limit** dialog (title
+`You've used this month's included AI`, or the spending-limit / failed-charge
+variants). It shows **Monthly limit**, the message `Add additional credits to
+keep going.`, and an `Open usage settings` button. Credit purchases live in
+Settings → Usage; subscription changes live in Settings → Billing.
+
+The free plan is a hard cap: when its monthly allowance is used up, requests
+answer 402 with code `ai_free_allowance_exhausted`. The dialog title is
+`You've used this month's free AI`; it says `Subscribe to a paid plan to keep
+going.` and offers `View plans`, which opens Billing. This upgrade path remains
+available while the usage summary loads or fails. Free users cannot buy credits
+or enable Auto-Reload. The cap resets with the UTC calendar month.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
+
+AI service clients return typed quota errors without opening UI. Foreground
+mutation failures and direct session/edit actions present the shared dialog;
+ordinary HTTP failures and background queries do not. Document AI-edit refusals
+apply no edits and open this dialog instead of the generic `AI edit failed`
+toast. Legacy chat tool errors carrying a recognized quota code also open it.
 
 ### Quota manual checks
 
 Use an isolated local backend with local billing fixtures, not real hosted
 accounts. See [quota rollout and coverage](../AI_QUOTA_ENFORCEMENT.md) for setup
 and the full matrix. Record both browser behavior and the Network/protocol result;
-existing UI does not promise a dedicated quota dialog outside development mode.
+recognized foreground quota refusals open the shared dialog when the frontend
+rollout is active (always in dev and local; flag-controlled in production).
 
 1. With the flag absent/false across all hosts, send a legacy chat and a managed
    session prompt. Confirm ordinary behavior and new uncounted usage rows.
@@ -514,12 +623,20 @@ existing UI does not promise a dedicated quota dialog outside development mode.
    work remains without a retry loop and that Stop still works.
 4. Invoke AI editing on an editable document and an independent AI tool with the
    exhausted fixture. Confirm failed results and unchanged document content. Check
-   manual editing and dictation still work. A successful chat whose optional rename
+   the usage-limit dialog opens, with a subscription CTA for Free or a Usage
+   settings CTA for paid accounts. Check manual editing and dictation still work. A successful chat whose optional rename
    is refused keeps its existing/default title rather than failing the chat.
 5. Set false consistently and restart/redeploy all local processes. Retry refused
    work explicitly and confirm recovery, new uncounted rows, and unchanged counted
    history. Do not erase history to simulate rollback or claim that rollback is a
    quota reset. Check cancellation in both flag states.
+
+For frontend-only checks against dev, use Settings → Usage → **Developer tools**
+to open the Free or paid usage-limit dialog directly, then reset the preview. This is
+a display override, not a quota change. To test actual refusal handling without
+hosted AI spending, intercept only the tested AI request in Chrome DevTools and
+return the matching 402 body; restore the response afterward. Backend admission
+and settlement tests still require the isolated backend fixtures above.
 
 ## Start a doc-scoped chat
 
@@ -666,6 +783,28 @@ who has prompted or answered the session also receive an `agent_session_waiting_
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
 
+## Tool calls waiting for the session owner
+
+An agent session always runs with its owner's access. When someone else prompts it (a
+second person replying in the session's channel thread, or a bot), every tool call that
+uses that access - Macro's own tools on the owner's email, calendar, documents and so on,
+and any connected app - waits for the owner to approve it. Public lookups (`WebSearch`,
+`WebFetch`, `SelfKnowledge`) and the owner's own turns are never held. The session view
+shows a card over the composer that says what the agent wants to do, e.g. `Dave Seed asked
+the agent to read your email.` The owner sees `Approval needed` with `Decline` /
+`Always allow` / `Approve`; everyone else sees `Waiting for <owner> to approve` (`…to read
+Alice Seed's email`) and, with edit access, a `Cancel` button for when the owner is away.
+`Always allow` approves the call and stops asking about the same person's calls for the
+rest of the session: the same tool on Macro (the card says `Always allow lets Dave Seed
+read your email in this session without asking you.`), every tool of a connected app. It
+also approves that person's other waiting calls it covers, and is not offered for a bot.
+The owner also gets an `agent_session_waiting_for_input` notification. Once answered the
+transcript shows the same action (`Read your email`) with `Approved by …`, `Always allowed
+by …`, `Declined by …`, `Cancelled`, or `Not approved in time` (30 minutes for the
+in-process agent; sandboxed ones wait as long when their MCP client accepts progress, about
+four minutes otherwise). A declined or cancelled call does not run and the agent says so. The Magic Chip
+reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
+
 ## In channels
 
 Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
@@ -766,7 +905,8 @@ When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
 to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
-merged / closed.
+merged / closed. Merging happens from the PR entity's top bar or from a channel
+Magic Chip's PR row, not from this header chip.
 
 Tool rows show the tool's own name without an MCP server or workspace prefix.
 Chat MCP rows retain their service icon.
@@ -968,6 +1108,8 @@ resizing them. File selection, Escape, the backdrop, or **Hide file tree** dismi
 the drawer and restores focus to its opener. Drawer visibility never changes the
 saved wide-tree preference or width. Phones keep unified diffs and omit layout
 controls, with **Back to conversation** closing Changes.
+Closing the drawer releases its dialog handlers immediately; the exiting tree
+frame stays inert, so the animation does not intercept Escape or steal focus.
 Returning from full width restores the previous split ratio without replaying
 the opening slide or losing the conversation draft, diff state, or scroll position.
 Drag the divider beside the file tree to resize it, or focus that divider and use
@@ -1001,10 +1143,10 @@ that file in the Changes pane. Notes never go to GitHub. Collapsed files and
 unsent notes persist per session in localStorage; a new capture expands all
 files.
 
-The session header's **Changes** pill and sidebar totals display the linked
-PR's `additions` and `deletions` returned by the GitHub API, without summing
-transcript edits. The sidebar lists files from the captured PR diff. Counts
-refresh when a capture changes and every 30 seconds while the session is open.
+The Changes pane header and sidebar totals display the linked PR's `additions`
+and `deletions` returned by the GitHub API, without summing transcript edits.
+The header toggle itself has no totals. The sidebar lists files from the captured PR diff.
+Counts refresh when a capture changes and every 30 seconds while the session is open.
 Zero-valued counts and unavailable GitHub statistics are hidden; a missing PR
 or failed GitHub request never falls back to estimated transcript totals.
 
@@ -1112,18 +1254,22 @@ must stay hidden; subsequent live messages must still appear.
   32% of the viewport and 16rem. Click the preview again or press Escape to collapse
   it, retaining edits and editor state. Each row shows a `Queued` label (with `by
   {user}` when someone else queued it —
-  several users can stack prompts in one session's queue) and an always-visible remove
-  (`X`) button. Type in the expanded editor — changes
+  several users can stack prompts in one session's queue), an always-visible remove
+  (`X`) button, and, while a turn is in flight, a `Steer` button. Steering moves
+  that message to the front of the queue and cancels the current turn, so it runs
+  next, ahead of anything queued before it. Type in the expanded editor — changes
   autosave (debounced, and on blur) with no save button. Editing and removal are
   possible only until the entry dispatches; after that the row simply becomes the next
   user message in the transcript.
 - Keyboard: Up at the very start of the composer input moves focus into the
   bottom (next-to-send) queue row; further Up presses walk toward newer entries, Down
   walks back and past the bottom row returns to the input. When the composer is empty
-  and a prompt is queued, its action becomes `Send next queued message` (an Enter
-  symbol); pressing Enter or clicking that button cancels the current turn so the next
-  queued prompt starts immediately. The advance is held — the control reads `Stop` and
-  Enter is inert — while a stop is already in flight or while the prompt the last
+  and a prompt is queued, its action becomes `Flush queued messages` (the send arrow,
+  with a ring so it reads as flushing the queue rather than sending a new message);
+  pressing Enter or clicking that button cancels the current turn so the queue drains
+  in order, oldest first. Steer on a queued row is the interrupt for that one message;
+  flush sends whatever is already next. The advance is held — the flush control is
+  disabled and Enter is inert — while a stop is already in flight or while the prompt the last
   advance sent is still unconfirmed (it shows as a pending bubble); once the server
   confirms that prompt as the running turn, Enter advances the queue again. Two rapid
   Enters therefore advance one entry, not two: each advance ends the turn the server is
@@ -1262,3 +1408,15 @@ The chat's **Read skill** tool row expands to show the full instructions. When
 verifying this flow, invoke a saved skill by name, confirm the agent reads it,
 and expand the row to inspect the returned content. Document access permissions
 apply; ordinary documents and deleted skills cannot be read as skills.
+
+### Agent warm-up
+
+Home's agent composer and the Agents page issue a best-effort authenticated
+`POST /agent-sessions/warm`. It starts an unprompted in-memory session, hidden
+from history and lists. Opening either page must not add an empty conversation
+or execute a model/tool call. A warm response waits until ACP initialization
+and the shared MCP listing have finished. On first send, the default agent can claim the
+prepared session only when the user, model, and instructions match. Other
+personas and changed settings use normal creation. Warm failures must not block
+sending. Unclaimed sessions expire after ten minutes; a claimed conversation
+must remain visible and usable after that deadline.

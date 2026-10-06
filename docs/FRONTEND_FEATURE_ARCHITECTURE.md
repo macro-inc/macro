@@ -516,6 +516,13 @@ websocket import-time effects with `vi.mock`. Those are integration limitations;
 feature data and capability behavior are supplied through the provider. Do not
 turn those stubs into a pattern for replacing the feature logic under test.
 
+The same fakes make whole-feature browser tests possible without a backend.
+`features/onboarding` and `features/auth` keep an in-memory fake of their context
+in `tests/` and a `browser-test/` fixture. The fixture mounts the real views over
+that fake, with no module aliasing, and persists the fake in sessionStorage so
+OAuth and checkout round trips are real page loads. CI runs both suites on every
+web PR through `just test-signup-browser`.
+
 For a frontend implementation change, run the relevant tests and checks from
 `apps/web` with dependencies installed:
 

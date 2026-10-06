@@ -1,4 +1,4 @@
-import { ChangesToggle } from '@app/features/agent-changes/agent-changes';
+import { ChangesToggle } from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import {
   type BlockTool,

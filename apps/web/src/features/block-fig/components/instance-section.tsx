@@ -1,3 +1,4 @@
+import { InspectorSelect } from './inspector-select';
 /**
  * The instance section of the design panel, as Figma shows it for a
  * selected instance: its main component (with "Go to main component"),
@@ -44,19 +45,14 @@ function Properties(props: {
       <For each={props.instance.variants}>
         {(v) => (
           <PropertyRow label={v.name}>
-            <select
-              class="w-full rounded-md bg-inset px-1.5 py-0.5 text-ink outline-none disabled:opacity-60"
+            <InspectorSelect
+              label={v.name}
               value={v.value}
               disabled={!set}
-              data-testid={`fig-variant-${slug(v.name)}`}
-              onChange={(e) =>
-                set?.(id(), v.name, { variant: e.currentTarget.value })
-              }
-            >
-              <For each={v.options}>
-                {(o) => <option value={o}>{o}</option>}
-              </For>
-            </select>
+              testId={`fig-variant-${slug(v.name)}`}
+              options={v.options.map((value) => ({ value, label: value }))}
+              onChange={(value) => set?.(id(), v.name, { variant: value })}
+            />
           </PropertyRow>
         )}
       </For>
@@ -165,7 +161,7 @@ export function InstanceSection(props: {
       />
       <For each={i().nested}>
         {(n) => (
-          <div class="flex flex-col gap-1.5 border-edge-muted border-t pt-1.5">
+          <div class="flex flex-col gap-1.5 border-edge-frame border-t pt-1.5">
             <span class="flex items-center gap-1 font-medium text-ink">
               <DiamondsFour class="size-3 text-accent" />
               {n.name}

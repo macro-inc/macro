@@ -121,6 +121,8 @@ async fn word_document_requests_carry_the_token_and_surface_agent_errors() {
             &token,
             &WordDocumentRequest::Edit {
                 operations: vec![WordDocumentOperation::Delete { id: "x".into() }],
+                track_changes: None,
+                author: "Jacob Beckerman".into(),
             },
         )
         .await
@@ -141,6 +143,10 @@ async fn word_document_requests_carry_the_token_and_surface_agent_errors() {
     );
     assert_eq!(
         bodies[1]["request"],
-        serde_json::json!({ "action": "edit", "operations": [{ "type": "delete", "id": "x" }] })
+        serde_json::json!({
+            "action": "edit",
+            "operations": [{ "type": "delete", "id": "x" }],
+            "author": "Jacob Beckerman",
+        })
     );
 }

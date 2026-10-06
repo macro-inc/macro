@@ -33,7 +33,7 @@ import type { FigEditor } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
 
 const ROOT = '';
-const ROW_HEIGHT = 28;
+const ROW_HEIGHT = 32;
 
 interface FlatRow {
   row: LayerRow;
@@ -54,7 +54,7 @@ export function LayersPanel(props: {
   viewer: FigViewer;
   engine: FigEngine;
   /** Where ⌘F focuses. */
-  searchRef?: (el: HTMLInputElement) => void;
+  focusSearchRef?: (focus: () => void) => void;
   /** Renaming, visibility, locking, and reordering when editable. */
   editor?: FigEditor;
 }) {
@@ -62,6 +62,14 @@ export function LayersPanel(props: {
   const [children, setChildren] = createSignal(new Map<string, LayerRow[]>());
   const [expanded, setExpanded] = createSignal(new Set<string>());
   const [query, setQuery] = createSignal('');
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  let searchInput: HTMLInputElement | undefined;
+  let searchButton: HTMLButtonElement | undefined;
+  const focusSearch = () => {
+    setSearchOpen(true);
+    queueMicrotask(() => searchInput?.focus());
+  };
+  props.focusSearchRef?.(focusSearch);
   const [results, setResults] = createSignal<SearchHit[]>([]);
   const [pagesOpen, setPagesOpen] = createSignal(true);
   let list: VListHandle | undefined;
@@ -232,17 +240,19 @@ export function LayersPanel(props: {
     )
   );
 
-  const toggleFlag = (row: LayerRow, flag: 'visible' | 'locked') =>
+  const toggleFlag = (row: LayerRow, flag: 'visible' | 'locked') => {
+    if (flag === 'locked') {
+      void props.editor?.toggleLocked([row.id]);
+      return;
+    }
     void props.editor?.apply([
       {
         op: 'set',
         ids: [row.id],
-        props:
-          flag === 'visible'
-            ? { visible: !row.visible }
-            : { locked: !row.locked },
+        props: { visible: !row.visible },
       },
     ]);
+  };
 
   const [dragging, setDragging] = createSignal<string[]>();
   const [drop, setDrop] = createSignal<{ id: string; zone: DropZone }>();
@@ -329,9 +339,15 @@ export function LayersPanel(props: {
     );
   };
 
-  /** Arrow keys move through the rows shown, and expand or collapse. */
+  /**
+   * Read-only, arrow keys move through the rows shown, and expand or
+   * collapse. Editing, they nudge the selection, as in Figma, whose layers
+   * list leaves the arrows to the canvas (Tab, Enter, and ⇧Enter move
+   * through the layers there).
+   */
   const onTreeKey = (e: KeyboardEvent) => {
     if (
+      props.editor?.enabled() ||
       e.metaKey ||
       e.ctrlKey ||
       e.altKey ||
@@ -369,59 +385,78 @@ export function LayersPanel(props: {
       class="flex size-full min-h-0 flex-col text-ink text-xs"
       data-testid="fig-layers-panel"
     >
-      <div class="flex h-9 shrink-0 items-center gap-1.5 border-edge-muted border-b px-2">
-        <MagnifyingGlass class="size-3.5 shrink-0 text-ink-muted" />
-        <input
-          ref={props.searchRef}
-          type="search"
-          placeholder="Find layers"
-          aria-label="Find layers"
-          data-testid="fig-layer-search"
-          class="h-7 min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
-          value={query()}
-          onInput={(e) => void search(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === 'Escape') {
-              void search('');
-              e.currentTarget.blur();
-            }
-          }}
-        />
-        <Show when={query()}>
+      <Show when={searchOpen()}>
+        <div class="flex h-10 shrink-0 items-center gap-1.5 border-edge-frame border-b px-3">
+          <MagnifyingGlass class="size-3.5 shrink-0 text-ink-muted" />
+          <input
+            ref={searchInput}
+            type="search"
+            placeholder="Find layers"
+            aria-label="Find layers"
+            data-testid="fig-layer-search"
+            class="h-7 min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
+            value={query()}
+            onInput={(e) => void search(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Escape') {
+                void search('');
+                setSearchOpen(false);
+                searchButton?.focus();
+              }
+            }}
+          />
           <button
             type="button"
-            aria-label="Clear search"
+            aria-label="Close search"
             class="rounded p-0.5 text-ink-muted hover:text-ink"
-            onClick={() => void search('')}
+            onClick={() => {
+              void search('');
+              setSearchOpen(false);
+              searchButton?.focus();
+            }}
           >
             <XIcon class="size-3" />
           </button>
-        </Show>
-      </div>
+        </div>
+      </Show>
       <Show when={!query()}>
-        <div class="relative shrink-0 border-edge-muted border-b py-1">
-          <button
-            type="button"
-            class="flex h-7 w-full items-center gap-1 px-2 font-medium"
-            onClick={() => setPagesOpen((o) => !o)}
-          >
-            <Show when={pagesOpen()} fallback={<CaretRight class="size-3" />}>
-              <CaretDown class="size-3" />
-            </Show>
-            <span class="flex-1 text-left">Pages</span>
-          </button>
-          <Show when={props.editor?.enabled()}>
+        <div class="shrink-0 border-edge-frame border-b px-2 pt-2 pb-3">
+          <div class="flex h-8 items-center gap-1 px-1">
             <button
               type="button"
-              aria-label="Add page"
-              data-testid="fig-page-add"
-              class="absolute top-1.5 right-2 rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
-              onClick={() => void addPage()}
+              class="flex h-7 min-w-0 flex-1 items-center gap-1 font-semibold"
+              aria-expanded={pagesOpen()}
+              onClick={() => setPagesOpen((o) => !o)}
             >
-              <Plus class="size-3.5" />
+              <Show when={pagesOpen()} fallback={<CaretRight class="size-3" />}>
+                <CaretDown class="size-3" />
+              </Show>
+              <span class="flex-1 text-left">Pages</span>
             </button>
-          </Show>
+            <button
+              ref={searchButton}
+              type="button"
+              aria-label="Find layers"
+              title="Find layers · ⌘F / Ctrl+F"
+              data-testid="fig-search-toggle"
+              class="flex size-6 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
+              onClick={focusSearch}
+            >
+              <MagnifyingGlass class="size-3.5" />
+            </button>
+            <Show when={props.editor?.enabled()}>
+              <button
+                type="button"
+                aria-label="Add page"
+                data-testid="fig-page-add"
+                class="flex size-6 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
+                onClick={() => void addPage()}
+              >
+                <Plus class="size-3.5" />
+              </button>
+            </Show>
+          </div>
           <Show when={pagesOpen()}>
             <div class="max-h-48 overflow-y-auto">
               <For each={viewer.pages}>
@@ -430,7 +465,7 @@ export function LayersPanel(props: {
                     when={!isPageDivider(p.name)}
                     fallback={
                       <div class="flex h-3 items-center px-6" role="separator">
-                        <div class="h-px w-full bg-edge-muted" />
+                        <div class="h-px w-full bg-edge-frame" />
                       </div>
                     }
                   >
@@ -438,10 +473,9 @@ export function LayersPanel(props: {
                       when={renamingPage() === p.id}
                       fallback={
                         <div
-                          class="group flex h-7 w-full items-center pr-2 pl-6 hover:bg-hover"
+                          class="group flex h-8 w-full items-center rounded-md pr-2 pl-6 hover:bg-hover"
                           classList={{
-                            'font-semibold bg-selected':
-                              p.index === viewer.page(),
+                            'font-medium bg-hover': p.index === viewer.page(),
                           }}
                         >
                           <button
@@ -501,8 +535,14 @@ export function LayersPanel(props: {
         </div>
       </Show>
       <div
+        class="flex h-10 shrink-0 items-center px-3 font-semibold"
+        data-testid="fig-layers-heading"
+      >
+        {query() ? 'Search results' : 'Layers'}
+      </div>
+      <div
         ref={tree}
-        // Takes the keys after a row is clicked (arrows move in the tree).
+        // Takes the keys after a row is clicked (see `onTreeKey`).
         tabIndex={-1}
         aria-label="Layers"
         data-testid="fig-layer-tree"
@@ -578,7 +618,7 @@ export function LayersPanel(props: {
                 }}
                 style={{
                   height: `${ROW_HEIGHT}px`,
-                  'padding-left': `${8 + item.depth * 14}px`,
+                  'padding-left': `${12 + item.depth * 16}px`,
                 }}
                 draggable={editable(item.row) && renaming() !== item.row.id}
                 onDragStart={(e) => {

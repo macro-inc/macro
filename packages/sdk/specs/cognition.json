@@ -1097,6 +1097,35 @@
         }
       }
     },
+    "/import/runs/{source}/discover": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Discover candidates for user selection without auto-importing them.",
+        "operationId": "discover_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Import source",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Discovery accepted (idempotent)"
+          },
+          "400": {
+            "description": "Unknown import source or discovery not supported"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/import/runs/{source}/dismiss": {
       "post": {
         "tags": ["import"],
@@ -3866,7 +3895,7 @@
       "Initiator": {
         "type": "string",
         "description": "Where an import entity was first staged from. Provenance only — never a\nvisibility filter.",
-        "enum": ["onboarding", "chat", "archive"]
+        "enum": ["onboarding", "chat", "archive", "manual"]
       },
       "JwtPayload": {
         "type": "object",
@@ -4251,6 +4280,16 @@
             "format": "float",
             "description": "Price per audio minute (USD), absent for token billing."
           },
+          "price_per_million_cache_read": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+          },
+          "price_per_million_cache_write": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+          },
           "price_per_million_in": {
             "type": "number",
             "format": "float",
@@ -4484,6 +4523,16 @@
             "format": "float",
             "description": "Price per minute of audio (USD), or null for token-only pricing."
           },
+          "price_per_mil_cache_read": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-read input tokens (USD). Omit it when the model\nhas no published rate: calls that report cache reads then stay unpriced."
+          },
+          "price_per_mil_cache_write": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-write input tokens (USD). Omit it when the model\nhas no published rate: calls that report cache writes then stay unpriced."
+          },
           "price_per_mil_in": {
             "type": ["number", "null"],
             "format": "float",
@@ -4555,9 +4604,23 @@
         "description": "Metadata for one staged Slack channel.",
         "required": ["name"],
         "properties": {
+          "archived": {
+            "type": "boolean",
+            "description": "Whether Slack has archived this channel."
+          },
           "channel_id": {
             "type": ["string", "null"],
             "description": "Slack's channel id (e.g. `C0123456789`), stable across renames."
+          },
+          "member_count": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Total human members in the Slack channel.",
+            "minimum": 0
+          },
+          "members_resolved": {
+            "type": "boolean",
+            "description": "Whether `participants` reflects a live membership read."
           },
           "name": {
             "type": "string",
@@ -4568,7 +4631,7 @@
             "items": {
               "$ref": "#/components/schemas/SlackParticipant"
             },
-            "description": "The channel's most relevant members, when discoverable."
+            "description": "Slack members matched to the Macro team roster when discovery resolved membership."
           },
           "purpose": {
             "type": ["string", "null"],
@@ -5060,12 +5123,31 @@
       "Usage": {
         "type": "object",
         "description": "Measured usage for one invocation.",
-        "required": ["input_tokens", "output_tokens", "model", "created_at"],
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "cache_read_input_tokens",
+          "cache_write_input_tokens",
+          "model",
+          "created_at"
+        ],
         "properties": {
           "audio_seconds": {
             "type": ["number", "null"],
             "format": "double",
             "description": "Audio duration in seconds, absent for token billing."
+          },
+          "cache_read_input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Input tokens read from a prompt cache; zero for audio billing.",
+            "minimum": 0
+          },
+          "cache_write_input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Input tokens written to a prompt cache; zero for audio billing.",
+            "minimum": 0
           },
           "created_at": {
             "type": "string",
@@ -5075,7 +5157,7 @@
           "input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens; zero for audio billing.",
+            "description": "Uncached input tokens; zero for audio billing.",
             "minimum": 0
           },
           "model": {

@@ -1,7 +1,9 @@
 //! Commands and values used by the harness domain.
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
-use agent_egress::domain::model::{McpServerSlug, RepoSlug};
+use agent_egress::domain::model::{
+    CUSTOM_MCP_PATH_PREFIX, CustomMcpServerKey, CustomMcpServerListing, McpServerSlug, RepoSlug,
+};
 use agent_fold::domain::model::{StopReason, TurnSignal};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
@@ -448,6 +450,18 @@ pub struct MarkedPassage {
     pub surrounding_text: String,
 }
 
+/// Whose access a session runs with, and who sent the prompt being composed.
+///
+/// Named to the agent on every prompt so it can tell the session's owner
+/// from anyone else who may drive it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptPeople {
+    /// The session's owner.
+    pub owner: MacroUserIdStr<'static>,
+    /// The prompt's sender; absent when a bot sent it on nobody's behalf.
+    pub sender: Option<MacroUserIdStr<'static>>,
+}
+
 /// What the conversation an agent was summoned from contributes to its prompt.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ConversationContext {
@@ -517,6 +531,14 @@ pub enum HarnessCommand {
         /// The user responsible, as on [`Self::EditQueued`].
         actor: Option<MacroUserIdStr<'static>>,
     },
+    /// Run a queued action next: move it to the front and, when a turn is in
+    /// flight, cancel that turn so this entry flushes ahead of the rest.
+    SteerQueued {
+        /// The queue entry to run next.
+        action_id: AgentActionId,
+        /// The user responsible, as on [`Self::EditQueued`].
+        actor: Option<MacroUserIdStr<'static>>,
+    },
     /// The session's fold reported a turn fact: an ended turn clears the
     /// busy mark and dispatches the next queued action; a raised or cleared
     /// question is published as is. Internal - enqueued by the turn observer
@@ -529,6 +551,11 @@ pub enum HarnessCommand {
         /// Why the actor stopped.
         reason: String,
     },
+    /// A tool call in the session's running turn started or stopped waiting
+    /// for the owner's approval. Sent by the approval service from whichever
+    /// replica held the call, and forwarded to the one managing the session,
+    /// since that is where the turn's reply is known.
+    ToolApproval(ToolApprovalChange),
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
@@ -681,11 +708,13 @@ pub struct AnnouncedMessage {
 /// thread would rather read that than a notice. The rest distinguish the
 /// silences a reader can act on differently - try again, or not.
 ///
-/// Two are not ends at all. A turn that asks the user something through an
+/// Three are not ends at all. A turn that asks the user something through an
 /// ACP elicitation is held open until someone answers it in the session
-/// view, and a thread showing a spinner has no way of knowing that; so the
-/// reply says so ([`Self::NeedsInput`]) and returns to pending once the
-/// question is cleared ([`Self::Resumed`]).
+/// view, and one whose tool call waits on the owner's approval is held until
+/// the owner answers; a thread showing a spinner has no way of knowing
+/// either. So the reply says so ([`Self::NeedsInput`],
+/// [`Self::AwaitingApproval`]) and returns to pending once nothing is
+/// waiting ([`Self::Resumed`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplyOutcome {
     /// The agent answered; its last message, whole.
@@ -702,8 +731,37 @@ pub enum ReplyOutcome {
         /// What the agent is asking, in prose.
         question: String,
     },
-    /// The question was answered or withdrawn and the turn is running again.
+    /// A tool call is held until the session's owner approves it.
+    AwaitingApproval(HeldToolCall),
+    /// The question was answered or withdrawn, or every held tool call was
+    /// settled, and the turn is running again.
     Resumed,
+}
+
+/// A tool call held for the session owner's approval, as far as the thread
+/// is told about it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HeldToolCall {
+    /// The approval row; what its settling names.
+    pub approval_id: String,
+    /// `macro`, or the connected app's slug.
+    pub server_slug: String,
+    /// What a person calls the server the tool is on.
+    pub server_name: String,
+    /// The tool called.
+    pub tool_name: String,
+}
+
+/// How a session's held tool calls changed.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ToolApprovalChange {
+    /// A call started waiting for the owner.
+    Held(HeldToolCall),
+    /// The call was approved, denied, cancelled, or expired.
+    Settled {
+        /// The approval that settled.
+        approval_id: String,
+    },
 }
 
 impl ReplyOutcome {
@@ -796,6 +854,10 @@ pub struct SandboxEgress {
     /// the owner has connected them. Macro's own server is not listed: every
     /// session has it, on its own route.
     pub mcp_servers: Vec<McpServerSlug>,
+    /// The owner's own MCP servers - the ones added by URL under "Custom
+    /// MCP" - by the key the proxy resolves. The sandbox never sees a
+    /// server's URL or credential; both stay behind the key.
+    pub custom_servers: Vec<CustomMcpServerListing>,
 }
 
 /// Where the sandbox finds the egress proxy.
@@ -832,6 +894,11 @@ impl SandboxEgress {
         format!("{}/mcp-macro", self.base_url)
     }
 
+    /// Where the proxy serves the owner's custom server behind `key`.
+    pub fn custom_mcp_url(&self, key: &CustomMcpServerKey) -> String {
+        format!("{}{CUSTOM_MCP_PATH_PREFIX}{key}", self.base_url)
+    }
+
     /// The `Authorization` value presented on every proxied call.
     pub fn authorization_header(&self) -> String {
         format!("Bearer {}", self.session_token)
@@ -851,13 +918,19 @@ impl SandboxEgress {
         ]
     }
 
-    /// The workspace and internal MCP servers, followed by the owner's apps,
-    /// as `(name, url)` pairs.
+    /// The workspace and internal MCP servers, followed by the owner's apps
+    /// and then the owner's custom servers, as `(name, url)` pairs.
     ///
     /// The one enumeration behind both renderings - [`Self::acp_servers`] and
     /// the Cursor API's - so the two can never advertise different sets.
+    ///
+    /// Every name is unique and non-empty, because the runtimes key servers
+    /// by name and refuse a list that repeats one. App slugs already are; a
+    /// custom server's name is whatever the owner typed, so it is reduced to
+    /// the characters tool namespaces tolerate and, if that still collides
+    /// with an earlier entry, suffixed with a piece of its key.
     pub fn server_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
-        [
+        let mut entries: Vec<(String, String)> = vec![
             (MACRO_MCP_NAME.to_owned(), self.macro_mcp_url()),
             (
                 INTERNAL_MCP_NAME.to_owned(),
@@ -867,13 +940,17 @@ impl SandboxEgress {
                 "macro-preview".to_owned(),
                 format!("{}/mcp-preview", self.base_url),
             ),
-        ]
-        .into_iter()
-        .chain(
+        ];
+        entries.extend(
             self.mcp_servers
                 .iter()
                 .map(|slug| (slug.as_str().to_owned(), self.mcp_url(slug))),
-        )
+        );
+        for listing in &self.custom_servers {
+            let name = unique_server_name(&listing.name, &listing.key, &entries);
+            entries.push((name, self.custom_mcp_url(&listing.key)));
+        }
+        entries.into_iter()
     }
 
     /// Session-scoped internal tools, also supplied to external runtimes.
@@ -933,6 +1010,42 @@ pub struct ProvisionedEgress {
     pub sandbox: SandboxEgress,
 }
 
+/// The name a custom server is advertised under among `taken` entries.
+///
+/// Owner-typed names are reduced to `[A-Za-z0-9_-]`, which is what agents
+/// accept in a tool namespace, and an empty result reads as `custom`. A name
+/// that then matches an earlier entry gets a key suffix, so two servers the
+/// owner named alike stay distinguishable and neither can shadow Macro's own.
+fn unique_server_name(name: &str, key: &CustomMcpServerKey, taken: &[(String, String)]) -> String {
+    const DEFAULT_NAME: &str = "custom";
+    const KEY_SUFFIX_LEN: usize = 8;
+
+    let mut sanitized: String = name
+        .trim()
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '_' | '-') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if sanitized.is_empty() {
+        sanitized = DEFAULT_NAME.to_owned();
+    }
+    let is_taken = |candidate: &str| taken.iter().any(|(existing, _)| existing == candidate);
+    if !is_taken(&sanitized) {
+        return sanitized;
+    }
+    let key = key.as_str();
+    let suffixed = format!("{sanitized}_{}", &key[..KEY_SUFFIX_LEN.min(key.len())]);
+    if !is_taken(&suffixed) {
+        return suffixed;
+    }
+    format!("{sanitized}_{key}")
+}
+
 impl std::fmt::Debug for SandboxEgress {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -940,6 +1053,7 @@ impl std::fmt::Debug for SandboxEgress {
             .field("base_url", &self.base_url)
             .field("session_token", &"[REDACTED]")
             .field("mcp_servers", &self.mcp_servers)
+            .field("custom_servers", &self.custom_servers)
             .finish()
     }
 }

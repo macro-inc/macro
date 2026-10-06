@@ -9,6 +9,7 @@ const base: NodeInfo = {
   typeLabel: 'Frame',
   x: 0,
   y: 0,
+  panelMove: [1, 0, 0, 1],
   width: 320,
   height: 200,
   rotation: 0,

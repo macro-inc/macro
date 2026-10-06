@@ -24,12 +24,12 @@ import {
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
+import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
 import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { MobileSettings } from '@app/features/settings/MobileSettings';
-import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
@@ -44,11 +44,7 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import {
-  DEV_MODE_ENV,
-  enableDatabases,
-  enableReminders,
-} from '@core/constant/featureFlags';
+import { enableDatabases, enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -57,13 +53,13 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { useUserInfoQuery } from '@queries/auth/user-info';
+import { queryClient } from '@queries/client';
 import {
   type RouteSectionProps,
   useLocation,
   useNavigate,
 } from '@solidjs/router';
 import { cn, ImperativeDialogHost } from '@ui';
-import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
   createEffect,
   createMemo,
@@ -142,19 +138,15 @@ function NewOnboardingRedirect() {
   const userInfoQuery = useUserInfoQuery();
   const navigate = useNavigate();
   const location = useLocation();
-  const onboardingV4 = useOnboardingV4Flag();
-
   createEffect(() => {
-    if (!onboardingV4().enabled || isMobile() || isNativeMobilePlatform()) {
-      return;
-    }
+    if (isMobile() || isNativeMobilePlatform()) return;
     const data = userInfoQuery.data;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
     if (AUTH_URLS.includes(location.pathname)) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite):
-    // /setup carries it as ?next and its finish() returns there instead of
+    // onboarding carries it as ?next and its finish() returns there instead of
     // the post-setup landing. Base-relative so navigate() can resolve it
     // against the router.
     const target =
@@ -176,6 +168,8 @@ function LayoutInner(props: RouteSectionProps) {
   const { paywallOpen, showPaywall } = usePaywallState();
   const { usageLimitOpen } = useAiUsageLimitState();
   const location = useLocation();
+
+  onCleanup(observeAiUsageLimitMutations(queryClient));
 
   useAppSquishHandlers();
 
@@ -271,7 +265,7 @@ function LayoutInner(props: RouteSectionProps) {
           <Paywall />
         </Suspense>
       </Show>
-      <Show when={DEV_MODE_ENV && usageLimitOpen()}>
+      <Show when={usageLimitOpen()}>
         <AiUsageLimitDialog />
       </Show>
       <div class="max-h-full grow flex">
@@ -317,7 +311,6 @@ function LayoutInner(props: RouteSectionProps) {
         </Show>
       </Suspense>
       <DevStatusBar />
-      <ScreencastHotkeys />
     </div>
   );
 }

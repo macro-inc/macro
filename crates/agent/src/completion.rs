@@ -5,8 +5,9 @@
 #[cfg(test)]
 mod test;
 
-use crate::model::metering::MeteringContext;
+use crate::model::metering::{MeteringContext, WireProtocol};
 use crate::model::router::{ModelRouter, RoutedModel};
+use crate::model::usage_amount::usage_amount;
 use crate::telemetry::{ChatSpanHook, GenAiContext, TracedModel};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
@@ -42,6 +43,7 @@ pub async fn complete<M: ToString>(
         let model = model.to_string();
         let routed = ModelRouter::shared()?.route_or_default(&model);
         let telemetry = telemetry_for(&ctx, &routed);
+        let protocol = routed.protocol();
         let response = match routed {
             RoutedModel::Anthropic(m) => {
                 prompt_once(
@@ -80,7 +82,7 @@ pub async fn complete<M: ToString>(
                 .await?
             }
         };
-        record(recorder, ctx, model, &response);
+        record(recorder, ctx, model, protocol, &response);
         Ok(response.output)
     })
     .await
@@ -104,6 +106,7 @@ pub async fn complete_with_history<M: ToString>(
         let model = model.to_string();
         let routed = ModelRouter::shared()?.route_or_default(&model);
         let telemetry = telemetry_for(&ctx, &routed);
+        let protocol = routed.protocol();
         let response = match routed {
             RoutedModel::Anthropic(m) => {
                 prompt_with_history(
@@ -142,7 +145,7 @@ pub async fn complete_with_history<M: ToString>(
                 .await?
             }
         };
-        record(recorder, ctx, model, &response);
+        record(recorder, ctx, model, protocol, &response);
         Ok(response.output)
     })
     .await
@@ -205,13 +208,10 @@ fn record(
     recorder: &dyn UsageRecorder,
     ctx: UsageContext,
     model: String,
+    protocol: WireProtocol,
     response: &PromptResponse,
 ) {
-    recorder.record(ctx.into_event(
-        model,
-        response.usage.input_tokens,
-        response.usage.output_tokens,
-    ));
+    recorder.record(ctx.into_event(model, usage_amount(protocol, &response.usage)));
 }
 
 /// Build a toolless agent and prompt it with a single user message.

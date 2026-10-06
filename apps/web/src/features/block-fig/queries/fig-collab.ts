@@ -101,7 +101,29 @@ export interface DesignCollabOptions {
 export interface DesignCollabSession {
   state: Accessor<DesignCollabState>;
   collaboration: FigCollaboration;
+  /**
+   * Resolves once every change made here so far reached the sync service;
+   * `false` when it could not be reached in time.
+   */
+  delivered: () => Promise<boolean>;
 }
+
+/** How long storing a file waits for the sync service to have every change. */
+const DELIVERY_TIMEOUT_MS = 5_000;
+
+/** A write-ahead log that knows when the last local change was logged. */
+class TrackedWALSyncer extends WALSyncer<Uint8Array> {
+  /** Settles once the latest appended change is in the log. */
+  lastAppend: Promise<void> = Promise.resolve();
+
+  override append(update: Uint8Array): Promise<void> {
+    const appended = super.append(update);
+    this.lastAppend = appended.catch(() => {});
+    return appended;
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The first shared snapshot: the format version and nothing changed yet. */
 export function buildDesignSeed(): Uint8Array {
@@ -129,7 +151,7 @@ export function createDesignCollabSession(
   let disposed = false;
   let started = false;
 
-  const wal = new WALSyncer(
+  const wal = new TrackedWALSyncer(
     walStore,
     (updates) =>
       connection()?.source.pushUpdate(updates) ?? Promise.resolve(false),
@@ -338,8 +360,24 @@ export function createDesignCollabSession(
         : []
     );
 
+  async function delivered(): Promise<boolean> {
+    const deadline = Date.now() + DELIVERY_TIMEOUT_MS;
+    // A commit logs its change at once; the log writes it asynchronously.
+    await wal.lastAppend;
+    while (!disposed) {
+      if (connection()?.source.status() === SyncSourceStatus.Connected) {
+        await wal.flush();
+        if ((await wal.summary()).dirty === 0) return true;
+      }
+      if (Date.now() >= deadline) return false;
+      await sleep(200);
+    }
+    return false;
+  }
+
   return {
     state,
+    delivered,
     collaboration: {
       peerId: manager.peerIdStr,
       color: () => awareness.local().user.color,

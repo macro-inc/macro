@@ -6,8 +6,43 @@ fn config_values() -> Value {
         "ENVIRONMENT": "local",
         "DATABASE_URL": "postgres://localhost/macro",
         "KAFKA_BROKERS": "existing-broker:9092",
-        "INTERNAL_API_KEY": "test"
+        "INTERNAL_API_KEY": "test",
+        "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,
+        "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 2000,
+        "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 10000,
+        "AI_USAGE_OVERAGE_MARKUP_PERCENT": 5
     })
+}
+
+#[test]
+fn ai_pricing_is_mandatory_and_validated() {
+    use ai_billing::PlanTier;
+
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    let pricing = config.ai_pricing();
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Free), 500);
+    assert_eq!(
+        pricing.included_allowance_cents_for(PlanTier::Premium),
+        2_000
+    );
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Max), 10_000);
+    assert_eq!(pricing.overage_markup_percent(), 5);
+    for key in [
+        "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_OVERAGE_MARKUP_PERCENT",
+    ] {
+        let mut values = config_values();
+        values.as_object_mut().unwrap().remove(key);
+        assert!(
+            serde_json::from_value::<Config>(values).is_err(),
+            "{key} must be mandatory"
+        );
+    }
+    let mut values = config_values();
+    values["AI_USAGE_OVERAGE_MARKUP_PERCENT"] = json!(100);
+    assert!(serde_json::from_value::<Config>(values).is_err());
 }
 
 #[test]

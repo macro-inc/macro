@@ -28,11 +28,11 @@
 /* Match the settings surface without changing the signature's saved HTML or
    overriding explicit text/background colors in pasted content. */
 .signature-editor .ql-container.ql-snow {
-  background-color: var(--color-surface);
+  background-color: transparent;
 }
 
 .signature-editor .ql-editor {
-  min-height: 8rem;
+  min-height: 12rem;
   color: var(--color-ink);
 }
 

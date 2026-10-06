@@ -43,6 +43,12 @@ impl Affine {
         m12: 0.0,
     };
 
+    /// A mirror across the y axis (x ↦ −x).
+    pub const MIRROR_X: Affine = Affine {
+        m00: -1.0,
+        ..Self::IDENTITY
+    };
+
     pub fn translate(x: f64, y: f64) -> Self {
         Affine {
             m02: x,
@@ -135,6 +141,33 @@ impl Affine {
     /// Rotation in degrees, clockwise as Figma's inspector shows it.
     pub fn rotation_degrees(&self) -> f64 {
         -self.m10.atan2(self.m00).to_degrees()
+    }
+
+    /// Whether the transform mirrors its layer (a flipped layer).
+    pub fn is_mirrored(&self) -> bool {
+        self.determinant() < 0.0
+    }
+
+    /// The rotation the design panel shows. A mirrored transform reads as a
+    /// horizontal flip followed by this rotation, as in Figma, so flipping a
+    /// layer horizontally keeps its angle (and a vertical flip reads 180°).
+    pub fn panel_rotation_degrees(&self) -> f64 {
+        if self.is_mirrored() {
+            self.mul(&Affine::MIRROR_X).rotation_degrees()
+        } else {
+            self.rotation_degrees()
+        }
+    }
+
+    /// Where the design panel's X and Y point of a `size` layer with this
+    /// transform is: its origin, or for a mirrored layer the origin of the
+    /// unflipped layer it reads as (see `panel_rotation_degrees`).
+    pub fn panel_origin(&self, size: Vec2) -> Vec2 {
+        if self.is_mirrored() {
+            self.apply(Vec2::new(size.x, 0.0))
+        } else {
+            self.apply(Vec2::default())
+        }
     }
 
     pub fn to_skia(&self) -> tiny_skia::Transform {

@@ -1,0 +1,98 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH resolved AS (\n                UPDATE agent_session_tool_approval\n                SET status = $2, resolved_by = $3, resolved_at = now(), remembered = $5\n                WHERE id = $1 AND status = 'pending'\n                RETURNING *\n            )\n            SELECT\n                resolved.id AS \"id!\",\n                resolved.agent_session_id AS \"agent_session_id!\",\n                resolved.turn_action_id AS \"turn_action_id!\",\n                resolved.request_id AS \"request_id!\",\n                resolved.owner_id AS \"owner_id!: MacroUserIdStr<'static>\",\n                resolved.requested_by AS \"requested_by: MacroUserIdStr<'static>\",\n                resolved.server_slug AS \"server_slug!\",\n                resolved.server_name AS \"server_name!\",\n                resolved.tool_name AS \"tool_name!\",\n                resolved.arguments AS \"arguments!\",\n                resolved.status AS \"status!\",\n                resolved.resolved_by AS \"resolved_by: MacroUserIdStr<'static>\",\n                resolved.remembered AS \"remembered!\"\n            FROM resolved, pg_notify($4, resolved.id::text)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "agent_session_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "turn_action_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "request_id!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "owner_id!: MacroUserIdStr<'static>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "requested_by: MacroUserIdStr<'static>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "server_slug!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "server_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "tool_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "arguments!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "resolved_by: MacroUserIdStr<'static>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "remembered!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "0978b8f4414bcc135fc867075255ef541a9820a9902258f903edf20a064f8a6c"
+}

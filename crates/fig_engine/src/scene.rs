@@ -14,6 +14,8 @@ use crate::model::{Affine, EffectKind, Guid, NodeType, PropField, PropValue, Pro
 use std::collections::HashMap;
 use std::sync::Arc;
 
+mod variables;
+
 pub type SceneIdx = u32;
 
 /// Where a scene node's properties live.
@@ -44,6 +46,8 @@ pub struct SceneNode {
     /// For instances: what their sublayers were built from (see
     /// [`instance_feed`]), to tell a move from a change in what they show.
     feed: u64,
+    /// Collection modes at build time, including an explicit empty selection.
+    modes: Option<Arc<[(Guid, Guid)]>>,
 }
 
 impl SceneNode {
@@ -70,6 +74,10 @@ pub struct Scene {
     pub page: NodeIdx,
     pub nodes: Vec<SceneNode>,
     by_guid: HashMap<Guid, SceneIdx>,
+    /// See [`Scene::paint_times`]; computed on first use. Edits that change
+    /// the tree rebuild the scene, so the times stay valid across
+    /// [`Scene::refresh`].
+    paint_times: std::sync::OnceLock<Box<[(u32, u32)]>>,
 }
 
 /// Deepest instance nesting expanded (guards against cyclic components).
@@ -111,7 +119,9 @@ impl Scene {
             page,
             nodes: b.nodes,
             by_guid: b.by_guid,
+            paint_times: std::sync::OnceLock::new(),
         };
+        variables::resolve(doc, &mut scene);
         scene.compute_world(doc);
         scene.compute_bounds(doc);
         scene
@@ -133,8 +143,11 @@ impl Scene {
             page,
             nodes: b.nodes,
             by_guid: b.by_guid,
+            paint_times: std::sync::OnceLock::new(),
         };
+        variables::resolve(doc, &mut scene);
         scene.compute_world(doc);
+        scene.compute_bounds(doc);
         scene
     }
 
@@ -223,6 +236,35 @@ impl Scene {
         chain
     }
 
+    /// When each node paints, as a walk of the tree in paint order meets it:
+    /// `(enter, exit)` per scene node, all distinct. A node's fills (and
+    /// generated layers) paint when it is entered, the strokes it draws over
+    /// its children when it is left, and everything it holds in between, so
+    /// one node painted before another has the smaller time. Renders of a
+    /// paint-order window ([`crate::render::Layers::Window`]) compare these.
+    pub fn paint_times(&self) -> &[(u32, u32)] {
+        self.paint_times.get_or_init(|| {
+            let mut times = vec![(0u32, 0u32); self.nodes.len()];
+            let mut clock = 0u32;
+            // (node, whether its subtree was walked)
+            let mut stack = vec![(self.root(), false)];
+            while let Some((i, walked)) = stack.pop() {
+                if walked {
+                    times[i as usize].1 = clock;
+                    clock += 1;
+                    continue;
+                }
+                times[i as usize].0 = clock;
+                clock += 1;
+                stack.push((i, true));
+                // Pushed in reverse so the first below is walked first.
+                let below: Vec<SceneIdx> = self.nodes[i as usize].below().collect();
+                stack.extend(below.into_iter().rev().map(|c| (c, false)));
+            }
+            times.into_boxed_slice()
+        })
+    }
+
     fn compute_world(&mut self, doc: &Document) {
         // Parents precede children in `nodes`, so one forward pass suffices.
         for i in 0..self.nodes.len() {
@@ -298,10 +340,16 @@ impl Scene {
         let mut starts = Vec::new();
         for &t in touched {
             let node = doc.node(t);
+            if node.props.variable.is_some() || node.props.variable_modes.is_some() {
+                return false;
+            }
             if node.removed || node.props.node_type() == NodeType::Canvas && t != self.page {
                 return false;
             }
             if t == self.page {
+                if self.nodes[0].modes != node.props.mode_by_set {
+                    return false;
+                }
                 continue;
             }
             let Some(&i) = node.props.guid.and_then(|g| self.by_guid.get(&g)) else {
@@ -316,7 +364,8 @@ impl Scene {
             // component itself does not: instances keep their own root
             // properties); an instance whose sources changed shows other
             // layers.
-            if !matches!(sn.props, PropSource::Doc(_))
+            if sn.modes != node.props.mode_by_set
+                || !matches!(sn.props, PropSource::Doc(_))
                 || sn.path.is_some()
                 || (node.props.node_type() == NodeType::Instance
                     && sn.feed != instance_feed(&node.props))
@@ -551,19 +600,27 @@ fn text_bounds(props: &Props, size: Vec2) -> Rect {
 
 /// How far effects reach beyond the node's geometry, in page units.
 fn effect_outset(props: &Props, world: &Affine) -> f64 {
-    let mut outset: f64 = 0.0;
+    let (mut blur, mut shadow): (f64, f64) = (0.0, 0.0);
     for e in props.effects().iter().filter(|e| e.is_visible()) {
-        let reach = match e.kind {
+        match e.kind {
             EffectKind::DropShadow => {
-                f64::from(e.radius) * 1.5
-                    + f64::from(e.spread.max(0.0))
-                    + e.offset.x.abs().max(e.offset.y.abs())
+                shadow = shadow.max(
+                    f64::from(e.radius) * 1.5
+                        + if props.supports_shadow_spread() {
+                            f64::from(e.spread.max(0.0))
+                        } else {
+                            0.0
+                        }
+                        + e.offset.x.abs().max(e.offset.y.abs()),
+                );
             }
-            EffectKind::LayerBlur => f64::from(e.radius) * 1.5,
-            _ => 0.0,
-        };
-        outset = outset.max(reach);
+            EffectKind::LayerBlur => blur += f64::from(e.radius.max(0.0)) * 1.5,
+            _ => {}
+        }
     }
+    // Blurs apply one after another, and drop shadows are cast from the
+    // blurred layer: their reaches add up.
+    let outset = blur + shadow;
     if outset > 0.0 {
         outset * world.scale_factor().max(1e-6)
     } else {
@@ -595,6 +652,7 @@ impl<'a> Builder<'a> {
             bounds: Rect::EMPTY,
             path,
             feed: 0,
+            modes: self.doc.props(src).mode_by_set.clone(),
         });
         if let Some(p) = parent {
             self.nodes[p as usize].children.push(i);
@@ -631,6 +689,7 @@ impl<'a> Builder<'a> {
                 bounds: Rect::EMPTY,
                 path: Some((root, path.into())),
                 feed: 0,
+                modes: self.doc.props(src).mode_by_set.clone(),
             });
             self.nodes[at as usize].generated.push(i);
         }
@@ -654,25 +713,68 @@ impl<'a> Builder<'a> {
         }
     }
 
-    fn normalize(&self, path: &[Guid]) -> Vec<Guid> {
+    fn normalize(&self, path: &[Guid], mut symbol: NodeIdx) -> Vec<Guid> {
         path.iter()
             .map(|g| {
-                if self.doc.by_guid.contains_key(g) {
-                    *g
-                } else {
-                    self.doc.by_override_key.get(g).copied().unwrap_or(*g)
+                // Imported components keep their original ids as override
+                // keys. Those ids can also name unrelated nodes in this file;
+                // resolve each segment inside its component first.
+                let direct = self.doc.find(*g);
+                let imported = self
+                    .doc
+                    .by_override_key
+                    .get(g)
+                    .and_then(|g| self.doc.find(*g));
+                let within = |mut node| loop {
+                    if node == symbol {
+                        return true;
+                    }
+                    let Some(parent) = self.doc.node(node).parent else {
+                        return false;
+                    };
+                    node = parent;
+                };
+                let node = direct.filter(|&n| within(n)).or_else(|| {
+                    imported.filter(|&n| within(n)).or_else(|| {
+                        // More than one imported component can reuse a key,
+                        // so the document-wide index need not hold this copy.
+                        let mut pending = vec![symbol];
+                        while let Some(n) = pending.pop() {
+                            if self.doc.props(n).override_key == Some(*g) {
+                                return Some(n);
+                            }
+                            pending.extend(&self.doc.node(n).children);
+                        }
+                        None
+                    })
+                });
+                // A swapped nested instance can reference another component's
+                // nodes. Keep accepting those globally unique paths too.
+                let Some(node) = node.or(direct).or(imported) else {
+                    return *g;
+                };
+                let props = self.doc.props(node);
+                if let Some(next) = props
+                    .swapped_symbol
+                    .or_else(|| props.symbol.as_ref().and_then(|s| s.symbol_id))
+                    .and_then(|g| self.doc.find(g))
+                {
+                    symbol = next;
                 }
+                props.guid.unwrap_or(*g)
             })
             .collect()
     }
 
-    fn override_map(&self, list: &[Props]) -> OverrideMap {
+    fn override_map(&self, list: &[Props], symbol: NodeIdx) -> OverrideMap {
         let mut map: OverrideMap = HashMap::new();
         for (i, p) in list.iter().enumerate() {
             if let Some(path) = &p.guid_path
                 && !path.is_empty()
             {
-                map.entry(self.normalize(path)).or_default().push(i as u32);
+                map.entry(self.normalize(path, symbol))
+                    .or_default()
+                    .push(i as u32);
             }
         }
         map
@@ -708,9 +810,9 @@ impl<'a> Builder<'a> {
         let derived = props.derived.clone().unwrap_or_else(empty);
         levels.push(Level {
             prefix_len: path.len(),
-            override_map: self.override_map(&overrides),
+            override_map: self.override_map(&overrides, symbol),
             overrides,
-            derived_map: self.override_map(&derived),
+            derived_map: self.override_map(&derived, symbol),
             derived,
             assignments: props.prop_assignments.clone(),
             symbol,

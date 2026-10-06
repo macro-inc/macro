@@ -37,20 +37,53 @@ impl Daemon {
     /// Returns once the client is built; the serving itself runs until
     /// [`Daemon::stop`] or the task fails.
     pub async fn start(
-        config: Config,
+        mut config: Config,
         credentials: HarnessCredentials,
         _config_path: &Path,
     ) -> rootcause::Result<Self> {
         let cancel = CancellationToken::new();
         let client = EventStreamClient::new(&config.macro_api, &credentials);
         let api = HarnessApi::new(&config.macro_api, &credentials);
+
+        #[cfg(unix)]
+        let herdr = start_herdr(&mut config, &credentials);
+        #[cfg(unix)]
+        let tap = herdr
+            .as_ref()
+            .map(|hub| std::sync::Arc::new(hub.tap()) as crate::harness::LineTap);
+        #[cfg(not(unix))]
+        let tap = None;
+
+        #[cfg(unix)]
+        let workspaces = if crate::herdr::drives_herdr(&config.harness) {
+            let root = crate::herdr::instance_directory(credentials.harness_id)?;
+            let herdr = crate::herdr::HerdrSession::detect()
+                .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
+            crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
+            Some(crate::herdr::repositories::Workspaces::new(
+                config.workspace.path.clone(),
+                config.herdr.storage_path.clone().unwrap_or(root),
+                crate::herdr::cli::HerdrCli::new(herdr.bin, herdr.workspace_id),
+            ))
+        } else {
+            None
+        };
+
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
             config.harness.clone(),
             &config.workspace.path,
+            tap,
         );
         let executor = Dispatcher::new(api, runtime, config.workspace.clone());
+        #[cfg(unix)]
+        let executor = executor.with_workspaces(workspaces);
+        #[cfg(unix)]
+        let executor = match herdr {
+            Some(hub) => executor.with_herdr(hub),
+            None => executor,
+        };
 
         tracing::info!(
             api = %config.macro_api.api_url,
@@ -103,6 +136,36 @@ impl Daemon {
         self.task.abort();
         let _ = self.task.await;
         tracing::info!("daemon stopped");
+    }
+}
+
+/// Inside herdr, the directory macrod was started from is the repository
+/// every session works in, and each session gets a herdr window.
+#[cfg(unix)]
+fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<crate::herdr::Hub> {
+    let herdr = crate::herdr::HerdrSession::detect()?;
+    if !crate::herdr::drives_herdr(&config.harness) {
+        match std::env::current_dir() {
+            Ok(cwd) => config.workspace.path = cwd,
+            Err(error) => tracing::warn!(error = %error, "could not read the working directory"),
+        }
+    }
+    if crate::herdr::drives_herdr(&config.harness) {
+        tracing::info!("herdr detected; the harness opens a herdr window per session");
+        return None;
+    }
+    let api = HarnessApi::new(&config.macro_api, credentials);
+    match crate::herdr::Hub::start(
+        &herdr,
+        api,
+        &config.workspace.path,
+        &config.macro_api.web_url,
+    ) {
+        Ok(hub) => Some(hub),
+        Err(error) => {
+            tracing::warn!(error = %error, "herdr detected but its window socket could not start");
+            None
+        }
     }
 }
 

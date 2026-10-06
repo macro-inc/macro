@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id, m.parent_entity_type, m.parent_entity_id, a.entity_id\n           FROM comms_messages m JOIN comms_attachments a ON a.message_id = m.id\n           WHERE m.id = ANY($1) ORDER BY m.created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "parent_entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "18550ce144d61e0c7b74342212f687d463723d2de3f525739a509b0644197e8b"
+}

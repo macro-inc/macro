@@ -52,6 +52,87 @@ export function seedDesign(doc: LoroDoc): void {
   doc.commit({ origin: 'fig-seed' });
 }
 
+// The stored files the entries apply to. Entries hold what changed since
+// the collaboration began, so they only apply to a file the collaboration
+// produced: the one it began on, or one stored from it. `figMeta.base` is
+// the fingerprint of the file the current entries began on, and
+// `figMeta["file:<fingerprint>"]` names, for every file opened or stored
+// since, the base it belongs to. A file stored outside the collaboration
+// (a new upload, an AI edit) is not listed: its opener starts the shared
+// design over on it, dropping the entries made on the file it replaced.
+
+/** `figMeta` key of the fingerprint of the file the entries began on. */
+export const BASE_KEY = 'base';
+
+const fileKey = (fingerprint: string) => `file:${fingerprint}`;
+
+/** Commit origin of changes to the stored files' record. */
+export const STORED_FILE_ORIGIN = 'fig-stored-file';
+
+/** The fingerprint of the file the shared entries began on, if recorded. */
+export function designBase(doc: LoroDoc): string | undefined {
+  const value = doc.getMap(META).get(BASE_KEY);
+  return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * Whether the shared entries apply to the stored file with `fingerprint`:
+ * it is the file they began on or one stored from it, or the design was
+ * shared before files were recorded.
+ */
+export function entriesApplyTo(doc: LoroDoc, fingerprint: string): boolean {
+  const base = designBase(doc);
+  return (
+    base === undefined || doc.getMap(META).get(fileKey(fingerprint)) === base
+  );
+}
+
+/**
+ * Records that the file with `fingerprint` holds the shared entries (it
+ * was opened, or is about to be stored); a design shared before files were
+ * recorded begins on it. Returns whether anything was written.
+ */
+export function recordStoredFile(doc: LoroDoc, fingerprint: string): boolean {
+  const meta = doc.getMap(META);
+  let base = designBase(doc);
+  if (base !== undefined && meta.get(fileKey(fingerprint)) === base)
+    return false;
+  if (base === undefined) {
+    base = fingerprint;
+    meta.set(BASE_KEY, base);
+  }
+  meta.set(fileKey(fingerprint), base);
+  doc.commit({ origin: STORED_FILE_ORIGIN });
+  return true;
+}
+
+/**
+ * Starts the shared design over on a file stored outside it: drops every
+ * entry (they were made on the file it replaced) and the facts about that
+ * file, and begins on this one.
+ */
+export function restartOnFile(doc: LoroDoc, fingerprint: string): void {
+  const meta = doc.getMap(META);
+  for (const container of FIG_CONTAINERS) {
+    if (container === META) continue;
+    const map = doc.getMap(container);
+    for (const key of map.keys()) map.delete(key);
+  }
+  // The format stays; what was known about the replaced file goes.
+  for (const key of meta.keys()) if (key !== 'format') meta.delete(key);
+  meta.set(BASE_KEY, fingerprint);
+  meta.set(fileKey(fingerprint), fingerprint);
+  doc.commit({ origin: STORED_FILE_ORIGIN });
+}
+
+/** A short, stable fingerprint of a stored file's bytes (SHA-256, hex). */
+export async function fileFingerprint(bytes: BufferSource): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return [...digest.slice(0, 16)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 /** The current values of some entries, as changes to apply. */
 export function readValues(
   doc: LoroDoc,

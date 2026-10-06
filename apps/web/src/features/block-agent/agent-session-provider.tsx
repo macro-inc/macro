@@ -6,6 +6,8 @@ import { isCursorBotId } from '@core/constant/cursorAgent';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
+import { useAgentSessionSubscription } from '@queries/agent-session/subscription';
+import { answerAgentSessionToolApproval } from '@queries/agent-session/tool-approvals';
 import type {
   FoldedMessage,
   TurnState,
@@ -25,7 +27,9 @@ import {
 } from './context/create-queue-controller';
 import { resolveSessionId } from './context/resolve-session-id';
 import { createSendNext } from './context/send-next';
+import { createSteer } from './context/steer';
 import { createInteractionController } from './primitives/create-interaction-controller';
+import { createToolApprovalController } from './primitives/create-tool-approval-controller';
 import type { QuoteInsert } from './ui';
 
 export function AgentSessionProvider(
@@ -98,12 +102,29 @@ export function AgentSessionProvider(
     expect: live.expect,
     retract: live.retract,
   });
+  const steer = createSteer({
+    currentTurn: live.currentTurn,
+    entries: queue.entries,
+    steer: queue.steer,
+    expect: live.expect,
+    retract: live.retract,
+  });
   const interactions = createInteractionController({
     sessionId,
     pending: () => live.metadata()?.pendingInteractions ?? [],
     canEdit: () => live.session()?.canEdit,
     issue: live.issue,
     onFailure: toast.failure,
+  });
+  useAgentSessionSubscription(sessionId);
+  const toolApprovals = createToolApprovalController({
+    sessionId,
+    pending: () => live.metadata()?.pendingInteractions ?? [],
+    ownerId: () => live.session()?.ownerId,
+    userId,
+    canEdit: () => live.session()?.canEdit,
+    onFailure: toast.failure,
+    answer: answerAgentSessionToolApproval,
   });
 
   // The transcript's "Reply to this" chip hands selected text to the
@@ -151,7 +172,9 @@ export function AgentSessionProvider(
           issue: live.issue,
           selectModel: live.selectModel,
           sendNext,
+          steer,
           interactions,
+          toolApprovals,
           queue,
           quoteSelection,
           registerQuoteInsert,

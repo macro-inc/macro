@@ -18,6 +18,12 @@ release the anchor so manual scrolling and review-note editing remain unrestrict
 Refreshing files or patch text does not reselect an unchanged active file after
 that release; an initial pending selection still waits for its file card.
 
+`Root` keeps patch parsing separate from the stack's body-reveal queue.
+`create-diff-reveal.ts` owns viewport observation and file-card registration;
+scroll anchoring stays in `Stack` and also reacts to later highlighting.
+Both queues are scoped to their respective Solid owners. A host that animates
+an exit retains those owners until the visual exit completes.
+
 Each file is an outlined `@ui` `Card` with a 40px sticky header: a ghost
 disclosure button, the status letter and `text-xs` path (directory in
 `text-ink-subtle`), and `text-xs` counts. Both default and custom headers use

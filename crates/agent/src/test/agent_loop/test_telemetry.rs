@@ -639,3 +639,51 @@ async fn the_run_span_records_how_the_provider_stream_behaved() {
         "the silence at the end is recorded"
     );
 }
+
+/// Each model call's `chat` span records how soon its first chunk came and
+/// what it was: the provider's latency, apart from the generation the call's
+/// duration also includes.
+#[tokio::test]
+async fn each_model_call_records_its_first_chunk() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-1", "echo_tool", json!({ "value": "a" })),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::text("done"),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+    ]);
+    let toolset = util::single_tool_set::<EchoTool, ()>();
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+
+    let result = util::drive(&mut session, "call echo").await;
+    assert_eq!(result.content(), "done");
+    drop(session);
+
+    let spans = finished(&exporter, &provider);
+    let chats = spans_with_operation(&spans, attr::operation::CHAT);
+    assert_eq!(
+        chats.len(),
+        2,
+        "two model calls, got:\n{}",
+        describe(&spans)
+    );
+    assert_eq!(
+        string_attribute(chats[0], attr::MACRO_CHAT_FIRST_CHUNK_KIND).as_deref(),
+        Some("tool_call")
+    );
+    assert_eq!(
+        string_attribute(chats[1], attr::MACRO_CHAT_FIRST_CHUNK_KIND).as_deref(),
+        Some("text")
+    );
+    for chat in &chats {
+        assert!(
+            int_attribute(chat, attr::MACRO_CHAT_TIME_TO_FIRST_CHUNK_MS).is_some_and(|ms| ms >= 0),
+            "{}",
+            describe(&spans)
+        );
+    }
+}

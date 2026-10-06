@@ -667,6 +667,9 @@ pub struct Applied {
 }
 
 struct Step {
+    /// Identifies the step while it is on either stack (see
+    /// [`History::undo_step`]).
+    id: u64,
     before: Vec<(NodeIdx, Node)>,
     after: Vec<(NodeIdx, Node)>,
     coalesce: Option<String>,
@@ -677,6 +680,7 @@ struct Step {
 pub struct History {
     undo: Vec<Step>,
     redo: Vec<Step>,
+    next_id: u64,
 }
 
 const MAX_UNDO: usize = 200;
@@ -877,7 +881,8 @@ impl<'a> Txn<'a> {
     }
 
     fn set_position(&mut self, i: NodeIdx, x: Option<f64>, y: Option<f64>) {
-        let origin = self.doc.world(i).apply(Vec2::default());
+        // The point the panel shows (flip-aware, as `inspect::node_info`).
+        let origin = self.doc.world(i).panel_origin(self.doc.props(i).size());
         let space = self
             .coordinate_parent(i)
             .map(|p| self.doc.world(p))
@@ -887,14 +892,28 @@ impl<'a> Txn<'a> {
         self.translate(i, target.x - origin.x, target.y - origin.y);
     }
 
+    /// Turns `i` about its center to `degrees` on the page, as the panel
+    /// shows it (`Affine::panel_rotation_degrees`): a flipped layer stays
+    /// flipped, and a layer in a rotated group reads its page angle.
     fn set_rotation(&mut self, i: NodeIdx, degrees: f64) {
         let props = self.doc.props(i);
         let size = props.size();
         let t = props.transform();
         let center = t.apply(Vec2::new(size.x / 2.0, size.y / 2.0));
+        let parent = self
+            .doc
+            .node(i)
+            .parent
+            .map(|p| self.doc.world(p))
+            .unwrap_or_default();
         // Figma's rotation is counter-clockwise in a y-down space.
-        let r = Affine::rotate(-degrees.to_radians());
-        let mut next = r;
+        let mut world = Affine::rotate(-degrees.to_radians());
+        if parent.mul(&t).is_mirrored() {
+            world = world.mul(&Affine::MIRROR_X);
+        }
+        let mut next = parent.invert().unwrap_or_default().mul(&world);
+        next.m02 = 0.0;
+        next.m12 = 0.0;
         let c = next.apply(Vec2::new(size.x / 2.0, size.y / 2.0));
         next.m02 = center.x - c.x;
         next.m12 = center.y - c.y;
@@ -1605,8 +1624,12 @@ impl<'a> Txn<'a> {
                     .into_iter()
                     .filter(|&i| self.doc.node(i).parent == parent)
                     .collect();
-                if let Some(g) = self.group(&same, *frame)? {
-                    let _ = g;
+                if let Some(g) = self.group(&same, *frame)?
+                    && *frame
+                {
+                    // As in Figma, a frame around a selection does not clip
+                    // it (shadows and overhangs stay visible).
+                    self.edit(g, flags::CLIP).clip_disabled = Some(true);
                 }
             }
             Op::Ungroup { ids } => {
@@ -1725,6 +1748,18 @@ impl History {
         !self.redo.is_empty()
     }
 
+    /// The step undo would take back next. Steps keep their id while
+    /// coalescing and across undo and redo, so the editor can remember
+    /// what was selected around each one.
+    pub fn undo_step(&self) -> Option<u64> {
+        self.undo.last().map(|s| s.id)
+    }
+
+    /// The step redo would apply next.
+    pub fn redo_step(&self) -> Option<u64> {
+        self.redo.last().map(|s| s.id)
+    }
+
     /// Applies `ops` as one undoable step. Consecutive steps with the same
     /// `coalesce` key (a drag, say) undo as one. On error nothing changes.
     pub fn apply(
@@ -1814,7 +1849,9 @@ impl History {
             }
             last.after = after_map.into_iter().collect();
         } else {
+            self.next_id += 1;
             self.undo.push(Step {
+                id: self.next_id,
                 before,
                 after,
                 coalesce: coalesce.map(str::to_owned),

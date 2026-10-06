@@ -1,5 +1,5 @@
 import { throwOnErr } from '@core/util/result';
-import type { PaidPlan } from '@service-auth/ai-billing-types';
+import type { AiPlanTier, PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
@@ -50,6 +50,24 @@ export function useAiBillingPlansQuery() {
     staleTime: AI_BILLING_PLANS_STALE_TIME,
     throwOnError: false,
   }));
+}
+
+/**
+ * Included AI per seat per period from the plan catalog, in cents at provider
+ * cost, keyed by tier. The backend owns the amount; this is the only place the
+ * frontend should get it from. Empty until the catalog has loaded.
+ */
+export function useIncludedAiCentsByTier(): () => Partial<
+  Record<AiPlanTier, number>
+> {
+  const plans = useAiBillingPlansQuery();
+  return () =>
+    Object.fromEntries(
+      (plans.isSuccess ? plans.data.plans : []).map((plan) => [
+        plan.tier,
+        plan.included_ai_cents_per_seat,
+      ])
+    );
 }
 
 export function invalidateAiBillingSummary() {

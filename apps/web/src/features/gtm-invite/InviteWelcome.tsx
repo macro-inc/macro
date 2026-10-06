@@ -1,5 +1,5 @@
-import { NoiseBackground } from '@app/features/setup/flow/shared';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { NoiseBackground } from '@core/component/NoiseBackground';
 import { useIsAuthenticated } from '@core/context/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';

@@ -7,10 +7,13 @@
 //! last touches a socket, which is what lets the decisions above it be tested
 //! exhaustively without one.
 
+use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
+
+use crate::domain::approval::{StandingApproval, ToolApproval, ToolApprovalId};
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    McpDestination, McpResolution, ProxyRequest, ProxyResponse, RepoSlug, SessionGrant,
-    SessionToken, UpstreamCall,
+    AgentSessionId, McpDestination, McpResolution, ProxyRequest, ProxyResponse, RepoSlug,
+    SessionGrant, SessionToken, UpstreamCall,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -86,4 +89,103 @@ pub trait Forwarder: Send + Sync {
         &self,
         request: ProxyRequest,
     ) -> impl Future<Output = Result<ProxyResponse, EgressError>> + Send;
+}
+
+/// Where held tool calls are recorded.
+///
+/// Every resolution is conditional on the row still being pending, which is
+/// what makes the first resolution the only one: an owner's answer racing
+/// the hold's own deadline on another replica cannot both land.
+pub trait ToolApprovalStore: Send + Sync + 'static {
+    /// Record a newly held call.
+    fn insert(
+        &self,
+        approval: &ToolApproval,
+    ) -> impl Future<Output = Result<(), EgressError>> + Send;
+
+    /// Resolve `id` if it is still pending, and wake whoever waits on it.
+    /// `remembered` records an approval given for good. `None` when it was
+    /// not pending or does not exist.
+    fn resolve(
+        &self,
+        id: ToolApprovalId,
+        status: ToolApprovalStatus,
+        resolved_by: Option<&MacroUserIdStr<'static>>,
+        remembered: bool,
+    ) -> impl Future<Output = Result<Option<ToolApproval>, EgressError>> + Send;
+
+    /// The approval `id`, whatever its state.
+    fn get(
+        &self,
+        id: ToolApprovalId,
+    ) -> impl Future<Output = Result<Option<ToolApproval>, EgressError>> + Send;
+
+    /// The pending approval holding `session`'s JSON-RPC request `request_id`.
+    fn pending_for_request(
+        &self,
+        session: AgentSessionId,
+        request_id: &serde_json::Value,
+    ) -> impl Future<Output = Result<Option<ToolApprovalId>, EgressError>> + Send;
+
+    /// Every approval `session` has pending.
+    fn pending_for_session(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<ToolApprovalId>, EgressError>> + Send;
+
+    /// Record an approval given for good. Recording the same one twice is
+    /// not an error.
+    fn remember(
+        &self,
+        standing: &StandingApproval,
+    ) -> impl Future<Output = Result<(), EgressError>> + Send;
+
+    /// Whether a standing approval lets `user` call `tool` on `server_slug`
+    /// in `session` without asking.
+    fn is_standing(
+        &self,
+        session: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+        server_slug: &str,
+        tool: &str,
+    ) -> impl Future<Output = Result<bool, EgressError>> + Send;
+
+    /// Every pending approval `standing` covers.
+    fn pending_covered_by(
+        &self,
+        standing: &StandingApproval,
+    ) -> impl Future<Output = Result<Vec<ToolApprovalId>, EgressError>> + Send;
+}
+
+/// Wakes a hold when its approval may have been resolved, wherever that
+/// happened.
+pub trait ToolApprovalSignals: Send + Sync + 'static {
+    /// A waiter on one approval.
+    type Subscription: ToolApprovalSubscription;
+
+    /// Start listening for `id`. Registered by the time this returns, so a
+    /// resolution after it is never missed.
+    fn subscribe(&self, id: ToolApprovalId) -> Self::Subscription;
+}
+
+/// A waiter on one approval.
+pub trait ToolApprovalSubscription: Send + 'static {
+    /// Resolves when the approval may have changed. Wakes can be spurious,
+    /// and a waiter re-reads the store either way.
+    fn changed(&mut self) -> impl Future<Output = ()> + Send;
+}
+
+/// Tells people about held calls: the session's viewers see each state in
+/// its log, and the owner is notified when one starts waiting on them.
+/// Best-effort; a failure is the adapter's to log.
+pub trait ToolApprovalAnnouncer: Send + Sync + 'static {
+    /// A call started waiting on `owner`.
+    fn requested(
+        &self,
+        approval: &ToolApproval,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = ()> + Send;
+
+    /// A held call was resolved.
+    fn resolved(&self, approval: &ToolApproval) -> impl Future<Output = ()> + Send;
 }

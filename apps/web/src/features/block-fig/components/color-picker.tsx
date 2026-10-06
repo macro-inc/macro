@@ -1,3 +1,4 @@
+import { InspectorSelect } from './inspector-select';
 /**
  * Figma's color picker: a saturation and brightness square, hue and
  * opacity sliders, the eyedropper (where the browser has one), the value
@@ -269,17 +270,14 @@ export function ColorPicker(props: {
         </div>
       </div>
       <div class="flex items-center gap-1">
-        <select
-          aria-label="Color format"
-          data-testid="fig-color-format"
-          class="w-14 shrink-0 rounded bg-transparent py-1 text-ink outline-none"
+        <InspectorSelect
+          label="Color format"
+          testId="fig-color-format"
+          class="w-18 shrink-0"
           value={format()}
-          onChange={(e) => setFormat(e.currentTarget.value as ColorFormat)}
-        >
-          <For each={COLOR_FORMATS}>
-            {(f) => <option value={f.value}>{f.label}</option>}
-          </For>
-        </select>
+          options={COLOR_FORMATS}
+          onChange={setFormat}
+        />
         <div class="flex min-w-0 flex-1 gap-1">
           <Index each={fields()}>
             {(value, i) => (

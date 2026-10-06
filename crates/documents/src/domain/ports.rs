@@ -70,6 +70,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<DocumentBasic, Self::Err>> + Send;
 
+    /// A user's first and last name by their user id, each `None` when the
+    /// user has not set it.
+    fn get_user_name(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(Option<String>, Option<String>), Self::Err>> + Send;
+
     /// Soft-delete a document (remove pins/history, set deletedAt).
     fn soft_delete_document(
         &self,
@@ -437,6 +444,13 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<DocumentBasic, DocumentError>> + Send;
+
+    /// The name a user goes by ("First Last"), ignoring access checks;
+    /// `None` when they have not set one.
+    fn internal_get_user_display_name(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, DocumentError>> + Send;
 
     /// Resolve a team task slug to its document ID.
     fn get_document_by_team_slug(

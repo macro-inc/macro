@@ -471,6 +471,4 @@ export interface KeypressContext {
   commandCaptured: HotkeyCommand | undefined;
   /** The event type ('keydown' or 'keyup') */
   eventType: 'keydown' | 'keyup';
-  /** Whether the keypress includes a non-modifier key */
-  isNonModifierKeypress: boolean;
 }

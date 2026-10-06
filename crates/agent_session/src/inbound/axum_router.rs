@@ -39,7 +39,7 @@ use entity_registry::{NonUserOwners, resolve_creation_principal};
 use macro_authorization::{
     ActingUser, InternalOnly, MacroAuthorization, MacroAuthorizationExtractor,
     MacroAuthorizationService, MacroAuthorizationState, UserBotOrHarness,
-    UserBotOrHarnessAuthorization,
+    UserBotOrHarnessAuthorization, UserOnly,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -240,6 +240,10 @@ where
             "/{session_id}/queue/{action_id}",
             put(edit_queued_action_handler::<R, Access, Auth>)
                 .delete(remove_queued_action_handler::<R, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/queue/{action_id}/steer",
+            post(steer_queued_action_handler::<R, Access, Auth>),
         )
         .route(
             "/{session_id}/sandbox-size",
@@ -1177,6 +1181,55 @@ pub async fn remove_queued_action_handler<
 }
 
 #[utoipa::path(
+    post,
+    path = "/agent-sessions/{session_id}/queue/{action_id}/steer",
+    tag = "agent-sessions",
+    operation_id = "steer_queued_action",
+    params(
+        ("session_id" = Uuid, Path, description = "ID of the agent session"),
+        ("action_id" = Uuid, Path, description = "ID the action was accepted under"),
+    ),
+    responses(
+        (status = 204),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String, description = "Already dispatched or never queued"),
+        (status = 500, body = String),
+    )
+)]
+/// Run a queued action next. Moves it ahead of the rest of the queue and
+/// cancels the turn in flight, so this entry dispatches when that turn ends.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), session_id = %session_id, %action_id),
+    err(Debug)
+)]
+pub async fn steer_queued_action_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    Path((session_id, action_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
+    let actor = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone());
+    state
+        .recipient
+        .steer_queued_control(session_id, AgentActionId::from_uuid(action_id), actor)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
     delete,
     path = "/agent-sessions/{session_id}",
     tag = "agent-sessions",
@@ -1544,6 +1597,10 @@ where
         .route(
             "/",
             post(create_agent_session_handler::<Opener, Bots, Requests, Auth>),
+        )
+        .route(
+            "/warm",
+            post(warm_agent_session_handler::<Opener, Bots, Requests, Auth>),
         )
         .with_state(state)
 }
@@ -1993,13 +2050,10 @@ pub async fn create_agent_session_handler<
                 // caller delivers its first prompt through the control
                 // endpoint once this answers, as it does for a managed one.
                 SelectedPersona::External { bot_id } => {
-                    if request.repo_url.is_some() || request.repo_branch.is_some() {
-                        return Err(CreateSessionApiError::Domain(
-                            AgentSessionError::InvalidRepositorySelection(
-                                "repository selection is supported for Cursor coding agents",
-                            ),
-                        ));
-                    }
+                    let repo_url = crate::domain::ports::external_repository(
+                        request.repo_url,
+                        request.repo_branch.as_deref(),
+                    )?;
                     // Refused rather than dropped: nothing delivers it, and a
                     // caller that sent one would otherwise never learn it was
                     // ignored. A model is different - it is applied when the
@@ -2022,6 +2076,7 @@ pub async fn create_agent_session_handler<
                                 .map(AgentSessionId::new_from_uuid)
                                 .unwrap_or_else(AgentSessionId::new),
                             bot_id,
+                            repo_url,
                             owner,
                             model: request.model.filter(|model| !model.trim().is_empty()),
                         })
@@ -2166,4 +2221,43 @@ pub async fn create_agent_session_handler<
             session: AgentSessionResponse::new(session, true),
         }),
     ))
+}
+
+/// A client-minted id deduplicates warm calls without creating a conversation.
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WarmAgentSessionRequest {
+    /// Id reserved by this browser for its next in-memory conversation.
+    pub id: Uuid,
+}
+
+/// A bounded best-effort warm attempt; absence means normal creation should proceed.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WarmAgentSessionResponse {
+    /// Prepared session, hidden until explicitly claimed through create.
+    pub session: Option<AgentSessionResponse>,
+}
+
+/// Prepare MCP connections without sending a prompt or creating a visible list row.
+#[utoipa::path(post, path = "/agent-sessions/warm", request_body = WarmAgentSessionRequest,
+    responses((status = 200, body = WarmAgentSessionResponse)), tag = "agent-sessions")]
+pub async fn warm_agent_session_handler<
+    Opener: SessionOpener,
+    Bots: BotDirectory,
+    Requests: ExternalSessionRequester,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CreateSessionState<Opener, Bots, Requests, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Json(request): Json<WarmAgentSessionRequest>,
+) -> Result<Json<WarmAgentSessionResponse>, CreateSessionApiError> {
+    let owner = Owner::User(caller.authorization.macro_user_id.clone());
+    let session = state
+        .opener
+        .warm_session(owner, AgentSessionId::new_from_uuid(request.id))
+        .await?;
+    Ok(Json(WarmAgentSessionResponse {
+        session: session.map(|session| AgentSessionResponse::new(session, true)),
+    }))
 }

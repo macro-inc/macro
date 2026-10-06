@@ -10,6 +10,7 @@ import {
 } from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
 import { createBrowserOfflineSignal } from '@core/util/connectivity';
+import { isTransientRequestError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import {
   makeGroupComparator,
@@ -163,11 +164,16 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     }
   });
   const isSupported = () => input() !== undefined;
+  const inputKey = createMemo(() => JSON.stringify(input()));
 
   const query = createUrqlQuery<
     GroupSoupQuery,
     GroupSoupQueryVariables,
-    { viewerId: string; data: SoupAstItemsData }
+    {
+      inputKey: string;
+      viewerId: string;
+      data: SoupAstItemsData;
+    }
   >(() => {
     const queryOptions = options();
     const groupBy = args().groupBy;
@@ -198,6 +204,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
         );
       },
       select: (data: GroupSoupQuery) => ({
+        inputKey: JSON.stringify(queryInput),
         viewerId: data.user.id,
         data: mapGraphqlGroupedSoupData(data, groupBy!, {
           instructionsIdQuery,
@@ -234,7 +241,6 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     })
   );
 
-  const error = (): CombinedError | undefined => query.error ?? undefined;
   const cachedMail = createMemo(() => {
     const data = local.data();
     if (
@@ -253,6 +259,24 @@ export function createGraphqlGroupedSoupAstItemsQuery(
       return;
     return groupCachedMailByDate(data, now());
   });
+  const error = (): CombinedError | undefined => {
+    const error = query.error;
+    // A failed refresh must not hide usable current-query data, including an
+    // empty page. Retained data from other filters is not an offline fallback.
+    // Server/GraphQL errors and failures without cached data still surface.
+    if (
+      error &&
+      isTransientRequestError(error) &&
+      !error.response &&
+      options().enabled &&
+      isSupported() &&
+      (cachedMail() !== undefined ||
+        (query.data?.inputKey === inputKey() && query.data?.data !== undefined))
+    ) {
+      return undefined;
+    }
+    return error ?? undefined;
+  };
   createComputed(
     on(error, (queryError) => {
       if (queryError) {

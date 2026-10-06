@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 
 use activity::inbound::toolset::activity_toolset;
+use agent_session::inbound::toolset::coding_agent_toolset;
 use ai_toolset::AsyncToolCollection;
 use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_builder};
 
@@ -9,6 +10,7 @@ mod test;
 
 pub mod ai_operations;
 mod build_context;
+mod deferred;
 mod display_results;
 mod import_channels;
 mod mcp_app_catalog;
@@ -55,6 +57,7 @@ pub use build_context::{
     build_anthropic_tool_context, build_image_generator_from_env,
     build_tool_service_context_from_env,
 };
+pub use deferred::{DeferredToolSet, deferred_tools};
 pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
 pub use search::search_toolset;
 pub use tool_context::{
@@ -64,11 +67,11 @@ pub use tool_context::{
     ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
-    ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
-    ToolDatabasesService, ToolDatabasesSqlToolContext, ToolDatabasesToolContext,
-    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
-    ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
-    ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService,
+    ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext, ToolCommsService,
+    ToolCrmService, ToolCrmToolContext, ToolDatabasesService, ToolDatabasesSqlToolContext,
+    ToolDatabasesToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
+    ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
+    ToolEntityCreator, ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService,
     ToolImageGenerationToolContext, ToolImportService, ToolImportToolContext,
     ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
@@ -78,8 +81,8 @@ pub use tool_context::{
     ToolTeamToolContext, ToolUserEmailService, ToolViewOnlyDatabasesSqlToolContext,
     build_activity_tool_context, build_bot_tool_context, build_calendar_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
-    build_channel_tool_context_without_side_effects, build_crm_tool_context,
-    build_databases_sql_tool_context, build_databases_tool_context,
+    build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
+    build_crm_tool_context, build_databases_sql_tool_context, build_databases_tool_context,
     build_image_generation_tool_context, build_initiative_tool_context,
     build_message_service_with_side_effects, build_message_service_without_side_effects,
     build_project_tool_context, build_properties_service, build_properties_service_with_broker,
@@ -111,6 +114,9 @@ pub fn database_read_only_tools() -> AiToolSet {
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
     pub prompt: Box<dyn std::fmt::Display + Send + Sync>,
+    /// The tools a [`DeferredToolSet`] keeps out of every request; the prompt
+    /// lists them. Empty on hosts that send every schema.
+    pub deferred: Arc<[ai_toolset::SearchableTool]>,
 }
 
 impl ToolSchemaGenerator for ToolSetWithPrompt {
@@ -181,6 +187,38 @@ pub enum AiHost {
     Mcp,
 }
 
+/// The tools whose schemas go out with every request on hosts with tool
+/// search: the ones most turns use. Every other tool is deferred (see
+/// [`DeferredToolSet`]), listed by name and summary in the prompt and loaded
+/// with `LoadTools` when needed.
+pub const EAGER_TOOLS: &[&str] = &[
+    "BashCodeExecution",
+    "ContentSearch",
+    "CreateDocument",
+    "DisplayResults",
+    "EditDocument",
+    "GetThread",
+    "ListEntities",
+    "ListSkills",
+    "LoadTools",
+    "NameSearch",
+    "ReadChannelMessageContext",
+    "ReadChannelMessages",
+    "ReadChannelThread",
+    "ReadChat",
+    "ReadContent",
+    "ReadMetadata",
+    "ReadSkill",
+    "SearchSkills",
+    "SearchTools",
+    "SelfKnowledge",
+    "SendChannelMessage",
+    "Subagent",
+    "TextEditorCodeExecution",
+    "WebFetch",
+    "WebSearch",
+];
+
 /// Assemble the toolset and tool-use prompt for a host. These are actually
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
@@ -198,6 +236,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
+        .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset())
         .add_tool::<Subagent, SubagentContext>();
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
@@ -211,14 +250,35 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
-        AiHost::Chat => Box::new(&prompt::TOOL_USE_PROMPT),
-        AiHost::AgentSession => Box::new(&prompt::SESSION_TOOL_USE_PROMPT),
-        AiHost::ChannelBot | AiHost::Mcp => Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
+    // External MCP clients have no `LoadTools`, so they get every schema.
+    let deferred = match host {
+        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => {
+            deferred_tools(&toolset, EAGER_TOOLS)
+        }
+        AiHost::Mcp => Arc::from([]),
     };
+    let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
+        AiHost::Chat => Box::new(prompt::TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT)),
+        AiHost::AgentSession => {
+            Box::new(prompt::SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
+        }
+        AiHost::ChannelBot | AiHost::Mcp => {
+            Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
+        }
+    };
+    let catalog: Vec<(&str, &str)> = deferred
+        .iter()
+        .map(|tool| (tool.name.as_str(), tool.description.as_str()))
+        .collect();
+    let prompt: Box<dyn std::fmt::Display + Send + Sync> =
+        match prompt::deferred_tools::render(&catalog) {
+            Some(section) => Box::new(format!("{prompt}{section}")),
+            None => prompt,
+        };
     ToolSetWithPrompt {
         toolset: Arc::new(toolset),
         prompt,
+        deferred,
     }
 }
 
@@ -237,5 +297,6 @@ pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
         prompt: Box::new(&prompt::BASE_PROMPT),
         toolset: Arc::new(AsyncToolCollection::new()),
+        deferred: Arc::from([]),
     }
 }

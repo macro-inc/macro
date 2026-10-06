@@ -1,0 +1,12 @@
+---
+source: crates/folds/codex_fold/src/test.rs
+expression: events
+---
+[
+  {
+    "ModelChanged": "gpt-6-astra"
+  },
+  {
+    "ModelChanged": "gpt-6-sol"
+  }
+]

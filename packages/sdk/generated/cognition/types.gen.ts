@@ -799,7 +799,7 @@ export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
  * Where an import entity was first staged from. Provenance only — never a
  * visibility filter.
  */
-export type Initiator = 'onboarding' | 'chat' | 'archive';
+export type Initiator = 'onboarding' | 'chat' | 'archive' | 'manual';
 
 export type JwtPayload = {
     token: string;
@@ -1111,6 +1111,16 @@ export type Price = {
      */
     price_per_audio_minute?: number | null;
     /**
+     * Price per million cache-read input tokens (USD), absent when the model
+     * has no published rate and for audio billing.
+     */
+    price_per_million_cache_read?: number | null;
+    /**
+     * Price per million cache-write input tokens (USD), absent when the model
+     * has no published rate and for audio billing.
+     */
+    price_per_million_cache_write?: number | null;
+    /**
      * Price per million input tokens (USD); zero for audio billing.
      */
     price_per_million_in: number;
@@ -1301,6 +1311,16 @@ export type SetPricingRequest = {
      */
     price_per_audio_minute?: number | null;
     /**
+     * Price per million cache-read input tokens (USD). Omit it when the model
+     * has no published rate: calls that report cache reads then stay unpriced.
+     */
+    price_per_mil_cache_read?: number | null;
+    /**
+     * Price per million cache-write input tokens (USD). Omit it when the model
+     * has no published rate: calls that report cache writes then stay unpriced.
+     */
+    price_per_mil_cache_write?: number | null;
+    /**
      * New price per million input tokens (USD). Required for token pricing.
      */
     price_per_mil_in?: number | null;
@@ -1333,15 +1353,27 @@ export type SharePermissionV2 = {
  */
 export type SlackChannelMeta = {
     /**
+     * Whether Slack has archived this channel.
+     */
+    archived?: boolean;
+    /**
      * Slack's channel id (e.g. `C0123456789`), stable across renames.
      */
     channel_id?: string | null;
+    /**
+     * Total human members in the Slack channel.
+     */
+    member_count?: number | null;
+    /**
+     * Whether `participants` reflects a live membership read.
+     */
+    members_resolved?: boolean;
     /**
      * Channel name without the leading `#`.
      */
     name: string;
     /**
-     * The channel's most relevant members, when discoverable.
+     * Slack members matched to the Macro team roster when discovery resolved membership.
      */
     participants?: Array<SlackParticipant>;
     /**
@@ -1641,11 +1673,19 @@ export type Usage = {
      */
     audio_seconds?: number | null;
     /**
+     * Input tokens read from a prompt cache; zero for audio billing.
+     */
+    cache_read_input_tokens: number;
+    /**
+     * Input tokens written to a prompt cache; zero for audio billing.
+     */
+    cache_write_input_tokens: number;
+    /**
      * Recording timestamp.
      */
     created_at: string;
     /**
-     * Input tokens; zero for audio billing.
+     * Uncached input tokens; zero for audio billing.
      */
     input_tokens: number;
     /**
@@ -2297,6 +2337,38 @@ export type RunImportHandlerResponses = {
 };
 
 export type RunImportHandlerResponse = RunImportHandlerResponses[keyof RunImportHandlerResponses];
+
+export type DiscoverHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * Import source
+         */
+        source: string;
+    };
+    query?: never;
+    url: '/import/runs/{source}/discover';
+};
+
+export type DiscoverHandlerErrors = {
+    /**
+     * Unknown import source or discovery not supported
+     */
+    400: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DiscoverHandlerResponses = {
+    /**
+     * Discovery accepted (idempotent)
+     */
+    204: void;
+};
+
+export type DiscoverHandlerResponse = DiscoverHandlerResponses[keyof DiscoverHandlerResponses];
 
 export type DismissRunHandlerData = {
     body?: never;

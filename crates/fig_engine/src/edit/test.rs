@@ -411,3 +411,22 @@ fn edits_effects() {
     let r = reopened.find(Guid::parse("1:3").unwrap()).unwrap();
     assert_eq!(reopened.props(r).effects().len(), 2);
 }
+
+#[test]
+fn steps_keep_their_ids_through_coalescing_undo_and_redo() {
+    let (mut doc, mut h) = open();
+    let nudge = ops(r#"[{"op":"translate","ids":["1:3"],"dx":1,"dy":0}]"#);
+    assert_eq!(h.undo_step(), None);
+    h.apply(&mut doc, &nudge, None).unwrap();
+    let first = h.undo_step().unwrap();
+    // A drag's steps are one step, with one id.
+    h.apply(&mut doc, &nudge, Some("drag")).unwrap();
+    let drag = h.undo_step().unwrap();
+    assert_ne!(drag, first);
+    h.apply(&mut doc, &nudge, Some("drag")).unwrap();
+    assert_eq!(h.undo_step(), Some(drag));
+    h.undo(&mut doc).unwrap();
+    assert_eq!((h.undo_step(), h.redo_step()), (Some(first), Some(drag)));
+    h.redo(&mut doc).unwrap();
+    assert_eq!((h.undo_step(), h.redo_step()), (Some(drag), None));
+}

@@ -6,6 +6,35 @@ use crate::scene::Scene;
 use crate::testing::showcase_file;
 use std::collections::BTreeMap;
 
+#[test]
+fn joining_a_lazy_file_keeps_other_pages_deferred() {
+    use crate::testing::{fig_file, node};
+
+    let bytes = Arc::new(fig_file(
+        vec![
+            node(0, None, "DOCUMENT", "Document", vec![]),
+            node(1, Some((0, "a")), "CANVAS", "Cover", vec![]),
+            node(2, Some((0, "b")), "CANVAS", "Screens", vec![]),
+            node(50, Some((2, "a")), "RECTANGLE", "Deferred", vec![]),
+        ],
+        vec![],
+    ));
+    let mut lazy = Document::open_lazy(&bytes).unwrap();
+    let mut full = Document::open_shared(&bytes).unwrap();
+    let session = lazy.props(lazy.root).guid.unwrap().session;
+    let (_, lazy_meta) = Collab::new(&mut lazy, session, None);
+    let (_, full_meta) = Collab::new(&mut full, session, None);
+    assert_eq!(lazy_meta, full_meta);
+    // A colliding session must still allocate after IDs on unopened pages.
+    assert_eq!(lazy.next_guid, full.next_guid);
+    assert_eq!(lazy.next_guid.local, 51);
+    assert!(!lazy.is_complete());
+    let deferred = lazy.node(lazy.pages[1]).children[0];
+    assert!(!lazy.is_decoded(deferred));
+    lazy.complete().unwrap();
+    assert_eq!(lazy.next_guid, full.next_guid);
+}
+
 /// One person editing: a document, its undo history, and its collaboration
 /// state, exchanging entries through a [`Hub`].
 struct Peer {
@@ -319,6 +348,7 @@ fn entries_round_trip_every_property() {
             }),
         }));
         props.macro_data = Some(Arc::from([(Arc::from("libraries"), Arc::from("[]"))]));
+        props.arc_data = Some([0.25, 4.5, 0.75]);
         let state = NodeState {
             props,
             removed: node.removed,
@@ -465,6 +495,18 @@ fn set_design_system_fields(props: &mut crate::model::Props) {
         name: "Light".into(),
     }]));
     props.mode_by_set = Some(Arc::from([(g(20), g(21))]));
+    let mut pattern = crate::model::Paint::solid(Color::BLACK);
+    pattern.kind = crate::model::PaintKind::Pattern(crate::model::PatternPaint {
+        layout: crate::model::PatternLayout::HorizontalHexagonal,
+        source: g(28),
+        scale: 1.5,
+        spacing: crate::model::Vec2::new(-0.2, 3.0),
+        horizontal: crate::model::PatternAlign::Center,
+        vertical: crate::model::PatternAlign::End,
+    });
+    let mut fills = props.fills().to_vec();
+    fills.push(pattern);
+    props.fills = Some(fills.into());
     if let Some(fills) = &props.fills {
         let mut list = fills.to_vec();
         for p in &mut list {
@@ -993,4 +1035,24 @@ fn prototype_edits_reach_other_people_and_their_saves() {
     let saved = crate::save::save(&b.doc, &bytes).unwrap();
     let c = Peer::open(3, &saved, &mut hub);
     assert_same(&a.doc, &c.doc);
+}
+
+#[test]
+fn reads_entries_before_arc_metadata_was_added() {
+    use codec::{BlobRef, NodeState, Reader, Writer};
+    let state = NodeState {
+        props: crate::model::Props::default(),
+        removed: false,
+        listed: true,
+        edits: 0,
+        source: None,
+    };
+    let mut blobs = |index| BlobRef::Base(index);
+    let mut bytes = Writer::new(&mut blobs).node(&state);
+    // Version 1 ended Props after `recomputed`; version 2 appends arc_data.
+    // The four final bytes are NodeState's booleans, zero edits, and no source.
+    assert_eq!(bytes.remove(bytes.len() - 5), 0);
+    bytes[0] = 1;
+    let resolve = |_: &BlobRef| None;
+    assert_eq!(Reader::new(&bytes, &resolve).node().unwrap(), state);
 }

@@ -5,6 +5,7 @@
  */
 
 import { Popover } from '@kobalte/core/popover';
+import X from '@phosphor/x.svg';
 import { Layer } from '@ui';
 import type { JSX } from 'solid-js';
 
@@ -41,13 +42,22 @@ export function SwatchPopover(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="z-modal rounded-xl border border-edge-muted bg-menu p-3 shadow-xl outline-none"
+            class="fig-editor-theme z-modal rounded-xl border border-edge-muted bg-menu p-3 shadow-xl outline-none"
             aria-label={props.label}
             onKeyDown={(e: KeyboardEvent) => {
               if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
             }}
             onPointerDown={(e: PointerEvent) => e.stopPropagation()}
           >
+            <div class="mb-3 flex items-center justify-between gap-3 text-ink text-xs">
+              <Popover.Title class="font-medium">{props.label}</Popover.Title>
+              <Popover.CloseButton
+                aria-label={`Close ${props.label.toLowerCase()}`}
+                class="flex size-6 items-center justify-center rounded hover:bg-hover"
+              >
+                <X class="size-3.5" />
+              </Popover.CloseButton>
+            </div>
             {props.children}
           </Popover.Content>
         </Layer>

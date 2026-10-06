@@ -362,7 +362,9 @@ async fn records_provider_counts_before_image_decoding_or_refusal() {
             events[0].amount,
             ai_usage::UsageAmount::Tokens {
                 input: 8,
-                output: 1290
+                output: 1290,
+                cache_read: 0,
+                cache_write: 0,
             }
         );
     }
@@ -395,7 +397,9 @@ async fn blocked_prompt_records_reported_input_without_inventing_output() {
         events[0].amount,
         ai_usage::UsageAmount::Tokens {
             input: 12,
-            output: 0
+            output: 0,
+            cache_read: 0,
+            cache_write: 0,
         }
     );
 }
@@ -461,7 +465,9 @@ async fn uses_total_minus_prompt_when_candidate_count_is_absent() {
         events[0].amount,
         ai_usage::UsageAmount::Tokens {
             input: 8,
-            output: 1290
+            output: 1290,
+            cache_read: 0,
+            cache_write: 0,
         }
     );
 }

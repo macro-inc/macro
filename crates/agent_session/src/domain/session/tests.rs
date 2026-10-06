@@ -1236,6 +1236,35 @@ fn session_new_carries_the_sessions_workspace() {
 }
 
 #[test]
+fn session_new_names_the_macro_session_in_meta() {
+    let mut machine = SessionMachine::new(
+        AgentSessionId::TEST_A,
+        "/home/operator/code".to_owned(),
+        Vec::new(),
+        PermissionPolicy::AutoAccept,
+    );
+    machine.handle(acp_ready());
+    let effects = machine.handle(initialized());
+
+    let named: Vec<String> = effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::Send {
+                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+                ..
+            } if request.method.as_ref() == "session/new" => {
+                let params = request.params.clone()?.into_value();
+                params["_meta"][crate::domain::model::MACRO_AGENT_SESSION_META_KEY]
+                    .as_str()
+                    .map(str::to_owned)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(named, [AgentSessionId::TEST_A.to_string()]);
+}
+
+#[test]
 fn resume_carries_the_sessions_workspace() {
     let mut machine = SessionMachine::resume(
         AgentSessionId::TEST_A,

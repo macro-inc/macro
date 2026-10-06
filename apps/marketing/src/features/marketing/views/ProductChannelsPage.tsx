@@ -202,11 +202,11 @@ export function RouteChannels() {
             a: 'No. Everything on this page is a local sample. Nothing you type here leaves your browser.',
           },
           {
-            q: 'Is there a free plan?',
+            q: 'Can I join as a Guest for free?',
             a: (
               <>
-                Yes. See <a href="/pricing">pricing</a> for current plans and
-                limits.
+                Yes. Guest access is free. See <a href="/pricing">pricing</a>{' '}
+                for current access and limits.
               </>
             ),
           },

@@ -11,6 +11,7 @@
 import {
   AgentSession,
   AgentSessionAccessDenied,
+  type AgentSessionRecord,
   type IssueResult,
 } from '@core/agent-session/AgentSession';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
@@ -40,6 +41,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { issueSessionAction } from '../queries/issue-session-action';
 import type { EffortSelection } from '../state/session-config';
 import { configureSessionModel } from './configure-session-model';
 
@@ -208,39 +210,87 @@ export function createAgentSession(
 
   let latestRename: AgentSessionRenamedEvent | undefined;
   let renameRefresh = 0;
+  /**
+   * The fetch failed after a cached transcript was already on screen. The
+   * resource resolved with the cached row, so its own error never fires;
+   * this carries the failure the same way.
+   */
+  const [settleFailure, setSettleFailure] = createSignal<unknown>();
+
+  const superseded = (session: AgentSession) =>
+    untrack(sessionId) !== session.id;
+
+  /**
+   * Show what the machine holds for `record`. Read after every input pushed
+   * so far, and applied before any event that arrives later: events between
+   * subscribe and here upserted into the list, and this replaces the list
+   * with a view that includes them.
+   */
+  const show = async (
+    session: AgentSession,
+    record: AgentSessionRecord,
+    kind: 'cached' | 'fetched'
+  ) => {
+    const snapshot = await session.snapshot();
+    if (superseded(session)) return;
+    batch(() => {
+      setBot(record.bot);
+      setMetadata(snapshot.metadata);
+      replace(snapshot.messages);
+    });
+    session.rendered(kind);
+  };
+
+  /** The fetched session, shown, with a rename that landed meanwhile kept. */
+  const settle = async (
+    session: AgentSession,
+    renameRefreshAtStart: number
+  ): Promise<AgentSessionResponse> => {
+    const record = await session.load();
+    if (superseded(session)) return record.session;
+    await show(session, record, 'fetched');
+    return renameRefresh > renameRefreshAtStart &&
+      latestRename?.agentSessionId === session.id
+      ? { ...record.session, name: latestRename.name }
+      : record.session;
+  };
 
   const [resource, { mutate, refetch }] = createResource(
     live,
     async (session) => {
       const renameRefreshAtStart = renameRefresh;
-      const superseded = () => untrack(sessionId) !== session.id;
 
       batch(() => {
         setList(reconcile([]));
         setBot(undefined);
         setMetadata(undefined);
+        setSettleFailure(undefined);
       });
 
-      const record = await session.load();
-      if (superseded()) return record.session;
-      // Read after every input pushed so far, and applied before any event
-      // that arrives later: events between subscribe and here upserted into
-      // the list, and this replaces the list with a view that includes them.
-      const snapshot = await session.snapshot();
-      if (superseded()) return record.session;
-
-      batch(() => {
-        setBot(record.bot);
-        setMetadata(snapshot.metadata);
-        replace(snapshot.messages);
-      });
-
-      return renameRefresh > renameRefreshAtStart &&
-        latestRename?.agentSessionId === session.id
-        ? { ...record.session, name: latestRename.name }
-        : record.session;
+      const cached = await session.warm();
+      if (!cached || superseded(session)) {
+        return settle(session, renameRefreshAtStart);
+      }
+      // A transcript from the last open goes up now; the fetched one
+      // replaces it when it lands, through the same store, so the resource
+      // resolves here and the fetch settles it in the background.
+      await show(session, cached, 'cached');
+      void settleInBackground(session, renameRefreshAtStart);
+      return cached.session;
     }
   );
+
+  async function settleInBackground(
+    session: AgentSession,
+    renameRefreshAtStart: number
+  ): Promise<void> {
+    try {
+      const fetched = await settle(session, renameRefreshAtStart);
+      if (!superseded(session)) mutate(fetched);
+    } catch (error) {
+      if (!superseded(session)) setSettleFailure(error);
+    }
+  }
 
   onCleanup(
     subscribeAgentSessionRenamed((event) => {
@@ -294,8 +344,9 @@ export function createAgentSession(
   // update queue before the enclosing `<Suspense>` swaps its fallback back
   // out, and the block shows a spinner forever instead of its error panel.
   // The failure is reported through `loadFailed`; absent is what the row is.
+  const failure = () => resource.error ?? settleFailure();
   const session = () => {
-    if (resource.error !== undefined) return undefined;
+    if (failure() !== undefined) return undefined;
     if (openedPending && resource.state === 'pending') return undefined;
     return resource.latest;
   };
@@ -305,17 +356,22 @@ export function createAgentSession(
     bot,
     metadata,
     messages: () => list,
-    loadFailed: () => resource.error !== undefined,
-    accessDenied: () => resource.error instanceof AgentSessionAccessDenied,
+    loadFailed: () => failure() !== undefined,
+    accessDenied: () => failure() instanceof AgentSessionAccessDenied,
     retry: () => void refetch(),
-    issue: (action) => live()?.issue(action, { userId: options.userId() }),
+    issue: (action) => {
+      const current = live();
+      return current
+        ? issueSessionAction(current, action, { userId: options.userId() })
+        : undefined;
+    },
     selectModel: async (model, effort) => {
       const current = live();
       if (!current) throw new Error('The agent session is not ready.');
       await configureSessionModel(
         {
           issue: (action) =>
-            current.issue(action, { userId: options.userId() }),
+            issueSessionAction(current, action, { userId: options.userId() }),
           snapshot: () => current.snapshot(),
           subscribe: (listener) => current.subscribe(listener),
         },

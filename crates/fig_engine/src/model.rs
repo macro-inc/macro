@@ -25,7 +25,7 @@ pub use handoff::{
 pub use library::LibraryLink;
 pub use paint::{
     BlendMode, Color, ColorStop, Effect, EffectKind, GradientKind, ImageFilters, ImagePaint,
-    ImageScaleMode, Paint, PaintKind,
+    ImageScaleMode, Paint, PaintKind, PatternAlign, PatternLayout, PatternPaint,
 };
 pub use prototype::{Action, FlowStart, Interaction, OverlaySettings};
 pub use text::{Baseline, Decoration, Glyph, StyleRun, TextContent, TextLayout, TextStyle};
@@ -494,6 +494,8 @@ pub struct Props {
     pub corner_radius: Option<f32>,
     pub corner_radii: Option<CornerRadii>,
     pub corner_smoothing: Option<f32>,
+    /// Ellipse start angle, end angle (radians), and inner radius ratio.
+    pub arc_data: Option<[f32; 3]>,
     /// `frameMaskDisabled`: frames clip their content unless this is set.
     pub clip_disabled: Option<bool>,
     pub background_color: Option<Color>,
@@ -597,7 +599,7 @@ impl Props {
             mask_type, fills, strokes, stroke_weight, stroke_sides, stroke_align, stroke_cap,
             stroke_join,
             dash_pattern, fill_geometry, stroke_geometry, effects, corner_radius, corner_radii,
-            corner_smoothing, clip_disabled, background_color, internal_only, text_content,
+            corner_smoothing, arc_data, clip_disabled, background_color, internal_only, text_content,
             text_layout, text_style,
             symbol, derived, swapped_symbol, prop_assignments, prop_refs, prop_defs,
             override_key, auto_layout, layout_child, export_settings, boolean_operation, vector_data, constraints,
@@ -684,6 +686,21 @@ impl Props {
     /// Whether any paint is visible.
     pub fn has_visible_fills(&self) -> bool {
         self.fills().iter().any(Paint::is_visible)
+    }
+
+    /// Figma ignores stored shadow spread on open arcs and arbitrary paths.
+    /// Containers support it only when their filled shape clips the contents.
+    pub fn supports_shadow_spread(&self) -> bool {
+        match self.node_type() {
+            NodeType::Rectangle | NodeType::RoundedRectangle => true,
+            NodeType::Ellipse => self.arc_data.is_none_or(|[start, end, inner]| {
+                inner == 0.0 && (end - start).abs() >= std::f32::consts::TAU - 1e-5
+            }),
+            NodeType::Frame | NodeType::Symbol | NodeType::Instance => {
+                self.clips_content() && self.has_visible_fills()
+            }
+            _ => false,
+        }
     }
 
     /// The library this node is a copy of an asset from.

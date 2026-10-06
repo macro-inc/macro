@@ -1,5 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import type { ProjectSection } from '../core/project';
 
 export function ProjectDescriptionSkeleton() {
@@ -30,12 +30,15 @@ export function ProjectsSidebarSkeleton() {
 }
 
 /** Matches the overview's content width, insets, and wrapping property pills. */
-export function ProjectContentSkeleton(props: { section: ProjectSection }) {
+export function ProjectContentSkeleton(props: {
+  section: ProjectSection;
+  navigation?: JSX.Element;
+}) {
   return (
     <ListSkeleton.Root label="Loading project" class="h-full overflow-y-auto">
       <Show
         when={props.section === 'overview'}
-        fallback={<ProjectTasksSkeleton />}
+        fallback={<ProjectTasksSkeleton navigation={props.navigation} />}
       >
         <div class="px-6 pb-8 pt-12 touch:pt-6">
           <div class="mx-auto max-w-3xl">
@@ -69,12 +72,13 @@ export function ProjectContentSkeleton(props: { section: ProjectSection }) {
   );
 }
 
-function ProjectTasksSkeleton() {
+function ProjectTasksSkeleton(props: { navigation?: JSX.Element }) {
   return (
-    <div class="space-y-6 p-3 touch:px-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <ListSkeleton.Bar class="h-10 w-96 max-w-full" />
-        <div class="flex gap-2">
+    <div class="space-y-6 px-4 py-2">
+      <div class="flex h-8 items-center gap-3 overflow-x-auto scrollbar-hidden">
+        {props.navigation}
+        <ListSkeleton.Bar class="size-8 shrink-0 rounded-full" />
+        <div class="ml-auto flex shrink-0 gap-2">
           <ListSkeleton.Bar class="h-8 w-32" />
           <ListSkeleton.Bar class="h-8 w-24" />
         </div>

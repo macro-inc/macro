@@ -1,5 +1,6 @@
 /// Current authorization for agent session streams.
 pub mod audience;
+pub mod coding_agents;
 pub mod connection;
 /// Authorization of user and runtime session controls.
 pub mod control;
@@ -34,3 +35,6 @@ pub mod working_branch;
 
 /// Recovery of sessions abandoned by crashed replicas.
 pub mod recovery;
+
+/// Warm session promotion and expiry.
+pub mod warm;

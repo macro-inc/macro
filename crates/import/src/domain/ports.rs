@@ -2,9 +2,11 @@
 
 use super::models::{
     ImportEntity, ImportRun, ImportSource, ImportSourceBinding, ImportStatus, ImportTargetKey,
-    ImportTargetKind, ImportTargetReservation, Initiator, RunStatus, SlackWorkspaceId,
+    ImportTargetKind, ImportTargetReservation, Initiator, RunStatus, SlackConversationId,
+    SlackConversationPage, SlackMemberPage, SlackUserPage, SlackWorkspaceId,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -14,6 +16,9 @@ pub enum ImportError {
     /// AI work was refused or usage validation is temporarily unavailable.
     #[error(transparent)]
     Admission(#[from] ai_billing::AiAdmissionError),
+    /// This source does not support user-triggered discovery.
+    #[error("manual discovery is not supported for {source}", source = .0.as_ref())]
+    UnsupportedDiscovery(ImportSource),
     /// Database failure.
     #[error("database error: {0}")]
     Db(rootcause::Report),
@@ -39,6 +44,67 @@ pub enum ImportError {
 
 /// Result alias for import operations.
 pub type Result<T> = std::result::Result<T, ImportError>;
+
+/// Errors reading a live Slack workspace.
+#[derive(Debug, Error)]
+pub enum SlackSourceError {
+    /// The user has no Slack connector.
+    #[error("Slack is not connected")]
+    NotConnected,
+    /// The connector lacks a required capability.
+    #[error("Slack connector capability unavailable: {0}")]
+    ToolsUnavailable(&'static str),
+    /// Slack temporarily refused reads due to rate limiting.
+    #[error("Slack rate limit exceeded")]
+    RateLimited {
+        /// Provider-supplied delay before retrying, when available.
+        retry_after: Option<Duration>,
+    },
+    /// The connection lacks a required Slack permission scope.
+    #[error("missing Slack scope: {0}")]
+    MissingScope(String),
+    /// Any other source failure.
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+/// Opens live Slack workspace sessions for import discovery and membership reads.
+pub trait SlackWorkspaceSource: Send + Sync + 'static {
+    /// Workspace reader scoped to one gather or one import batch.
+    type Session: SlackWorkspaceSession;
+
+    /// Open a session scoped to one gather or one import batch.
+    /// Returns [`SlackSourceError::NotConnected`] when the user has no Slack
+    /// connector, or [`SlackSourceError::ToolsUnavailable`] when the connector
+    /// lacks a needed capability.
+    fn open(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = std::result::Result<Self::Session, SlackSourceError>> + Send;
+}
+
+/// Paginated workspace reads scoped to one gather or one import batch.
+/// Pass `None` to read the first page, then the returned continuation cursor.
+pub trait SlackWorkspaceSession: Send + Sync {
+    /// List conversations visible to the connected user.
+    fn list_conversations(
+        &self,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackConversationPage, SlackSourceError>> + Send;
+
+    /// List the members of one Slack conversation.
+    fn conversation_members(
+        &self,
+        conversation: &SlackConversationId,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackMemberPage, SlackSourceError>> + Send;
+
+    /// List the workspace user directory.
+    fn list_users(
+        &self,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<SlackUserPage, SlackSourceError>> + Send;
+}
 
 /// Persistence for the import ledger and gather runs.
 ///
@@ -188,6 +254,13 @@ pub trait ImportRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
 
+    /// IDs of the team's members. Macro user IDs encode emails, so this is
+    /// the roster the import domain matches Slack emails against.
+    fn team_members(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
+
     /// All gather runs for the user.
     fn list_runs(
         &self,
@@ -204,6 +277,16 @@ pub trait ImportRepo: Send + Sync + 'static {
         source: ImportSource,
         from: &[RunStatus],
         auto_import: bool,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// CAS a run to `running` with `auto_import = false`. Wins when no run
+    /// exists or the existing status is in `from`. Unlike `start_run`, a
+    /// successful claim always clears `auto_import`.
+    fn start_manual_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        from: &[RunStatus],
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// CAS the `running` run for `source` to `to` (ready/failed), recording

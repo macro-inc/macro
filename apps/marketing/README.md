@@ -100,8 +100,16 @@ bun run build
 
 Install workspace dependencies from the repository root first. The public dev
 server runs independently of the authenticated app. It serves the homepage,
-public feature and blog routes, and `/start`; `/onboarding-preview.html` remains
-a development review entry. It does not host the authenticated `/app/*` routes.
+public feature and blog routes, `/download`, and `/start`;
+`/onboarding-preview.html` remains a development review entry. It does not host
+the authenticated `/app/*` routes.
+
+`/download` has a single “Download for macOS” button for Apple silicon Macs.
+It resolves the current DMG from the latest GitHub release in the browser,
+with the latest release page as a fallback, and shows the current release tag.
+The page hides the header's Open app action, has no web-app download option,
+and has no header/footer navigation entry.
+Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
 Before the first prerender build, install Chromium with
 `bunx playwright install chromium --only-shell` (add `--with-deps` on Linux CI).

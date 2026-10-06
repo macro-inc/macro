@@ -23,16 +23,34 @@ export class MemorySyncServer {
   private readonly awareness = new EphemeralStore(10_000);
   private readonly clients = new Set<(event: SyncSourceEvent) => void>();
   private initialized = false;
+  private file = new Uint8Array();
+  /** While `false`, people opening the design cannot reach the server. */
+  reachable = true;
 
   constructor() {
     this.doc.setPeerId(99n);
   }
 
+  /** The stored `.fig` (document storage, which people open), a copy. */
+  stored(): ArrayBuffer {
+    return this.file.slice().buffer;
+  }
+
+  store(bytes: Uint8Array): void {
+    this.file = bytes.slice();
+  }
+
+  private ensureReachable() {
+    if (!this.reachable) throw new Error('The sync service is unreachable.');
+  }
+
   async exists(): Promise<boolean> {
+    this.ensureReachable();
     return this.initialized;
   }
 
   async initialize(snapshot: Uint8Array): Promise<void> {
+    this.ensureReachable();
     if (this.initialized) throw new Error('already initialized');
     this.doc.import(snapshot);
     this.initialized = true;

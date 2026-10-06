@@ -107,12 +107,12 @@ test('styles a range of characters', async ({ page }) => {
   // Select "bold" and make it bold, underlined.
   for (let k = 0; k < 4; k++) await page.keyboard.press('Shift+ArrowLeft');
   await expect.poll(() => selection(page)).toEqual([6, 10]);
-  await page.keyboard.press('Control+b');
+  await page.keyboard.press('ControlOrMeta+b');
   await expect
     .poll(async () => (await textInfo(page))?.runs.map((r) => r.fontStyle))
     .toEqual(['Bold']);
-  await expect(page.getByTestId('fig-font-weight')).toHaveValue('700');
-  await page.keyboard.press('Control+u');
+  await expect(page.getByTestId('fig-font-weight')).toHaveText('Bold');
+  await page.keyboard.press('ControlOrMeta+u');
   await expect
     .poll(async () => (await textInfo(page))?.runs[0]?.decoration)
     .toBe('UNDERLINE');
@@ -120,8 +120,8 @@ test('styles a range of characters', async ({ page }) => {
   expect(info?.styleIds).toEqual([0, 0, 0, 0, 0, 0, 1, 1, 1, 1]);
   expect(info?.fontStyle).toBe('Regular');
   // Over both, the Type section shows the weight as mixed.
-  await page.keyboard.press('Control+a');
-  await expect(page.getByTestId('fig-font-weight')).toHaveValue('mixed');
+  await page.keyboard.press('ControlOrMeta+a');
+  await expect(page.getByTestId('fig-font-weight')).toHaveText('Mixed');
   // A size from the panel applies to the selected characters only.
   await page.keyboard.press('Shift+ArrowLeft');
   await page.keyboard.press('Home');
@@ -148,7 +148,7 @@ test('styles a range of characters', async ({ page }) => {
 test('bolds what is typed next at a caret', async ({ page }) => {
   await openNew(page);
   await typeNewText(page, 'a');
-  await page.keyboard.press('Control+b');
+  await page.keyboard.press('ControlOrMeta+b');
   await page.keyboard.type('b');
   await expect
     .poll(async () => (await textInfo(page))?.styleIds)
@@ -162,10 +162,10 @@ test('undoes typing in bursts and keeps editing', async ({ page }) => {
   await page.keyboard.type(' two');
   const editor = page.getByTestId('fig-text-editor');
   await expect(editor).toHaveValue('one two');
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect(editor).toHaveValue('one');
   await expect(editor).toBeFocused();
-  await page.keyboard.press('Control+Shift+z');
+  await page.keyboard.press('ControlOrMeta+Shift+z');
   await expect(editor).toHaveValue('one two');
 });
 
@@ -182,9 +182,15 @@ test('switches fonts, loading them first', async ({ page }) => {
     'data-value',
     'Roboto Mono'
   );
-  const requests = await page.evaluate(() => window.figFixture.fontRequests());
-  expect(requests.some((r) => r.includes('family=Roboto+Mono'))).toBe(true);
-  expect(requests.some((r) => r.endsWith('InterVariable.ttf'))).toBe(true);
+  // The panel shows the family as soon as it is picked; its files load after.
+  const requested = async (match: (r: string) => boolean) =>
+    (await page.evaluate(() => window.figFixture.fontRequests())).some(match);
+  await expect
+    .poll(() => requested((r) => r.includes('family=Roboto+Mono')))
+    .toBe(true);
+  await expect
+    .poll(() => requested((r) => r.endsWith('InterVariable.ttf')))
+    .toBe(true);
   await expect
     .poll(async () => (await textInfo(page))?.fontStatus)
     .toBe('AVAILABLE');

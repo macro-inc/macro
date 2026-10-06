@@ -91,32 +91,131 @@ async fn reads_mint_only_view_access_for_the_delegated_actor() {
     assert_eq!(read.content, "Word document with 3 blocks.");
 }
 
-#[tokio::test]
-async fn edits_mint_edit_access_and_forward_the_operations() {
+/// A docx lookup that knows the requesting user by `name`.
+fn named(name: Option<&'static str>) -> MockWordDocumentLookup {
+    let mut lookup = lookup("docx");
+    lookup
+        .expect_display_name()
+        .withf(|id| id == "macro|words@macro.com")
+        .returning(move |_| Box::pin(async move { Ok(name.map(str::to_owned)) }));
+    lookup
+}
+
+/// A worker expecting one edit, checking its tracking and author.
+fn editing_worker(track: Option<bool>, expected_author: &'static str) -> MockEditingWorkerService {
     let mut worker = MockEditingWorkerService::new();
     worker
         .expect_word_document()
         .times(1)
-        .returning(|_, token, request| {
+        .returning(move |_, token, request| {
             assert_eq!(claims(token)["access_level"], "edit");
-            let WordDocumentRequest::Edit { operations } = request else {
+            let WordDocumentRequest::Edit {
+                operations,
+                track_changes,
+                author,
+            } = request
+            else {
                 panic!("expected an edit");
             };
             assert_eq!(operations.len(), 2);
+            assert_eq!(*track_changes, track);
+            assert_eq!(author, expected_author);
             Box::pin(async { Ok(response("Applied 2 operations.")) })
         });
-    let service =
-        WordDocumentService::new(Arc::new(lookup("docx")), Arc::new(worker), SECRET.into());
+    worker
+}
+
+#[tokio::test]
+async fn edits_mint_edit_access_and_are_attributed_to_the_user() {
+    let service = WordDocumentService::new(
+        Arc::new(named(Some("Jacob Beckerman"))),
+        Arc::new(editing_worker(Some(true), "Jacob Beckerman")),
+        SECRET.into(),
+    );
     let edited = service
         .edit(
             receipt(AccessLevel::Edit),
             &user(),
             "macro|ai@macro.com",
             vec![rename("a"), rename("b")],
+            WordEditOptions {
+                track_changes: Some(true),
+                author: None,
+            },
         )
         .await
         .unwrap();
     assert_eq!(edited.content, "Applied 2 operations.");
+}
+
+#[tokio::test]
+async fn a_user_without_a_name_is_named_by_their_email() {
+    let service = WordDocumentService::new(
+        Arc::new(named(None)),
+        Arc::new(editing_worker(None, "words")),
+        SECRET.into(),
+    );
+    service
+        .edit(
+            receipt(AccessLevel::Edit),
+            &user(),
+            "macro|ai@macro.com",
+            vec![rename("a"), rename("b")],
+            WordEditOptions::default(),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn an_explicit_author_replaces_the_user() {
+    let mut lookup = lookup("docx");
+    lookup.expect_display_name().never();
+    let service = WordDocumentService::new(
+        Arc::new(lookup),
+        Arc::new(editing_worker(Some(false), "Acme Legal")),
+        SECRET.into(),
+    );
+    service
+        .edit(
+            receipt(AccessLevel::Edit),
+            &user(),
+            "macro|ai@macro.com",
+            vec![rename("a"), rename("b")],
+            WordEditOptions {
+                track_changes: Some(false),
+                author: Some("  Acme Legal ".into()),
+            },
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn authors_are_one_short_line() {
+    for author in ["A\nB".to_owned(), "x".repeat(MAX_AUTHOR_LENGTH + 1)] {
+        let mut worker = MockEditingWorkerService::new();
+        worker.expect_word_document().never();
+        let service = WordDocumentService::new(
+            Arc::new(MockWordDocumentLookup::new()),
+            Arc::new(worker),
+            SECRET.into(),
+        );
+        let error = service
+            .edit(
+                receipt(AccessLevel::Edit),
+                &user(),
+                "macro|ai@macro.com",
+                vec![rename("a")],
+                WordEditOptions {
+                    track_changes: None,
+                    author: Some(author),
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("author must be one line"));
+    }
 }
 
 #[tokio::test]
@@ -156,6 +255,7 @@ async fn edits_need_between_one_and_fifty_operations() {
                 &user(),
                 "macro|ai@macro.com",
                 operations,
+                WordEditOptions::default(),
             )
             .await
             .unwrap_err();
@@ -182,7 +282,15 @@ fn operations_use_the_worker_wire_format() {
                 underline: None,
                 strikethrough: None,
             },
+            WordDocumentOperation::AddComment {
+                paragraph: "p1".into(),
+                find: None,
+                occurrence: None,
+                text: "Why?".into(),
+            },
         ],
+        track_changes: Some(true),
+        author: "Jacob Beckerman".into(),
     };
     assert_eq!(
         serde_json::to_value(&request).unwrap(),
@@ -191,7 +299,10 @@ fn operations_use_the_worker_wire_format() {
             "operations": [
                 { "type": "insertParagraph", "after": "p1", "text": "New" },
                 { "type": "formatText", "paragraph": "p1", "bold": true },
+                { "type": "addComment", "paragraph": "p1", "text": "Why?" },
             ],
+            "trackChanges": true,
+            "author": "Jacob Beckerman",
         })
     );
     assert_eq!(

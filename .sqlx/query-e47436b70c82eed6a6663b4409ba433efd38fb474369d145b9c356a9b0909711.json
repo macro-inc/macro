@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ea.access_level::text\n        FROM database_rows r\n        JOIN database_tables t ON t.id = r.table_id\n        JOIN database_entities d ON d.database_id = t.database_id\n        JOIN entity_access ea ON ea.entity_id = d.database_id\n        WHERE r.id = $1\n        AND ea.entity_type = 'database'\n        AND ea.source_id = ANY($2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e47436b70c82eed6a6663b4409ba433efd38fb474369d145b9c356a9b0909711"
+}

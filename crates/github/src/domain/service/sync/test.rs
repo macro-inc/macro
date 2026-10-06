@@ -139,6 +139,12 @@ impl DocumentService for StubDocumentService {
     ) -> Result<DocumentBasic, DocumentError> {
         unimplemented!()
     }
+    async fn internal_get_user_display_name(
+        &self,
+        _user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
+        unimplemented!()
+    }
     async fn get_document_by_team_slug(
         &self,
         _team_receipt: EntityAccessReceipt<MemberTeamRole>,
