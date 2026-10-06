@@ -66,6 +66,8 @@ export type PendingConversion = {
 };
 
 export type BuilderOptions = {
+  /** Whether the Build tab is visible; hidden editors publish no selection. */
+  active?: Accessor<boolean>;
   /** The form as the server last answered it. */
   detail: Accessor<FormDetail | undefined>;
   refetch: () => Promise<void>;
@@ -193,7 +195,7 @@ export function createBuilder(options: BuilderOptions) {
 
   const selection = createMemo(
     (): FormSelection | undefined => {
-      if (!present()) return undefined;
+      if (!present() || options.active?.() === false) return undefined;
       const questionId = selectedId();
       const sectionId = targetSectionId();
       if (questionId) {
@@ -427,7 +429,11 @@ export function createBuilder(options: BuilderOptions) {
       return result;
     };
     // An idle queue sends at once; otherwise after the write before it.
-    const run = idle ? execute() : queueTail.then(execute);
+    async function executeAfter(previous: Promise<unknown>) {
+      await previous;
+      return execute();
+    }
+    const run = idle ? execute() : executeAfter(queueTail);
     queueTail = run;
     return run;
   }
@@ -477,7 +483,16 @@ export function createBuilder(options: BuilderOptions) {
   function withQuestionsSection(current: FormLayout) {
     if (current.sections.some((section) => section.kind === 'questions'))
       return current;
-    return { sections: [...current.sections, newSection('questions')] };
+    const added = addLayoutSection(
+      current,
+      newSection('questions'),
+      current.sections.length
+    );
+    if (added.isErr()) {
+      options.notify.failure(refusalMessage(added.error));
+      return;
+    }
+    return added.value;
   }
 
   /**
@@ -498,6 +513,7 @@ export function createBuilder(options: BuilderOptions) {
     const columnId = options.mintId();
     const questionId = options.mintId();
     const prepared = withQuestionsSection(current);
+    if (!prepared) return;
     const placement = input.placement ?? defaultPlacement(prepared);
     if (!placement) return;
     const added = addLayoutQuestion(
@@ -656,6 +672,7 @@ export function createBuilder(options: BuilderOptions) {
       const current = layout();
       if (!current) return;
       const prepared = withQuestionsSection(current);
+      if (!prepared) return;
       const target = placement ?? defaultPlacement(prepared);
       if (!target) return;
       const questionId = options.mintId();

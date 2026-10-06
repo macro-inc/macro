@@ -34,9 +34,9 @@ export function responseTiles(
   const tiles: ResponseTile[] = [
     { label: 'Responses', value: count(counts.submitted) },
     {
-      label: 'Stopped by a screener',
+      label: 'Stopped submissions',
       value: count(counts.stopped),
-      hint: byGate.length > 0 ? byGate.join(' · ') : undefined,
+      hint: ['Signed-in respondents only', ...byGate].join(' · '),
     },
     {
       label: 'Rows in the table',

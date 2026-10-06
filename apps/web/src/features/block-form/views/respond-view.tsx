@@ -115,7 +115,12 @@ export function RespondView(props: {
 
   /** From the update notice: read the form again, then back to the answers. */
   async function retry() {
-    const read = await props.refetch().catch(() => false);
+    let read: boolean;
+    try {
+      read = await props.refetch();
+    } catch {
+      read = false;
+    }
     if (!read) {
       context.notify.failure(
         'The form couldn’t be read again. Try again in a moment.'
@@ -197,9 +202,7 @@ export function RespondView(props: {
               renderEntityLabel={context.ui.renderEntityLabel}
               onEdit={respond.restartPreview}
               notice={
-                <p class="text-sm text-ink-muted">
-                  Preview complete. No response was saved.
-                </p>
+                <p class="text-sm text-ink-muted">No response was saved.</p>
               }
               footer={
                 <Button
@@ -260,6 +263,33 @@ export function RespondView(props: {
           })()}
         >
           {(closed) => <ClosedNotice reason={closed().reason} />}
+        </Match>
+        <Match
+          when={(() => {
+            const view = respond.view();
+            return view.kind === 'response-unavailable' ? view : undefined;
+          })()}
+        >
+          {(unavailable) => (
+            <div
+              role="alert"
+              class="flex flex-col gap-3 rounded-xl border border-edge bg-surface p-5"
+            >
+              <p class="font-medium text-ink">You’ve already responded</p>
+              <p class="text-sm text-ink-muted">
+                Your saved response couldn’t be loaded.
+              </p>
+              <Button
+                variant="outline"
+                class="self-start"
+                disabled={unavailable().retrying}
+                aria-busy={unavailable().retrying}
+                onClick={() => void respond.retryResponse()}
+              >
+                Try again
+              </Button>
+            </div>
+          )}
         </Match>
         <Match when={respond.view().kind === 'updating'}>
           <div
@@ -379,7 +409,7 @@ export function RespondView(props: {
             <form
               class="flex flex-col gap-3"
               noValidate
-              aria-label={answering().section.title || form().name}
+              aria-label={answering().section?.title || form().name}
               onSubmit={(event) => {
                 event.preventDefault();
                 if (answering().isLast) {
@@ -397,10 +427,10 @@ export function RespondView(props: {
                 />
               </Show>
               <SectionHeading
-                title={answering().section.title}
-                description={answering().section.description}
+                title={answering().section?.title ?? ''}
+                description={answering().section?.description ?? ''}
               />
-              <For each={answering().section.questions}>
+              <For each={answering().section?.questions}>
                 {(question) => {
                   const column = () => respond.columns().get(question.columnId);
                   return (
@@ -483,7 +513,7 @@ export function RespondView(props: {
               </For>
               <Show
                 when={
-                  answering().section.questions.some(
+                  answering().section?.questions.some(
                     (question) => question.required
                   ) || editNote()
                 }
@@ -494,7 +524,7 @@ export function RespondView(props: {
                   class="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-1 text-xs text-ink-muted"
                 >
                   <Show
-                    when={answering().section.questions.some(
+                    when={answering().section?.questions.some(
                       (question) => question.required
                     )}
                   >

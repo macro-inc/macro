@@ -1,3 +1,5 @@
+import { ThrownResultError } from '@core/util/result';
+import type { FormsError } from '@service-storage/forms';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFormDetailSource } from './form-sources';
@@ -9,10 +11,20 @@ const sync = vi.hoisted(() => ({
   access: 'view',
   formReads: 0,
   databaseName: (): string => 'Offsite',
+  queryError: (): unknown => undefined,
 }));
 vi.mock('@queries/storage/forms', () => ({
   useFormDetailQuery: () => ({
-    isSuccess: true,
+    get isSuccess() {
+      return sync.queryError() === undefined;
+    },
+    get isError() {
+      return sync.queryError() !== undefined;
+    },
+    isPending: false,
+    get error() {
+      return sync.queryError();
+    },
     data: {
       form: {
         id: 'form-1',
@@ -73,9 +85,47 @@ beforeEach(() => {
   sync.responsesFollowed = [];
   sync.databasesRead = [];
   sync.formReads = 0;
+  sync.queryError = () => undefined;
 });
 
 describe('createFormDetailSource', () => {
+  it('keeps cached detail through a temporary refresh failure and recovery', () => {
+    const [failure, setFailure] = createSignal<unknown>();
+    sync.queryError = failure;
+    sync.access = 'owner';
+    createRoot((dispose) => {
+      const source = createFormDetailSource(() => 'form-1');
+      expect(source.detail()?.form.name).toBe('Lunch?');
+      setFailure(new Error('Connection lost'));
+      expect(source.detail()?.form.name).toBe('Lunch?');
+      expect(source.failure()?.kind).toBe('failed');
+      setFailure(undefined);
+      expect(source.detail()?.form.name).toBe('Lunch?');
+      expect(source.failure()).toBeUndefined();
+      dispose();
+    });
+  });
+
+  it.each(['FORBIDDEN', 'UNAUTHORIZED', 'NOT_FOUND'] as const)(
+    'removes cached detail when a refresh revokes access with %s',
+    (code) => {
+      const [failure, setFailure] = createSignal<unknown>();
+      sync.queryError = failure;
+      sync.access = 'owner';
+      createRoot((dispose) => {
+        const source = createFormDetailSource(() => 'form-1');
+        expect(source.detail()).toBeDefined();
+        const error: FormsError = {
+          code,
+          message: 'Access denied',
+          refusal: null,
+        };
+        setFailure(new ThrownResultError([error]));
+        expect(source.detail()).toBeUndefined();
+        dispose();
+      });
+    }
+  );
   it('follows the form’s database once, for editors only; respondents never track it', () => {
     sync.access = 'view';
     createRoot((dispose) => {

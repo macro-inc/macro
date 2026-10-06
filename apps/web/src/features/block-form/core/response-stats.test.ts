@@ -22,9 +22,9 @@ it('reads the ledger, the table and the channel reach as tiles', () => {
   ).toEqual([
     { label: 'Responses', value: '19' },
     {
-      label: 'Stopped by a screener',
+      label: 'Stopped submissions',
       value: '3',
-      hint: 'Eligibility 2 · Travel 1',
+      hint: 'Signed-in respondents only · Eligibility 2 · Travel 1',
     },
     {
       label: 'Rows in the table',
@@ -45,7 +45,11 @@ it('reads the ledger, the table and the channel reach as tiles', () => {
     )
   ).toEqual([
     { label: 'Responses', value: '2' },
-    { label: 'Stopped by a screener', value: '0' },
+    {
+      label: 'Stopped submissions',
+      value: '0',
+      hint: 'Signed-in respondents only',
+    },
     { label: 'Rows in the table', value: '2' },
   ]);
 });

@@ -5,6 +5,7 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import {
@@ -146,6 +147,60 @@ function mount(
 }
 
 describe('BuilderView', () => {
+  it('keeps keyboard focus in the outline when another editor changes a section', () => {
+    const { shared } = mount();
+    const outline = screen.getByRole('navigation', { name: 'Form outline' });
+    const question = within(outline).getByRole('button', { name: 'Team' });
+    question.focus();
+
+    shared.remote((layout) => ({
+      ...layout,
+      sections: layout.sections.map((section) => ({
+        ...section,
+        title: 'Your team',
+      })),
+    }));
+
+    expect(document.activeElement).toBe(question);
+    expect(
+      within(outline).getByRole('button', { name: 'Your team' })
+    ).toBeTruthy();
+    fireEvent.click(question);
+    expect(
+      within(screen.getByRole('group', { name: 'Question 2: Team' })).getByRole(
+        'textbox',
+        {
+          name: 'Question',
+        }
+      )
+    ).toBeTruthy();
+  });
+
+  it('selects an outline question on the first click while another question name saves on blur', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    mount();
+    await user.click(screen.getByRole('group', { name: 'Question 1: Name' }));
+    const title = screen.getByRole('textbox', {
+      name: 'Question',
+    });
+    await user.clear(title);
+    await user.type(title, 'Full name');
+    const outline = screen.getByRole('navigation', { name: 'Form outline' });
+    await user.click(within(outline).getByRole('button', { name: 'Team' }));
+
+    const question = screen.getByRole('group', { name: 'Question 2: Team' });
+    expect(
+      within(question).getByRole<HTMLInputElement>('textbox', {
+        name: 'Question',
+      }).value
+    ).toBe('Team');
+    expect(
+      within(outline)
+        .getByRole('button', { name: 'Team' })
+        .getAttribute('aria-current')
+    ).toBe('true');
+  });
+
   it('shows required state below a question and edits it from the footer', async () => {
     const { shared } = mount();
     const question = screen.getByRole('group', { name: 'Question 1: Name' });

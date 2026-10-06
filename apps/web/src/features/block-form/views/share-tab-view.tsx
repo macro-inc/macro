@@ -1,9 +1,11 @@
 import UsersThree from '@phosphor/users-three.svg';
 import { Button, ToggleSwitch } from '@ui';
+import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { AudiencePanel } from '../components/share/audience-panel';
 import {
   type FormMetadataPatch,
+  type FormWriteFailure,
   useFormContext,
 } from '../context/form-context';
 import {
@@ -12,6 +14,7 @@ import {
 } from '../core/date-answers';
 import type { FormDetail } from '../core/form-model';
 import { createAudienceChange } from '../primitives/create-audience-change';
+import type { Preview } from '../primitives/create-preview';
 
 /**
  * The Share tab (RFC 02 §2, §6): who can respond, the respond link, whether
@@ -21,6 +24,7 @@ import { createAudienceChange } from '../primitives/create-audience-change';
 export function ShareTabView(props: {
   detail: FormDetail;
   respondLink: string;
+  trackWrites: Preview['trackWrites'];
   onOpenShare: () => void;
   /** The form went to the trash; the host closes it. */
   onTrashed: () => void;
@@ -30,6 +34,18 @@ export function ShareTabView(props: {
   const isOwner = () => props.detail.access === 'owner';
   const canEdit = () => props.detail.access !== 'view';
   const [pending, setPending] = createSignal(false);
+  const writes = new Set<ResultAsync<void, FormWriteFailure>>();
+  props.trackWrites(() =>
+    ResultAsync.combine([...writes]).map(() => undefined)
+  );
+
+  function updateMetadata(formId: string, patch: FormMetadataPatch) {
+    const write = context.updateMetadata(formId, patch);
+    writes.add(write);
+    return write
+      .andTee(() => writes.delete(write))
+      .orTee(() => writes.delete(write));
+  }
 
   async function moveToTrash() {
     const confirmed = await context.confirm({
@@ -52,7 +68,7 @@ export function ShareTabView(props: {
 
   async function update(patch: FormMetadataPatch, what: string) {
     setPending(true);
-    const result = await context.updateMetadata(form().id, patch);
+    const result = await updateMetadata(form().id, patch);
     setPending(false);
     if (result.isErr())
       context.notify.failure(`${what} wasn’t saved: ${result.error.message}`);
@@ -60,7 +76,7 @@ export function ShareTabView(props: {
 
   const audience = createAudienceChange({
     detail: () => props.detail,
-    updateMetadata: context.updateMetadata,
+    updateMetadata,
     notify: context.notify,
   });
 

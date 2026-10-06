@@ -1,5 +1,6 @@
 /** Adapters from the shared form and database queries to the feature's sources. */
 import { ThrownResultError } from '@core/util/result';
+import { queryReadyGate } from '@queries/gate';
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import {
   editMyResponse,
@@ -117,9 +118,14 @@ export function createFormDetailSource(
   formId: Accessor<string>
 ): FormDetailSource {
   const query = useFormDetailQuery(formId);
-  const detail = createMemo(() =>
-    query.isSuccess ? toFormDetail(query.data) : undefined
+  const failure = createMemo(() =>
+    query.isError ? loadFailureOf(query.error) : undefined
   );
+  const detail = createMemo(() => {
+    const problem = failure();
+    if (problem && problem.kind !== 'failed') return undefined;
+    return queryReadyGate(query) ? toFormDetail(query.data) : undefined;
+  });
   // Once per mounted form: everyone hears form pings; only editors track the
   // database, whose events carry other viewers' positions.
   const databaseId = () => detail()?.form.databaseId;
@@ -146,7 +152,7 @@ export function createFormDetailSource(
   );
   return {
     detail,
-    failure: () => (query.isError ? loadFailureOf(query.error) : undefined),
+    failure,
     refetch: async () => {
       const read = await query.refetch();
       return !read.isError;

@@ -6,6 +6,7 @@ import Rows from '@phosphor/rows.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
 import Warning from '@phosphor/warning.svg';
 import { makeEventListener } from '@solid-primitives/event-listener';
+import { Key } from '@solid-primitives/keyed';
 import { Button, Dialog, Dropdown, Panel } from '@ui';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import {
@@ -118,6 +119,7 @@ type BuilderViewProps = {
   detail: FormDetail;
   /** The layout every editor of the form edits at once. */
   collaboration: FormLayoutCollaboration;
+  active?: boolean;
   /** Registers writes a preview waits for, while the builder is open. */
   trackWrites: TrackWrites;
   onOpenDatabase: (databaseId: string) => void;
@@ -142,6 +144,7 @@ export function BuilderView(props: BuilderViewProps) {
     context.columns(props.detail.form.databaseId, props.detail.form.tableId)
   );
   const builder = createBuilder({
+    active: () => props.active ?? true,
     detail: props.source.detail,
     // Column facts come from both reads, so the builder's read-back takes both.
     refetch: async () => {
@@ -230,13 +233,15 @@ function BuilderCanvas(
   );
   // The form's name and description: a preview waits for them too.
   const metadataWrites = new Set<Promise<boolean>>();
-  const writeMetadata = (written: PromiseLike<boolean>) => {
+  async function writeMetadata(written: PromiseLike<boolean>) {
     const pending = Promise.resolve(written);
     metadataWrites.add(pending);
-    const forget = () => metadataWrites.delete(pending);
-    void pending.then(forget, forget);
-    return pending;
-  };
+    try {
+      return await pending;
+    } finally {
+      metadataWrites.delete(pending);
+    }
+  }
   props.trackWrites(() =>
     ResultAsync.fromSafePromise(Promise.all(metadataWrites)).andThen((saved) =>
       saved.every(Boolean)
@@ -608,23 +613,23 @@ function BuilderCanvas(
         <BuilderSidebar
           outline={
             <ul class="flex flex-col gap-2">
-              <For each={layout().sections}>
+              <Key each={layout().sections} by="id">
                 {(section) => (
                   <OutlineSection
-                    name={sectionName(layout(), section.id)}
-                    kind={section.kind}
-                    number={sectionPosition(layout(), section.id)}
-                    selected={builder.targetSectionId() === section.id}
+                    name={sectionName(layout(), section().id)}
+                    kind={section().kind}
+                    number={sectionPosition(layout(), section().id)}
+                    selected={builder.targetSectionId() === section().id}
                     onSelectSection={() => {
-                      builder.focusSection(section.id);
+                      builder.focusSection(section().id);
                       viewport
-                        ?.querySelector(`[data-form-section="${section.id}"]`)
+                        ?.querySelector(`[data-form-section="${section().id}"]`)
                         ?.scrollIntoView({
                           block: 'start',
                           behavior: 'smooth',
                         });
                     }}
-                    questions={section.questions.map((question) => ({
+                    questions={section().questions.map((question) => ({
                       id: question.id,
                       title: columnTitle(question.columnId),
                       selected: builder.selectedId() === question.id,
@@ -640,7 +645,7 @@ function BuilderCanvas(
                     }}
                   />
                 )}
-              </For>
+              </Key>
             </ul>
           }
         />

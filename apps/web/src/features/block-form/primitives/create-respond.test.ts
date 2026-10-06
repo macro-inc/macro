@@ -752,6 +752,64 @@ describe('createRespond', () => {
     });
   });
 
+  it('offers a receipt retry when the server reports an existing response but reading it fails', async () => {
+    await createRoot(async (dispose) => {
+      const [mine, setMine] = createSignal<MyResponse>();
+      let reads = 0;
+      const submit = vi.fn(() =>
+        errAsync({
+          message: 'Already responded',
+          refusal: 'already-responded' as const,
+        })
+      );
+      const respond = createRespond({
+        detail: offsite,
+        mine,
+        signedIn: () => true,
+        submit,
+        editMine: () => errAsync({ message: 'unexpected edit' }),
+        refetch: async () => {},
+        mineFailed: () => true,
+        reloadMine: async () => {
+          reads += 1;
+          if (reads === 2)
+            setMine({
+              status: 'submitted',
+              submittedAt: '2026-09-30T10:00:00Z',
+              booking: null,
+              answers: [
+                {
+                  question: 'q-name',
+                  value: { type: 'text', value: 'Ada (phone)' },
+                },
+              ],
+            });
+        },
+        now,
+      });
+      respond.setAnswer('q-name', { type: 'text', value: 'Ada' });
+      respond.setAnswer('q-team', {
+        type: 'options',
+        value: [{ id: EMPLOYEE }],
+      });
+      respond.next();
+      respond.setAnswer('q-diet', { type: 'text', value: 'None' });
+      await respond.submit();
+      expect(respond.view()).toEqual({
+        kind: 'response-unavailable',
+        retrying: false,
+      });
+      await respond.retryResponse();
+      expect(reads).toBe(2);
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(respond.view()).toMatchObject({
+        kind: 'confirmation',
+        alreadyResponded: true,
+      });
+      dispose();
+    });
+  });
+
   describe('a booking step', () => {
     const INTRO_CALL = { profileId: 'profile-1', eventTypeId: 'intro-call' };
     const UNLOCKED = {
@@ -760,6 +818,90 @@ describe('createRespond', () => {
       description: 'Thirty minutes with the team.',
       target: INTRO_CALL,
     };
+
+    it('lets a booking-only form submit before revealing the server-approved destination', async () => {
+      await createRoot(async (dispose) => {
+        const detail = offsite();
+        detail.layout.sections = [
+          {
+            id: 'call',
+            title: 'Book a call',
+            description: '',
+            kind: 'booking',
+            gateRules: null,
+            gateMessage: '',
+            bookingTarget: null,
+            questions: [],
+          },
+        ];
+        const submitted: SubmittedAnswer[][] = [];
+        const respond = createRespond({
+          detail: () => detail,
+          mine: () => null,
+          signedIn: () => false,
+          submit: (answers) => {
+            submitted.push(answers);
+            return okAsync({
+              kind: 'submitted',
+              responseId: 'response-1',
+              booking: UNLOCKED,
+            });
+          },
+          editMine: () => errAsync({ message: 'unexpected edit' }),
+          mineFailed: () => false,
+          reloadMine: async () => {},
+          refetch: async () => {},
+          now,
+        });
+        expect(respond.view()).toMatchObject({
+          kind: 'answering',
+          isFirst: true,
+          isLast: true,
+          continuesToBooking: true,
+        });
+        expect(submitted).toEqual([]);
+        await respond.submit();
+        expect(submitted).toEqual([[]]);
+        expect(respond.view()).toEqual({
+          kind: 'booking',
+          booking: UNLOCKED,
+          preview: false,
+        });
+        dispose();
+      });
+    });
+
+    it('previews an empty form without writing a response', async () => {
+      await createRoot(async (dispose) => {
+        const detail = offsite();
+        detail.layout.sections = [];
+        const submit = vi.fn(() => errAsync({ message: 'unexpected submit' }));
+        const respond = createRespond({
+          detail: () => detail,
+          preview: true,
+          mine: () => null,
+          signedIn: () => true,
+          submit,
+          editMine: () => errAsync({ message: 'unexpected edit' }),
+          mineFailed: () => false,
+          reloadMine: async () => {},
+          refetch: async () => {},
+          now,
+        });
+        expect(respond.view()).toMatchObject({
+          kind: 'answering',
+          total: 0,
+          isLast: true,
+        });
+        await respond.submit();
+        expect(respond.view()).toEqual({
+          kind: 'preview-complete',
+          answers: {},
+        });
+        expect(submit).not.toHaveBeenCalled();
+        dispose();
+      });
+    });
 
     /** The offsite form ending in a booking step, as a respondent reads it. */
     function booked(target: typeof INTRO_CALL | null = null): FormDetail {

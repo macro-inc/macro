@@ -119,6 +119,26 @@ function EditorPanels(
   const context = useFormContext();
   const collaboration = context.createLayoutCollaboration(props.detail.form.id);
   props.preview.trackLayout(collaboration.flush);
+  // Authoring state and pending writes belong to the editor, across tab changes.
+  const builder = (
+    <BuilderView
+      source={props.source}
+      detail={props.detail}
+      collaboration={collaboration}
+      active={props.tab === 'build'}
+      trackWrites={props.preview.trackWrites}
+      onOpenDatabase={props.onOpenDatabase}
+    />
+  );
+  const sharing = (
+    <ShareTabView
+      detail={props.detail}
+      respondLink={props.respondLink}
+      trackWrites={props.preview.trackWrites}
+      onOpenShare={props.onOpenShare}
+      onTrashed={props.onTrashed}
+    />
+  );
   return (
     <>
       <EditorTabs
@@ -134,29 +154,14 @@ function EditorPanels(
         class="min-h-0 flex-1"
       >
         <Switch>
-          <Match when={props.tab === 'build'}>
-            <BuilderView
-              source={props.source}
-              detail={props.detail}
-              collaboration={collaboration}
-              trackWrites={props.preview.trackWrites}
-              onOpenDatabase={props.onOpenDatabase}
-            />
-          </Match>
+          <Match when={props.tab === 'build'}>{builder}</Match>
           <Match when={props.tab === 'responses'}>
             <ResponsesView
               detail={props.detail}
               onOpenDatabase={props.onOpenDatabase}
             />
           </Match>
-          <Match when={props.tab === 'share'}>
-            <ShareTabView
-              detail={props.detail}
-              respondLink={props.respondLink}
-              onOpenShare={props.onOpenShare}
-              onTrashed={props.onTrashed}
-            />
-          </Match>
+          <Match when={props.tab === 'share'}>{sharing}</Match>
         </Switch>
       </div>
     </>

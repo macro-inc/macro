@@ -31,13 +31,15 @@ import { formAvailability } from '../core/form-status';
 /** What the respondent sees. */
 export type RespondView =
   | { kind: 'loading' }
+  | { kind: 'response-unavailable'; retrying: boolean }
   | { kind: 'preview-complete'; answers: FormAnswers }
   | { kind: 'closed'; reason: 'closed' | 'deadline' | 'table-gone' }
   /** The form is being changed under the respondent: try again shortly. */
   | { kind: 'updating' }
   | {
       kind: 'answering';
-      section: FormSection;
+      /** Absent for a form that can be submitted without questions. */
+      section: FormSection | undefined;
       /** 1-based among questions sections. */
       position: number;
       total: number;
@@ -92,7 +94,7 @@ export type RespondOptions = {
 };
 
 type Phase =
-  | { kind: 'answering'; sectionId: string }
+  | { kind: 'answering'; sectionId: string | undefined }
   | { kind: 'stopped'; message: string }
   | { kind: 'closed'; reason: 'closed' | 'table-gone' }
   | { kind: 'updating' }
@@ -163,9 +165,9 @@ export function createRespond(options: RespondOptions) {
     return index >= 0 ? index : firstSectionIndex();
   };
 
-  const showSection = (index: number) => {
-    const section = layout().sections[index];
-    if (section) setPhase({ kind: 'answering', sectionId: section.id });
+  const showSection = (index: number | undefined) => {
+    const section = index === undefined ? undefined : layout().sections[index];
+    setPhase({ kind: 'answering', sectionId: section?.id });
   };
 
   const stored = () => {
@@ -209,6 +211,8 @@ export function createRespond(options: RespondOptions) {
         submittedAt: previous.submittedAt,
         booking: previous.booking,
       };
+    if (current?.kind === 'already-responded')
+      return { kind: 'response-unavailable', retrying: submitting() };
     if (current?.kind === 'closed')
       return { kind: 'closed', reason: current.reason };
     if (open.kind === 'table-gone')
@@ -222,15 +226,22 @@ export function createRespond(options: RespondOptions) {
     const indices = questionSectionIndices(layout());
     const section =
       sectionIndex === undefined ? undefined : layout().sections[sectionIndex];
-    if (!section || sectionIndex === undefined)
-      return { kind: 'closed', reason: 'closed' };
-    const position = indices.indexOf(sectionIndex) + 1;
+    if (sectionIndex === undefined) {
+      const first = nextStep(layout(), -1, answers());
+      if (first.kind === 'stop')
+        return { kind: 'stopped', message: first.message };
+      if (first.kind === 'updating') return { kind: 'updating' };
+    }
+    const position =
+      sectionIndex === undefined ? 0 : indices.indexOf(sectionIndex) + 1;
     return {
       kind: 'answering',
       section,
       position,
       total: indices.length,
-      isFirst: previousSectionIndex(layout(), sectionIndex) === undefined,
+      isFirst:
+        sectionIndex === undefined ||
+        previousSectionIndex(layout(), sectionIndex) === undefined,
       // Structural: a gate that would stop someone still shows "Next".
       isLast: position === indices.length,
       submitting: submitting(),
@@ -310,6 +321,15 @@ export function createRespond(options: RespondOptions) {
     );
   }
 
+  async function readSavedResponse() {
+    try {
+      await options.reloadMine();
+    } catch {
+      setFailure('Your saved response couldn’t be loaded. Try again.');
+    }
+    setPhase({ kind: 'already-responded' });
+  }
+
   async function send(mode: 'create' | 'edit'): Promise<void> {
     const sent = submissionAnswers(layout(), answers(), mode);
     const result = await (mode === 'edit'
@@ -340,8 +360,7 @@ export function createRespond(options: RespondOptions) {
     const refusal = refused.refusal;
     if (refusal === 'already-responded' && mode === 'create') {
       // Never overwrite a response saved elsewhere unseen: show it instead.
-      await options.reloadMine();
-      setPhase({ kind: 'already-responded' });
+      await readSavedResponse();
       return;
     }
     if (refusal === 'closed' || refusal === 'table-gone') {
@@ -380,13 +399,13 @@ export function createRespond(options: RespondOptions) {
   async function submit() {
     const index = currentIndex();
     if (
-      index === undefined ||
+      view().kind !== 'answering' ||
       submitting() ||
       uploads() > 0 ||
-      !validateSection(index)
+      (index !== undefined && !validateSection(index))
     )
       return;
-    const step = nextStep(layout(), index, answers());
+    const step = nextStep(layout(), index ?? -1, answers());
     if (step.kind !== 'submit') {
       follow(step);
       return;
@@ -420,6 +439,15 @@ export function createRespond(options: RespondOptions) {
     next,
     back,
     submit,
+    async retryResponse() {
+      if (phase()?.kind !== 'already-responded' || submitting()) return;
+      setSubmitting(true);
+      try {
+        await readSavedResponse();
+      } finally {
+        setSubmitting(false);
+      }
+    },
     restartPreview() {
       if (!options.preview) return;
       batch(() => {
@@ -443,7 +471,7 @@ export function createRespond(options: RespondOptions) {
     checkAnswers() {
       const first = firstSectionIndex();
       setProblems({});
-      if (first !== undefined) showSection(first);
+      showSection(first);
     },
     /** From the receipt, open the booking step the response unlocked. */
     openBooking() {
@@ -461,6 +489,7 @@ export function createRespond(options: RespondOptions) {
         setProblems({});
         const first = nextStep(layout(), -1, current.answers);
         if (first.kind === 'section') showSection(first.index);
+        else if (first.kind === 'submit') showSection(undefined);
       });
     },
   };

@@ -862,6 +862,53 @@ describe('the booking step', () => {
       dispose();
     });
   });
+
+  it('recreates the question section before booking when every question section was deleted', async () => {
+    const { writes } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder, shared, notices } = setup({ writes });
+      const booking = builder.addBooking(INTRO_CALL);
+      builder.removeSection('gate');
+      builder.removeSection('about');
+      builder.removeSection('details');
+
+      await builder.addQuestion(shortAnswer);
+
+      expect(shared.theirs().sections.map((section) => section.kind)).toEqual([
+        'questions',
+        'booking',
+      ]);
+      expect(shared.theirs().sections[0].questions).toHaveLength(1);
+      expect(shared.theirs().sections.at(-1)?.id).toBe(booking?.sectionId);
+      expect(notices).toEqual([]);
+      dispose();
+    });
+  });
+
+  it('reuses a column before booking when the form has no question sections', () => {
+    const { writes, calls } = fakeWrites();
+    createRoot((dispose) => {
+      const { builder, shared, notices } = setup({ writes });
+      const booking = builder.addBooking(INTRO_CALL);
+      builder.removeSection('gate');
+      builder.removeSection('about');
+      builder.removeSection('details');
+
+      builder.addExistingColumn(NOTES_COLUMN);
+
+      expect(shared.theirs().sections.map((section) => section.kind)).toEqual([
+        'questions',
+        'booking',
+      ]);
+      expect(shared.theirs().sections[0].questions[0].columnId).toBe(
+        NOTES_COLUMN
+      );
+      expect(shared.theirs().sections.at(-1)?.id).toBe(booking?.sectionId);
+      expect(calls).toEqual([]);
+      expect(notices).toEqual([]);
+      dispose();
+    });
+  });
 });
 
 it('numbers a column name while another column has it', () => {

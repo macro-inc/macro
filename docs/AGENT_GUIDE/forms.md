@@ -60,7 +60,9 @@ splits keep the palette beside the canvas; narrow splits put it below.
   focusing a section's title, which outlines it) it goes to the end of that
   section. An empty section has its own **Add question** menu.
 - Click a section or question in the left **Outline** to reveal it in the
-  canvas. Selecting a section also directs subsequent question additions there.
+  canvas. A question opens for editing on the first click, including while a
+  rename saves. Selecting a section also directs subsequent question additions
+  there. Incoming edits preserve keyboard focus in the outline.
 - Click a row to select it: the title input renames the column, the type chip
   opens the same grouped type menu (Short answer … Database row), choice questions edit
   their options in place, and the footer has Duplicate, **Remove from form**
@@ -94,7 +96,8 @@ splits keep the palette beside the canvas; narrow splits put it below.
   question**: a new column gets the answers that convert and the question
   moves to it; the old column stays (listed under columns not on the form).
 - **Preview** opens a new tab with the respondent experience after pending
-  edits are saved. Fill it, try the screeners, and return to the builder. Preview
+  question and Share settings edits are saved, including edits started before
+  switching tabs. Fill it, try the screeners, and return to the builder. Preview
   creates no response rows, file uploads or bookings.
 - **Booking** in the right panel selects an existing booking link from **Booking links**
   settings. It is always the last step. **Change** selects another link;
@@ -106,10 +109,13 @@ splits keep the palette beside the canvas; narrow splits put it below.
 ### Responses
 
 The linked table's grid, embedded and live, with **Open database**, **Export
-CSV** and tiles: Responses, Stopped by a screener (per screener in its hint), Rows in
+CSV** and tiles: Responses, Stopped submissions (per screener in its hint), Rows in
 the table, and (owners, when posted in channels) People in its channels (the
 owner excluded; a dash for public forms). Every row of the table shows,
-including rows added in the grid.
+including rows added in the grid. Stopped submissions counts signed-in respondents
+whose latest recorded result is stopped. Retrying does not add another count;
+a successful submission clears that stop. Anonymous attempts and stops before
+submitting are not recorded; answers stay in the browser until Submit.
 
 ### Share
 
@@ -152,12 +158,18 @@ confirmation with a receipt; signed-in respondents (either audience) get
 return. A closed form says "This form is closed"; a returning respondent
 sees their saved answers with that reason.
 
+Temporary background refresh failures keep unsent answers on screen. If Submit
+discovers an existing response but cannot load its receipt, **Try again** reloads
+that response without submitting another one.
+
 When the form ends with a booking step, the last action reads **Continue to
 booking**. After the server accepts the response and its screeners, Macro's
 time picker appears. Booking opens `/app/booking/<id>#<private-token>`; retain
 that private link for cancellation or rescheduling. A returning signed-in
 respondent can use **Book a time** on their receipt if their saved answers still
-pass. Preview can show real slots, but its booking button is disabled.
+pass. A form with only a booking step still offers **Continue to booking** and
+waits for server acceptance. Preview can show real slots, but its booking button
+is disabled.
 
 In a message or document, a form card fills in place; a poll card shows one
 bar per option, your vote marked, and "N votes · one vote each". Click an

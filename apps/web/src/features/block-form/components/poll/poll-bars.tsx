@@ -105,7 +105,9 @@ export function PollBars(props: {
                 <Show when={props.showResults}>
                   <span class="relative text-xs text-ink-muted tabular-nums">
                     {bar().count}
-                    <span class="sr-only"> votes</span>
+                    <span class="sr-only">
+                      {bar().count === 1 ? ' vote' : ' votes'}
+                    </span>
                   </span>
                 </Show>
               </button>

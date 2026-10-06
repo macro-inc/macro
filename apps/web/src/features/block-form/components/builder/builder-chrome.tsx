@@ -3,6 +3,7 @@ import CaretDown from '@phosphor/caret-down.svg';
 import Database from '@phosphor/database.svg';
 import Plus from '@phosphor/plus.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { SectionKind } from '../../core/form-model';
@@ -322,28 +323,28 @@ export function OutlineSection(props: {
       </Button>
       <Show when={props.questions.length > 0}>
         <ul class="ml-4 flex flex-col border-l border-edge-divider pl-2">
-          <For each={props.questions}>
+          <Key each={props.questions} by="id">
             {(question) => (
               <li>
                 <Button
                   variant="ghost"
                   size="sm"
                   fullWidth
-                  tooltip={question.title}
-                  aria-current={question.selected ? 'true' : undefined}
+                  tooltip={question().title}
+                  aria-current={question().selected ? 'true' : undefined}
                   class={cn(
                     'h-7 justify-start rounded-md px-1.5 text-left text-xs font-normal',
-                    question.selected
+                    question().selected
                       ? 'bg-active text-ink'
                       : 'text-ink-muted hover:bg-hover hover:text-ink'
                   )}
-                  onClick={() => props.onSelectQuestion(question.id)}
+                  onClick={() => props.onSelectQuestion(question().id)}
                 >
-                  <span class="truncate">{question.title}</span>
+                  <span class="truncate">{question().title}</span>
                 </Button>
               </li>
             )}
-          </For>
+          </Key>
         </ul>
       </Show>
     </li>
