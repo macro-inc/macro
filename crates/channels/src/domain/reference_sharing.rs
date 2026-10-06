@@ -22,6 +22,7 @@ pub(crate) fn grant_level(
         }
         (ReferencedShareItemType::AgentSession | ReferencedShareItemType::CalendarEvent, _)
         | (_, None) => None,
+        (ReferencedShareItemType::Document, Some(_)) => Some(AccessLevel::Comment),
         (_, Some(_)) => Some(AccessLevel::View),
     }
 }
