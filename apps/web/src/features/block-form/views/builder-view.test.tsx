@@ -33,9 +33,18 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = () => {};
   window.scrollTo = () => {};
 });
-beforeEach(() => vi.useFakeTimers());
+let animationStyle: HTMLStyleElement;
+beforeEach(() => {
+  vi.useFakeTimers();
+  // jsdom's empty animation name otherwise leaves native menus waiting forever
+  // for an animationend event, preventing their close-focus lifecycle.
+  animationStyle = document.createElement('style');
+  animationStyle.textContent = '* { animation-name: none !important; }';
+  document.head.append(animationStyle);
+});
 afterEach(() => {
   cleanup();
+  animationStyle.remove();
   vi.useRealTimers();
 });
 
@@ -147,6 +156,26 @@ function mount(
 }
 
 describe('BuilderView', () => {
+  it('keeps focus on a new section after the compact add menu closes', async () => {
+    mount();
+    const trigger = screen.getByRole('button', {
+      name: 'Add question',
+    });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    await vi.advanceTimersByTimeAsync(0);
+    const section = screen.getByRole('menuitem', {
+      name: 'Section',
+    });
+    section.focus();
+    fireEvent.keyDown(section, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Move Section 2' })
+    );
+  });
+
   it('keeps keyboard focus in the outline when another editor changes a section', () => {
     const { shared } = mount();
     const outline = screen.getByRole('navigation', { name: 'Form outline' });
@@ -285,6 +314,48 @@ describe('BuilderView', () => {
     expect(shared.theirs().sections[0].questions).toHaveLength(1);
     expect(shared.theirs().sections[0].questions[0].widget).toBe('short');
     expect(calls.notices).toEqual([]);
+  });
+
+  it('chooses a related table in a dialog from the compact add menu', async () => {
+    const { shared } = mount();
+    const trigger = screen.getByRole('button', {
+      name: 'Add question',
+    });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const item = screen.getByRole('menuitem', {
+      name: 'Database row',
+    });
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(100);
+    const dialog = screen.getByRole('dialog', { name: 'Choose a table' });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Responses' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(shared.theirs().sections[0].questions).toHaveLength(3);
+  });
+
+  it('returns focus to the compact add trigger when table selection is canceled', async () => {
+    mount();
+    const trigger = screen.getByRole('button', {
+      name: 'Add question',
+    });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    await vi.advanceTimersByTimeAsync(0);
+    const item = screen.getByRole('menuitem', {
+      name: 'Database row',
+    });
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(100);
+    const dialog = screen.getByRole('dialog', { name: 'Choose a table' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('waits for the native table picker before creating a relation question, and cancel creates nothing', async () => {
@@ -731,6 +802,43 @@ describe('BuilderView', () => {
       const card = screen.getByRole('region', { name: 'Book a time' });
       expect(within(card).getByText('Intro call')).toBeTruthy();
       expect(within(card).getByText('30 min · Ada Lovelace')).toBeTruthy();
+    });
+
+    it('returns focus to the compact add trigger when booking selection is canceled', async () => {
+      mountBooking(rsvp());
+      const trigger = screen.getByRole('button', {
+        name: 'Add question',
+      });
+      await openMenu('Add question');
+      await choose(/^Booking$/);
+      const dialog = screen.getByRole('dialog', {
+        name: 'Choose a booking link',
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      await vi.advanceTimersByTimeAsync(100);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it('chooses a booking link in a dialog from the compact menu and focuses its new step', async () => {
+      const { shared } = mountBooking(rsvp());
+      await openMenu('Add question');
+      await choose(/^Booking$/);
+      const dialog = screen.getByRole('dialog', {
+        name: 'Choose a booking link',
+      });
+      expect(dialog.contains(document.activeElement)).toBe(true);
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: /Intro call/ })
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(shared.theirs().sections.at(-1)?.bookingTarget).toEqual(
+        INTRO_CALL
+      );
+      expect(document.activeElement).toBe(
+        screen.getByRole('region', { name: 'Book a time' })
+      );
     });
 
     it('shows each of two concurrently added booking steps with its own link, for an editor to remove one', async () => {

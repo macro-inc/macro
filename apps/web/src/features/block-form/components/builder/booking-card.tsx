@@ -62,8 +62,8 @@ export function BookingLinkMenu(props: {
   );
 }
 
-/** Booking choices shared by the standalone picker and compact add menu. */
-export function BookingLinkItems(props: {
+/** Booking choices in the standalone picker. */
+function BookingLinkItems(props: {
   links: readonly FormBookingLink[] | undefined;
   failed: boolean;
   selected?: FormBookingTarget;

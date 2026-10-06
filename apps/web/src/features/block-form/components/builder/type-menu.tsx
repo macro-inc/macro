@@ -20,12 +20,13 @@ export type RelationTable = {
 
 /** The menu items of every question type, relation tables under their own submenu. */
 function TypeItems(props: {
+  tableSelection: 'submenu' | 'dialog';
   current?: QuestionTypeId;
   tables: readonly RelationTable[];
   onChoose: (choice: QuestionTypeChoice, table?: RelationTable) => void;
 }) {
   const item = (choice: QuestionTypeChoice): JSX.Element =>
-    choice.kind === 'pick-table' ? (
+    choice.kind === 'pick-table' && props.tableSelection === 'submenu' ? (
       <Dropdown.Sub>
         <Dropdown.SubTrigger
           disabled={props.tables.length === 0}
@@ -52,6 +53,7 @@ function TypeItems(props: {
     ) : (
       <Dropdown.Item
         onSelect={() => props.onChoose(choice)}
+        disabled={choice.kind === 'pick-table' && props.tables.length === 0}
         aria-current={props.current === choice.id ? 'true' : undefined}
         class={props.current === choice.id ? 'bg-active' : undefined}
       >
@@ -103,6 +105,7 @@ export function TypeMenu(props: {
       </Dropdown.Trigger>
       <Dropdown.Content class="max-h-[min(32rem,75vh)] w-64 overflow-y-auto">
         <TypeItems
+          tableSelection="submenu"
           current={props.current}
           tables={props.tables}
           onChoose={props.onChoose}
@@ -115,6 +118,7 @@ export function TypeMenu(props: {
 /** Add a new question or reuse a field from the associated database. */
 export function AddQuestionMenu(props: {
   trigger: JSX.Element;
+  triggerRef?: (element: HTMLButtonElement) => void;
   disabled?: boolean;
   children?: JSX.Element;
   tables: readonly RelationTable[];
@@ -122,6 +126,7 @@ export function AddQuestionMenu(props: {
   onChoose: (choice: QuestionTypeChoice, table?: RelationTable) => void;
   onAddColumn: (columnId: string) => void;
   onAddAllColumns?: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   return (
     <Dropdown>
@@ -129,13 +134,21 @@ export function AddQuestionMenu(props: {
         variant="outline"
         size="md"
         class="w-full justify-start gap-2"
+        ref={props.triggerRef}
         disabled={props.disabled}
       >
         {props.trigger}
         <CaretDown class="ml-auto size-3.5" aria-hidden="true" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="max-h-[min(32rem,75vh)] w-64 overflow-y-auto">
-        <TypeItems tables={props.tables} onChoose={props.onChoose} />
+      <Dropdown.Content
+        class="max-h-[min(32rem,75vh)] w-64 overflow-y-auto"
+        onCloseAutoFocus={props.onCloseAutoFocus}
+      >
+        <TypeItems
+          tableSelection="dialog"
+          tables={props.tables}
+          onChoose={props.onChoose}
+        />
         <Show when={props.hiddenColumns.length > 0}>
           <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
           <Dropdown.Group>

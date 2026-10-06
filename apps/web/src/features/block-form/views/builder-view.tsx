@@ -1,6 +1,5 @@
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import CalendarCheck from '@phosphor/calendar-check.svg';
-import CaretRight from '@phosphor/caret-right.svg';
 import Database from '@phosphor/database.svg';
 import Plus from '@phosphor/plus.svg';
 import Rows from '@phosphor/rows.svg';
@@ -26,10 +25,10 @@ import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
   BookingCard,
-  BookingLinkItems,
   BookingLinkMenu,
   type BookingLinkState,
 } from '../components/builder/booking-card';
+import { BookingLinkDialog } from '../components/builder/booking-link-dialog';
 import {
   BuilderPalette,
   BuilderSidebar,
@@ -270,6 +269,10 @@ function BuilderCanvas(
     </Show>
   );
   const [editingRules, setEditingRules] = createSignal<string>();
+  const [choosingBooking, setChoosingBooking] = createSignal(false);
+  let focusAfterMenu: (() => void) | undefined;
+  let compactAddTrigger: HTMLButtonElement | undefined;
+  let dialogReturnFocus: HTMLButtonElement | undefined;
   const [pendingRelation, setPendingRelation] = createSignal<{
     choice: QuestionTypeChoice;
     placement: QuestionPlacement | undefined;
@@ -954,6 +957,9 @@ function BuilderCanvas(
           />
           <div class="@3xl/builder:hidden">
             <AddQuestionMenu
+              triggerRef={(element) => {
+                compactAddTrigger = element;
+              }}
               trigger={
                 <>
                   <Plus class="size-4" />
@@ -963,20 +969,30 @@ function BuilderCanvas(
               disabled={props.detail.tableGone}
               tables={relationTables()}
               hiddenColumns={hiddenColumnRows()}
-              onChoose={(choice, table) =>
-                void insertQuestion(choice, undefined, table)
-              }
+              onChoose={(choice, table) => {
+                if (choice.kind === 'pick-table' && !table) {
+                  dialogReturnFocus = compactAddTrigger;
+                }
+                void insertQuestion(choice, undefined, table);
+              }}
               onAddColumn={(columnId) => builder.addExistingColumn(columnId)}
               onAddAllColumns={addAllHidden}
+              onCloseAutoFocus={(event) => {
+                if (choosingBooking() || pendingRelation()) {
+                  event.preventDefault();
+                  return;
+                }
+                focusAddedSection(event);
+              }}
             >
               <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
               <Dropdown.Group>
                 <Dropdown.GroupLabel>Form flow</Dropdown.GroupLabel>
-                <Dropdown.Item onSelect={() => addSection('questions')}>
+                <Dropdown.Item onSelect={() => addSectionFromMenu('questions')}>
                   <Rows class="size-4" />
                   Section
                 </Dropdown.Item>
-                <Dropdown.Item onSelect={() => addSection('gate')}>
+                <Dropdown.Item onSelect={() => addSectionFromMenu('gate')}>
                   <ShieldCheck class="size-4" />
                   Screener
                 </Dropdown.Item>
@@ -984,27 +1000,23 @@ function BuilderCanvas(
                   when={booking()}
                   fallback={
                     <Show when={context.booking.available()}>
-                      <Dropdown.Sub>
-                        <Dropdown.SubTrigger>
-                          <CalendarCheck class="size-4" />
-                          <span class="flex-1">Booking</span>
-                          <CaretRight class="size-3.5" aria-hidden="true" />
-                        </Dropdown.SubTrigger>
-                        <Dropdown.SubContent class="max-h-[min(32rem,75vh)] w-64 max-w-[calc(100vw-1rem)] overflow-y-auto">
-                          <BookingLinkItems
-                            links={bookingLinks.value()}
-                            failed={!!bookingLinks.failure()}
-                            onChoose={addBooking}
-                            onCreate={context.booking.openSettings}
-                          />
-                        </Dropdown.SubContent>
-                      </Dropdown.Sub>
+                      <Dropdown.Item
+                        onSelect={() => {
+                          dialogReturnFocus = compactAddTrigger;
+                          setChoosingBooking(true);
+                        }}
+                      >
+                        <CalendarCheck class="size-4" />
+                        Booking
+                      </Dropdown.Item>
                     </Show>
                   }
                 >
                   {(existing) => (
                     <Dropdown.Item
-                      onSelect={() => revealBooking(existing().id)}
+                      onSelect={() => {
+                        focusAfterMenu = () => revealBooking(existing().id);
+                      }}
                     >
                       <CalendarCheck class="size-4" />
                       Booking
@@ -1096,6 +1108,23 @@ function BuilderCanvas(
           }
         />
       </div>
+      <Show when={choosingBooking()}>
+        <BookingLinkDialog
+          links={bookingLinks.value()}
+          failed={!!bookingLinks.failure()}
+          onChoose={(target) => {
+            const result = builder.addBooking(target);
+            if (result) focusAfterMenu = () => revealBooking(result.sectionId);
+            setChoosingBooking(false);
+          }}
+          onCreate={() => {
+            setChoosingBooking(false);
+            context.booking.openSettings();
+          }}
+          onClose={() => setChoosingBooking(false)}
+          onCloseAutoFocus={focusAfterDialog}
+        />
+      </Show>
       <Show when={pendingRelation()}>
         {(pending) => (
           <Dialog
@@ -1103,6 +1132,7 @@ function BuilderCanvas(
             onOpenChange={(open) => {
               if (!open) setPendingRelation(undefined);
             }}
+            onCloseAutoFocus={focusAfterDialog}
             class="w-96 max-w-[calc(100vw-2rem)]"
           >
             <Panel>
@@ -1189,7 +1219,32 @@ function BuilderCanvas(
     const id = builder.addSection(kind);
     if (!id) return;
     if (kind === 'gate') setEditingRules(id);
-    drag.refocus({ kind: 'section', id });
+    return id;
+  }
+
+  function focusAddedSection(event: Event) {
+    const focus = focusAfterMenu;
+    focusAfterMenu = undefined;
+    if (!focus) return;
+    event.preventDefault();
+    // Kobalte restores the trigger after this callback, even when prevented.
+    queueMicrotask(focus);
+  }
+
+  function focusAfterDialog(event: Event) {
+    const trigger = dialogReturnFocus;
+    dialogReturnFocus = undefined;
+    if (focusAfterMenu) {
+      focusAddedSection(event);
+    } else if (trigger) {
+      event.preventDefault();
+      queueMicrotask(() => trigger.focus());
+    }
+  }
+
+  function addSectionFromMenu(kind: NewSectionKind) {
+    const id = addSection(kind);
+    if (id) focusAfterMenu = () => focusHandle({ kind: 'section', id });
   }
 
   function AddSectionButton(buttonProps: {
@@ -1215,7 +1270,8 @@ function BuilderCanvas(
         onClick={(event) => {
           handle.onClick(event);
           if (event.defaultPrevented) return;
-          addSection(buttonProps.kind);
+          const id = addSection(buttonProps.kind);
+          if (id) drag.refocus({ kind: 'section', id });
         }}
       >
         {buttonProps.children}
