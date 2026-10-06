@@ -288,6 +288,15 @@ export class PsdEngine {
     return b.length > 0 ? new Blob([b], { type: 'image/png' }) : null;
   }
 
+  /**
+   * A layer's mask over the canvas, fitted in `size` pixels (gray PNG);
+   * `null` when the layer has no mask.
+   */
+  async maskThumbnail(id: number, size: number): Promise<Blob | null> {
+    const b = await this.bytes('maskThumbnail', id, size);
+    return b.length > 0 ? new Blob([b], { type: 'image/png' }) : null;
+  }
+
   /** The merged image fitted in `size` pixels (PNG). */
   async preview(size: number): Promise<Blob> {
     return new Blob([await this.bytes('preview', size)], { type: 'image/png' });

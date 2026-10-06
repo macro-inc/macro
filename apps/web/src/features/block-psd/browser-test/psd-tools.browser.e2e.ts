@@ -118,6 +118,8 @@ test('paints on a layer mask', async ({ page }) => {
   await blackSquare(page);
   await page.getByTestId('psd-add-mask').click();
   await expect(page.getByTestId('psd-layer-mask')).toBeVisible();
+  // The mask's row shows what it holds.
+  await expect(page.getByTestId('psd-layer-mask-thumbnail')).toBeVisible();
   // Black on the mask hides the square there.
   await page.keyboard.press('d');
   await page.keyboard.press('b');

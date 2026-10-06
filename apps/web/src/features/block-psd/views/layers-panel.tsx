@@ -92,6 +92,12 @@ export function LayersPanel(props: {
     engine: editor.engine,
     version: editor.thumbVersion,
   });
+  const maskThumbnails = createLayerThumbnails({
+    engine: {
+      thumbnail: (id, size) => editor.engine.maskThumbnail(id, size),
+    },
+    version: editor.thumbVersion,
+  });
   const keys = createDragKeys('layer');
   const [drop, setDrop] = createSignal<DropState>();
   const [menu, setMenu] = createSignal<{ x: number; y: number }>();
@@ -413,6 +419,9 @@ export function LayersPanel(props: {
                   row.kind === 'text'
                     ? null
                     : thumbnails.url(row.id)
+                }
+                maskThumbnail={
+                  row.hasMask ? maskThumbnails.url(row.id) : undefined
                 }
                 editable={editable()}
                 dropZone={drop()?.over === row.id ? drop()?.zone : undefined}

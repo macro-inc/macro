@@ -26,6 +26,7 @@ export type QueryMethod =
 /** Engine methods answered with bytes (PNG, JPEG, or samples). */
 export type BytesMethod =
   | 'thumbnail'
+  | 'maskThumbnail'
   | 'preview'
   | 'copyPixels'
   | 'exportPng'

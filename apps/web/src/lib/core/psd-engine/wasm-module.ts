@@ -31,6 +31,8 @@ export interface WasmPsdFile {
   sample: (x: number, y: number, layer?: number | null) => Uint8Array;
   /** PNG (empty when the layer draws nothing). */
   thumbnail: (id: number, size: number) => Uint8Array;
+  /** Gray PNG of the layer's mask over the canvas (empty without one). */
+  maskThumbnail: (id: number, size: number) => Uint8Array;
   /** PNG of the merged image. */
   preview: (size: number) => Uint8Array;
   /** `FontUse[]` JSON. */

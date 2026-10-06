@@ -322,6 +322,7 @@ function titleOf(layer: LayerInfo): string {
   if (layer.kind === 'shape') return 'Shape Layer';
   if (layer.fill) return 'Fill Layer';
   if (layer.adjustment) return 'Adjustment Layer';
+  if (layer.artboard) return 'Artboard';
   if (layer.kind === 'group') return 'Group';
   if (layer.smartObject) return 'Smart Object';
   return layer.background ? 'Background' : 'Pixel Layer';

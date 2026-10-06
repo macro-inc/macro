@@ -103,6 +103,19 @@ export type LayerKindName =
   | 'smartObject';
 
 /** A layers panel row, top to bottom (`inspect::LayerRow`). */
+/** What an artboard is drawn on (`model::ArtboardBackground`). */
+export type ArtboardBackground =
+  | { type: 'white' }
+  | { type: 'black' }
+  | { type: 'transparent' }
+  | { type: 'color'; color: Rgb };
+
+/** A group that is an artboard (`model::Artboard`). */
+export interface Artboard {
+  rect: IRect;
+  background: ArtboardBackground;
+}
+
 export interface LayerRow {
   id: number;
   name: string;
@@ -131,6 +144,8 @@ export interface LayerRow {
   children: number;
   /** Canvas bounds of what it draws. */
   bounds: IRect | null;
+  /** A group that is an artboard. */
+  artboard?: Artboard;
 }
 
 // ---- paint ------------------------------------------------------------

@@ -124,6 +124,7 @@ function bytes(request: Extract<PsdRequest, { kind: 'bytes' }>): Uint8Array {
   const [a, b, c] = request.args;
   return match(request.method)
     .with('thumbnail', () => f.thumbnail(a ?? 0, b ?? 64))
+    .with('maskThumbnail', () => f.maskThumbnail(a ?? 0, b ?? 64))
     .with('preview', () => f.preview(a ?? 256))
     .with('copyPixels', () => f.copyPixels(optional(a)))
     .with('exportPng', () => f.exportPng(optional(a)))

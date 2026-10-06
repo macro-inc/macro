@@ -2,8 +2,8 @@
 //! properties, what is under the pointer, thumbnails, colors, and fonts.
 
 use crate::model::{
-    Adjustment, BlendMode, BlendRanges, Document, Effects, Fill, Guide, LayerIdx, LayerKind, Locks,
-    SmartObject, TextLayer, VectorMask, VectorStroke,
+    Adjustment, Artboard, BlendMode, BlendRanges, Document, Effects, Fill, Guide, LayerIdx,
+    LayerKind, Locks, SmartObject, TextLayer, VectorMask, VectorStroke,
 };
 use crate::raster::IRect;
 use crate::render::Renderer;
@@ -56,6 +56,9 @@ pub struct LayerRow {
     pub children: usize,
     /// Canvas bounds of what it draws.
     pub bounds: Option<IRect>,
+    /// A group that is an artboard: its rectangle and background.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artboard: Option<Artboard>,
 }
 
 fn kind_name(kind: &LayerKind, vector: bool) -> &'static str {
@@ -95,6 +98,10 @@ pub fn row(doc: &Document, i: LayerIdx, depth: usize) -> LayerRow {
         open: matches!(l.kind, LayerKind::Group { open: true, .. }),
         children: l.children.len(),
         bounds: crate::render::visual_bounds(doc, i),
+        artboard: match &l.kind {
+            LayerKind::Group { artboard, .. } => *artboard,
+            _ => None,
+        },
     }
 }
 
@@ -255,6 +262,47 @@ pub fn thumbnail(doc: &Document, renderer: &mut Renderer, id: u32, size: u32) ->
     encode_png(&rgba, rect.w as u32, rect.h as u32)
 }
 
+/// A layer's pixel mask over the canvas fitted in `size` pixels, as a gray
+/// PNG (white shows, black hides); empty when the layer has no mask.
+pub fn mask_thumbnail(doc: &Document, id: u32, size: u32) -> Vec<u8> {
+    let Some(mask) = doc.find(id).and_then(|i| doc.layer(i).mask.as_ref()) else {
+        return Vec::new();
+    };
+    let canvas = doc.bounds();
+    let size = size.clamp(8, 1024) as f64;
+    let scale = (size / f64::from(canvas.w.max(canvas.h).max(1))).min(1.0);
+    let (w, h) = (
+        ((f64::from(canvas.w) * scale).round() as u32).max(1),
+        ((f64::from(canvas.h) * scale).round() as u32).max(1),
+    );
+    // Each thumbnail pixel averages a few samples of the canvas area it
+    // covers.
+    const SAMPLES: u32 = 3;
+    let value = |x: i32, y: i32| {
+        if mask.rect.contains(x, y) {
+            u32::from(mask.raster.get(x, y)[0])
+        } else {
+            u32::from(mask.default_color)
+        }
+    };
+    let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+    for ty in 0..h {
+        for tx in 0..w {
+            let mut sum = 0;
+            for sy in 0..SAMPLES {
+                for sx in 0..SAMPLES {
+                    let fx = (f64::from(tx) + (f64::from(sx) + 0.5) / f64::from(SAMPLES)) / scale;
+                    let fy = (f64::from(ty) + (f64::from(sy) + 0.5) / f64::from(SAMPLES)) / scale;
+                    sum += value(canvas.x + fx as i32, canvas.y + fy as i32);
+                }
+            }
+            let v = (sum / (SAMPLES * SAMPLES)) as u8;
+            rgba.extend_from_slice(&[v, v, v, 255]);
+        }
+    }
+    encode_png(&rgba, w, h)
+}
+
 /// The document's merged image fitted in `size` pixels, as PNG.
 pub fn preview(doc: &Document, renderer: &mut Renderer, size: u32) -> Vec<u8> {
     let bounds = doc.bounds();
@@ -389,3 +437,6 @@ pub fn fonts(doc: &Document) -> Vec<FontUse> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod test;

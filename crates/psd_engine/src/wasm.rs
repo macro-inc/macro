@@ -205,6 +205,13 @@ impl PsdFile {
         inspect::thumbnail(&self.doc, &mut self.renderer, id, size)
     }
 
+    /// A layer's pixel mask over the canvas fitted in `size` pixels (gray
+    /// PNG; empty when the layer has no mask).
+    #[wasm_bindgen(js_name = maskThumbnail)]
+    pub fn mask_thumbnail(&self, id: u32, size: u32) -> Vec<u8> {
+        inspect::mask_thumbnail(&self.doc, id, size)
+    }
+
     /// The merged image fitted in `size` pixels (PNG).
     pub fn preview(&mut self, size: u32) -> Vec<u8> {
         inspect::preview(&self.doc, &mut self.renderer, size)

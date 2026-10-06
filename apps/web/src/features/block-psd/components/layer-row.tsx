@@ -1,7 +1,8 @@
 /**
  * One row of the layers panel, as Photoshop draws it: visibility, the
- * layer's thumbnail (or its kind for groups and adjustment layers), the
- * mask's thumbnail when it has one, the name (double-click renames), and
+ * layer's thumbnail (or its kind for groups, artboards, and adjustment
+ * layers), the mask's thumbnail when it has one, the name (double-click
+ * renames), and
  * markers for clipping, locks, and the layer style (fx turns it on or
  * off). Presentational.
  */
@@ -15,6 +16,7 @@ import Drop from '@phosphor/drop-half.svg';
 import Eye from '@phosphor/eye.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
 import FolderSimple from '@phosphor/folder-simple.svg';
+import FrameCorners from '@phosphor/frame-corners.svg';
 import LockSimple from '@phosphor/lock-simple.svg';
 import Shapes from '@phosphor/shapes.svg';
 import Stack from '@phosphor/stack.svg';
@@ -32,6 +34,8 @@ export function LayerRow(props: {
   /** The active layer's edits go to its mask. */
   maskTarget: boolean;
   thumbnail?: string | null;
+  /** The mask's thumbnail (`null` while there is none to show). */
+  maskThumbnail?: string | null;
   editable: boolean;
   /** Where a dragged row would land: above, inside, or below this one. */
   dropZone?: 'before' | 'inside' | 'after';
@@ -150,6 +154,11 @@ export function LayerRow(props: {
             </Show>
           }
         >
+          <Match when={props.row.artboard}>
+            <span title="Artboard" data-testid="psd-layer-artboard">
+              <FrameCorners class="size-4 text-ink-muted" />
+            </span>
+          </Match>
           <Match when={props.row.kind === 'group'}>
             <FolderSimple class="size-4 text-ink-muted" />
           </Match>
@@ -174,7 +183,7 @@ export function LayerRow(props: {
           aria-label="Edit the layer mask"
           title={props.row.maskDisabled ? 'Layer mask (off)' : 'Layer mask'}
           data-testid="psd-layer-mask"
-          class="flex size-8 shrink-0 items-center justify-center rounded-sm border bg-surface"
+          class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-sm border bg-surface"
           classList={{
             'border-accent': props.selected && props.maskTarget,
             'border-edge-muted': !(props.selected && props.maskTarget),
@@ -185,7 +194,22 @@ export function LayerRow(props: {
             props.onChooseMask();
           }}
         >
-          <span class="size-4 rounded-full border border-edge bg-ink/70" />
+          <Show
+            when={props.maskThumbnail}
+            fallback={
+              <span class="size-4 rounded-full border border-edge bg-ink/70" />
+            }
+          >
+            {(src) => (
+              <img
+                src={src()}
+                alt=""
+                class="max-h-full max-w-full object-contain"
+                draggable={false}
+                data-testid="psd-layer-mask-thumbnail"
+              />
+            )}
+          </Show>
         </button>
       </Show>
       <Show
