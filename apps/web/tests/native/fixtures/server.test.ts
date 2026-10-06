@@ -1,6 +1,8 @@
 import { afterEach, expect, test } from 'bun:test';
 import { type DocumentNode, type ExecutionResult, print, visit } from 'graphql';
 import {
+  MailAccountsDocument,
+  type MailAccountsQuery,
   SoupBackfillDocument,
   SoupDocument,
   type SoupInput,
@@ -8,7 +10,7 @@ import {
   type SoupQuery,
   SoupSharedMailBackfillDocument,
 } from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
-import { fixtureId } from './mail';
+import { EMAIL, fixtureId, USER_ID } from './mail';
 import { startFixtureServer } from './server';
 
 let server: ReturnType<typeof startFixtureServer> | undefined;
@@ -43,6 +45,36 @@ async function requestSoup(
   });
   return await response.json();
 }
+
+test.each([false, true])(
+  'mail accounts satisfy the production document (matrix=%s)',
+  async (filterMatrix) => {
+    server = startFixtureServer(0, filterMatrix);
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(MailAccountsDocument),
+        operationName: 'MailAccounts',
+      }),
+    });
+    const result: ExecutionResult<MailAccountsQuery> = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.user.emailLinks).toEqual(
+      (filterMatrix ? [EMAIL, 'other@example.com'] : [EMAIL]).map(
+        (emailAddress, index) => ({
+          id: fixtureId(1000 + index),
+          macroId: USER_ID,
+          emailAddress,
+          photoUrl: null,
+          isPrimary: index === 0,
+          needsReauth: false,
+          draftIsSignal: false,
+          settings: { signature: null, signatureOnRepliesForwards: false },
+        })
+      )
+    );
+  }
+);
 
 test('real generated backfill document validates, pages, and includes projection/preview metadata', async () => {
   server = startFixtureServer();

@@ -4,7 +4,7 @@ import {
 } from '../../../src/features/property/identifiers';
 import { mailProjectionCapsules } from '../../../src/lib/graphql-cache/worker/browser-test/mail-projection-capsules';
 import type { TagSetResponse } from '../../../src/lib/service-clients/service-properties/generated/schemas/tagSetResponse';
-import { EMAIL, fixtureId as id, USER_ID } from './mail';
+import { EMAIL, fixtureMailAccount, fixtureId as id, USER_ID } from './mail';
 
 export const PEOPLE = [USER_ID, 'macro|other@example.com'];
 export const TAG_DEFINITION = id(7000);
@@ -365,11 +365,9 @@ export function filterCorpus(
   return result;
 }
 
-export const matrixAccounts = LINKS.map((id, n) => ({
-  id,
-  emailAddress: n === 0 ? EMAIL : 'other@example.com',
-  photoUrl: null,
-}));
+export const matrixAccounts = LINKS.map((id, n) =>
+  fixtureMailAccount(id, n === 0 ? EMAIL : 'other@example.com', n === 0)
+);
 export const matrixTagSets: TagSetResponse[] = [
   {
     scope: 'user',
