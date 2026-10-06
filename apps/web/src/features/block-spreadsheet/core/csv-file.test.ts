@@ -4,10 +4,11 @@ import { csvImportEdits } from './sheet-operations';
 import { decodeCsv, isUploadedWorkbook } from './uploaded-workbook';
 
 describe('uploaded Excel/CSV detection', () => {
-  it.each(['xlsx', 'XLSX', 'csv', 'CSV'])('recognizes %s', (type) =>
-    expect(isUploadedWorkbook(type)).toBe(true)
+  it.each(['xlsx', 'XLSX', 'xlsm', 'XLSM', 'csv', 'CSV'])(
+    'recognizes %s',
+    (type) => expect(isUploadedWorkbook(type)).toBe(true)
   );
-  it.each(['xls', 'xlsm', 'pdf', 'spreadsheet', '', null, undefined])(
+  it.each(['xls', 'xltm', 'pdf', 'spreadsheet', '', null, undefined])(
     'rejects %s',
     (type) => expect(isUploadedWorkbook(type)).toBe(false)
   );

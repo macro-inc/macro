@@ -536,13 +536,11 @@ export function SpreadsheetEditor(props: {
       );
       return;
     }
-    if (!/\.(csv|xlsx)$/i.test(file.name)) {
-      actions.setNotice(
-        'Choose a .csv or .xlsx file. Macro-enabled workbooks are not supported.'
-      );
+    if (!/\.(csv|xlsx|xlsm)$/i.test(file.name)) {
+      actions.setNotice('Choose a .csv, .xlsx or .xlsm file.');
       return;
     }
-    if (/\.xlsx$/i.test(file.name)) {
+    if (/\.xls[xm]$/i.test(file.name)) {
       await workbookActions.importExcel(file);
       return;
     }
@@ -727,7 +725,7 @@ export function SpreadsheetEditor(props: {
       <input
         ref={importInput}
         type="file"
-        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".csv,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
         class="hidden"
         aria-label="Import spreadsheet file"
         onChange={(event) => {
