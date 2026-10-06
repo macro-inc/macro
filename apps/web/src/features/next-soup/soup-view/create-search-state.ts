@@ -1,3 +1,4 @@
+import { useCrmContactDiscovery } from '@app/features/crm/record-adapter';
 import type { SoupState } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/base';
 import {
@@ -7,11 +8,14 @@ import {
 import {
   createSearchState as createSharedSearchState,
   intersectEntityPools,
+  nameFuzzySearchFilter,
   type SoupSearchRequest,
+  soupSearchMatchType,
   useSearchContext,
 } from '@app/features/soup/search';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
+import type { CrmContactEntity, EntityData } from '@entity';
 import type {
   EntityFilters,
   PropertyFilter,
@@ -198,6 +202,8 @@ interface CreateSearchStateArgs {
   assignees: Accessor<string[]>;
   disableLocalSearch?: Accessor<boolean>;
   searchPaused?: Accessor<boolean>;
+  /** Whether the view's current scope lists CRM contacts. */
+  contactSearchScope: Accessor<boolean>;
   /**
    * Reactive search text. Owned by the caller so it can be wired to
    * per-entry navigation state and survive back/forward.
@@ -212,6 +218,7 @@ export const createSearchState = ({
   assignees,
   disableLocalSearch,
   searchPaused,
+  contactSearchScope,
   searchText,
   setSearchText,
 }: CreateSearchStateArgs) => {
@@ -307,16 +314,52 @@ export const createSearchState = ({
     searchPaused,
   });
 
+  // Contacts match names and emails by substring, so an exact (quoted)
+  // query searches its unquoted text.
+  const contactQuery = () => {
+    const text = searchText().trim();
+    return soupSearchMatchType(text) === 'exact' ? text.slice(1, -1) : text;
+  };
+  const contacts = useCrmContactDiscovery(
+    contactQuery,
+    () => contactSearchScope() && !searchPaused?.()
+  );
+
+  // Contacts whose CRM name matches lead the results with the featured
+  // matches. Email-only matches, such as everyone at a searched domain,
+  // follow the search-service results instead of burying them.
+  const contactResults = createMemo(() => {
+    const named = contacts
+      .contacts()
+      .filter((contact) => contact.name !== contact.email);
+    const byName: EntityData[] = nameFuzzySearchFilter(
+      named,
+      contactQuery().trim()
+    );
+    const nameMatchIds = new Set(byName.map((contact) => contact.id));
+    const byEmailOnly: CrmContactEntity[] = contacts
+      .contacts()
+      .filter((contact) => !nameMatchIds.has(contact.id));
+    return { byName, byEmailOnly };
+  });
+
+  const refresh = async () => {
+    await Promise.all([search.refresh(), contacts.refresh()]);
+  };
+
   return {
     searchText,
     setSearchText,
     localFuzzyResults: search.localFuzzyResults,
-    refresh: search.refresh,
+    refresh,
     isSearching: search.isSearching,
     serviceSearchResults: search.serviceSearchResults,
+    contactResults,
+    contacts,
     featuredIds: search.featuredIds,
     searchQuery: search.searchQuery,
-    isSearchServiceLoading: search.isSearchServiceLoading,
+    isSearchServiceLoading: () =>
+      search.isSearchServiceLoading() || contacts.isLoading(),
     isLocalSearchSettling: search.isLocalSearchSettling,
   };
 };

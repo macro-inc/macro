@@ -4,6 +4,7 @@ import { Entity } from '../../entity';
 import {
   isChannelEntity,
   isChannelMessageEntity,
+  isCrmContactEntity,
   isEmailEntity,
   isGithubPrEntity,
   isTaskEntity,
@@ -14,6 +15,7 @@ import {
   ChannelJoinButton,
   ChannelMessageSingleLine,
 } from './channel';
+import { ContactEmail } from './contact';
 import { EmailInboxChip } from './email';
 import { GithubAuthorBadge } from './foreign';
 import { RowEnd } from './row-end';
@@ -61,6 +63,9 @@ export function NarrowLayout(props: LayoutProps) {
           fallback={<Entity.Title entity={props.entity} />}
         >
           {(entity) => <ChannelMessageSingleLine entity={entity()} />}
+        </Show>
+        <Show when={isCrmContactEntity(props.entity) && props.entity}>
+          {(entity) => <ContactEmail entity={entity()} />}
         </Show>
         <Show when={reviewWithAuthor()}>
           {(review) => (

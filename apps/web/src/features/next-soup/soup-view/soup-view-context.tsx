@@ -31,6 +31,7 @@ import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
+import { isContactSearchScope } from '@app/features/next-soup/soup-view/contact-search-scope';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
 import {
   createTagFilter,
@@ -823,6 +824,16 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
+    contactSearchScope: () =>
+      enabled() &&
+      isContactSearchScope({
+        view: activeListView(),
+        filters: queryFilters.state,
+        predicates: {
+          and: soup.predicates.andIds(),
+          or: soup.predicates.orIds(),
+        },
+      }),
     searchText: effectiveSearchText,
     setSearchText,
   });
@@ -1023,8 +1034,14 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
       const local = search.localFuzzyResults();
       const service = search.serviceSearchResults();
+      const contacts = search.contactResults();
 
-      const merged: SoupEntity[] = [...service, ...local];
+      const merged: SoupEntity[] = [
+        ...contacts.byName,
+        ...service,
+        ...contacts.byEmailOnly,
+        ...local,
+      ];
 
       if (
         merged.length === 0 &&
@@ -1430,12 +1447,17 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     return result;
   });
 
-  const { searchQuery } = search;
+  const { searchQuery, contacts } = search;
+  // A failed contact search must not read as an empty result: without rows
+  // it shows the load error, while rows from either source still render.
   const searchSourceHasData = () =>
-    (searchQuery.data !== undefined && !searchQuery.isPlaceholderData) ||
-    (!searchQuery.isPlaceholderData && entities().length > 0);
+    (!searchQuery.isPlaceholderData && entities().length > 0) ||
+    (searchQuery.data !== undefined &&
+      !searchQuery.isPlaceholderData &&
+      !contacts.error());
   const searchSourceError = () =>
     (searchQuery.error as Error | null) ??
+    contacts.error() ??
     nativeOfflineLoadError(searchSourceHasData);
 
   const context = {
@@ -1461,17 +1483,23 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
               !itemsSource().isPlaceholderData() &&
               entities().length > 0),
       isLoading: () => itemsSource().isLoading(),
-      isFetching: () => itemsSource().isFetching() || searchQuery.isFetching,
+      isFetching: () =>
+        itemsSource().isFetching() ||
+        searchQuery.isFetching ||
+        contacts.isLoading(),
       isPlaceholderData: () =>
         itemsSource().isPlaceholderData() && !search.isSearching(),
       isFetchingNextPage: () =>
-        itemsSource().isFetchingNextPage() || searchQuery.isFetchingNextPage,
+        itemsSource().isFetchingNextPage() ||
+        searchQuery.isFetchingNextPage ||
+        contacts.isLoadingMore(),
       hasNextPage: () => {
         if (!enabled()) return false;
 
         return (
           (itemsSource().isEnabled() && itemsSource().hasNextPage()) ||
-          (searchQuery.isEnabled && searchQuery.hasNextPage)
+          (searchQuery.isEnabled && searchQuery.hasNextPage) ||
+          contacts.hasMore()
         );
       },
       fetchNextPage: async () => {
@@ -1479,7 +1507,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
         await Promise.all([
           itemsSource().isEnabled() ? itemsSource().fetchNextPage() : undefined,
-          searchQuery.isEnabled ? searchQuery.fetchNextPage() : undefined,
+          searchQuery.isEnabled && searchQuery.hasNextPage
+            ? searchQuery.fetchNextPage()
+            : undefined,
+          contacts.loadMore(),
         ]);
       },
       refresh: async () => {

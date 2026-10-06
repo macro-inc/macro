@@ -4,6 +4,7 @@ import { Entity } from '../../entity';
 import {
   isChannelEntity,
   isChannelMessageEntity,
+  isCrmContactEntity,
   isEmailEntity,
   isTaskEntity,
 } from '../../types/entity';
@@ -14,6 +15,7 @@ import {
   ChannelJoinButton,
   ChannelMessageSingleLine,
 } from './channel';
+import { ContactEmail } from './contact';
 import { EmailIdentity, EmailInboxChip } from './email';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
@@ -79,6 +81,9 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
             <span class="min-w-0 truncate font-semibold">
               <Entity.Title entity={props.entity} />
             </span>
+            <Show when={isCrmContactEntity(props.entity) && props.entity}>
+              {(entity) => <ContactEmail entity={entity()} />}
+            </Show>
             <Show when={isChannelEntity(props.entity) && props.entity}>
               {(entity) => (
                 <span class="ml-auto shrink-0 flex items-center">

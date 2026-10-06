@@ -917,6 +917,17 @@ The old search hit must not apply afterward, and its normal initial position sho
 still restore if no target has been applied. A newer mention or preview target must
 survive that cleanup and still open when the viewer is ready.
 
+With CRM enabled, a query in the unscoped **All** search also lists CRM contacts
+from the viewer's CRM-enabled teams, one per full email address. Contacts whose CRM
+name matches appear right after the featured results; contacts matched only by email
+(for example a shared domain) follow the search-service results. A quoted query
+searches contacts by its unquoted text. Any Type facet, tag, folder scope, or
+Command-K category handoff other than All/People leaves contacts out. Contacts keep
+loading as the list scrolls, and a contact-search failure shows the load error only
+when nothing else matched. Contact rows open the contact page; Shift-click opens a
+new split. Global Search has no Macro-user rows, so a contact who is also a Macro
+user still appears as the contact.
+
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
 Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click

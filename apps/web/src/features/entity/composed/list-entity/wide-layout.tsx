@@ -19,6 +19,7 @@ import {
   isChannelEntity,
   isChannelMessageEntity,
   isChatEntity,
+  isCrmContactEntity,
   isDocumentEntity,
   isEmailEntity,
   isGithubPrEntity,
@@ -36,6 +37,7 @@ import {
   ChannelMessageWideContent,
   ChannelWideContent,
 } from './channel';
+import { ContactEmail } from './contact';
 import { EmailWideContent, useOwningInboxForEntity } from './email';
 import {
   GithubPullRequestChecksIndicator,
@@ -174,6 +176,16 @@ export function WideLayout(props: LayoutProps) {
                   class="h-5 max-w-[40%] flex-wrap overflow-hidden"
                   pillClass="shrink-0"
                 />
+              </span>
+            )}
+          </Match>
+          <Match when={isCrmContactEntity(props.entity) && props.entity}>
+            {(entity) => (
+              <span class="flex min-w-0 items-center gap-2">
+                <span class="min-w-0 truncate">
+                  <Entity.Title entity={entity()} />
+                </span>
+                <ContactEmail entity={entity()} />
               </span>
             )}
           </Match>
