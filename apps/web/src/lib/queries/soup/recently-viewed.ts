@@ -67,7 +67,6 @@ export function useRecentlyViewedSoupQuery() {
             item.tag === 'foreignEntity' ||
             item.tag === 'channelThread' ||
             item.tag === 'calendarEvent' ||
-            item.tag === 'reminder' ||
             item.tag === 'databaseRow'
           ) {
             return [];

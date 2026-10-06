@@ -8,9 +8,11 @@ import userEvent from '@testing-library/user-event';
 import { Dialog } from '@ui';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EventDateTimeRangeFields } from './EventDateTimeRangeFields';
 import {
   EventComposerConferencePill,
   EventComposerGuestsPill,
+  EventComposerLocationPill,
 } from './EventPropertyPills';
 import type {
   EventEditorConferenceChoice,
@@ -72,10 +74,73 @@ class WebSocketStub {
 }
 
 beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   vi.stubGlobal('IntersectionObserver', ResizeObserverStub);
   vi.stubGlobal('WebSocket', WebSocketStub);
   vi.stubGlobal('scrollTo', vi.fn() as unknown as typeof window.scrollTo);
+});
+
+describe('composer popovers inside a dialog', () => {
+  it('focuses the location input and preserves changes when reopened', async () => {
+    const user = userEvent.setup();
+    render(() => {
+      const [location, setLocation] = createSignal('');
+      return (
+        <Dialog open>
+          <input aria-label="Title" />
+          <EventComposerLocationPill
+            value={location()}
+            onChange={setLocation}
+          />
+        </Dialog>
+      );
+    });
+    screen.getByLabelText('Title').focus();
+    const trigger = screen.getByRole('button', { name: 'Location' });
+    await user.click(trigger);
+    const input = screen.getByRole('textbox', { name: 'Location' });
+    expect(document.activeElement).toBe(input);
+    await user.type(input, 'Meeting room');
+    await user.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    await user.click(trigger);
+    expect(
+      (screen.getByRole('textbox', { name: 'Location' }) as HTMLInputElement)
+        .value
+    ).toBe('Meeting room');
+  });
+
+  it('selects a nested time without dismissing the date picker or composer', async () => {
+    const user = userEvent.setup();
+    render(() => {
+      const [start, setStart] = createSignal('2026-10-06T09:00');
+      return (
+        <Dialog open>
+          <input aria-label="Title" />
+          <EventDateTimeRangeFields
+            start={start()}
+            end="2026-10-06T10:00"
+            allDay={false}
+            onStartChange={setStart}
+            onEndChange={vi.fn()}
+            onAllDayChange={vi.fn()}
+          />
+        </Dialog>
+      );
+    });
+    screen.getByLabelText('Title').focus();
+    const trigger = screen.getByRole('button', {
+      name: 'Edit event start date and time',
+    });
+    await user.click(trigger);
+    const time = screen.getByLabelText('Start time');
+    await user.click(time);
+    await user.click(screen.getByRole('option', { name: '9:30 AM' }));
+    expect((time as HTMLInputElement).value).toBe('09:30');
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByLabelText('Title')).toBeTruthy();
+  });
 });
 
 afterEach(() => {
@@ -123,24 +188,28 @@ describe('EventComposerConferencePill', () => {
     expect(screen.queryByRole('option', { name: 'Macro call' })).toBeNull();
   });
 
-  it('shows the Macro selection and lets users switch to no link or Google Meet', async () => {
+  it('shows the Macro selection and lets users switch to no link or Google Meet inside the composer dialog', async () => {
     const user = userEvent.setup();
     render(() => {
       const [choice, setChoice] =
         createSignal<EventEditorConferenceChoice>('macro');
       return (
-        <EventComposerConferencePill
-          value={choice()}
-          macroCallsEnabled
-          canKeepExisting={false}
-          onChange={setChoice}
-        />
+        <Dialog open>
+          <input aria-label="Title" />
+          <EventComposerConferencePill
+            value={choice()}
+            macroCallsEnabled
+            canKeepExisting={false}
+            onChange={setChoice}
+          />
+        </Dialog>
       );
     });
     const trigger = screen.getByRole('button', {
       name: /Video conferencing/,
     });
     expect(trigger.textContent).toContain('Macro call');
+    screen.getByLabelText('Title').focus();
     await user.click(trigger);
     await user.click(screen.getByRole('option', { name: 'No meeting link' }));
     expect(trigger.textContent).toContain('Add meeting link');

@@ -128,7 +128,7 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
 
 #[test]
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
-    let prompt = system_prompt(&TOOLS, None, Some("be terse"), None);
+    let prompt = system_prompt(&TOOLS, None, Some("be terse"), None).to_string();
 
     assert!(
         prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
@@ -152,7 +152,7 @@ fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
         name: "Grunk".to_owned(),
         handle: "grunk".to_owned(),
     };
-    let prompt = system_prompt(&TOOLS, Some(&identity), None, None);
+    let prompt = system_prompt(&TOOLS, Some(&identity), None, None).to_string();
     let identity_section = prompt::agent_identity::render("Grunk", "grunk");
 
     assert!(
@@ -168,7 +168,7 @@ fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
 /// as an instruction.
 #[test]
 fn memory_follows_instructions_rather_than_preceding_them() {
-    let prompt = system_prompt(&TOOLS, None, Some("be terse"), Some("prefers Rust"));
+    let prompt = system_prompt(&TOOLS, None, Some("be terse"), Some("prefers Rust")).to_string();
 
     let instructions = prompt
         .find("<session_instructions>")
@@ -179,11 +179,45 @@ fn memory_follows_instructions_rather_than_preceding_them() {
     assert!(instructions < memory);
 }
 
+/// Two sessions of one agent differ only after the static Macro prompt, so
+/// the part before it is cached once for all of them.
+#[test]
+fn sessions_of_an_agent_share_everything_before_their_instructions() {
+    let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    };
+    let first = system_prompt(
+        &TOOLS,
+        Some(&identity),
+        Some("task A"),
+        Some("prefers Rust"),
+    );
+    let second = system_prompt(&TOOLS, Some(&identity), Some("task B"), None);
+
+    let shared = format!(
+        "{}\n{}\n{TOOLS}",
+        prompt::agent_identity::render("Grunk", "grunk"),
+        prompt::agent_session::PROMPT
+    );
+    assert_eq!(first.shared(), Some(shared.as_str()));
+    assert_eq!(second.shared(), Some(shared.as_str()));
+    assert_eq!(
+        first.rest(),
+        "\n<session_instructions>\ntask A\n</session_instructions>\n<user_memory>\nprefers Rust\n</user_memory>"
+    );
+    assert_eq!(
+        second.rest(),
+        "\n<session_instructions>\ntask B\n</session_instructions>"
+    );
+}
+
 /// Absent instructions add no section at all, rather than an empty one the
 /// model would have to interpret.
 #[test]
 fn no_instructions_means_no_section() {
-    let prompt = system_prompt(&TOOLS, None, None, Some("prefers Rust"));
+    let prompt = system_prompt(&TOOLS, None, None, Some("prefers Rust")).to_string();
 
     assert!(!prompt.contains("session_instructions"));
     assert!(prompt.contains("<user_memory>\nprefers Rust\n</user_memory>"));
@@ -193,7 +227,7 @@ fn no_instructions_means_no_section() {
 /// not become a blank delimited section.
 #[test]
 fn empty_instructions_add_no_section() {
-    let prompt = system_prompt(&TOOLS, None, Some(""), None);
+    let prompt = system_prompt(&TOOLS, None, Some(""), None).to_string();
 
     assert!(!prompt.contains("session_instructions"));
 }

@@ -950,6 +950,42 @@ async fn subscription_period_prefers_the_billable_subscription_to_an_unpaid_one(
     );
 }
 
+#[test]
+fn credit_reload_metadata_stamps_purpose_reload_and_payer() {
+    let payer = MacroUserIdStr::try_from("macro|payer@example.com".to_string()).expect("payer");
+    let metadata = credit_reload_metadata(Uuid::from_u128(13), &payer);
+
+    assert_eq!(metadata.len(), 3);
+    assert_eq!(
+        metadata.get(PURPOSE_METADATA_KEY).map(String::as_str),
+        Some(PURPOSE_AI_CREDIT_RELOAD)
+    );
+    assert_eq!(
+        metadata.get(RELOAD_METADATA_KEY).map(String::as_str),
+        Some("00000000-0000-0000-0000-00000000000d")
+    );
+    assert_eq!(
+        metadata.get(PAYER_METADATA_KEY).map(String::as_str),
+        Some("macro|payer@example.com")
+    );
+    assert!(!metadata.contains_key(CHARGE_METADATA_KEY));
+}
+
+#[test]
+fn overage_metadata_stamps_purpose_and_charge_only() {
+    let metadata = overage_metadata(Uuid::from_u128(1));
+
+    assert_eq!(metadata.len(), 2);
+    assert_eq!(
+        metadata.get(PURPOSE_METADATA_KEY).map(String::as_str),
+        Some(PURPOSE_AI_OVERAGE)
+    );
+    assert_eq!(
+        metadata.get(CHARGE_METADATA_KEY).map(String::as_str),
+        Some("00000000-0000-0000-0000-000000000001")
+    );
+}
+
 #[tokio::test]
 async fn subscription_period_reports_provider_errors() {
     let server = MockServer::start().await;

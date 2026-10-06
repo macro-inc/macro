@@ -529,13 +529,18 @@ export function SpreadsheetEditor(props: {
 
   async function importFile(file: File | undefined) {
     if (!file || !editable()) return;
-    if (!/\.(csv|xlsx)$/i.test(file.name)) {
+    if (/\.xls$/i.test(file.name)) {
+      // Converting .xls to .xlsx needs the server; uploads are upgraded.
       actions.setNotice(
-        'Choose a .csv or .xlsx file. Legacy .xls and macro-enabled workbooks are not supported.'
+        'Legacy .xls workbooks are converted when uploaded. Upload the file, then choose Edit in Macro.'
       );
       return;
     }
-    if (/\.xlsx$/i.test(file.name)) {
+    if (!/\.(csv|xlsx|xlsm)$/i.test(file.name)) {
+      actions.setNotice('Choose a .csv, .xlsx or .xlsm file.');
+      return;
+    }
+    if (/\.xls[xm]$/i.test(file.name)) {
       await workbookActions.importExcel(file);
       return;
     }
@@ -720,7 +725,7 @@ export function SpreadsheetEditor(props: {
       <input
         ref={importInput}
         type="file"
-        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".csv,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
         class="hidden"
         aria-label="Import spreadsheet file"
         onChange={(event) => {

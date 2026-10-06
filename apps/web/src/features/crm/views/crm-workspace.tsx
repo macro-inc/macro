@@ -25,11 +25,13 @@ import { CrmSidebar } from '../components/crm-sidebar';
 import { useCrmContext } from '../context/crm-context';
 import { useCrmWorkspace } from '../context/workspace-context';
 import { CRM_VIEWS } from '../core/navigation';
+import type { PeopleSort } from '../core/people';
 import type { CrmViewConfig } from '../core/saved-view';
 import { createCrmExportLoader } from '../primitives/export-source';
 import { useApplyCrmView } from './apply-view';
 import { CrmExport } from './export-companies';
 import { CrmImport } from './import-companies';
+import { CrmPeople } from './people';
 import { CrmCompanyDetail } from './record-detail';
 import { CompanyDisplayMenu, CompanyViewsMenu } from './saved-views-menu';
 import {
@@ -205,8 +207,13 @@ export function CrmWorkspaceView(props: {
     companyIds: string[];
   }>();
   const [importing, setImporting] = createSignal(false);
-  const active = () =>
-    view.activeTab() === 'people' ? 'active' : (view.activeTab() ?? 'active');
+  const active = () => view.activeTab() ?? 'active';
+  const peopleActive = () => active() === 'people';
+  const directory = useCrmContext().createPeopleSource(peopleActive);
+  const [peopleSearch, setPeopleSearch] = createSignal('');
+  const [peopleSort, setPeopleSort] =
+    createSignal<PeopleSort>('lastInteraction');
+  const [peopleDescending, setPeopleDescending] = createSignal(true);
   const [exporting, setExporting] = createSignal(false);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
@@ -218,6 +225,10 @@ export function CrmWorkspaceView(props: {
   const navigate = (id: string) => {
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
     closeCompany();
+    if (id === 'people') {
+      view.setActiveTab(id);
+      return;
+    }
     const saved = savedViews().find((v) => v.id === id);
     if (saved) {
       apply({ ...saved.config, viewMode: view.viewMode() });
@@ -313,7 +324,7 @@ export function CrmWorkspaceView(props: {
           )}
         </Show>
         <Show when={!selectedCompany()}>
-          <Show when={!isTouchDevice()}>
+          <Show when={!isTouchDevice() || peopleActive()}>
             <div class="flex h-12 shrink-0 items-center gap-3 px-4">
               <NavigationToggle onExpand={() => setCollapsed(false)}>
                 <Suspense>{sidebar()}</Suspense>
@@ -325,50 +336,65 @@ export function CrmWorkspaceView(props: {
                 <span class="truncate">{title()}</span>
               </h1>
             </div>
-            <ViewShell.Header>
-              <div class="flex min-w-0 items-center justify-between gap-3">
-                <CrmSearchBar />
-                <div class="ml-auto flex shrink-0 items-center gap-2 [&_button]:h-8 [&_button]:min-w-8 [&_button>svg]:size-4!">
-                  <SoupViewContextSort />
-                  <SoupViewContextGroup hideLabel variant="ghost" />
-                  <UnifiedFilterDropdown hideLabel variant="ghost" />
-                  <CompanyDisplayMenu />
-                  <Suspense>
-                    <CompanyViewsMenu hideLabel />
-                  </Suspense>
-                  <Show when={listsEnabled() && activeList()}>
-                    {(list) => (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setEditing({
-                            id: list().id,
-                            name: list().name,
-                            companyIds: [...list().config.companyIds],
-                          })
-                        }
-                      >
-                        Edit list
-                      </Button>
-                    )}
-                  </Show>
+            <Show when={!peopleActive()}>
+              <ViewShell.Header>
+                <div class="flex min-w-0 items-center justify-between gap-3">
+                  <CrmSearchBar />
+                  <div class="ml-auto flex shrink-0 items-center gap-2 [&_button]:h-8 [&_button]:min-w-8 [&_button>svg]:size-4!">
+                    <SoupViewContextSort />
+                    <SoupViewContextGroup hideLabel variant="ghost" />
+                    <UnifiedFilterDropdown hideLabel variant="ghost" />
+                    <CompanyDisplayMenu />
+                    <Suspense>
+                      <CompanyViewsMenu hideLabel />
+                    </Suspense>
+                    <Show when={listsEnabled() && activeList()}>
+                      {(list) => (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setEditing({
+                              id: list().id,
+                              name: list().name,
+                              companyIds: [...list().config.companyIds],
+                            })
+                          }
+                        >
+                          Edit list
+                        </Button>
+                      )}
+                    </Show>
+                  </div>
                 </div>
-              </div>
-            </ViewShell.Header>
-            <Suspense>
-              <CrmFilterChips onReset={() => navigate(active())} />
-            </Suspense>
+              </ViewShell.Header>
+              <Suspense>
+                <CrmFilterChips onReset={() => navigate(active())} />
+              </Suspense>
+            </Show>
           </Show>
-          <div class="min-h-0 min-w-0 flex-1">
-            {props.children({
-              onOpenEntity: isTouchDevice() ? undefined : openCompany,
-              mobileHeaderLeading: isTouchDevice() ? (
-                <NavigationToggle onExpand={() => setCollapsed(false)}>
-                  <Suspense>{sidebar()}</Suspense>
-                </NavigationToggle>
-              ) : undefined,
-            })}
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+            <Show
+              when={peopleActive()}
+              fallback={props.children({
+                onOpenEntity: isTouchDevice() ? undefined : openCompany,
+                mobileHeaderLeading: isTouchDevice() ? (
+                  <NavigationToggle onExpand={() => setCollapsed(false)}>
+                    <Suspense>{sidebar()}</Suspense>
+                  </NavigationToggle>
+                ) : undefined,
+              })}
+            >
+              <CrmPeople
+                directory={directory}
+                search={peopleSearch()}
+                onSearch={setPeopleSearch}
+                sort={peopleSort()}
+                onSort={setPeopleSort}
+                descending={peopleDescending()}
+                onDescending={setPeopleDescending}
+              />
+            </Show>
           </div>
         </Show>
       </ViewShell.Main>

@@ -164,6 +164,10 @@
 
 /* Homepage frame omits demo chrome without changing the workspace controls. */
 .dummy-route[data-embedded=true] .dummy-banner { display: none; }
+/* index.html and the site reset turn off overscroll on html/body. Inside the
+   homepage frame that traps the wheel: let a finished scroll chain out to the
+   homepage instead. */
+html:has(.dummy-route[data-embedded=true]), html:has(.dummy-route[data-embedded=true]) body { overscroll-behavior: auto !important; }
 @media (max-width:650px) { .dummy-route[data-embedded=true] .dummy-sidebar { top:42px; } }
 
 .sample-event-detail-row {display:flex;gap:12px;align-items:flex-start;margin:14px 0;font-size:12px;line-height:1.6;color:var(--color-ink-muted)}

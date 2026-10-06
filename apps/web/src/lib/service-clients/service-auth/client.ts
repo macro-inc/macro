@@ -738,6 +738,26 @@ export const authServiceClient = {
     );
   },
 
+  async updateAiAutoReload(args: {
+    enabled: boolean;
+    minimumBalanceCents: number;
+    targetBalanceCents: number;
+    monthlySpendLimitCents: number | null;
+  }) {
+    return await fetchWithAuth<AiUsageSnapshot>(
+      `${authHost}/ai-billing/auto-reload`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          enabled: args.enabled,
+          minimumBalanceCents: args.minimumBalanceCents,
+          targetBalanceCents: args.targetBalanceCents,
+          monthlySpendLimitCents: args.monthlySpendLimitCents,
+        }),
+      }
+    );
+  },
+
   async createAiCreditCheckout(args: {
     amountCents: number;
     successUrl: string;

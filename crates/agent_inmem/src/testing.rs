@@ -74,6 +74,15 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
         panic!("admission must not change settings")
     }
 
+    async fn update_auto_reload(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: bool,
+        _: ai_billing::domain::AutoReloadThresholds,
+    ) -> ai_billing::domain::Result<ai_billing::domain::UsageSnapshot> {
+        panic!("admission must not change settings")
+    }
+
     async fn create_credit_checkout(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -106,10 +115,18 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
     async fn mark_overage_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
         panic!("admission must not handle invoices")
     }
+
+    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
+        panic!("admission must not handle invoices")
+    }
 }
 
 /// Models advertised by shared test engines.
-pub(crate) const TEST_MODELS: &[&str] = &["anthropic/claude-sonnet-5-5", "other-model"];
+pub(crate) const TEST_MODELS: &[&str] = &[
+    "anthropic/claude-sonnet-5-5",
+    "other-model",
+    chat::domain::models::FREE_MODEL,
+];
 
 /// An engine that plays back a script of parts for every turn.
 pub(crate) struct ScriptedEngine {
@@ -210,5 +227,43 @@ impl TurnEngine for HangingEngine {
             drop(parts);
         });
         receiver
+    }
+}
+
+/// Mutable plan lookup used to exercise upgrades, downgrades, and lookup errors.
+pub(crate) struct TestModelAccess {
+    pub(crate) result: Mutex<
+        Result<
+            crate::domain::model_access::ModelAccess,
+            crate::domain::model_access::ModelAccessError,
+        >,
+    >,
+    pub(crate) owners: Mutex<Vec<model_owner::Owner>>,
+}
+
+impl TestModelAccess {
+    pub(crate) fn new(access: crate::domain::model_access::ModelAccess) -> Self {
+        Self {
+            result: Mutex::new(Ok(access)),
+            owners: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(crate) fn paid() -> Self {
+        Self::new(crate::domain::model_access::ModelAccess::Paid)
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::domain::model_access::InMemModelAccess for TestModelAccess {
+    async fn access(
+        &self,
+        owner: &model_owner::Owner,
+    ) -> Result<
+        crate::domain::model_access::ModelAccess,
+        crate::domain::model_access::ModelAccessError,
+    > {
+        self.owners.lock().unwrap().push(owner.clone());
+        *self.result.lock().unwrap()
     }
 }

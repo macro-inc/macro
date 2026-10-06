@@ -40,7 +40,9 @@ describe('draft session: reply composer', () => {
     try {
       await vi.advanceTimersByTimeAsync(0);
       await state.sendEmail();
-      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing');
+      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing', {
+        attachments: false,
+      });
       expect(context.drafts.saveDraft).toHaveBeenCalledWith(
         expect.objectContaining({
           clientHandles: expect.objectContaining({ draftId: 'existing' }),
@@ -100,7 +102,9 @@ describe('draft session: reply composer', () => {
     const state = mountReplyComposer(context, undefined, { draft });
     try {
       await vi.advanceTimersByTimeAsync(0);
-      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing');
+      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing', {
+        attachments: false,
+      });
       await state.sendEmail();
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
       expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(

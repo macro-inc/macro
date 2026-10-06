@@ -25,6 +25,7 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'channel',
   'dm',
   'crm_company',
+  'crm_contact',
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;

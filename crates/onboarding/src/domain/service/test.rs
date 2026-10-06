@@ -73,6 +73,10 @@ impl OnboardingRepo for MockRepo {
             ..active_row()
         })
     }
+
+    async fn delete_row(&self, _user: &MacroUserIdStr<'static>) -> Result<()> {
+        Ok(())
+    }
 }
 
 struct MockStore {

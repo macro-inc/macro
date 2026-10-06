@@ -876,7 +876,8 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     /// Update channel share permissions according to the referenced entity's policy.
     ///
     /// Implementations must not grant access for an item the actor cannot already view.
-    /// Agent sessions require ownership and grant edit access; other references grant view.
+    /// Agent sessions require ownership and grant view access; PDFs grant comment access,
+    /// capped at the actor's own access; other references grant view.
     fn update_channel_share_permissions_for_referenced_items(
         &self,
         actor: MacroUserIdStr<'static>,

@@ -9,7 +9,6 @@ import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queri
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
-import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   endTrackedDocumentSpan,
@@ -29,7 +28,6 @@ import {
   enableFigViewer,
   enableProjects,
   enablePsdEditor,
-  enableReminders,
   enableSnippets,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -491,13 +489,6 @@ export function runCreateAction(
         asPopover: true,
       });
       return;
-    // A reminder has no block to open: the composer asks what and when, and the
-    // reminder lives in the Reminders lists from there.
-    case 'reminder':
-      if (!isFeatureEnabled(enableReminders)) return;
-      setCreateMenuOpen(false, false);
-      openStandaloneReminderComposer();
-      return;
     case 'agent': {
       if (isFeatureEnabled(enableChatV3Agents)) {
         setCreateMenuOpen(false, false);
@@ -674,23 +665,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'p',
     keyDownHandler: () => {
       runCreateAction('initiative');
-      return true;
-    },
-  },
-  {
-    label: 'Reminder',
-    icon: getIconConfig('reminder').icon,
-    description: 'Create reminder',
-    launcherHint: 'Nudge yourself later',
-    keywords: ['new', 'make', 'add', 'remind', 'later', 'todo'],
-    blockName: 'reminder',
-    hotkeyToken: TOKENS.create.reminder,
-    // No `altHotkeyToken`: a reminder opens no split, so there is no
-    // shift-variant to bind.
-    hotkey: 'r',
-    enabled: () => isFeatureEnabled(enableReminders),
-    keyDownHandler: () => {
-      runCreateAction('reminder');
       return true;
     },
   },
@@ -889,7 +863,6 @@ export function useCreateMenuBlocks(
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
   // flag that resolves after mount would leave the menu as it was until reload.
-  const remindersFlag = useFeatureFlag(enableReminders);
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
   const projectsFlag = useFeatureFlag(enableProjects);
   const databasesFlag = useFeatureFlag(enableDatabases);
@@ -897,7 +870,6 @@ export function useCreateMenuBlocks(
   const figFlag = useFeatureFlag(enableFigViewer);
   const aiFlag = useFeatureFlag(enableAiEditor);
   return createMemo(() => {
-    remindersFlag();
     agentsFlag();
     databasesFlag();
     psdFlag();

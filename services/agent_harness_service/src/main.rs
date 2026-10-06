@@ -553,10 +553,24 @@ async fn run() -> anyhow::Result<()> {
     // Cold attaches (fresh spawns and post-restart resumes) rebuild
     // their model context from the same log every frame lands in.
     let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
+    let permissions_repo = roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone());
+    let inmem_model_access: Arc<dyn agent_inmem::domain::model_access::InMemModelAccess> = Arc::new(
+        agent_inmem::domain::model_access::PermissionModelAccess::new(
+            roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+                permissions_repo.clone(),
+                permissions_repo,
+            ),
+        ),
+    );
     let inmem = InMemRuntime {
-        manager: InMemAgentManager::new(Arc::clone(&inmem_model_engine), frames, mcp_connector)
-            .with_admission(admission.clone())
-            .with_dev_commands(enable_dev_commands),
+        manager: InMemAgentManager::new(
+            Arc::clone(&inmem_model_engine),
+            frames,
+            mcp_connector,
+            Arc::clone(&inmem_model_access),
+        )
+        .with_admission(admission.clone())
+        .with_dev_commands(enable_dev_commands),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
@@ -1126,6 +1140,7 @@ async fn run() -> anyhow::Result<()> {
                     InMemoryModels::new(
                         Some(Arc::clone(&inmem_model_engine)),
                         config.inmem_model.clone(),
+                        Arc::clone(&inmem_model_access),
                     ),
                     CursorModels::new(cursor_keys.clone(), cursor_api_base_url()),
                     macrod_models.clone(),
@@ -1138,7 +1153,11 @@ async fn run() -> anyhow::Result<()> {
     let model_service = Arc::new(
         AgentModelsServiceImpl::new(
             VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
-            InMemoryModels::new(Some(inmem_model_engine), config.inmem_model.clone()),
+            InMemoryModels::new(
+                Some(inmem_model_engine),
+                config.inmem_model.clone(),
+                inmem_model_access,
+            ),
             CursorModels::new(cursor_keys, cursor_api_base_url()),
             macrod_models,
             model_probe_timeout,

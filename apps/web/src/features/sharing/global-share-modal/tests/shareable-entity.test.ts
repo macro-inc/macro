@@ -13,6 +13,5 @@ describe('isShareableEntityType', () => {
   it('rejects entity types with no share flow', () => {
     expect(isShareableEntityType('channel')).toBe(false);
     expect(isShareableEntityType('call')).toBe(false);
-    expect(isShareableEntityType('reminder')).toBe(false);
   });
 });

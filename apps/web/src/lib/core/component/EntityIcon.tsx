@@ -11,8 +11,6 @@ import type {
   EmailEntity,
   EntityData,
   ForeignEntity,
-  NamedSubType,
-  ReminderEntity,
 } from '@entity';
 import Spreadsheet from '@icon/wide-spreadsheet.svg';
 import SpreadsheetBold from '@icon/wide-spreadsheet-bold.svg';
@@ -645,8 +643,6 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   hasIcsAttachment?: EmailEntity['hasIcsAttachment'];
   foreignSource?: ForeignEntity['foreignSource'];
   metadata?: ForeignEntity['metadata'];
-  /** Reference metadata carried by reminder entities. */
-  referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
 /** The shared entity-to-icon mapping used by lists, previews, and drag images. */
@@ -673,11 +669,6 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'initiative' }, () => 'initiative')
     .with({ type: 'project' }, () => 'project')
     .with({ type: 'calendar_event' }, () => 'calendar')
-    .with({ type: 'reminder' }, (e) =>
-      e.referencedEntity
-        ? reminderReferenceIconType(e.referencedEntity)
-        : 'reminder'
-    )
     .with({ type: 'call' }, () => 'call')
     .with({ type: 'routine' }, () => 'routine')
     .with({ type: 'foreign' }, (e) => {
@@ -692,40 +683,6 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
     .exhaustive();
-}
-
-/** What the block resolvers return when they cannot place something. */
-const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
-
-/**
- * The icon for what a reminder is about, shown beside the reminder's name.
- *
- * Synchronous by design: the referenced entity's `fileType`/`subType` are
- * resolved server-side precisely so this costs no fetch per row.
- *
- * A reference that resolves to nothing gets the reminder icon, not the unknown-file
- * glyph, which on a reminder row reads as breakage rather than as a reminder.
- * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
- * returns the literal `unknown`, and `validateEntity` returns `default`.
- */
-export function reminderReferenceIconType(
-  reference: NonNullable<ReminderEntity['referencedEntity']>
-): EntityWithValidIcon {
-  if (reference.type === 'crm_company') return 'company';
-  if (reference.type === 'crm_contact') return 'contact';
-  const blockName = itemToBlockName(
-    {
-      type: reference.type,
-      fileType: reference.fileType,
-      subType: reference.subType
-        ? { type: reference.subType as NamedSubType }
-        : undefined,
-    },
-    true
-  );
-
-  const iconType = blockName ? validateEntity(blockName) : 'default';
-  return UNRESOLVED_ICONS.has(iconType) ? 'reminder' : iconType;
 }
 
 export function getEntityIconConfig(

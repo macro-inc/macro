@@ -270,7 +270,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         crm::domain::service::NoOpCrmService,
         github_pull_request_service,
-        reminders::domain::service::NoOpRemindersService,
     ));
 
     let ingress_queue = SqsQueue::new(
@@ -481,17 +480,16 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        booking_link_tool_context: ai_tools::build_booking_link_tool_context(
+            pool.clone(),
+            macro_env::Environment::Local,
+        ),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             pool.clone(),
             macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
         ),
         notification_tool_context: notification_tool_context.clone(),
-        reminders_tool_context: ai_tools::build_reminders_tool_context(
-            pool.clone(),
-            user_email_service.clone(),
-            entity_access_service.clone(),
-        ),
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),

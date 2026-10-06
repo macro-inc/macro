@@ -26,7 +26,6 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_CALLS,
   enableCrm,
-  enableReminders,
   enableTasksReviews,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -131,14 +130,6 @@ const SIDEBAR_LINKS = [
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
   },
   {
-    id: 'reminders',
-    label: 'Reminders',
-    href: LIST_VIEW_PATHS.reminders,
-    icon: getIconConfig('reminder').icon,
-    hotkey: 'm',
-    hotkeyToken: TOKENS.sidebar.goTo.reminders,
-  },
-  {
     id: 'calendar',
     label: 'Calendar',
     href: calendarPath('timeGridWeek'),
@@ -226,14 +217,12 @@ export const GoToHotkeys = () => {
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
-  const reminders = useFeatureFlag(enableReminders);
   const reviews = useFeatureFlag(enableTasksReviews);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
-      reminders().enabled,
       reviews().enabled
     )
   );
@@ -409,7 +398,7 @@ const REVIEWS_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Recent, Activity, Calendar, Reminders, Calls, Reviews, and CRM
+ * flag-gated Recent, Activity, Calendar, Calls, Reviews, and CRM
  * entries in their correct positions.
  * Call from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
  */
@@ -417,13 +406,10 @@ const buildSidebarLinks = (
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
-  showReminders: boolean,
   showReviews: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS.filter(
-    (link) =>
-      (showCalendar || link.id !== 'calendar') &&
-      (showReminders || link.id !== 'reminders')
+    (link) => showCalendar || link.id !== 'calendar'
   );
 
   const insertAfter = (anchorId: string, link: SidebarItem) => {

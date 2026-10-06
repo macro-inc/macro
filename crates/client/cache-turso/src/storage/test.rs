@@ -6,6 +6,7 @@ mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
+mod mutation_retry;
 mod page_retention;
 mod predicate_cost;
 mod projection_writes;
@@ -168,7 +169,7 @@ async fn expect_every_storage_method_latched(
     );
     expect_reset_reason(
         storage
-            .defer_mutation(1, token("blocked", 1), 2, "blocked".into())
+            .defer_mutation(1, token("blocked", 1), 2, "blocked".into(), false)
             .await,
         expected,
     );

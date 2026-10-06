@@ -158,6 +158,24 @@ fn test_split_suffix_match() {
 }
 
 #[test]
+fn test_split_suffix_match_office_files() {
+    for (file_name, expected) in [
+        ("Budget.xlsm", Some(("Budget", "xlsm"))),
+        ("Old Memo.doc", Some(("Old Memo", "doc"))),
+        ("OLD MEMO.DOC", Some(("OLD MEMO", "DOC"))),
+        ("Deck.ppt", Some(("Deck", "ppt"))),
+        ("Ledger.xls", Some(("Ledger", "xls"))),
+        ("notes.mdoc", Some(("notes", "mdoc"))),
+    ] {
+        assert_eq!(
+            FileType::split_suffix_match(file_name),
+            expected,
+            "{file_name}"
+        );
+    }
+}
+
+#[test]
 fn design_files_are_editable_documents_not_images() {
     for file_type in [FileType::Psd, FileType::Psb, FileType::Ai, FileType::Fig] {
         assert!(!file_type.is_image(), "{file_type}");

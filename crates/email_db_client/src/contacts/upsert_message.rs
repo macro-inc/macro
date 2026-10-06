@@ -200,6 +200,11 @@ async fn update_missing_contact_names(
     pool: &PgPool,
     updates: &[(Uuid, String)],
 ) -> anyhow::Result<()> {
+    // Rows are locked in array order; concurrent messages naming the same contacts must lock
+    // them in the same order or they deadlock.
+    let mut updates: Vec<&(Uuid, String)> = updates.iter().collect();
+    updates.sort_unstable_by_key(|(id, _)| *id);
+
     let ids: Vec<Uuid> = updates.iter().map(|(id, _)| *id).collect();
     let names: Vec<String> = updates.iter().map(|(_, name)| name.clone()).collect();
 
@@ -225,6 +230,12 @@ async fn insert_new_contacts(
     pool: &PgPool,
     contacts: &[ContactPhotoless],
 ) -> anyhow::Result<Vec<address::FetchedAddressId>> {
+    // Rows claim their (link_id, email_address) keys in array order; concurrent messages that
+    // share new addresses must claim them in the same order or they deadlock.
+    let mut contacts: Vec<&ContactPhotoless> = contacts.iter().collect();
+    contacts
+        .sort_unstable_by(|a, b| (a.link_id, &a.email_address).cmp(&(b.link_id, &b.email_address)));
+
     let mut ids: Vec<Uuid> = Vec::with_capacity(contacts.len());
     let mut link_ids: Vec<Uuid> = Vec::with_capacity(contacts.len());
     let mut emails: Vec<String> = Vec::with_capacity(contacts.len());

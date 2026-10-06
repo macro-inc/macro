@@ -16,6 +16,7 @@ use serde_json::json;
 #[test]
 fn optimistic_source_supports_versioned_and_legacy_json() {
     let source = OptimisticSource {
+        client_metadata: Some(json!({"kind": "email-draft", "revision": 10})),
         identity_bindings: Vec::new(),
         mutation_data: json!({"rename": {"name": "next"}}),
         link_patches: Vec::new(),
@@ -77,6 +78,12 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
         json!({"rename": {"name": "legacy"}})
     );
     assert!(legacy_v2.projection_mutations.is_empty());
+    assert!(legacy_v2.client_metadata.is_none());
+    let without_metadata = encode_optimistic_source(&OptimisticSource {
+        client_metadata: None,
+        ..source
+    });
+    assert!(!without_metadata.contains("clientMetadata"));
     assert!(
         decode_optimistic_source(
             r#"@macro-cache/optimistic-source:{"version":2,"mutationData":{},"projectionMutations":[]}"#,
@@ -271,6 +278,7 @@ fn queue_claim_retry_and_settlement_are_ordered() {
                     },
                     200,
                     "offline".into(),
+                    false,
                 )
                 .await
                 .unwrap()

@@ -152,6 +152,19 @@ describe('forwarding with selected access', () => {
     }
   );
 
+  it('defaults pdf sharing to comment', async () => {
+    mocks.sendToChannel.mockResolvedValue({
+      channelId: 'channel-1',
+      navigateToChannel: vi.fn(),
+    });
+    const setChannelPermissions = vi.fn().mockResolvedValue(true);
+    const { submit } = mountForward(setChannelPermissions, 'pdf');
+
+    await submit();
+
+    expect(setChannelPermissions).toHaveBeenCalledWith('channel-1', 'comment');
+  });
+
   it.each(['channel', 'user', 'group'] as const)(
     'finishes sending to a %s before applying the selected access level',
     async (target) => {

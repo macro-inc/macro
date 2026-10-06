@@ -23,6 +23,7 @@ use model_entity::EntityType;
 use models_bulk_upload::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
 use sha2::{Digest, Sha256};
 use sqs_client::upload_extractor::UploadExtractQueueMessage;
+use std::ffi::OsStr;
 use std::path::Path;
 use std::{fs, str::FromStr};
 use std::{path::PathBuf, sync::Arc};
@@ -99,8 +100,10 @@ async fn handler(
                         Some(pid),
                     );
 
+                // A partial upload still has a usable tree; leaving it pending would hide
+                // every folder because of one bad file.
                 let (update_dynamodb_res, update_dss_res) = match &upload_status {
-                    UploadFolderStatus::Completed => {
+                    UploadFolderStatus::Completed | UploadFolderStatus::PartiallyCompleted => {
                         tokio::join!(
                             update_dynamodb_fut,
                             dss_client
@@ -115,12 +118,21 @@ async fn handler(
                     .inspect_err(|e| tracing::error!("Failed to update dynamo status: {:?}", e))
                     .ok();
 
-                match update_dss_res {
-                    Ok(_) => UploadFolderStatusUpdate::Completed {
+                match (update_dss_res, &upload_status) {
+                    (Ok(_), UploadFolderStatus::Completed) => UploadFolderStatusUpdate::Completed {
                         request_id: request_id.clone(),
                         project_id: root_project_id.clone(),
                     },
-                    Err(e) => {
+                    (Ok(_), UploadFolderStatus::PartiallyCompleted) => {
+                        UploadFolderStatusUpdate::PartiallyCompleted {
+                            request_id: request_id.clone(),
+                            project_id: root_project_id.clone(),
+                        }
+                    }
+                    (Ok(_), _) => UploadFolderStatusUpdate::Failed {
+                        request_id: request_id.clone(),
+                    },
+                    (Err(e), _) => {
                         tracing::error!("Failed to update dss status: {:?}", e);
                         UploadFolderStatusUpdate::Unknown {
                             request_id: request_id.clone(),
@@ -250,14 +262,18 @@ async fn process_zipped_s3_object(
         "Building file system structure for folder: {}",
         root_folder_name
     );
-    let folder_items = build_file_system(&extract_dir).await?;
-    tracing::debug!("Upload file system: {:?}", folder_items);
+    let ExtractedTree {
+        items: folder_items,
+        folders,
+    } = build_file_system(&extract_dir).await?;
+    tracing::debug!("Upload file system: {:?} {:?}", folder_items, folders);
 
     let upload_result = dss_client
         .upload_unnested_folder(
             user_id.to_string(),
             root_folder_name,
             folder_items,
+            folders,
             request_id.to_string(),
             parent_id.map(|s| s.to_string()),
         )
@@ -489,27 +505,70 @@ fn extract_zip_file(
     Ok(root_dir_name)
 }
 
-async fn build_file_system(extract_dir: &Path) -> Result<Vec<FolderItem>, Error> {
-    let mut tasks = Vec::new();
+/// Files and folders collected from an extracted upload.
+#[derive(Debug, Default)]
+struct ExtractedTree {
+    items: Vec<FolderItem>,
+    /// Every kept folder, as a path relative to the extract dir, so empty
+    /// folders still become projects.
+    folders: Vec<String>,
+}
 
-    // Walk the extracted directory and collect files
-    let walker = walkdir::WalkDir::new(extract_dir).into_iter();
+/// OS and editor clutter that should never become a document or project.
+fn is_ignored_name(name: &OsStr) -> bool {
+    let name = name.to_string_lossy();
+    let lower = name.to_ascii_lowercase();
+    // Hidden files/folders, including `.DS_Store`, `._*` and `.~lock.*#`.
+    name.starts_with('.')
+        || name == "__MACOSX"
+        // Office owner/lock files written next to open documents.
+        || name.starts_with("~$")
+        || lower == "thumbs.db"
+        || lower == "ehthumbs.db"
+        || lower == "desktop.ini"
+        // macOS custom folder icon file.
+        || name == "Icon\r"
+}
+
+/// Whether a path under the extract dir should be skipped. The first component
+/// is the root folder the user picked, which is kept whatever its name.
+fn is_ignored_entry(relative_path: &Path) -> bool {
+    relative_path.iter().skip(1).any(is_ignored_name)
+}
+
+async fn build_file_system(extract_dir: &Path) -> Result<ExtractedTree, Error> {
+    let mut tasks = Vec::new();
+    let mut folders = Vec::new();
+
+    let walker = walkdir::WalkDir::new(extract_dir)
+        .min_depth(1)
+        .sort_by_file_name()
+        .into_iter()
+        // Pruning here also skips everything inside an ignored folder.
+        .filter_entry(|entry| {
+            entry
+                .path()
+                .strip_prefix(extract_dir)
+                .map(|relative| !is_ignored_entry(relative))
+                .unwrap_or(false)
+        });
 
     for entry in walker.filter_map(|e| e.ok()) {
         let path = entry.path().to_path_buf();
+        let relative = path
+            .strip_prefix(extract_dir)
+            .map_err(|e| Error::from(format!("strip_prefix failed: {:?}", e)))?
+            .to_path_buf();
 
-        // Skip directories and the root directory itself
-        if path.is_dir() || path == extract_dir || !root_dir_common_filter(path.as_path()) {
+        if entry.file_type().is_dir() {
+            let folder = relative
+                .to_str()
+                .ok_or_else(|| Error::from(format!("Invalid folder name: {:?}", relative)))?;
+            folders.push(folder.to_string());
             continue;
         }
 
-        // Skip hidden files and folders (names starting with '.')
-        if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .map(|name| name.starts_with('.'))
-            .unwrap_or(false)
-        {
+        if !entry.file_type().is_file() {
             continue;
         }
 
@@ -527,9 +586,7 @@ async fn build_file_system(extract_dir: &Path) -> Result<Vec<FolderItem>, Error>
                 None => (full_name, None),
             };
 
-            let relative_path_without_filename = path
-                .strip_prefix(extract_dir)
-                .map_err(|e| Error::from(format!("strip_prefix failed: {:?}", e)))?
+            let relative_path_without_filename = relative
                 .parent()
                 .ok_or_else(|| Error::from(format!("No parent for path: {:?}", path)))?
                 .to_string_lossy()
@@ -537,7 +594,7 @@ async fn build_file_system(extract_dir: &Path) -> Result<Vec<FolderItem>, Error>
 
             let sha = compute_sha256(&path).await?;
 
-            Ok(FolderItem {
+            Ok::<_, Error>(FolderItem {
                 name: file_name.to_string(),
                 full_name: full_name.to_string(),
                 file_type,
@@ -550,7 +607,8 @@ async fn build_file_system(extract_dir: &Path) -> Result<Vec<FolderItem>, Error>
     }
 
     // exits immediately if any task fails
-    try_join_all(tasks).await
+    let items = try_join_all(tasks).await?;
+    Ok(ExtractedTree { items, folders })
 }
 
 async fn compute_sha256(path: &Path) -> Result<String, Error> {
@@ -567,15 +625,10 @@ async fn compute_sha256(path: &Path) -> Result<String, Error> {
     Ok(format!("{:x}", result)) // hex string
 }
 
+/// `full_name` is the name on disk; rebuilding it from the parsed type would
+/// lowercase extensions like `.DOCX` and miss the file.
 fn get_file_path_for_item(extract_dir: &Path, item: &FolderItem) -> PathBuf {
-    match &item.file_type {
-        None => extract_dir.join(&item.relative_path).join(&item.name),
-        Some(ext) => {
-            // TODO: use with added extension once stable
-            let full_name = format!("{}.{}", item.name, ext.as_str());
-            extract_dir.join(&item.relative_path).join(full_name)
-        }
-    }
+    extract_dir.join(&item.relative_path).join(&item.full_name)
 }
 
 #[tokio::main]
@@ -669,7 +722,7 @@ mod tests {
         nested_file.write_all(b"nested file content").unwrap();
 
         // Run the build_file_system function
-        let result = build_file_system(extract_dir).await.unwrap();
+        let result = build_file_system(extract_dir).await.unwrap().items;
 
         // Verify the results
         assert_eq!(result.len(), 3); // Should have 3 files total
@@ -785,10 +838,12 @@ mod tests {
         let extract_dir = temp_dir.path();
 
         // Run the build_file_system function
-        let result = build_file_system(extract_dir).await.unwrap();
+        let result = build_file_system(extract_dir).await.unwrap().items;
 
         // Verify the results
         assert_eq!(result.len(), 0); // Should be empty
+        let tree = build_file_system(extract_dir).await.unwrap();
+        assert!(tree.folders.is_empty());
     }
 
     #[tokio::test]
@@ -797,18 +852,21 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let extract_dir = temp_dir.path();
 
+        let root_dir = extract_dir.join("root");
+        fs::create_dir_all(&root_dir).unwrap();
+
         // Create a visible file
-        let visible_file_path = extract_dir.join("visible.txt");
+        let visible_file_path = root_dir.join("visible.txt");
         let mut visible_file = File::create(&visible_file_path).unwrap();
         visible_file.write_all(b"visible content").unwrap();
 
         // Create a hidden file
-        let hidden_file_path = extract_dir.join(".hidden.txt");
+        let hidden_file_path = root_dir.join(".hidden.txt");
         let mut hidden_file = File::create(&hidden_file_path).unwrap();
         hidden_file.write_all(b"hidden content").unwrap();
 
         // Run the build_file_system function
-        let result = build_file_system(extract_dir).await.unwrap();
+        let result = build_file_system(extract_dir).await.unwrap().items;
 
         // Verify that only the visible file is included
         assert_eq!(result.len(), 1);
@@ -828,7 +886,7 @@ mod tests {
         file.write_all(b"content without extension").unwrap();
 
         // Run the build_file_system function
-        let result = build_file_system(extract_dir).await.unwrap();
+        let result = build_file_system(extract_dir).await.unwrap().items;
 
         // Verify the results
         assert_eq!(result.len(), 1);
@@ -854,10 +912,202 @@ mod tests {
         let expected_sha = format!("{:x}", hasher.finalize());
 
         // Run the build_file_system function
-        let result = build_file_system(extract_dir).await.unwrap();
+        let result = build_file_system(extract_dir).await.unwrap().items;
 
         // Verify the SHA256 hash
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].sha, expected_sha);
+    }
+
+    #[test]
+    fn test_get_file_path_for_item_keeps_extension_case() {
+        let extract_dir = PathBuf::from("/tmp/extract");
+        let item = FolderItem {
+            name: "REPORT".to_string(),
+            full_name: "REPORT.DOCX".to_string(),
+            file_type: Some(FileType::Docx),
+            relative_path: "Root".to_string(),
+            sha: "abcd".to_string(),
+        };
+
+        assert_eq!(
+            get_file_path_for_item(&extract_dir, &item),
+            PathBuf::from("/tmp/extract/Root/REPORT.DOCX")
+        );
+    }
+
+    #[test]
+    fn test_is_ignored_entry() {
+        for ignored in [
+            "Root/.DS_Store",
+            "Root/~$Summary.docx",
+            "Root/Sub/~$Deck.pptx",
+            "Root/Thumbs.db",
+            "Root/THUMBS.DB",
+            "Root/desktop.ini",
+            "Root/Desktop.ini",
+            "Root/ehthumbs.db",
+            "Root/Icon\r",
+            "Root/.git/config",
+            "Root/__MACOSX/._a.docx",
+            "Root/Sub/.~lock.Budget.xlsx#",
+        ] {
+            assert!(is_ignored_entry(Path::new(ignored)), "{ignored}");
+        }
+        for kept in [
+            "Root",
+            ".dotted-root",
+            ".dotted-root/a.docx",
+            "Root/a.docx",
+            "Root/Sub/b.pptx",
+            "Root/Thumbs.db.xlsx",
+            "Root/report~$.docx",
+            "Root/Icon.png",
+        ] {
+            assert!(!is_ignored_entry(Path::new(kept)), "{kept}");
+        }
+    }
+
+    /// Zip entries as the web app's zip worker writes them for a dropped folder.
+    fn write_browser_zip(path: &Path, entries: &[(&str, Option<&[u8]>)]) {
+        let file = File::create(path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        for (name, contents) in entries {
+            match contents {
+                Some(bytes) => {
+                    zip.start_file(*name, options).unwrap();
+                    zip.write_all(bytes).unwrap();
+                }
+                None => zip.add_directory(*name, options).unwrap(),
+            }
+        }
+        zip.finish().unwrap();
+    }
+
+    async fn extract_tree(
+        entries: &[(&str, Option<&[u8]>)],
+        zip_name: &str,
+    ) -> (String, ExtractedTree, PathBuf, tempfile::TempDir) {
+        let temp_dir = tempdir().unwrap();
+        let zip_path = temp_dir.path().join("upload.zip");
+        write_browser_zip(&zip_path, entries);
+        let extract_dir = temp_dir.path().join("extracted");
+        fs::create_dir_all(&extract_dir).unwrap();
+        let root = extract_zip_file(&zip_path, &extract_dir, Some(zip_name)).unwrap();
+        let tree = build_file_system(&extract_dir).await.unwrap();
+        (root, tree, extract_dir, temp_dir)
+    }
+
+    #[tokio::test]
+    async fn test_nested_office_folder_upload() {
+        let entries: &[(&str, Option<&[u8]>)] = &[
+            ("Board Pack/", None),
+            ("Board Pack/Summary.docx", Some(b"docx")),
+            ("Board Pack/REPORT UPPER.DOCX", Some(b"upper")),
+            ("Board Pack/Deck.PPTX", Some(b"upper pptx")),
+            ("Board Pack/Café Menü.docx", Some(b"unicode")),
+            ("Board Pack/~$Summary.docx", Some(b"lock")),
+            ("Board Pack/.DS_Store", Some(b"ds")),
+            ("Board Pack/Thumbs.db", Some(b"thumbs")),
+            ("Board Pack/desktop.ini", Some(b"ini")),
+            ("Board Pack/.git/", None),
+            ("Board Pack/.git/config", Some(b"git")),
+            ("Board Pack/Empty Folder/", None),
+            ("Board Pack/Finance/", None),
+            ("Board Pack/Finance/Budget.xlsx", Some(b"xlsx")),
+            ("Board Pack/Finance/Forecasts/", None),
+            ("Board Pack/Finance/Forecasts/Scenarios/", None),
+            (
+                "Board Pack/Finance/Forecasts/Scenarios/Downside.xlsx",
+                Some(b"xlsx2"),
+            ),
+            ("Board Pack/Finance/Forecasts/Scenarios/Empty Leaf/", None),
+            ("Board Pack/Decks/", None),
+            ("Board Pack/Decks/Archive/", None),
+            ("Board Pack/Decks/Archive/Old.pptx", Some(b"pptx")),
+            ("Board Pack/Decks/Archive/~$Old.pptx", Some(b"lock")),
+        ];
+        let (root, tree, extract_dir, _guard) = extract_tree(entries, "Board Pack").await;
+        assert_eq!(root, "Board Pack");
+
+        let mut files: Vec<String> = tree
+            .items
+            .iter()
+            .map(|item| format!("{}/{}", item.relative_path, item.full_name))
+            .collect();
+        files.sort();
+        assert_eq!(
+            files,
+            vec![
+                "Board Pack/Café Menü.docx",
+                "Board Pack/Deck.PPTX",
+                "Board Pack/Decks/Archive/Old.pptx",
+                "Board Pack/Finance/Budget.xlsx",
+                "Board Pack/Finance/Forecasts/Scenarios/Downside.xlsx",
+                "Board Pack/REPORT UPPER.DOCX",
+                "Board Pack/Summary.docx",
+            ]
+        );
+
+        // Every kept file must be found again when it is copied to storage.
+        for item in &tree.items {
+            assert!(
+                get_file_path_for_item(&extract_dir, item).is_file(),
+                "{item:?}"
+            );
+        }
+        let upper = tree
+            .items
+            .iter()
+            .find(|item| item.full_name == "REPORT UPPER.DOCX")
+            .unwrap();
+        assert_eq!(upper.file_type, Some(FileType::Docx));
+        assert_eq!(upper.name, "REPORT UPPER");
+        let deck = tree
+            .items
+            .iter()
+            .find(|item| item.full_name == "Deck.PPTX")
+            .unwrap();
+        assert_eq!(deck.file_type, Some(FileType::Pptx));
+
+        assert_eq!(
+            tree.folders,
+            vec![
+                "Board Pack",
+                "Board Pack/Decks",
+                "Board Pack/Decks/Archive",
+                "Board Pack/Empty Folder",
+                "Board Pack/Finance",
+                "Board Pack/Finance/Forecasts",
+                "Board Pack/Finance/Forecasts/Scenarios",
+                "Board Pack/Finance/Forecasts/Scenarios/Empty Leaf",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_folder_with_only_empty_subfolders() {
+        let entries: &[(&str, Option<&[u8]>)] =
+            &[("Shell/", None), ("Shell/A/", None), ("Shell/A/B/", None)];
+        let (root, tree, _extract_dir, _guard) = extract_tree(entries, "Shell").await;
+        assert_eq!(root, "Shell");
+        assert!(tree.items.is_empty());
+        assert_eq!(tree.folders, vec!["Shell", "Shell/A", "Shell/A/B"]);
+    }
+
+    #[tokio::test]
+    async fn test_single_subfolder_keeps_picked_root() {
+        // The picked folder holds one subfolder and no files of its own.
+        let entries: &[(&str, Option<&[u8]>)] = &[
+            ("Wrapper/", None),
+            ("Wrapper/Inner/", None),
+            ("Wrapper/Inner/a.docx", Some(b"a")),
+        ];
+        let (root, tree, _extract_dir, _guard) = extract_tree(entries, "Wrapper").await;
+        assert_eq!(root, "Wrapper");
+        assert_eq!(tree.items.len(), 1);
+        assert_eq!(tree.items[0].relative_path, "Wrapper/Inner");
+        assert_eq!(tree.folders, vec!["Wrapper", "Wrapper/Inner"]);
     }
 }

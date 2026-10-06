@@ -61,6 +61,7 @@ async fn enqueue(
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: UUID,
                 query: if delete { DELETE } else { SAVE },
                 operation_name: Some(if delete {
@@ -168,7 +169,7 @@ fn disk_restart_rebases_newer_edits_and_preserves_uncertain_save_before_discard(
         let first_claim = claim(&mut engine, first, 1).await;
         assert!(matches!(
             engine
-                .defer_optimistic_write(first, first_claim, 20, "uncertain response".into())
+                .defer_optimistic_write(first, first_claim, 20, "uncertain response".into(), false)
                 .await
                 .unwrap(),
             DeferOptimisticWriteResult::Deferred
@@ -219,7 +220,7 @@ fn disk_restart_rebases_newer_edits_and_preserves_uncertain_save_before_discard(
         assert!(read(&mut engine, "local-draft").await.is_empty());
         assert!(matches!(
             engine
-                .defer_optimistic_write(newer, newer_claim, 40, "uncertain edit".into())
+                .defer_optimistic_write(newer, newer_claim, 40, "uncertain edit".into(), false)
                 .await
                 .unwrap(),
             DeferOptimisticWriteResult::Deferred

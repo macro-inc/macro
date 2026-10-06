@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 /// A wall-clock window in an availability schedule.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TimeWindow {
     /// Inclusive HH:MM start.
@@ -14,7 +15,8 @@ pub struct TimeWindow {
     pub end: String,
 }
 /// Availability for one weekday.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct WeeklyDay {
     /// Sunday is zero.
     pub day: u8,
@@ -22,7 +24,8 @@ pub struct WeeklyDay {
     pub windows: Vec<TimeWindow>,
 }
 /// Replacement availability for one date.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DateOverride {
     /// Local date in the schedule zone.
     pub date: NaiveDate,
@@ -30,7 +33,8 @@ pub struct DateOverride {
     pub windows: Vec<TimeWindow>,
 }
 /// Reusable hours, with DST interpreted in an IANA zone.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Schedule {
     /// Stable schedule identity.
@@ -38,6 +42,7 @@ pub struct Schedule {
     /// Display name.
     pub name: String,
     /// IANA time zone.
+    #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
     pub time_zone: chrono_tz::Tz,
     /// Weekly windows.
     pub weekly: Vec<WeeklyDay>,
@@ -45,6 +50,7 @@ pub struct Schedule {
     pub overrides: Vec<DateOverride>,
 }
 /// Team host assignment policy.
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SchedulingMode {
@@ -56,7 +62,8 @@ pub enum SchedulingMode {
     RoundRobin,
 }
 /// A question on the booking form.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Question {
     /// Stable identity.
     pub id: Uuid,
@@ -66,7 +73,7 @@ pub struct Question {
     pub required: bool,
 }
 /// A reusable booking link.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct EventType {
     /// Stable identity.
@@ -109,7 +116,7 @@ pub struct EventType {
     pub questions: Vec<Question>,
 }
 /// Editable configuration for a person or team.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     /// Public, opaque profile identity.

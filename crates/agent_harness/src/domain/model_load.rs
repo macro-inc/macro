@@ -132,7 +132,10 @@ pub trait HarnessModelAccess: Send + Sync + 'static {
 /// Fresh in-memory model probe.
 pub trait InMemoryModelProbe: Send + Sync + 'static {
     /// Probe the running in-memory implementation.
-    fn probe(&self) -> impl Future<Output = Result<RawModelProbe, ModelProbeError>> + Send;
+    fn probe(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<RawModelProbe, ModelProbeError>> + Send;
 }
 
 /// Fresh Cursor model probe.
@@ -229,7 +232,7 @@ where
                 None => Ok(RawModelProbe::Unsupported),
             },
             (ModelHarness::InMemory, None) => {
-                tokio::time::timeout(self.timeout, self.in_memory.probe())
+                tokio::time::timeout(self.timeout, self.in_memory.probe(&caller))
                     .await
                     .map_err(|_| LoadAgentModelsError::Timeout)?
             }

@@ -2,6 +2,11 @@ import {
   MACRO_AGENT_NAME,
   MACRO_AGENT_PRINCIPAL_ID,
 } from '@core/constant/macroAgent';
+import {
+  MACRO_CODER_BOT_ID,
+  MACRO_CODER_NAME,
+  MACRO_CODER_PRINCIPAL_ID,
+} from '@core/constant/macroCoder';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { IUser } from '@core/user/types';
 import { createRoot, createSignal } from 'solid-js';
@@ -84,4 +89,44 @@ describe('useAgentMentionUsers', () => {
       dispose();
     });
   });
+
+  it.each([false, true])(
+    'excludes the retired coder with the agents rollout set to %s',
+    (rollout) => {
+      createRoot((dispose) => {
+        flags.agents = () => rollout;
+        const users = useAgentMentionUsers(() => []);
+        expect(users().map((user) => user.id)).not.toContain(
+          MACRO_CODER_PRINCIPAL_ID
+        );
+
+        const person = {
+          id: 'person',
+          name: 'Person',
+          email: 'person@example.com',
+        };
+        const [enabled, setEnabled] = createSignal(true);
+        const participants = [
+          person,
+          ...[MACRO_CODER_BOT_ID, MACRO_CODER_PRINCIPAL_ID].map((id) => ({
+            id,
+            name: MACRO_CODER_NAME,
+            email: MACRO_CODER_NAME,
+          })),
+        ];
+        const mentions = useAgentMentionUsers(() => participants, enabled);
+        expect(mentions()).toContainEqual(person);
+        expect(mentions().map((user) => user.id)).not.toContain(
+          MACRO_CODER_BOT_ID
+        );
+        expect(mentions().map((user) => user.id)).not.toContain(
+          MACRO_CODER_PRINCIPAL_ID
+        );
+        setEnabled(false);
+        expect(mentions()).toEqual([person]);
+        expect(participants).toHaveLength(3);
+        dispose();
+      });
+    }
+  );
 });

@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::domain::model_access::{InMemModelAccess, ModelAccess, ModelAccessError};
 use agent::ReasoningEffort;
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
@@ -34,7 +35,7 @@ use agent_client_protocol::{
 };
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_session::domain::model::AgentSessionId;
-use ai_billing::domain::{AiAdmissionError, AiAdmissionService};
+use ai_billing::domain::AiAdmissionService;
 use ai_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
 };
@@ -120,6 +121,8 @@ pub struct AgentState {
     pub engine: Arc<dyn TurnEngine>,
     /// Admission for new provider-backed turns, including direct ACP requests.
     pub admission: Arc<dyn AiAdmissionService>,
+    /// Current model permissions for the trusted session owner.
+    pub model_access: Arc<dyn InMemModelAccess>,
     /// Conversation state, shared with the manager so it survives reattach.
     pub store: Arc<SessionStore>,
     /// Every outstanding turn's cancellation token - the running turn and any
@@ -243,13 +246,13 @@ impl AgentState {
 
     /// ACP model configuration backed by the engine's supported-model source
     /// and this session's current selection.
-    fn session_config_options(&self) -> Vec<SessionConfigOption> {
+    fn session_config_options(&self, access: ModelAccess) -> Vec<SessionConfigOption> {
         let Some(session) = self.store.get(&self.session_id) else {
             return Vec::new();
         };
         crate::domain::model_options::session_config_options(
             &session.model,
-            self.engine.supported_models(),
+            &access.models(self.engine.supported_models()),
             session.reasoning_effort,
         )
     }
@@ -553,12 +556,25 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: NewSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
+                    let access = match state.model_access.access(&state.owner).await {
+                        Ok(access) => access,
+                        Err(error) => {
+                            return responder.respond_with_error(model_access_error(error));
+                        }
+                    };
+                    if let Some(model) = state
+                        .store
+                        .get(&state.session_id)
+                        .map(|session| session.model.clone())
+                    {
+                        state.set_model(access.default_model(&model).to_owned());
+                    }
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
                     state.start_connect_mcp(request.mcp_servers);
                     let responded = responder.respond(
                         NewSessionResponse::new(acp_id.clone())
-                            .config_options(state.session_config_options()),
+                            .config_options(state.session_config_options(access)),
                     );
                     advertise_commands(&state, &connection, acp_id);
                     responded
@@ -571,6 +587,19 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: ResumeSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
+                    let access = match state.model_access.access(&state.owner).await {
+                        Ok(access) => access,
+                        Err(error) => {
+                            return responder.respond_with_error(model_access_error(error));
+                        }
+                    };
+                    if let Some(model) = state
+                        .store
+                        .get(&state.session_id)
+                        .map(|session| session.model.clone())
+                    {
+                        state.set_model(access.default_model(&model).to_owned());
+                    }
                     // Kept when the state already belongs to this ACP id -
                     // either this process served the session, or a cold
                     // attach replayed the frame log back into it (see
@@ -578,7 +607,8 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     state.bind_acp_session(request.session_id.clone(), true);
                     state.start_connect_mcp(request.mcp_servers);
                     let responded = responder.respond(
-                        ResumeSessionResponse::new().config_options(state.session_config_options()),
+                        ResumeSessionResponse::new()
+                            .config_options(state.session_config_options(access)),
                     );
                     advertise_commands(&state, &connection, request.session_id);
                     responded
@@ -654,14 +684,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             // Admission failure must not tear down resumable state.
                             let _ = match result {
                                 Ok(stop) => responder.respond(PromptResponse::new(stop)),
-                                Err(error) => responder.respond_with_error(
-                                    AcpError::new(-32603, error.to_string()).data(
-                                        serde_json::json!({
-                                            "code": error.code(),
-                                            "retryable": error.is_retryable(),
-                                        }),
-                                    ),
-                                ),
+                                Err(error) => responder.respond_with_error(error),
                             };
                             Ok(())
                         }
@@ -680,6 +703,12 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     if let Err(error) = state.expect_session(&request.session_id) {
                         return responder.respond_with_error(error);
                     }
+                    let access = match state.model_access.access(&state.owner).await {
+                        Ok(access) => access,
+                        Err(error) => {
+                            return responder.respond_with_error(model_access_error(error));
+                        }
+                    };
                     let Some(value) = request.value.as_value_id() else {
                         return responder.respond_with_error(
                             AcpError::invalid_params().data("the config option takes a value id"),
@@ -695,6 +724,11 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                                 return responder.respond_with_error(
                                     AcpError::invalid_params().data("unsupported model"),
                                 );
+                            }
+                            if !access.allows(&value.to_string()) {
+                                return responder.respond_with_error(model_access_error(
+                                    ModelAccessError::Forbidden,
+                                ));
                             }
                             state.set_model(value.to_string());
                         }
@@ -725,7 +759,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         }
                     }
                     responder.respond(SetSessionConfigOptionResponse::new(
-                        state.session_config_options(),
+                        state.session_config_options(access),
                     ))
                 }
             },
@@ -748,6 +782,15 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .await
 }
 
+fn model_access_error(error: ModelAccessError) -> AcpError {
+    let (code, retryable) = match error {
+        ModelAccessError::Forbidden => ("model_access_denied", false),
+        ModelAccessError::Unavailable => ("model_access_unavailable", true),
+    };
+    AcpError::new(-32603, error.to_string())
+        .data(serde_json::json!({ "code": code, "retryable": retryable }))
+}
+
 /// Run one turn to completion, streaming updates as they arrive.
 async fn run_turn(
     state: &AgentState,
@@ -755,7 +798,7 @@ async fn run_turn(
     acp_session_id: SessionId,
     prompt: UserPrompt,
     cancel: CancellationToken,
-) -> Result<StopReason, AiAdmissionError> {
+) -> Result<StopReason, AcpError> {
     // Include lock and admission waits in time to first output.
     let started = Instant::now();
     // Mark every exit (including denial or a dropped connection) complete so
@@ -774,7 +817,11 @@ async fn run_turn(
     tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = admit_turn(state.admission.as_ref(), &state.owner) => result?,
+        result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+            AcpError::new(-32603, error.to_string()).data(serde_json::json!({
+                "code": error.code(), "retryable": error.is_retryable(),
+            }))
+        )?,
     }
     span.record(
         "agent.turn.admission_wait_ms",
@@ -792,6 +839,14 @@ async fn run_turn(
         identity,
         instructions,
     } = state.turn_input(&prompt);
+    let access = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+    };
+    if !access.allows(&model) {
+        return Err(model_access_error(ModelAccessError::Forbidden));
+    }
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {

@@ -752,8 +752,7 @@ async fn assert_document_attachment_share_permission_side_effect_contract(
     )
     .await?;
     assert_db_attachment_count(&ctx.pool, &root.id, 1).await?;
-    assert_db_document_channel_share_permission(&ctx.pool, &document.document_id, &channel.id)
-        .await?;
+    assert_db_pdf_channel_share_permission(&ctx.pool, &document.document_id, &channel.id).await?;
 
     for event in listeners
         .wait_for_all(
@@ -1858,7 +1857,7 @@ async fn assert_db_attachment_count(
     Ok(())
 }
 
-async fn assert_db_document_channel_share_permission(
+async fn assert_db_pdf_channel_share_permission(
     pool: &PgPool,
     document_id: &str,
     channel_id: &str,
@@ -1884,7 +1883,7 @@ async fn assert_db_document_channel_share_permission(
             FROM "ChannelSharePermission"
             WHERE "share_permission_id" = $1
               AND "channel_id" = $2
-              AND "access_level"::text = 'view'
+              AND "access_level"::text = 'comment'
         )
         "#,
     )
@@ -1908,7 +1907,7 @@ async fn assert_db_document_channel_share_permission(
               AND entity_type = 'document'
               AND source_id = $2
               AND source_type::text = 'channel'
-              AND access_level::text = 'view'
+              AND access_level::text = 'comment'
               AND granted_from_project_id IS NULL
         )
         "#,
@@ -1920,7 +1919,7 @@ async fn assert_db_document_channel_share_permission(
     .context("failed to query document channel entity access row")?;
     ensure!(
         entity_access_exists,
-        "document {document_id} did not receive view entity_access from channel {channel_id}"
+        "document {document_id} did not receive comment entity_access from channel {channel_id}"
     );
 
     Ok(())

@@ -245,6 +245,10 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
       with:
         playwright: 'true'
+    - name: Build agent-fold WASM for tests
+      run: just build-agent-fold-wasm
+      timeout-minutes: 15
+      working-directory: apps/web
     - name: Test
       run: bun run test
       env:

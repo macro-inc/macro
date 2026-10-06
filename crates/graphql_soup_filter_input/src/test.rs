@@ -282,3 +282,28 @@ fn crm_document_literals_materialize_for_browser_and_server() {
         )) if domain == "acme.com"
     ));
 }
+
+#[test]
+fn contacts_are_opt_in_and_normalize_full_email_filters() {
+    assert!(
+        materialize_graphql_filter(json!({}))
+            .unwrap()
+            .crm_contact_filter
+            .is_none()
+    );
+    let ast = materialize_graphql_filter(json!({
+        "crmContactFilter": { "and": {
+            "left": { "literal": { "teamId": "00000000-0000-0000-0000-000000000011" } },
+            "right": { "literal": { "email": "  Pat+Alias@Example.com " } }
+        } }
+    }))
+    .unwrap();
+    let tree = serde_json::to_value(ast.crm_contact_filter).unwrap();
+    assert_eq!(tree["&"][1]["l"]["email"], "pat+alias@example.com");
+    assert!(
+        materialize_graphql_filter(
+            json!({ "crmContactFilter": { "literal": { "include": false } } })
+        )
+        .is_err()
+    );
+}

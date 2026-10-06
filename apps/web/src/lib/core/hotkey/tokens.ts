@@ -205,6 +205,7 @@ export const TOKENS = {
     paste: 'canvas.paste',
     zoomIn: 'canvas.zoomIn',
     zoomOut: 'canvas.zoomOut',
+    zoomFit: 'canvas.zoomFit',
     undo: 'canvas.undo',
     redo: 'canvas.redo',
     cancel: 'canvas.cancel',

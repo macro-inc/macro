@@ -104,9 +104,15 @@ public feature and blog routes, `/download`, and `/start`;
 `/onboarding-preview.html` remains a development review entry. It does not host
 the authenticated `/app/*` routes.
 
-`/download` has a single “Download for macOS” button for Apple silicon Macs.
-It resolves the current DMG from the latest GitHub release in the browser,
-with the latest release page as a fallback, and shows the current release tag.
+`/download` says “Available for macOS and Linux” and has one download button.
+Desktop Linux browsers receive the x86_64 AppImage; other browsers default to
+the Apple silicon DMG, with the selected platform named in the button.
+It searches recent stable GitHub releases for each installer, skipping CLI-only
+releases and unfinished platform uploads.
+Verified direct installer URLs remain usable while loading and if the API fails;
+update these fallbacks in `desktopDownloads.ts` when retiring older installers.
+The separate “All releases” link opens GitHub, with the selected installer's
+release version displayed beneath it.
 The page hides the header's Open app action, has no web-app download option,
 and has no header/footer navigation entry.
 Check the installer link, keyboard navigation, and desktop/mobile layouts.

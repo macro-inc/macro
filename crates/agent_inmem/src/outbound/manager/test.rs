@@ -96,6 +96,7 @@ fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMe
         engine,
         Arc::new(LogFrameSource::new(repo.clone())),
         Arc::new(crate::domain::mcp::NoMcpServers),
+        Arc::new(crate::testing::TestModelAccess::paid()),
     )
 }
 
@@ -783,6 +784,7 @@ async fn teardown_releases_pooled_mcp_sessions_for_the_egress_token() {
         Arc::new(ScriptedEngine::new(Vec::new())),
         Arc::new(LogFrameSource::new(repo.clone())),
         mcp.clone(),
+        Arc::new(crate::testing::TestModelAccess::paid()),
     );
     let id = AgentSessionId::new();
     let _spawned = manager

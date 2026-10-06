@@ -90,6 +90,27 @@ export function useUpdateAiOverageMutation() {
   }));
 }
 
+/**
+ * Turn automatic credit reloads (and with them, usage billing) on or off and
+ * set the balance thresholds and optional monthly spend limit.
+ */
+export function useUpdateAiAutoReloadMutation() {
+  return useMutation(() => ({
+    mutationFn: async (args: {
+      enabled: boolean;
+      minimumBalanceCents: number;
+      targetBalanceCents: number;
+      monthlySpendLimitCents: number | null;
+    }) =>
+      await throwOnErr(
+        async () => await authServiceClient.updateAiAutoReload(args)
+      ),
+    onSuccess: (snapshot) => {
+      queryClient.setQueryData(authKeys.aiBillingSummary.queryKey, snapshot);
+    },
+  }));
+}
+
 /** Start a Stripe Checkout for a credit pack; resolves to the hosted URL. */
 export function useCreateAiCreditCheckoutMutation() {
   return useMutation(() => ({

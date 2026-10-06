@@ -1,9 +1,7 @@
 import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
-import { reminderDetailUrl } from '@app/features/reminders/reminder-navigation';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { calendarEventLinkTarget } from '../utils';
@@ -49,7 +47,6 @@ const getEntityUrl = (entity: EntityData): string => {
       id: encodeURIComponent(entity.id),
     });
   }
-  if (entity.type === 'reminder') return reminderDetailUrl(entity.id);
 
   return buildSimpleEntityUrl(
     {
@@ -61,16 +58,12 @@ const getEntityUrl = (entity: EntityData): string => {
 };
 
 export const makeCopyLinkAction = () => {
-  const canExecute = (entity: EntityData): boolean =>
-    entity.type !== 'reminder' || isFeatureEnabled(enableReminders);
+  const canExecute = (_entity: EntityData): boolean => true;
 
   const execute = async (entities: EntityData[]) => {
     // Only copy link for the first entity (doesn't make sense for bulk)
     const entity = entities[0];
     if (!entity) return;
-    if (entity.type === 'reminder' && !isFeatureEnabled(enableReminders)) {
-      return;
-    }
 
     // The calendar is a singleton block, so there is no /app/calendar_event
     // route to link an event by id. Events copy the deep link the calendar's

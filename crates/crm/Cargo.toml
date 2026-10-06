@@ -61,6 +61,8 @@ search = ["dep:sqlx", "ports"]
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

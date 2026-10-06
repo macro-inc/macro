@@ -12,20 +12,14 @@ android-build *ARGS:
 # beforeDevCommand's environment, and the --config merge points the webview's
 # devUrl at the same port.
 ios-dev: ios-prepare
-    #!/usr/bin/env bash
-    set -euo pipefail
-    PORT="${PORT:-3000}"
-    cd tauri/src-tauri && cargo tauri ios dev --open \
-      --config "{\"build\":{\"devUrl\":\"http://localhost:${PORT}\"}}" \
-      -- --no-default-features
+    bash scripts/ios-dev.sh
 
-# iOS: prod-facing build, with bundle auto-update turned off, for testing locally on actual iPhone
-ios-build-no-update: ios-prepare
-    cd tauri/src-tauri && cargo tauri ios build --open -- --no-default-features
+# Compatibility alias for `just ios-build --no-update`.
+ios-build-no-update: (ios-build "--no-update")
 
-# iOS: build for release
-ios-build: ios-prepare
-    cd tauri/src-tauri && cargo tauri ios build --open
+# iOS: build for release; --no-update disables automatic bundle updates.
+ios-build *ARGS: ios-prepare
+    bash scripts/ios-build.sh "$@"
 
 # iOS: arm64 Simulator .app for the Appetize PR preview (the `ios_preview`
 # workflow). Simulator builds need no signing, and --no-default-features keeps
@@ -43,6 +37,7 @@ ios-build-sim prebuilt="false": ios-prepare
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "{{prebuilt}}" != "true" ]; then just build-tauri-dev; fi
+    export TMPDIR="$(/usr/bin/getconf DARWIN_USER_TEMP_DIR)"
     # frontendDist is restated because this override replaces the build table:
     # dropping it silently produces an app with an empty assets/ and no
     # index.html, which installs and launches to a black screen.
@@ -71,6 +66,12 @@ ios-prepare-tauri-api:
 dev-tauri: ensure-cache-wasm
     printf development > tauri/src-tauri/.macro-tauri-env
     bun run --bun dev
+
+# iOS prepares WASM before switching to Apple's native compiler and linker.
+[private]
+dev-tauri-prepared:
+    printf development > tauri/src-tauri/.macro-tauri-env
+    bun run --bun dev:server
 
 # List available local service names
 local-services:

@@ -1,5 +1,17 @@
 # Navigation and App Structure
 
+The native macOS app reserves 40 px above the app layout for the inset overlay
+title bar's traffic-light controls. Drag this top strip to move the window, or
+double-click it to toggle zoom. The loading shell uses the same inset; browser,
+Windows, Linux, and mobile layouts do not add this space.
+
+Native desktop content keeps its rounded split frame even with only one split,
+and the app icon rail has no right divider. On macOS, the sidebar icon beside the
+traffic lights toggles navigation for the active split; it replaces the controls
+inside the workspace. The top-right split icon opens another Home split, even
+when Home is already open, and is disabled when there is no room for a new split.
+Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
+
 ## Returning from another page
 
 A browser back/forward-cache restore reconnects the GraphQL cache worker and
@@ -59,7 +71,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*`; reminders use `/app/home/reminder/<uuid>` |
+| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
@@ -81,8 +93,6 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
-| `/app/reminders` | Reminders list (requires the Reminders flag) |
-| `/app/reminder/<uuid>` | Lightweight reminder details; the same reminder opened from Home or another split reuses its existing route owner |
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -120,13 +130,9 @@ message/thread target when opening a channel or reusing its existing pane.
 Returning to Home's list clears the prior target, so reopening an item without
 a specific location does not replay the previous search hit.
 
-Reminder navigation is native-route only: list, Home, notifications, commands,
-copied links, and new browser tabs use `/app/reminders`,
-`/app/home/reminder/<uuid>`, or `/app/reminder/<uuid>`. Imperative callers use
-`openReminderDetail` so Split Manager sends the typed destination through the
-app content navigator. The standalone and Home routes claim the same reminder
-identity, and callers must never treat a reminder ID as a document ID. Startup
-notification intents are consumed only by the destination's applied callback.
+Email snooze notifications and copied links target the original email
+conversation. The **Reminders** collection is a tab inside Email; standalone
+reminder routes and the former Home reminder detail route are removed.
 
 When an event opens inline from Home, changing the Calendar period stays under
 `/app/home/calendar/`, updates the period segment, and re-focuses that event.
@@ -311,8 +317,8 @@ Touch devices retain the flag-gated Reviews tab in Tasks.
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus.
-- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Reminders`, `Calendar`,
-  `Agents`, `Customers`. Reminders, Calendar, and Customers appear only when
+- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
+  `Agents`, `Customers`. Calendar and Customers appear only when
   their features are enabled.
 - Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
   photo as a badge in its corner. It opens Settings directly in the active
@@ -334,7 +340,13 @@ the list. Check that reading that item keeps the dot lit if another loaded row
 is unread, and that completing the last one clears it. Query bounds and
 pagination are unchanged.
 
-The Agents sidebar mixes chat and coding sessions in one newest-first list.
+The Agents sidebar opens with a **Work** / **Code** switch (radio group
+"Agents mode") under its title; Work is the default and the choice is remembered
+per user across reloads. Work lists chat sessions and legacy chats; Code lists
+coding sessions only, newest first. Each mode's empty state is its own ("No
+conversations yet." / "No coding conversations yet."). Opening a session of the
+other kind from outside Agents (a link, Home, Ask AI) switches the mode to match;
+switching modes while a session is open returns to that mode's New conversation.
 New agent sessions use one dot in the left slot for activity and notifications:
 pulsing accent for starting/working, amber for waiting for input, and solid accent
 for an unread dormant session. Read dormant sessions leave that slot empty.
@@ -349,10 +361,13 @@ the selected background. Legacy chat rows keep their chat icon.
 Use **Search conversations** beside the Conversations heading to filter by title.
 Results stay packed at the top with compact spacing, even with only a few matches;
 clearing the search restores the list.
-Its **New conversation** button opens the unified composer with one **Agent**
-selector on the right. Choosing a coding agent reveals the repository drawer;
-there is no Chat/Code switch. New sessions use the selected agent's default model
-and the URL for its kind. Opening an existing row restores its own kind and URL.
+Its **New conversation** button opens the composer for the current mode with one
+**Agent** selector on the right. In Work the selector lists Macro's models and
+chat agents, and the composer stays on one line. In Code it lists coding agents
+only, the composer opens expanded with the repository drawer below it, and the
+greeting reads "What should we build?". New sessions use the selected agent's
+default model and the URL for its kind. Home's composer is unchanged and still
+offers both kinds. Opening an existing row restores its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 
@@ -498,7 +513,7 @@ dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touc
 drops in favour of the card's DM action.
 
 `Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
-Document D, Task T, Project P, Reminder R, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
+Document D, Task T, Project P, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task, Project, and Channel open dialogs.
 When calls are enabled, `C C` (Create → Call) opens `/app/meet/new`. The call is
 created only after `Start call`; Escape closes the Create menu.
@@ -651,6 +666,16 @@ its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
+With CRM enabled, normal `@` menus include CRM contacts under **People** in
+documents, channels, discussions, and composers. Contact search loads paged
+GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
+and companies, and collapses duplicate full email addresses case-insensitively.
+The most recently active visible team record represents each email. An eligible
+Macro user with the same email takes precedence and keeps normal user-mention
+notifications. External contacts insert a link to their original CRM record;
+they do not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only.
+
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
 time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
@@ -797,12 +822,10 @@ failed items selected for retry.
 Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
 
-The New reminder dialog uses the same compact panel and fixed action footer.
-Its referenced item is a capped Badge; repeat options use bubble tabs (Does not
-repeat / Weekly / Monthly). Date, time, weekdays, and timezone retain their
-scheduling behavior. Creating a reminder dismisses the composer before saving,
-with success or failure reported by toast.
+Email snoozing uses a command menu with quick or typed times, **If no reply** /
+**Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
+retry errors inline. See [Email reminders](reminders.md).
 
-Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, reminder creation, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
 The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.

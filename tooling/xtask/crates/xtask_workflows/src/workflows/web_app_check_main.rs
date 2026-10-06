@@ -159,6 +159,7 @@ fn test() -> Job {
         .add_step(steps::mount_web_test_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(build_agent_fold_for_tests())
         .add_step(run_tests())
         .add_step(run_signup_browser_tests())
         .add_step(steps::teardown_nix())
@@ -365,6 +366,14 @@ fn run_collaboration_biome() -> Step<Run> {
     Step::new("Run Collaboration Package Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
+}
+
+// Keep cold Rust/WASM compilation outside Vitest’s five-minute setup hook.
+fn build_agent_fold_for_tests() -> Step<Run> {
+    Step::new("Build agent-fold WASM for tests")
+        .run("just build-agent-fold-wasm")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .timeout_minutes(15u32)
 }
 
 /// `bun run test` enables Vitest's filesystem module cache; the cache volume

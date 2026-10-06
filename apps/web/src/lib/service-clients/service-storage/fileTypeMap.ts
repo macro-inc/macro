@@ -508,11 +508,17 @@ export const FileTypeMap = {
   },
   djvu: { extension: 'djvu', mime: 'image/vnd.djvu', app: 'document' },
   xls: { extension: 'xls', mime: 'application/vnd.ms-excel', app: 'document' },
+  xlsm: {
+    extension: 'xlsm',
+    mime: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+    app: 'document',
+  },
   ppt: {
     extension: 'ppt',
     mime: 'application/vnd.ms-powerpoint',
     app: 'document',
   },
+  doc: { extension: 'doc', mime: 'application/msword', app: 'document' },
   pptx: { extension: 'pptx', mime: 'application/xml', app: 'document' },
   xlsx: { extension: 'xlsx', mime: 'application/xml', app: 'document' },
   db: { extension: 'db', mime: 'application/octet-stream', app: 'database' },
