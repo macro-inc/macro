@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO form_authoring_baselines (user_id, revision_id, form_id, snapshot) VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f934340b4fa28ac125f4138f23b78f6750afd9f29bc81ec50c076e77c4bad39"
+}

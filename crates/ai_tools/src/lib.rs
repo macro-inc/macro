@@ -74,7 +74,7 @@ pub use tool_context::{
     ToolDatabasesService, ToolDatabasesSqlToolContext, ToolDatabasesToolContext,
     ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
     ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
-    ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService,
+    ToolForeignEntityService, ToolFormsToolContext, ToolFrecencyService, ToolGithubPullRequestService,
     ToolImageGenerationToolContext, ToolImportService, ToolImportToolContext,
     ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
@@ -86,7 +86,7 @@ pub use tool_context::{
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
     build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
     build_crm_tool_context, build_databases_sql_tool_context, build_databases_tool_context,
-    build_image_generation_tool_context, build_initiative_tool_context,
+    build_forms_tool_context, build_image_generation_tool_context, build_initiative_tool_context,
     build_message_service_with_side_effects, build_message_service_without_side_effects,
     build_project_tool_context, build_properties_service, build_properties_service_with_broker,
     build_properties_tool_context, build_routine_tool_context, build_skill_tool_context,
@@ -152,6 +152,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
         .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
         .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
+        .add_subtoolset::<ToolFormsToolContext>(forms::inbound::toolset::authoring_toolset())
         .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
@@ -231,11 +232,13 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         AiHost::Chat | AiHost::AgentSession => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
-            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_toolset()),
+            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_toolset())
+            .add_user_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>(),
         AiHost::ChannelBot | AiHost::Mcp => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())
-            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_mcp_toolset()),
+            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_mcp_toolset())
+            .add_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>(),
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())

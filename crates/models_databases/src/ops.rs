@@ -447,6 +447,7 @@ pub struct EntityRef {
 }
 
 /// A kind of Macro entity a reference column can point at.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug,
     Clone,
@@ -490,6 +491,7 @@ pub enum EntityKind {
 }
 
 /// A type a column can have.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema, specta::Type,
 )]

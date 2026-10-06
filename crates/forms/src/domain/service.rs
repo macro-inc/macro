@@ -2,6 +2,7 @@
 //! every use case's orchestration, over its ports.
 
 mod answers;
+mod authoring;
 mod create;
 mod drafts;
 mod layout;

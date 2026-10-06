@@ -424,6 +424,21 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         db.clone(),
     );
 
+    let calendar_tool_context = ai_tools::build_calendar_tool_context(
+        db.clone(),
+        CalendarServiceUrl::new()?,
+        config.internal_api_key.to_string(),
+    );
+    let forms_tool_context = ai_tools::build_forms_tool_context(
+        db.clone(),
+        &document_tool_context,
+        &databases_tool_context,
+        &calendar_tool_context,
+        Some(side_effect_clients.connection_gateway.as_ref().clone()),
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        macro_service_urls::AppServiceUrl::new()?.to_string(),
+    );
+
     let recorder =
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
 
@@ -452,13 +467,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             db.clone(),
             config.environment,
         ),
-        calendar_tool_context: ai_tools::build_calendar_tool_context(
-            db.clone(),
-            CalendarServiceUrl::new()?,
-            config.internal_api_key.to_string(),
-        ),
+        calendar_tool_context,
         notification_tool_context,
         databases_tool_context,
+        forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,

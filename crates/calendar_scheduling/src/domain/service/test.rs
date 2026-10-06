@@ -1142,4 +1142,45 @@ async fn stale_team_events_can_be_repaired_one_at_a_time() {
     ));
 }
 
+#[tokio::test]
+async fn attaching_booking_targets_requires_current_access_and_an_enabled_saved_event() {
+    let service = TestService::new(
+        Arc::new(Memory::default()),
+        Arc::new(Calendar::default()),
+        Members,
+    );
+    let saved = service.save("admin", None, profile(None)).await.unwrap();
+    let event = saved.event_types[0].id;
+    assert!(
+        service
+            .validate_attachment("admin", saved.id, event)
+            .await
+            .is_ok()
+    );
+    assert!(matches!(
+        service
+            .validate_attachment("stranger", saved.id, event)
+            .await,
+        Err(Error::Forbidden)
+    ));
+    assert!(matches!(
+        service
+            .validate_attachment("admin", saved.id, Uuid::new_v4())
+            .await,
+        Err(Error::NotFound)
+    ));
+    let mut disabled = saved.clone();
+    disabled.event_types[0].enabled = false;
+    service.save("admin", None, disabled).await.unwrap();
+    assert!(matches!(
+        service.validate_attachment("admin", saved.id, event).await,
+        Err(Error::NotFound)
+    ));
+}
+
+impl AttachmentReadiness for Arc<Calendar> {
+    async fn ready(&self, _: &str) -> Result<(), Error> {
+        Ok(())
+    }
+}
 mod booking_links;

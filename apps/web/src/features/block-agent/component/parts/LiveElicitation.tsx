@@ -11,6 +11,15 @@
  * back to the flat form the agent also sent, through these.
  */
 
+import type { FormAccessArgs } from '@core/component/AI/component/tool/forms/types';
+import { lazy, Suspense } from 'solid-js';
+
+const FormAccessReview = lazy(async () => ({
+  default: (
+    await import('@core/component/AI/component/tool/forms/AccessReview')
+  ).FormAccessReview,
+}));
+
 import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
 import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
 import type {
@@ -389,6 +398,18 @@ export function UserToolComposer(props: {
           sink={sink<CreateCalendarEvent>()}
           previewKey={props.toolCall}
         />
+      </Match>
+      <Match when={props.tool.name === 'SetFormAccess'}>
+        <Suspense
+          fallback={
+            <p class="text-sm text-ink-muted">Loading sharing review…</p>
+          }
+        >
+          <FormAccessReview
+            initialData={props.tool.data as FormAccessArgs}
+            sink={sink<FormAccessArgs>()}
+          />
+        </Suspense>
       </Match>
       <Match when={props.tool.name === 'SendEmail'}>
         <div class="flex flex-col gap-2">

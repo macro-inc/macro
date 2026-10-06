@@ -317,3 +317,27 @@ impl<T: TeamRepository> Directory for MacroDirectory<T> {
             .collect())
     }
 }
+
+impl<O: CalendarOccurrenceService, M: calendar_events::domain::ports::CalendarMutationService>
+    crate::domain::ports::AttachmentReadiness for MacroCalendars<O, M>
+{
+    async fn ready(&self, host: &str) -> Result<(), Error> {
+        let calendars = self
+            .mutations
+            .list_visible_calendars(host)
+            .await
+            .map_err(|_| Error::CalendarUnavailable)?;
+        if calendars.iter().any(|c| c.sync_error.is_some())
+            || !calendars.iter().any(|c| c.is_primary && c.is_writable)
+            || self
+                .occurrences
+                .sync_status(host)
+                .await
+                .map_err(|_| Error::CalendarUnavailable)?
+                != CalendarSyncStatus::Ready
+        {
+            return Err(Error::CalendarUnavailable);
+        }
+        Ok(())
+    }
+}

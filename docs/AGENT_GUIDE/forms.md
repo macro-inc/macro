@@ -211,3 +211,67 @@ in the form's banner. Each submission is a row; the `Submitted` and
 but their types cannot change and they cannot be deleted while the form exists
 (including while it is in the trash). Permanently deleting the form releases
 those protections and preserves its database, columns, and answer rows.
+
+## Forms through the AI tools
+
+`CreateForm` creates a complete questionnaire over a new database, or an explicitly
+selected table whose database you own. Give questions and sections distinct local
+keys; gates refer to earlier question keys and choice rules can refer to their
+option keys. The result maps these keys to saved identities. New forms start
+**closed and members-only**. A successful create returns the actual saved draft,
+its builder and respondent URLs, and an opaque revision for subsequent changes.
+A respondent URL alone does not mean the form accepts responses.
+
+Use `ReadForm` in authoring mode before changing an existing form. It reads the
+shared durable editor document, including a draft that has not reached the
+respondent page. `EditForm` changes only named fields or placements against that
+revision, preserving unrelated human edits. A change to the same field or a
+referenced dependency requires a fresh read and a revised intent. There is no
+staged release: valid edits to an open form can become visible immediately.
+Question removal retains the response column and its existing answers. Submitted
+and Respondent remain protected. Additive columns are supported; column cleanup,
+linked type changes, independent display-label overrides, and reference pickers
+are not offered by these tools.
+
+Required means an answer must be present; it does not mean the answer qualifies.
+Use nonempty AND/OR screeners for qualification. Rules must refer to questions in
+earlier sections and options belonging to those questions. Empty answers pass
+only an `isEmpty` presence check, including for negative comparisons. Zero and
+false are answers. Put at most one booking section last. Select a saved accessible
+profile/event identity from the scheduling UI or available booking tools. Booking
+screeners reveal a link after an accepted response; the independent booking URL
+remains usable. Requests for strict booking enforcement are refused.
+
+`ListForms` searches forms reachable through your actual grants, not every public
+form. It returns at most 50 matches; narrow the name, database, status or access
+filter when truncated. Respondent-mode `ReadForm` omits authoring revisions,
+response summaries and hidden booking destinations. Authoring summaries contain
+counts, never response rows.
+
+To obtain a usable link, the owner calls `SetFormAccess` with a fresh saved revision
+and complete audience, open/closed, deadline and tally settings. Chat and agent
+sessions show a native sharing review; no additional prose confirmation is needed.
+Review the questions and screeners, who may respond, and the respondent URL, then
+choose **Save sharing** or **Cancel review**. Channel View allows responding.
+Channel Edit also permits reading and editing the entire backing database,
+including columns the form does not ask. Explicit grant deltas leave other grants
+unchanged and do not post messages or send invitations. A passed deadline keeps
+an otherwise open form closed to responses. If the reviewed state changed, read
+again and review the updated proposal. Chat completes the deferred tool after the
+turn; agent sessions return the accepted result to the running agent.
+
+Reuse a request ID only for an exact retry of that mutation. The workflow records
+its operation identity and last acknowledged phase. A partial or pending result
+is not a completed form: use `ReadForm` with the returned form and operation IDs
+before attempting repair. Do not create another form to retry an interrupted
+request. Expired revisions require a fresh authoring read. Forms authoring and
+review UI follow the existing `enable-forms` feature flag; server execution uses
+the same authenticated user/delegated-agent permissions as the rest of Forms.
+
+Sharing checks the current durable revision after remote booking validation and
+then conditionally saves settings. It does not freeze the collaborative editor:
+subsequent editor changes can become live. A returned diagnostic calls out a live
+edit detected after that check. Owners can still close a form or remove access
+when its draft or booking destination needs repair. Operation inspection reconciles
+acknowledged writes with current saved state without replaying them; earlier
+uncertain phases include instructions for a fresh targeted repair request.

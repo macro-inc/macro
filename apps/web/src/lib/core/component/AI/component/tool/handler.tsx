@@ -65,6 +65,7 @@ import {
 } from './DocumentComments';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
+import { lazyFormsToolHandlers } from './FormsHandlers';
 import { generateImageHandler } from './GenerateImage';
 import { getThreadHandler } from './GetThread';
 import {
@@ -171,6 +172,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   IssueBotCredential: issueBotCredentialHandler,
   ListBots: listBotsHandler,
   ManageBotChannelAccess: manageBotChannelAccessHandler,
+  ...lazyFormsToolHandlers,
   ListBookingLinks: listBookingLinksHandler,
   CreateBookingLink: createBookingLinkHandler,
   EditBookingLink: editBookingLinkHandler,

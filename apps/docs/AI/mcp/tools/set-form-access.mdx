@@ -1,0 +1,18 @@
+---
+title: SetFormAccess
+description: >-
+  Open, close or share a saved form using a concrete baseRevision from ReadForm.
+---
+
+# SetFormAccess
+
+Open, close or share a saved form using a concrete baseRevision from ReadForm. Requires Form Owner and a current valid respondent projection before opening. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Interactive hosts show an editable review card: call directly without an extra prose confirmation. Cancellation changes nothing. This never posts a message or sends invitations. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `requestId` | AuthoringRequestId | Yes | Stable identity of one authoring mutation and its recovery record. |
+| `formId` | FormId | Yes | Identifier of a form (the shareable entity respondents open). |
+| `baseRevision` | AuthoringRevisionId | Yes | Opaque server-retained authoring baseline, scoped to actor and form. |
+| `draft` | AccessDraft | Yes | Complete reviewed access settings. Empty grant deltas are a no-op. |

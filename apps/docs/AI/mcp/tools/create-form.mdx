@@ -1,0 +1,19 @@
+---
+title: CreateForm
+description: >-
+  Create a complete questionnaire with response columns, ordered sections,
+  screeners and an optional saved booking link.
+---
+
+# CreateForm
+
+Create a complete questionnaire with response columns, ordered sections, screeners and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in screeners and reference only earlier sections. Required questions require an answer; screeners compare answers using AND/OR. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Reuse requestId only for the identical retry. Returns actual saved IDs, revision, links and completion state; inspect partial/pending work instead of recreating.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `requestId` | AuthoringRequestId | Yes | Stable identity of one authoring mutation and its recovery record. |
+| `name` | string | Yes | Form name, also the new database name for source/new. |
+| `source` | FormSource | Yes | Where a new form's responses go. |
+| `draft` | Draft | Yes | Complete ordered draft. Extra backing columns need not be questions. |

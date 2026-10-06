@@ -8,6 +8,8 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling"] }
+calendar_scheduling = { path = "../calendar_scheduling", features = ["postgres", "calendar"] }
 routines = { path = "../routines" }
 macro_auth = { path = "../macro_auth" }
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }

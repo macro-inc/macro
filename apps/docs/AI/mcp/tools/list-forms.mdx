@@ -1,0 +1,18 @@
+---
+title: ListForms
+description: >-
+  Find forms the user has an explicit or inherited grant to.
+---
+
+# ListForms
+
+Find forms the user has an explicit or inherited grant to. Filter by name query, status, minimum access or backing database. Returns up to 50 recent matches and a total; narrow filters when truncated. This does not enumerate all public forms or read response cells. Use ReadForm for an authoring baseline before editing.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query` | string | No | Case-insensitive name substring; omit to list recent forms. |
+| `status` | `"open"` \| `"closed"` | No | Filter by current open/closed setting. |
+| `access` | `"view"` \| `"edit"` \| `"owner"` | No | Minimum effective permission. |
+| `databaseId` | string | No | Restrict to a known backing database. |

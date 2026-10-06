@@ -81,6 +81,9 @@ mod images;
 pub use images::build_image_generation_tool_context_test;
 pub use images::{ToolImageGenerationToolContext, build_image_generation_tool_context};
 
+mod forms;
+pub use forms::{ToolFormsToolContext, build_forms_tool_context};
+
 mod initiatives;
 pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
 
@@ -1592,6 +1595,7 @@ pub struct ToolServiceContext {
     pub booking_link_tool_context: ToolBookingLinkToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
     pub databases_tool_context: ToolDatabasesToolContext,
+    pub forms_tool_context: ToolFormsToolContext,
     pub databases_sql_tool_context: ToolDatabasesSqlToolContext,
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
@@ -1656,6 +1660,7 @@ impl ToolServiceContext {
         self.initiative_tool_context = self.initiative_tool_context.with_actor(actor);
         self.channel_tool_context = self.channel_tool_context.with_actor(actor);
         self.databases_tool_context = self.databases_tool_context.with_actor(actor);
+        self.forms_tool_context.actor = actor;
         self.databases_sql_tool_context = self.databases_sql_tool_context.with_actor(actor);
         self
     }

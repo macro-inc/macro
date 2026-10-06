@@ -82,6 +82,7 @@ pub(crate) struct World {
     /// A grid change that commits just before the next cell read.
     pub(crate) grid_change_before_next_cell_read: Option<GridChange>,
     /// Refuse the next batch with this error.
+    pub(crate) adopt_new_database_before_next_batch: bool,
     pub(crate) refuse_next_batch: Option<::databases::domain::models::DatabaseError>,
     /// Every database rename the service asked for, refused ones included.
     pub(crate) database_renames: Vec<RecordedDatabaseRename>,
@@ -121,6 +122,7 @@ impl World {
             layout_before_next_update: None,
             competing_submission: None,
             grid_change_before_next_cell_read: None,
+            adopt_new_database_before_next_batch: false,
             refuse_next_batch: None,
             database_renames: vec![],
             refuse_next_database_rename: None,

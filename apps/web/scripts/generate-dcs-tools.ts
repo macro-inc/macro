@@ -95,9 +95,11 @@ async function loadFrontendSchemas(): Promise<FrontendSchemas> {
 // card is hidden. The `default` is meaningless for parse-to-render, so strip it
 // from every optional (non-required) property; the field then renders as
 // `.optional()`.
-function stripOptionalDefaults(node: unknown): void {
+function stripOptionalDefaults(node: unknown, seen = new WeakSet<object>()): void {
+  if (!node || typeof node !== 'object' || seen.has(node)) return;
+  seen.add(node);
   if (Array.isArray(node)) {
-    for (const child of node) stripOptionalDefaults(child);
+    for (const child of node) stripOptionalDefaults(child, seen);
     return;
   }
   if (!node || typeof node !== 'object') return;
@@ -116,7 +118,7 @@ function stripOptionalDefaults(node: unknown): void {
       }
     }
   }
-  for (const value of Object.values(obj)) stripOptionalDefaults(value);
+  for (const value of Object.values(obj)) stripOptionalDefaults(value, seen);
 }
 
 async function generateSchemasFile(schema: FrontendSchemas) {
