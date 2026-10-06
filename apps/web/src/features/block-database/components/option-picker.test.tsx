@@ -11,6 +11,46 @@ afterEach(() => {
 });
 
 describe('option picker', () => {
+  it.each([{ selected: [] }, { selected: ['To do'] }])(
+    'starts ArrowUp at the last option with selections $selected',
+    async ({ selected }) => {
+      const onPick = vi.fn();
+      render(() => (
+        <OptionPicker
+          column={{
+            id: 'status',
+            name: 'Status',
+            dataType: 'SELECT_STRING',
+            isMultiSelect: false,
+            options: [
+              { id: 'to-do', label: 'To do', color: null },
+              { id: 'doing', label: 'Doing', color: null },
+              { id: 'done', label: 'Done', color: null },
+            ],
+            writable: true,
+          }}
+          selected={selected}
+          search=""
+          onSearch={vi.fn()}
+          onPick={onPick}
+          onClear={vi.fn()}
+          onCreate={vi.fn()}
+        />
+      ));
+      const search = screen.getByRole('combobox', {
+        name: 'Search Status options',
+      });
+      search.focus();
+      await userEvent.keyboard('{ArrowUp}');
+      expect(search.getAttribute('aria-activedescendant')).toBe(
+        screen.getByRole('option', { name: 'Done' }).id
+      );
+      expect(document.activeElement).toBe(search);
+      await userEvent.keyboard('{Enter}');
+      expect(onPick).toHaveBeenCalledExactlyOnceWith('Done');
+    }
+  );
+
   it('filters options by the typed text, ignoring case', async () => {
     render(() => {
       const [search, setSearch] = createSignal('');

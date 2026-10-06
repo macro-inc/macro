@@ -120,6 +120,8 @@ focused (**Search or create…**). Typing filters the options; when the typed na
 not an option yet, a **Create “…”** row adds it, picks it, and keeps focus (on the
 cell for a single select, in the search for a multi-select, which stays open). Arrow
 keys move through the rows and Enter picks; **Clear value** empties the cell.
+From a freshly opened picker, Down starts at the first row and Up starts at the
+last; both wrap around at the ends.
 Multi-select pickers toggle each option and keep the others.
 
 Each option row has a **⋯** button (`Edit <option>`) that opens the option editor:

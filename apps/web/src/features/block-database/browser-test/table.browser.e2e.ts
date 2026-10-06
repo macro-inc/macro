@@ -115,3 +115,24 @@ test.describe('touch resizing', () => {
     await session.detach();
   });
 });
+
+test('starts ArrowUp at the last select option and saves it with Enter', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Status: Open' }).click();
+  const search = page.getByRole('combobox', { name: 'Search Status options' });
+  await expect(search).toBeFocused();
+  await search.press('ArrowUp');
+  await expect(page.getByRole('option', { name: 'Done' })).toHaveAttribute(
+    'data-active',
+    ''
+  );
+  await search.press('Enter');
+  await expect(page.getByLabel('Writes', { exact: true })).toHaveText('1');
+  await expect(page.getByRole('button', { name: 'Status: Open' })).toHaveCount(
+    0
+  );
+  await expect(page.getByRole('button', { name: 'Status: Done' })).toHaveCount(
+    2
+  );
+});
