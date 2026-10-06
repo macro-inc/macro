@@ -57,7 +57,7 @@ const FILTER_CACHE_DIR: RuntimePath<'static> =
 /// binary for the filter.
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::Runner::Small.with_cache_tag(vars::NEXTEST_FILTER_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
             "doppler_candidates",
