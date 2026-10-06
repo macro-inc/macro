@@ -44,12 +44,13 @@ then **Open form** (respond view in a new split); other editors always see
 
 A banner at the top contains the editable form name, description, and a link
 to its database. Below, a centered column of sections holds the question rows,
-with **Outline** on the left and the **Add question** type tiles and **Structure**
-controls on the right. Each type tile has its icon beside its label. Narrow
-splits place the banner above the canvas and the question palette below it.
+with **Outline** on the left and one compact **Add question** panel on the right.
+Question types use two columns of buttons with icons beside their labels;
+**Structure** controls sit below a divider in the same panel. Narrow splits
+place the banner above the canvas and the question palette below it.
 
 - Click a question type in the right panel to add it after the selected
-  question, or drag the tile to an insertion line in the canvas. A drop creates
+  question, or drag the button to an insertion line in the canvas. A drop creates
   exactly one question; Escape or dropping outside the canvas creates nothing.
   **Database row** asks which table to use before adding the question. An empty
   form accepts a question directly and creates its first section.

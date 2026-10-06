@@ -947,15 +947,17 @@ function BuilderCanvas(
         <BuilderPalette
           question={(choice) => <AddQuestionButton choice={choice} />}
           structure={
-            <div class="flex flex-col gap-1.5">
-              <AddSectionButton kind="questions">
-                <Rows class="size-3.5" />
-                Section
-              </AddSectionButton>
-              <AddSectionButton kind="gate">
-                <ShieldCheck class="size-3.5" />
-                Screener
-              </AddSectionButton>
+            <div class="flex flex-col gap-0.5">
+              <div class="grid grid-cols-2 gap-0.5">
+                <AddSectionButton kind="questions">
+                  <Rows class="size-3.5" />
+                  Section
+                </AddSectionButton>
+                <AddSectionButton kind="gate">
+                  <ShieldCheck class="size-3.5" />
+                  Screener
+                </AddSectionButton>
+              </div>
               <Show
                 when={booking()}
                 fallback={
@@ -967,8 +969,9 @@ function BuilderCanvas(
                           Booking
                         </>
                       ),
-                      triggerClass: 'w-full justify-start gap-2',
-                      triggerVariant: 'outline',
+                      triggerClass:
+                        'w-full justify-start gap-1 rounded-md px-1 text-xs',
+                      triggerVariant: 'ghost',
                       onChoose: addBooking,
                     })}
                   </Show>
@@ -976,9 +979,9 @@ function BuilderCanvas(
               >
                 {(existing) => (
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="md"
-                    class="w-full justify-start gap-2"
+                    class="w-full justify-start gap-1 rounded-md px-1 text-xs"
                     onClick={() => revealBooking(existing().id)}
                   >
                     <CalendarCheck class="size-3.5" />
@@ -988,9 +991,9 @@ function BuilderCanvas(
               </Show>
               <Dropdown>
                 <Dropdown.Trigger
-                  variant="outline"
+                  variant="ghost"
                   size="md"
-                  class="w-full justify-start gap-2"
+                  class="w-full justify-start gap-1 rounded-md px-1 text-xs"
                   disabled={hiddenColumnRows().length === 0}
                 >
                   <Database class="size-3.5" />
@@ -1081,9 +1084,9 @@ function BuilderCanvas(
     const handle = drag.handleProps(target);
     return (
       <Button
-        variant="outline"
+        variant="ghost"
         size="md"
-        class="h-auto min-h-12 w-full touch-none justify-start gap-1.5 rounded-lg px-2 py-3 text-xs"
+        class="w-full touch-none justify-start gap-1 rounded-md px-1 text-xs"
         aria-label={`Add ${buttonProps.choice.label}`}
         data-drag-source
         data-drag-handle={`new-question:${buttonProps.choice.id}`}
@@ -1104,9 +1107,7 @@ function BuilderCanvas(
           type={buttonProps.choice.id}
           class="size-3.5 text-ink-muted"
         />
-        <span class="whitespace-normal text-left leading-tight">
-          {buttonProps.choice.label}
-        </span>
+        <span>{buttonProps.choice.label}</span>
       </Button>
     );
   }
@@ -1122,9 +1123,9 @@ function BuilderCanvas(
     const handle = drag.handleProps(target);
     return (
       <Button
-        variant="outline"
+        variant="ghost"
         size="md"
-        class="w-full touch-none justify-start gap-2"
+        class="w-full touch-none justify-start gap-1 rounded-md px-1 text-xs"
         data-drag-source
         data-drag-handle={`new-section:${buttonProps.kind}`}
         disabled={props.detail.tableGone}

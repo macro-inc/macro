@@ -55,12 +55,12 @@ export function BuilderSkeleton() {
             )}
           </For>
         </div>
-        <div class="hidden flex-col gap-4 rounded-xl border border-edge-muted bg-surface p-3 @5xl/builder:flex">
+        <div class="hidden flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-2 @5xl/builder:flex">
           <div class="h-4 w-24 rounded bg-hover motion-safe:animate-pulse" />
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-0.5">
             <For each={[0, 1, 2, 3, 4, 5, 6, 7]}>
               {() => (
-                <div class="h-14 rounded-lg bg-hover motion-safe:animate-pulse" />
+                <div class="h-8 rounded-md bg-hover motion-safe:animate-pulse" />
               )}
             </For>
           </div>
@@ -236,11 +236,13 @@ export function BuilderPalette(props: {
   return (
     <aside
       aria-label="Add to form"
-      class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col gap-4 @5xl/builder:sticky @5xl/builder:top-4 @5xl/builder:max-h-[calc(100dvh-8rem)] @5xl/builder:overflow-y-auto"
+      class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col rounded-xl border border-edge-muted bg-surface @5xl/builder:sticky @5xl/builder:top-4 @5xl/builder:max-h-[calc(100dvh-8rem)] @5xl/builder:overflow-y-auto"
     >
-      <div class="rounded-xl border border-edge-muted bg-surface p-3">
-        <h3 class="mb-3 text-sm font-semibold text-ink">Add question</h3>
-        <div class="grid grid-cols-2 gap-2">
+      <div class="p-2">
+        <h3 class="mb-1 px-1.5 py-1 text-sm font-semibold text-ink">
+          Add question
+        </h3>
+        <div class="grid grid-cols-2 gap-0.5">
           <For
             each={QUESTION_TYPE_CHOICES.filter(
               (choice) => choice.group === 'forms'
@@ -249,8 +251,10 @@ export function BuilderPalette(props: {
             {props.question}
           </For>
         </div>
-        <h4 class="mt-4 mb-2 text-[11px] font-medium text-ink-muted">Macro</h4>
-        <div class="grid grid-cols-2 gap-2">
+        <h4 class="mt-2 mb-1 px-1.5 text-[11px] font-medium text-ink-muted">
+          Macro
+        </h4>
+        <div class="grid grid-cols-2 gap-0.5">
           <For
             each={QUESTION_TYPE_CHOICES.filter(
               (choice) => choice.group === 'macro'
@@ -260,8 +264,10 @@ export function BuilderPalette(props: {
           </For>
         </div>
       </div>
-      <div class="flex flex-col gap-2 rounded-xl border border-edge-muted bg-surface p-3">
-        <h3 class="mb-1 text-xs font-medium text-ink-muted">Structure</h3>
+      <div class="border-t border-edge-divider p-2">
+        <h3 class="mb-1 px-1.5 text-[11px] font-medium text-ink-muted">
+          Structure
+        </h3>
         {props.structure}
       </div>
     </aside>
