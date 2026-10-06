@@ -59,3 +59,29 @@ fn legacy_office_types_round_trip() {
         );
     }
 }
+
+#[test]
+fn every_mime_type_parses_back_to_a_content_type() {
+    for file_type in FileType::all() {
+        let content_type = ContentType::from_str(file_type.mime_type())
+            .unwrap_or_else(|e| panic!("{file_type}: {e}"));
+        assert_eq!(content_type.mime_type(), file_type.mime_type());
+    }
+}
+
+#[test]
+fn mime_types_parse_case_insensitively() {
+    assert_eq!(
+        ContentType::from_str("application/vnd.ms-excel.sheet.macroEnabled.12").unwrap(),
+        ContentType::from(FileType::Xlsm)
+    );
+    assert_eq!(
+        ContentType::from_str("APPLICATION/VND.MS-EXCEL.SHEET.MACROENABLED.12").unwrap(),
+        ContentType::from(FileType::Xlsm)
+    );
+    assert_eq!(
+        ContentType::from_str("Application/MSWord").unwrap(),
+        ContentType::from(FileType::Doc)
+    );
+    assert!(ContentType::from_str("application/x-not-a-type").is_err());
+}

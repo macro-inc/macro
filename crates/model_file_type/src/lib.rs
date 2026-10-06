@@ -157,19 +157,16 @@ macro_rules! generate_file_types {
         impl FromStr for ContentType {
             type Err = ValueError<Self>;
             fn from_str(mime_type: &str) -> Result<Self, Self::Err> {
-                let cleaned = mime_type.to_ascii_lowercase();
-
-                // there can be multiple variants for the same mime type
-                // but it does not matter for the purposes of this function
-                #[expect(unreachable_patterns)]
-                match cleaned.as_str() {
-                    $(
-                        $mime_type => Ok(ContentType::$variant),
-                    )*
-                    _ => {
-                        Err(ValueError(cleaned, PhantomData))
+                // MIME types are case-insensitive, and some canonical ones are
+                // mixed case (`application/vnd.ms-excel.sheet.macroEnabled.12`).
+                // There can be multiple variants for the same mime type; the
+                // first one wins, which does not matter for this function.
+                $(
+                    if mime_type.eq_ignore_ascii_case($mime_type) {
+                        return Ok(ContentType::$variant);
                     }
-                }
+                )*
+                Err(ValueError(mime_type.to_ascii_lowercase(), PhantomData))
             }
 
         }
