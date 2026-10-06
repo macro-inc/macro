@@ -13,6 +13,10 @@ use model_file_type::FileType;
 ///
 /// A PDF grants comment access so channel members can annotate it, capped at
 /// the sharer's own access. `file_type` is the referenced document's file type.
+#[cfg_attr(
+    not(feature = "outbound"),
+    allow(dead_code, reason = "only the outbound share adapter grants access")
+)]
 pub(crate) fn grant_level(
     item_type: ReferencedShareItemType,
     file_type: Option<FileType>,
