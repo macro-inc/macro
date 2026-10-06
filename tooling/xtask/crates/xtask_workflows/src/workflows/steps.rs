@@ -325,6 +325,22 @@ pub fn mount_web_build_cache_volume() -> Step<Use> {
         ))
 }
 
+/// [`mount_web_build_cache_volume`] plus [`vars::WASM_PKG_CACHE_DIR`], for the PR
+/// build that reuses unchanged wasm packages. Deploy builds always rebuild them.
+pub fn mount_web_build_check_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with((
+            "path",
+            format!(
+                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}",
+                vars::BUN_CACHE_VOLUME_DIR,
+                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+                vars::WASM_PKG_CACHE_DIR,
+            ),
+        ))
+}
+
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
 /// Jobs that run `gen-api` follow this with [`configure_namespace_sccache`].
 /// Requires [`setup_nix`] first.

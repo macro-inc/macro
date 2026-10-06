@@ -87,6 +87,10 @@ pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
 /// the lockfile and tsconfig, so PR jobs can share one volume.
 pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-modules";
 
+/// Browser wasm packages keyed by their inputs, so the PR build reuses a package
+/// whose crates did not change (`apps/web/scripts/cached-wasm-build.sh`).
+pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
+
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
 /// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
 pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";

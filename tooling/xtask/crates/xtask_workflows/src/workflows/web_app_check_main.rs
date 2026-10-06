@@ -180,7 +180,7 @@ fn build() -> Job {
         // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -402,6 +402,7 @@ fn collaboration_cycles_import_check() -> Step<Run> {
 fn run_build() -> Step<Run> {
     Step::new("Build")
         .run("just build-dev")
+        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
