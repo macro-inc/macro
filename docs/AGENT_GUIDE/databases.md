@@ -392,10 +392,11 @@ immediately. The empty input rotates through example questions; a selected datab
 uses its actual table and column names. Typing hides these hints, and reduced-motion
 preferences keep them static. Use the searchable source picker below the question to
 choose a database; the entire chosen database is in scope, without a table
-prerequisite. **Automatic** finds a relevant accessible database from the question
-with the discovery tools and inspects all its tables. The answer's `QueryDatabase`
-runs with view access only, so asking a question never changes data, even for an
-editor. Both discovery and final answer formatting receive the registered database
+prerequisite. An explicit source also disambiguates databases with identical names
+when previewing or refreshing an answer. **Automatic** finds a relevant accessible
+database from the question with the discovery tools and inspects all its tables.
+The answer's `QueryDatabase` runs with view access only, so asking a question never
+changes data, even for an editor. Both discovery and final answer formatting receive the registered database
 tool reference, including the current SQL dialect. Verify an Automatic question
 that needs ListDatabases, DescribeDatabase, and QueryDatabase completes with live
 results; repeat with an explicit source and an aggregate using an AS alias. The

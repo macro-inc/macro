@@ -73,7 +73,10 @@ describe('automatic question source verification', () => {
       })
     )._unsafeUnwrap();
     expect(verified).toEqual({ ...answer, source: schema });
-    expect(read).toHaveBeenCalledExactlyOnceWith(generated.sql);
+    expect(read).toHaveBeenCalledExactlyOnceWith(generated.sql, {
+      databaseId: schema.databaseId,
+      source: generated.source,
+    });
     expect(describe).not.toHaveBeenCalled();
   });
 
