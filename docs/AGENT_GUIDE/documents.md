@@ -276,7 +276,9 @@ protection). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
-while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
+while the preview was open. Macros and encrypted files are rejected. A legacy `.xls`
+is rejected here with a hint to upload it instead; uploads convert it (see
+[Legacy Office uploads](#legacy-office-uploads)).
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
 current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, shapes, text boxes, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas and rich text are not fully supported; review import notes before conversion.
@@ -431,6 +433,27 @@ Extension case does not matter (`REPORT.DOCX` imports as `.docx`). If some files
 fail, the rest of the tree still appears and a toast says some files could not be
 uploaded. The unzip runs in the upload extractor Lambda, which the local stack
 does not run; verify folder imports against a deployed backend.
+
+## Legacy Office uploads
+
+Uploaded legacy binary Office files are converted to their OpenXML equivalents
+on the server: `.doc` → `.docx`, `.ppt` → `.pptx`, `.xls` → `.xlsx`. This also
+applies to files inside an uploaded folder. The document keeps its id and name;
+its file type changes and the converted file becomes its latest version.
+Converted Word files then go through the regular DOCX pipeline, and converted
+workbooks open in the uploaded-workbook preview, where **Edit in Macro** imports
+them into a native spreadsheet.
+
+While a legacy file uploaded in the last 10 minutes is converting, its view shows
+**Converting … to a PowerPoint presentation…** (or Word document / Excel
+workbook) with **Download** still available for the original. When the
+conversion lands, the split reopens in the right block (workbooks switch in
+place). If conversion fails or takes over 3 minutes, the view falls back to
+**No preview available**, and the original stays downloadable. Legacy files
+uploaded before conversion existed are not converted.
+
+Conversion runs in the convert service through the upload finalizer Lambda,
+neither of which the local stack runs, so verify it against a deployed backend.
 
 ## Presentations (PowerPoint)
 

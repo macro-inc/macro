@@ -49,3 +49,5 @@ Notices:
 - U.S. federal works (SEC, Census, BLS, BEA, IRS, SBA, GSA) are in the public domain; the FRED export carries BLS series data.
 
 Templates whose terms forbid redistribution (Microsoft Create, Vertex42, Breaking Into Wall Street, Damodaran, SBDC) were used only for local testing and are not committed. Add a file by copying it here unmodified and adding its `file`, `title`, `source` and `license` to the manifest; set `skipCalculation` with a reason only when the engine cannot finish it.
+
+`upgraded-from-xls.xlsx` is a legacy Excel 97 workbook (`services/convert_service/fixtures/legacy/budget.xls`) converted to `.xlsx` by LibreOffice with the `Calc MS Excel 2007 XML` filter, exactly as the convert service upgrades uploaded `.xls` files. `../xlsx-upgraded-legacy.test.ts` checks that it imports into a native spreadsheet with its sheets, formulas, merges and number formats.
