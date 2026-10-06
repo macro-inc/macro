@@ -76,7 +76,17 @@ export interface FoldCloseRequest {
   sessionId: string;
 }
 
-export type FoldRequest = FoldPushRequest | FoldReadRequest | FoldCloseRequest;
+/** Initialize the worker and WASM without opening a session. */
+export interface FoldPreloadRequest {
+  id: number;
+  kind: 'preload';
+}
+
+export type FoldRequest =
+  | FoldPushRequest
+  | FoldReadRequest
+  | FoldCloseRequest
+  | FoldPreloadRequest;
 
 /** What the worker sends back, one per request. */
 export type FoldResponse =
@@ -89,4 +99,5 @@ export type FoldResponse =
       metadata: SessionMetadata;
     }
   | { id: number; ok: true; kind: 'close' }
+  | { id: number; ok: true; kind: 'preload' }
   | { id: number; ok: false; error: string };

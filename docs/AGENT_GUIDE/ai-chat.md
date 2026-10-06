@@ -15,6 +15,12 @@ first prose. Verify a second prompt and a reload preserve the complete answer.
 Selected model and effort must be confirmed before the first prompt; settings
 already confirmed by the runtime do not need another control request.
 
+Repeat from a fresh tab using Home, Agents, and a document's Chat action.
+Focusing an agent composer prepares its transcript renderer locally; focus alone
+must not send a prompt. Record navigation and focus time separately from typing
+and Enter-to-first-answer time. Check the first readable agent words in the DOM,
+not a loading indicator or a bare Markdown delimiter.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and
