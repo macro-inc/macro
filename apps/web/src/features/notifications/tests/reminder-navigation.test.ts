@@ -15,12 +15,7 @@ vi.mock('../notification-stacking', () => ({
 }));
 
 const flags = vi.hoisted(() => ({ reminders: true }));
-const openReminderDetail = vi.hoisted(() => vi.fn());
 const getNotificationById = vi.hoisted(() => vi.fn());
-
-vi.mock('@app/features/reminders/reminder-navigation', () => ({
-  openReminderDetail,
-}));
 
 vi.mock('@app/features/calendar-view/calendar-range', () => ({
   createCalendarRange: vi.fn(),
@@ -61,7 +56,8 @@ import type { UnifiedNotification } from '../types';
 
 function reminderNotification(): UnifiedNotification {
   return {
-    entity_id: 'reminder-1',
+    entity_id: 'thread-1',
+    entity_type: 'email_thread',
     notification_event_type: 'reminder',
     notification_metadata: {
       tag: 'reminder',
@@ -74,46 +70,34 @@ function reminderNotification(): UnifiedNotification {
 }
 
 describe('reminder notification navigation', () => {
+  const openWithSplit = vi.fn();
+  const layout = {
+    getSplitByContent: vi.fn(() => undefined),
+    openWithSplit,
+  } as unknown as SplitManager;
   beforeEach(() => {
     flags.reminders = true;
-    openReminderDetail.mockClear();
+    openWithSplit.mockReset();
     getNotificationById.mockReset();
   });
 
-  it('opens source-less reminders through their claimed detail route', async () => {
-    const getOrchestrator = vi.fn();
-    const layout = {
-      getOrchestrator,
-    } as unknown as SplitManager;
-
+  it('opens the original email thread', async () => {
     const result = await openNotification(reminderNotification(), layout);
-
     expect(result.isOk()).toBe(true);
-    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
-      manager: layout,
-      handle: undefined,
-      openInNewSplit: false,
-    });
-    expect(getOrchestrator).not.toHaveBeenCalled();
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'email', id: 'thread-1' },
+      expect.objectContaining({ activate: true })
+    );
   });
 
-  it('defers feature enforcement to the reactive destination route', async () => {
+  it('keeps delivered email reminders navigable after disabling creation', async () => {
     flags.reminders = false;
-    const layout = {} as SplitManager;
-
     await openNotification(reminderNotification(), layout);
-
-    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
-      manager: layout,
-      handle: undefined,
-      openInNewSplit: false,
-    });
+    expect(openWithSplit).toHaveBeenCalledOnce();
   });
 
-  it('forwards acceptance so startup intent clears only after route apply', async () => {
-    const layout = {} as SplitManager;
+  it('reports acceptance only after the email route is applied', async () => {
     const onApplied = vi.fn();
-
     await openNotification(
       reminderNotification(),
       layout,
@@ -122,34 +106,34 @@ describe('reminder notification navigation', () => {
       undefined,
       { onApplied }
     );
-
-    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
-      manager: layout,
-      handle: undefined,
-      openInNewSplit: false,
-      onApplied,
-    });
     expect(onApplied).not.toHaveBeenCalled();
+    openWithSplit.mock.calls[0][1].onApplied();
+    expect(onApplied).toHaveBeenCalledOnce();
+  });
+
+  it('does not reopen a removed generic reminder surface', async () => {
+    const notification = {
+      ...reminderNotification(),
+      entity_type: 'reminder',
+    } as UnifiedNotification;
+    await openNotification(notification, layout);
+    expect(openWithSplit).not.toHaveBeenCalled();
   });
 
   it('does not open a fetched reminder after its route host becomes stale', async () => {
-    const notification = reminderNotification();
-    getNotificationById.mockResolvedValue(notification);
-    const layout = {} as SplitManager;
+    getNotificationById.mockResolvedValue(reminderNotification());
     const source = { notifications: () => [] } as unknown as NotificationSource;
-
     const result = await openNotificationFromId(
       'notification-1',
       layout,
       source,
       { canOpen: () => false }
     );
-
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({
       tag: 'NavigationDeferredError',
       notificationId: 'notification-1',
     });
-    expect(openReminderDetail).not.toHaveBeenCalled();
+    expect(openWithSplit).not.toHaveBeenCalled();
   });
 });

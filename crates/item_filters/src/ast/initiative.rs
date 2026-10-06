@@ -11,7 +11,7 @@ use crate::{InitiativeFilters, ast::ExpandErr};
 pub enum InitiativeLiteral {
     /// Opt this query into initiatives at all.
     ///
-    /// Like reminders, initiatives are **off by default** — a query that
+    /// Initiatives are **off by default** — a query that
     /// says nothing about them gets none, so adding them to Soup did not
     /// change what pre-existing Soup views return. Asking for specific ids
     /// or owners also counts as opting in.

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE user_notification SET state = 'done' WHERE notification_id = $1::uuid",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a6fe35d3b49cd46116ea15a05abd8f3d40d3825fccf9fd96dde66a7558d34d9e"
+}

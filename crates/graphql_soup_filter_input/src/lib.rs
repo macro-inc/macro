@@ -38,7 +38,6 @@ use item_filters::{
         initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
-        reminder::ReminderLiteral,
     },
 };
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
@@ -386,8 +385,6 @@ pub struct GraphqlEntityFilterAst {
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
     /// The GitHub pull request filter to apply, on top of the foreign entity filter.
     github_pull_request_filter: Option<GraphqlGithubPullRequestExpr>,
-    /// The reminder filter to apply.
-    reminder_filter: Option<GraphqlReminderExpr>,
     /// The agent session filter to apply.
     agent_session_filter: Option<GraphqlAgentSessionExpr>,
     /// The initiative filter to apply. Initiatives are opt-in.
@@ -428,7 +425,6 @@ impl GraphqlEntityFilterAst {
             crm_contact_filter: optional_tree(self.crm_contact_filter)?,
             foreign_entity_filter: optional_tree(self.foreign_entity_filter)?,
             github_pull_request_filter: optional_tree(self.github_pull_request_filter)?,
-            reminder_filter: optional_tree(self.reminder_filter)?,
             agent_session_filter: optional_tree(self.agent_session_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
             initiative_filter: optional_tree(self.initiative_filter)?,
@@ -562,13 +558,6 @@ filter_expr_input!(
     GraphqlGithubPullRequestLiteral,
     GithubPullRequestLiteral,
     "GithubPullRequestFilterExpr"
-);
-filter_expr_input!(
-    GraphqlReminderExpr,
-    GraphqlReminderBinaryExpr,
-    GraphqlReminderLiteral,
-    ReminderLiteral,
-    "ReminderFilterExpr"
 );
 filter_expr_input!(
     GraphqlAgentSessionExpr,
@@ -1151,47 +1140,6 @@ impl GraphqlCallStatus {
             Self::Missed => CallStatus::Missed,
             Self::Unattended => CallStatus::Unattended,
         }
-    }
-}
-
-/// GraphQL input representing the reminder literal.
-#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-enum GraphqlReminderLiteral {
-    /// Opt this query into reminders at all. Reminders are off by default, so
-    /// without this (or an `id`/`entity`) Soup omits them entirely — a filter
-    /// of only `completed` would otherwise silently match nothing. Must be
-    /// `true`; there is no literal for excluding reminders, that is the default.
-    Include(bool),
-    /// The id option.
-    Id(ID),
-    /// The referenced entity, as `"{type}:{id}"`.
-    Entity(String),
-    /// Whether the owner has marked the reminder done.
-    Completed(bool),
-    /// Whether the reminder has come due and is awaiting its owner.
-    Fired(bool),
-}
-
-impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
-    /// Convert this value into the expr representation.
-    fn into_expr(self) -> InputResult<Expr<ReminderLiteral>> {
-        let literal = match self {
-            // `include: false` is the default, not a literal — accepting it
-            // would opt the query in, the opposite of what was asked.
-            Self::Include(false) => {
-                return Err(InputError::new(
-                    "reminder `include` must be true; omit the filter to exclude reminders",
-                ));
-            }
-            Self::Include(true) => ReminderLiteral::Include,
-            Self::Id(id) => ReminderLiteral::Id(parse_id(id, "id")?),
-            Self::Entity(entity) => ReminderLiteral::Entity(entity),
-            Self::Completed(completed) => ReminderLiteral::Completed(completed),
-            Self::Fired(fired) => ReminderLiteral::Fired(fired),
-        };
-        Ok(Expr::val(literal))
     }
 }
 

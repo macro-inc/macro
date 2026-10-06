@@ -10,5 +10,5 @@ export type SoupItemOneOfTwofiveTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SoupItemOneOfTwofiveTag = {
-  reminder: 'reminder',
+  agentSession: 'agentSession',
 } as const;

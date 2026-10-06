@@ -25,7 +25,6 @@ import {
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
-import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
@@ -41,7 +40,7 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableDatabases, enableReminders } from '@core/constant/featureFlags';
+import { enableDatabases } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -250,12 +249,6 @@ function LayoutInner(props: RouteSectionProps) {
           <CreateChannelModal />
           <CreateCompanyModal />
           <CreateContactModal />
-          {/* Reactive, unlike the imperative isFeatureEnabled(enableReminders) gate on the
-              action: this decides whether the composer is mounted at all, so it
-              has to pick up a late PostHog answer. */}
-          <ShowFeatureFlag flag={enableReminders}>
-            <ReminderComposerModal />
-          </ShowFeatureFlag>
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>

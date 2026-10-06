@@ -27,8 +27,6 @@ function reflectsIntent(
   if (!entity) return intent.done && excludesDone;
   if (hasActivityAfterDone(entity, intent)) return true;
   if (entity.type === 'email') return entity.done === intent.done;
-  if (entity.type === 'reminder')
-    return (entity.completedAt != null) === intent.done;
   const notifications = soupDoneNotifications(
     entity,
     intent.scopeChannelThreads
@@ -57,17 +55,6 @@ function projectState(
   if (hasActivityAfterDone(entity, intent)) return entity;
   if (entity.type === 'email' && entity.done !== intent.done) {
     return { ...entity, done: intent.done };
-  }
-  if (
-    entity.type === 'reminder' &&
-    (entity.completedAt != null) !== intent.done
-  ) {
-    return {
-      ...entity,
-      completedAt: intent.done
-        ? new Date(intent.startedAt).toISOString()
-        : null,
-    };
   }
   return entity;
 }
@@ -215,11 +202,7 @@ export function createGraphqlSoupDoneProjection() {
         const current = raw.get(id);
         // Unfiltered document/channel recents have no entity-level done field.
         // Their inclusion rules are not notification-feed membership rules.
-        if (
-          current &&
-          !excludesDone &&
-          !['email', 'reminder'].includes(current.entity.type)
-        )
+        if (current && !excludesDone && current.entity.type !== 'email')
           continue;
         if (current && entry.done && !remembered.has(id)) {
           remembered.set(

@@ -29,7 +29,6 @@ import type {
   InitiativeEntity,
   Notification,
   ProjectEntity,
-  ReminderEntity,
   SearchData,
   WithSearch,
 } from '@entity';
@@ -58,7 +57,6 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
-import { reminderEntityFromData } from '../reminders/entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
 
 /** Search sends a property's entity type only when it has one. */
@@ -97,7 +95,6 @@ type SoupEntity =
   | CallEntity
   | CrmCompanyEntity
   | CrmContactEntity
-  | ReminderEntity
   | CalendarEventEntity
   | ForeignEntity;
 
@@ -1000,9 +997,6 @@ export const mapApiSoupItemToEntity = (
         properties: item.data.properties,
       } satisfies CrmCompanyEntity;
     })
-    .with({ tag: 'reminder' }, (item) =>
-      reminderEntityFromData(item.data, item.frecency_score)
-    )
     .with({ tag: 'calendarEvent' }, (item) => {
       return {
         type: 'calendar_event',

@@ -47,7 +47,6 @@ export async function executeEmailFollowup(
     await Promise.all([
       invalidateEmailReminderReads(),
       refetchSoupEntity(threadId, 'emailThread'),
-      refetchSoupEntity(result.reminderId, 'reminder'),
       queryClient.invalidateQueries({
         queryKey: emailKeys.threadMessages(threadId).queryKey,
       }),
@@ -55,11 +54,6 @@ export async function executeEmailFollowup(
       ...(isFeatureEnabled(enableGraphqlSoup)
         ? [refreshActiveGraphqlSoupQueries(), fetchGraphqlEmailThread(threadId)]
         : []),
-      queryClient.invalidateQueries({ queryKey: reminderKeys.list._def }),
-      queryClient.invalidateQueries({ queryKey: reminderKeys.collection._def }),
-      queryClient.invalidateQueries({
-        queryKey: reminderKeys.detail(result.reminderId).queryKey,
-      }),
     ]);
   } catch (error) {
     console.error('Email reminder saved but refresh failed', error);

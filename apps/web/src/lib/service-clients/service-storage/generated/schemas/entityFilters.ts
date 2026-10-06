@@ -18,7 +18,6 @@ import type { ForeignEntityFilters } from './foreignEntityFilters';
 import type { InitiativeFilters } from './initiativeFilters';
 import type { ProjectFilters } from './projectFilters';
 import type { PropertyFilter } from './propertyFilter';
-import type { ReminderFilters } from './reminderFilters';
 import type { TagFilterMode } from './tagFilterMode';
 
 /**
@@ -53,8 +52,6 @@ export interface EntityFilters {
   project_filters?: ProjectFilters;
   /** property-based filters applied across entity types */
   property_filters?: PropertyFilter[];
-  /** the bundled [ReminderFilters] */
-  reminder_filters?: ReminderFilters;
   /** How the `tag_option_ids` combine: `any` (default) matches entities
 holding at least one selected tag, `all` requires every selected tag. */
   tag_filter_mode?: TagFilterMode;

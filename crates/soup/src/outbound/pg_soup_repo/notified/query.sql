@@ -50,7 +50,6 @@ WHERE CASE nc.entity_type
     WHEN 'email_thread' THEN {email_gate}
     WHEN 'calendar_event' THEN {calendar_event_gate}
     WHEN 'foreign_entity' THEN {foreign_entity_gate}
-    WHEN 'reminder' THEN {reminder_gate}
     WHEN 'agent_session' THEN {agent_session_gate}
     ELSE FALSE
 END

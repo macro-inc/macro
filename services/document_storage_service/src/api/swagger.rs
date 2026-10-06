@@ -195,8 +195,6 @@ use models_soup::project::SoupProject;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
 };
-use reminders::domain::models::{Reminder, ReminderSchedule, RemindersList};
-use reminders::inbound::axum_router::{CreateReminderRequest, UpdateReminderRequest};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
@@ -441,13 +439,7 @@ use utoipa::OpenApi;
         // reminders
         reminders::inbound::axum_router::get_email_followup_handler,
         reminders::inbound::axum_router::set_email_followup_handler,
-        reminders::inbound::axum_router::list_reminders_handler,
-        reminders::inbound::axum_router::list_reminder_collection_handler,
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
-        reminders::inbound::axum_router::create_reminder_handler,
-        reminders::inbound::axum_router::get_reminder_handler,
-        reminders::inbound::axum_router::update_reminder_handler,
-        reminders::inbound::axum_router::delete_reminder_handler,
         // initiatives
         initiative::inbound::axum_router::list::list_initiatives_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,
@@ -648,9 +640,6 @@ use utoipa::OpenApi;
             CreateChannelLabelRequest,
             RenameChannelLabelRequest,
             SetChannelLabelRequest,
-            Reminder,
-            RemindersList,
-            ReminderSchedule,
             // databases
             Database,
             DatabaseTable,
@@ -728,8 +717,6 @@ use utoipa::OpenApi;
             DatabaseQueryDefinition,
             DatabaseSavedQuery,
             DatabaseSaveQueryRequest,
-            CreateReminderRequest,
-            UpdateReminderRequest,
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,

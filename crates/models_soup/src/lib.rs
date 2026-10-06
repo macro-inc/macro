@@ -32,7 +32,5 @@ pub mod item;
 pub mod project;
 /// Property models attached to Soup items.
 pub mod properties;
-/// Reminder models for Soup responses.
-pub mod reminder;
 
 pub use properties::SoupProperty;

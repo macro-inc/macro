@@ -2525,10 +2525,6 @@ input GraphqlEntityFilterAst {
 	"""
 	githubPullRequestFilter: GraphqlGithubPullRequestExpr
 	"""
-	The reminder filter to apply.
-	"""
-	reminderFilter: GraphqlReminderExpr
-	"""
 	The agent session filter to apply.
 	"""
 	agentSessionFilter: GraphqlAgentSessionExpr
@@ -4602,71 +4598,6 @@ A property value represented by a type-safe GraphQL union.
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
 
 """
-The two operands of a recursive `ReminderFilterExpr` binary expression.
-"""
-input GraphqlReminderBinaryExpr {
-	"""
-	Left expression.
-	"""
-	left: GraphqlReminderExpr!
-	"""
-	Right expression.
-	"""
-	right: GraphqlReminderExpr!
-}
-
-"""
-A recursive `ReminderFilterExpr` filter expression.
-"""
-input GraphqlReminderExpr @oneOf {
-	"""
-	Both expressions must match.
-	"""
-	and: GraphqlReminderBinaryExpr
-	"""
-	Either expression may match.
-	"""
-	or: GraphqlReminderBinaryExpr
-	"""
-	Negate an expression.
-	"""
-	not: GraphqlReminderExpr
-	"""
-	Match a literal.
-	"""
-	literal: GraphqlReminderLiteral
-}
-
-"""
-GraphQL input representing the reminder literal.
-"""
-input GraphqlReminderLiteral @oneOf {
-	"""
-	Opt this query into reminders at all. Reminders are off by default, so
-	without this (or an `id`/`entity`) Soup omits them entirely — a filter
-	of only `completed` would otherwise silently match nothing. Must be
-	`true`; there is no literal for excluding reminders, that is the default.
-	"""
-	include: Boolean
-	"""
-	The id option.
-	"""
-	id: ID
-	"""
-	The referenced entity, as `"{type}:{id}"`.
-	"""
-	entity: String
-	"""
-	Whether the owner has marked the reminder done.
-	"""
-	completed: Boolean
-	"""
-	Whether the reminder has come due and is awaiting its owner.
-	"""
-	fired: Boolean
-}
-
-"""
 Metadata for a due reminder.
 """
 type GraphqlReminderMetadata {
@@ -4686,20 +4617,6 @@ type GraphqlReminderMetadata {
 	notifications written before recurring dispatch existed.
 	"""
 	scheduledFor: String
-}
-
-"""
-How often a reminder fires.
-"""
-enum GraphqlReminderScheduleType {
-	"""
-	Fires once, at `remindAt`.
-	"""
-	ONCE
-	"""
-	Fires repeatedly, on `cron` evaluated in `timezone`.
-	"""
-	RECURRING
 }
 
 """
@@ -6874,10 +6791,6 @@ enum GraphqlSoupEntityType {
 	"""
 	CALENDAR_EVENT
 	"""
-	Reminder entity.
-	"""
-	REMINDER
-	"""
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
@@ -7121,135 +7034,6 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
-}
-
-"""
-GraphQL representation of the soup reminder.
-"""
-type GraphqlSoupReminder implements GraphqlSoupEntity {
-	"""
-	The unique identifier.
-	"""
-	id: ID!
-	"""
-	Canonical entity kind.
-	"""
-	entityType: GraphqlSoupEntityType!
-	"""
-	Opaque cache projection metadata, unavailable for this entity variant.
-	"""
-	cacheProjection: SoupCacheProjection
-	"""
-	User-visible display name — a reminder's description is its name.
-	"""
-	displayName: String
-	"""
-	Common reminder metadata.
-	
-	`owner_id` is absent because a reminder is only ever readable by its
-	owner, and `parent` because a reminder is not contained by the entity it
-	references — see [`Self::referenced_entity`].
-	"""
-	metadata: GraphqlEntityMetadata!
-	"""
-	The entity this reminder is about, when it is attached to one.
-	
-	Only the reference is returned; the client resolves it into a Soup item
-	through the edges that already exist for that entity type.
-	"""
-	referencedEntity: GraphqlSoupReminderReference
-	"""
-	What to remind the user about.
-	"""
-	description: String!
-	"""
-	Whether the reminder fires once or repeatedly.
-	"""
-	scheduleType: GraphqlReminderScheduleType!
-	"""
-	The instant a one-shot reminder fires at, in RFC 3339 format.
-	"""
-	remindAt: String
-	"""
-	The cron expression a recurring reminder fires on.
-	"""
-	cron: String
-	"""
-	The timezone a recurring reminder's cron is evaluated in.
-	"""
-	timezone: String
-	"""
-	The next firing, in RFC 3339 format. Soup orders reminders on this.
-	"""
-	nextRunAt: String!
-	"""
-	When false, the dispatcher skips this reminder.
-	"""
-	enabled: Boolean!
-	"""
-	When a one-shot reminder fired, in RFC 3339 format.
-	"""
-	completedAt: String
-	"""
-	The created timestamp in RFC 3339 format.
-	"""
-	createdAt: String!
-	"""
-	The updated timestamp in RFC 3339 format.
-	"""
-	updatedAt: String!
-	"""
-	Properties assigned to this entity that the authenticated user may view.
-	"""
-	properties: [GraphqlProperty!]!
-	"""
-	Notifications associated with this entity for the authenticated user.
-	"""
-	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
-	"""
-	Whether the authenticated viewer has favorited this entity.
-	"""
-	isFavorited: Boolean!
-	"""
-	The authenticated viewer's effective permission for this entity.
-	"""
-	viewerPermission: GraphqlEntityPermission
-	"""
-	The newest activity on this entity, newest first. Loaded lazily and
-	batched across entities; an activity outage degrades to an empty
-	timeline. Deeper history belongs to the viewer's activity feed.
-	"""
-	activity(limit: Int): [GraphqlActivityEvent!]!
-	"""
-	The viewer's frecency score for this entity, when loaded.
-	"""
-	frecencyScore: Float
-}
-
-"""
-The entity a reminder is about, resolved server-side.
-
-Carries `file_type`/`sub_type` rather than just the reference: a reminder is
-iconed as whatever it points at, and the client's icon path is synchronous,
-so resolving them here saves a fetch per row.
-"""
-type GraphqlSoupReminderReference {
-	"""
-	The referenced entity's id.
-	"""
-	id: ID!
-	"""
-	The referenced entity's type.
-	"""
-	entityType: GraphqlEntityType!
-	"""
-	File type, when the reference is a document — `md`, `pdf`, and so on.
-	"""
-	fileType: String
-	"""
-	Sub type, when the reference is a task or snippet document.
-	"""
-	subType: String
 }
 
 """

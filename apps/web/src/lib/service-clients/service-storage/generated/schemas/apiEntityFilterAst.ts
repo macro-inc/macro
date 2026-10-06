@@ -10,8 +10,8 @@ import type { ApiEntityFilterAstFavoritesOnly } from './apiEntityFilterAstFavori
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export interface ApiEntityFilterAst {
-  /** Filters applied to agent sessions (wire key `asf`). Like reminders,
-empty/omitted returns **no** agent sessions: they are opt-in, so the
+  /** Filters applied to agent sessions (wire key `asf`). An empty or
+omitted filter returns **no** agent sessions: they are opt-in, so the
 caller must send `inc`, an id, or an owner to get any. */
   asf?: unknown;
   /** filters applied to canonical calendar events */
@@ -56,8 +56,4 @@ unlike the materialized [`EntityFilterAst`] used for cursors. */
   pf?: unknown;
   /** the filters that should be applied based on entity properties */
   propf?: unknown;
-  /** Filters applied to reminders (wire key `remf`). Unlike every other
-filter here, empty/omitted returns **no** reminders: they are opt-in,
-so the caller must send `inc`, an id, or an entity to get any. */
-  remf?: unknown;
 }

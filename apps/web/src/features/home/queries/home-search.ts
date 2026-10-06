@@ -21,11 +21,9 @@ const tabTypes: Record<HomeTab, ReadonlySet<HomeTypeFilter>> = {
     'agents',
     'projects',
     'github',
-    'reminders',
     'calendar',
   ]),
   noise: new Set(['email']),
-  reminders: new Set(['reminders']),
 };
 
 function readFilter(selection: FacetSelection): boolean | undefined {
@@ -52,7 +50,6 @@ function resolveTypes(
     [...requested].filter((type) => {
       if (type === 'calendar') return capabilities.calendar;
       if (type === 'github') return capabilities.foreignEntities;
-      if (type === 'reminders') return capabilities.reminders;
       return true;
     })
   );
@@ -101,7 +98,6 @@ export function buildHomeSearchRequest(
     email_filters: { email_thread_ids: [NIL_UUID] },
     foreign_entity_filters: { ids: [NIL_UUID] },
     project_filters: { project_ids: [NIL_UUID] },
-    reminder_filters: { ids: [NIL_UUID] },
   };
 
   if (types.has('calendar')) {
@@ -199,19 +195,6 @@ export function buildHomeSearchRequest(
     }
 
     filters.project_filters = projectFilters;
-  }
-
-  if (types.has('reminders')) {
-    const reminderFilters: NonNullable<EntityFilters['reminder_filters']> = {
-      include: true,
-    };
-
-    if (context.tab === 'reminders') {
-      reminderFilters.completed = false;
-      reminderFilters.fired = false;
-    }
-
-    filters.reminder_filters = reminderFilters;
   }
 
   return {

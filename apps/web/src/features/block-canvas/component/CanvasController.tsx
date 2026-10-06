@@ -871,7 +871,6 @@ export function CanvasController(props: ParentProps) {
     if (entityType === 'crm_contact') return;
     if (entityType === 'database') return;
     // Nor are reminders — they have no canvas representation.
-    if (entityType === 'reminder') return;
     // Nor are calendar events.
     if (entityType === 'calendar_event' || entityType === 'agent_session')
       return;

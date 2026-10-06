@@ -416,7 +416,6 @@ async fn a_table_read_is_its_rows_and_nothing_else() {
             "crmf": null,
             "fef": {"l": {"id": Uuid::nil()}},
             "ghprf": null,
-            "remf": null,
             "asf": null,
             "if": null,
             "drf": {"l": {"t": DEALS}},

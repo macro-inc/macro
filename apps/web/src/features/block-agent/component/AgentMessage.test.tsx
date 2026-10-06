@@ -98,8 +98,10 @@ vi.mock('../ui', () => ({
   WorkingLine: (props: { label?: string }) => (
     <div data-testid="working">{props.label}</div>
   ),
-  ActionLine: (props: { label: string }) => (
-    <div data-testid="action-line">{props.label}</div>
+  ActionLine: (props: { label: string; detail?: string }) => (
+    <div data-testid="action-line" data-detail={props.detail}>
+      {props.label}
+    </div>
   ),
   FailureNoticeCard: (props: {
     notice: { title: string; body: string; link?: { url: string } | null };
@@ -750,7 +752,7 @@ describe('Message failed turns', () => {
         inFlight={false}
       />
     ));
-    expect(view.getByTestId('action-line').textContent).toContain(
+    expect(view.getByTestId('action-line').dataset.detail).toBe(
       'Internal error: something broke'
     );
     expect(view.queryByTestId('failure-notice')).toBeNull();

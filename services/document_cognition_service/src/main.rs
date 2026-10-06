@@ -269,7 +269,6 @@ async fn main() -> anyhow::Result<()> {
         CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
         crm::domain::service::NoOpCrmService,
         github_pull_request_service,
-        reminders::domain::service::NoOpRemindersService,
     ));
 
     tracing::info!("initialized soup service");
@@ -725,11 +724,6 @@ async fn main() -> anyhow::Result<()> {
             internal_api_key.clone(),
         ),
         notification_tool_context: notification_tool_context.clone(),
-        reminders_tool_context: ai_tools::build_reminders_tool_context(
-            db.clone(),
-            user_email_service.clone(),
-            entity_access_service.clone(),
-        ),
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(

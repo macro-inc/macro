@@ -1,6 +1,6 @@
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 
-export type HomeTab = 'signal' | 'noise' | 'reminders';
+export type HomeTab = 'signal' | 'noise';
 
 export type HomeGroupBy = 'date' | 'type' | 'none';
 
@@ -22,7 +22,6 @@ export type HomeTypeFilter =
   | 'agents'
   | 'projects'
   | 'github'
-  | 'reminders'
   | 'calendar';
 
 export type HomeReadFilter = 'unread' | 'read';

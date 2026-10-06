@@ -4,7 +4,7 @@
 use crate::{
     AgentSessionFilters, CalendarEventFilters, CallFilters, ChannelFilters, ChannelThreadFilters,
     ChatFilters, CrmCompanyFilters, DocumentFilters, EmailFilters, EntityFilters,
-    ForeignEntityFilters, InitiativeFilters, ProjectFilters, PropertyFilter, ReminderFilters,
+    ForeignEntityFilters, InitiativeFilters, ProjectFilters, PropertyFilter,
     ast::{
         agent_session::AgentSessionLiteral,
         calendar_event::CalendarEventLiteral,
@@ -20,7 +20,6 @@ use crate::{
         initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::PropertiesLiteral,
-        reminder::ReminderLiteral,
     },
 };
 use document::DocumentLiteral;
@@ -62,8 +61,6 @@ pub mod initiative;
 pub mod project;
 /// contains the ast literal value for property-based filtering
 pub mod properties;
-/// contains the ast literal value for reminders
-pub mod reminder;
 
 #[cfg(test)]
 mod tests;
@@ -252,10 +249,6 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "ghprf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
-    /// the filters that should be applied to reminders
-    #[serde(default, rename = "remf")]
-    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
-    pub reminder_filter: LiteralTree<ReminderLiteral>,
     /// the filters that should be applied to agent sessions
     #[serde(default, rename = "asf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -320,8 +313,6 @@ impl EntityFilterAst {
             )?
             .map(Arc::new),
             github_pull_request_filter: None,
-            reminder_filter: ReminderFilters::expand_ast(entity_filter.reminder_filters)?
-                .map(Arc::new),
             agent_session_filter: AgentSessionFilters::expand_ast(
                 entity_filter.agent_session_filters,
             )?
@@ -371,7 +362,6 @@ impl EntityFilterAst {
             crm_contact_filter: None,
             foreign_entity_filter: None,
             github_pull_request_filter: None,
-            reminder_filter: None,
             agent_session_filter: None,
             initiative_filter: None,
             database_row_filter: None,
@@ -411,7 +401,6 @@ impl IsEmpty for EntityFilterAst {
             crm_contact_filter,
             foreign_entity_filter,
             github_pull_request_filter,
-            reminder_filter,
             agent_session_filter,
             initiative_filter,
             database_row_filter,
@@ -430,7 +419,6 @@ impl IsEmpty for EntityFilterAst {
             && crm_contact_filter.is_none()
             && foreign_entity_filter.is_none()
             && github_pull_request_filter.is_none()
-            && reminder_filter.is_none()
             && agent_session_filter.is_none()
             && initiative_filter.is_none()
             && database_row_filter.is_none()

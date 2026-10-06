@@ -18,7 +18,6 @@ use item_filters::ast::{
     foreign_entity::ForeignEntityLiteral,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
-    reminder::ReminderLiteral,
 };
 use predicate_index::{
     ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
@@ -405,14 +404,6 @@ fn check_soup_flat(
         )
     }) {
         return Eligibility::Unsupported(UnsupportedReason::Partition("crmContact"));
-    }
-    if ast.reminder_filter.as_deref().is_some_and(|expr| {
-        !proves_none(
-            expr,
-            |literal| matches!(literal, ReminderLiteral::Id(id) if id.is_nil()),
-        )
-    }) {
-        return Eligibility::Unsupported(UnsupportedReason::Partition("reminder"));
     }
     if ast.agent_session_filter.as_deref().is_some_and(|expr| {
         !proves_none(

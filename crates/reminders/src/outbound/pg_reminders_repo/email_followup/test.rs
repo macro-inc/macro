@@ -1,22 +1,17 @@
 use super::*;
 use crate::domain::email_followup::{EmailReminderCondition, service::EmailFollowupService};
-use crate::domain::ports::{Clock, RemindersRepo};
+use crate::domain::ports::Clock;
 use crate::domain::{
-    email_followup::{dispatch::EmailReminderDispatch, reminder_service::EmailRemindersService},
-    models::{DeliveryOutcome, DueFiring, ReminderPatch, SweepSummary},
-    ports::{ReminderDispatch, RemindersService},
-    service::RemindersServiceImpl,
+    email_followup::dispatch::EmailReminderDispatch,
+    models::{DeliveryOutcome, DueFiring, SweepSummary},
+    ports::ReminderDispatch,
 };
 use chrono::{DateTime, Duration, Utc};
 use email::domain::{
     followup::{EmailFollowupMailbox, FollowupMessage, FollowupThread},
     models::EmailErr,
 };
-use entity_access::domain::models::{
-    AccessLevel, Entity as AccessEntity, EntityAccessReceipt, EntityPermission, OwnerAccessLevel,
-};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use model_entity::EntityType;
 use sqlx::PgPool;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -40,20 +35,6 @@ impl ReminderDispatch for SweepProbe {
     async fn deliver(&self, _: DueFiring) -> Result<DeliveryOutcome, ReminderError> {
         Ok(DeliveryOutcome::Gone)
     }
-}
-
-fn owner_receipt(id: Uuid) -> EntityAccessReceipt<OwnerAccessLevel> {
-    EntityAccessReceipt::try_new_authenticated_user(
-        user(),
-        AccessEntity {
-            entity_id: id.to_string(),
-            entity_type: EntityType::Reminder,
-        },
-        EntityPermission::AccessLevel {
-            access_level: AccessLevel::Owner,
-        },
-    )
-    .unwrap()
 }
 
 struct PausedDelivery {
@@ -250,12 +231,13 @@ async fn retry_concurrency_and_stale_undo_do_not_duplicate_or_resurrect(pool: Pg
             .unwrap()
             .inbox_visible
     );
-    let reminder = service
-        .repo
-        .get_reminder(&user(), first.reminder_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let reminder = sqlx::query!(
+        "SELECT enabled, completed_at FROM reminder WHERE id = $1",
+        first.reminder_id
+    )
+    .fetch_one(&service.repo.pool)
+    .await
+    .unwrap();
     assert!(!reminder.enabled);
     assert!(reminder.completed_at.is_some());
 }
@@ -600,84 +582,7 @@ async fn exact_seconds_and_removal_without_source_access(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn deleting_historical_followup_preserves_new_pending_followup(pool: PgPool) {
-    let service = setup(pool).await;
-    let first_command = set(
-        service.clock.now() + Duration::hours(1),
-        EmailReminderCondition::Regardless,
-    );
-    let first = service
-        .execute(user(), THREAD, first_command.clone())
-        .await
-        .unwrap();
-    let guard = service.repo.lock_followup(&user(), THREAD).await.unwrap();
-    let mut record = service
-        .repo
-        .reminder_followup(&user(), first.reminder_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(
-        service
-            .return_due_locked(&mut record, first.remind_at)
-            .await
-            .unwrap()
-    );
-    drop(guard);
-    let second = service
-        .execute(
-            user(),
-            THREAD,
-            set(
-                service.clock.now() + Duration::hours(2),
-                EmailReminderCondition::Regardless,
-            ),
-        )
-        .await
-        .unwrap();
-    let writes = service.mailbox.0.lock().unwrap().writes;
-    let reminders = EmailRemindersService::new(
-        RemindersServiceImpl::new(service.repo.clone()),
-        service.clone(),
-    );
-    reminders
-        .delete_reminder(owner_receipt(first.reminder_id))
-        .await
-        .unwrap();
-    assert_eq!(service.mailbox.0.lock().unwrap().writes, writes);
-    assert!(
-        !service
-            .mailbox
-            .0
-            .lock()
-            .unwrap()
-            .facts
-            .as_ref()
-            .unwrap()
-            .inbox_visible
-    );
-    assert_eq!(service.get(user(), THREAD).await.unwrap(), Some(second));
-    assert_eq!(
-        service
-            .execute(user(), THREAD, first_command)
-            .await
-            .unwrap()
-            .state,
-        FollowupState::Removed
-    );
-    assert_eq!(service.mailbox.0.lock().unwrap().writes, writes);
-    let retired = service
-        .repo
-        .get_reminder(&user(), first.reminder_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(!retired.enabled);
-    assert!(retired.completed_at.is_some());
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn completion_waits_for_delivery_after_inbox_return(pool: PgPool) {
+async fn removal_waits_for_delivery_after_inbox_return(pool: PgPool) {
     let service = setup(pool).await;
     let created = service
         .execute(
@@ -717,17 +622,13 @@ async fn completion_waits_for_delivery_after_inbox_return(pool: PgPool) {
         .unwrap()
         .unwrap();
     assert_eq!(returned.followup.state, FollowupState::Returned);
-    let reminders = EmailRemindersService::new(
-        RemindersServiceImpl::new(service.repo.clone()),
-        service.clone(),
-    );
-    let completion = reminders.update_reminder(
-        owner_receipt(created.reminder_id),
-        ReminderPatch {
-            description: None,
-            schedule: None,
-            enabled: None,
-            completed: Some(true),
+    let completion = service.execute(
+        user(),
+        THREAD,
+        EmailFollowupCommand::Remove {
+            operation_id: Uuid::now_v7(),
+            expected_revision: created.revision,
+            undo: false,
         },
     );
     tokio::pin!(completion);
@@ -743,8 +644,7 @@ async fn completion_waits_for_delivery_after_inbox_return(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    assert!(completed.completed_at.is_some());
-    assert!(!completed.enabled);
+    assert_eq!(completed.state, FollowupState::Removed);
     assert_eq!(
         service
             .repo
@@ -759,7 +659,7 @@ async fn completion_waits_for_delivery_after_inbox_return(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn corrupt_email_reconciliation_does_not_suppress_generic_sweep(pool: PgPool) {
+async fn corrupt_email_reconciliation_does_not_suppress_delivery_sweep(pool: PgPool) {
     let service = setup(pool).await;
     let created = service
         .execute(
@@ -991,98 +891,4 @@ async fn undo_and_archive_rollback_restore_original_inbox_order(pool: PgPool) {
         );
         service.mailbox.0.lock().unwrap().archive_fails = false;
     }
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn collection_skips_corrupt_email_probe_without_hiding_generic_reminders(pool: PgPool) {
-    use crate::domain::{
-        collection::{CollectionCursor, CollectionQuery},
-        models::{NewReminder, ReminderSchedule},
-    };
-    let service = setup(pool).await;
-    let now = service.clock.now();
-    let created = service
-        .execute(
-            user(),
-            THREAD,
-            set(
-                now + Duration::seconds(100),
-                EmailReminderCondition::Regardless,
-            ),
-        )
-        .await
-        .unwrap();
-    sqlx::query!(
-        "UPDATE reminder_email_followup SET payload = '{}'::jsonb WHERE reminder_id = $1",
-        created.reminder_id,
-    )
-    .execute(&service.repo.pool)
-    .await
-    .unwrap();
-    let mut expected = Vec::new();
-    for i in 0..105 {
-        if i == 100 {
-            continue;
-        }
-        let at = now + Duration::seconds(i);
-        let reminder = service
-            .repo
-            .create_reminder(
-                &user(),
-                &NewReminder {
-                    description: "readable collection row".into(),
-                    entity: None,
-                    schedule: ReminderSchedule::Once { remind_at: at },
-                    next_run_at: at,
-                },
-            )
-            .await
-            .unwrap();
-        expected.push(reminder.id);
-    }
-    let batch = service
-        .repo
-        .list_collection(&user(), &CollectionQuery::default(), now, 101)
-        .await
-        .unwrap();
-    assert_eq!(batch.examined, 101);
-    assert_eq!(batch.items.len(), 100);
-    assert_eq!(
-        batch.last_examined.unwrap().position.id,
-        created.reminder_id
-    );
-    let reminders = RemindersServiceImpl::with_clock(
-        PgRemindersRepo::new(service.repo.pool.clone()),
-        service.clock.clone(),
-    );
-    let first = reminders
-        .list_collection(&user(), CollectionQuery::default())
-        .await
-        .unwrap();
-    assert_eq!(first.items.len(), 100);
-    let second = reminders
-        .list_collection(
-            &user(),
-            CollectionQuery {
-                cursor: Some(
-                    CollectionCursor::decode(first.next_cursor.as_deref().unwrap()).unwrap(),
-                ),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(second.items.len(), 4);
-    assert!(second.next_cursor.is_none());
-    let actual: Vec<_> = first
-        .items
-        .into_iter()
-        .chain(second.items)
-        .map(|row| row.reminder.id)
-        .collect();
-    assert_eq!(actual, expected);
-    assert!(
-        !actual.contains(&created.reminder_id),
-        "a corrupt mirror must never become an ordinary reminder"
-    );
 }

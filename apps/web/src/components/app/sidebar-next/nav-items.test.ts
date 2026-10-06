@@ -18,34 +18,16 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showCalendar: true,
   showCustomers: true,
-  showReminders: true,
   showCalls: true,
   showReviews: true,
   prefs: defaultPrefs(),
   ...overrides,
 });
 
-describe('reminders navigation item', () => {
-  it('exposes the canonical list destination only while enabled', () => {
-    const enabled = visibleNavItems(
-      defaultGates({
-        showReminders: true,
-        prefs: defaultPrefs({ hidden: new Set() }),
-      })
-    );
-    const disabled = visibleNavItems(
-      defaultGates({
-        showReminders: false,
-        prefs: defaultPrefs({ hidden: new Set() }),
-      })
-    );
-
-    expect(enabled.find((item) => item.id === 'reminders')).toMatchObject({
-      label: 'Reminders',
-      href: '/reminders',
-    });
-    expect(disabled.some((item) => item.id === 'reminders')).toBe(false);
-  });
+it('keeps reminders inside Email instead of offering a separate app', () => {
+  const items = visibleNavItems(defaultGates());
+  expect(items.some((item) => item.id === 'reminders')).toBe(false);
+  expect(items.some((item) => item.id === 'mail')).toBe(true);
 });
 
 describe('sidebar visibility preferences', () => {

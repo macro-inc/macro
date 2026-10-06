@@ -1,9 +1,9 @@
 use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
-        GetRemindersRequest, GroupedSortRequest, IntoSoupReqAst, NotifiedEntity,
-        NotifiedHydratableTypes, NotifiedPagePosition, NotifiedQueryInner, NotifiedSoupRequest,
-        SimpleQueryInner, SimpleSortQuery, SimpleSortRequest, SoupDocumentServerFacts, SoupErr,
+        GroupedSortRequest, IntoSoupReqAst, NotifiedEntity, NotifiedHydratableTypes,
+        NotifiedPagePosition, NotifiedQueryInner, NotifiedSoupRequest, SimpleQueryInner,
+        SimpleSortQuery, SimpleSortRequest, SoupDocumentServerFacts, SoupErr,
         SoupProjectionHydration, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection,
         SoupType, TouchedPagePosition, TouchedQueryInner, TouchedSoupRequest,
         calendar_filter_supported_by_notified, grouping::ItemGroupingInfo,
@@ -58,9 +58,7 @@ use models_soup::{
     crm_contact::SoupCrmContact,
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
-    reminder::SoupReminder,
 };
-use reminders::domain::{models::SoupReminderQuery, ports::RemindersService};
 use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -123,7 +121,6 @@ struct NotifiedHydrationLegs {
     foreign_entities: Option<(Vec<SourceId>, ForeignEntityListQuery)>,
     /// Narrows the foreign entity leg to matching GitHub pull requests.
     github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
-    reminders: Option<GetRemindersRequest<'static>>,
 }
 
 /// ANDs a leg's request-level filter tree onto the page's id tree, so the
@@ -205,7 +202,7 @@ fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem<()> {
 }
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
-pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
+pub struct SoupImpl<T, U, V, C, K, Crm, F> {
     /// the interface for interacting with the db
     soup_storage: T,
     /// the interface for interacting with frecency
@@ -220,14 +217,12 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
     crm_service: Crm,
     /// the interface for listing GitHub pull requests
     github_pull_request_service: F,
-    /// the interface for interacting with reminders
-    reminders_service: Rem,
     /// Optional captured branch facts supplied by the owning changes domain.
     agent_branches: Option<Arc<dyn agent_changes::domain::ports::SessionBranchReader>>,
     favorites: Option<Arc<dyn favorites::FavoriteReader>>,
 }
 
-impl<T, U, V, C, K, Crm, F, Rem> SoupImpl<T, U, V, C, K, Crm, F, Rem>
+impl<T, U, V, C, K, Crm, F> SoupImpl<T, U, V, C, K, Crm, F>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
@@ -237,7 +232,6 @@ where
     K: CallRecordQueryService,
     Crm: CrmService,
     F: GithubPullRequestListing,
-    Rem: RemindersService,
 {
     /// Creates a soup service from its repository and dependent domain services.
     #[allow(clippy::too_many_arguments)]
@@ -249,7 +243,6 @@ where
         call_record_service: K,
         crm_service: Crm,
         github_pull_request_service: F,
-        reminders_service: Rem,
     ) -> Self {
         SoupImpl {
             soup_storage,
@@ -259,7 +252,6 @@ where
             call_record_service,
             crm_service,
             github_pull_request_service,
-            reminders_service,
             agent_branches: None,
             favorites: None,
         }
@@ -752,7 +744,7 @@ where
     /// candidates from the user's notifications, hydrates each entity type by
     /// id, and reassembles the page in notification order.
     ///
-    /// Channel, channel-thread, email, foreign-entity and reminder candidates
+    /// Channel, channel-thread, email and foreign-entity candidates
     /// hydrate through their own domains' legs with the request's filter tree
     /// for that type ANDed in, so those filters apply at hydration rather
     /// than in the candidate query. A candidate the leg does not return is dropped and
@@ -797,7 +789,6 @@ where
             channel_threads: legs.comms_threads.is_some(),
             email_threads: legs.email.is_some(),
             foreign_entities: legs.foreign_entities.is_some(),
-            reminders: legs.reminders.is_some(),
         };
         let page_len = usize::from(limit);
 
@@ -884,7 +875,6 @@ where
         let mut thread_ids = Vec::new();
         let mut email_ids = Vec::new();
         let mut foreign_entity_ids = Vec::new();
-        let mut reminder_ids = Vec::new();
         for candidate in candidates {
             match candidate.entity.entity_type {
                 // Calendar events and agent sessions ride the main by-ids
@@ -913,9 +903,6 @@ where
                 }
                 EntityType::ForeignEntity => {
                     push_candidate_uuid(&mut foreign_entity_ids, &candidate.entity, "foreign")
-                }
-                EntityType::Reminder => {
-                    push_candidate_uuid(&mut reminder_ids, &candidate.entity, "reminder")
                 }
                 // The candidate query only returns the types above.
                 _ => {}
@@ -997,34 +984,6 @@ where
             .map_or((Vec::new(), None), |(sources, query)| {
                 (sources, Some(query))
             });
-        let reminder_request = legs.reminders.as_ref().and_then(|template| {
-            // A request naming specific reminders keeps that constraint;
-            // otherwise the page's candidates are the id set. An empty
-            // intersection skips the leg: an empty id list means every
-            // reminder to the reminders service.
-            let ids: Vec<Uuid> = if template.reminder_ids.is_empty() {
-                reminder_ids.clone()
-            } else {
-                reminder_ids
-                    .iter()
-                    .copied()
-                    .filter(|id| template.reminder_ids.contains(id))
-                    .collect()
-            };
-            if ids.is_empty() {
-                return None;
-            }
-            Some(GetRemindersRequest {
-                user_id: template.user_id.clone(),
-                limit: ids.len() as i64,
-                reminder_ids: ids,
-                entities: template.entities.clone(),
-                completed: template.completed,
-                fired: template.fired,
-                order: template.order,
-            })
-        });
-
         // The repo error type is not Send, so it cannot ride through
         // tokio::join!; convert inside the future instead.
         let main_items_fut = async {
@@ -1060,7 +1019,6 @@ where
             thread_candidates,
             email_candidates,
             foreign_entity_candidates,
-            reminder_candidates,
         ) = tokio::join!(
             main_items_fut,
             project_items_fut,
@@ -1075,7 +1033,6 @@ where
                 legs.github_pull_request_filter.clone(),
                 SoupSortDirection::Desc,
             ),
-            self.handle_reminder_request(reminder_request),
         );
 
         let mut candidates_by_entity = HashMap::new();
@@ -1086,7 +1043,6 @@ where
             .chain(thread_candidates?)
             .chain(email_candidates?)
             .chain(foreign_entity_candidates?)
-            .chain(reminder_candidates?)
         {
             let key = {
                 let entity = candidate.item.entity();
@@ -1244,50 +1200,6 @@ where
             })?
             .into_iter()
             .map(|company| SoupItem::CrmCompany(SoupCrmCompany::from(company)))
-            .collect();
-
-        Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
-    }
-
-    #[tracing::instrument(err, skip(self, req))]
-    async fn handle_reminder_request(
-        &self,
-        req: Option<GetRemindersRequest<'_>>,
-    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
-        let Some(req) = req else {
-            return Ok(Either::Left(None.into_iter()));
-        };
-
-        let GetRemindersRequest {
-            user_id,
-            reminder_ids,
-            entities,
-            completed,
-            fired,
-            order,
-            limit,
-        } = req;
-
-        let items: Vec<SoupItem<()>> = self
-            .reminders_service
-            .list_reminders_for_soup(
-                &user_id,
-                SoupReminderQuery {
-                    ids: &reminder_ids,
-                    entities: &entities,
-                    completed,
-                    fired,
-                    order,
-                    limit,
-                },
-            )
-            .await
-            .map_err(|err| {
-                tracing::error!(error = ?err, "reminder soup request failed");
-                SoupErr::ReminderErr
-            })?
-            .into_iter()
-            .map(|reminder| SoupItem::Reminder(SoupReminder::from(reminder)))
             .collect();
 
         Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
@@ -1629,19 +1541,11 @@ where
         let comms_request = req.build_comms_request();
         let comms_thread_request = req.build_comms_thread_request();
         let call_request = req.build_call_request();
-        let mut reminder_request = req.build_reminder_request(limit.into());
         if let Some(entities) = &favorite_entities {
             crm_company_request = crm_company_request.and_then(|mut request| {
                 favorites::intersect(
                     &mut request.company_ids,
                     favorites::ids(entities, EntityType::CrmCompany),
-                )
-                .then_some(request)
-            });
-            reminder_request = reminder_request.and_then(|mut request| {
-                favorites::intersect(
-                    &mut request.reminder_ids,
-                    favorites::ids(entities, EntityType::Reminder),
                 )
                 .then_some(request)
             });
@@ -1667,7 +1571,6 @@ where
                 let call_soup_fut = self.handle_call_request(call_request);
                 let crm_company_soup_fut = self.handle_crm_company_request(crm_company_request);
                 let crm_contact_soup_fut = self.handle_crm_contact_request(crm_contact_request);
-                let reminder_soup_fut = self.handle_reminder_request(reminder_request);
                 let foreign_entity_soup_fut = self.handle_foreign_entity_request(
                     Some(req.user.to_string()),
                     foreign_entity_source_ids,
@@ -1685,7 +1588,6 @@ where
                     call_soup,
                     crm_company_soup,
                     crm_contact_soup,
-                    reminder_soup,
                     foreign_entity_soup,
                 ) = tokio::join!(
                     main_soup_fut,
@@ -1695,7 +1597,6 @@ where
                     call_soup_fut,
                     crm_company_soup_fut,
                     crm_contact_soup_fut,
-                    reminder_soup_fut,
                     foreign_entity_soup_fut,
                 );
 
@@ -1706,7 +1607,6 @@ where
                     .chain(call_soup?)
                     .chain(crm_company_soup?)
                     .chain(crm_contact_soup?)
-                    .chain(reminder_soup?)
                     .chain(foreign_entity_soup?)
                     .paginate_on(limit.into(), sort_method)
                     .filter_on(entity_filter);
@@ -1768,7 +1668,6 @@ where
                     foreign_entities: foreign_entity_query
                         .map(|query| (foreign_entity_source_ids, query)),
                     github_pull_request_filter,
-                    reminders: reminder_request,
                 };
                 let (candidates, next) = self
                     .handle_notified_request(
@@ -1816,7 +1715,7 @@ where
     }
 }
 
-impl<T, U, V, C, K, Crm, F, Rem> SoupService for SoupImpl<T, U, V, C, K, Crm, F, Rem>
+impl<T, U, V, C, K, Crm, F> SoupService for SoupImpl<T, U, V, C, K, Crm, F>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
@@ -1826,7 +1725,6 @@ where
     K: CallRecordQueryService,
     Crm: CrmService,
     F: GithubPullRequestListing,
-    Rem: RemindersService,
 {
     #[tracing::instrument(err, skip(self, req, team_receipt))]
     async fn get_user_soup<R>(

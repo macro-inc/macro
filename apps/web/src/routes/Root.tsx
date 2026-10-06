@@ -107,7 +107,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { useReminderAlerts } from '../features/reminders/reminder-alerts';
 import { AppRouterView } from './app-router-view';
 
 // Only first-time mobile web users see it, and only once it opens.
@@ -201,7 +200,6 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     onNotification
   );
   useNotificationUpdates(notificationSource);
-  useReminderAlerts(notificationSource);
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);

@@ -128,7 +128,7 @@ pub(super) fn apply(mut ast: EntityFilterAst, entities: &[Entity<'_>]) -> Entity
             item_filters::ast::crm_contact::CrmContactLiteral::Id,
         );
     }
-    // CRM companies and reminders expose an ID-list service contract instead of arbitrary
+    // CRM companies expose an ID-list service contract instead of arbitrary
     // AST evaluation. Intersect those lists separately, never OR them together.
     ast
 }

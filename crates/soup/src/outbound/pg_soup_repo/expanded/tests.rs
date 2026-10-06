@@ -5910,7 +5910,6 @@ fn mock_empty_ast() -> EntityFilterAst {
         crm_contact_filter: None,
         foreign_entity_filter: None,
         github_pull_request_filter: None,
-        reminder_filter: None,
         agent_session_filter: None,
         initiative_filter: None,
         database_row_filter: None,

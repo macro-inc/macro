@@ -23,7 +23,6 @@ import type {
   GroupedSoupInput as GraphqlGroupedSoupInput,
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
   GraphqlFilterPropertiesLiteral as GraphqlPropertiesLiteralInput,
-  GraphqlReminderLiteral as GraphqlReminderLiteralInput,
   SoupInitialInput as GraphqlSoupInitialInput,
   SoupInput as GraphqlSoupInput,
 } from '@service-storage/graphql/generated/graphql';
@@ -68,7 +67,6 @@ type TargetAstKey =
   | 'fef'
   | 'ghprf'
   | 'asf'
-  | 'remf'
   | 'propf';
 
 type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
@@ -603,26 +601,6 @@ function mapGithubPullRequestLiteral(
   }
 }
 
-function mapReminderLiteral(literal: unknown): GraphqlReminderLiteralInput {
-  const [field, value] = singleLiteralField(literal);
-  switch (field) {
-    // `inc` is a unit literal, so it only ever arrives as `true` — which is
-    // the only value the server accepts, reminders being opt-in.
-    case 'inc':
-      return { include: mapBoolean(value, 'include') };
-    case 'id':
-      return { id: mapString(value, 'id') };
-    case 'ent':
-      return { entity: mapString(value, 'entity') };
-    case 'comp':
-      return { completed: mapBoolean(value, 'completed') };
-    case 'fired':
-      return { fired: mapBoolean(value, 'fired') };
-    default:
-      unsupported(`reminder literal ${field}`);
-  }
-}
-
 function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
   if (!isRecord(literal)) unsupported('expected property literal object');
   const propertyDefinitionId = mapString(literal.pd, 'propertyDefinitionId');
@@ -763,9 +741,6 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
         return unsupported(`agent session literal ${field}`);
       }
     );
-  }
-  if (body.remf) {
-    filters.reminderFilter = compileExpr(body.remf, mapReminderLiteral);
   }
   if (body.propf) {
     filters.propertiesFilter = compileExpr(body.propf, mapPropertiesLiteral);

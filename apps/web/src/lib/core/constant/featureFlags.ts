@@ -466,8 +466,8 @@ export const enableProjects = defineFlag({
   default: onInDev,
 });
 
-// Reminders: the "Remind me" entry in the command menu, the soup
-// context menu and the block ⋯ menu, its 'h' shortcut, and the composer modal.
+// Email snooze: the "Remind me" action, its 'h' shortcut, and the shared
+// time-selection command menu.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this
 // is the single gate for all of them. PostHog-gated with a dev-mode default.
 export const enableReminders = defineFlag({
