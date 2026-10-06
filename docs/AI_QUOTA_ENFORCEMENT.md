@@ -135,8 +135,9 @@ per-period overage cap (the offered maximum when there is no limit), clears both
 suspensions, and settles at once; disabling behaves like turning overage off and
 keeps the stored thresholds. A monthly limit must be at least the overage cap
 minimum (`$5`) so the cap is never raised above what the payer entered. The
-monthly limit bounds reload purchases per calendar month and the overage
-fallback per Stripe period separately; it is not a combined budget. `GET /ai-billing/summary`
+monthly limit bounds reload purchases per calendar month; the overage cap it
+seeds bounds how far *over* credits usage may run per Stripe period. They are
+not a combined budget. `GET /ai-billing/summary`
 reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
