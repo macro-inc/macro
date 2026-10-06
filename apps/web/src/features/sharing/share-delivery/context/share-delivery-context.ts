@@ -1,5 +1,5 @@
 import type { Result } from 'neverthrow';
-import type { ShareEvent, ShareTarget } from '../core/delivery-plan';
+import type { ShareEvent } from '../core/delivery-plan';
 import type {
   ChannelAccessChange,
   ChannelAccessError,
@@ -7,19 +7,20 @@ import type {
 } from '../core/share-item';
 
 export type OutgoingMessage = {
-  readonly to: ShareTarget;
+  readonly channelId: string;
   readonly messageId: string;
   readonly items: readonly ShareItemRef[];
   readonly text: string;
-  readonly beforeSend?: (channelId: string) => Promise<void>;
 };
 
 export type SentMessage = {
-  readonly channelId: string;
   readonly open: () => void;
 };
 
 export type ShareDeliveryContext = {
+  readonly resolvePeopleChannel: (
+    userIds: readonly string[]
+  ) => Promise<string | undefined>;
   readonly send: (message: OutgoingMessage) => Promise<SentMessage | undefined>;
   readonly changeChannelAccess: (
     item: ShareItemRef,

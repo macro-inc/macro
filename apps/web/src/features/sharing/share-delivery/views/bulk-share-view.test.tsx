@@ -78,11 +78,12 @@ function setup(
   const grantErrors = new Map<string, ChannelAccessError>();
   const opened: string[] = [];
   const context = {
-    send: vi.fn<ShareDeliveryContext['send']>(async ({ to }) => {
-      const channelId =
-        to.t === 'channel' ? to.channelId : `dm:${to.userIds.join('+')}`;
+    resolvePeopleChannel: vi.fn<ShareDeliveryContext['resolvePeopleChannel']>(
+      async (userIds) => `dm:${userIds.join('+')}`
+    ),
+    send: vi.fn<ShareDeliveryContext['send']>(async ({ channelId }) => {
       if (failingChannels.has(channelId)) return undefined;
-      return { channelId, open: () => opened.push(channelId) };
+      return { open: () => opened.push(channelId) };
     }),
     changeChannelAccess: vi.fn<ShareDeliveryContext['changeChannelAccess']>(
       async (ref) => {
@@ -177,11 +178,9 @@ describe('BulkShareView', () => {
     fireEvent.click(button('Retry'));
     await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
 
-    expect(context.send.mock.calls.map(([message]) => message.to)).toEqual([
-      { t: 'channel', channelId: 'general' },
-      { t: 'channel', channelId: 'design' },
-      { t: 'channel', channelId: 'design' },
-    ]);
+    expect(
+      context.send.mock.calls.map(([message]) => message.channelId)
+    ).toEqual(['general', 'design', 'design']);
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       'Shared with 2 recipients',
       undefined

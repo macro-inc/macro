@@ -160,62 +160,49 @@ export type DeliveryLedger = ReadonlyMap<TargetKey, TargetRecord>;
 
 export const emptyLedger: DeliveryLedger = new Map();
 
-function updateRecord(
-  ledger: DeliveryLedger,
-  key: TargetKey,
-  channelId: string,
-  update: (record: TargetRecord) => TargetRecord
-): DeliveryLedger {
-  const record = ledger.get(key) ?? {
+export function emptyRecord(channelId: string): TargetRecord {
+  return {
     channelId,
     delivered: new Set(),
     granted: new Map(),
     grantErrors: new Map(),
   };
-  return new Map(ledger).set(key, update(record));
 }
 
-export function recordDelivery(
-  ledger: DeliveryLedger,
-  key: TargetKey,
-  delivery: { readonly channelId: string; readonly messageId: string }
-): DeliveryLedger {
-  return updateRecord(ledger, key, delivery.channelId, (record) => ({
-    ...record,
-    delivered: new Set(record.delivered).add(delivery.messageId),
-  }));
+export function withDelivery(
+  record: TargetRecord,
+  messageId: string
+): TargetRecord {
+  return { ...record, delivered: new Set(record.delivered).add(messageId) };
 }
 
-export function recordGrant(
-  ledger: DeliveryLedger,
-  key: TargetKey,
+export function withGrant(
+  record: TargetRecord,
   grant: {
-    readonly channelId: string;
     readonly item: ShareItemRef;
     readonly level: ChannelAccessLevel;
     readonly result: Result<void, ChannelAccessError>;
   }
-): DeliveryLedger {
+): TargetRecord {
   const id = itemKey(grant.item);
-  const { result } = grant;
-  return updateRecord(ledger, key, grant.channelId, (record) => {
-    const granted = new Map(record.granted);
-    const grantErrors = new Map(record.grantErrors);
-    if (result.isOk()) {
-      granted.set(id, grant.level);
-      grantErrors.delete(id);
-    } else {
-      grantErrors.set(id, result.error);
-    }
-    return { ...record, granted, grantErrors };
-  });
+  const granted = new Map(record.granted);
+  const grantErrors = new Map(record.grantErrors);
+  if (grant.result.isOk()) {
+    granted.set(id, grant.level);
+    grantErrors.delete(id);
+  } else {
+    grantErrors.set(id, grant.result.error);
+  }
+  return { ...record, granted, grantErrors };
 }
 
 export type TargetWork = {
   readonly key: TargetKey;
-  readonly target: ShareTarget;
-  readonly grants: readonly GrantStep[];
-  readonly messages: readonly PlannedMessage[];
+  readonly channel:
+    | { readonly t: 'known'; readonly record: TargetRecord }
+    | { readonly t: 'unknown'; readonly userIds: readonly string[] };
+  readonly pendingGrants: readonly GrantStep[];
+  readonly unsentMessages: readonly PlannedMessage[];
 };
 
 const mayRetry = (error: ChannelAccessError | undefined) =>
@@ -235,22 +222,27 @@ export function remainingWork(
     const isDelivered = (message: PlannedMessage) =>
       record?.delivered.has(message.id) ?? false;
 
-    const grants = messages
+    const pendingGrants = messages
       .filter(isDelivered)
       .flatMap((message) => message.grantAfter.filter(retryable));
     const undelivered = messages.filter((message) => !isDelivered(message));
     const blocked = undelivered.findIndex((message) =>
       message.grantFirst.some((grant) => !confirmed(grant) && !retryable(grant))
     );
-    const sendable = (
+    const unsentMessages = (
       blocked === -1 ? undelivered : undelivered.slice(0, blocked)
     ).map((message) => ({
       ...message,
       grantFirst: message.grantFirst.filter((grant) => !confirmed(grant)),
     }));
 
-    if (grants.length === 0 && sendable.length === 0) return [];
-    return [{ key, target, grants, messages: sendable }];
+    if (pendingGrants.length === 0 && unsentMessages.length === 0) return [];
+    const channel: TargetWork['channel'] = record
+      ? { t: 'known', record }
+      : target.t === 'channel'
+        ? { t: 'known', record: emptyRecord(target.channelId) }
+        : { t: 'unknown', userIds: target.userIds };
+    return [{ key, channel, pendingGrants, unsentMessages }];
   });
 }
 
@@ -269,7 +261,7 @@ export type RecipientOutcome = {
 export type ShareOutcome = {
   readonly complete: boolean;
   readonly retryable: boolean;
-  readonly delivered: boolean;
+  readonly anyDelivered: boolean;
   readonly recipients: readonly RecipientOutcome[];
 };
 
@@ -303,7 +295,7 @@ export function summarizeShare(
         unsent.length === 0 && accessIssues.length === 0
     ),
     retryable: remainingWork(plan, ledger).length > 0,
-    delivered: plan.targets.some(({ key, messages }) =>
+    anyDelivered: plan.targets.some(({ key, messages }) =>
       messages.some((message) => ledger.get(key)?.delivered.has(message.id))
     ),
     recipients,

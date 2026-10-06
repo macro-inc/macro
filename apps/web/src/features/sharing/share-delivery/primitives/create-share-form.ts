@@ -5,13 +5,11 @@ import {
   canSendAsGroup,
   type DeliveryLedger,
   emptyLedger,
+  emptyRecord,
   type GrantStep,
   type PickedRecipient,
-  type PlannedMessage,
   planShare,
   prefillChannel,
-  recordDelivery,
-  recordGrant,
   remainingWork,
   type ShareNotice,
   type ShareOutcome,
@@ -20,8 +18,11 @@ import {
   shareNotices,
   summarizeShare,
   type TargetKey,
+  type TargetRecord,
   type TargetWork,
   targetsFor,
+  withDelivery,
+  withGrant,
 } from '../core/delivery-plan';
 import {
   type ChannelAccessLevel,
@@ -38,7 +39,11 @@ export type ShareFormOptions = {
 
 export type ShareFormStatus =
   | { readonly t: 'editing' }
-  | { readonly t: 'sending'; readonly plan: SharePlan }
+  | {
+      readonly t: 'sending';
+      readonly plan: SharePlan;
+      readonly previousOutcome: ShareOutcome | undefined;
+    }
   | {
       readonly t: 'incomplete';
       readonly plan: SharePlan;
@@ -53,6 +58,12 @@ export type ShareFormStatus =
 export type ShareSubmitResult = {
   readonly outcome: ShareOutcome;
   readonly open?: () => void;
+};
+
+type TargetRun = {
+  readonly key: TargetKey;
+  readonly record: TargetRecord;
+  readonly open: (() => void) | undefined;
 };
 
 export type LevelField = {
@@ -125,66 +136,56 @@ export function createShareForm<Recipient extends PickedRecipient>(
     shareNotices(options.items(), level()?.value ?? 'view')
   );
 
-  async function grantAll(
-    key: TargetKey,
-    channelId: string,
-    steps: readonly GrantStep[]
-  ): Promise<boolean> {
-    const granted = await Promise.all(
-      steps.map(async (step) => {
-        const result = await context.changeChannelAccess(step.item, {
+  async function grantAll(record: TargetRecord, steps: readonly GrantStep[]) {
+    const results = await Promise.all(
+      steps.map(async (step) => ({
+        ...step,
+        result: await context.changeChannelAccess(step.item, {
           t: 'set',
-          channelId,
+          channelId: record.channelId,
           level: step.level,
-        });
-        ledger = recordGrant(ledger, key, {
-          channelId,
-          item: step.item,
-          level: step.level,
-          result,
-        });
-        return result.isOk();
-      })
+        }),
+      }))
     );
-    return granted.every(Boolean);
+    return {
+      record: results.reduce(withGrant, record),
+      allGranted: results.every(({ result }) => result.isOk()),
+    };
   }
 
-  async function post(work: TargetWork, message: PlannedMessage) {
-    const channelId = ledger.get(work.key)?.channelId;
-    const beforeSend =
-      message.grantFirst.length === 0
-        ? undefined
-        : async (resolved: string) => {
-            if (!(await grantAll(work.key, resolved, message.grantFirst))) {
-              throw new Error('A grant this message needs failed');
-            }
-          };
-    try {
-      return await context.send({
-        to: channelId === undefined ? work.target : { t: 'channel', channelId },
+  async function runTarget(work: TargetWork): Promise<TargetRun | undefined> {
+    let record: TargetRecord;
+    if (work.channel.t === 'known') {
+      record = work.channel.record;
+    } else {
+      const channelId = await context.resolvePeopleChannel(
+        work.channel.userIds
+      );
+      if (channelId === undefined) return undefined;
+      record = emptyRecord(channelId);
+    }
+    let open: (() => void) | undefined;
+    if (work.pendingGrants.length > 0) {
+      record = (await grantAll(record, work.pendingGrants)).record;
+    }
+    for (const message of work.unsentMessages) {
+      if (message.grantFirst.length > 0) {
+        const first = await grantAll(record, message.grantFirst);
+        record = first.record;
+        if (!first.allGranted) break;
+      }
+      const sent = await context.send({
+        channelId: record.channelId,
         messageId: message.id,
         items: message.items,
         text: message.text,
-        beforeSend,
       });
-    } catch {
-      return undefined;
+      if (!sent) break;
+      record = withDelivery(record, message.id);
+      open ??= sent.open;
+      record = (await grantAll(record, message.grantAfter)).record;
     }
-  }
-
-  async function runTarget(work: TargetWork): Promise<void> {
-    const known = ledger.get(work.key)?.channelId;
-    if (known !== undefined) await grantAll(work.key, known, work.grants);
-    for (const message of work.messages) {
-      const sent = await post(work, message);
-      if (!sent) return;
-      ledger = recordDelivery(ledger, work.key, {
-        channelId: sent.channelId,
-        messageId: message.id,
-      });
-      if (!opens.has(work.key)) opens.set(work.key, sent.open);
-      await grantAll(work.key, sent.channelId, message.grantAfter);
-    }
+    return { key: work.key, record, open };
   }
 
   function freeze(): SharePlan | undefined {
@@ -205,23 +206,44 @@ export function createShareForm<Recipient extends PickedRecipient>(
   }
 
   async function submit(): Promise<ShareSubmitResult | undefined> {
-    const plan = match(status())
-      .with({ t: 'editing' }, () => freeze())
-      .with({ t: 'incomplete' }, (incomplete) => incomplete.plan)
+    const attempt = match(status())
+      .with({ t: 'editing' }, () => {
+        const plan = freeze();
+        return plan && { plan, previousOutcome: undefined };
+      })
+      .with({ t: 'incomplete' }, ({ plan, outcome }) => ({
+        plan,
+        previousOutcome: outcome,
+      }))
       .with({ t: 'sending' }, { t: 'complete' }, () => undefined)
       .exhaustive();
-    if (!plan) return undefined;
+    if (!attempt) return undefined;
 
-    setStatus({ t: 'sending', plan });
+    const { plan } = attempt;
+    setStatus({ t: 'sending', ...attempt });
     const before = ledger;
-    await Promise.all(remainingWork(plan, before).map(runTarget));
-    for (const event of shareEvents(plan, before, ledger)) context.track(event);
+    const runs = await Promise.allSettled(
+      remainingWork(plan, before).map(runTarget)
+    );
+    const finished = runs.flatMap((run) =>
+      run.status === 'fulfilled' && run.value ? [run.value] : []
+    );
+    ledger = new Map([
+      ...before,
+      ...finished.map(({ key, record }) => [key, record] as const),
+    ]);
+    for (const { key, open } of finished) {
+      if (open && !opens.has(key)) opens.set(key, open);
+    }
     const outcome = summarizeShare(plan, ledger);
     setStatus(
       outcome.complete
         ? { t: 'complete', plan, outcome }
         : { t: 'incomplete', plan, outcome }
     );
+    for (const event of shareEvents(plan, before, ledger)) context.track(event);
+    const rejected = runs.find((run) => run.status === 'rejected');
+    if (rejected) throw rejected.reason;
     return {
       outcome,
       open:

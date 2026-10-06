@@ -3,18 +3,20 @@ import { describe, expect, it } from 'vitest';
 import {
   type DeliveryLedger,
   emptyLedger,
+  emptyRecord,
   planShare,
   prefillChannel,
-  recordDelivery,
-  recordGrant,
   remainingWork,
   type ShareRequest,
   type ShareTarget,
   shareEvents,
   shareNotices,
   summarizeShare,
+  type TargetRecord,
   targetKey,
   targetsFor,
+  withDelivery,
+  withGrant,
 } from './delivery-plan';
 import type {
   ChannelAccessError,
@@ -53,12 +55,28 @@ const plan = (overrides: Partial<ShareRequest> = {}) => {
   return planShare(request(overrides), () => `message-${++minted}`);
 };
 
+const update = (
+  ledger: DeliveryLedger,
+  target: ShareTarget,
+  channelId: string,
+  change: (record: TargetRecord) => TargetRecord
+): DeliveryLedger => {
+  const key = targetKey(target);
+  return new Map(ledger).set(
+    key,
+    change(ledger.get(key) ?? emptyRecord(channelId))
+  );
+};
+
 const deliver = (
   ledger: DeliveryLedger,
   target: ShareTarget,
   messageId: string,
   channelId = 'channel-1'
-) => recordDelivery(ledger, targetKey(target), { channelId, messageId });
+) =>
+  update(ledger, target, channelId, (record) =>
+    withDelivery(record, messageId)
+  );
 
 const grant = (
   ledger: DeliveryLedger,
@@ -73,12 +91,9 @@ const grant = (
     channelId?: string;
   } = {}
 ) =>
-  recordGrant(ledger, targetKey(target), {
-    channelId,
-    item: granted,
-    level,
-    result,
-  });
+  update(ledger, target, channelId, (record) =>
+    withGrant(record, { item: granted, level, result })
+  );
 
 describe('planShare', () => {
   it('splits a large batch into messages of at most ten, with the text on the first', () => {
@@ -145,11 +160,11 @@ describe('remainingWork', () => {
     });
     const ledger = deliver(emptyLedger, channel('channel-1'), 'message-1');
     const [work] = remainingWork(share, ledger);
-    expect(work.messages.map(({ id, text }) => [id, text])).toEqual([
+    expect(work.unsentMessages.map(({ id, text }) => [id, text])).toEqual([
       ['message-2', ''],
       ['message-3', ''],
     ]);
-    expect(work.grants).toEqual([]);
+    expect(work.pendingGrants).toEqual([]);
   });
 
   it('retries a failed grant without sending again, and never a refused one', () => {
@@ -161,10 +176,26 @@ describe('remainingWork', () => {
     expect(remainingWork(share, ledger)).toEqual([
       {
         key: targetKey(target),
-        target,
-        grants: [{ item: item('doc-2'), level: 'view' }],
-        messages: [],
+        channel: { t: 'known', record: ledger.get(targetKey(target)) },
+        pendingGrants: [{ item: item('doc-2'), level: 'view' }],
+        unsentMessages: [],
       },
+    ]);
+  });
+
+  it('looks people up only until their channel is known', () => {
+    const people: ShareTarget = { t: 'people', userIds: ['user-1'] };
+    const share = plan({ targets: [channel('channel-1'), people] });
+    const resolved = update(emptyLedger, people, 'dm-1', (record) => record);
+    expect(
+      remainingWork(share, emptyLedger).map((work) => work.channel)
+    ).toEqual([
+      { t: 'known', record: emptyRecord('channel-1') },
+      { t: 'unknown', userIds: ['user-1'] },
+    ]);
+    expect(remainingWork(share, resolved).map((work) => work.channel)).toEqual([
+      { t: 'known', record: emptyRecord('channel-1') },
+      { t: 'known', record: emptyRecord('dm-1') },
     ]);
   });
 
@@ -178,9 +209,9 @@ describe('remainingWork', () => {
     expect(remainingWork(share, ledger)).toEqual([
       {
         key: targetKey(people),
-        target: people,
-        grants: [],
-        messages: [
+        channel: { t: 'known', record: ledger.get(targetKey(people)) },
+        pendingGrants: [],
+        unsentMessages: [
           {
             id: 'message-1',
             items: [project],
@@ -202,8 +233,8 @@ describe('remainingWork', () => {
     const failed = grant(emptyLedger, target, project, err('failed'));
     expect(remainingWork(share, refused)).toEqual([]);
     expect(
-      remainingWork(share, failed).map(({ messages }) =>
-        messages.map(({ grantFirst }) => grantFirst)
+      remainingWork(share, failed).map(({ unsentMessages }) =>
+        unsentMessages.map(({ grantFirst }) => grantFirst)
       )
     ).toEqual([[[{ item: project, level: 'view' }]]]);
   });
@@ -218,11 +249,28 @@ describe('remainingWork', () => {
     expect(remainingWork(share, ledger)).toEqual([
       {
         key: targetKey(target),
-        target,
-        grants: [{ item: chat, level: 'view' }],
-        messages: [],
+        channel: { t: 'known', record: ledger.get(targetKey(target)) },
+        pendingGrants: [{ item: chat, level: 'view' }],
+        unsentMessages: [],
       },
     ]);
+  });
+
+  it('records a delivery and lets a later grant clear an error', () => {
+    const record = withGrant(
+      withGrant(emptyRecord('dm-1'), {
+        item: item('doc-1'),
+        level: 'view',
+        result: err('failed'),
+      }),
+      { item: item('doc-1'), level: 'view', result: ok(undefined) }
+    );
+    expect(withDelivery(record, 'message-1')).toEqual({
+      channelId: 'dm-1',
+      delivered: new Set(['message-1']),
+      granted: new Map([['document:doc-1', 'view']]),
+      grantErrors: new Map(),
+    });
   });
 });
 
@@ -305,7 +353,7 @@ describe('summarizeShare', () => {
     expect(summarizeShare(share, ledger)).toMatchObject({
       complete: true,
       retryable: false,
-      delivered: true,
+      anyDelivered: true,
     });
   });
 
@@ -317,7 +365,7 @@ describe('summarizeShare', () => {
     expect(summarizeShare(share, ledger)).toEqual({
       complete: false,
       retryable: false,
-      delivered: true,
+      anyDelivered: true,
       recipients: [
         {
           key: targetKey(target),
@@ -337,7 +385,7 @@ describe('summarizeShare', () => {
     expect(summarizeShare(share, ledger)).toEqual({
       complete: false,
       retryable: true,
-      delivered: false,
+      anyDelivered: false,
       recipients: [
         {
           key: targetKey(target),
@@ -353,7 +401,7 @@ describe('summarizeShare', () => {
     expect(summarizeShare(plan(), emptyLedger)).toMatchObject({
       complete: false,
       retryable: true,
-      delivered: false,
+      anyDelivered: false,
       recipients: [{ unsent: docs(2), accessIssues: [] }],
     });
   });

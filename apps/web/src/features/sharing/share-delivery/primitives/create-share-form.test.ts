@@ -32,14 +32,18 @@ function setup(items: readonly ShareItem[]) {
   };
   let events: ShareEvent[] = [];
   const failingPosts = new Set<string>();
+  const brokenPosts = new Map<string, Error>();
   const grantErrors = new Map<string, ChannelAccessError>();
 
   const context: ShareDeliveryContext = {
-    async send({ to, messageId, items: attached, text, beforeSend }) {
-      const channelId =
-        to.t === 'channel' ? to.channelId : `dm:${to.userIds.join('+')}`;
-      if (to.t === 'people') note(channelId, 'resolve');
-      await beforeSend?.(channelId);
+    async resolvePeopleChannel(userIds) {
+      const channelId = `dm:${userIds.join('+')}`;
+      note(channelId, 'resolve');
+      return channelId;
+    },
+    async send({ channelId, messageId, items: attached, text }) {
+      const broken = brokenPosts.get(messageId);
+      if (broken) throw broken;
       if (failingPosts.has(messageId)) {
         note(channelId, `post ${messageId} failed`);
         return undefined;
@@ -51,7 +55,7 @@ function setup(items: readonly ShareItem[]) {
           ? `post ${messageId}: ${ids} "${text}"`
           : `post ${messageId}: ${ids}`
       );
-      return { channelId, open: () => note(channelId, 'open') };
+      return { open: () => note(channelId, 'open') };
     },
     async changeChannelAccess(ref, change) {
       const level = change.t === 'set' ? change.level : 'removed';
@@ -83,6 +87,7 @@ function setup(items: readonly ShareItem[]) {
   return {
     form,
     failingPosts,
+    brokenPosts,
     grantErrors,
     takeLog: () => {
       const taken = log;
@@ -136,7 +141,7 @@ it('retries only the failed delivery, under its planned message id', async () =>
     outcome: {
       complete: false,
       retryable: true,
-      delivered: true,
+      anyDelivered: true,
       recipients: [
         {
           key: 'channel:design',
@@ -163,7 +168,7 @@ it('retries only the failed delivery, under its planned message id', async () =>
   await form.submit();
 
   expect(takeLog()).toEqual({
-    'dm:ana': ['resolve', 'post m2: spec', 'grant spec view'],
+    'dm:ana': ['post m2: spec', 'grant spec view'],
   });
   expect(takeEvents()).toEqual([
     { t: 'access-set', item: spec, level: 'view' },
@@ -256,7 +261,7 @@ it('retries a failed grant but never a refused one', async () => {
   expect(retry?.outcome).toEqual({
     complete: false,
     retryable: false,
-    delivered: true,
+    anyDelivered: true,
     recipients: [
       {
         key: 'channel:design',
@@ -303,12 +308,48 @@ it('locks recipients, group, level, and text after the first submit', async () =
   await form.submit();
 
   expect(takeLog()).toEqual({
-    'dm:ana+ben': [
-      'resolve',
-      'post m1: spec "First draft"',
-      'grant spec comment',
-    ],
+    'dm:ana+ben': ['post m1: spec "First draft"', 'grant spec comment'],
   });
+});
+
+it('keeps the last outcome on the status while a retry is sending', async () => {
+  const { form, failingPosts } = setup([item('document', 'spec')]);
+  form.setRecipients([channel('design')]);
+  failingPosts.add('m1');
+  const first = await form.submit();
+  failingPosts.clear();
+
+  const retry = form.submit();
+
+  expect(form.status()).toEqual({
+    t: 'sending',
+    plan: expect.anything(),
+    previousOutcome: first?.outcome,
+  });
+  await retry;
+  expect(form.status().t).toBe('complete');
+});
+
+it('settles the form and keeps the other recipients when a send throws', async () => {
+  const spec = item('document', 'spec');
+  const { form, takeLog, brokenPosts } = setup([spec]);
+  form.setRecipients([channel('design'), channel('review')]);
+  const broken = new Error('send threw');
+  brokenPosts.set('m2', broken);
+
+  await expect(form.submit()).rejects.toBe(broken);
+
+  expect(form.status()).toMatchObject({
+    t: 'incomplete',
+    outcome: { anyDelivered: true, retryable: true },
+  });
+  expect(takeLog()).toEqual({ design: ['post m1: spec', 'grant spec view'] });
+
+  brokenPosts.clear();
+  await form.submit();
+
+  expect(takeLog()).toEqual({ review: ['post m2: spec', 'grant spec view'] });
+  expect(form.status().t).toBe('complete');
 });
 
 it('flags a submit with no valid recipient and sends nothing', async () => {

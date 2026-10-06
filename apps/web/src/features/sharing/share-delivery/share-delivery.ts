@@ -89,29 +89,20 @@ function useAppShareDeliveryContext(
   items: Accessor<readonly ShareItem[]>,
   location: ShareLocation
 ): ShareDeliveryContext {
-  const { sendToChannel, sendToUsers } = useSendMessageToPeople();
+  const { resolvePeopleChannel, sendToChannel } = useSendMessageToPeople();
   const analytics = useAnalytics();
 
   return {
-    send: async ({ to, messageId, items: attached, text, beforeSend }) => {
-      const message = {
+    resolvePeopleChannel,
+    send: async ({ channelId, messageId, items: attached, text }) => {
+      const sent = await sendToChannel({
+        channelId,
         content: text,
         mentions: [],
         attachments: attached.map(toAttachment),
-        beforeSend,
         messageId,
-      };
-      const sent = await match(to)
-        .with({ t: 'channel' }, ({ channelId }) =>
-          sendToChannel({ ...message, channelId })
-        )
-        .with({ t: 'people' }, ({ userIds }) =>
-          sendToUsers({ ...message, users: [...userIds] })
-        )
-        .exhaustive();
-      return (
-        sent && { channelId: sent.channelId, open: sent.navigateToChannel }
-      );
+      });
+      return sent && { open: sent.navigateToChannel };
     },
     changeChannelAccess,
     track: (event) =>

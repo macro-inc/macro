@@ -20,8 +20,8 @@ import {
 import { ForwardToChannel } from './ForwardToChannel';
 
 const mocks = vi.hoisted(() => ({
+  resolvePeopleChannel: vi.fn(),
   sendToChannel: vi.fn(),
-  sendToUsers: vi.fn(),
   success: vi.fn(),
   failure: vi.fn(),
   alert: vi.fn(),
@@ -204,14 +204,16 @@ describe('forwarding with selected access', () => {
         navigateToChannel: () => void;
       }>();
       const grant = deferred<unknown>();
-      const sendMessage =
-        target === 'channel' ? mocks.sendToChannel : mocks.sendToUsers;
-      sendMessage.mockReturnValue(send.promise);
+      mocks.resolvePeopleChannel.mockResolvedValue('channel-1');
+      mocks.sendToChannel.mockReturnValue(send.promise);
       mocks.updateAgentSessionSharePermissions.mockReturnValue(grant.promise);
       const { submit, onSubmit } = mountForward();
 
       const submitted = submit();
-      expect(sendMessage).toHaveBeenCalledOnce();
+      expect(
+        target === 'channel' ? mocks.sendToChannel : mocks.resolvePeopleChannel
+      ).toHaveBeenCalledOnce();
+      await waitFor(() => expect(mocks.sendToChannel).toHaveBeenCalledOnce());
       expect(mocks.updateAgentSessionSharePermissions).not.toHaveBeenCalled();
       expect(onSubmit).not.toHaveBeenCalled();
 
@@ -227,7 +229,7 @@ describe('forwarding with selected access', () => {
       // A second shortcut or button press must not duplicate the message while
       // its access update is still pending.
       await submit();
-      expect(sendMessage).toHaveBeenCalledOnce();
+      expect(mocks.sendToChannel).toHaveBeenCalledOnce();
 
       grant.resolve(ok({}));
       await submitted;
@@ -271,9 +273,8 @@ describe('forwarding with selected access', () => {
                 { kind: 'user', id: 'user-1' },
                 { kind: 'user', id: 'user-2' },
               ];
-      const sendMessage =
-        target === 'channel' ? mocks.sendToChannel : mocks.sendToUsers;
-      sendMessage.mockResolvedValue({
+      mocks.resolvePeopleChannel.mockResolvedValue('channel-1');
+      mocks.sendToChannel.mockResolvedValue({
         channelId: 'channel-1',
         navigateToChannel: vi.fn(),
       });
@@ -291,7 +292,7 @@ describe('forwarding with selected access', () => {
       );
       await submit();
 
-      expect(sendMessage).toHaveBeenCalledOnce();
+      expect(mocks.sendToChannel).toHaveBeenCalledOnce();
       expect(mocks.updateAgentSessionSharePermissions.mock.calls).toEqual([
         ['session-1', replace('channel-1', 'view')],
         ['session-1', replace('channel-1', 'view')],

@@ -11,8 +11,8 @@ const ME = 'macro|me@example.com';
 const SOMEONE_ELSE = 'macro|someone-else@example.com';
 
 const mocks = vi.hoisted(() => ({
+  resolvePeopleChannel: vi.fn(),
   sendToChannel: vi.fn(),
-  sendToUsers: vi.fn(),
   mobile: false,
   hasTeam: false,
   getAgentPermissions: vi.fn(),
@@ -1071,7 +1071,6 @@ describe('native project sharing', () => {
       return ok({});
     });
     mocks.sendToChannel.mockImplementation(async (input) => {
-      await input.beforeSend?.(input.channelId);
       order.push('message');
       return { channelId: input.channelId, navigateToChannel: vi.fn() };
     });
@@ -1099,12 +1098,6 @@ describe('native project sharing', () => {
     mocks.updateInitiativePermissions.mockResolvedValue(
       err([{ code: 'FORBIDDEN', message: 'Not the owner' }])
     );
-    const posted = vi.fn();
-    mocks.sendToChannel.mockImplementation(async (input) => {
-      await input.beforeSend?.(input.channelId);
-      posted();
-      return { channelId: input.channelId, navigateToChannel: vi.fn() };
-    });
     mountProject();
     selectChannel();
     share();
@@ -1112,7 +1105,7 @@ describe('native project sharing', () => {
     await vi.waitFor(() =>
       expect(toast.failure).toHaveBeenCalledWith('Message failed to send')
     );
-    expect(posted).not.toHaveBeenCalled();
+    expect(mocks.sendToChannel).not.toHaveBeenCalled();
   });
 
   it('lets only the owner forward a project', () => {

@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import { useSendMessageToPeople } from './channels';
 import { ThrownResultError } from './result';
 
@@ -40,48 +40,46 @@ beforeEach(() => {
   mocks.send.mockResolvedValue({ id: 'message' });
 });
 
-it.each([['recipient'], ['recipient', 'other']])(
-  'authorizes the resolved destination before sending to %j',
-  async (...users) => {
-    const { sendToUsers } = useSendMessageToPeople();
-    const order: string[] = [];
-    const grant = vi.fn(async () => {
-      order.push('grant');
-    });
-    mocks.send.mockImplementation(async () => {
-      order.push('message');
-      return { id: 'message' };
-    });
-    await sendToUsers({
+it.each([
+  { users: ['recipient'], channelId: 'resolved-dm' },
+  { users: ['recipient', 'other'], channelId: 'resolved-group' },
+])(
+  'resolves $users to $channelId and posts the attachments there',
+  async ({ users, channelId }) => {
+    const { resolvePeopleChannel, sendToUsers } = useSendMessageToPeople();
+
+    const resolved = await resolvePeopleChannel(users);
+    const sent = await sendToUsers({
       users,
       content: '',
       mentions: [],
       attachments: [{ entity_type: 'initiative', entity_id: 'project' }],
-      beforeSend: grant,
     });
-    expect(order).toEqual(['grant', 'message']);
-    expect(grant).toHaveBeenCalledWith(
-      users.length === 1 ? 'resolved-dm' : 'resolved-group'
-    );
-    expect(mocks.send.mock.calls[0][0].message.attachments).toEqual([
-      { entity_type: 'initiative', entity_id: 'project' },
-    ]);
+
+    expect([resolved, sent?.channelId]).toEqual([channelId, channelId]);
+    expect(mocks.send.mock.calls[0][0]).toMatchObject({
+      parent: { type: 'channel', id: channelId },
+      message: {
+        attachments: [{ entity_type: 'initiative', entity_id: 'project' }],
+      },
+    });
   }
 );
 
-it('does not post an attachment when its destination grant fails', async () => {
-  const { sendToChannel } = useSendMessageToPeople();
-  await expect(
-    sendToChannel({
-      channelId: 'channel',
-      content: '',
-      mentions: [],
-      attachments: [{ entity_type: 'initiative', entity_id: 'project' }],
-      beforeSend: async () => {
-        throw new Error('Only owner');
-      },
-    })
-  ).rejects.toThrow('Only owner');
+it('resolves a failed lookup to nothing and posts nothing', async () => {
+  const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  onTestFinished(() => logError.mockRestore());
+  mocks.direct.mockRejectedValue(new Error('unavailable'));
+  const { resolvePeopleChannel, sendToUsers } = useSendMessageToPeople();
+
+  const resolved = await resolvePeopleChannel(['recipient']);
+  const sent = await sendToUsers({
+    users: ['recipient'],
+    content: '',
+    mentions: [],
+  });
+
+  expect([resolved, sent]).toEqual([undefined, undefined]);
   expect(mocks.send).not.toHaveBeenCalled();
 });
 

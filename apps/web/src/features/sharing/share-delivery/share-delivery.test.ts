@@ -10,8 +10,8 @@ import {
 } from './share-delivery';
 
 const mocks = vi.hoisted(() => ({
+  resolvePeopleChannel: vi.fn(),
   sendToChannel: vi.fn(),
-  sendToUsers: vi.fn(),
   changeChannelAccess: vi.fn(),
   track: vi.fn(),
   minted: 0,
@@ -29,8 +29,8 @@ vi.mock('@core/constant/featureFlags', () => ({
 }));
 vi.mock('@core/util/channels', () => ({
   useSendMessageToPeople: () => ({
+    resolvePeopleChannel: mocks.resolvePeopleChannel,
     sendToChannel: mocks.sendToChannel,
-    sendToUsers: mocks.sendToUsers,
   }),
 }));
 vi.mock('@queries/messages/mutations', () => ({
@@ -188,8 +188,9 @@ describe('useShareForm', () => {
     expect(result?.open).toBe(navigate);
   });
 
-  it('sends a group to its members and retries under the same id', async () => {
-    mocks.sendToUsers.mockResolvedValueOnce(undefined).mockResolvedValueOnce({
+  it('sends a group to its private channel and retries under the same id', async () => {
+    mocks.resolvePeopleChannel.mockResolvedValue('group-1');
+    mocks.sendToChannel.mockResolvedValueOnce(undefined).mockResolvedValueOnce({
       channelId: 'group-1',
       navigateToChannel: vi.fn(),
     });
@@ -199,16 +200,18 @@ describe('useShareForm', () => {
     await form.submit();
     await form.submit();
 
+    expect(mocks.resolvePeopleChannel.mock.calls).toEqual([
+      [['user-1', 'user-2']],
+    ]);
     expect(
-      mocks.sendToUsers.mock.calls.map(([message]) => [
-        message.users,
+      mocks.sendToChannel.mock.calls.map(([message]) => [
+        message.channelId,
         message.messageId,
       ])
     ).toEqual([
-      [['user-1', 'user-2'], 'message-1'],
-      [['user-1', 'user-2'], 'message-1'],
+      ['group-1', 'message-1'],
+      ['group-1', 'message-1'],
     ]);
-    expect(mocks.sendToChannel).not.toHaveBeenCalled();
   });
 
   it('grants through the kind registry and tracks the forward', async () => {
@@ -249,7 +252,8 @@ describe('useShareForm', () => {
   });
 
   it('counts the batch on every bulk share event', async () => {
-    mocks.sendToUsers.mockResolvedValue({
+    mocks.resolvePeopleChannel.mockResolvedValue('dm-1');
+    mocks.sendToChannel.mockResolvedValue({
       channelId: 'dm-1',
       navigateToChannel: vi.fn(),
     });

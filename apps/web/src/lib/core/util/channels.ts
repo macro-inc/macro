@@ -22,8 +22,6 @@ type SendContent = {
   content: string;
   mentions: SimpleMention[];
   attachments?: NewAttachment[];
-  /** An entity owner may need to authorize the resolved DM/channel before sending. */
-  beforeSend?: (channelId: string) => Promise<void>;
   /**
    * Reuse one id across retries of the same message. The server stores one
    * copy, and a conflict on a supplied id counts as delivered.
@@ -87,7 +85,6 @@ export function useSendMessageToPeople() {
   ) {
     const senderId = userId();
     if (!senderId) return;
-    await args.beforeSend?.(channelId);
     const messageId = await postMessage(channelId, senderId, args);
     if (messageId === undefined) return;
 
@@ -115,24 +112,29 @@ export function useSendMessageToPeople() {
     return { channelId, messageId, navigateToChannel };
   }
 
-  async function sendToUsers(args: SendToUsersArgs) {
-    let channelId: string;
+  async function resolvePeopleChannel(
+    users: readonly string[]
+  ): Promise<string | undefined> {
     try {
       const result =
-        args.users.length === 1
+        users.length === 1
           ? await getOrCreateDmMutation.mutateAsync({
-              recipient_id: args.users[0],
+              recipient_id: users[0],
             })
           : await getOrCreatePrivateChannelMutation.mutateAsync({
-              recipients: args.users,
+              recipients: [...users],
             });
-      channelId = result.channel_id;
+      return result.channel_id;
     } catch (err) {
       toast.failure('Failed to send message to people');
       console.error('failed to create new channel to forward', err);
-      return;
+      return undefined;
     }
+  }
 
+  async function sendToUsers(args: SendToUsersArgs) {
+    const channelId = await resolvePeopleChannel(args.users);
+    if (channelId === undefined) return;
     return sendAndNavigateToChannel(channelId, args);
   }
 
@@ -141,6 +143,8 @@ export function useSendMessageToPeople() {
   }
 
   return {
+    /** Finds or creates the DM for one user or the private channel for several. */
+    resolvePeopleChannel: createCallback(resolvePeopleChannel),
     /** Sends a message to a list of users,
      * if the users already have an existing channel,
      * it will send the message to that channel

@@ -31,7 +31,7 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
   const sending = () => props.form.status().t === 'sending';
   const settled = () => report()?.retryable === false;
   const close = () =>
-    report()?.delivered ? props.onFinish() : props.onCancel();
+    report()?.anyDelivered ? props.onFinish() : props.onCancel();
 
   const targetName = (target: ShareTarget) => {
     const name = (id: string) => {
@@ -52,7 +52,7 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
     const { outcome, open } = result;
     if (!outcome.complete) {
       setReport(outcome);
-      if (outcome.delivered) props.onDelivered();
+      if (outcome.anyDelivered) props.onDelivered();
       return;
     }
     const [only, ...others] = outcome.recipients;
