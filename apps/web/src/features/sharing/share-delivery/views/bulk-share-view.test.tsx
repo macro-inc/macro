@@ -262,6 +262,33 @@ describe('BulkShareView', () => {
     expect(button('Share')).toHaveProperty('disabled', false);
   });
 
+  it('explains capped access and a split batch before sending', () => {
+    const markdown = (name: string): ShareItem => ({
+      ...item('document', name),
+      markdown: true,
+    });
+    setup(
+      [
+        markdown('Spec'),
+        item('email', 'Thread'),
+        ...Array.from({ length: 9 }, (_, index) =>
+          markdown(`Doc ${index + 1}`)
+        ),
+      ],
+      [channel('general')]
+    );
+
+    expect(button('Permission').textContent).toBe('edit');
+    expect(
+      screen.getByText('Thread can be shared with view access at most.')
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Each recipient gets 2 messages, because a message holds up to 10 items. Your message goes in the first.'
+      )
+    ).toBeTruthy();
+  });
+
   it('disables Share when every row is left out', () => {
     setup(
       [
