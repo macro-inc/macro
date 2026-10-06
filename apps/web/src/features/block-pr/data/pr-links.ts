@@ -87,7 +87,9 @@ export const EMPTY_PR_LINKS: PrLinks = {
  * GitHub label names teams use for priority: `P0`–`P3`, `priority: high`,
  * `urgent`, `critical`. Anything else is not a priority label.
  */
-export function priorityFromLabelName(name: string): PrPriorityId | null {
+export function priorityFromLabelName(
+  name: string
+): Exclude<PrPriorityId, 'none'> | null {
   const label = name.trim().toLowerCase();
   const level = label.match(/^(?:priority[\s:/_-]*)?p([0-3])$/)?.[1];
   if (level) return (['urgent', 'high', 'medium', 'low'] as const)[+level];
@@ -96,7 +98,9 @@ export function priorityFromLabelName(name: string): PrPriorityId | null {
     /^priority[\s:/_-]*(urgent|critical|high|medium|low)$/
   )?.[1];
   if (!named) return null;
-  return named === 'critical' ? 'urgent' : (named as PrPriorityId);
+  return named === 'critical'
+    ? 'urgent'
+    : (named as Exclude<PrPriorityId, 'none'>);
 }
 
 const higher = (a: PrPriority, b: PrPriority) =>
