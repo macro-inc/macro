@@ -270,7 +270,7 @@ function BuilderCanvas(
   );
   const [editingRules, setEditingRules] = createSignal<string>();
   const [choosingBooking, setChoosingBooking] = createSignal(false);
-  let focusAfterMenu: (() => void) | undefined;
+  let afterMenuClose: (() => void) | undefined;
   let compactAddTrigger: HTMLButtonElement | undefined;
   let dialogReturnFocus: HTMLButtonElement | undefined;
   const [pendingRelation, setPendingRelation] = createSignal<{
@@ -970,20 +970,16 @@ function BuilderCanvas(
               tables={relationTables()}
               hiddenColumns={hiddenColumnRows()}
               onChoose={(choice, table) => {
-                if (choice.kind === 'pick-table' && !table) {
-                  dialogReturnFocus = compactAddTrigger;
-                }
-                void insertQuestion(choice, undefined, table);
+                afterMenuClose = () => {
+                  if (choice.kind === 'pick-table' && !table) {
+                    dialogReturnFocus = compactAddTrigger;
+                  }
+                  void insertQuestion(choice, undefined, table);
+                };
               }}
               onAddColumn={(columnId) => builder.addExistingColumn(columnId)}
               onAddAllColumns={addAllHidden}
-              onCloseAutoFocus={(event) => {
-                if (choosingBooking() || pendingRelation()) {
-                  event.preventDefault();
-                  return;
-                }
-                focusAddedSection(event);
-              }}
+              onCloseAutoFocus={runAfterClose}
             >
               <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
               <Dropdown.Group>
@@ -1002,8 +998,10 @@ function BuilderCanvas(
                     <Show when={context.booking.available()}>
                       <Dropdown.Item
                         onSelect={() => {
-                          dialogReturnFocus = compactAddTrigger;
-                          setChoosingBooking(true);
+                          afterMenuClose = () => {
+                            dialogReturnFocus = compactAddTrigger;
+                            setChoosingBooking(true);
+                          };
                         }}
                       >
                         <CalendarCheck class="size-4" />
@@ -1015,7 +1013,7 @@ function BuilderCanvas(
                   {(existing) => (
                     <Dropdown.Item
                       onSelect={() => {
-                        focusAfterMenu = () => revealBooking(existing().id);
+                        afterMenuClose = () => revealBooking(existing().id);
                       }}
                     >
                       <CalendarCheck class="size-4" />
@@ -1114,10 +1112,11 @@ function BuilderCanvas(
           failed={!!bookingLinks.failure()}
           onChoose={(target) => {
             const result = builder.addBooking(target);
-            if (result) focusAfterMenu = () => revealBooking(result.sectionId);
+            if (result) afterMenuClose = () => revealBooking(result.sectionId);
             setChoosingBooking(false);
           }}
           onCreate={() => {
+            dialogReturnFocus = undefined;
             setChoosingBooking(false);
             context.booking.openSettings();
           }}
@@ -1222,20 +1221,21 @@ function BuilderCanvas(
     return id;
   }
 
-  function focusAddedSection(event: Event) {
-    const focus = focusAfterMenu;
-    focusAfterMenu = undefined;
-    if (!focus) return;
+  function runAfterClose(event: Event) {
+    const action = afterMenuClose;
+    afterMenuClose = undefined;
+    if (!action) return;
     event.preventDefault();
-    // Kobalte restores the trigger after this callback, even when prevented.
-    queueMicrotask(focus);
+    // Kobalte restores focus and releases its modal lock after this callback.
+    // Finish that cleanup before focusing an insertion or opening a drawer.
+    queueMicrotask(action);
   }
 
   function focusAfterDialog(event: Event) {
     const trigger = dialogReturnFocus;
     dialogReturnFocus = undefined;
-    if (focusAfterMenu) {
-      focusAddedSection(event);
+    if (afterMenuClose) {
+      runAfterClose(event);
     } else if (trigger) {
       event.preventDefault();
       queueMicrotask(() => trigger.focus());
@@ -1244,7 +1244,7 @@ function BuilderCanvas(
 
   function addSectionFromMenu(kind: NewSectionKind) {
     const id = addSection(kind);
-    if (id) focusAfterMenu = () => focusHandle({ kind: 'section', id });
+    if (id) afterMenuClose = () => focusHandle({ kind: 'section', id });
   }
 
   function AddSectionButton(buttonProps: {

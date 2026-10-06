@@ -1,3 +1,4 @@
+import * as mobile from '@core/mobile/isMobile';
 import {
   cleanup,
   fireEvent,
@@ -45,6 +46,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   animationStyle.remove();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -335,6 +338,33 @@ describe('BuilderView', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(shared.theirs().sections[0].questions).toHaveLength(3);
+  });
+
+  it('releases the mobile drawer pointer lock after opening it from the add menu', async () => {
+    vi.spyOn(mobile, 'isMobile').mockReturnValue(true);
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    mount();
+    const trigger = screen.getByRole('button', { name: 'Add question' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    await vi.advanceTimersByTimeAsync(0);
+    const item = screen.getByRole('menuitem', { name: 'Database row' });
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(100);
+    const dialog = screen.getByRole('dialog', { name: 'Choose a table' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await vi.advanceTimersByTimeAsync(400);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.body.style.pointerEvents).not.toBe('none');
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('returns focus to the compact add trigger when table selection is canceled', async () => {
