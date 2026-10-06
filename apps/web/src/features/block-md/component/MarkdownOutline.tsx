@@ -21,12 +21,27 @@ const HEADING_SCROLL_OFFSET = 80;
 const SECTION_PREVIEW_LENGTH = 240;
 const MIN_OUTLINE_HEADINGS = 3;
 export const MARKDOWN_OUTLINE_WIDTH = 40;
+export const MARKDOWN_OUTLINE_INSET = 16;
 
 export function shouldShowOutline(
   headingCount: number,
   enabled: boolean
 ): boolean {
   return enabled && headingCount >= MIN_OUTLINE_HEADINGS;
+}
+
+/**
+ * Whether the rail fits in the margin left of the text column, given that
+ * column's own distance from the notebook's left edge. The rail takes pointer
+ * events, so fitting the notebook is not enough: checkbox markers are
+ * `li::before` boxes drawn outside the list item and flush with the column's
+ * left edge, and a rail reaching past the column swallows the click that would
+ * tick one. The margin has to be measured rather than derived from the
+ * notebook's width, because a comment layout pushes the column left without
+ * making the notebook any narrower.
+ */
+export function outlineFitsGutter(contentInset: number): boolean {
+  return contentInset >= MARKDOWN_OUTLINE_INSET + MARKDOWN_OUTLINE_WIDTH;
 }
 
 /** A section runs from its heading to the next heading (or the editor end). */
@@ -278,6 +293,10 @@ export function MarkdownOutline(props: {
                 }
                 contentZIndexClass="z-item-options-menu"
                 gutter={10}
+                // The preview covers the text column's left edge, including the
+                // checkbox markers, so it must not take the pointer that is on
+                // its way to one.
+                passThroughPointerEvents
                 placement="right"
                 portalMount={props.portalMount()}
                 trigger={

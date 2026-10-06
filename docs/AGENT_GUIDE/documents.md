@@ -55,12 +55,19 @@ An empty title uses **New Note** when expanding.
 ## Markdown outline
 
 On desktop, Markdown documents with at least three headings show a tick rail in
-the left margin. Every section whose content overlaps the editor viewport is
+the left margin. The rail appears only where the text column's left margin is
+wide enough to hold it clear of the text, so it never overlaps the checkbox
+markers of a checklist; a document whose margin comments have pushed the text
+column against the container padding shows no rail at any window width. Every
+section whose content overlaps the editor viewport is
 highlighted, including a section whose heading has already scrolled above it.
 Hover a tick (or Tab to its button) to expand it and nearby ticks and show a
 rounded preview with the section heading and up to three lines of body text.
 While a preview is open, only its tick is emphasized; visible-section highlights
 return when the preview closes.
+The preview overlays the text column, but it does not take the pointer: a click
+that lands on it reaches the document underneath, so checkboxes it covers still
+toggle, and moving off the rail closes it even if the pointer crosses the card.
 Click a tick or press Enter to jump immediately to its heading without closing its preview
 or collapsing the expanded ticks. Scrolling, resizing, and
 editor updates refresh the visible-section highlights.
