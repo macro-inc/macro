@@ -3,7 +3,7 @@
 
 use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
-use crate::workflows::{build_appimage_on_tag, steps, vars};
+use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
 
 /// Build the reusable workflow.
 pub fn build_dmg() -> Workflow {
@@ -30,7 +30,7 @@ pub fn build_dmg() -> Workflow {
 pub fn build_dmg_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build macOS DMG")
-        .runs_on("macos-15")
+        .runs_on(runners::Runner::MacOsArm.to_string())
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
         .add_step(steps::install_nix_macos())

@@ -11,7 +11,7 @@ name: Build macOS DMG
 jobs:
   build-dmg:
     name: Build macOS DMG
-    runs-on: macos-15
+    runs-on: nscloud-macos-sequoia-arm64-6x14
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
