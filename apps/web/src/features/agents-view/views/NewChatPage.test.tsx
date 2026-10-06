@@ -429,6 +429,7 @@ describe('agent-led new conversation', () => {
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
+      modelOverride: 'chat-default',
     });
   });
   it('offers only coding agents in Code and opens the repository drawer', async () => {

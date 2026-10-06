@@ -12,8 +12,10 @@ Repeat with the default model and with an explicit model/effort selection.
 The first visible output and the first answer text should appear as they arrive;
 later chunks can arrive in batches. Reasoning or a tool row should not delay the
 first prose. Verify a second prompt and a reload preserve the complete answer.
-Selected model and effort must be confirmed before the first prompt; settings
-already confirmed by the runtime do not need another control request.
+A model selected before the first prompt is part of the create request, and the
+runtime starts on it; no model change appears in the new session's transcript.
+A selected effort is confirmed before the first prompt; settings the runtime
+already reports do not need another control request.
 
 Repeat from a fresh tab using Home, Agents, and a document's Chat action.
 Focusing an agent composer prepares its transcript renderer locally; focus alone
