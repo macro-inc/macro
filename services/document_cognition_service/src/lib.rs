@@ -1,11 +1,11 @@
 #![recursion_limit = "256"]
-//! Document storage service. The service binary and the OpenAPI generator both
-//! link this library, so the service compiles once and caches as one rlib.
+//! Document cognition service. The service binary and the OpenAPI generator
+//! both link this library, so the service compiles once and caches as one rlib.
 
 mod api;
 mod config;
-pub mod model;
-mod outbound;
+mod core;
+mod model;
 mod server;
 mod service;
 
