@@ -26,10 +26,12 @@ export function useWarmAgentSessionQuery(userId: Accessor<string | undefined>) {
       gcTime: CLIENT_WARM_TTL_MS,
       retry: false,
       refetchOnWindowFocus: false,
-      queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      queryFn: async () => {
         if (!owner) return null;
+        // Keep one reservation in flight across Home -> Agents navigation.
+        // Aborting on unmount would abandon its server ID and warm another.
         const result = await throwOnErr(() =>
-          agentHarnessServiceClient.warm(uuidv7(), signal)
+          agentHarnessServiceClient.warm(uuidv7())
         );
         if (result.session) {
           return {
@@ -45,7 +47,10 @@ export function useWarmAgentSessionQuery(userId: Accessor<string | undefined>) {
   });
 }
 
-/** Consume once, only for the owner and exact default-agent configuration. */
+/**
+ * Consume once, only for the owner and exact default-agent configuration.
+ * Keep the empty cache fresh until creation finishes and releases server capacity.
+ */
 export function takeWarmAgentSession(
   options: {
     userId?: string;
@@ -76,4 +81,20 @@ export function takeWarmAgentSession(
     return;
   client.setQueryData(key, null);
   return entry.id;
+}
+
+/** Prepare one replacement after creation succeeds, joining any existing request. */
+export function replenishWarmAgentSession(
+  userId: string,
+  client: QueryClient = queryClient
+): void {
+  const key = agentSessionWarmKeys.owner(userId).queryKey;
+  const query = client.getQueryState<WarmSession | null>(key);
+  // A different configuration may have left a usable reservation in the cache.
+  // No query means this owner has not mounted a warming surface.
+  if (!query || query.data) return;
+  void client.invalidateQueries(
+    { queryKey: key, exact: true },
+    { cancelRefetch: false }
+  );
 }

@@ -15,6 +15,12 @@ first prose. Verify a second prompt and a reload preserve the complete answer.
 Selected model and effort must be confirmed before the first prompt; settings
 already confirmed by the runtime do not need another control request.
 
+Repeat from Home, Agents, and the create menu with an already-ready session.
+The first prompt can be accepted before its destination mounts; navigating into
+the session must keep the same streamed turn without restarting its load. Also
+leave a pending destination, then reopen the session and confirm the sent prompt
+and complete answer remain available.
+
 The `agent.prompt` trace separates raw fold text (`first_text`) from mounted
 answer DOM (`text_mounted`), readable visible text (`first_text_rendered`), and
 its paint (`first_text_paint`). Only the final milestone is a visible-response
@@ -1438,3 +1444,17 @@ prepared session only when the user, model, and instructions match. Other
 personas and changed settings use normal creation. Warm failures must not block
 sending. Unclaimed sessions expire after ten minutes; a claimed conversation
 must remain visible and usable after that deadline.
+
+Taking a reservation clears it immediately, but replacement preparation waits
+until session creation succeeds. This lets a warm claim release its server
+reservation before requesting another. An active Home or Agents surface then
+prepares one replacement; otherwise preparation waits for the next mount. Verify
+a second conversation can reuse that replacement without waiting five minutes,
+including when another tab already holds the owner's other warm reservation.
+Successful cold creation also replenishes an empty cache left by an expired or
+failed reservation. A failed create does not trigger more warming.
+An already-started preparation stays in the shared cache across Home-to-Agents
+navigation, so mounting the next surface joins that request instead of warming
+another server session.
+Empty or failed warm responses do not trigger a refill loop, and mismatched
+agent settings leave a usable reservation available for the default agent.
