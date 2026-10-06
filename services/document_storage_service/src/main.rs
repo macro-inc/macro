@@ -1800,6 +1800,15 @@ async fn run() -> anyhow::Result<()> {
 
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
+    let document_purger = Arc::new(documents_hex::domain::purge::DocumentPurger::new(
+        documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(db.clone()),
+        documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(sqs_client.clone()),
+        documents_hex::outbound::document_purge::RedisDocxPartReferences::new(
+            redis_sha_client.clone(),
+        ),
+        macro_event_broker.clone(),
+    ));
+
     let graphql_entity_mutation_service =
         Arc::new(service::entity_mutation::DssEntityMutationService::new(
             document_service.clone(),
@@ -1932,6 +1941,7 @@ async fn run() -> anyhow::Result<()> {
         dynamo_db,
         macro_event_broker: macro_event_broker.clone(),
         sqs_client: sqs_client.clone(),
+        document_purger,
         notification_ingress_service: notification_ingress_service.clone(),
         conn_gateway_client: conn_gateway_client.clone(),
         sync_service_client: sync_service_client.clone(),

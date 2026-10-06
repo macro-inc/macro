@@ -5,11 +5,17 @@ use std::sync::{
 
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use model_owner::Owner;
+use shared_entity_registry::{OwnedPurgeOutcome, PurgeOwnedEntity};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use super::{DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService, DocumentPurger};
+use super::{
+    DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService, DocumentPurger,
+    DocxPartReferences, PurgeTarget,
+};
 use crate::domain::models::DocumentError;
+
+const OWNER: &str = "macro|owner@example.com";
 
 #[derive(Clone, Copy, Default)]
 enum BrokerFailure {
@@ -22,9 +28,11 @@ enum BrokerFailure {
 
 struct State {
     steps: Mutex<Vec<(&'static str, String)>>,
-    owner: Mutex<Option<Owner>>,
+    document: Mutex<Option<PurgeTarget>>,
+    part_shas: Vec<String>,
     fail_rows: AtomicBool,
     fail_queue: AtomicBool,
+    fail_release: AtomicBool,
     broker_failure: BrokerFailure,
 }
 
@@ -32,50 +40,97 @@ impl Default for State {
     fn default() -> Self {
         Self {
             steps: Mutex::default(),
-            owner: Mutex::new(Some(
-                Owner::from_principal_str("macro|owner@example.com").unwrap(),
-            )),
+            document: Mutex::new(Some(PurgeTarget {
+                owner: owner(),
+                file_type: Some("pdf".to_owned()),
+            })),
+            part_shas: Vec::new(),
             fail_rows: AtomicBool::default(),
             fail_queue: AtomicBool::default(),
+            fail_release: AtomicBool::default(),
             broker_failure: BrokerFailure::default(),
         }
     }
 }
 
 impl State {
-    fn record(&self, step: &'static str, id: &str) {
-        self.steps.lock().unwrap().push((step, id.to_owned()));
+    fn docx(part_shas: &[&str]) -> Self {
+        Self {
+            document: Mutex::new(Some(PurgeTarget {
+                owner: owner(),
+                file_type: Some("docx".to_owned()),
+            })),
+            part_shas: part_shas.iter().map(|sha| (*sha).to_owned()).collect(),
+            ..Self::default()
+        }
+    }
+
+    fn missing() -> Self {
+        Self {
+            document: Mutex::new(None),
+            ..Self::default()
+        }
+    }
+
+    fn record(&self, step: &'static str, detail: &str) {
+        self.steps.lock().unwrap().push((step, detail.to_owned()));
     }
 
     fn steps(&self) -> Vec<(&'static str, String)> {
         self.steps.lock().unwrap().clone()
     }
+
+    fn exists(&self) -> bool {
+        self.document.lock().unwrap().is_some()
+    }
+}
+
+fn owner() -> Owner {
+    Owner::from_principal_str(OWNER).unwrap()
 }
 
 impl DocumentPurgeRepository for Arc<State> {
-    async fn purge_rows(&self, document_id: &str) -> Result<Owner, DocumentError> {
+    async fn find(&self, document_id: &str) -> Result<Option<PurgeTarget>, DocumentError> {
+        self.record("find", document_id);
+        Ok(self.document.lock().unwrap().clone())
+    }
+
+    async fn docx_part_shas(&self, document_id: &str) -> Result<Vec<String>, DocumentError> {
+        self.record("part_shas", document_id);
+        Ok(self.part_shas.clone())
+    }
+
+    async fn purge_rows(&self, document_id: &str) -> Result<(), DocumentError> {
         self.record("rows", document_id);
         if self.fail_rows.load(Ordering::SeqCst) {
             return Err(DocumentError::Internal(anyhow::anyhow!(
                 "row deletion failed"
             )));
         }
-        self.owner
-            .lock()
-            .unwrap()
-            .take()
-            .ok_or_else(|| DocumentError::Internal(anyhow::anyhow!("document already removed")))
+        self.document.lock().unwrap().take();
+        Ok(())
     }
 }
 
 impl DocumentPurgeQueue for Arc<State> {
     async fn enqueue(&self, document_id: String, owner: Owner) -> Result<(), DocumentError> {
         self.record("queue", &document_id);
-        assert!(self.owner.lock().unwrap().is_none());
-        assert_eq!(owner.principal_id(), "macro|owner@example.com");
+        assert_eq!(owner.principal_id(), OWNER);
         if self.fail_queue.load(Ordering::SeqCst) {
             return Err(DocumentError::Internal(anyhow::anyhow!(
                 "queue unavailable"
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl DocxPartReferences for Arc<State> {
+    async fn release(&self, shas: Vec<String>) -> Result<(), DocumentError> {
+        self.record("release", &shas.join(","));
+        if self.fail_release.load(Ordering::SeqCst) {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "sha counter unavailable"
             )));
         }
         Ok(())
@@ -111,70 +166,211 @@ impl MacroEventBroker for Broker {
     }
 }
 
-fn purger(state: &Arc<State>) -> DocumentPurger<Arc<State>, Arc<State>, Broker> {
-    DocumentPurger::new(state.clone(), state.clone(), Broker(state.clone()))
+fn purger(state: &Arc<State>) -> DocumentPurger<Arc<State>, Arc<State>, Arc<State>, Broker> {
+    DocumentPurger::new(
+        state.clone(),
+        state.clone(),
+        state.clone(),
+        Broker(state.clone()),
+    )
 }
 
-fn expected_steps(id: Uuid) -> Vec<(&'static str, String)> {
-    ["rows", "queue", "broker"]
-        .into_iter()
-        .map(|step| (step, id.to_string()))
-        .collect()
+fn steps(id: Uuid, names: &[&'static str]) -> Vec<(&'static str, String)> {
+    names.iter().map(|name| (*name, id.to_string())).collect()
 }
 
 #[tokio::test]
-async fn row_failure_does_not_publish_a_deletion_or_remove_stored_content() {
-    let state = Arc::new(State {
-        fail_rows: AtomicBool::new(true),
-        ..State::default()
-    });
+async fn purge_enqueues_and_publishes_before_deleting_the_rows() {
+    let state = Arc::new(State::default());
     let id = Uuid::now_v7();
-    assert!(purger(&state).purge(id).await.is_err());
-    assert_eq!(state.steps(), vec![("rows", id.to_string())]);
+    purger(&state).purge(id).await.unwrap();
+    assert_eq!(
+        state.steps(),
+        steps(id, &["find", "queue", "broker", "rows"])
+    );
+    assert!(!state.exists());
 }
 
 #[tokio::test]
-async fn queue_failure_still_publishes_the_committed_deletion() {
+async fn queue_failure_stops_before_the_event_and_the_rows() {
     let state = Arc::new(State {
         fail_queue: AtomicBool::new(true),
         ..State::default()
     });
     let id = Uuid::now_v7();
-    let service = purger(&state);
-    assert!(service.purge(id).await.is_err());
-    assert_eq!(state.steps(), expected_steps(id));
-    assert!(state.owner.lock().unwrap().is_none());
+    assert!(purger(&state).purge(id).await.is_err());
+    assert_eq!(state.steps(), steps(id, &["find", "queue"]));
+    assert!(state.exists());
 }
 
 #[tokio::test]
-async fn broker_start_failure_preserves_the_content_cleanup_attempt() {
+async fn broker_start_failure_keeps_the_rows() {
     let state = Arc::new(State {
         broker_failure: BrokerFailure::BeforeSpawn,
         ..State::default()
     });
     let id = Uuid::now_v7();
     assert!(purger(&state).purge(id).await.is_err());
-    assert_eq!(state.steps(), expected_steps(id));
+    assert_eq!(state.steps(), steps(id, &["find", "queue", "broker"]));
+    assert!(state.exists());
 }
 
 #[tokio::test]
-async fn broker_delivery_failure_is_awaited_and_returned() {
+async fn broker_delivery_failure_is_awaited_and_keeps_the_rows() {
     let state = Arc::new(State {
         broker_failure: BrokerFailure::DuringDelivery,
         ..State::default()
     });
     let id = Uuid::now_v7();
     assert!(purger(&state).purge(id).await.is_err());
-    assert_eq!(state.steps(), expected_steps(id));
+    assert_eq!(state.steps(), steps(id, &["find", "queue", "broker"]));
+    assert!(state.exists());
 }
 
 #[tokio::test]
-async fn cancelled_broker_delivery_is_returned_after_content_cleanup() {
+async fn cancelled_broker_delivery_keeps_the_rows() {
     let state = Arc::new(State {
         broker_failure: BrokerFailure::Cancelled,
         ..State::default()
     });
     let id = Uuid::now_v7();
     assert!(purger(&state).purge(id).await.is_err());
-    assert_eq!(state.steps(), expected_steps(id));
+    assert_eq!(state.steps(), steps(id, &["find", "queue", "broker"]));
+    assert!(state.exists());
+}
+
+#[tokio::test]
+async fn row_failure_leaves_the_document_for_a_retry() {
+    let state = Arc::new(State {
+        fail_rows: AtomicBool::new(true),
+        ..State::default()
+    });
+    let id = Uuid::now_v7();
+    let service = purger(&state);
+    assert!(service.purge(id).await.is_err());
+    assert!(state.exists());
+
+    state.fail_rows.store(false, Ordering::SeqCst);
+    service.purge(id).await.unwrap();
+    assert_eq!(
+        state.steps(),
+        steps(
+            id,
+            &[
+                "find", "queue", "broker", "rows", "find", "queue", "broker", "rows"
+            ]
+        )
+    );
+    assert!(!state.exists());
+}
+
+#[tokio::test]
+async fn docx_parts_are_released_after_the_rows_are_gone() {
+    let state = Arc::new(State::docx(&["b", "a", "b"]));
+    let id = Uuid::now_v7();
+    purger(&state).purge(id).await.unwrap();
+    let mut expected = steps(id, &["find", "part_shas", "queue", "broker", "rows"]);
+    expected.push(("release", "b,a,b".to_owned()));
+    assert_eq!(state.steps(), expected);
+}
+
+#[tokio::test]
+async fn docx_parts_are_released_once_across_a_failed_attempt_and_its_retry() {
+    let state = Arc::new(State {
+        fail_rows: AtomicBool::new(true),
+        ..State::docx(&["a"])
+    });
+    let id = Uuid::now_v7();
+    let service = purger(&state);
+    assert!(service.purge(id).await.is_err());
+    state.fail_rows.store(false, Ordering::SeqCst);
+    service.purge(id).await.unwrap();
+
+    let mut expected = steps(
+        id,
+        &[
+            "find",
+            "part_shas",
+            "queue",
+            "broker",
+            "rows",
+            "find",
+            "part_shas",
+            "queue",
+            "broker",
+            "rows",
+        ],
+    );
+    expected.push(("release", "a".to_owned()));
+    assert_eq!(state.steps(), expected);
+}
+
+#[tokio::test]
+async fn release_failure_after_the_rows_are_gone_still_purges() {
+    let state = Arc::new(State {
+        fail_release: AtomicBool::new(true),
+        ..State::docx(&["a"])
+    });
+    let id = Uuid::now_v7();
+    purger(&state).purge(id).await.unwrap();
+    assert_eq!(state.steps().last(), Some(&("release", "a".to_owned())));
+    assert!(!state.exists());
+}
+
+#[tokio::test]
+async fn purge_of_a_missing_document_does_nothing() {
+    let state = Arc::new(State::missing());
+    let id = Uuid::now_v7();
+    purger(&state).purge(id).await.unwrap();
+    assert_eq!(state.steps(), steps(id, &["find"]));
+}
+
+#[tokio::test]
+async fn purge_owned_of_a_missing_document_is_purged() {
+    let state = Arc::new(State::missing());
+    let id = Uuid::now_v7();
+    assert_eq!(
+        purger(&state).purge_owned(id, &owner()).await.unwrap(),
+        OwnedPurgeOutcome::Purged
+    );
+    assert_eq!(state.steps(), steps(id, &["find"]));
+}
+
+#[tokio::test]
+async fn purge_owned_refuses_a_document_owned_by_someone_else() {
+    let state = Arc::new(State::default());
+    let id = Uuid::now_v7();
+    let team = Owner::Team(Uuid::from_u128(1));
+    assert_eq!(
+        purger(&state).purge_owned(id, &team).await.unwrap(),
+        OwnedPurgeOutcome::OwnedElsewhere
+    );
+    assert_eq!(state.steps(), steps(id, &["find"]));
+    assert!(state.exists());
+}
+
+#[tokio::test]
+async fn purge_owned_of_the_expected_owner_purges() {
+    let state = Arc::new(State::default());
+    let id = Uuid::now_v7();
+    assert_eq!(
+        purger(&state).purge_owned(id, &owner()).await.unwrap(),
+        OwnedPurgeOutcome::Purged
+    );
+    assert_eq!(
+        state.steps(),
+        steps(id, &["find", "queue", "broker", "rows"])
+    );
+    assert!(!state.exists());
+}
+
+#[tokio::test]
+async fn purge_owned_returns_a_failed_purge_as_an_error() {
+    let state = Arc::new(State {
+        fail_queue: AtomicBool::new(true),
+        ..State::default()
+    });
+    let id = Uuid::now_v7();
+    assert!(purger(&state).purge_owned(id, &owner()).await.is_err());
+    assert!(state.exists());
 }

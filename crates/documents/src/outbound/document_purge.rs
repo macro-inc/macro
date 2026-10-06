@@ -2,7 +2,7 @@
 
 use super::super::domain::{
     models::DocumentError,
-    purge::{DocumentPurgeQueue, DocumentPurgeRepository},
+    purge::{DocumentPurgeQueue, DocumentPurgeRepository, DocxPartReferences, PurgeTarget},
 };
 use model_owner::Owner;
 use std::sync::Arc;
@@ -20,11 +20,28 @@ impl LegacyDocumentPurgeRepository {
 }
 
 impl DocumentPurgeRepository for LegacyDocumentPurgeRepository {
-    async fn purge_rows(&self, document_id: &str) -> Result<Owner, DocumentError> {
-        let document =
-            macro_db_client::document::get_deleted_document_info(&self.pool, document_id)
-                .await
-                .map_err(|error| DocumentError::Internal(error.into()))?;
+    #[tracing::instrument(skip(self), err)]
+    async fn find(&self, document_id: &str) -> Result<Option<PurgeTarget>, DocumentError> {
+        match macro_db_client::document::get_deleted_document_info(&self.pool, document_id).await {
+            Ok(document) => Ok(Some(PurgeTarget {
+                owner: document.owner,
+                file_type: document.file_type,
+            })),
+            Err(sqlx::Error::RowNotFound) => Ok(None),
+            Err(error) => Err(DocumentError::Internal(error.into())),
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn docx_part_shas(&self, document_id: &str) -> Result<Vec<String>, DocumentError> {
+        let parts = macro_db_client::document::get_bom_parts(&self.pool, document_id)
+            .await
+            .map_err(DocumentError::Internal)?;
+        Ok(parts.into_iter().map(|part| part.sha).collect())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn purge_rows(&self, document_id: &str) -> Result<(), DocumentError> {
         macro_db_client::document::delete_document(&self.pool, document_id)
             .await
             .map_err(DocumentError::Internal)?;
@@ -37,7 +54,7 @@ impl DocumentPurgeRepository for LegacyDocumentPurgeRepository {
             tracing::error!(?error, %document_id, "unable to delete outgoing document mentions");
         })
         .ok();
-        Ok(document.owner)
+        Ok(())
     }
 }
 
@@ -57,6 +74,27 @@ impl DocumentPurgeQueue for SqsDocumentPurgeQueue {
     async fn enqueue(&self, document_id: String, owner: Owner) -> Result<(), DocumentError> {
         self.sqs
             .enqueue_document_delete(&owner.principal_id(), &document_id)
+            .await
+            .map_err(DocumentError::Internal)
+    }
+}
+
+/// Docx part references in the shared SHA counter.
+pub struct RedisDocxPartReferences {
+    sha_counts: Arc<macro_sha_count_client::Redis>,
+}
+
+impl RedisDocxPartReferences {
+    /// Compose from the application's SHA counter client.
+    pub fn new(sha_counts: Arc<macro_sha_count_client::Redis>) -> Self {
+        Self { sha_counts }
+    }
+}
+
+impl DocxPartReferences for RedisDocxPartReferences {
+    async fn release(&self, shas: Vec<String>) -> Result<(), DocumentError> {
+        self.sha_counts
+            .release_shas(shas)
             .await
             .map_err(DocumentError::Internal)
     }
