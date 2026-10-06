@@ -1,5 +1,6 @@
 //! Default [`ChatService`] implementation backed by a [`ChatRepo`].
 
+mod purge_owned;
 #[cfg(test)]
 mod test;
 
