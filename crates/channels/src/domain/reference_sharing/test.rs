@@ -17,10 +17,25 @@ fn only_owner_can_share_session_view_with_channel() {
 }
 
 #[test]
+fn document_references_share_comment_access_with_channel() {
+    assert_eq!(grant_level(ReferencedShareItemType::Document, None), None);
+    for access in [
+        AccessLevel::View,
+        AccessLevel::Comment,
+        AccessLevel::Edit,
+        AccessLevel::Owner,
+    ] {
+        assert_eq!(
+            grant_level(ReferencedShareItemType::Document, Some(access)),
+            Some(AccessLevel::Comment)
+        );
+    }
+}
+
+#[test]
 fn existing_reference_types_keep_view_sharing() {
     for kind in [
         ReferencedShareItemType::Database,
-        ReferencedShareItemType::Document,
         ReferencedShareItemType::Chat,
         ReferencedShareItemType::Project,
         ReferencedShareItemType::EmailThread,
