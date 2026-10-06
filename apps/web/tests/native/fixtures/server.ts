@@ -92,14 +92,21 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
         input.initial.filters.documentFilter?.literal?.id !== fixtureId(0);
       return { items: coreLane ? core : [], nextCursor: null };
     }
-    if (operation === 'SoupNotifications')
+    if (
+      operation === 'SoupNotifications' ||
+      (operation === 'ChannelUnreadPresence' && excludesMail(input))
+    )
       return { items: [], nextCursor: null };
     if (operation === 'Soup') {
       // The app sidebar also queries channel Soup, explicitly excluding mail.
       if (excludesMail(input)) {
         return { items: [], nextCursor: null };
       }
-      const signalTree = input.initial?.filters?.emailFilter?.tree;
+      const tree = input.initial?.filters?.emailFilter?.tree;
+      // The sidebar's unread badge adds read=false to the same Signal scope.
+      // It must not create online baselines for the offline Noise/All views.
+      const unreadOnly = tree?.and?.right?.literal?.read === false;
+      const signalTree = unreadOnly ? tree?.and?.left : tree;
       if (
         input.initial?.emailView !== 'INBOX' ||
         signalTree?.and?.left?.literal?.importance !== true ||
@@ -107,7 +114,12 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
       ) {
         throw new Error('Only the initial Signal view may be fetched online');
       }
-      return { items: signalMail, nextCursor: null };
+      return {
+        items: unreadOnly
+          ? signalMail.filter((item) => item.isRead === false)
+          : signalMail,
+        nextCursor: null,
+      };
     }
     throw new Error(`Unimplemented Soup operation: ${operation}`);
   }

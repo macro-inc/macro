@@ -1,6 +1,8 @@
 import { afterEach, expect, test } from 'bun:test';
 import { type DocumentNode, type ExecutionResult, print, visit } from 'graphql';
 import {
+  ChannelUnreadPresenceDocument,
+  type ChannelUnreadPresenceQuery,
   MailAccountsDocument,
   type MailAccountsQuery,
   SoupBackfillDocument,
@@ -146,6 +148,49 @@ test('accepts the initial Signal INBOX query with both email predicates', async 
   ]);
 });
 
+test('sidebar badges only read unread Signal mail and mail-excluding channel Soup', async () => {
+  server = startFixtureServer();
+  const mail = await requestSoup({
+    initial: {
+      emailView: 'INBOX',
+      filters: {
+        emailFilter: {
+          tree: {
+            and: {
+              left: signalTree,
+              right: { literal: { read: false } },
+            },
+          },
+        },
+      },
+    },
+  });
+  expect(mail.errors).toBeUndefined();
+  expect(mail.data?.user.soup.items.map((item) => item.id)).toEqual([
+    fixtureId(6),
+  ]);
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query: transportQuery(ChannelUnreadPresenceDocument),
+      operationName: 'ChannelUnreadPresence',
+      variables: {
+        input: {
+          initial: {
+            filters: {
+              emailFilter: { tree: { literal: { threadId: fixtureId(0) } } },
+            },
+          },
+        },
+      },
+    }),
+  });
+  const channels: ExecutionResult<ChannelUnreadPresenceQuery> =
+    await response.json();
+  expect(channels.errors).toBeUndefined();
+  expect(channels.data?.user.soup.items).toEqual([]);
+});
+
 const invalidSignalInputs: Array<[string, SoupInput]> = [
   [
     'importance only in the channel branch',
@@ -228,6 +273,36 @@ const invalidSignalInputs: Array<[string, SoupInput]> = [
       initial: {
         emailView: 'ALL',
         filters: { emailFilter: { tree: signalTree } },
+      },
+    },
+  ],
+  [
+    'unread ALL rather than INBOX',
+    {
+      initial: {
+        emailView: 'ALL',
+        filters: {
+          emailFilter: {
+            tree: {
+              and: { left: signalTree, right: { literal: { read: false } } },
+            },
+          },
+        },
+      },
+    },
+  ],
+  [
+    'read rather than unread Signal badge',
+    {
+      initial: {
+        emailView: 'INBOX',
+        filters: {
+          emailFilter: {
+            tree: {
+              and: { left: signalTree, right: { literal: { read: true } } },
+            },
+          },
+        },
       },
     },
   ],

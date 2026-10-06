@@ -61,11 +61,14 @@ The six threads are IDs ending in 4, 6, 8, 9, 10, and 12:
 | Offline Noise | 4, 8, 10 |
 | Offline All | 4, 6, 8, 9, 10, 12 |
 
-Only the initial Signal view may receive an online Mail response. The other rows
-arrive via metadata backfill. Tests wait for the real three-page completion
+Only the initial Signal view and its sidebar unread badge may receive an online
+Mail response. The badge gets only unread Signal rows; Noise and All remain
+unavailable online. The other rows arrive via metadata backfill. Tests wait for the real three-page completion
 checkpoint, then read the six normalized records through native IPC before
-changing filters. Tab changes use the app's public numeric hotkeys (2 / 7) and
-verify `aria-current` before checking results. Assertions compare exact row
+changing filters. Tab changes activate the labeled sidebar buttons with DOM `click()` and verify
+`aria-current` before checking results. This exercises the real UI handlers, but
+not pointer hit-testing: WebKitWebDriver's native clicks can land on an adjacent
+row in the Tauri window, and All is now beyond the numeric tab shortcuts. Assertions compare exact row
 identities, not just counts.
 
 ## Exhaustive filter-selection matrix
