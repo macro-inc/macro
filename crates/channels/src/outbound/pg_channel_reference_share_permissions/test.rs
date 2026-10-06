@@ -205,7 +205,7 @@ async fn form_references_grant_the_channel_view_and_keep_an_existing_grant(pool:
             .unwrap();
             transaction.commit().await.unwrap();
         }
-        let level = grant_level(item.entity_type(), Some(AccessLevel::Owner)).unwrap();
+        let level = grant_level(item.entity_type(), None, Some(AccessLevel::Owner)).unwrap();
         for _ in 0..2 {
             ensure_referenced_item_visible_to_channel(&pool, channel_id, &item, level)
                 .await

@@ -106,7 +106,10 @@ fn posting_a_form_grants_the_channel_view_and_never_more() {
         (Some(AccessLevel::Edit), Some(AccessLevel::View)),
         (Some(AccessLevel::Owner), Some(AccessLevel::View)),
     ] {
-        assert_eq!(grant_level(ReferencedShareItemType::Form, access), expected);
+        assert_eq!(
+            grant_level(ReferencedShareItemType::Form, None, access),
+            expected
+        );
     }
 }
 
