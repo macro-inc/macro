@@ -127,11 +127,13 @@ fn doppler_config() -> Job {
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        // Before the dev shell: its LD_LIBRARY_PATH points the runner's
+        // git-remote-https at Nix's glibc, which aborts `git fetch`.
+        .add_step(compute_changed_files())
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
-        .add_step(compute_changed_files())
         .add_step(compute_doppler_bins())
         .add_step(validate_doppler_configs())
         .add_step(steps::show_sccache_stats())
