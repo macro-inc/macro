@@ -1,3 +1,4 @@
+import { BulkShare } from '@app/features/sharing/share-delivery/bulk-share';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
 import { ActionDialogShell, Dialog } from '@ui';
@@ -12,16 +13,20 @@ import { BulkDeleteView, type PartialDeleteHandler } from './BulkDeleteView';
 import { BulkMoveToProjectView } from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
+export type BulkEditView = 'rename' | 'moveToProject' | 'delete' | 'share';
+
 const BulkEditEntityModalContent = (props: {
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;
-  view: 'rename' | 'moveToProject' | 'delete' | null;
+  view: BulkEditView | null;
   entities: EntityData[];
   onFinish?: () => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
 }) => {
+  // Dismissing a share that reached anyone finishes it, as its Close does.
+  const [dismissFinishes, setDismissFinishes] = createSignal(false);
   const handleFinish = () => {
     props.setIsOpen(false);
     props.onFinish?.();
@@ -38,10 +43,15 @@ const BulkEditEntityModalContent = (props: {
     <Dialog
       open={props.isOpen()}
       position="center"
-      class={props.view === 'moveToProject' ? 'w-120' : 'w-110'}
+      class={
+        props.view === 'moveToProject' || props.view === 'share'
+          ? 'w-120'
+          : 'w-110'
+      }
       onOpenChange={(open) => {
         if (!open) {
-          handleCancel();
+          if (dismissFinishes()) handleFinish();
+          else handleCancel();
         }
         props.setIsOpen(open);
       }}
@@ -72,6 +82,14 @@ const BulkEditEntityModalContent = (props: {
             onError={handleError}
           />
         </Show>
+        <Show when={props.view === 'share'}>
+          <BulkShare
+            entities={props.entities}
+            onFinish={handleFinish}
+            onCancel={handleCancel}
+            onDelivered={() => setDismissFinishes(true)}
+          />
+        </Show>
       </ActionDialogShell>
     </Dialog>
   );
@@ -80,7 +98,7 @@ const BulkEditEntityModalContent = (props: {
 type BulkEditEntityModalProps = {
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;
-  view: 'rename' | 'moveToProject' | 'delete';
+  view: BulkEditView;
   entities: Accessor<EntityData[]>;
 };
 
@@ -100,7 +118,7 @@ const _BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
 };
 
 const [globalModalProps, setGlobalModalProps] = createSignal<{
-  view: 'rename' | 'moveToProject' | 'delete';
+  view: BulkEditView;
   entities: EntityData[];
   onFinish?: () => void;
   onCancel?: () => void;
@@ -112,7 +130,7 @@ const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
 });
 
 export const openBulkEditModal = (props: {
-  view: 'rename' | 'moveToProject' | 'delete';
+  view: BulkEditView;
   entities: EntityData[];
   onFinish?: () => void;
   onCancel?: () => void;

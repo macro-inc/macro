@@ -33,3 +33,7 @@ export const isShareableEntityType = (
     type === 'agent_session'
   );
 };
+
+export const isShareableEntity = (
+  entity: EntityData
+): entity is ShareableEntityData => isShareableEntityType(entity.type);
