@@ -60,6 +60,8 @@ const config: KnipConfig = {
     'libheif-js',
     '@tailwindcss/vite',
     'bebop',
+    // TypeScript 7's compiler, run by path from `type-check`.
+    'typescript-native',
   ],
 
   ignoreWorkspaces: ['../../packages/loro-mirror', '../../packages/sdk'],

@@ -244,7 +244,7 @@ fn test_job_runs_signup_browser_tests_after_vitest() {
         .find("name: Cycles Import Check")
         .map_or(yaml.len(), |offset| start + offset);
     let test_job = &yaml[start..end];
-    let vitest = test_job.find("bunx vitest").expect("vitest step");
+    let vitest = test_job.find("bun run test").expect("vitest step");
     let browser = test_job
         .find("just test-signup-browser")
         .expect("sign-up browser step");
@@ -255,5 +255,27 @@ fn test_job_runs_signup_browser_tests_after_vitest() {
     assert!(
         test_job.contains("playwright: 'true'"),
         "the Test job installs Playwright's Chromium: {test_job}"
+    );
+}
+
+#[test]
+fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let start = yaml.find("name: Test\n").expect("Test job");
+    let end = yaml[start..]
+        .find("name: Cycles Import Check")
+        .map_or(yaml.len(), |offset| start + offset);
+    let test_job = &yaml[start..end];
+    let mounted = format!("  {}\n", vars::VITEST_MODULE_CACHE_VOLUME_DIR);
+    assert!(
+        test_job.contains(&mounted),
+        "the cache volume mounts the Vitest module cache: {test_job}"
+    );
+    assert!(
+        test_job.contains(&format!(
+            "VITEST_MODULE_CACHE_DIR: {}",
+            vars::VITEST_MODULE_CACHE_VOLUME_DIR
+        )),
+        "vitest writes its module cache to the mounted path: {test_job}"
     );
 }

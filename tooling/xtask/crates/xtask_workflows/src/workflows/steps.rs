@@ -293,6 +293,21 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
         })
 }
 
+/// [`mount_web_cache_volume`] plus Vitest's module cache, so the web `Test`
+/// job reuses transforms from earlier runs instead of redoing them all.
+pub fn mount_web_test_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with((
+            "path",
+            format!(
+                "{}\n{}",
+                vars::BUN_CACHE_VOLUME_DIR,
+                vars::VITEST_MODULE_CACHE_VOLUME_DIR,
+            ),
+        ))
+}
+
 /// [`mount_web_cache_volume`] for jobs that compile the browser wasm packages
 /// (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack` is the
 /// downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps the

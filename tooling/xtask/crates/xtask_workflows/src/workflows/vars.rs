@@ -82,6 +82,11 @@ pub const SYNC_SERVICE_CACHE_TAG: &str = "sync-service-deploy";
 /// the Nix dev shell and is not available to Namespace's cache planner yet.
 pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
 
+/// Vitest's filesystem module cache for the web `Test` job. `apps/web`'s
+/// Vitest config reads it from `VITEST_MODULE_CACHE_DIR` and keys entries by
+/// the lockfile and tsconfig, so PR jobs can share one volume.
+pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-modules";
+
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
 /// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
 pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";

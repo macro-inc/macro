@@ -78,7 +78,7 @@ jobs:
       run: bun run check-dynamic-ui-schema
       working-directory: apps/web
     - name: Check Types
-      run: bun run --bun --silent tsc --project ./tsconfig.json
+      run: bun run type-check
       working-directory: apps/web
     - name: Check Collaboration Package Types
       run: bun run type-check
@@ -227,7 +227,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -235,7 +235,9 @@ jobs:
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
-        path: /home/runner/.bun/install/cache
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cache/vitest-modules
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -244,7 +246,9 @@ jobs:
       with:
         playwright: 'true'
     - name: Test
-      run: bunx vitest
+      run: bun run test
+      env:
+        VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
       working-directory: apps/web
     - name: Sign-up Browser Tests
       run: just test-signup-browser

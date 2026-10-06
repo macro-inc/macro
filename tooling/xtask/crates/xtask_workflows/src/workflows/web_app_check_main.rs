@@ -20,11 +20,11 @@ fn web_runner() -> String {
     runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
-/// The generated-code job compiles the schema binaries and the app build
-/// compiles the two browser wasm packages, so both keep the mid-size profile
-/// while sharing the web CI cache volume and remote sccache. Typecheck no
-/// longer compiles Rust but stays on mid: `tsc` over the whole app has not been
-/// measured on the small profile.
+/// The mid-size (16x32) profile on the web CI cache volume and remote sccache,
+/// for the jobs that scale with cores: the generated-code job compiles the
+/// schema binaries, the app build compiles the browser wasm packages and runs
+/// Vite, typechecking runs the TS 7 compiler, and vitest runs about 1.9x faster
+/// on 16 cores than on the small profile's 8.
 fn mid_web_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
@@ -154,8 +154,9 @@ fn biome_check() -> Job {
 
 fn test() -> Job {
     gated_web_job("Test")
+        .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::mount_web_test_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(run_tests())
@@ -323,9 +324,10 @@ fi
     ))
 }
 
+/// `type-check` runs the native TypeScript 7 compiler.
 fn check_types() -> Step<Run> {
     Step::new("Check Types")
-        .run("bun run --bun --silent tsc --project ./tsconfig.json")
+        .run("bun run type-check")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -365,9 +367,15 @@ fn run_collaboration_biome() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 
+/// `bun run test` enables Vitest's filesystem module cache; the cache volume
+/// keeps it warm across jobs.
 fn run_tests() -> Step<Run> {
     Step::new("Test")
-        .run("bunx vitest")
+        .run("bun run test")
+        .add_env((
+            "VITEST_MODULE_CACHE_DIR",
+            vars::VITEST_MODULE_CACHE_VOLUME_DIR,
+        ))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
