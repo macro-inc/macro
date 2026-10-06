@@ -442,10 +442,16 @@ pub fn release_clip(ctx: &mut Ctx<'_>, ids: &[u32]) -> Result<()> {
             _ => continue,
         };
         let artboard = ctx.doc.node(i).artboard;
-        if let NodeKind::Group { clip, .. } = &mut ctx.node(i).kind {
+        let group = ctx.node(i);
+        if let NodeKind::Group { clip, .. } = &mut group.kind {
             *clip = None;
         }
-        ctx.node(i).edits |= flags::CLIP;
+        group.edits |= flags::CLIP;
+        // What was a clip group (by the name it was made with) is a group.
+        if group.name == "Clip Group" {
+            group.name = "Group".into();
+            group.edits |= flags::NAME;
+        }
         let mut p = Node::new(
             0,
             NodeKind::Path(PathNode {
@@ -455,7 +461,7 @@ pub fn release_clip(ctx: &mut Ctx<'_>, ids: &[u32]) -> Result<()> {
                 stroke: None,
             }),
         );
-        p.name = "Clipping Path".into();
+        p.name = "Path".into();
         p.artboard = artboard;
         let p = ctx.push(p);
         attach(ctx, p, Some(i), Position::Top);

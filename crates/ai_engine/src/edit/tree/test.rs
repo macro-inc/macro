@@ -104,6 +104,25 @@ fn paste_keeps_the_order_and_copies_groups_whole() {
 }
 
 #[test]
+fn released_clips_are_named_as_what_they_become() {
+    let mut d = doc();
+    let mut h = History::new();
+    let mut make = |d: &mut Document, op: Op| h.apply(d, &[op], None).expect("applies").created;
+    let a = make(&mut d, square(0.0, 0.0))[0];
+    let b = make(&mut d, square(10.0, 10.0))[0];
+    let group = make(&mut d, Op::MakeClip { ids: vec![a, b] })[0];
+    let label = |d: &Document, id: u32| {
+        let i = d.find(id).expect("a node");
+        crate::inspect::info(d, d.node(i).id).expect("info").name
+    };
+    assert_eq!(label(&d, group), "Clip Group");
+    let released = make(&mut d, Op::ReleaseClip { ids: vec![group] });
+    assert_eq!(label(&d, group), "Group");
+    assert_eq!(released.len(), 1);
+    assert_eq!(label(&d, released[0]), "Path");
+}
+
+#[test]
 fn paste_parses_from_json() {
     let ops: Vec<Op> =
         serde_json::from_str(r#"[{"op":"paste","ids":[3,4],"offset":[10,10]}]"#).expect("parses");
