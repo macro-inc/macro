@@ -12,7 +12,6 @@ import {
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   getShareDrawerRecipientInput,
@@ -110,18 +109,17 @@ export const TopBar: Component<{
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel badges={<CodeFileTypeChip />} />
+        <Show when={props.isHtmlFile && !isMobile()}>
+          <div class="ph-no-capture mx-2 h-full min-w-0 shrink-0">
+            <CodeModeControl
+              mode={props.mode}
+              onModeChange={props.onModeChange}
+            />
+          </div>
+        </Show>
       </SplitHeaderLeft>
 
       <ResponsivePermissionsBadge />
-
-      <Show when={props.isHtmlFile && !isMobile()}>
-        <SplitToolbarRight order={-1}>
-          <CodeModeControl
-            mode={props.mode}
-            onModeChange={props.onModeChange}
-          />
-        </SplitToolbarRight>
-      </Show>
 
       <ResponsiveBlockToolbar
         tools={tools}

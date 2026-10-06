@@ -366,7 +366,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
               }}
             />
           </DebugSuspense>
-          <div class="flex min-h-0 flex-1 flex-col px-2">
+          <div
+            class="flex min-h-0 flex-1 flex-col px-2"
+            data-channel-tab-content
+          >
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <DebugSuspense name="ChannelDetail.messages">
