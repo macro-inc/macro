@@ -613,7 +613,8 @@ export class CacheWorkerCore {
           request.leaseOwner,
           request.leaseGeneration,
           request.nextAttemptAtMs,
-          request.error
+          request.error,
+          request.serverFailure ?? false
         );
         if (result.kind === 'discarded-superseded') {
           result.revision = parseCacheRevision(result.revision);

@@ -152,7 +152,8 @@ export interface CacheEngine {
     leaseOwner: string,
     leaseGeneration: string,
     nextAttemptAtMs: number,
-    error: string
+    error: string,
+    serverFailure: boolean
   ): Promise<DeferOptimisticWriteResult>;
   commitOptimisticWrite(
     transactionId: string,

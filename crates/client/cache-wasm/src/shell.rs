@@ -246,6 +246,7 @@ struct JsClaimedMutation {
     variables: serde_json::Value,
     identity: Option<String>,
     attempt_count: u32,
+    server_failure_count: u32,
 }
 
 impl TryFrom<ClaimedMutation> for JsClaimedMutation {
@@ -265,6 +266,7 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
             variables: serde_json::from_str(&request.variables_json).map_err(err_js)?,
             identity: request.identity,
             attempt_count: claimed.queued.mutation.attempt_count,
+            server_failure_count: claimed.queued.mutation.server_failure_count,
         })
     }
 }
@@ -1863,6 +1865,7 @@ impl CacheEngine {
         lease_generation: String,
         next_attempt_at_ms: f64,
         error: String,
+        server_failure: bool,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1877,7 +1880,13 @@ impl CacheEngine {
             let next_attempt_at_ms = parse_timestamp(next_attempt_at_ms, "next attempt timestamp")?;
             let result = state
                 .engine_mut()?
-                .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
+                .defer_optimistic_write(
+                    transaction,
+                    claim,
+                    next_attempt_at_ms,
+                    error,
+                    server_failure,
+                )
                 .await;
             let result = state.engine_result(result)?;
             let result = match result {

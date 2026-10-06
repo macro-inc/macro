@@ -2210,6 +2210,7 @@ async fn every_method_rejects_after_consuming_close() {
         "1".into(),
         2.0,
         "closed".into(),
+        false,
     ))
     .await;
     assert_closed(engine.commit_optimistic_write(

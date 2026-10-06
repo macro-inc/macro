@@ -37,6 +37,9 @@ pub struct StoredMutation {
     pub request: MutationRequest,
     /// Number of times this mutation has been claimed for a network attempt.
     pub attempt_count: u32,
+    /// Retryable server failures accepted for this mutation, excluding transport failures.
+    #[serde(default)]
+    pub server_failure_count: u32,
     /// Earliest wall-clock time at which the head may be claimed again.
     pub next_attempt_at_ms: Option<i64>,
     /// Owner of the current claim, if any.
@@ -57,6 +60,7 @@ impl StoredMutation {
         Self {
             request,
             attempt_count: 0,
+            server_failure_count: 0,
             next_attempt_at_ms: None,
             lease_owner: None,
             lease_generation: 0,

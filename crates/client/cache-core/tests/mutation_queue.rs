@@ -271,6 +271,7 @@ fn queue_claim_retry_and_settlement_are_ordered() {
                     },
                     200,
                     "offline".into(),
+                    false,
                 )
                 .await
                 .unwrap()

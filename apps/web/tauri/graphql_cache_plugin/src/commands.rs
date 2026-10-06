@@ -408,6 +408,7 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
     lease_generation: String,
     next_attempt_at_ms: i64,
     error: String,
+    server_failure: Option<bool>,
 ) -> Result<DeferOptimisticWriteResultWire, String> {
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
@@ -417,6 +418,7 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
             lease_generation,
             next_attempt_at_ms,
             error,
+            server_failure.unwrap_or(false),
         )
         .await?;
     if let DeferOptimisticWriteResultWire::DiscardedSuperseded {

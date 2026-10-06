@@ -375,6 +375,37 @@ describe('CacheWorkerCore', () => {
     });
   });
 
+  it.each([undefined, false, true])(
+    'forwards server-failure accounting to wasm: %s',
+    async (serverFailure) => {
+      const deferOptimisticWrite = vi.fn(async () => ({ kind: 'deferred' }));
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ deferOptimisticWrite }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'defer-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '2',
+        nextAttemptAtMs: 100,
+        error: 'failed',
+        serverFailure,
+      });
+      expect(deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+        '1',
+        'runner',
+        '2',
+        100,
+        'failed',
+        serverFailure ?? false
+      );
+    }
+  );
+
   it('runs standalone claims ahead of queued observational reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;

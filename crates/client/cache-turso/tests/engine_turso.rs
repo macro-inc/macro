@@ -242,6 +242,7 @@ fn optimistic_hydration_retry_complete_and_reopen_run_over_turso() {
                 },
                 200,
                 "offline".into(),
+                false,
             )
             .await
             .unwrap();

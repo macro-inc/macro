@@ -1902,6 +1902,7 @@ impl<S: Storage> Engine<S> {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<DeferOptimisticWriteResult, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
         let layer = self
@@ -1931,7 +1932,13 @@ impl<S: Storage> Engine<S> {
         }
         if !self
             .storage
-            .defer_mutation(transaction, claim, next_attempt_at_ms, error)
+            .defer_mutation(
+                transaction,
+                claim,
+                next_attempt_at_ms,
+                error,
+                server_failure,
+            )
             .await
             .map_err(EngineError::Storage)?
         {

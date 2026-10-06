@@ -155,10 +155,11 @@ impl Storage for ClaimFailingStorage {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<bool, Self::Error> {
         Ok(self
             .inner
-            .defer_mutation(id, claim, next_attempt_at_ms, error)
+            .defer_mutation(id, claim, next_attempt_at_ms, error, server_failure)
             .await
             .unwrap())
     }
@@ -560,7 +561,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
             let (_, claim) = claim_head(&mut engine, "first-runner", 10).await;
             if deferred {
                 engine
-                    .defer_optimistic_write(older, claim, 500, "offline".into())
+                    .defer_optimistic_write(older, claim, 500, "offline".into(), false)
                     .await
                     .unwrap();
             }
@@ -826,7 +827,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
 
         let (_, claim) = claim_head(&mut engine, "runner", 10).await;
         engine
-            .defer_optimistic_write(first, claim, 100, "offline".into())
+            .defer_optimistic_write(first, claim, 100, "offline".into(), false)
             .await
             .unwrap();
         assert!(
@@ -1085,6 +1086,7 @@ fn active_uuid_replacement_is_superseded_and_failed_attempt_is_discarded() {
                 },
                 500,
                 "superseded".into(),
+                false,
             )
             .await
             .unwrap();

@@ -623,12 +623,15 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'leaseGeneration',
           'nextAttemptAtMs',
           'error',
+          'serverFailure',
         ]) &&
         isString(value.transactionId) &&
         isString(value.leaseOwner) &&
         isString(value.leaseGeneration) &&
         isSafeNonNegativeInteger(value.nextAttemptAtMs) &&
-        isString(value.error)
+        isString(value.error) &&
+        (value.serverFailure === undefined ||
+          typeof value.serverFailure === 'boolean')
       );
     case 'commit-optimistic-write':
       return (

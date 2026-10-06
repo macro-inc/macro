@@ -205,7 +205,8 @@ type FakeHost = CacheHost & {
   teardowns: number[];
   scriptRead: (result: ReadResult) => void;
   seedQueued: (
-    args: Parameters<CacheHost['enqueueOptimisticMutation']>[0]
+    args: Parameters<CacheHost['enqueueOptimisticMutation']>[0],
+    serverFailureCount?: number
   ) => void;
   pushAffected: (opKeys: number[]) => void;
   pushGeneration: (change: CacheGenerationChange) => void;
@@ -221,6 +222,7 @@ function makeFakeHost(): FakeHost {
     transactionId: string;
     args: Parameters<CacheHost['enqueueOptimisticMutation']>[0];
     attemptCount: number;
+    serverFailureCount: number;
     leased: boolean;
     nextAttemptAtMs?: number;
   }> = [];
@@ -248,6 +250,7 @@ function makeFakeHost(): FakeHost {
       operationName: head.args.operationName,
       variables: head.args.variables ?? {},
       attemptCount: head.attemptCount,
+      serverFailureCount: head.serverFailureCount,
     };
   }
 
@@ -266,11 +269,12 @@ function makeFakeHost(): FakeHost {
     scriptRead: (r) => {
       readResult = r;
     },
-    seedQueued: (args) => {
+    seedQueued: (args, serverFailureCount = 0) => {
       queue.push({
         transactionId: `restored-${queue.length + 1}`,
         args,
         attemptCount: 0,
+        serverFailureCount,
         leased: false,
       });
     },
@@ -341,7 +345,13 @@ function makeFakeHost(): FakeHost {
         linkPatches: args.linkPatches,
       });
       const transactionId = `txn-${host.begins.length}`;
-      queue.push({ transactionId, args, attemptCount: 0, leased: false });
+      queue.push({
+        transactionId,
+        args,
+        attemptCount: 0,
+        serverFailureCount: 0,
+        leased: false,
+      });
       const mutation = claimQueueHead(claim.nowMs);
       return {
         transactionId,
@@ -372,13 +382,15 @@ function makeFakeHost(): FakeHost {
       transactionId,
       _claim: MutationClaim,
       nextAttemptAtMs,
-      error
+      error,
+      serverFailure = false
     ) {
       host.defers.push({ transactionId, error });
       const head = queue[0];
       if (head?.transactionId === transactionId) {
         head.leased = false;
         head.nextAttemptAtMs = nextAttemptAtMs;
+        if (serverFailure) head.serverFailureCount += 1;
       }
       return { kind: 'deferred' };
     },
@@ -4000,6 +4012,147 @@ describe('normalizedCacheExchange', () => {
         kind: 'queued',
         transactionId: 'txn-1',
       });
+    });
+
+    it.each(['graphql', 'http-500', 'http-503'])(
+      'permanently fails the tenth %s failure and advances the queue',
+      async (kind) => {
+        vi.useFakeTimers();
+        try {
+          const error =
+            kind === 'graphql'
+              ? new CombinedError({
+                  graphQLErrors: [
+                    {
+                      message: 'persistent failure',
+                      extensions: { retryable: true },
+                    },
+                  ],
+                })
+              : new CombinedError({
+                  networkError: new Error('server unavailable'),
+                  response: new Response(null, {
+                    status: kind === 'http-500' ? 500 : 503,
+                  }),
+                });
+          const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+          let attempts = 0;
+          const { ops, results, forwarded } = harness(
+            host,
+            () =>
+              ++attempts <= 10
+                ? { error, data: undefined }
+                : { data: optimistic },
+            { shouldRetryMutation: shouldRetryGraphqlMutation }
+          );
+          ops.next(makeMutationOp(1, optimistic));
+          ops.next(makeMutationOp(2, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+          for (let attempt = 1; attempt < 10; attempt += 1) {
+            expect(forwarded).toHaveLength(attempt);
+            expect(host.rollbacks).toHaveLength(0);
+            await vi.advanceTimersByTimeAsync(
+              Math.min(1_000 * 2 ** (attempt - 1), 60_000)
+            );
+          }
+          await vi.advanceTimersByTimeAsync(1);
+          expect(host.defers).toHaveLength(9);
+          expect(rollback).toHaveBeenCalledExactlyOnceWith(
+            'txn-1',
+            expect.any(Object),
+            expect.stringContaining('10 server failures'),
+            'MUTATION_RETRY_EXHAUSTED'
+          );
+          expect(host.commits.map((entry) => entry.transactionId)).toEqual([
+            'txn-2',
+          ]);
+          expect(forwarded).toHaveLength(11);
+          expect(
+            results.some(
+              (result) =>
+                optimisticMutationDispositionOf(result)?.kind ===
+                'permanently-failed'
+            )
+          ).toBe(true);
+        } finally {
+          vi.clearAllTimers();
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it('network failures neither consume nor reset the server failure budget', async () => {
+      vi.useFakeTimers();
+      try {
+        const server = new CombinedError({
+          graphQLErrors: [
+            { message: 'server failed', extensions: { retryable: true } },
+          ],
+        });
+        const network = new CombinedError({
+          networkError: new DOMException('request timed out', 'TimeoutError'),
+        });
+        let attempts = 0;
+        const { ops } = harness(
+          host,
+          () => {
+            attempts += 1;
+            // Nine server failures, then more than ten transport failures, then
+            // the tenth server failure. Transport errors cannot reset the budget.
+            return {
+              error: attempts <= 9 || attempts === 22 ? server : network,
+              data: undefined,
+            };
+          },
+          { shouldRetryMutation: shouldRetryGraphqlMutation }
+        );
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(0);
+        for (let attempt = 1; attempt < 22; attempt += 1) {
+          expect(host.rollbacks).toHaveLength(0);
+          await vi.advanceTimersByTimeAsync(
+            Math.min(1_000 * 2 ** (attempt - 1), 60_000)
+          );
+        }
+        expect(attempts).toBe(22);
+        expect(host.defers).toHaveLength(21);
+        expect(host.rollbacks).toEqual(['txn-1']);
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
+    });
+
+    it('uses the persisted budget on replay and revalidates after exhaustion', async () => {
+      host.seedQueued(
+        {
+          uuid: crypto.randomUUID(),
+          query: stringifyDocument(MUTATION),
+          data: optimistic,
+          revalidations: [
+            { query: stringifyDocument(QUERY), variablesJson: '{}' },
+          ],
+        },
+        9
+      );
+      const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+      const error = new CombinedError({
+        graphQLErrors: [
+          { message: 'still failing', extensions: { retryable: true } },
+        ],
+      });
+      const { client } = harness(host, () => ({ error, data: undefined }), {
+        shouldRetryMutation: shouldRetryGraphqlMutation,
+      });
+      await tick();
+      expect(host.defers).toHaveLength(0);
+      expect(rollback).toHaveBeenCalledExactlyOnceWith(
+        'restored-1',
+        expect.any(Object),
+        expect.stringContaining('10 server failures'),
+        'MUTATION_RETRY_EXHAUSTED'
+      );
+      expect(client.query).toHaveBeenCalledOnce();
     });
 
     it('retries a draft response failure with the same handles and commits after recovery', async () => {

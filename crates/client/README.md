@@ -252,4 +252,10 @@ wipes + rebinds atomically when the tag changes (silent restart).
 Optimistic GraphQL mutations are persisted with their replay request before
 becoming visible. The exchange claims and applies them strictly in enqueue
 order; a configurable callback decides whether an error remains queued or
-permanently rolls back.
+permanently rolls back. The exchange caps retryable server failures at ten per
+mutation, excluding transport failures/timeouts. This separate budget is stored
+in the existing Turso `meta` table under `mutation-server-failures:<id>` and
+updated atomically with fenced deferral; absent metadata starts at zero for
+existing queued writes. Commit, rollback, replacement, and clear remove it.
+The storage schema/database identity and the all-attempt backoff counter stay
+unchanged. Failed mutations are not retained in a DLQ.

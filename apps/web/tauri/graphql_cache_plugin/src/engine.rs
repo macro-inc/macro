@@ -205,6 +205,8 @@ pub struct ClaimedMutationWire {
     pub identity: Option<String>,
     /// Number of network attempts including this claim.
     pub attempt_count: u32,
+    /// Retryable server failures, excluding transport failures.
+    pub server_failure_count: u32,
 }
 
 /// Tagged result of deferring or discarding a failed queue attempt.
@@ -303,6 +305,7 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
             variables: serde_json::from_str(&request.variables_json).map_err(|e| e.to_string())?,
             identity: request.identity,
             attempt_count: claimed.queued.mutation.attempt_count,
+            server_failure_count: claimed.queued.mutation.server_failure_count,
         })
     }
 }
@@ -770,6 +773,7 @@ impl EngineHandle {
         lease_generation: String,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<DeferOptimisticWriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
         let claim = MutationClaimToken {
@@ -779,7 +783,13 @@ impl EngineHandle {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops, .. } = &mut *state;
         match engine
-            .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
+            .defer_optimistic_write(
+                transaction,
+                claim,
+                next_attempt_at_ms,
+                error,
+                server_failure,
+            )
             .await
             .map_err(|e| e.to_string())?
         {

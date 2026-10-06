@@ -107,6 +107,7 @@ const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
 const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+const MAX_MUTATION_SERVER_FAILURES = 10;
 
 const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
 
@@ -169,6 +170,7 @@ type QueueAttemptContext = {
   leaseOwner: string;
   leaseGeneration: string;
   attemptCount: number;
+  serverFailureCount: number;
 };
 
 function queueAttemptOf(op: Operation): QueueAttemptContext | undefined {
@@ -863,6 +865,7 @@ export function normalizedCacheExchange(
           leaseOwner: queueOwner,
           leaseGeneration: claimed.leaseGeneration,
           attemptCount: claimed.attemptCount,
+          serverFailureCount: claimed.serverFailureCount ?? 0,
         };
         const live = liveQueuedOps.get(claimed.transactionId);
         if (live) {
@@ -1482,13 +1485,39 @@ export function normalizedCacheExchange(
                     options.onCacheError?.(error, op);
                   }
                 }
+                // urql represents HTTP 5xx as networkError too. Count actual
+                // server responses, never connection failures or timeouts.
+                const serverFailure =
+                  result.error !== undefined &&
+                  (result.error.graphQLErrors.length > 0 ||
+                    (result.error.response?.status ?? 0) >= 500);
+                if (
+                  retry &&
+                  serverFailure &&
+                  attempt.serverFailureCount + 1 >= MAX_MUTATION_SERVER_FAILURES
+                ) {
+                  retry = false;
+                  result = {
+                    ...result,
+                    error: new CombinedError({
+                      graphQLErrors: [
+                        {
+                          message: `Mutation stopped after ${MAX_MUTATION_SERVER_FAILURES} server failures: ${result.error?.message}`,
+                          extensions: { code: 'MUTATION_RETRY_EXHAUSTED' },
+                        },
+                      ],
+                      response: result.error?.response,
+                    }),
+                  };
+                }
                 if (retry) {
                   retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
                   const deferred = await host.deferOptimisticWrite(
                     attempt.transactionId,
                     claim,
                     retryAt,
-                    result.error?.message ?? 'mutation returned no data'
+                    result.error?.message ?? 'mutation returned no data',
+                    serverFailure
                   );
                   if (deferred.kind === 'discarded-superseded') {
                     retryAt = undefined;

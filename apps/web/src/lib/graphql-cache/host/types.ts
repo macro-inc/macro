@@ -153,7 +153,8 @@ export interface CacheHost {
     transactionId: string,
     claim: MutationClaim,
     nextAttemptAtMs: number,
-    error: string
+    error: string,
+    serverFailure?: boolean
   ): Promise<DeferOptimisticWriteResult>;
   /** Atomically commits a claimed mutation's real network response. */
   commitOptimisticWrite(
