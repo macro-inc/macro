@@ -95,6 +95,7 @@ impl BillingRepo for PgBillingRepo {
                 overage_suspended_at: r.overage_suspended_at,
                 period_anchor: r.period_start.zip(r.period_end),
                 seat_generation: SeatGeneration::from_raw(r.seat_generation),
+                ..Default::default()
             })
             .unwrap_or_default())
     }

@@ -278,6 +278,7 @@ fn error_response(e: BillingError) -> Response {
         BillingError::FreePlan => StatusCode::PAYMENT_REQUIRED,
         BillingError::InvalidCreditAmount
         | BillingError::InvalidOverageLimit
+        | BillingError::InvalidAutoReload(_)
         | BillingError::NoStripeCustomer => StatusCode::BAD_REQUEST,
         BillingError::Payment(_) | BillingError::Storage(_) | BillingError::Entitlement(_) => {
             tracing::error!(error = ?e, "ai billing request failed");

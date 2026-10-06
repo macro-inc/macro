@@ -52,6 +52,14 @@ pub const CREDIT_PACKS_CENTS: [i64; 4] = [1_000, 2_500, 5_000, 10_000];
 pub const OVERAGE_LIMIT_MIN_CENTS: i64 = 500;
 /// Largest per-period overage cap a payer may set.
 pub const OVERAGE_LIMIT_MAX_CENTS: i64 = 500_000;
+/// Credit balance below which an automatic reload fires, unless the payer
+/// has set their own minimum.
+pub const AUTO_RELOAD_DEFAULT_MINIMUM_CENTS: i64 = 1_000;
+/// Credit balance an automatic reload tops up to, unless the payer has set
+/// their own target.
+pub const AUTO_RELOAD_DEFAULT_TARGET_CENTS: i64 = 10_000;
+/// Largest automatic reload target a payer may set.
+pub const AUTO_RELOAD_TARGET_MAX_CENTS: i64 = 500_000;
 /// Accrued overage is charged once it reaches this much (or when the period
 /// ends), so a payer sees a few predictable charges rather than one per
 /// completion.
@@ -413,6 +421,59 @@ impl Entitlement {
     }
 }
 
+/// When and how far a payer's credit balance is automatically reloaded.
+///
+/// Reloads piggyback on the overage opt-in: they only run while
+/// [`BillingSettings::overage_active`] holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AutoReloadThresholds {
+    /// Reload once the effective balance drops below this, in customer cents.
+    pub minimum_cents: i64,
+    /// Reload the balance back up to this, in customer cents.
+    pub target_cents: i64,
+    /// Most a payer will be reloaded per UTC calendar month, in customer
+    /// cents. `None` means no limit.
+    pub monthly_limit_cents: Option<i64>,
+}
+
+impl Default for AutoReloadThresholds {
+    fn default() -> Self {
+        Self {
+            minimum_cents: AUTO_RELOAD_DEFAULT_MINIMUM_CENTS,
+            target_cents: AUTO_RELOAD_DEFAULT_TARGET_CENTS,
+            monthly_limit_cents: None,
+        }
+    }
+}
+
+impl AutoReloadThresholds {
+    /// Reject thresholds that could never produce a chargeable reload or
+    /// that exceed the offered range.
+    pub fn validate(&self) -> Result<()> {
+        if self.minimum_cents <= 0 {
+            return Err(BillingError::InvalidAutoReload(
+                "minimum balance must be positive",
+            ));
+        }
+        if self.target_cents < self.minimum_cents + MIN_STRIPE_CHARGE_CENTS {
+            return Err(BillingError::InvalidAutoReload(
+                "target balance must be at least $0.50 above the minimum balance",
+            ));
+        }
+        if self.target_cents > AUTO_RELOAD_TARGET_MAX_CENTS {
+            return Err(BillingError::InvalidAutoReload(
+                "target balance exceeds the largest offered reload",
+            ));
+        }
+        if self.monthly_limit_cents.is_some_and(|limit| limit <= 0) {
+            return Err(BillingError::InvalidAutoReload(
+                "monthly spend limit must be positive",
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// The payer's overage settings, Stripe period anchor, and open-seat generation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BillingSettings {
@@ -422,6 +483,10 @@ pub struct BillingSettings {
     pub overage_limit_cents: i64,
     /// Set when an overage charge failed to collect.
     pub overage_suspended_at: Option<DateTime<Utc>>,
+    /// When and how far credits are automatically reloaded.
+    pub auto_reload: AutoReloadThresholds,
+    /// Set when an automatic reload failed to collect.
+    pub auto_reload_suspended_at: Option<DateTime<Utc>>,
     /// The subscription period last observed from Stripe (webhook or read-through).
     pub period_anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
     /// Generation of the payer's open-seat roster. Zero when no account row exists.
@@ -432,6 +497,12 @@ impl BillingSettings {
     /// Whether overage can currently be charged.
     pub fn overage_active(&self) -> bool {
         self.overage_enabled && self.overage_suspended_at.is_none() && self.overage_limit_cents > 0
+    }
+
+    /// Whether credits are automatically reloaded: overage is on and no
+    /// reload has failed since the payer last re-enabled it.
+    pub fn auto_reload_active(&self) -> bool {
+        self.overage_active() && self.auto_reload_suspended_at.is_none()
     }
 }
 
@@ -469,6 +540,21 @@ pub enum OverageChargeStatus {
     Paid,
     /// Collection failed and overage is suspended. The charge stops covering
     /// usage only when no Stripe invoice was opened for it.
+    Failed,
+}
+
+/// Lifecycle of an automatic credit reload pushed to Stripe.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum CreditReloadStatus {
+    /// Reserved; Stripe not yet confirmed.
+    Pending,
+    /// Collected and booked as credits.
+    Paid,
+    /// Collection failed and automatic reloads are suspended.
     Failed,
 }
 
@@ -527,6 +613,22 @@ pub enum AllowanceDecision {
     Deny(DenyReason),
 }
 
+/// The payer's automatic reload settings, as shown in Billing settings.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct AutoReloadSnapshot {
+    /// Reload once the effective balance drops below this, in customer cents.
+    pub minimum_balance_cents: i64,
+    /// Reload the balance back up to this, in customer cents.
+    pub target_balance_cents: i64,
+    /// Most reloaded per UTC calendar month, in customer cents. `null` when
+    /// there is no limit.
+    pub monthly_spend_limit_cents: Option<i64>,
+    /// Whether reloads are paused after a failed reload charge.
+    pub suspended: bool,
+    /// Whether reloads will fire: overage is on and reloads are not suspended.
+    pub active: bool,
+}
+
 /// The payer's current-period position, as shown in Billing settings and used
 /// by the gate.
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -562,6 +664,9 @@ pub struct UsageSnapshot {
     pub overage_charged_cents: i64,
     /// Whether overage is paused after a failed charge.
     pub overage_suspended: bool,
+    /// Automatic credit reload settings. `active` means overage is on and
+    /// reloads are not suspended.
+    pub auto_reload: AutoReloadSnapshot,
     /// Team-wide usage beyond per-seat allowances, at the overage markup, that
     /// is not yet covered by shared credits or charges (awaiting settlement).
     /// Customer cents.
@@ -590,6 +695,10 @@ pub enum BillingError {
     /// Outside the allowed overage cap range.
     #[error("overage limit must be between ${} and ${}", OVERAGE_LIMIT_MIN_CENTS / 100, OVERAGE_LIMIT_MAX_CENTS / 100)]
     InvalidOverageLimit,
+    /// Automatic reload thresholds that could never charge or exceed the
+    /// offered range ([`AutoReloadThresholds::validate`]).
+    #[error("invalid automatic reload settings: {0}")]
+    InvalidAutoReload(&'static str),
     /// The payer has no Stripe customer to bill.
     #[error("no payment account on file")]
     NoStripeCustomer,
