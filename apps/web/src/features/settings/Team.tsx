@@ -16,6 +16,7 @@ import {
 } from '@core/component/TopBar/linkShare';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableAiUsageBilling } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
@@ -93,6 +94,7 @@ import {
   Switch,
 } from 'solid-js';
 import { z } from 'zod';
+import { ConnectAction } from './integration-ui';
 import {
   IntegrationRow,
   SettingsCard,
@@ -951,6 +953,7 @@ function TeamManagement(props: {
   const teamQuery = useTeamQuery(() => props.teamId);
   const invitesQuery = useTeamInvitesQuery(() => props.teamId);
   const githubLink = useGithubLinkStatusQuery();
+  const { openSettings } = useSettingsState();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
@@ -1504,15 +1507,21 @@ function TeamManagement(props: {
             >
               {/* The install callback rejects users without a linked GitHub
                   account, so don't offer the flow until they've connected one
-                  in their personal settings. */}
+                  on the Integrations page. */}
               <Show
                 when={githubLink.data?.status === 'linked'}
                 fallback={
-                  <span class="text-xs text-ink-muted">
-                    {githubLink.isLoading
-                      ? 'Loading…'
-                      : 'Connect your GitHub account first'}
-                  </span>
+                  <Show
+                    when={!githubLink.isLoading}
+                    fallback={
+                      <span class="text-xs text-ink-muted">Loading…</span>
+                    }
+                  >
+                    <ConnectAction
+                      label="Connect your GitHub account first"
+                      onClick={() => openSettings('Connected')}
+                    />
+                  </Show>
                 }
               >
                 <a
