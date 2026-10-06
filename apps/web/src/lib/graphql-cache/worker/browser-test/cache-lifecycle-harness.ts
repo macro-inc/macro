@@ -1,7 +1,7 @@
 import {
   type Client,
-  CombinedError,
   createClient,
+  fetchExchange,
   gql,
   stringifyDocument,
 } from '@urql/core';
@@ -308,40 +308,29 @@ const api = {
     });
     mutationRunner = createClient({
       url: 'http://cache-lifecycle.test/graphql',
+      fetch: async () => {
+        attempts += 1;
+        // Even a valid data payload over HTTP 5xx must exhaust the budget.
+        return new Response(
+          JSON.stringify({
+            data: {
+              setEntityProperty: {
+                id: attempts === 1 ? 'failing-property' : 'following-property',
+                displayName: 'Synced',
+              },
+            },
+          }),
+          {
+            status: attempts === 1 ? 503 : 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        );
+      },
       exchanges: [
-        normalizedCacheExchange(host, { shouldRetryMutation: () => true }),
-        () => (operations) =>
-          pipe(
-            operations,
-            filter((operation) => operation.kind === 'mutation'),
-            map((operation) => {
-              attempts += 1;
-              return {
-                operation,
-                ...(attempts === 1
-                  ? {
-                      error: new CombinedError({
-                        graphQLErrors: [
-                          {
-                            message: 'persistent failure',
-                            extensions: { retryable: true },
-                          },
-                        ],
-                      }),
-                    }
-                  : {
-                      data: {
-                        setEntityProperty: {
-                          id: 'following-property',
-                          displayName: 'Synced',
-                        },
-                      },
-                    }),
-                stale: false,
-                hasNext: false,
-              };
-            })
-          ),
+        normalizedCacheExchange(host, {
+          shouldRetryMutation: (error) => (error.response?.status ?? 0) >= 500,
+        }),
+        fetchExchange,
       ],
     });
     await complete.promise;

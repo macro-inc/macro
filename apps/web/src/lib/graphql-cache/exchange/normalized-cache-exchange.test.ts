@@ -12,7 +12,9 @@ import { shouldRetryGraphqlMutation } from '@service-storage/graphql-mutation-re
 import {
   type Client,
   CombinedError,
+  createClient,
   createRequest,
+  fetchExchange,
   gql,
   makeOperation,
   type Operation,
@@ -49,6 +51,7 @@ import {
   normalizedCacheResultMetadata,
 } from './normalized-cache-exchange';
 import {
+  executeOptimisticMutation,
   optimisticContextOf,
   optimisticMutationDispositionOf,
 } from './optimistic';
@@ -4013,6 +4016,141 @@ describe('normalizedCacheExchange', () => {
         transactionId: 'txn-1',
       });
     });
+
+    it.each([
+      { status: 500, data: null, failures: 0 },
+      { status: 503, data: { from: 'server' }, failures: 0 },
+      { status: 500, data: null, failures: 9 },
+      { status: 503, data: { from: 'server' }, failures: 9 },
+    ])(
+      'handles HTTP $status without GraphQL errors after $failures server failures',
+      async ({ status, data, failures }) => {
+        vi.useFakeTimers();
+        try {
+          if (failures > 0) {
+            host.seedQueued(
+              {
+                uuid: crypto.randomUUID(),
+                query: stringifyDocument(MUTATION),
+                data: optimistic,
+              },
+              failures
+            );
+          }
+          const response = new Response(JSON.stringify({ data }), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          });
+          const shouldRetryMutation = vi.fn(shouldRetryGraphqlMutation);
+          const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+          const defer = vi.spyOn(host, 'deferOptimisticWrite');
+          const client = createClient({
+            url: 'http://test/graphql',
+            fetch: vi.fn(async () => response),
+            exchanges: [
+              normalizedCacheExchange(host, { shouldRetryMutation }),
+              fetchExchange,
+            ],
+          });
+          const pending =
+            failures === 0
+              ? executeOptimisticMutation(
+                  client,
+                  MUTATION,
+                  { input: {} },
+                  optimistic,
+                  { uuid: crypto.randomUUID() }
+                ).toPromise()
+              : undefined;
+          await vi.advanceTimersByTimeAsync(10);
+          expect(shouldRetryMutation).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ response, graphQLErrors: [] })
+          );
+          expect(host.commits).toHaveLength(0);
+          if (failures === 0) {
+            expect(defer).toHaveBeenCalledExactlyOnceWith(
+              'txn-1',
+              expect.any(Object),
+              expect.any(Number),
+              expect.stringContaining(String(status)),
+              true
+            );
+            expect(host.rollbacks).toHaveLength(0);
+            expect(optimisticMutationDispositionOf((await pending)!)).toEqual({
+              kind: 'queued',
+              transactionId: 'txn-1',
+            });
+          } else {
+            expect(host.defers).toHaveLength(0);
+            expect(rollback).toHaveBeenCalledExactlyOnceWith(
+              'restored-1',
+              expect.any(Object),
+              expect.stringContaining('10 server failures'),
+              'MUTATION_RETRY_EXHAUSTED'
+            );
+          }
+        } finally {
+          vi.clearAllTimers();
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each([false, true])(
+      'preserves success and explicit GraphQL rejection with fetchExchange (rejected=%s)',
+      async (rejected) => {
+        vi.useFakeTimers();
+        try {
+          const response = new Response(
+            JSON.stringify(
+              rejected
+                ? {
+                    errors: [
+                      { message: 'rejected', extensions: { code: 'INVALID' } },
+                    ],
+                  }
+                : { data: optimistic }
+            ),
+            {
+              status: rejected ? 503 : 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          );
+          const client = createClient({
+            url: 'http://test/graphql',
+            fetch: vi.fn(async () => response),
+            exchanges: [
+              normalizedCacheExchange(host, {
+                shouldRetryMutation: shouldRetryGraphqlMutation,
+              }),
+              fetchExchange,
+            ],
+          });
+          const pending = executeOptimisticMutation(
+            client,
+            MUTATION,
+            { input: {} },
+            optimistic,
+            { uuid: crypto.randomUUID() }
+          ).toPromise();
+          await vi.advanceTimersByTimeAsync(10);
+          const result = await pending;
+          expect(host.defers).toHaveLength(0);
+          expect(optimisticMutationDispositionOf(result)?.kind).toBe(
+            rejected ? 'permanently-failed' : 'committed'
+          );
+          if (rejected) {
+            expect(result.error?.graphQLErrors[0]?.extensions.code).toBe(
+              'INVALID'
+            );
+            expect(result.error?.response).toBe(response);
+          }
+        } finally {
+          vi.clearAllTimers();
+          vi.useRealTimers();
+        }
+      }
+    );
 
     it.each(['graphql', 'http-500', 'http-503'])(
       'permanently fails the tenth %s failure and advances the queue',
