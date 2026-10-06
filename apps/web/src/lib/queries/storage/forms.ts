@@ -77,12 +77,13 @@ export function useFormDetailQuery(
 ) {
   return useQuery(() => {
     const id = formId();
+    const respondentView = refreshWithoutPresence();
     return {
       ...formDetailQueryOptions(id ?? ''),
       enabled: !!id,
       // Respondents stay fresh without joining the gateway's presence roster.
       refetchInterval: (query) =>
-        refreshWithoutPresence() || query.state.data?.access === 'view'
+        respondentView || query.state.data?.access === 'view'
           ? RESPONDENT_REFRESH_INTERVAL
           : false,
       // A form you cannot open stays unopened; retrying a 404 changes nothing.
