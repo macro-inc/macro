@@ -50,7 +50,7 @@ pub fn table<'catalog>(
     catalog: &'catalog Catalog,
     name: &TableName,
 ) -> Result<&'catalog Table, ResolveError> {
-    let matches: Vec<&Table> = catalog
+    let mut matches: Vec<&Table> = catalog
         .tables
         .iter()
         .filter(|table| {
@@ -61,6 +61,12 @@ pub fn table<'catalog>(
                     .is_none_or(|database| same(&table.database, &database.0))
         })
         .collect();
+    if name.database.is_none()
+        && let Some(scope) = catalog.scope
+        && matches.iter().any(|table| table.database_id == scope)
+    {
+        matches.retain(|table| table.database_id == scope);
+    }
     // Names match case-insensitively, but when that is ambiguous the exact
     // spelling decides: `Test.Table 1` and `test.Table 1` are different tables.
     let exact: Vec<&Table> = matches

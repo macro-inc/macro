@@ -218,6 +218,9 @@ not at all. New tables, columns and options carry ids the client mints, so
 later ops of the same batch can name them. Agents and MCP write SQL,
 which the same engine turns into those ops on the server, and their schema
 tools send the same ops.
+When databases share a table name, a selected database takes precedence for
+unqualified table names. Database-qualified names still select that database;
+without a selection, duplicate table names are ambiguous.
 Rows keep the table's order unless the view sorts them. After each of your own
 edits the grid reads its rows again, and another viewer's edit reaches an open
 grid or answer within a moment through the gateway's table-changed message; a

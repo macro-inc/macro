@@ -2,6 +2,8 @@
 //! browser's tests map a database detail onto each fixture's schema, so the
 //! two sides build the same catalog from the same databases.
 
+mod scopes;
+
 use serde_json::Value;
 
 use super::*;

@@ -60,6 +60,8 @@ export type CardPosition = {
 export type Catalog = {
   /**  The visible tables. */
   tables: Table[];
+  /**  The database whose tables win when an unqualified name matches several. */
+  scope?: DatabaseId | null;
 };
 
 /**

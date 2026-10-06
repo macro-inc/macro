@@ -38,6 +38,7 @@ pub const LOW: OptionId = OptionId::from_uuid(Uuid::from_u128(0x42));
 /// assigned and a deal linked, and the platform `macro.people`.
 pub fn catalog() -> Catalog {
     Catalog {
+        scope: None,
         tables: vec![
             Table {
                 id: DEALS,
@@ -227,6 +228,7 @@ pub const FEATURE: OptionId = OptionId::from_uuid(Uuid::from_u128(0x75));
 /// and a query (which names definitions) can be told apart.
 pub fn issues_catalog() -> Catalog {
     Catalog {
+        scope: None,
         tables: vec![Table {
             id: ISSUES,
             database_id: WORK,
