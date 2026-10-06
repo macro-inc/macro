@@ -8,6 +8,7 @@ import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { SectionKind } from '../../core/form-model';
 import {
   QUESTION_TYPE_CHOICES,
+  QUESTION_TYPE_GROUPS,
   type QuestionTypeChoice,
   type QuestionTypeId,
 } from '../../core/question-types';
@@ -25,9 +26,9 @@ export function BuilderSkeleton() {
     >
       <div
         aria-hidden="true"
-        class="mx-auto grid w-full max-w-[1280px] grid-cols-1 items-start justify-center gap-5 p-4 @5xl/builder:grid-cols-[256px_minmax(0,680px)_256px] @5xl/builder:py-6"
+        class="mx-auto grid w-full max-w-[1320px] grid-cols-1 items-start justify-center gap-5 p-4 @3xl/builder:grid-cols-[minmax(0,680px)_272px] @5xl/builder:grid-cols-[272px_minmax(0,680px)_272px] @5xl/builder:py-6"
       >
-        <div class="mx-auto flex h-38 w-full max-w-[680px] flex-col gap-4 rounded-xl border border-edge-muted bg-surface p-6 @5xl/builder:col-span-3 @5xl/builder:max-w-none">
+        <div class="mx-auto flex h-38 w-full max-w-[680px] flex-col gap-4 rounded-xl border border-edge-muted bg-surface p-6 @3xl/builder:col-span-full @3xl/builder:max-w-none">
           <div class="h-7 w-2/5 rounded bg-hover motion-safe:animate-pulse" />
           <div class="h-4 w-3/5 rounded bg-hover motion-safe:animate-pulse" />
           <div class="mt-auto h-3 w-1/4 rounded bg-hover motion-safe:animate-pulse" />
@@ -55,7 +56,7 @@ export function BuilderSkeleton() {
             )}
           </For>
         </div>
-        <div class="hidden flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-2 @5xl/builder:flex">
+        <div class="hidden flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-2 @3xl/builder:flex">
           <div class="h-4 w-24 rounded bg-hover motion-safe:animate-pulse" />
           <div class="grid grid-cols-2 gap-0.5">
             <For each={[0, 1, 2, 3, 4, 5, 6, 7]}>
@@ -218,11 +219,9 @@ export function BuilderSidebar(props: { outline: JSX.Element }) {
   return (
     <nav
       aria-label="Form outline"
-      class="hidden min-w-0 flex-col gap-3 px-1 text-sm @5xl/builder:sticky @5xl/builder:top-4 @5xl/builder:flex @5xl/builder:max-h-[calc(100dvh-8rem)] @5xl/builder:overflow-y-auto"
+      class="hidden min-w-0 flex-col gap-2 rounded-xl border border-edge-muted bg-surface p-2.5 text-sm @5xl/builder:sticky @5xl/builder:top-4 @5xl/builder:flex @5xl/builder:max-h-[calc(100dvh-8rem)] @5xl/builder:overflow-y-auto"
     >
-      <h3 class="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">
-        Outline
-      </h3>
+      <h3 class="px-1.5 py-1 text-sm font-semibold text-ink">Outline</h3>
       {props.outline}
     </nav>
   );
@@ -232,42 +231,39 @@ export function BuilderSidebar(props: { outline: JSX.Element }) {
 export function BuilderPalette(props: {
   question: (choice: QuestionTypeChoice) => JSX.Element;
   structure: JSX.Element;
+  database: JSX.Element;
 }) {
   return (
     <aside
       aria-label="Add to form"
-      class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col rounded-xl border border-edge-muted bg-surface @5xl/builder:sticky @5xl/builder:top-4 @5xl/builder:max-h-[calc(100dvh-8rem)] @5xl/builder:overflow-y-auto"
+      class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col rounded-xl border border-edge-muted bg-surface @3xl/builder:sticky @3xl/builder:top-4 @3xl/builder:max-h-[calc(100dvh-8rem)] @3xl/builder:overflow-y-auto"
     >
-      <div class="p-2">
-        <h3 class="mb-1 px-1.5 py-1 text-sm font-semibold text-ink">
-          Add question
-        </h3>
-        <div class="grid grid-cols-2 gap-0.5">
-          <For
-            each={QUESTION_TYPE_CHOICES.filter(
-              (choice) => choice.group === 'forms'
-            )}
-          >
-            {props.question}
-          </For>
-        </div>
-        <h4 class="mt-2 mb-1 px-1.5 text-[11px] font-medium text-ink-muted">
-          Macro
-        </h4>
-        <div class="grid grid-cols-2 gap-0.5">
-          <For
-            each={QUESTION_TYPE_CHOICES.filter(
-              (choice) => choice.group === 'macro'
-            )}
-          >
-            {props.question}
-          </For>
-        </div>
+      <div class="border-b border-edge-divider px-3.5 py-2.5">
+        <h3 class="text-sm font-semibold text-ink">Add question</h3>
       </div>
-      <div class="border-t border-edge-divider p-2">
-        <h3 class="mb-1 px-1.5 text-[11px] font-medium text-ink-muted">
-          Structure
-        </h3>
+      <div class="flex flex-col gap-2 p-2.5">
+        <For each={QUESTION_TYPE_GROUPS}>
+          {(group) => (
+            <div role="group" aria-label={group.label}>
+              <h4 class="mb-1 px-1 text-[11px] font-medium text-ink-muted">
+                {group.label}
+              </h4>
+              <div class="grid grid-cols-2 gap-0.5">
+                <For
+                  each={QUESTION_TYPE_CHOICES.filter(
+                    (choice) => choice.group === group.id
+                  )}
+                >
+                  {props.question}
+                </For>
+              </div>
+            </div>
+          )}
+        </For>
+        {props.database}
+      </div>
+      <div class="border-t border-edge-divider p-2.5">
+        <h3 class="mb-1 px-1 text-xs font-semibold text-ink">Form flow</h3>
         {props.structure}
       </div>
     </aside>
@@ -278,18 +274,35 @@ export function BuilderPalette(props: {
 export function OutlineSection(props: {
   name: string;
   kind: SectionKind;
+  number: number;
+  selected: boolean;
   questions: readonly { id: string; title: string; selected: boolean }[];
   onSelectSection: () => void;
   onSelectQuestion: (questionId: string) => void;
 }) {
   return (
     <li class="flex flex-col gap-0.5">
-      <button
-        type="button"
-        class="flex items-center gap-1.5 rounded px-1.5 py-1 text-left text-xs font-medium text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+      <Button
+        variant="ghost"
+        size="md"
+        fullWidth
+        tooltip={props.name}
+        aria-current={props.selected ? 'true' : undefined}
+        class={cn(
+          'justify-start gap-2 rounded-md px-1.5 text-xs text-ink',
+          props.selected && 'bg-active'
+        )}
         onClick={props.onSelectSection}
       >
         <Switch>
+          <Match when={props.kind === 'questions'}>
+            <span
+              aria-hidden="true"
+              class="flex size-5 shrink-0 items-center justify-center rounded border border-edge-muted text-[11px] text-ink-muted"
+            >
+              {props.number}
+            </span>
+          </Match>
           <Match when={props.kind === 'gate'}>
             <ShieldCheck class="size-3.5 text-amber-ink" aria-hidden="true" />
           </Match>
@@ -297,29 +310,42 @@ export function OutlineSection(props: {
             <CalendarCheck class="size-3.5 text-ink-muted" aria-hidden="true" />
           </Match>
         </Switch>
-        {props.name}
-      </button>
-      <ul class="flex flex-col border-l border-edge-divider pl-2">
-        <For each={props.questions}>
-          {(question) => (
-            <li>
-              <button
-                type="button"
-                aria-current={question.selected ? 'true' : undefined}
-                class={cn(
-                  'w-full truncate rounded px-1.5 py-0.5 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-edge-focus',
-                  question.selected
-                    ? 'bg-active text-ink'
-                    : 'text-ink-muted hover:bg-hover hover:text-ink'
-                )}
-                onClick={() => props.onSelectQuestion(question.id)}
-              >
-                {question.title}
-              </button>
-            </li>
-          )}
-        </For>
-      </ul>
+        <span class="min-w-0 flex-1 truncate text-left">{props.name}</span>
+        <Show when={props.questions.length > 0}>
+          <span
+            aria-hidden="true"
+            class="text-[11px] font-normal text-ink-muted"
+          >
+            {props.questions.length}
+          </span>
+        </Show>
+      </Button>
+      <Show when={props.questions.length > 0}>
+        <ul class="ml-4 flex flex-col border-l border-edge-divider pl-2">
+          <For each={props.questions}>
+            {(question) => (
+              <li>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  fullWidth
+                  tooltip={question.title}
+                  aria-current={question.selected ? 'true' : undefined}
+                  class={cn(
+                    'h-7 justify-start rounded-md px-1.5 text-left text-xs font-normal',
+                    question.selected
+                      ? 'bg-active text-ink'
+                      : 'text-ink-muted hover:bg-hover hover:text-ink'
+                  )}
+                  onClick={() => props.onSelectQuestion(question.id)}
+                >
+                  <span class="truncate">{question.title}</span>
+                </Button>
+              </li>
+            )}
+          </For>
+        </ul>
+      </Show>
     </li>
   );
 }

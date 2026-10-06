@@ -13,10 +13,18 @@ existing `gate` protocol value remains unchanged.
 
 The top banner contains the editable form name, description and a link to the
 database. Below it, the question canvas is centered between equal-width side
-panels: the outline on the left, and visible question types on the right.
-Question types use compact two-column buttons with icons to the left of their
-labels. Section, Screener and Booking controls follow a divider in the same
-panel. Narrow splits put the banner above the canvas and the palette below it.
+panels: a numbered outline on the left, and visible question types on the right.
+The outline marks the selected question or section. Question types use compact
+two-column buttons with icons to the left of their labels, grouped consistently
+with the Add question and type menus: Text & files, Choices, Numbers & dates,
+and Linked items. From database reuses existing fields. Section, Screener and
+Booking sit separately under Form flow. Medium splits retain the palette beside
+the canvas; narrow splits put it below.
+
+Required state belongs in the builder question's footer: a quiet badge while
+collapsed, and the native switch at the bottom right while selected. The
+respondent's required-field legend sits below the questions beside response
+editing guidance; required fields keep their accessible labels and asterisks.
 
 Question type buttons, Section and Screener controls support click to insert and
 drag from the right panel to an insertion point in the canvas. Question drops

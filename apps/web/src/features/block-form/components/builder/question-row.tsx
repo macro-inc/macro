@@ -1,5 +1,5 @@
 import Spinner from '@phosphor/spinner.svg';
-import { cn } from '@ui';
+import { Badge, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { DraftInput } from './draft-input';
 import { LiveTextInput } from './live-text-input';
@@ -79,11 +79,6 @@ export function QuestionRow(props: {
               fallback={
                 <p class="pt-1 text-sm font-medium text-ink wrap-anywhere">
                   {props.title}
-                  <Show when={props.required}>
-                    <span class="ml-0.5 text-failure-ink" aria-label="required">
-                      *
-                    </span>
-                  </Show>
                 </p>
               }
             >
@@ -126,6 +121,13 @@ export function QuestionRow(props: {
           {props.selected ? props.editor : props.preview}
         </div>
         <Show when={props.selected}>{props.footer}</Show>
+        <Show when={!props.selected && props.required}>
+          <div class="flex justify-end">
+            <Badge variant="outline" size="xs">
+              Required
+            </Badge>
+          </div>
+        </Show>
       </div>
     </div>
   );

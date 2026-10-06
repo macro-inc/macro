@@ -44,10 +44,12 @@ then **Open form** (respond view in a new split); other editors always see
 
 A banner at the top contains the editable form name, description, and a link
 to its database. Below, a centered column of sections holds the question rows,
-with **Outline** on the left and one compact **Add question** panel on the right.
-Question types use two columns of buttons with icons beside their labels;
-**Structure** controls sit below a divider in the same panel. Narrow splits
-place the banner above the canvas and the question palette below it.
+with a numbered **Outline** panel on the left and an **Add question** panel on
+the right. The outline marks the selected section or question. Question types
+use two columns of buttons, grouped as **Text & files**, **Choices**,
+**Numbers & dates**, and **Linked items**. **From database** reuses existing
+fields; **Form flow** separately holds Section, Screener, and Booking. Medium
+splits keep the palette beside the canvas; narrow splits put it below.
 
 - Click a question type in the right panel to add it after the selected
   question, or drag the button to an insertion line in the canvas. A drop creates
@@ -60,11 +62,14 @@ place the banner above the canvas and the question palette below it.
 - Click a section or question in the left **Outline** to reveal it in the
   canvas. Selecting a section also directs subsequent question additions there.
 - Click a row to select it: the title input renames the column, the type chip
-  opens the type menu (Short answer … Database row), choice questions edit
+  opens the same grouped type menu (Short answer … Database row), choice questions edit
   their options in place, and the footer has Duplicate, **Remove from form**
   (keeps the column), **Required**, and the ⋯ menu (Move up / Move down / Move
   to section / **Delete column and answers…**, which confirms with the row
   count).
+- Required questions show a **Required** badge below their answer preview.
+  Selecting the question puts its Required switch at the bottom right, with
+  duplicate, remove, and more actions on the left.
 - Drag by the six-dot handle (mouse: move 4 px; touch: hold 200 ms). A line
   shows where it lands; a red line with a note means a gate checks that
   question and it must stay above the gate. Escape cancels; nothing saves
@@ -137,7 +142,8 @@ it inside the app shell (sidebar, command menu); anonymous visitors get a
 focused page, so a public form never hits login. Signed in, a respondent
 keeps their identity on either audience and can edit their response while the
 form is open; anonymous visitors cannot. One section per screen with
-**Back / Next**, **Submit** on the last. Next checks required answers and any
+**Back / Next**, **Submit** on the last. Required fields keep their asterisks;
+the legend and response-editing guidance sit below the questions. Next checks required answers and any
 gate locally; a failing gate shows "This form can't take your response" with
 the gate's message (never its rules), **Check my answers** and, signed in,
 **Message the owner** (opens a direct conversation). Submit shows the

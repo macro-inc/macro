@@ -44,7 +44,6 @@ export function ProgressStrip(props: { position: number; total: number }) {
 export function RespondTitleCard(props: {
   name: string;
   description: string;
-  note: JSX.Element;
   compact: boolean;
 }) {
   return (
@@ -63,7 +62,6 @@ export function RespondTitleCard(props: {
             {props.description}
           </p>
         </Show>
-        <p class="text-xs text-ink-muted">{props.note}</p>
       </div>
     </div>
   );

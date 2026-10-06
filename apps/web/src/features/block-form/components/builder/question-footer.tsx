@@ -26,7 +26,7 @@ export function QuestionFooter(props: {
   onDeleteColumn: () => void;
 }) {
   return (
-    <div class="mt-1 flex items-center justify-end gap-1 border-t border-edge-divider pt-2">
+    <div class="mt-1 flex items-center gap-1 border-t border-edge-divider pt-2">
       <Button
         variant="ghost"
         size="icon-sm"
@@ -43,13 +43,6 @@ export function QuestionFooter(props: {
       >
         <Trash />
       </Button>
-      <span class="mx-1.5 h-5 w-px bg-edge-divider" aria-hidden="true" />
-      <ToggleSwitch
-        label="Required"
-        labelClass="text-xs text-ink-muted"
-        checked={props.required}
-        onChange={props.onRequired}
-      />
       <Dropdown>
         <Dropdown.Trigger
           variant="ghost"
@@ -108,6 +101,13 @@ export function QuestionFooter(props: {
           </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
+      <ToggleSwitch
+        label="Required"
+        labelClass="text-xs font-medium text-ink"
+        class="ml-auto min-h-8 rounded-md px-1.5"
+        checked={props.required}
+        onChange={props.onRequired}
+      />
     </div>
   );
 }

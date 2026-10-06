@@ -1,8 +1,11 @@
 import CaretDown from '@phosphor/caret-down.svg';
+import CaretRight from '@phosphor/caret-right.svg';
+import Check from '@phosphor/check.svg';
 import { Dropdown } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import {
   QUESTION_TYPE_CHOICES,
+  QUESTION_TYPE_GROUPS,
   type QuestionTypeChoice,
   type QuestionTypeId,
 } from '../../core/question-types';
@@ -20,14 +23,17 @@ function TypeItems(props: {
   tables: readonly RelationTable[];
   onChoose: (choice: QuestionTypeChoice, table?: RelationTable) => void;
 }) {
-  const group = (name: QuestionTypeChoice['group']) =>
-    QUESTION_TYPE_CHOICES.filter((choice) => choice.group === name);
   const item = (choice: QuestionTypeChoice): JSX.Element =>
     choice.kind === 'pick-table' ? (
       <Dropdown.Sub>
-        <Dropdown.SubTrigger disabled={props.tables.length === 0}>
+        <Dropdown.SubTrigger
+          disabled={props.tables.length === 0}
+          aria-current={props.current === choice.id ? 'true' : undefined}
+          class={props.current === choice.id ? 'bg-active' : undefined}
+        >
           <QuestionTypeIcon type={choice.id} />
           <span class="flex-1 truncate">{choice.label}</span>
+          <CaretRight class="size-3.5" aria-hidden="true" />
         </Dropdown.SubTrigger>
         <Dropdown.SubContent>
           <Dropdown.Group>
@@ -50,19 +56,26 @@ function TypeItems(props: {
       >
         <QuestionTypeIcon type={choice.id} />
         <span class="flex-1 truncate">{choice.label}</span>
+        <Show when={props.current === choice.id}>
+          <Check class="size-3.5" aria-hidden="true" />
+        </Show>
       </Dropdown.Item>
     );
   return (
-    <>
-      <Dropdown.Group>
-        <For each={group('forms')}>{item}</For>
-      </Dropdown.Group>
-      <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
-      <Dropdown.Group>
-        <Dropdown.GroupLabel>Macro</Dropdown.GroupLabel>
-        <For each={group('macro')}>{item}</For>
-      </Dropdown.Group>
-    </>
+    <For each={QUESTION_TYPE_GROUPS}>
+      {(group) => (
+        <Dropdown.Group>
+          <Dropdown.GroupLabel>{group.label}</Dropdown.GroupLabel>
+          <For
+            each={QUESTION_TYPE_CHOICES.filter(
+              (choice) => choice.group === group.id
+            )}
+          >
+            {item}
+          </For>
+        </Dropdown.Group>
+      )}
+    </For>
   );
 }
 
@@ -87,7 +100,7 @@ export function TypeMenu(props: {
         <span class="truncate">{props.label}</span>
         <CaretDown class="size-3 opacity-70" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-56">
+      <Dropdown.Content class="max-h-[min(32rem,75vh)] w-64 overflow-y-auto">
         <TypeItems
           current={props.current}
           tables={props.tables}
@@ -98,7 +111,7 @@ export function TypeMenu(props: {
   );
 }
 
-/** The rail's Add menu: question types, then the table's columns not on the form. */
+/** Add a new question or reuse a field from the associated database. */
 export function AddQuestionMenu(props: {
   trigger: JSX.Element;
   tables: readonly RelationTable[];
@@ -116,12 +129,12 @@ export function AddQuestionMenu(props: {
         {props.trigger}
         <CaretDown class="ml-auto size-3.5" aria-hidden="true" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-60">
+      <Dropdown.Content class="max-h-[min(32rem,75vh)] w-64 overflow-y-auto">
         <TypeItems tables={props.tables} onChoose={props.onChoose} />
         <Show when={props.hiddenColumns.length > 0}>
           <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
           <Dropdown.Group>
-            <Dropdown.GroupLabel>Columns not on this form</Dropdown.GroupLabel>
+            <Dropdown.GroupLabel>From database</Dropdown.GroupLabel>
             <For each={props.hiddenColumns}>
               {(column) => (
                 <Dropdown.Item onSelect={() => props.onAddColumn(column.id)}>

@@ -146,6 +146,39 @@ function mount(
 }
 
 describe('BuilderView', () => {
+  it('shows required state below a question and edits it from the footer', async () => {
+    const { shared } = mount();
+    const question = screen.getByRole('group', { name: 'Question 1: Name' });
+    expect(within(question).getByText('Required')).toBeTruthy();
+    expect(within(question).queryByText('*')).toBeNull();
+    fireEvent.click(question);
+    const required = within(question).getByRole('switch', { name: 'Required' });
+    expect(required.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(required);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(shared.theirs().sections[0].questions[0].required).toBe(false);
+    fireEvent.click(screen.getByRole('group', { name: 'Question 2: Team' }));
+    expect(within(question).queryByText('Required')).toBeNull();
+  });
+
+  it('marks the outline section receiving new questions', async () => {
+    const { shared } = mount();
+    const outline = screen.getByRole('navigation', { name: 'Form outline' });
+    const section = within(outline).getByRole('button', { name: 'About you' });
+    fireEvent.click(section);
+    expect(section.getAttribute('aria-current')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Add Paragraph' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(shared.theirs().sections[0].questions.at(-1)?.widget).toBe(
+      'paragraph'
+    );
+    expect(
+      within(outline)
+        .getByRole('button', { name: 'About you' })
+        .getAttribute('aria-current')
+    ).not.toBe('true');
+  });
+
   it('shows the question palette beside a separate outline and adds the chosen type after the selected question', async () => {
     const { calls, shared } = mount();
     const banner = screen.getByRole('region', { name: 'Form details' });

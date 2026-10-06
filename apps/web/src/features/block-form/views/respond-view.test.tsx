@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@solidjs/testing-library';
 import { errAsync } from 'neverthrow';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -389,7 +390,7 @@ describe('RespondView', () => {
     expect(screen.getByLabelText<HTMLInputElement>(/^Name/).value).toBe('Ada');
   });
 
-  it('tells anonymous visitors of a public form only that answers are required', () => {
+  it('places required-field guidance below the questions without promising anonymous editing', () => {
     const detail = offsite();
     detail.form.audience = 'public';
     const { context } = createMockFormContext({ detail, viewerId: undefined });
@@ -402,7 +403,14 @@ describe('RespondView', () => {
         />
       </FormProvider>
     ));
-    expect(screen.getByText('* required')).toBeTruthy();
+    const guidance = screen.getByRole('note', { name: 'Form guidance' });
+    expect(within(guidance).getByText('Required fields')).toBeTruthy();
+    const question = screen.getByLabelText(/^Name/);
+    expect(
+      question.compareDocumentPosition(guidance) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.queryByText(/you can edit your response/i)).toBeNull();
   });
 
   it('says a closed form is closed', () => {

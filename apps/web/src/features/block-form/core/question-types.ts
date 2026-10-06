@@ -25,113 +25,121 @@ export type QuestionTypeId =
   | 'tags'
   | 'entity';
 
+/** Shared categories for the question palette and type menus. */
+export const QUESTION_TYPE_GROUPS = [
+  { id: 'text', label: 'Text & files' },
+  { id: 'choices', label: 'Choices' },
+  { id: 'details', label: 'Numbers & dates' },
+  { id: 'linked', label: 'Linked items' },
+] as const;
+
 /** What a type is stored as: a column kind and how it is asked. */
 export type QuestionTypeChoice = {
   id: QuestionTypeId;
   label: string;
-  group: 'forms' | 'macro';
+  group: (typeof QUESTION_TYPE_GROUPS)[number]['id'];
   /** A relation names its table when chosen, so it has no kind until then. */
   kind: FormColumnKind | 'pick-table';
   widget: QuestionWidget | null;
 };
 
-/** The type menu: the Google Forms list, then Macro's own. */
+/** The available question types, grouped by the answer they collect. */
 export const QUESTION_TYPE_CHOICES: readonly QuestionTypeChoice[] = [
   {
     id: 'short',
     label: 'Short answer',
-    group: 'forms',
+    group: 'text',
     kind: { type: 'text' },
     widget: 'short',
   },
   {
     id: 'paragraph',
     label: 'Paragraph',
-    group: 'forms',
+    group: 'text',
     kind: { type: 'text' },
     widget: 'paragraph',
   },
   {
     id: 'choice',
     label: 'Multiple choice',
-    group: 'forms',
+    group: 'choices',
     kind: { type: 'select', multi: false },
     widget: 'choice',
   },
   {
     id: 'checkboxes',
     label: 'Checkboxes',
-    group: 'forms',
+    group: 'choices',
     kind: { type: 'select', multi: true },
     widget: 'checkboxes',
   },
   {
     id: 'dropdown',
     label: 'Dropdown',
-    group: 'forms',
+    group: 'choices',
     kind: { type: 'select', multi: false },
     widget: 'dropdown',
   },
   {
     id: 'file',
     label: 'File upload',
-    group: 'forms',
+    group: 'text',
     kind: { type: 'link' },
     widget: 'file',
   },
   {
     id: 'number',
     label: 'Number',
-    group: 'forms',
+    group: 'details',
     kind: { type: 'number' },
     widget: null,
   },
   {
     id: 'datetime',
     label: 'Date & time',
-    group: 'forms',
+    group: 'details',
     kind: { type: 'date' },
     widget: 'datetime',
   },
   {
     id: 'date',
     label: 'Date',
-    group: 'forms',
+    group: 'details',
     kind: { type: 'date' },
     widget: 'date',
   },
   {
     id: 'url',
     label: 'Link',
-    group: 'forms',
+    group: 'text',
     kind: { type: 'link' },
     widget: 'url',
   },
   {
     id: 'checkbox',
     label: 'Checkbox',
-    group: 'macro',
+    group: 'choices',
     kind: { type: 'boolean' },
     widget: null,
   },
   {
     id: 'person',
     label: 'Person',
-    group: 'macro',
+    group: 'linked',
     kind: { type: 'entity', target: 'USER', multi: false },
     widget: null,
   },
   {
     id: 'document',
     label: 'Document',
-    group: 'macro',
+    group: 'linked',
     kind: { type: 'entity', target: 'DOCUMENT', multi: false },
     widget: null,
   },
   {
     id: 'relation',
     label: 'Database row',
-    group: 'macro',
+    group: 'linked',
     kind: 'pick-table',
     widget: null,
   },

@@ -1,8 +1,63 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
-import { TypeMenu } from './type-menu';
+import { AddQuestionMenu, TypeMenu } from './type-menu';
 
 afterEach(cleanup);
+
+it('groups new questions by purpose and keeps existing database fields separate', async () => {
+  const choose = vi.fn();
+  const addColumn = vi.fn();
+  render(() => (
+    <AddQuestionMenu
+      trigger="Add question"
+      tables={[]}
+      hiddenColumns={[
+        { id: 'notes', name: 'Workshop notes', type: 'paragraph' },
+      ]}
+      onChoose={choose}
+      onAddColumn={addColumn}
+    />
+  ));
+  const trigger = screen.getByRole('button', { name: 'Add question' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  const choices = await screen.findByRole('group', { name: 'Choices' });
+  expect(
+    within(choices)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent)
+  ).toEqual(['Multiple choice', 'Checkboxes', 'Dropdown', 'Checkbox']);
+  expect(
+    within(screen.getByRole('group', { name: 'Text & files' })).getByRole(
+      'menuitem',
+      { name: 'Paragraph' }
+    )
+  ).toBeTruthy();
+  expect(
+    within(screen.getByRole('group', { name: 'Numbers & dates' })).getByRole(
+      'menuitem',
+      { name: 'Date' }
+    )
+  ).toBeTruthy();
+  expect(
+    within(screen.getByRole('group', { name: 'Linked items' }))
+      .getByRole('menuitem', { name: 'Database row' })
+      .getAttribute('aria-disabled')
+  ).toBe('true');
+  const existing = within(
+    screen.getByRole('group', { name: 'From database' })
+  ).getByRole('menuitem', { name: 'Workshop notes' });
+  existing.focus();
+  fireEvent.keyDown(existing, { key: 'Enter' });
+  expect(addColumn).toHaveBeenCalledWith('notes');
+  expect(choose).not.toHaveBeenCalled();
+});
 
 it('opens the database-row submenu and chooses its table', async () => {
   const choose = vi.fn();

@@ -80,13 +80,12 @@ export function RespondView(props: {
   const open = () =>
     formAvailability(form(), props.detail.tableGone, new Date()).kind ===
     'open';
-  const note = () => {
-    if (props.preview) return '* required';
-    if (!signedIn() || !open()) return '* required';
+  const editNote = () => {
+    if (props.preview || !signedIn() || !open()) return undefined;
     const closesAt = form().closesAt;
     return closesAt
-      ? `* required · you can edit your response until the form closes on ${shortDate(new Date(closesAt), new Date())}`
-      : '* required · you can edit your response while the form is open';
+      ? `You can edit your response until the form closes on ${shortDate(new Date(closesAt), new Date())}.`
+      : 'You can edit your response while the form is open.';
   };
 
   function revealTop() {
@@ -177,7 +176,6 @@ export function RespondView(props: {
         <RespondTitleCard
           name={form().name}
           description={form().description}
-          note={note()}
           compact={false}
         />
       </Show>
@@ -483,6 +481,33 @@ export function RespondView(props: {
                   );
                 }}
               </For>
+              <Show
+                when={
+                  answering().section.questions.some(
+                    (question) => question.required
+                  ) || editNote()
+                }
+              >
+                <div
+                  role="note"
+                  aria-label="Form guidance"
+                  class="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-1 text-xs text-ink-muted"
+                >
+                  <Show
+                    when={answering().section.questions.some(
+                      (question) => question.required
+                    )}
+                  >
+                    <p class="inline-flex items-center gap-1.5">
+                      <span class="text-failure-ink" aria-hidden="true">
+                        *
+                      </span>
+                      <span>Required fields</span>
+                    </p>
+                  </Show>
+                  <Show when={editNote()}>{(note) => <p>{note()}</p>}</Show>
+                </div>
+              </Show>
               <Show when={respond.failure()}>
                 {(message) => (
                   <p role="alert" class="px-1 text-sm text-failure-ink">

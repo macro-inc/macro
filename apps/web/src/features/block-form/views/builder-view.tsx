@@ -533,8 +533,8 @@ function BuilderCanvas(
       <div aria-live="assertive" aria-atomic="true" class="sr-only">
         {drag.announcement()}
       </div>
-      <div class="mx-auto grid w-full max-w-[1280px] grid-cols-1 items-start justify-center gap-5 p-4 @5xl/builder:grid-cols-[256px_minmax(0,680px)_256px] @5xl/builder:py-6">
-        <div class="mx-auto w-full max-w-[680px] @5xl/builder:col-span-3 @5xl/builder:max-w-none">
+      <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 items-start justify-center gap-5 p-4 @3xl/builder:grid-cols-[minmax(0,680px)_272px] @5xl/builder:grid-cols-[272px_minmax(0,680px)_272px] @5xl/builder:py-6">
+        <div class="mx-auto w-full max-w-[680px] @3xl/builder:col-span-full @3xl/builder:max-w-none">
           <TitleCard
             databaseLink={
               <Button
@@ -613,6 +613,8 @@ function BuilderCanvas(
                   <OutlineSection
                     name={sectionName(layout(), section.id)}
                     kind={section.kind}
+                    number={sectionPosition(layout(), section.id)}
+                    selected={builder.targetSectionId() === section.id}
                     onSelectSection={() => {
                       builder.focusSection(section.id);
                       viewport
@@ -989,37 +991,39 @@ function BuilderCanvas(
                   </Button>
                 )}
               </Show>
-              <Dropdown>
-                <Dropdown.Trigger
-                  variant="ghost"
-                  size="md"
-                  class="w-full justify-start gap-1 rounded-md px-1 text-xs"
-                  disabled={hiddenColumnRows().length === 0}
-                >
-                  <Database class="size-3.5" />
-                  Questions from the table
-                </Dropdown.Trigger>
-                <Dropdown.Content class="w-60">
-                  <Dropdown.Item onSelect={addAllHidden}>
-                    <Plus class="size-4" />
-                    <span class="flex-1">
-                      Add all {hiddenColumnRows().length} columns
-                    </span>
-                  </Dropdown.Item>
-                  <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
-                  <For each={hiddenColumnRows()}>
-                    {(hidden) => (
-                      <Dropdown.Item
-                        onSelect={() => builder.addExistingColumn(hidden.id)}
-                      >
-                        <QuestionTypeIcon type={hidden.type} />
-                        <span class="flex-1 truncate">{hidden.name}</span>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Content>
-              </Dropdown>
             </div>
+          }
+          database={
+            <Dropdown>
+              <Dropdown.Trigger
+                variant="ghost"
+                size="md"
+                class="w-full justify-start gap-1 rounded-md px-1 text-xs"
+                disabled={hiddenColumnRows().length === 0}
+              >
+                <Database class="size-3.5" />
+                From database
+              </Dropdown.Trigger>
+              <Dropdown.Content class="w-60">
+                <Dropdown.Item onSelect={addAllHidden}>
+                  <Plus class="size-4" />
+                  <span class="flex-1">
+                    Add all {hiddenColumnRows().length} columns
+                  </span>
+                </Dropdown.Item>
+                <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
+                <For each={hiddenColumnRows()}>
+                  {(hidden) => (
+                    <Dropdown.Item
+                      onSelect={() => builder.addExistingColumn(hidden.id)}
+                    >
+                      <QuestionTypeIcon type={hidden.type} />
+                      <span class="flex-1 truncate">{hidden.name}</span>
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Content>
+            </Dropdown>
           }
         />
       </div>
