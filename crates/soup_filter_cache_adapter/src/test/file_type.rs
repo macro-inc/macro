@@ -407,7 +407,7 @@ fn malformed_file_type_data_is_still_rejected_but_unknown_filter_inputs_are_not_
     );
     assert!(
         compile_current_filter_request(
-            filters(json!({"literal":{"fileType":"doc"}})),
+            filters(json!({"literal":{"fileType":"docm"}})),
             "UPDATED_AT",
             "DESC",
             20
