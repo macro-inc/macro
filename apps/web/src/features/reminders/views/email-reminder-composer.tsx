@@ -6,8 +6,8 @@ import {
 import { useMutationUndoContext } from '@queries/undo';
 import type { EmailFollowup } from '@service-storage/generated/schemas/emailFollowup';
 import type { EmailFollowupCommand } from '@service-storage/generated/schemas/emailFollowupCommand';
-import { Button, Dialog, type ManagedDialogProps } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import type { ManagedDialogProps } from '@ui';
+import { createSignal } from 'solid-js';
 import type { EmailReminderCondition } from '../core/email-reminder';
 import { EmailReminderMenu } from './email-reminder-menu';
 
@@ -30,7 +30,7 @@ export function EmailReminderComposer(
   const active = () =>
     current()?.state === 'pending' || current()?.state === 'archiving';
   const submit = async (command: EmailFollowupCommand) => {
-    if (pending()) return;
+    if (pending() || !query.isSuccess) return;
     setPending(true);
     setError(undefined);
     if (operationSnapshot?.operationId !== command.operationId) {
@@ -132,57 +132,41 @@ export function EmailReminderComposer(
     void submit(lastCommand);
   };
   return (
-    <Show
-      when={query.isSuccess}
-      fallback={
-        <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-          <Dialog.Title>Remind me</Dialog.Title>
-          <p role="status">
-            {query.isError
-              ? 'Couldn’t load this email reminder.'
-              : 'Loading reminder…'}
-          </p>
-          <Show when={query.isError}>
-            <Button onClick={() => void query.refetch()}>Retry</Button>
-          </Show>
-          <Button onClick={() => props.onOpenChange(false)}>Cancel</Button>
-        </Dialog>
-      }
-    >
-      <EmailReminderMenu
-        open={props.open}
-        onOpenChange={(open) => {
-          if (!pending()) props.onOpenChange(open);
-        }}
-        subject={props.entity.name}
-        initialTime={active() ? current()?.remindAt : undefined}
-        initialCondition={active() ? current()?.condition : undefined}
-        pending={pending()}
-        error={error()}
-        onSave={save}
-        onRemove={
-          active()
-            ? () => {
-                const revision = current()?.revision;
-                if (!revision) return;
-                if (
-                  !lastCommand ||
-                  lastCommand.type !== 'remove' ||
-                  (lastCommand.expectedRevision !== revision &&
-                    revision !== lastCommand.operationId)
-                ) {
-                  lastCommand = {
-                    type: 'remove',
-                    operationId: crypto.randomUUID(),
-                    expectedRevision: revision,
-                    undo: false,
-                  };
-                }
-                void submit(lastCommand);
+    <EmailReminderMenu
+      open={props.open}
+      onOpenChange={(open) => {
+        if (!pending()) props.onOpenChange(open);
+      }}
+      subject={props.entity.name}
+      initialTime={active() ? current()?.remindAt : undefined}
+      initialCondition={active() ? current()?.condition : undefined}
+      pending={pending()}
+      ready={query.isSuccess}
+      error={query.isError ? 'Couldn’t load this email reminder.' : error()}
+      onRetry={query.isError ? () => void query.refetch() : undefined}
+      onSave={save}
+      onRemove={
+        active()
+          ? () => {
+              const revision = current()?.revision;
+              if (!revision) return;
+              if (
+                !lastCommand ||
+                lastCommand.type !== 'remove' ||
+                (lastCommand.expectedRevision !== revision &&
+                  revision !== lastCommand.operationId)
+              ) {
+                lastCommand = {
+                  type: 'remove',
+                  operationId: crypto.randomUUID(),
+                  expectedRevision: revision,
+                  undo: false,
+                };
               }
-            : undefined
-        }
-      />
-    </Show>
+              void submit(lastCommand);
+            }
+          : undefined
+      }
+    />
   );
 }

@@ -14,12 +14,21 @@ and time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
 saves immediately. **Cancel** or Escape closes without saving. There is no
 separate title, note, or recurrence step.
 
+The time picker opens immediately, including on the first use. You can type or
+change the condition while its existing reminder is fetched; time choices enable
+once that lookup succeeds. The same input keeps focus and its text when data
+arrives. Reminders already loaded in the Reminders list reuse their cached data.
+A failed lookup shows an inline error and **Retry** inside the picker; **Cancel**
+and Escape remain available.
+
 **If no reply** is the default. A new inbound reply cancels that reminder;
 outgoing mail, drafts, replayed messages, and historical backfill do not.
 **Regardless** survives a reply. Only one active reminder is allowed per user
 and conversation. Opening the menu again edits that reminder; **Remove reminder**
 returns the conversation to its inbox. Scheduling archives it and advances
-within the invoking email list only after the server confirms success.
+within the invoking email list only after the server confirms success. The menu
+closes on confirmation; navigation and background list refreshes do not delay
+closing the menu or making undo available.
 
 Bare H still types inside reply, compose, search, and other editable fields.
 On tasks, H collapses the item or its parent group. On list group headers,
@@ -63,6 +72,13 @@ rows and exposes **Couldn’t load more email. Try again**.
 For UI failure checks against hosted data, intercept
 `PUT **/dss/reminders/email/{threadId}`. Hold or reject the response and verify:
 
+- Delay `GET **/dss/reminders/email/{threadId}` with an empty detail cache:
+  the complete picker appears immediately, focuses **Remind me when**, accepts
+  typing, and never shows a separate loading dialog. Resolving the request
+  preserves the input and its focus. Verify both opening and reopening.
+- Reject the GET: the same picker shows **Retry**, preserves typed text, and
+  cannot save until a successful lookup. An existing reminder's condition is
+  applied unless the user has already changed it.
 - Saving disables controls and repeated input cannot issue duplicate writes.
 - A failure keeps the chosen time and condition, shows an inline retry message,
   and does not navigate or send a separate client archive request.

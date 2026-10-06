@@ -27,14 +27,20 @@ export function EmailReminderForm(
     onConditionChange: (value: EmailReminderCondition) => void;
     times: readonly ReminderTimeOption[];
     pending: boolean;
+    ready?: boolean;
     error?: string;
+    onRetry?: () => void;
     onSave: (at: Date, condition: EmailReminderCondition) => void;
     onRemove?: () => void;
   }
 ) {
   const id = createUniqueId();
   const select = (option: { date: Date }) => {
-    if (!props.pending && option.date.getTime() > Date.now())
+    if (
+      props.ready !== false &&
+      !props.pending &&
+      option.date.getTime() > Date.now()
+    )
       props.onSave(option.date, props.condition);
   };
   const list = createCommandListController({
@@ -115,7 +121,7 @@ export function EmailReminderForm(
             selectedIndex={list.selectedIndex()}
             scrollSelectedIntoView={list.shouldScrollSelectedIntoView()}
             itemId={(_, index) => `${id}-${index}`}
-            itemDisabled={() => props.pending}
+            itemDisabled={() => props.pending || props.ready === false}
             onItemMouseMove={list.setSelectedIndexFromPointer}
             onSelect={select}
             class="min-h-0 max-h-80 mobile:[&_[role=option]]:h-auto mobile:[&_[role=option]]:min-h-12"
@@ -144,10 +150,15 @@ export function EmailReminderForm(
           <span role="status">
             {props.pending ? 'Saving…' : '↑ ↓ to choose · Enter to snooze'}
           </span>
+          <Show when={props.onRetry}>
+            <Button variant="ghost" onClick={() => props.onRetry?.()}>
+              Retry
+            </Button>
+          </Show>
           <Show when={props.onRemove}>
             <Button
               variant="ghost"
-              disabled={props.pending}
+              disabled={props.pending || props.ready === false}
               onClick={() => props.onRemove?.()}
             >
               Remove reminder
