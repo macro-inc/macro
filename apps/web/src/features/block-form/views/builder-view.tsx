@@ -895,12 +895,16 @@ function BuilderCanvas(
                                 }
                                 tables={relationTables()}
                                 hiddenColumns={hiddenColumnRows()}
-                                onChoose={(choice, relation) =>
-                                  void builder.addQuestion(choice, relation, {
-                                    sectionId,
-                                    index: 0,
-                                  })
-                                }
+                                disabled={props.detail.tableGone}
+                                onChoose={(choice, relation) => {
+                                  afterMenuClose = () =>
+                                    void insertQuestion(
+                                      choice,
+                                      { sectionId, index: 0 },
+                                      relation
+                                    );
+                                }}
+                                onCloseAutoFocus={runAfterClose}
                                 onAddColumn={(columnId) =>
                                   builder.addExistingColumn(columnId, {
                                     sectionId,

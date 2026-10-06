@@ -340,6 +340,28 @@ describe('BuilderView', () => {
     expect(shared.theirs().sections[0].questions).toHaveLength(3);
   });
 
+  it('chooses a related table from an empty section and inserts into that section', async () => {
+    const detail = rsvp();
+    detail.layout.sections[0].questions = [];
+    const { shared } = mount({ detail });
+    const section = screen.getByRole('region', { name: 'About you' });
+    const trigger = within(section).getByRole('button', {
+      name: 'Add question',
+    });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    await vi.advanceTimersByTimeAsync(0);
+    const item = screen.getByRole('menuitem', { name: 'Database row' });
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(100);
+    const dialog = screen.getByRole('dialog', { name: 'Choose a table' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Responses' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(shared.theirs().sections[0].questions).toHaveLength(1);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('releases the mobile drawer pointer lock after opening it from the add menu', async () => {
     vi.spyOn(mobile, 'isMobile').mockReturnValue(true);
     vi.stubGlobal(
