@@ -22,7 +22,7 @@ import {
   worldMatrix,
 } from '../src/core';
 import { resizeHandles } from '../src/core/resize';
-import { createGraphicsPeerLab } from '../src/loro';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const appearance = { fill: 'red', stroke: 'black' };
 function rectangle(id = 'a', x = 0, y = 0): ShapeItem<'rectangle'> {
@@ -49,18 +49,17 @@ function preview(editor: GraphicsEditor, id = 'a') {
   return worldBounds(editor.document, id, editor.getSession().transform?.nodes);
 }
 
-it.each([0.25, 1, 2, 2.5, 4, 8, 13])(
-  'snaps drawing preview and commit to arbitrary unit %s',
-  (unit) => {
-    const editor = setup(unit, []);
-    editor.beginRectangle({ x: unit * 0.3, y: -unit * 1.3 });
-    editor.updateRectangle({ x: unit * 4.2, y: unit * 2.8 });
-    const expected = { x: 0, y: -unit, width: unit * 4, height: unit * 4 };
-    expect(editor.getPreview()).toEqual(expected);
-    expect(editor.commitRectangle('a', appearance)).toBe(true);
-    expect(worldBounds(editor.document, 'a')).toEqual(expected);
-  }
-);
+it.each([
+  0.25, 1, 2, 2.5, 4, 8, 13,
+])('snaps drawing preview and commit to arbitrary unit %s', (unit) => {
+  const editor = setup(unit, []);
+  editor.beginRectangle({ x: unit * 0.3, y: -unit * 1.3 });
+  editor.updateRectangle({ x: unit * 4.2, y: unit * 2.8 });
+  const expected = { x: 0, y: -unit, width: unit * 4, height: unit * 4 };
+  expect(editor.getPreview()).toEqual(expected);
+  expect(editor.commitRectangle('a', appearance)).toBe(true);
+  expect(worldBounds(editor.document, 'a')).toEqual(expected);
+});
 
 it('leaves precision unrestricted by default and rejects invalid units without changing configuration', () => {
   const editor = setup();
@@ -126,31 +125,30 @@ it('snaps nested moves in world coordinates and preserves the constrained axis',
   expect(editor.getSession().canUndo).toBe(false);
 });
 
-it.each(resizeHandles)(
-  'snaps dimensions with handle %s and keeps the opposite edge fixed',
-  (handle) => {
-    const editor = setup(8);
-    const horizontal = handle.includes('e') || handle.includes('w');
-    const vertical = handle.includes('n') || handle.includes('s');
-    const west = handle.includes('w'),
-      north = handle.includes('n');
-    const start = { x: (west ? 0 : 32) + 2, y: (north ? 0 : 16) - 1 };
-    editor.beginTransform('a', start, handle);
-    editor.updateTransform({
-      x: start.x + (west ? -11 : 11),
-      y: start.y + (north ? -7 : 7),
-    });
-    const expected = {
-      x: west ? -8 : 0,
-      y: north ? -8 : 0,
-      width: horizontal ? 40 : 32,
-      height: vertical ? 24 : 16,
-    };
-    expect(preview(editor)).toEqual(expected);
-    editor.commitTransform();
-    expect(worldBounds(editor.document, 'a')).toEqual(expected);
-  }
-);
+it.each(
+  resizeHandles
+)('snaps dimensions with handle %s and keeps the opposite edge fixed', (handle) => {
+  const editor = setup(8);
+  const horizontal = handle.includes('e') || handle.includes('w');
+  const vertical = handle.includes('n') || handle.includes('s');
+  const west = handle.includes('w'),
+    north = handle.includes('n');
+  const start = { x: (west ? 0 : 32) + 2, y: (north ? 0 : 16) - 1 };
+  editor.beginTransform('a', start, handle);
+  editor.updateTransform({
+    x: start.x + (west ? -11 : 11),
+    y: start.y + (north ? -7 : 7),
+  });
+  const expected = {
+    x: west ? -8 : 0,
+    y: north ? -8 : 0,
+    width: horizontal ? 40 : 32,
+    height: vertical ? 24 : 16,
+  };
+  expect(preview(editor)).toEqual(expected);
+  editor.commitTransform();
+  expect(worldBounds(editor.document, 'a')).toEqual(expected);
+});
 
 it('accounts for rotation and ancestor scale when snapping physical dimensions', () => {
   const matrix = multiply(

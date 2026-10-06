@@ -47,7 +47,6 @@ import {
   enableReminders,
   isFeatureEnabled,
   LOCAL_ONLY,
-  USE_CANVAS_NEXT,
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -759,33 +758,6 @@ registerComponent(
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 
 if (LOCAL_ONLY) {
-  if (USE_CANVAS_NEXT) {
-    registerComponent(
-      'canvas-next',
-      lazy(() => import('@app/features/block-canvas/canvas-next/canvas-next'))
-    );
-  }
-  registerComponent(
-    'graphics-multiplayer-playground',
-    lazy(() => import('@app/features/graphics-playground/loro-playground'))
-  );
-  registerComponent(
-    'nested-scene-playground',
-    lazy(
-      () => import('@app/features/graphics-playground/nested-scene-playground')
-    )
-  );
-  registerComponent(
-    'image-markup-playground',
-    lazy(
-      () =>
-        import('@app/features/image-markup-playground/image-markup-playground')
-    )
-  );
-  registerComponent(
-    'graphics-playground',
-    lazy(() => import('@app/features/graphics-playground/graphics-playground'))
-  );
   registerComponent(
     'theme-edit-3',
     lazy(() => import('@theme/components/ThemeEdit3'))

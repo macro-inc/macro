@@ -1,4 +1,8 @@
-import { createGraphicsEditor, styleCommand } from '@macro-inc/graphics';
+import {
+  createGraphicsEditor,
+  setShapeLabelCommand,
+  styleCommand,
+} from '@macro-inc/graphics';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createCanvasNextScene } from '../core/seed-scene';
@@ -176,4 +180,47 @@ it('uses the same snap unit for layout scrubbing and commit, and cancels when it
   expect(preview.document()).toBeUndefined();
   cancelled.commit(103);
   expect(editor.document).toBe(restored);
+});
+
+it('uses the same label measurements during dimension scrubbing and commit', () => {
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    const measure = (g: { width: number }) => ({
+      width: g.width,
+      height: g.width < 150 ? 81 : 27,
+    });
+    const editor = createGraphicsEditor(createCanvasNextScene(), {
+      measureText: measure,
+    });
+    cleanups.push(editor.dispose);
+    editor.execute(setShapeLabelCommand, {
+      id: 'welcome-rectangle',
+      label: {
+        content: 'Wrapped label',
+        fontSize: 20,
+        fontFamily: 'sans',
+        height: 27,
+      },
+    });
+    editor.select('welcome-rectangle');
+    const before = editor.document;
+    const preview = createInspectorPreview(editor, measure);
+    const drag = preview.begin(
+      (context, value) =>
+        selectionLayoutCommand.apply(context, { field: 'width', value })
+          .document,
+      (value) =>
+        editor.execute(selectionLayoutCommand, { field: 'width', value })
+    );
+    drag.preview(100);
+    const rendered = preview.document();
+    expect(rendered?.items['welcome-rectangle']).toMatchObject({
+      geometry: { width: 100, label: { fontSize: 20, height: 81 } },
+    });
+    expect(editor.document).toBe(before);
+    drag.commit(100);
+    expect(editor.document).toEqual(rendered);
+    editor.undo();
+    expect(editor.document).toEqual(before);
+  });
 });

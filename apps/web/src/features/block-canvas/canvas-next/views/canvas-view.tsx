@@ -9,6 +9,7 @@ import {
 } from '@macro-inc/graphics';
 import { attachConnectorControls } from '@macro-inc/graphics/browser';
 import {
+  ConnectorView,
   EllipseView,
   GraphicsSurface,
   RectangleView,
@@ -36,7 +37,6 @@ import {
   canEmbedDocument,
   setDocumentDisplayCommand,
 } from '../core/document-display';
-import { createCanvasNextScene } from '../core/seed-scene';
 import {
   selectionLayoutCommand,
   selectionLayoutInfo,
@@ -49,7 +49,6 @@ import type {
   CanvasTool,
 } from '../primitives/create-canvas-state';
 import { attachTextInput } from '../primitives/text-input';
-import { attachDebugStorage } from '../queries/debug-storage';
 import { CanvasAssetPicker } from './asset-picker';
 import { CanvasContextMenu } from './canvas-context-menu';
 import { CanvasDrawingToolbar, CanvasViewControls } from './canvas-toolbars';
@@ -60,7 +59,6 @@ import { TextEditingView } from './text-editing-view';
 
 export function CanvasView(props: {
   state: CanvasState;
-  debug?: boolean;
   fitOnLoad?: boolean;
   scopeId: string;
   embedView: Component<CanvasEmbedViewProps>;
@@ -128,9 +126,7 @@ export function CanvasView(props: {
   };
   const [layers, setLayers] = createSignal(false);
   const inspectorWidth = () =>
-    state.selection().length > 0
-      ? Math.min(320, Math.max(0, host.clientWidth - 48))
-      : 0;
+    Math.min(288, Math.max(0, host.clientWidth - 48));
   const fit = () => {
     editor.fitScene({
       width: host.clientWidth - inspectorWidth(),
@@ -190,26 +186,9 @@ export function CanvasView(props: {
     droppable(host);
     onCleanup(props.clipboard.attach(root));
     onCleanup(attachTextInput(root, state));
-    const debugStorage = props.debug
-      ? attachDebugStorage(
-          editor,
-          () => window.localStorage,
-          () =>
-            state.setNotice('Could not read or save the local debug snapshot')
-        )
-      : undefined;
-    if (debugStorage) {
-      window.addEventListener('pagehide', debugStorage.flush);
-      window.addEventListener('beforeunload', debugStorage.flush);
-      onCleanup(() => {
-        window.removeEventListener('pagehide', debugStorage.flush);
-        window.removeEventListener('beforeunload', debugStorage.flush);
-        debugStorage.dispose();
-      });
-    }
     const initialFit = new ResizeObserver(([entry]) => {
       if (!entry?.contentRect.width || !entry.contentRect.height) return;
-      if (!debugStorage?.restored && props.fitOnLoad !== false) fit();
+      if (props.fitOnLoad !== false) fit();
       initialFit.disconnect();
     });
     initialFit.observe(host);
@@ -228,7 +207,9 @@ export function CanvasView(props: {
   };
   const labelSelection = () => {
     const item = state.document.items[state.selection()[0]!];
-    return state.selection().length === 1 && canLabel(item);
+    return (
+      state.selection().length === 1 && canLabel(item) && !!item.geometry.label
+    );
   };
   const finishText = () => {
     state.text.finish();
@@ -244,15 +225,11 @@ export function CanvasView(props: {
       <main class="relative size-full overflow-hidden">
         <Layer depth={2}>
           <aside
-            class="absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-72 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge bg-surface shadow-lg"
-            style={{
-              height:
-                state.selection().length > 0 ? 'calc(100% - 2rem)' : undefined,
-            }}
+            class="absolute bottom-4 right-4 top-4 z-30 flex w-64 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-lg"
             aria-label="Canvas inspector"
           >
-            <header class="flex h-11 shrink-0 items-center justify-between px-4">
-              <span class="text-sm font-medium">Design</span>
+            <header class="flex h-10 shrink-0 items-center justify-between px-3">
+              <span class="text-xs font-medium">Design</span>
               <CanvasViewControls
                 scale={state.camera().scale}
                 grid={state.grid()}
@@ -263,13 +240,20 @@ export function CanvasView(props: {
                 onSnapMode={state.setSnapMode}
               />
             </header>
-            <Show when={state.selection().length > 0}>
+            <Show
+              when={state.selection().length > 0}
+              fallback={
+                <p class="border-t border-edge-muted px-3 py-4 text-xs text-ink-muted">
+                  Select an object to edit its properties.
+                </p>
+              }
+            >
               <div
-                class="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-edge pb-28"
+                class="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-edge-muted pb-4 [scrollbar-gutter:stable]"
                 data-canvas-inspector-scroll
               >
-                <div class="border-b border-edge px-4 py-4">
-                  <h1 class="text-sm font-medium capitalize">
+                <div class="border-b border-edge-muted px-3 py-3">
+                  <h1 class="text-xs font-medium capitalize">
                     {state.selection().length > 1
                       ? `${state.selection().length} selected`
                       : (selectedItem()?.type ??
@@ -358,6 +342,17 @@ export function CanvasView(props: {
                 />
                 <Show
                   when={
+                    state.isConnectorTool() ||
+                    state.shapes().some((item) => item.type === 'connector')
+                  }
+                >
+                  <ConnectorInspector
+                    value={connectorValue()}
+                    onChange={state.connector.style}
+                  />
+                </Show>
+                <Show
+                  when={
                     state.tool() === 'text' ||
                     state.text.draft() ||
                     state.shapes().some((item) => item.type === 'text') ||
@@ -372,17 +367,6 @@ export function CanvasView(props: {
                     geometry={textGeometry()}
                     onChange={state.text.typography}
                     onScrub={() => state.text.scrubFontSize(state.inspector)}
-                  />
-                </Show>
-                <Show
-                  when={
-                    state.isConnectorTool() ||
-                    state.shapes().some((item) => item.type === 'connector')
-                  }
-                >
-                  <ConnectorInspector
-                    value={connectorValue()}
-                    onChange={state.connector.style}
                   />
                 </Show>
                 <Show when={selectedItem()?.type === 'video'}>
@@ -577,6 +561,13 @@ export function CanvasView(props: {
                       onExit={exitEmbed}
                     />
                   ),
+                  connector: (props) => (
+                    <ConnectorView
+                      {...props}
+                      hideLabel={state.text.draft()?.id === props.item.id}
+                      contentView={CanvasTextContent}
+                    />
+                  ),
                   rectangle: (props) => (
                     <RectangleView
                       {...props}
@@ -663,18 +654,6 @@ export function CanvasView(props: {
         <CanvasDrawingToolbar
           state={state}
           onFocusCanvas={focus}
-          onReset={
-            props.debug
-              ? () => {
-                  state.text.cancel();
-                  props.assets.cancelPending();
-                  editor.resetDocument(createCanvasNextScene());
-                  state.chooseTool('select');
-                  fit();
-                  state.setNotice('Fresh demo scene');
-                }
-              : undefined
-          }
           layers={layers()}
           onLayers={() => setLayers((value) => !value)}
           tool={state.tool()}
@@ -725,7 +704,7 @@ export function CanvasView(props: {
           role="status"
           class="pointer-events-none absolute bottom-5 max-w-[calc(100%-32rem)] truncate text-xs text-ink-muted"
           style={{
-            right: state.selection().length > 0 ? '20rem' : '1rem',
+            right: '19rem',
           }}
         >
           {state.notice()}

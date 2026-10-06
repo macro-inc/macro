@@ -25,16 +25,16 @@ export function SelectionLayoutInspector(props: {
   onTransform: (action: 'rotate90' | 'flipX' | 'flipY') => void;
 }) {
   return (
-    <Show when={props.count > 0}>
-      <InspectorSection title="Alignment">
+    <fieldset disabled={props.count === 0} class="min-w-0">
+      <InspectorSection title="Position">
         <CanvasAlignmentControls
           count={props.count}
           onAlign={props.onAlign}
           onDistribute={props.onDistribute}
         />
-        <p class="text-xs text-ink-muted">Position</p>
         <div class="grid grid-cols-2 gap-2">
           <InspectorNumberField
+            disabled={props.count === 0}
             label="Position X"
             icon={<span>X</span>}
             value={props.value('x')}
@@ -44,6 +44,7 @@ export function SelectionLayoutInspector(props: {
             onScrub={() => props.onScrub('x')}
           />
           <InspectorNumberField
+            disabled={props.count === 0}
             label="Position Y"
             icon={<span>Y</span>}
             value={props.value('y')}
@@ -53,9 +54,10 @@ export function SelectionLayoutInspector(props: {
             onScrub={() => props.onScrub('y')}
           />
         </div>
-        <p class="text-xs text-ink-muted">Rotation</p>
+        <p class="text-[10px] text-ink-muted">Rotation</p>
         <div class="grid grid-cols-2 items-center gap-2">
           <InspectorNumberField
+            disabled={props.count === 0}
             label="Rotation"
             icon={<ArrowClockwise class="size-4" />}
             value={props.value('rotation')}
@@ -65,20 +67,26 @@ export function SelectionLayoutInspector(props: {
             onChange={(value) => props.onChange('rotation', value)}
             onScrub={() => props.onScrub('rotation')}
           />
-          <ButtonGroup size="icon-sm">
+          <ButtonGroup size="icon-sm" class="w-full rounded-md bg-hover/50">
             <Button
+              fullWidth
+              class="bg-transparent"
               label="Rotate 90°"
               onClick={() => props.onTransform('rotate90')}
             >
               <ArrowClockwise />
             </Button>
             <Button
+              fullWidth
+              class="bg-transparent"
               label="Flip horizontal"
               onClick={() => props.onTransform('flipX')}
             >
               <ArrowsHorizontal />
             </Button>
             <Button
+              fullWidth
+              class="bg-transparent"
               label="Flip vertical"
               onClick={() => props.onTransform('flipY')}
             >
@@ -88,9 +96,10 @@ export function SelectionLayoutInspector(props: {
         </div>
       </InspectorSection>
       <InspectorSection title="Layout">
-        <p class="text-xs text-ink-muted">Dimensions</p>
+        <p class="text-[10px] text-ink-muted">Dimensions</p>
         <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
           <InspectorNumberField
+            disabled={props.count === 0}
             label="Width"
             icon={<span>W</span>}
             value={props.value('width')}
@@ -100,6 +109,7 @@ export function SelectionLayoutInspector(props: {
             onScrub={() => props.onScrub('width')}
           />
           <InspectorNumberField
+            disabled={props.count === 0}
             label="Height"
             icon={<span>H</span>}
             value={props.value('height')}
@@ -121,9 +131,10 @@ export function SelectionLayoutInspector(props: {
           </Button>
         </div>
         <Show when={props.count > 1}>
-          <p class="text-xs text-ink-muted">Spacing</p>
+          <p class="text-[10px] text-ink-muted">Spacing</p>
           <div class="grid grid-cols-2 gap-2">
             <InspectorNumberField
+              disabled={props.count === 0}
               label="Horizontal spacing"
               icon={<ArrowsHorizontal class="size-4" />}
               value={props.value('gapX')}
@@ -133,6 +144,7 @@ export function SelectionLayoutInspector(props: {
               onScrub={() => props.onScrub('gapX')}
             />
             <InspectorNumberField
+              disabled={props.count === 0}
               label="Vertical spacing"
               icon={<ArrowsVertical class="size-4" />}
               value={props.value('gapY')}
@@ -144,6 +156,6 @@ export function SelectionLayoutInspector(props: {
           </div>
         </Show>
       </InspectorSection>
-    </Show>
+    </fieldset>
   );
 }

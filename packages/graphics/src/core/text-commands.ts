@@ -1,6 +1,11 @@
 import type { GraphicsCommand } from './commands';
 import type { ShapeItem } from './model';
-import { canLabel, type ShapeLabel, validShapeLabel } from './shapes/label';
+import {
+  canLabel,
+  type ShapeLabel,
+  validShapeLabel,
+  withShapeLabel,
+} from './shapes/label';
 import { textDefinition } from './shapes/text';
 /** One completed text edit is one document operation; keystrokes stay in the host. */
 export const setTextCommand: GraphicsCommand<ShapeItem<'text'>> = {
@@ -36,16 +41,12 @@ export const setShapeLabelCommand: GraphicsCommand<{
       throw new Error('Invalid shape label');
     if (JSON.stringify(item.geometry.label) === JSON.stringify(label))
       return { document };
-    const { label: _previous, ...size } = item.geometry;
     return {
       document: {
         ...document,
         items: {
           ...document.items,
-          [id]: {
-            ...item,
-            geometry: { ...size, ...(label ? { label } : {}) },
-          },
+          [id]: withShapeLabel(item, label),
         },
       },
       selection: [id],

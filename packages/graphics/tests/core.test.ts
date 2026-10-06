@@ -14,20 +14,19 @@ describe('camera', () => {
     const point = { x: -1500, y: 808 };
     expect(screenToWorld(camera, worldToScreen(camera, point))).toEqual(point);
   });
-  it.each([0.0001, 0.3, 2, 100])(
-    'preserves the world point at the zoom anchor (%s)',
-    (scale) => {
-      const camera = { x: 32, y: -18, scale: 1.5 };
-      const anchor = { x: 241, y: 173 };
-      const next = zoomAt(camera, anchor, scale);
-      const before = screenToWorld(camera, anchor);
-      const after = screenToWorld(next, anchor);
-      expect(after.x).toBeCloseTo(before.x);
-      expect(after.y).toBeCloseTo(before.y);
-      expect(next.scale).toBeGreaterThanOrEqual(MIN_SCALE);
-      expect(next.scale).toBeLessThanOrEqual(MAX_SCALE);
-    }
-  );
+  it.each([
+    0.0001, 0.3, 2, 100,
+  ])('preserves the world point at the zoom anchor (%s)', (scale) => {
+    const camera = { x: 32, y: -18, scale: 1.5 };
+    const anchor = { x: 241, y: 173 };
+    const next = zoomAt(camera, anchor, scale);
+    const before = screenToWorld(camera, anchor);
+    const after = screenToWorld(next, anchor);
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.y).toBeCloseTo(before.y);
+    expect(next.scale).toBeGreaterThanOrEqual(MIN_SCALE);
+    expect(next.scale).toBeLessThanOrEqual(MAX_SCALE);
+  });
   it('isolates instances, rejects nonfinite input and stops notifications after disposal', () => {
     const first = createGraphicsEditor();
     const second = createGraphicsEditor();

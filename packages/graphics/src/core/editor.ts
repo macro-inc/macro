@@ -284,7 +284,12 @@ function createEditor(
     cancelShape();
     cancelTransform();
     const result = command.apply(
-      { document, selection: selection.getState().selectedIds, snapUnit },
+      {
+        document,
+        selection: selection.getState().selectedIds,
+        snapUnit,
+        measureText: options.measureText,
+      },
       payload
     );
     if (result.document !== document) commitDocument(result.document);

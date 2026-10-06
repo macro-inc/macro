@@ -6,10 +6,10 @@ export function InspectorSection(props: {
 }) {
   return (
     <section
-      class="space-y-3 border-b border-edge px-4 py-4 last:border-b-0"
+      class="space-y-2 border-b border-edge-muted px-3 py-3 last:border-b-0"
       aria-label={props.title}
     >
-      <h2 class="text-xs font-medium text-ink-muted">{props.title}</h2>
+      <h2 class="text-xs font-medium text-ink">{props.title}</h2>
       {props.children}
     </section>
   );

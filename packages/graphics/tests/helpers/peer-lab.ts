@@ -1,9 +1,15 @@
-import { createGraphicsEditorFromBackend } from '../core/editor';
-import type { GraphicsDocument } from '../core/model';
-import { createLoroGraphicsBackend, createLoroSeed } from './backend';
-import { createGraphicsPresence, type PresencePacket } from './presence';
+import { createGraphicsEditorFromBackend } from '../../src/core/editor';
+import type { GraphicsDocument } from '../../src/core/model';
+import {
+  createLoroGraphicsBackend,
+  createLoroSeed,
+} from '../../src/loro/backend';
+import {
+  createGraphicsPresence,
+  type PresencePacket,
+} from '../../src/loro/presence';
 
-/** Disposable two-replica transport. Bytes are queued in memory, never persisted. */
+/** Two-replica in-memory transport for collaboration tests. */
 export function createGraphicsPeerLab(seed: GraphicsDocument) {
   const snapshot = createLoroSeed(seed);
   const backends = [
@@ -141,4 +147,5 @@ export function createGraphicsPeerLab(seed: GraphicsDocument) {
     },
   };
 }
+
 export type GraphicsPeerLab = ReturnType<typeof createGraphicsPeerLab>;

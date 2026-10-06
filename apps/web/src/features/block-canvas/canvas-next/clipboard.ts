@@ -1,9 +1,11 @@
 import {
   copyFragment,
   type GraphicsEditor,
+  type GraphicsFragment,
   parseFragment,
   pasteCommand,
 } from '@macro-inc/graphics';
+import { importExcalidraw } from './core/excalidraw';
 import { validCanvasTextDocument } from './core/text-codec';
 
 const mime = 'application/x-macro-graphics';
@@ -29,17 +31,7 @@ export function createCanvasClipboard(
     );
     return fragment ? JSON.stringify(fragment) : undefined;
   };
-  const paste = (text: string, html?: string) => {
-    const fragment = parseFragment(text);
-    if (!fragment) {
-      if (pasteText && text.trim()) {
-        pasteText(text, html);
-        notify('Pasted text');
-        return true;
-      }
-      notify('Clipboard has no Canvas Next shapes');
-      return false;
-    }
+  const insert = (fragment: GraphicsFragment, text: string) => {
     if (!validCanvasTextDocument(fragment.scene)) {
       notify('Clipboard has invalid Canvas Next text');
       return false;
@@ -51,8 +43,28 @@ export function createCanvasClipboard(
       createId: () => crypto.randomUUID(),
       offset: { x: 24 * pasteCount, y: 24 * pasteCount },
     });
-    notify('Pasted selection');
     return true;
+  };
+  const paste = (text: string, html?: string) => {
+    const fragment = parseFragment(text);
+    if (fragment) {
+      const pasted = insert(fragment, text);
+      if (pasted) notify('Pasted selection');
+      return pasted;
+    }
+    const excalidraw = importExcalidraw(text);
+    if (excalidraw) {
+      const pasted = insert(excalidraw.fragment, text);
+      if (pasted) notify(excalidrawNotice(excalidraw));
+      return pasted;
+    }
+    if (pasteText && text.trim()) {
+      pasteText(text, html);
+      notify('Pasted text');
+      return true;
+    }
+    notify('Clipboard has no Canvas Next shapes');
+    return false;
   };
   async function copy(cut = false) {
     const text = serialize();
@@ -165,3 +177,14 @@ export function createCanvasClipboard(
   };
 }
 export type CanvasClipboard = ReturnType<typeof createCanvasClipboard>;
+
+function excalidrawNotice(result: ReturnType<typeof importExcalidraw>): string {
+  if (!result) return 'Pasted selection';
+  const extras: string[] = [];
+  if (result.approximated) extras.push(`${result.approximated} approximated`);
+  if (result.skipped) extras.push(`${result.skipped} unsupported`);
+  const shapes = `${result.imported} Excalidraw ${result.imported === 1 ? 'shape' : 'shapes'}`;
+  return extras.length
+    ? `Imported ${shapes} (${extras.join(', ')})`
+    : `Imported ${shapes}`;
+}

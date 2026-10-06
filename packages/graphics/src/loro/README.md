@@ -2,21 +2,18 @@
 
 Status reviewed 2026-09-28. See the [main progress plan](../../../../docs/GRAPHICS_PARITY.md).
 Automated mapping coverage now includes pencil, rich text/labels, connectors and
-media/document references. The visual peer UI still offers Select/Rectangle/Ellipse
-with default renderers; it is not the full Canvas Next rich editor. Full peer UI
-integration is deferred while the
+media/document references. Full Canvas Next integration is deferred while the
 [legacy bridge and colors](../../../../docs/CANVAS_LEGACY_BRIDGE.md) take priority.
 
-`@macro-inc/graphics/loro` is an experimental adapter and in-memory transport for
-`/app/component/graphics-multiplayer-playground`. It uses the workspace Loro
-version (1.16.3). No SyncService, network requests, local storage, or server changes
-are involved. Reload/reset creates a new shared seed and two independent replicas.
+`@macro-inc/graphics/loro` is an experimental adapter with an in-memory transport
+harness used by tests. It uses the workspace Loro version (1.16.3). No SyncService,
+network requests, local storage, or server changes are involved.
 
 The root graphics export stays framework/DOM/Loro-free. `GraphicsBackend` is the
 small document/history contract; `createGraphicsEditorFromBackend` proposes local
 commits and renders backend snapshots. Loro is authoritative. The editor does not
 also maintain snapshot undo for these documents. The owner disposes each editor
-before its backend. Existing memory-backed demos keep their original behavior.
+before its backend. Memory-backed hosts keep their original behavior.
 
 ## Representation
 
@@ -47,7 +44,7 @@ no repair operations or reconciliation loop are emitted.
 
 **This is a policy to evaluate, not a settled production schema.** Such a node stays
 anchored in world space through subsequent parent transforms until it receives a
-new pose edit. The playground reports these nodes. Captured world pose is the
+new pose edit. Adapter diagnostics report these nodes. Captured world pose is the
 winning edit's pose, not a guarantee that both concurrent geometric intentions
 survive. Concurrent edits to one pose choose one coherent result.
 
@@ -60,12 +57,12 @@ these behaviors. Snapshot undo
 is never applied to a shared document. Deleting a group while another peer extracts
 a child lets the extracted child survive; opposite reparents converge without cycles.
 
-## Controls and validation
+## Test transport
 
-Alice and Bob have independent editors. Go offline queues updates; Sync now delivers
-the queue without changing connection state. Reconnect resumes delivery. Delivery
-delay is a transport batching delay. Reset both peers discards editors, histories,
-queued messages and timers. No messages can cross into the new seed.
+The automated collaboration tests give Alice and Bob independent editors backed by
+an in-memory transport. Tests can pause delivery, flush queued updates, reconnect,
+and add artificial latency. Disposing the harness clears editors, histories,
+queued messages and timers so packets cannot leak between cases.
 
 ## Awareness boundary
 
@@ -86,8 +83,8 @@ or imports. Non-collaborative hosts keep their existing imports and behavior.
 Cursor and preview publication uses a 40 ms trailing debounce with a 100 ms maximum
 wait, so continuous movement still sends updates. Capture and encoding happen only
 when sending. Selection changes, cursor departure, release and cancellation flush
-immediately. Transport coalesces the latest packet per peer and adds the demo's
-latency setting. Presence is excluded from the durable queued/delivered counters. Disconnect hides remote
+immediately. The in-memory test transport coalesces the latest packet per peer and
+can add artificial latency. Presence is excluded from the durable queued/delivered counters. Disconnect hides remote
 presence and discards pending presence packets; reconnect publishes fresh state.
 Sync now while offline exchanges only document updates. Monotonic packet sequences
 reject duplicate/reordered presence. Heartbeats refresh idle selections every 10
@@ -131,8 +128,8 @@ Production integration still needs an accepted geometry/history conflict policy,
 an explicit choice to retain cancellation or implement intent rebasing, mixed-content
 editor validation, shared collaboration runtime integration, durable initialization,
 permissions, reconnect/storage tests and deployment. Asset/text mappings now exist;
-their production acceptance is separate from basic mapping tests. This transport is only a demo
-harness; do not turn it into another production sync engine.
+their production acceptance is separate from basic mapping tests. This transport is
+only an in-memory test harness; do not turn it into another production sync engine.
 
 References: [Loro ordered trees](https://www.loro.dev/docs/tutorial/tree),
 [Loro undo](https://www.loro.dev/docs/advanced/undo),

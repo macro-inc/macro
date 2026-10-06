@@ -14,8 +14,8 @@ import {
   translation,
   worldMatrix,
 } from '../src/core';
-import { createGraphicsPeerLab } from '../src/loro';
 import { GraphicsSurface } from '../src/solid';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const rectangle = (radius = 0): RectangleItem => ({
   id: 'rect',
@@ -28,86 +28,87 @@ const rectangle = (radius = 0): RectangleItem => ({
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((dispose) => dispose()));
 
-it.each(radiusHandles)(
-  'drags %s in a rotated, reflected, scaled group with one undo step',
-  (handle) => {
-    const item = {
-      ...rectangle(8),
-      placement: { parentId: 'group', sortKey: 'a0' },
-      transform: rotation(0.4),
-    };
-    const editor = createGraphicsEditor(
-      [
-        {
-          id: 'group',
-          type: 'group',
-          placement: { parentId: 'scene-root', sortKey: 'a0' },
-          transform: multiply(translation(100, 200), scaling(-2, 0.5)),
-        },
-        item,
-      ],
-      { snapUnit: 4 }
-    );
-    cleanups.push(editor.dispose);
-    const before = editor.document;
-    const world = worldMatrix(before, item.id);
-    const origin = transformPoint(world, radiusHandlePoint(item, handle));
-    const target = transformPoint(
-      world,
-      radiusHandlePoint(
-        { ...item, appearance: { ...item.appearance, cornerRadius: 29.4 } },
-        handle
-      )
-    );
-    editor.select(item.id);
-    editor.beginTransform(item.id, origin, handle);
-    editor.updateTransform(target);
-    expect(editor.getSession().transform).toMatchObject({
-      kind: 'radius',
-      handle,
-      nodes: { rect: { appearance: { cornerRadius: 29 } } },
-    });
-    expect(editor.document).toBe(before);
-    expect(editor.getSession().canUndo).toBe(false);
-    expect(editor.commitTransform()).toBe(true);
-    expect(editor.document.items.rect).toMatchObject({
-      transform: item.transform,
-      geometry: item.geometry,
-      appearance: { cornerRadius: 29 },
-    });
-    editor.undo();
-    expect(editor.document).toEqual(before);
-    expect(editor.getSession().canUndo).toBe(false);
-    editor.redo();
-    expect(editor.document.items.rect).toMatchObject({
-      appearance: { cornerRadius: 29 },
-    });
-  }
-);
+it.each(
+  radiusHandles
+)('drags %s in a rotated, reflected, scaled group with one undo step', (handle) => {
+  const item = {
+    ...rectangle(8),
+    placement: { parentId: 'group', sortKey: 'a0' },
+    transform: rotation(0.4),
+  };
+  const editor = createGraphicsEditor(
+    [
+      {
+        id: 'group',
+        type: 'group',
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: multiply(translation(100, 200), scaling(-2, 0.5)),
+      },
+      item,
+    ],
+    { snapUnit: 4 }
+  );
+  cleanups.push(editor.dispose);
+  const before = editor.document;
+  const world = worldMatrix(before, item.id);
+  const origin = transformPoint(world, radiusHandlePoint(item, handle));
+  const target = transformPoint(
+    world,
+    radiusHandlePoint(
+      { ...item, appearance: { ...item.appearance, cornerRadius: 29.4 } },
+      handle
+    )
+  );
+  editor.select(item.id);
+  editor.beginTransform(item.id, origin, handle);
+  editor.updateTransform(target);
+  expect(editor.getSession().transform).toMatchObject({
+    kind: 'radius',
+    handle,
+    nodes: { rect: { appearance: { cornerRadius: 29 } } },
+  });
+  expect(editor.document).toBe(before);
+  expect(editor.getSession().canUndo).toBe(false);
+  expect(editor.commitTransform()).toBe(true);
+  expect(editor.document.items.rect).toMatchObject({
+    transform: item.transform,
+    geometry: item.geometry,
+    appearance: { cornerRadius: 29 },
+  });
+  editor.undo();
+  expect(editor.document).toEqual(before);
+  expect(editor.getSession().canUndo).toBe(false);
+  editor.redo();
+  expect(editor.document.items.rect).toMatchObject({
+    appearance: { cornerRadius: 29 },
+  });
+});
 
-it.each([undefined, 1, 4, 64])(
-  'rounds radius to whole pixels with scene unit %s, including the size limit',
-  (snapUnit) => {
-    const editor = createGraphicsEditor(
-      [{ ...rectangle(), geometry: { width: 160, height: 101 } }],
-      { snapUnit }
-    );
-    cleanups.push(editor.dispose);
-    editor.beginTransform('rect', { x: 16, y: 16 }, 'radius-nw');
-    editor.updateTransform({ x: 33.7, y: 33.7 });
-    expect(editor.getSession().transform?.nodes.rect).toMatchObject({
-      appearance: { cornerRadius: 18 },
-    });
-    editor.updateTransform({ x: 500, y: 500 });
-    expect(editor.getSession().transform?.nodes.rect).toMatchObject({
-      appearance: { cornerRadius: 50 },
-    });
-    editor.commitTransform();
-    expect(editor.document.items.rect).toMatchObject({
-      appearance: { cornerRadius: 50 },
-    });
-  }
-);
+it.each([
+  undefined,
+  1,
+  4,
+  64,
+])('rounds radius to whole pixels with scene unit %s, including the size limit', (snapUnit) => {
+  const editor = createGraphicsEditor(
+    [{ ...rectangle(), geometry: { width: 160, height: 101 } }],
+    { snapUnit }
+  );
+  cleanups.push(editor.dispose);
+  editor.beginTransform('rect', { x: 16, y: 16 }, 'radius-nw');
+  editor.updateTransform({ x: 33.7, y: 33.7 });
+  expect(editor.getSession().transform?.nodes.rect).toMatchObject({
+    appearance: { cornerRadius: 18 },
+  });
+  editor.updateTransform({ x: 500, y: 500 });
+  expect(editor.getSession().transform?.nodes.rect).toMatchObject({
+    appearance: { cornerRadius: 50 },
+  });
+  editor.commitTransform();
+  expect(editor.document.items.rect).toMatchObject({
+    appearance: { cornerRadius: 50 },
+  });
+});
 
 it('clamps to the shorter half-side, cancels, and leaves click-only or returned drags out of history', () => {
   const editor = createGraphicsEditor([rectangle(3.5)], { snapUnit: 8 });
@@ -208,23 +209,24 @@ it('previews all four corners from an inset handle, stays visible during drag, a
   expect(editor.document).toEqual(before);
 });
 
-it.each(['Escape', 'pointercancel', 'blur'])(
-  'cancels radius preview on %s',
-  (reason) => {
-    const { editor, viewport, handle, drawn } = setup(8);
-    const before = editor.document;
-    pointer(handle(), 'pointerdown', 16, 16);
-    pointer(viewport, 'pointermove', 40, 40);
-    if (reason === 'Escape')
-      viewport.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    else if (reason === 'blur') window.dispatchEvent(new Event('blur'));
-    else pointer(viewport, 'pointercancel', 40, 40);
-    expect(editor.document).toBe(before);
-    expect(editor.getSession().transform).toBeUndefined();
-    expect(editor.getSession().canUndo).toBe(false);
-    expect(drawn().getAttribute('rx')).toBe('8');
-  }
-);
+it.each([
+  'Escape',
+  'pointercancel',
+  'blur',
+])('cancels radius preview on %s', (reason) => {
+  const { editor, viewport, handle, drawn } = setup(8);
+  const before = editor.document;
+  pointer(handle(), 'pointerdown', 16, 16);
+  pointer(viewport, 'pointermove', 40, 40);
+  if (reason === 'Escape')
+    viewport.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  else if (reason === 'blur') window.dispatchEvent(new Event('blur'));
+  else pointer(viewport, 'pointercancel', 40, 40);
+  expect(editor.document).toBe(before);
+  expect(editor.getSession().transform).toBeUndefined();
+  expect(editor.getSession().canUndo).toBe(false);
+  expect(drawn().getAttribute('rx')).toBe('8');
+});
 
 it('keeps controls the same screen size at zoom and avoids overlapping handles on pills', () => {
   const { editor, host, handle } = setup(50);

@@ -2,6 +2,7 @@ import type { TextGeometry } from '@macro-inc/graphics';
 import Text from '@phosphor/text-t.svg';
 import { Show } from 'solid-js';
 import type { InspectorNumberScrub } from '../primitives/create-inspector-preview';
+import { InspectorField } from './inspector-field';
 import { InspectorNumberField } from './inspector-number-field';
 import { InspectorSection } from './inspector-section';
 import { InspectorSelect } from './inspector-select';
@@ -15,38 +16,38 @@ export function TextInspector(props: {
   ) => void;
 }) {
   return (
-    <InspectorSection title={props.label ? 'Shape label' : 'Typography'}>
-      <div class="grid grid-cols-[4rem_1fr] items-center gap-3">
-        <span class="text-xs text-ink-muted">Font</span>
-        <InspectorSelect
-          label="Font family"
-          value={props.geometry.fontFamily}
-          options={[
-            { value: 'sans', label: 'Sans' },
-            { value: 'serif', label: 'Serif' },
-            { value: 'mono', label: 'Mono' },
-          ]}
-          onChange={(fontFamily) => props.onChange({ fontFamily })}
-        />
-      </div>
-      <div class="grid grid-cols-2 items-center gap-3">
-        <span class="text-xs text-ink-muted">Size</span>
-        <InspectorNumberField
-          label="Font size"
-          icon={<Text class="size-4" />}
-          value={Math.round(props.geometry.fontSize * 10) / 10}
-          min={4}
-          max={512}
-          unit="px"
-          onChange={(fontSize) => props.onChange({ fontSize })}
-          onScrub={props.onScrub}
-        />
+    <InspectorSection title="Typography">
+      <div class="grid grid-cols-2 gap-2">
+        <InspectorField label="Font">
+          <InspectorSelect
+            label="Font family"
+            value={props.geometry.fontFamily}
+            options={[
+              { value: 'sans', label: 'Sans' },
+              { value: 'serif', label: 'Serif' },
+              { value: 'mono', label: 'Mono' },
+            ]}
+            onChange={(fontFamily) => props.onChange({ fontFamily })}
+          />
+        </InspectorField>
+        <InspectorField label="Size">
+          <InspectorNumberField
+            label="Font size"
+            icon={<Text class="size-3" />}
+            value={Math.round(props.geometry.fontSize * 10) / 10}
+            min={4}
+            max={512}
+            unit="px"
+            onChange={(fontSize) => props.onChange({ fontSize })}
+            onScrub={props.onScrub}
+          />
+        </InspectorField>
       </div>
       <Show when={!props.label}>
         <button
           type="button"
           aria-pressed={props.geometry.autoWidth}
-          class="w-full rounded border border-edge-muted px-2 py-1.5 text-xs hover:bg-hover"
+          class="h-6 w-full rounded-md bg-hover/50 px-2 text-xs outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-muted"
           onClick={() =>
             props.onChange({ autoWidth: !props.geometry.autoWidth })
           }
@@ -54,11 +55,6 @@ export function TextInspector(props: {
           {props.geometry.autoWidth ? 'Auto width' : 'Wrap to width'}
         </button>
       </Show>
-      <p class="text-[10px] leading-relaxed text-ink-muted">
-        {props.label
-          ? 'Double-click or Enter to edit. Labels wrap and fit inside the shape.'
-          : 'Double-click or Enter to edit. Side edges wrap; corners scale text.'}
-      </p>
     </InspectorSection>
   );
 }

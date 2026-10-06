@@ -7,6 +7,7 @@ export function InspectorNumberField(props: {
   label: string;
   icon: JSX.Element;
   value: number | undefined;
+  disabled?: boolean;
   min?: number;
   max?: number;
   step?: number | 'any';
@@ -66,13 +67,17 @@ export function InspectorNumberField(props: {
     drag.scrub?.preview(value);
   };
   return (
-    <InputGroup class="has-[button:focus]:border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] has-[button:focus]:ring-2 has-[button:focus]:ring-edge-muted">
+    <InputGroup
+      size="sm"
+      class="border-transparent bg-hover/50 hover:border-edge-muted has-[button:focus]:border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] has-[button:focus]:ring-2 has-[button:focus]:ring-edge-muted"
+    >
       <InputGroup.Addon class="ps-0">
         <button
           type="button"
+          disabled={props.disabled}
           aria-label={`Adjust ${props.label}`}
           title={`Drag to adjust ${props.label.toLowerCase()}. Shift for larger steps.`}
-          class="flex h-full w-9 shrink-0 touch-none select-none items-center justify-center rounded-l-md text-ink-muted outline-none cursor-ew-resize"
+          class="flex h-full w-6 shrink-0 touch-none select-none items-center justify-center rounded-l-md text-ink-muted outline-none cursor-ew-resize"
           onPointerDown={(event) => {
             if (event.button !== 0 || drag) return;
             event.preventDefault();
@@ -131,15 +136,22 @@ export function InspectorNumberField(props: {
       </InputGroup.Addon>
       <InputGroup.Input
         onClick={(event) => event.currentTarget.select()}
+        disabled={props.disabled}
         type="text"
         inputMode="decimal"
         aria-label={props.label}
         min={props.min === -Infinity ? undefined : (props.min ?? 0)}
         max={props.max}
         step={props.step ?? 1}
-        placeholder={props.value === undefined ? 'Mixed' : String(props.value)}
+        placeholder={
+          props.disabled
+            ? '—'
+            : props.value === undefined
+              ? 'Mixed'
+              : String(props.value)
+        }
         value={draft() ?? props.value ?? ''}
-        class="text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        class="px-1 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         onChange={(event) => {
           const raw = event.currentTarget.value.trim();
           const value = raw === '' ? NaN : Number(raw);

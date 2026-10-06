@@ -18,15 +18,14 @@ centrally compiled; Canvas Next owns Lexical and stores its serialized tree as o
 whole-string LWW value. Graphics treats that content as opaque; Canvas Next
 owns the Lexical codec, validation and empty-content decisions. There is no
 character-level collaboration. The optional LoroTree backend has native local
-undo and isolated ephemeral awareness. Its visual peer demo is still smaller than
-Canvas Next and does not yet validate the full mixed-content editor.
+undo and isolated ephemeral awareness. Its automated peer harness is still smaller
+than Canvas Next and does not yet validate the full mixed-content editor.
 
 Canvas Next now has gated version 2 JSON persistence, frontend legacy migration
 and document-level read-only enforcement. SyncService wiring and collaboration
-remain follow-up work. The standalone playgrounds use an unversioned model and disposable
-seed scripts. The Canvas Next demo has local debug storage; real Canvas Next
-documents have versioned JSON at the durable boundary. Embedded documents keep
-their existing sync independently of the outer canvas.
+remain follow-up work. Saved Canvas Next documents use versioned JSON at the durable
+boundary. Embedded documents keep their existing sync independently of the outer
+canvas.
 
 ## Goals
 
@@ -88,8 +87,7 @@ per tool. Keep product composition in the web feature architecture described in
 
 **Document:** durable records, stable IDs, containment and sibling ordering,
 geometry, styles, connector bindings, asset references and plugin-owned content.
-Introduce format versions only at durable/exchange boundaries; current playground
-documents remain unversioned. Export from document state,
+Introduce format versions only at durable/exchange boundaries. Export from document state,
 never visibility, mounted components or selection.
 
 **Editing session:** selection, camera, active tool, gesture state, snapping,
@@ -464,9 +462,9 @@ packages/graphics/
   README.md
   tsconfig.core.json # ES libs only, no DOM or framework imports
 
-apps/web/src/features/graphics-playground/
-  graphics-playground.tsx # production mounting and split header
-  views/                 # playground composition
+apps/web/src/features/block-canvas/canvas-next/
+  canvas-next.tsx         # flagged saved-document composition
+  views/                  # Canvas product composition
 ```
 
 Use subdirectories only as they gain responsibilities. The existing machine
@@ -475,12 +473,9 @@ separate `/browser` export and core type-check. Solid is an optional peer depend
 The root barrel must never re-export the other entry points. Enforce the boundary
 with import checks in addition to the no-DOM type-check.
 
-Register `graphics-playground` lazily under `LOCAL_ONLY` in
-`apps/web/src/components/app/split-layout/componentRegistry.tsx`, using the existing
-debug-page pattern. Open through the split router's component route. Each mounted
-playground owns an independent editor with explicit disposal. The page needs no
-document ID, storage requests or legacy Block provider. Follow existing split
-header conventions and semantic theme tokens at the host boundary.
+Canvas Next mounts through the existing Canvas document host behind
+`enable-canvas-next`. It receives the document identity, permissions and storage
+adapter from that host; there is no separate playground route.
 
 ### Minimal state
 
@@ -545,8 +540,8 @@ performance tuning beyond stable reactive identity need measured justification.
 
 ### Small implementation checkpoints
 
-1. **Surface:** scaffold package/exports, typed rectangle data, camera math, Solid
-   projection, renderer and registry-mounted playground. Render seeded rectangles;
+1. **Surface:** scaffold package/exports, typed rectangle data, camera math and a
+   Solid projection/renderer. Render seeded rectangles in automated fixtures;
    pan and pointer-anchored zoom work.
 2. **Create:** normalized input and rectangle state machine; preview, commit and
    cancellation work in all drag directions.
@@ -566,9 +561,9 @@ legacy Canvas migration remain later milestones.
 - Import tests enforce no Solid/DOM/app dependencies from the core export.
 - Solid adapter tests check reactive geometry and stable mounts across unrelated
   edits; disposal removes subscriptions and event listeners.
-- In the actual registry-mounted browser page, exercise creation at non-default
-  zoom, pan/zoom, selection, drag outside bounds, cancel, deletion and two splits.
+- In the flagged saved-document browser surface, exercise creation at non-default
+  zoom, pan/zoom, selection, drag outside bounds and cancellation.
 - Run package tests/type-check, affected web tests/type-check and `just check`.
-  Add the playground route and tool behavior to the app agent guide.
+  Add the tool behavior to the app agent guide.
 - README documents the three imports, state ownership, initial rectangle contract
   and how to add another item definition plus renderer.

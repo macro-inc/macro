@@ -128,7 +128,7 @@ function restoreText(
   labelStyle: NodeData['labelStyle']
 ) {
   if (kind === 'text') return { ...geometry, content };
-  if (kind === 'rectangle' || kind === 'ellipse')
+  if (kind === 'rectangle' || kind === 'ellipse' || kind === 'connector')
     return content !== null && labelStyle
       ? { ...geometry, label: { ...labelStyle, content } }
       : geometry;
@@ -199,7 +199,7 @@ export function writeScene(
   next: GraphicsDocument
 ) {
   if (before.rootId !== next.rootId || next.surface)
-    throw new Error('Shared playground supports one unbounded surface');
+    throw new Error('Shared graphics backend supports one unbounded surface');
   const handles = new Map(
     tree.getNodes().map((node) => [node.data.get('id'), node])
   );

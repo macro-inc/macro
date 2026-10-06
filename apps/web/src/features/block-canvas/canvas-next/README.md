@@ -1,8 +1,9 @@
 # Canvas Next — drawing, rich text, media and document cards
 
 Canvas Next opens saved documents behind the remote `enable-canvas-next` flag.
-Use `VITE_ENABLE_CANVAS_NEXT=true` to opt in locally; unset overrides defer to
-PostHog and the rollout stays off until enabled there. The flag is sampled when
+Use `VITE_ENABLE_CANVAS_NEXT=true` in `apps/web/.env.local` to opt in locally.
+Local analytics is disabled, so unset remote flags settle as off without waiting
+for PostHog. Deployed builds use the remote rollout when no override is set. The flag is sampled when
 opening a document, so remote refreshes cannot switch an active editing session.
 
 The frontend treats unversioned JSON (and explicit version 1) as legacy Canvas.
@@ -27,17 +28,12 @@ SyncService integration and collaboration remain a follow-up. This change keeps
 the existing whole-file save behavior. See [Graphics and Canvas parity](../../../../../../docs/GRAPHICS_PARITY.md)
 for the remaining editor and collaboration work.
 
-The disposable demo at `/app/component/canvas-next` is separately guarded by
-`USE_CANVAS_NEXT` (local only; `VITE_USE_CANVAS_NEXT=false` hides it). Only that demo
-uses `macro.canvas-next.debug.v1` local storage and exposes **Reset demo**. Real
-documents never load its browser snapshot or show its reset action.
-
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing
 and inserting media, document cards, and embeds. Tooltips show each tool's shortcut.
 Zoom, reset-to-100%, fit, undo, and redo live at the bottom-left. Adjacent controls
-toggle floating properties and layers panels; the demo canvas menu contains Reset demo.
+toggle floating properties and layers panels.
 Fit Scene uses the current viewport dimensions, centers all scene geometry and
 zooms in or out to leave 100 screen pixels per side on the first axis to fill.
 Camera zoom limits still apply; padding decreases for small embedded viewports.
@@ -95,8 +91,19 @@ access. Fragments include whole selected subtrees, fresh IDs on insertion, stabl
 relative order and world placement. Pasting repeatedly offsets by another 24 units.
 Canvas Next fragments preserve rich text. Plain text and HTML pasted onto the canvas
 create a wrapped text shape; pasting inside the editor belongs to Lexical. Image
-clipboard data uploads through the media adapter. Legacy Canvas and Excalidraw
-clipboard formats remain later adapters.
+clipboard data uploads through the media adapter. Legacy Canvas clipboard format
+remains a later adapter.
+
+Pasting an Excalidraw selection or `.excalidraw`/`excalidraw/clipboard` JSON
+imports through `core/excalidraw.ts` (import only; export is not implemented). It
+converts rectangles, ellipses, text, freedraw and line/arrow elements, rebuilds
+flat `groupIds` membership into the nested local-transform tree, folds
+container-bound text into shape or connector labels, and keeps arrow bindings
+that resolve to imported shapes. Diamonds are approximated as rectangles; images,
+frames and embeddables are dropped. The status line reports the imported, approximated and
+unsupported counts. Hachure/fill styles, roughness and multi-point line bends are
+not represented. Connectors import as straight unless both endpoints bind to
+imported shapes; doubly bound connectors retain their straight, smooth or elbow route.
 
 Option-drag duplicates the selected roots (or selects and duplicates the clicked
 shape). It is a cancellable preview; originals stay put and retain their DOM.
@@ -104,8 +111,20 @@ Release commits creation plus movement as one undo step; clicking without moving
 or pressing Escape leaves no copy or history entry. Hold Option at gesture start;
 live modifier toggling during a duplicate drag is not implemented.
 
+The inspector stays in a rounded floating panel on the right at the same width
+and height, including with no selection. Connector routes, endpoint styles, and
+stroke patterns have previews in both their selectors and menus. Rotation and
+flip buttons share the alignment controls’ compact grouped treatment. Sections follow Position, Layout, Appearance, Fill, Stroke,
+Connection, Typography; unavailable sections are omitted without reordering the
+others. Position and Layout remain visible but disabled for fully bound connectors.
+Compact fields share a two-column grid, opacity and corner radius share Appearance,
+and label typography appears only for existing labels or during label editing.
 The inspector supports mixed values, fill/stroke palettes, width, opacity and
-rectangle radius. Color controls compose the shared `@ui` ColorPicker field, hue
+rectangle radius. Width/height edits and scrubs resize geometry through the canvas
+shape definitions, preserving label proportions and remeasuring wrapping. Text
+width reflows; text height scales proportionally. Rotated world-bound edits and
+groups with incompatible axes preserve proportions rather than introducing shear.
+Color controls compose the shared `@ui` ColorPicker field, hue
 and opacity tracks, and hex input. Canvas does not import the theme editor picker
 or Color.js; custom edits produce sRGB hex, while preset theme references stay
 as references until edited. Edits also become defaults for subsequent shapes. A group has
@@ -159,14 +178,15 @@ outline tolerance; a thick stroke does not gain another 3px outside its paint.
 - `primitives/`: Solid state, mixed values, creation defaults and UI actions.
 - `components/`: inspector and layer list with explicit props.
 - `views/`: editor surface and controls composed around a supplied editor/state.
-- `canvas-next.tsx`: local memory editor, Macro header/hotkey scope, clipboard wiring.
+- `canvas-next.tsx`: memory editor, Macro hotkey scope and clipboard wiring.
 - `clipboard.ts` / `hotkeys.ts`: host adapters. No browser/app dependency in the core.
 
-Core command and transform tests exercise both memory and Loro paths. The new UI
-uses memory only; it does not install awareness or production collaboration.
+Core command and transform tests exercise both memory and Loro paths. Canvas Next
+currently uses memory plus versioned whole-file saves; it does not install awareness
+or production collaboration.
 
 The view/state already accept an editor. The current composition root constructs
-its own memory editor; a later peer checkpoint can inject Loro editors while
+its own memory editor; a later collaboration checkpoint can inject Loro editors while
 retaining the same rich-text measurement, renderer, clipboard and input ownership.
 
 ## Pencil checkpoint
@@ -193,11 +213,11 @@ budget. Mixed-content performance and general spatial indexing remain later work
 
 T chooses text. Click for auto width, or drag horizontally to choose a wrapping
 width. Double-click an existing text shape, or select it and press Enter, to edit.
-Double-click empty canvas also creates text. Escape, Cmd/Ctrl+Enter, Done, or a click
+Double-click empty canvas also creates text. Escape, Cmd/Ctrl+Enter, or a click
 outside commits the edit. Empty drafts disappear without an undo entry.
 
 The editing toolbar supports bold, italic, underline, strike, code, highlight,
-links, headings, quotes, nested bulleted/numbered lists, and paragraph alignment.
+links, headings, quotes, and nested bulleted/numbered lists.
 Tab / Shift+Tab indent/outdent lists. Lexical owns IME, caret/range selection, rich
 clipboard and typing undo; canvas hotkeys and gestures are suspended while editing.
 The inspector controls font family (sans/serif/mono), size and auto/wrapped width.
@@ -209,16 +229,18 @@ badges, assignee avatars, and mention spacing scale in em units with the text.
 
 Type `@` in text or a shape label to open the shared mention picker. Choose a
 person, document, or other supported reference with the mouse or arrow keys and
-Enter. Escape closes the picker before ending editing. Mentions retain their typed
+Enter. Pending `@` queries use the same text width as their measured content, so
+opening the picker does not add an extra wrapped line. Escape closes the picker
+before ending editing. Mentions retain their typed
 Lexical nodes through reopening, copy/paste, and undo, and render with the shared
-mention decorators. This disposable demo disables backend mention tracking and
+mention decorators. Canvas Next currently disables backend mention tracking and
 notifications; mentions remain part of the same whole-content LWW string.
 
 Canvas Next stores a stringified Lexical editor tree in `TextGeometry.content`,
 including shape labels. `core/text-codec.ts` owns bounded tree validation, seed
 construction, serialization, plain-text extraction and empty-content detection.
-Clipboard and debug-storage imports validate this host format before accepting a
-scene. Graphics only checks the opaque string's size; it never interprets the tree
+Clipboard imports validate this host format before accepting a scene. Graphics
+only checks the opaque string's size; it never interprets the tree
 or decides whether to remove empty text. The text state explicitly deletes cleared
 text items, skips empty creations and clears labels while retaining their shapes.
 Canvas Next uses the shared Markdown builder (`buildConfig` and `MarkdownShell`)
@@ -232,12 +254,14 @@ Reordering other items therefore cannot remount the editor or replace its conten
 Draft updates do not mutate the scene. Ending the edit submits one canvas undo
 step, and undo inside the editor affects only that editing session.
 
-Rectangles and ellipses own optional rich-text labels in their geometry. Double-click
-anywhere inside either shape (even with no fill), use T then click the shape, or
-select the shape and press Enter. Labels start center-aligned and vertically
-centered, wrap to a padded interior (an inscribed box for ellipses), and uniformly
-shrink to fit small shapes. Resizing remeasures wrapping without changing the stored
-font size; labels inherit the shape's stroke color and opacity. Clicking a label
+Rectangles, ellipses and connectors own optional rich-text labels in their geometry.
+Double-click inside a rectangle or ellipse (even with no fill), or on a connector.
+You can also use T then click, or select the item and press Enter. Connector labels
+sit at the route midpoint, follow bound targets, and size to their text; the
+connector line leaves a gap behind the label. Other labels start
+center-aligned and vertically centered, wrap to a padded interior (an inscribed
+box for ellipses), and uniformly shrink to fit small shapes. Resizing remeasures
+wrapping without changing the stored font size; labels inherit the shape's stroke color and opacity. Clicking a label
 selects its owner. Ordinary clicks elsewhere in an unfilled interior still pass
 through. Clearing a label leaves the shape. Label edits, copy/paste, duplication,
 grouping and transforms all preserve ownership; there is no separate text node.
@@ -247,8 +271,8 @@ stores one `textContent` string register per text item or labeled shape, separat
 from pose. Concurrent edits choose one complete tree; no character-level merging
 or shared caret is intended. Label layout metadata is separate from pose too, so
 adding a label and moving its owner can merge. Local typing undo stays in Lexical;
-finished edits use the canvas backend's undo. The local Canvas Next demo still has
-no persistence or production SyncService connection.
+finished edits use the canvas backend's undo. Canvas Next does not yet have a
+production SyncService connection.
 
 Mixed selections containing text scale uniformly to preserve letter proportions;
 use a single text shape’s side edges to change wrapping width. Shape definitions
@@ -277,8 +301,8 @@ visible positions. Deleting a target leaves its surviving connectors in place;
 undo restores the connection. Moving a connector body moves its free ends, keeping
 bound ends attached. Endpoint previews do not write document history.
 
-Connector labels, arbitrary bend-point editing, and remote endpoint preview
-awareness are not included in this checkpoint. This remains a disposable local demo.
+Arbitrary bend-point editing and remote endpoint preview awareness are not included
+in this checkpoint.
 
 ## Media and document cards
 
@@ -288,8 +312,9 @@ and workspace entity drag/drop use the same insertion path. Media is naturally
 sized, fitted within 640 × 480 world units, and inserted in one undo step per batch.
 Uploading/loading is host-owned; only stable static-file or document references
 enter the scene. Reset/unmount invalidates pending insertion. Failures are shown in
-the status line. This local scene is disposable, but uploads use the existing static
-file service. Existing workspace file selection does not create a new file.
+the status line. Saved Canvas Next documents retain stable uploaded references;
+uploads use the existing static file service. Existing workspace file selection
+does not create a new file.
 
 Image/video shape definitions own validation, bounds, hit testing and resizing in
 core. The host resolves URLs through existing queries. Images support border,
@@ -316,14 +341,14 @@ The embedded block stays mounted when entering/leaving interaction mode.
 
 `block-embed-adapter.tsx` mounts the existing unmanaged block loader with its own
 panel handle, toolbar, and hotkey scope. The existing editor owns permissions and
-sync: edits inside an embed save to that referenced file, even though the outer
-scene remains local and disposable. The core stores only the document reference,
+sync: edits inside an embed save to that referenced file independently of the outer
+Canvas Next document. The core stores only the document reference,
 box size, and optional `display` (`preview`/`embed`). Active focus, selection inside
 the embed, its editor state, and network services never enter graphics core.
 Native clipboard events, pointer/wheel events and shortcuts remain owned by the
 active embed. Full embeds currently support `md` and `canvas`; other files retain
-preview cards. Production Canvas Next persistence and recursive Canvas Next
-embedding are not part of this checkpoint.
+preview cards. Recursive Canvas Next embedding remains gated by the referenced
+document's own format and feature availability.
 
 Known prototype limit: the embedded legacy canvas still converts pointer coordinates
 against an untransformed viewport. Its drawing/resize tools need host-transform

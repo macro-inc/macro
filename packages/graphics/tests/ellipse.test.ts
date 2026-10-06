@@ -167,47 +167,46 @@ it('picks the ellipse curve, lets its empty center through, and rejects bounding
   expect(filled.hitTest({ x: 10, y: 10 })).toBeUndefined();
 });
 
-it.each([0.25, 1, 4])(
-  'measures ellipse outline distance after rotation, shear and zoom %s',
-  (zoom) => {
-    const parent = multiply(
-      translation(80, 60),
-      multiply(rotation(0.4), scaling(2, 0.5))
-    );
-    const node = {
-      ...ellipse('transparent', rotation(-0.7)),
-      placement: { parentId: 'group', sortKey: 'a0' },
+it.each([
+  0.25, 1, 4,
+])('measures ellipse outline distance after rotation, shear and zoom %s', (zoom) => {
+  const parent = multiply(
+    translation(80, 60),
+    multiply(rotation(0.4), scaling(2, 0.5))
+  );
+  const node = {
+    ...ellipse('transparent', rotation(-0.7)),
+    placement: { parentId: 'group', sortKey: 'a0' },
+  };
+  const editor = createGraphicsEditor([
+    {
+      id: 'group',
+      type: 'group',
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
+      transform: parent,
+    },
+    node,
+  ]);
+  editor.zoomAt({ x: 0, y: 0 }, zoom);
+  const world = worldMatrix(editor.document, node.id);
+  for (const angle of [0, 0.7, 1.6, 3.4, 5.2]) {
+    const p = transformPoint(world, {
+      x: 100 + 100 * Math.cos(angle),
+      y: 50 + 50 * Math.sin(angle),
+    });
+    const tangent: Point = {
+      x: world[0] * -100 * Math.sin(angle) + world[2] * 50 * Math.cos(angle),
+      y: world[1] * -100 * Math.sin(angle) + world[3] * 50 * Math.cos(angle),
     };
-    const editor = createGraphicsEditor([
-      {
-        id: 'group',
-        type: 'group',
-        placement: { parentId: 'scene-root', sortKey: 'a0' },
-        transform: parent,
-      },
-      node,
-    ]);
-    editor.zoomAt({ x: 0, y: 0 }, zoom);
-    const world = worldMatrix(editor.document, node.id);
-    for (const angle of [0, 0.7, 1.6, 3.4, 5.2]) {
-      const p = transformPoint(world, {
-        x: 100 + 100 * Math.cos(angle),
-        y: 50 + 50 * Math.sin(angle),
-      });
-      const tangent: Point = {
-        x: world[0] * -100 * Math.sin(angle) + world[2] * 50 * Math.cos(angle),
-        y: world[1] * -100 * Math.sin(angle) + world[3] * 50 * Math.cos(angle),
-      };
-      const length = Math.hypot(tangent.x, tangent.y);
-      const offset = (px: number) => ({
-        x: p.x + ((tangent.y / length) * px) / zoom,
-        y: p.y - ((tangent.x / length) * px) / zoom,
-      });
-      expect(editor.hitTest(offset(2.99), true)).toBe(node.id);
-      expect(editor.hitTest(offset(3.01), true)).toBeUndefined();
-    }
+    const length = Math.hypot(tangent.x, tangent.y);
+    const offset = (px: number) => ({
+      x: p.x + ((tangent.y / length) * px) / zoom,
+      y: p.y - ((tangent.x / length) * px) / zoom,
+    });
+    expect(editor.hitTest(offset(2.99), true)).toBe(node.id);
+    expect(editor.hitTest(offset(3.01), true)).toBeUndefined();
   }
-);
+});
 
 it('marquee uses the ellipse, not the unused corners of its bounds', () => {
   const doc = createScene([ellipse()]);

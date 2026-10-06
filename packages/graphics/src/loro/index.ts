@@ -3,7 +3,6 @@ export {
   createLoroSeed,
   type LoroGraphicsBackend,
 } from './backend';
-export { createGraphicsPeerLab, type GraphicsPeerLab } from './peer-lab';
 export {
   createGraphicsPresence,
   type GraphicsPresence,

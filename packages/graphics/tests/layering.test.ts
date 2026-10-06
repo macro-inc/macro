@@ -54,19 +54,19 @@ it.each([
   ['back', ['b', 'd', 'a', 'c', 'e']],
   ['forward', ['a', 'c', 'b', 'e', 'd']],
   ['backward', ['b', 'a', 'd', 'c', 'e']],
-] satisfies [LayerOperation, string[]][])(
-  'moves a disjoint selection %s without renumbering other nodes',
-  (operation, expected) => {
-    const before = scene();
-    const after = reorderNodes(before, ['d', 'b'], operation);
-    expect(children(after)).toEqual(expected);
-    for (const id of ['a', 'c', 'e'])
-      expect(key(after, id)).toBe(key(before, id));
-    for (const id of children(before))
-      expect(worldMatrix(after, id)).toEqual(worldMatrix(before, id));
-    expect(hitTest(after, { x: 50, y: 50 })).toBe(expected.at(-1));
-  }
-);
+] satisfies [
+  LayerOperation,
+  string[],
+][])('moves a disjoint selection %s without renumbering other nodes', (operation, expected) => {
+  const before = scene();
+  const after = reorderNodes(before, ['d', 'b'], operation);
+  expect(children(after)).toEqual(expected);
+  for (const id of ['a', 'c', 'e'])
+    expect(key(after, id)).toBe(key(before, id));
+  for (const id of children(before))
+    expect(worldMatrix(after, id)).toEqual(worldMatrix(before, id));
+  expect(hitTest(after, { x: 50, y: 50 })).toBe(expected.at(-1));
+});
 
 it('moves contiguous selections one sibling and leaves boundary no-ops out of undo', () => {
   const before = scene();

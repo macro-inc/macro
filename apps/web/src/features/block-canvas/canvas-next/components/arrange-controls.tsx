@@ -8,7 +8,7 @@ import AlignTop from '@phosphor/align-top-simple.svg';
 import ArrowsHorizontal from '@phosphor/arrows-horizontal.svg';
 import ArrowsVertical from '@phosphor/arrows-vertical.svg';
 import { Button, ButtonGroup } from '@ui';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export function CanvasAlignmentControls(props: {
@@ -36,11 +36,10 @@ export function CanvasAlignmentControls(props: {
           }
         >
           {(alignments) => (
-            <ButtonGroup size="icon-md" variant="outline" class="w-full">
+            <ButtonGroup size="icon-sm" class="w-full rounded-md bg-hover/50">
               <For each={alignments}>
-                {([alignment, icon], index) => (
+                {([alignment, icon]) => (
                   <>
-                    {index() > 0 && <ButtonGroup.Divider />}
                     <Button
                       fullWidth
                       class="bg-transparent"
@@ -57,22 +56,24 @@ export function CanvasAlignmentControls(props: {
           )}
         </For>
       </div>
-      <ButtonGroup size="icon-md">
-        <Button
-          label="Distribute horizontal"
-          disabled={props.count < 3}
-          onClick={() => props.onDistribute('horizontal')}
-        >
-          <ArrowsHorizontal />
-        </Button>
-        <Button
-          label="Distribute vertical"
-          disabled={props.count < 3}
-          onClick={() => props.onDistribute('vertical')}
-        >
-          <ArrowsVertical />
-        </Button>
-      </ButtonGroup>
+      <Show when={props.count >= 3}>
+        <ButtonGroup size="icon-sm">
+          <Button
+            label="Distribute horizontal"
+            disabled={props.count < 3}
+            onClick={() => props.onDistribute('horizontal')}
+          >
+            <ArrowsHorizontal />
+          </Button>
+          <Button
+            label="Distribute vertical"
+            disabled={props.count < 3}
+            onClick={() => props.onDistribute('vertical')}
+          >
+            <ArrowsVertical />
+          </Button>
+        </ButtonGroup>
+      </Show>
     </div>
   );
 }

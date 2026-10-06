@@ -1,5 +1,5 @@
 import { corners, enclosing, intersects, transformPoint } from '../affine';
-import type { Point } from '../model';
+import type { Point, ShapeItem } from '../model';
 import { segmentDistance } from './box-geometry';
 import {
   type ConnectorHead,
@@ -8,6 +8,12 @@ import {
   connectorPath,
 } from './connector-routing';
 import type { ShapeDefinition } from './definition';
+import {
+  hitShapeLabel,
+  type ShapeLabel,
+  shapeLabelLayout,
+  validShapeLabel,
+} from './label';
 
 export const connectorAnchors = [
   'center',
@@ -29,6 +35,7 @@ export type ConnectorEndpoint = Readonly<{
   direction?: Point;
 }>;
 export type ConnectorGeometry = Readonly<{
+  label?: ShapeLabel;
   start: ConnectorEndpoint;
   end: ConnectorEndpoint;
   route: ConnectorRoute;
@@ -81,12 +88,54 @@ const headPoints = (point: Point, direction: Point, style: ConnectorHead) => {
 };
 const freezeEnd = (end: ConnectorEndpoint): ConnectorEndpoint =>
   Object.freeze({
+    ...end,
     point: Object.freeze({ ...end.point }),
     ...(end.binding ? { binding: Object.freeze({ ...end.binding }) } : {}),
     ...(end.direction
       ? { direction: Object.freeze({ ...end.direction }) }
       : {}),
   });
+const connectorBounds = (
+  item: ShapeItem<'connector'>,
+  includeLabel: boolean
+) => {
+  const g = item.geometry,
+    route = connectorPath(g.start, g.end, g.route);
+  const points = [...corners(route.bounds)];
+  for (const [end, style, direction] of [
+    [g.start, g.startHead, route.from],
+    [g.end, g.endHead, route.to],
+  ] as const) {
+    if (style === 'none') continue;
+    const head = connectorHead(end.point, direction, style);
+    if (head.radius)
+      points.push(
+        ...corners({
+          x: end.point.x - head.radius,
+          y: end.point.y - head.radius,
+          width: head.radius * 2,
+          height: head.radius * 2,
+        })
+      );
+    else points.push(...head.vertices);
+  }
+  const label = includeLabel ? shapeLabelLayout(item) : undefined;
+  if (label)
+    points.push(
+      ...corners({
+        x: 0,
+        y: 0,
+        width: label.geometry.width,
+        height: label.geometry.height,
+      }).map((p) => transformPoint(label.transform, p))
+    );
+  const bounds = enclosing(points);
+  return {
+    ...bounds,
+    width: Math.max(0.001, bounds.width),
+    height: Math.max(0.001, bounds.height),
+  };
+};
 export const connectorDefinition: ShapeDefinition<'connector'> = {
   type: 'connector',
   label: 'Connector',
@@ -95,6 +144,7 @@ export const connectorDefinition: ShapeDefinition<'connector'> = {
     const g = value as Record<string, unknown>,
       heads = ['none', 'arrow', 'arrow-filled', 'circle', 'circle-small'];
     return (
+      (g.label === undefined || validShapeLabel(g.label)) &&
       validEnd(g.start) &&
       validEnd(g.end) &&
       ['straight', 'stepped', 'smooth'].includes(String(g.route)) &&
@@ -103,40 +153,19 @@ export const connectorDefinition: ShapeDefinition<'connector'> = {
     );
   },
   freezeGeometry: (g) =>
-    Object.freeze({ ...g, start: freezeEnd(g.start), end: freezeEnd(g.end) }),
+    Object.freeze({
+      ...g,
+      start: freezeEnd(g.start),
+      end: freezeEnd(g.end),
+      ...(g.label ? { label: Object.freeze({ ...g.label }) } : {}),
+    }),
   sameGeometry: (a, b) =>
     JSON.stringify(a.geometry) === JSON.stringify(b.geometry),
-  bounds: (item) => {
-    const g = item.geometry,
-      route = connectorPath(g.start, g.end, g.route);
-    const points = [...corners(route.bounds)];
-    for (const [end, style, direction] of [
-      [g.start, g.startHead, route.from],
-      [g.end, g.endHead, route.to],
-    ] as const) {
-      if (style === 'none') continue;
-      const head = connectorHead(end.point, direction, style);
-      if (head.radius)
-        points.push(
-          ...corners({
-            x: end.point.x - head.radius,
-            y: end.point.y - head.radius,
-            width: head.radius * 2,
-            height: head.radius * 2,
-          })
-        );
-      else points.push(...head.vertices);
-    }
-    const b = enclosing(points);
-    return {
-      ...b,
-      width: Math.max(0.001, b.width),
-      height: Math.max(0.001, b.height),
-    };
-  },
+  bounds: (item) => connectorBounds(item, true),
   hitTest: (item, point, context) => {
+    if (item.appearance.opacity === 0) return false;
+    if (hitShapeLabel(item, point)) return true;
     if (
-      item.appearance.opacity === 0 ||
       item.appearance.stroke === 'transparent' ||
       item.appearance.strokeWidth === 0
     )
@@ -184,6 +213,22 @@ export const connectorDefinition: ShapeDefinition<'connector'> = {
     });
   },
   intersectsBox: (item, world, box) => {
+    const label = shapeLabelLayout(item);
+    if (
+      label &&
+      intersects(
+        corners({
+          x: 0,
+          y: 0,
+          width: label.geometry.width,
+          height: label.geometry.height,
+        }).map((p) =>
+          transformPoint(world, transformPoint(label.transform, p))
+        ),
+        corners(box)
+      )
+    )
+      return true;
     const g = item.geometry,
       path = connectorPath(g.start, g.end, g.route),
       bounds = corners(box);
@@ -207,24 +252,118 @@ export const connectorDefinition: ShapeDefinition<'connector'> = {
           );
     });
   },
-  resize: (item, size) => {
-    const b = connectorDefinition.bounds(item),
-      sx = size.width / b.width,
-      sy = size.height / b.height;
-    const resize = (e: ConnectorEndpoint) => ({
+  resize: (item, size, context) => {
+    const visible = connectorBounds(item, true),
+      geometry = connectorBounds(item, false),
+      sx = size.width / visible.width,
+      sy = size.height / visible.height,
+      midpoint = {
+        x: (item.geometry.start.point.x + item.geometry.end.point.x) / 2,
+        y: (item.geometry.start.point.y + item.geometry.end.point.y) / 2,
+      },
+      minimum = connectorBounds(
+        {
+          ...item,
+          geometry: {
+            ...item.geometry,
+            start: { ...item.geometry.start, point: midpoint },
+            end: { ...item.geometry.end, point: midpoint },
+          },
+        },
+        true
+      ),
+      target = {
+        width: Math.max(size.width, minimum.width),
+        height: Math.max(size.height, minimum.height),
+      },
+      scaled = {
+        left: size.x + visible.x * sx,
+        right: size.x + (visible.x + visible.width) * sx,
+        top: size.y + visible.y * sy,
+        bottom: size.y + (visible.y + visible.height) * sy,
+      },
+      handle = context?.handle,
+      targetOrigin = {
+        x:
+          target.width === size.width || handle?.includes('e')
+            ? scaled.left
+            : handle?.includes('w')
+              ? scaled.right - target.width
+              : (scaled.left + scaled.right - target.width) / 2,
+        y:
+          target.height === size.height || handle?.includes('s')
+            ? scaled.top
+            : handle?.includes('n')
+              ? scaled.bottom - target.height
+              : (scaled.top + scaled.bottom - target.height) / 2,
+      };
+    const flatX =
+      Math.abs(item.geometry.end.point.x - item.geometry.start.point.x) < 1e-9;
+    const flatY =
+      Math.abs(item.geometry.end.point.y - item.geometry.start.point.y) < 1e-9;
+    const expandFlatX = flatX && size.width > visible.width + 1e-9;
+    const expandFlatY = flatY && size.height > visible.height + 1e-9;
+    const resize = (e: ConnectorEndpoint, end: boolean) => ({
       ...e,
       point: {
-        x: size.x + (e.point.x - b.x) * sx,
-        y: size.y + (e.point.y - b.y) * sy,
+        x: expandFlatX
+          ? targetOrigin.x + (end ? target.width : 0)
+          : flatX
+            ? targetOrigin.x + target.width / 2
+            : targetOrigin.x +
+              ((e.point.x - geometry.x) * target.width) / geometry.width,
+        y: expandFlatY
+          ? targetOrigin.y + (end ? target.height : 0)
+          : flatY
+            ? targetOrigin.y + target.height / 2
+            : targetOrigin.y +
+              ((e.point.y - geometry.y) * target.height) / geometry.height,
       },
     });
+    let start = resize(item.geometry.start, false),
+      end = resize(item.geometry.end, true);
+    // Labels and heads stay screen-legible instead of scaling with the route.
+    // Refine the endpoint span against their fixed visible extents.
+    for (let i = 0; i < 8; i++) {
+      const candidate = {
+        ...item,
+        geometry: { ...item.geometry, start, end },
+      };
+      const actual = connectorBounds(candidate, true);
+      if (
+        Math.abs(actual.x - targetOrigin.x) < 1e-6 &&
+        Math.abs(actual.y - targetOrigin.y) < 1e-6 &&
+        Math.abs(actual.width - target.width) < 1e-6 &&
+        Math.abs(actual.height - target.height) < 1e-6
+      )
+        return candidate;
+      const adjust = (endpoint: ConnectorEndpoint) => ({
+        ...endpoint,
+        point: {
+          x:
+            flatX && !expandFlatX
+              ? endpoint.point.x +
+                (targetOrigin.x +
+                  target.width / 2 -
+                  (actual.x + actual.width / 2))
+              : targetOrigin.x +
+                ((endpoint.point.x - actual.x) * target.width) / actual.width,
+          y:
+            flatY && !expandFlatY
+              ? endpoint.point.y +
+                (targetOrigin.y +
+                  target.height / 2 -
+                  (actual.y + actual.height / 2))
+              : targetOrigin.y +
+                ((endpoint.point.y - actual.y) * target.height) / actual.height,
+        },
+      });
+      start = adjust(start);
+      end = adjust(end);
+    }
     return {
       ...item,
-      geometry: {
-        ...item.geometry,
-        start: resize(item.geometry.start),
-        end: resize(item.geometry.end),
-      },
+      geometry: { ...item.geometry, start, end },
     };
   },
 };

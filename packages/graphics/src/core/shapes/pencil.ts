@@ -118,34 +118,112 @@ export const pencilDefinition: ShapeDefinition<'pencil'> = {
   },
   freezeGeometry: (geometry) =>
     Object.freeze({
+      ...geometry,
       simulatePressure: geometry.simulatePressure,
       points: Object.freeze(
         geometry.points.map((point) => Object.freeze([...point]) as PencilPoint)
       ),
     }),
   bounds: (item) => pencilInk(item).bounds,
-  resize: (item, size) => {
-    const bounds = pencilInk(item).bounds;
-    const sx = size.width / bounds.width,
-      sy = size.height / bounds.height;
+  resize: (item, size, context) => {
+    const visible = pencilInk(item).bounds;
+    if (!context?.handle) {
+      const sx = size.width / visible.width,
+        sy = size.height / visible.height;
+      return {
+        ...item,
+        geometry: pencilDefinition.freezeGeometry({
+          ...item.geometry,
+          points: item.geometry.points.map(([x, y, pressure]) => [
+            x * sx,
+            y * sy,
+            pressure,
+          ]),
+        }),
+      };
+    }
+    const xs = item.geometry.points.map(([x]) => x),
+      ys = item.geometry.points.map(([, y]) => y),
+      minX = Math.min(...xs),
+      maxX = Math.max(...xs),
+      minY = Math.min(...ys),
+      maxY = Math.max(...ys),
+      flatX = maxX - minX < 1e-9,
+      flatY = maxY - minY < 1e-9,
+      margins = {
+        left: minX - visible.x,
+        right: visible.x + visible.width - maxX,
+        top: minY - visible.y,
+        bottom: visible.y + visible.height - maxY,
+      },
+      sx = size.width / visible.width,
+      sy = size.height / visible.height,
+      scaled = {
+        left: size.x + visible.x * sx,
+        right: size.x + (visible.x + visible.width) * sx,
+        top: size.y + visible.y * sy,
+        bottom: size.y + (visible.y + visible.height) * sy,
+      },
+      target = {
+        width: flatX
+          ? visible.width
+          : Math.max(size.width, margins.left + margins.right + 0.001),
+        height: flatY
+          ? visible.height
+          : Math.max(size.height, margins.top + margins.bottom + 0.001),
+      },
+      handle = context.handle,
+      targetOrigin = {
+        x:
+          target.width === size.width || handle?.includes('e')
+            ? scaled.left
+            : handle?.includes('w')
+              ? scaled.right - target.width
+              : (scaled.left + scaled.right - target.width) / 2,
+        y:
+          target.height === size.height || handle?.includes('s')
+            ? scaled.top
+            : handle?.includes('n')
+              ? scaled.bottom - target.height
+              : (scaled.top + scaled.bottom - target.height) / 2,
+      },
+      targetSamples = {
+        left: targetOrigin.x + margins.left,
+        right: targetOrigin.x + target.width - margins.right,
+        top: targetOrigin.y + margins.top,
+        bottom: targetOrigin.y + target.height - margins.bottom,
+      };
     return {
       ...item,
       geometry: pencilDefinition.freezeGeometry({
         ...item.geometry,
-        points: item.geometry.points.map(([x, y, pressure]) => [
-          x * sx,
-          y * sy,
-          pressure,
-        ]),
+        points: item.geometry.points.map(
+          ([x, y, pressure]) =>
+            [
+              flatX
+                ? x +
+                  (targetOrigin.x +
+                    target.width / 2 -
+                    (visible.x + visible.width / 2))
+                : targetSamples.left +
+                  ((x - minX) * (targetSamples.right - targetSamples.left)) /
+                    (maxX - minX),
+              flatY
+                ? y +
+                  (targetOrigin.y +
+                    target.height / 2 -
+                    (visible.y + visible.height / 2))
+                : targetSamples.top +
+                  ((y - minY) * (targetSamples.bottom - targetSamples.top)) /
+                    (maxY - minY),
+              pressure,
+            ] as PencilPoint
+        ),
       }),
     };
   },
   sameGeometry: (a, b) =>
-    a.geometry.simulatePressure === b.geometry.simulatePressure &&
-    a.geometry.points.length === b.geometry.points.length &&
-    a.geometry.points.every((point, i) =>
-      point.every((v, j) => v === b.geometry.points[i]?.[j])
-    ),
+    JSON.stringify(a.geometry) === JSON.stringify(b.geometry),
   hitTest: (item, point, context) => {
     const style = resolveAppearance(item.appearance);
     if (

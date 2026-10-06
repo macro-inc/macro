@@ -7,6 +7,9 @@
 .canvas-lexical-text h1, .canvas-lexical-text h2, .canvas-lexical-text h3,
 .canvas-lexical-text ul, .canvas-lexical-text ol { margin-block: 0; }
 .canvas-lexical-text [data-markdown-editable] { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Pending mention searches are measured as plain text. Keep their highlight
+   from adding width and wrapping an otherwise single-line canvas label. */
+.canvas-lexical-text .md-inline-search { padding: 0; }
 
 .canvas-lexical-text[data-canvas-text-editor] { min-width: 8px !important; }
 .canvas-lexical-text > .canvas-text-shell { font-size: inherit; height: auto; min-height: 0; overflow: visible; }

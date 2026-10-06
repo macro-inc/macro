@@ -195,7 +195,7 @@ export function createSelection(host: SelectionHost) {
       if (!proportional) {
         Object.assign(
           nodes,
-          stretchShapes(base, targets, delta, host.measureText)
+          stretchShapes(base, targets, delta, host.measureText, handle)
         );
       } else {
         for (const key of targets) {

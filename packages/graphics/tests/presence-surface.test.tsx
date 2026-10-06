@@ -2,9 +2,9 @@ import { onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { expect, it, vi } from 'vitest';
 import { createScene, translation } from '../src/core';
-import { createGraphicsPeerLab } from '../src/loro';
 import { CollaborativeGraphicsSurface } from '../src/loro/solid';
 import { RectangleView } from '../src/solid';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 it('renders remote selections/cursors/ghosts in the receiver camera without remounting or editing its shapes', () => {
   vi.useFakeTimers();

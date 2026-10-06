@@ -19,7 +19,7 @@ import {
   worldMatrix,
 } from '../src/core';
 import { pencilDefinition, pencilInk } from '../src/core/shapes/pencil';
-import { createGraphicsPeerLab } from '../src/loro';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const appearance = { fill: 'red', stroke: 'black', strokeWidth: 12 };
 const pencil = (simulatePressure = true): PencilItem => ({
@@ -88,29 +88,26 @@ it('uses point spacing for mouse width and actual pressure for pen width', () =>
   );
 });
 
-it.each([0.25, 1, 4])(
-  'picks the actual ink with 3 screen px tolerance at zoom %s',
-  (zoom) => {
-    const dot: PencilItem = {
-      ...pencil(false),
-      geometry: { points: [[0, 0, 0.5]], simulatePressure: false },
-      transform: multiply(
-        translation(120, 80),
-        multiply(rotation(0.7), scaling(2, 0.6))
-      ),
-    };
-    const editor = createGraphicsEditor([dot]);
-    editor.zoomAt({ x: 0, y: 0 }, zoom);
-    const polygon = pencilInk(dot).outline.map((point) =>
-      transformPoint(dot.transform, point)
-    );
-    const max = polygon.reduce((p, q) => (p.x > q.x ? p : q));
-    expect(editor.hitTest({ x: max.x + 2.99 / zoom, y: max.y })).toBe('ink');
-    expect(
-      editor.hitTest({ x: max.x + 3.01 / zoom, y: max.y })
-    ).toBeUndefined();
-  }
-);
+it.each([
+  0.25, 1, 4,
+])('picks the actual ink with 3 screen px tolerance at zoom %s', (zoom) => {
+  const dot: PencilItem = {
+    ...pencil(false),
+    geometry: { points: [[0, 0, 0.5]], simulatePressure: false },
+    transform: multiply(
+      translation(120, 80),
+      multiply(rotation(0.7), scaling(2, 0.6))
+    ),
+  };
+  const editor = createGraphicsEditor([dot]);
+  editor.zoomAt({ x: 0, y: 0 }, zoom);
+  const polygon = pencilInk(dot).outline.map((point) =>
+    transformPoint(dot.transform, point)
+  );
+  const max = polygon.reduce((p, q) => (p.x > q.x ? p : q));
+  expect(editor.hitTest({ x: max.x + 2.99 / zoom, y: max.y })).toBe('ink');
+  expect(editor.hitTest({ x: max.x + 3.01 / zoom, y: max.y })).toBeUndefined();
+});
 
 it('uses smoothed ink bounds and leaves empty loops and bounding-box gaps clickable', () => {
   const loop: PencilItem = {

@@ -46,7 +46,7 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
     if (
       !(target instanceof Element) ||
       target.closest(
-        '[data-canvas-document], [data-canvas-text-editor], [data-canvas-text-toolbar], [aria-label="Text style"]'
+        '[data-canvas-document], [data-canvas-text-editor], [aria-label="Text style"]'
       )
     )
       return;

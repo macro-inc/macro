@@ -57,58 +57,61 @@ function pointer(
   target.dispatchEvent(event);
 }
 
-it.each(['single', 'multiple', 'group'] as const)(
-  'commits a %s move when capture is lost before release, including outside the canvas',
-  (mode) => {
-    const { editor, viewport, outside } = setup(mode);
-    const before = editor.document;
-    pointer(viewport, 'pointerdown', 25, 25);
-    pointer(viewport, 'pointermove', 45, 55);
-    pointer(viewport, 'lostpointercapture', 45, 55);
-    expect(editor.getSession().transform?.kind).toBe('move');
-    expect(editor.document).toBe(before);
-    pointer(outside, 'pointermove', 900, 900, 2);
-    pointer(outside, 'pointerup', 900, 900, 2);
-    pointer(outside, 'pointercancel', 900, 900, 2);
-    expect(editor.getSession().transform?.geometry.x).toBe(20);
-    pointer(outside, 'pointermove', 65, 75);
-    expect(editor.getSession().transform?.geometry.x).toBe(40);
-    pointer(outside, 'pointerup', 75, 85);
-    expect(editor.getSession().transform).toBeUndefined();
-    expect(worldBounds(editor.document, 'a')).toMatchObject({ x: 50, y: 60 });
-    expect(worldBounds(editor.document, 'b').x).toBe(
-      mode === 'single' ? 100 : 150
-    );
-    const committed = editor.document;
-    pointer(viewport, 'lostpointercapture', 75, 85);
-    pointer(outside, 'pointermove', 125, 135);
-    pointer(outside, 'pointerup', 125, 135);
-    expect(editor.document).toBe(committed);
-    editor.undo();
-    expect(editor.document).toEqual(before);
-    editor.redo();
-    expect(editor.document).toEqual(committed);
-  }
-);
+it.each([
+  'single',
+  'multiple',
+  'group',
+] as const)('commits a %s move when capture is lost before release, including outside the canvas', (mode) => {
+  const { editor, viewport, outside } = setup(mode);
+  const before = editor.document;
+  pointer(viewport, 'pointerdown', 25, 25);
+  pointer(viewport, 'pointermove', 45, 55);
+  pointer(viewport, 'lostpointercapture', 45, 55);
+  expect(editor.getSession().transform?.kind).toBe('move');
+  expect(editor.document).toBe(before);
+  pointer(outside, 'pointermove', 900, 900, 2);
+  pointer(outside, 'pointerup', 900, 900, 2);
+  pointer(outside, 'pointercancel', 900, 900, 2);
+  expect(editor.getSession().transform?.geometry.x).toBe(20);
+  pointer(outside, 'pointermove', 65, 75);
+  expect(editor.getSession().transform?.geometry.x).toBe(40);
+  pointer(outside, 'pointerup', 75, 85);
+  expect(editor.getSession().transform).toBeUndefined();
+  expect(worldBounds(editor.document, 'a')).toMatchObject({ x: 50, y: 60 });
+  expect(worldBounds(editor.document, 'b').x).toBe(
+    mode === 'single' ? 100 : 150
+  );
+  const committed = editor.document;
+  pointer(viewport, 'lostpointercapture', 75, 85);
+  pointer(outside, 'pointermove', 125, 135);
+  pointer(outside, 'pointerup', 125, 135);
+  expect(editor.document).toBe(committed);
+  editor.undo();
+  expect(editor.document).toEqual(before);
+  editor.redo();
+  expect(editor.document).toEqual(committed);
+});
 
-it.each(['pointercancel', 'escape', 'blur', 'dispose'])(
-  'still cancels a move on %s after losing capture',
-  (reason) => {
-    const { editor, viewport, outside, dispose } = setup();
-    const before = editor.document;
-    pointer(viewport, 'pointerdown', 25, 25);
-    pointer(viewport, 'pointermove', 45, 55);
-    pointer(viewport, 'lostpointercapture', 45, 55);
-    expect(editor.getSession().transform?.kind).toBe('move');
-    if (reason === 'pointercancel') pointer(outside, 'pointercancel', 45, 55);
-    else if (reason === 'escape')
-      viewport.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    else if (reason === 'blur') window.dispatchEvent(new Event('blur'));
-    else dispose();
-    pointer(outside, 'pointermove', 65, 75);
-    pointer(outside, 'pointerup', 65, 75);
-    expect(editor.getSession().transform).toBeUndefined();
-    expect(editor.document).toBe(before);
-    expect(editor.getSession().canUndo).toBe(false);
-  }
-);
+it.each([
+  'pointercancel',
+  'escape',
+  'blur',
+  'dispose',
+])('still cancels a move on %s after losing capture', (reason) => {
+  const { editor, viewport, outside, dispose } = setup();
+  const before = editor.document;
+  pointer(viewport, 'pointerdown', 25, 25);
+  pointer(viewport, 'pointermove', 45, 55);
+  pointer(viewport, 'lostpointercapture', 45, 55);
+  expect(editor.getSession().transform?.kind).toBe('move');
+  if (reason === 'pointercancel') pointer(outside, 'pointercancel', 45, 55);
+  else if (reason === 'escape')
+    viewport.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  else if (reason === 'blur') window.dispatchEvent(new Event('blur'));
+  else dispose();
+  pointer(outside, 'pointermove', 65, 75);
+  pointer(outside, 'pointerup', 65, 75);
+  expect(editor.getSession().transform).toBeUndefined();
+  expect(editor.document).toBe(before);
+  expect(editor.getSession().canUndo).toBe(false);
+});

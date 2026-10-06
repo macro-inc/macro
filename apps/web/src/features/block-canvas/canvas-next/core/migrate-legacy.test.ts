@@ -106,6 +106,48 @@ describe('versioned canvas migration', () => {
     expect(readCanvasFile(JSON.parse(JSON.stringify(file)))).toEqual(file);
   });
 
+  it('retains same-version extension fields through validation and freezing', () => {
+    const file = migrateLegacyCanvas(
+      {
+        nodes: [
+          shape('box'),
+          {
+            ...shape('pencil'),
+            type: 'pencil',
+            coords: [[1, 2]],
+            wScale: 1,
+            hScale: 1,
+          },
+        ],
+      },
+      plainRichText
+    );
+    const serialized = JSON.parse(JSON.stringify(file));
+    const futureBox = { mode: 'v3' };
+    serialized.document.items.box.geometry.futureBox = futureBox;
+    serialized.document.items.pencil.geometry.futureInk = true;
+    const read = readCanvasFile(serialized);
+    expect(read.document.items.box).toMatchObject({
+      geometry: { futureBox: { mode: 'v3' } },
+    });
+    expect(read.document.items.pencil).toMatchObject({
+      geometry: { futureInk: true },
+    });
+    futureBox.mode = 'mutated';
+    expect(read.document.items.box).toMatchObject({
+      geometry: { futureBox: { mode: 'v3' } },
+    });
+    expect(
+      Object.isFrozen(
+        (
+          read.document.items.box as unknown as {
+            geometry: { futureBox: object };
+          }
+        ).geometry.futureBox
+      )
+    ).toBe(true);
+  });
+
   it('migrates old file references without mutating the legacy preprocessing input', () => {
     const source = {
       nodes: [{ ...shape('reference'), type: 'file', file: 'doc-id' }],

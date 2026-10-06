@@ -4,12 +4,47 @@ import {
   multiply,
   scaling,
   transformPoint,
+  transformVector,
 } from './affine';
-import type { GraphicsDocument, GraphicsItem } from './model';
+import type { Bounds, GraphicsDocument, GraphicsItem, Point } from './model';
+import type { ResizeHandle } from './resize';
 import { resolvedShape, worldMatrix } from './scene';
 import { isShape, shapeDefinition } from './shapes/registry';
 import type { TextMeasurer } from './shapes/text';
 import { selectedShapeIds } from './style-selection';
+
+function oppositeAnchor(bounds: Bounds, handle: ResizeHandle): Point {
+  const right = bounds.x + bounds.width,
+    bottom = bounds.y + bounds.height;
+  switch (handle) {
+    case 'e':
+    case 's':
+    case 'se':
+      return { x: bounds.x, y: bounds.y };
+    case 'w':
+    case 'sw':
+      return { x: right, y: bounds.y };
+    case 'n':
+    case 'ne':
+      return { x: bounds.x, y: bottom };
+    case 'nw':
+      return { x: right, y: bottom };
+  }
+}
+
+function localResizeHandle(handle: ResizeHandle, world: Matrix): ResizeHandle {
+  const direction = transformVector(inverse(world), {
+    x: handle.includes('e') ? 1 : handle.includes('w') ? -1 : 0,
+    y: handle.includes('s') ? 1 : handle.includes('n') ? -1 : 0,
+  });
+  const threshold =
+    Math.max(Math.abs(direction.x), Math.abs(direction.y)) * 1e-8;
+  const vertical =
+    Math.abs(direction.y) <= threshold ? '' : direction.y < 0 ? 'n' : 's';
+  const horizontal =
+    Math.abs(direction.x) <= threshold ? '' : direction.x < 0 ? 'w' : 'e';
+  return `${vertical}${horizontal}` as ResizeHandle;
+}
 
 /** Selected groups may scale their frame; ink opts to absorb that scale into
  * samples and cancel the added magnification in its local pose. */
@@ -56,7 +91,8 @@ export function stretchShapes(
   document: GraphicsDocument,
   selected: readonly string[],
   delta: Matrix,
-  measureText?: TextMeasurer
+  measureText?: TextMeasurer,
+  handle?: ResizeHandle
 ): Record<string, GraphicsItem> {
   const nodes: Record<string, GraphicsItem> = Object.create(null);
   for (const id of selectedShapeIds(document, selected)) {
@@ -70,6 +106,7 @@ export function stretchShapes(
       Math.hypot(stretched[2], stretched[3]) / Math.hypot(world[2], world[3]);
     const definition = shapeDefinition(item.type);
     const bounds = definition.bounds(item);
+    const localHandle = handle ? localResizeHandle(handle, world) : undefined;
     const center = transformPoint(stretched, {
       x: bounds.x + bounds.width / 2,
       y: bounds.y + bounds.height / 2,
@@ -82,11 +119,18 @@ export function stretchShapes(
         width: bounds.width * sx,
         height: bounds.height * sy,
       },
-      { measureText }
+      { measureText, handle: localHandle }
     );
     const nextBounds = definition.bounds(resized);
-    const x = nextBounds.x + nextBounds.width / 2,
-      y = nextBounds.y + nextBounds.height / 2;
+    const nextAnchor = localHandle
+      ? oppositeAnchor(nextBounds, localHandle)
+      : {
+          x: nextBounds.x + nextBounds.width / 2,
+          y: nextBounds.y + nextBounds.height / 2,
+        };
+    const worldAnchor = localHandle
+      ? transformPoint(stretched, oppositeAnchor(bounds, localHandle))
+      : center;
     const a = stretched[0] / sx,
       b = stretched[1] / sx;
     const c = stretched[2] / sy,
@@ -96,8 +140,8 @@ export function stretchShapes(
       b,
       c,
       d,
-      center.x - a * x - c * y,
-      center.y - b * x - d * y,
+      worldAnchor.x - a * nextAnchor.x - c * nextAnchor.y,
+      worldAnchor.y - b * nextAnchor.x - d * nextAnchor.y,
     ];
     nodes[id] = {
       ...resized,

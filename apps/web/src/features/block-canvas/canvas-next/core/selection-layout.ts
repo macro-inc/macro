@@ -7,9 +7,12 @@ import {
   layoutBounds,
   layoutRoots,
   multiply,
+  regenerateScaledShapes,
   rotation,
   scaling,
+  selectionFrame,
   snapValue,
+  stretchShapes,
   translation,
   worldMatrix,
 } from '@macro-inc/graphics';
@@ -87,7 +90,7 @@ export const selectionLayoutCommand: GraphicsCommand<{
 }> = {
   id: 'canvas.selection-layout',
   apply: (
-    { document, selection, snapUnit },
+    { document, selection, snapUnit, measureText },
     { field, value = 0, lockAspectRatio = false }
   ) => {
     if (!Number.isFinite(value)) return { document };
@@ -133,21 +136,39 @@ export const selectionLayoutCommand: GraphicsCommand<{
         );
       if (field === 'width' || field === 'height') {
         if (value <= 0 || entry[field] <= 0) continue;
+        const world = worldMatrix(document, entry.id);
+        const aligned =
+          (Math.abs(world[1]) < 1e-8 && Math.abs(world[2]) < 1e-8) ||
+          (Math.abs(world[0]) < 1e-8 && Math.abs(world[3]) < 1e-8);
+        // World-bound edits cannot deform rotated axes without shearing text.
+        // Match the canvas's uniform fallback for incompatible group axes.
+        const proportional =
+          lockAspectRatio ||
+          (item.type === 'text' && field === 'height') ||
+          (item.type === 'group'
+            ? !selectionFrame(document, [entry.id])?.canDeform
+            : !aligned);
+        const ratio = value / entry[field];
         delta = around(
           { x: entry.x, y: entry.y },
           scaling(
-            lockAspectRatio
-              ? value / entry[field]
-              : field === 'width'
-                ? value / entry.width
-                : 1,
-            lockAspectRatio
-              ? value / entry[field]
-              : field === 'height'
-                ? value / entry.height
-                : 1
+            proportional || field === 'width' ? ratio : 1,
+            proportional || field === 'height' ? ratio : 1
           )
         );
+        if (item.type !== 'group' || !proportional) {
+          Object.assign(
+            items,
+            stretchShapes(
+              document,
+              [entry.id],
+              delta,
+              measureText,
+              field === 'width' ? 'e' : 's'
+            )
+          );
+          continue;
+        }
       }
       if (field === 'rotation')
         delta = around(
@@ -175,6 +196,8 @@ export const selectionLayoutCommand: GraphicsCommand<{
           multiply(delta, worldMatrix(document, entry.id))
         ),
       };
+      if (field === 'width' || field === 'height')
+        regenerateScaledShapes(document, [entry.id], items);
     }
     return { document: { ...document, items } };
   },

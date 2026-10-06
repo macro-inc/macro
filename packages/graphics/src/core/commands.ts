@@ -10,6 +10,7 @@ import { layoutBounds, layoutRoots } from './layout';
 import type { Appearance, GraphicsDocument, Point } from './model';
 import { children, nodeBoundsPoints, roots, worldMatrix } from './scene';
 import { isShape } from './shapes/registry';
+import type { TextMeasurer } from './shapes/text';
 import { snapTranslation } from './snapping';
 import { selectedShapeIds } from './style-selection';
 
@@ -17,6 +18,7 @@ export type CommandContext = Readonly<{
   document: GraphicsDocument;
   selection: readonly string[];
   snapUnit?: number;
+  measureText?: TextMeasurer;
 }>;
 export type CommandResult = Readonly<{
   document: GraphicsDocument;

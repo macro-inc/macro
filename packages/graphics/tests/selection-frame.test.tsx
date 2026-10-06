@@ -63,96 +63,96 @@ it('keeps groups and multiple selections world-aligned, including a shared rotat
   );
 });
 
-it.each([false, true])(
-  'resizes the world-aligned box without skewing rotated children with grouped=%s',
-  (grouped) => {
-    for (const handle of ['e', 'se'] as const) {
-      const editor = createGraphicsEditor(fixture(grouped));
-      const selected = grouped ? ['g'] : ['a', 'b'];
-      editor.select(selected[0]);
-      if (!grouped) editor.toggleSelection('b');
-      const before = editor.document;
-      const frame = selectionFrame(before, selected)!;
-      const origin = {
-        x: frame.bounds.x + frame.bounds.width,
-        y: frame.bounds.y + frame.bounds.height,
-      };
-      editor.beginTransform(selected[0]!, origin, handle);
-      editor.updateTransform({
-        x: origin.x + frame.bounds.width / 2,
-        y: origin.y + frame.bounds.height / 4,
-      });
-      const nodes = editor.getSession().transform!.nodes;
-      const bounds = enclosing(
-        ['a', 'b'].flatMap((id) => nodeCorners(before, id, nodes))
-      );
-      expect(bounds.x).toBeCloseTo(frame.bounds.x);
-      expect(bounds.y).toBeCloseTo(
-        frame.bounds.y - (handle === 'e' ? frame.bounds.height / 4 : 0)
-      );
-      expect(bounds.width).toBeCloseTo(frame.bounds.width * 1.5);
-      expect(bounds.height).toBeCloseTo(frame.bounds.height * 1.5);
-      for (const id of ['a', 'b']) {
-        const original = worldMatrix(before, id);
-        const next = worldMatrix(before, id, nodes);
-        original
-          .slice(0, 4)
-          .forEach((value, i) => expect(next[i]).toBeCloseTo(value * 1.5));
-        expect(next[0] * next[2] + next[1] * next[3]).toBeCloseTo(0);
-        expect(nodes[id] ?? before.items[id]).toMatchObject({
-          placement: {
-            parentId: grouped ? 'g' : 'scene-root',
-            sortKey: id === 'a' ? 'a0' : 'a1',
-          },
-        });
-      }
-      expect(editor.document).toBe(before);
-      editor.commitTransform();
-      expect(selectionFrame(editor.document, selected)?.angle).toBeCloseTo(
-        frame.angle
-      );
-      editor.undo();
-      expect(editor.document).toEqual(before);
-      expect(editor.getSession().canUndo).toBe(false);
-      editor.dispose();
-    }
-  }
-);
-
-it.each([false, true])(
-  'recomputes center resizing in a rotated frame with proportional=%s',
-  (proportional) => {
-    const editor = createGraphicsEditor(fixture(true));
+it.each([
+  false,
+  true,
+])('resizes the world-aligned box without skewing rotated children with grouped=%s', (grouped) => {
+  for (const handle of ['e', 'se'] as const) {
+    const editor = createGraphicsEditor(fixture(grouped));
+    const selected = grouped ? ['g'] : ['a', 'b'];
+    editor.select(selected[0]);
+    if (!grouped) editor.toggleSelection('b');
     const before = editor.document;
-    const frame = selectionFrame(before, ['g'])!;
-    const start = {
+    const frame = selectionFrame(before, selected)!;
+    const origin = {
       x: frame.bounds.x + frame.bounds.width,
-      y: frame.bounds.y + frame.bounds.height / 2,
+      y: frame.bounds.y + frame.bounds.height,
     };
-    const end = { x: start.x - 30, y: start.y + 60 };
-    editor.beginTransform('g', start, 'e');
-    editor.updateTransform(end, { fromCenter: true, proportional });
-    const next = selectionFrame(
-      before,
-      ['g'],
-      editor.getSession().transform!.nodes
-    )!;
-    expect(next.bounds.width).toBeCloseTo(frame.bounds.width - 60);
-    expect(next.bounds.height).toBeCloseTo(
-      frame.bounds.height * (1 - 60 / frame.bounds.width)
+    editor.beginTransform(selected[0]!, origin, handle);
+    editor.updateTransform({
+      x: origin.x + frame.bounds.width / 2,
+      y: origin.y + frame.bounds.height / 4,
+    });
+    const nodes = editor.getSession().transform!.nodes;
+    const bounds = enclosing(
+      ['a', 'b'].flatMap((id) => nodeCorners(before, id, nodes))
     );
-    expect(next.center.x).toBeCloseTo(frame.center.x);
-    expect(next.center.y).toBeCloseTo(frame.center.y);
-    editor.updateTransform(start, { fromCenter: true, proportional });
-    closeMatrix(
-      worldMatrix(before, 'a', editor.getSession().transform!.nodes),
-      worldMatrix(before, 'a')
+    expect(bounds.x).toBeCloseTo(frame.bounds.x);
+    expect(bounds.y).toBeCloseTo(
+      frame.bounds.y - (handle === 'e' ? frame.bounds.height / 4 : 0)
     );
-    editor.cancelTransform();
+    expect(bounds.width).toBeCloseTo(frame.bounds.width * 1.5);
+    expect(bounds.height).toBeCloseTo(frame.bounds.height * 1.5);
+    for (const id of ['a', 'b']) {
+      const original = worldMatrix(before, id);
+      const next = worldMatrix(before, id, nodes);
+      original
+        .slice(0, 4)
+        .forEach((value, i) => expect(next[i]).toBeCloseTo(value * 1.5));
+      expect(next[0] * next[2] + next[1] * next[3]).toBeCloseTo(0);
+      expect(nodes[id] ?? before.items[id]).toMatchObject({
+        placement: {
+          parentId: grouped ? 'g' : 'scene-root',
+          sortKey: id === 'a' ? 'a0' : 'a1',
+        },
+      });
+    }
     expect(editor.document).toBe(before);
+    editor.commitTransform();
+    expect(selectionFrame(editor.document, selected)?.angle).toBeCloseTo(
+      frame.angle
+    );
+    editor.undo();
+    expect(editor.document).toEqual(before);
+    expect(editor.getSession().canUndo).toBe(false);
     editor.dispose();
   }
-);
+});
+
+it.each([
+  false,
+  true,
+])('recomputes center resizing in a rotated frame with proportional=%s', (proportional) => {
+  const editor = createGraphicsEditor(fixture(true));
+  const before = editor.document;
+  const frame = selectionFrame(before, ['g'])!;
+  const start = {
+    x: frame.bounds.x + frame.bounds.width,
+    y: frame.bounds.y + frame.bounds.height / 2,
+  };
+  const end = { x: start.x - 30, y: start.y + 60 };
+  editor.beginTransform('g', start, 'e');
+  editor.updateTransform(end, { fromCenter: true, proportional });
+  const next = selectionFrame(
+    before,
+    ['g'],
+    editor.getSession().transform!.nodes
+  )!;
+  expect(next.bounds.width).toBeCloseTo(frame.bounds.width - 60);
+  expect(next.bounds.height).toBeCloseTo(
+    frame.bounds.height * (1 - 60 / frame.bounds.width)
+  );
+  expect(next.center.x).toBeCloseTo(frame.center.x);
+  expect(next.center.y).toBeCloseTo(frame.center.y);
+  editor.updateTransform(start, { fromCenter: true, proportional });
+  closeMatrix(
+    worldMatrix(before, 'a', editor.getSession().transform!.nodes),
+    worldMatrix(before, 'a')
+  );
+  editor.cancelTransform();
+  expect(editor.document).toBe(before);
+  editor.dispose();
+});
 
 it('aligns the rotator with each selection frame and keeps square handles', () => {
   const editor = createGraphicsEditor(fixture(false));
@@ -227,65 +227,63 @@ it.each([
     cursors: ['nesw', 'nwse', 'nesw', 'nwse'],
   },
   { transform: scaling(-1, 1), cursors: ['nesw', 'nwse', 'nesw', 'nwse'] },
-])(
-  'uses world corner positions for hover and drag cursors with $transform',
-  ({ transform, cursors }) => {
-    const seed = fixture(true);
-    const editor = createGraphicsEditor({
-      ...seed,
-      items: {
-        ...seed.items,
-        g: {
-          id: 'g',
-          type: 'group',
-          placement: { parentId: seed.rootId, sortKey: 'a0' },
-          transform,
-        },
+])('uses world corner positions for hover and drag cursors with $transform', ({
+  transform,
+  cursors,
+}) => {
+  const seed = fixture(true);
+  const editor = createGraphicsEditor({
+    ...seed,
+    items: {
+      ...seed.items,
+      g: {
+        id: 'g',
+        type: 'group',
+        placement: { parentId: seed.rootId, sortKey: 'a0' },
+        transform,
       },
-    });
-    editor.zoomAt({ x: 0, y: 0 }, 2);
-    editor.panBy({ x: 300, y: 300 });
-    const host = document.createElement('div');
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <GraphicsSurface editor={editor} input={{ tool: () => 'select' }} />
-      ),
-      host
-    );
-    const viewport = host.querySelector<HTMLElement>(
-      '[aria-label="Graphics canvas"]'
+    },
+  });
+  editor.zoomAt({ x: 0, y: 0 }, 2);
+  editor.panBy({ x: 300, y: 300 });
+  const host = document.createElement('div');
+  document.body.append(host);
+  const dispose = render(
+    () => <GraphicsSurface editor={editor} input={{ tool: () => 'select' }} />,
+    host
+  );
+  const viewport = host.querySelector<HTMLElement>(
+    '[aria-label="Graphics canvas"]'
+  )!;
+  viewport.setPointerCapture = vi.fn();
+  viewport.hasPointerCapture = () => false;
+  editor.select('a');
+  for (const [index, name] of ['nw', 'ne', 'se', 'sw'].entries()) {
+    const handle = host.querySelector<SVGElement>(
+      `[data-graphics-handle="${name}"]`
     )!;
-    viewport.setPointerCapture = vi.fn();
-    viewport.hasPointerCapture = () => false;
-    editor.select('a');
-    for (const [index, name] of ['nw', 'ne', 'se', 'sw'].entries()) {
-      const handle = host.querySelector<SVGElement>(
-        `[data-graphics-handle="${name}"]`
-      )!;
-      const cursor = `${cursors[index]}-resize`;
-      expect(handle.style.cursor).toBe(cursor);
-      const event = new MouseEvent('pointerdown', {
-        bubbles: true,
-        clientX: Number(handle.getAttribute('x')) + 5,
-        clientY: Number(handle.getAttribute('y')) + 5,
-      });
-      Object.defineProperty(event, 'pointerId', { value: 1 });
-      handle.dispatchEvent(event);
-      expect(editor.getSession().transform?.kind).toBe('resize');
-      expect(viewport.style.cursor).toBe(cursor);
-      const cancel = new MouseEvent('pointercancel', { bubbles: true });
-      Object.defineProperty(cancel, 'pointerId', { value: 1 });
-      viewport.dispatchEvent(cancel);
-    }
-    for (const edge of ['n', 'e', 's', 'w']) {
-      expect(
-        host.querySelector<SVGElement>(`[data-graphics-handle="${edge}"]`)!
-          .style.cursor
-      ).toBe(edge === 'n' || edge === 's' ? 'ns-resize' : 'ew-resize');
-    }
-    dispose();
-    host.remove();
-    editor.dispose();
+    const cursor = `${cursors[index]}-resize`;
+    expect(handle.style.cursor).toBe(cursor);
+    const event = new MouseEvent('pointerdown', {
+      bubbles: true,
+      clientX: Number(handle.getAttribute('x')) + 5,
+      clientY: Number(handle.getAttribute('y')) + 5,
+    });
+    Object.defineProperty(event, 'pointerId', { value: 1 });
+    handle.dispatchEvent(event);
+    expect(editor.getSession().transform?.kind).toBe('resize');
+    expect(viewport.style.cursor).toBe(cursor);
+    const cancel = new MouseEvent('pointercancel', { bubbles: true });
+    Object.defineProperty(cancel, 'pointerId', { value: 1 });
+    viewport.dispatchEvent(cancel);
   }
-);
+  for (const edge of ['n', 'e', 's', 'w']) {
+    expect(
+      host.querySelector<SVGElement>(`[data-graphics-handle="${edge}"]`)!.style
+        .cursor
+    ).toBe(edge === 'n' || edge === 's' ? 'ns-resize' : 'ew-resize');
+  }
+  dispose();
+  host.remove();
+  editor.dispose();
+});

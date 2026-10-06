@@ -20,7 +20,7 @@ import {
   worldBounds,
   worldMatrix,
 } from '../src/core';
-import { createGraphicsPeerLab } from '../src/loro';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const seed = () =>
   createScene([

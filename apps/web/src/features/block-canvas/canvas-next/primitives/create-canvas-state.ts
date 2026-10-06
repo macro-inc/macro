@@ -12,7 +12,7 @@ import {
 import { createGraphicsProjection } from '@macro-inc/graphics/solid';
 import { parsePickerColor } from '@ui/utils/color';
 import { createMemo, createSignal } from 'solid-js';
-import { initialAppearance } from '../core/seed-scene';
+import { initialAppearance } from '../core/defaults';
 import { createCanvasSnapping } from './create-canvas-snapping';
 import { createConnectorState } from './create-connector-state';
 import { createEmbedState } from './create-embed-state';
@@ -34,7 +34,7 @@ export function createCanvasState(
   measureText: TextMeasurer
 ) {
   const projection = createGraphicsProjection(editor);
-  const inspector = createInspectorPreview(editor);
+  const inspector = createInspectorPreview(editor, measureText);
   const [tool, setTool] = createSignal<CanvasTool>('select');
   const eraser = createEraserState(editor, () => tool() === 'eraser');
   const [defaults, setDefaults] = createSignal(initialAppearance);

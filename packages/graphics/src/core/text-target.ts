@@ -1,6 +1,6 @@
 import { inverse, transformPoint } from './affine';
 import type { GraphicsDocument, Point } from './model';
-import { drawableIds, resolvedShape, worldMatrix } from './scene';
+import { drawableIds, shapeProjection } from './scene';
 import { canLabel } from './shapes/label';
 import { shapeDefinition } from './shapes/registry';
 
@@ -11,10 +11,9 @@ export function textTargetAt(
   point: Point
 ): string | undefined {
   for (const id of drawableIds(document).reverse()) {
-    const item = resolvedShape(document, id);
+    const { item, transform: world } = shapeProjection(document, id);
     if (!item || item.appearance.opacity === 0) continue;
-    const world = worldMatrix(document, id),
-      local = transformPoint(inverse(world), point);
+    const local = transformPoint(inverse(world), point);
     const definition = shapeDefinition(item.type);
     const target = item.type === 'text' || canLabel(item);
     const testItem = canLabel(item)
@@ -23,7 +22,7 @@ export function textTargetAt(
     if (
       definition.hitTest(testItem, local, {
         worldTransform: world,
-        tolerance: 0,
+        tolerance: item.type === 'connector' ? 3 : 0,
       })
     )
       return target ? id : undefined;

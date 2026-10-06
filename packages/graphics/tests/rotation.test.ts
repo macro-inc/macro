@@ -19,55 +19,54 @@ const pointerAt = (pivot: Point, degrees: number) => ({
 const angle = (matrix: readonly number[]) =>
   (Math.atan2(matrix[1]!, matrix[0]!) * 180) / Math.PI;
 
-it.each([1, -1])(
-  'snaps nested shapes and groups to absolute world angles in direction %s',
-  (direction) => {
-    for (const id of ['shape', 'parent']) {
-      const editor = createGraphicsEditor([
-        {
-          id: 'parent',
-          type: 'group',
-          placement: { parentId: 'scene-root', sortKey: 'a0' },
-          transform: multiply(
-            translation(100, 80),
-            multiply(rotation(radians(23 * direction)), scaling(1.6, 0.8))
-          ),
-        },
-        {
-          id: 'shape',
-          type: 'rectangle',
-          placement: { parentId: 'parent', sortKey: 'a0' },
-          transform: multiply(
-            translation(40, 50),
-            rotation(radians(-12 * direction))
-          ),
-          geometry: { width: 200, height: 100 },
-          appearance: { fill: 'red', stroke: 'black' },
-        },
-      ]);
-      const before = editor.document;
-      const bounds = worldBounds(before, id);
-      const pivot = {
-        x: bounds.x + bounds.width / 2,
-        y: bounds.y + bounds.height / 2,
-      };
-      editor.beginTransform(id, pointerAt(pivot, 0), 'rotate');
-      editor.updateTransform(pointerAt(pivot, 11 * direction), {
-        snapRotation: true,
-      });
-      expect(editor.document).toBe(before);
-      const nodes = editor.getSession().transform?.nodes;
-      expect(angle(worldMatrix(before, id, nodes))).toBeCloseTo(30 * direction);
-      const preview = worldBounds(before, id, nodes);
-      expect(preview.x + preview.width / 2).toBeCloseTo(pivot.x);
-      expect(preview.y + preview.height / 2).toBeCloseTo(pivot.y);
-      editor.commitTransform();
-      editor.undo();
-      expect(editor.document).toEqual(before);
-      expect(editor.getSession().canUndo).toBe(false);
-    }
+it.each([
+  1, -1,
+])('snaps nested shapes and groups to absolute world angles in direction %s', (direction) => {
+  for (const id of ['shape', 'parent']) {
+    const editor = createGraphicsEditor([
+      {
+        id: 'parent',
+        type: 'group',
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: multiply(
+          translation(100, 80),
+          multiply(rotation(radians(23 * direction)), scaling(1.6, 0.8))
+        ),
+      },
+      {
+        id: 'shape',
+        type: 'rectangle',
+        placement: { parentId: 'parent', sortKey: 'a0' },
+        transform: multiply(
+          translation(40, 50),
+          rotation(radians(-12 * direction))
+        ),
+        geometry: { width: 200, height: 100 },
+        appearance: { fill: 'red', stroke: 'black' },
+      },
+    ]);
+    const before = editor.document;
+    const bounds = worldBounds(before, id);
+    const pivot = {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2,
+    };
+    editor.beginTransform(id, pointerAt(pivot, 0), 'rotate');
+    editor.updateTransform(pointerAt(pivot, 11 * direction), {
+      snapRotation: true,
+    });
+    expect(editor.document).toBe(before);
+    const nodes = editor.getSession().transform?.nodes;
+    expect(angle(worldMatrix(before, id, nodes))).toBeCloseTo(30 * direction);
+    const preview = worldBounds(before, id, nodes);
+    expect(preview.x + preview.width / 2).toBeCloseTo(pivot.x);
+    expect(preview.y + preview.height / 2).toBeCloseTo(pivot.y);
+    editor.commitTransform();
+    editor.undo();
+    expect(editor.document).toEqual(before);
+    expect(editor.getSession().canUndo).toBe(false);
   }
-);
+});
 
 it('snaps a multiselection as a whole while retaining relative angles', () => {
   const editor = createGraphicsEditor(

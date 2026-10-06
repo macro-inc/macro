@@ -16,8 +16,8 @@ import {
   worldMatrix,
 } from '../src/core';
 import { resizeBounds } from '../src/core/resize';
-import { createGraphicsPeerLab } from '../src/loro';
 import { GraphicsSurface } from '../src/solid';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const edges: readonly ResizeEdge[] = ['n', 'e', 's', 'w'];
 const seed = () =>
@@ -44,106 +44,225 @@ const closePoint = (actual: Point, expected: Point) => {
   expect(actual.y).toBeCloseTo(expected.y, 8);
 };
 
-it.each(edges)(
-  'resizes a rotated single shape from %s while keeping the opposite midpoint fixed',
-  (handle) => {
-    const base = seed();
-    const a = base.items.a!;
-    if (!isShape(a)) throw new Error('Missing shape');
-    const editor = createGraphicsEditor({
-      ...base,
-      items: {
-        ...base.items,
-        a: {
-          ...a,
-          transform: multiply(
-            translation(60, 90),
-            multiply(rotation(0.7), scaling(1.4, 0.6))
-          ),
+it.each(
+  edges
+)('resizes a rotated single shape from %s while keeping the opposite midpoint fixed', (handle) => {
+  const base = seed();
+  const a = base.items.a!;
+  if (!isShape(a)) throw new Error('Missing shape');
+  const editor = createGraphicsEditor({
+    ...base,
+    items: {
+      ...base.items,
+      a: {
+        ...a,
+        transform: multiply(
+          translation(60, 90),
+          multiply(rotation(0.7), scaling(1.4, 0.6))
+        ),
+      },
+    },
+  });
+  const before = editor.document,
+    world = worldMatrix(before, 'a');
+  const horizontal = handle === 'e' || handle === 'w',
+    negative = handle === 'w' || handle === 'n';
+  const origin = horizontal
+    ? { x: negative ? 0 : 100, y: 40 }
+    : { x: 50, y: negative ? 0 : 80 };
+  const fixed = horizontal
+    ? { x: negative ? 100 : 0, y: 40 }
+    : { x: 50, y: negative ? 80 : 0 };
+  editor.beginTransform('a', transformPoint(world, origin), handle);
+  // Motion perpendicular to the active axis must not change the other size.
+  const delta = negative ? -25 : 25;
+  editor.updateTransform(
+    transformPoint(world, {
+      x: origin.x + (horizontal ? delta : 61),
+      y: origin.y + (horizontal ? 61 : delta),
+    })
+  );
+  const nodes = editor.getSession().transform!.nodes;
+  const preview = nodes.a;
+  if (
+    !isShape(preview) ||
+    preview.type === 'pencil' ||
+    preview.type === 'connector'
+  )
+    throw new Error('Missing preview');
+  expect(preview.geometry.width).toBeCloseTo(horizontal ? 125 : 100, 8);
+  expect(preview.geometry.height).toBeCloseTo(horizontal ? 80 : 105, 8);
+  const nextFixed = horizontal
+    ? { x: negative ? 125 : 0, y: 40 }
+    : { x: 50, y: negative ? 105 : 0 };
+  closePoint(
+    transformPoint(worldMatrix(before, 'a', nodes), nextFixed),
+    transformPoint(world, fixed)
+  );
+  editor.commitTransform();
+  editor.undo();
+  expect(editor.document).toEqual(before);
+});
+
+it.each(
+  edges
+)('stretches multi-selection from %s on only its active axis and commits once', (handle) => {
+  const editor = createGraphicsEditor(seed());
+  editor.select('a');
+  editor.toggleSelection('b');
+  const before = editor.document,
+    horizontal = handle === 'e' || handle === 'w';
+  const negative = handle === 'w' || handle === 'n';
+  const original = worldBounds(before, before.rootId);
+  const origin = {
+    x: handle === 'w' ? original.x : original.x + original.width,
+    y: handle === 'n' ? original.y : original.y + original.height,
+  };
+  const changes = vi.fn();
+  editor.subscribeDocument(changes);
+  editor.beginTransform('a', origin, handle);
+  const distance = negative ? -40 : 40;
+  editor.updateTransform({
+    x: origin.x + (horizontal ? distance : 123),
+    y: origin.y + (horizontal ? 123 : distance),
+  });
+  expect(changes).not.toHaveBeenCalled();
+  const bounds = worldBounds(
+    before,
+    before.rootId,
+    editor.getSession().transform!.nodes
+  );
+  expect(bounds.width).toBeCloseTo(original.width + (horizontal ? 40 : 0));
+  expect(bounds.height).toBeCloseTo(original.height + (horizontal ? 0 : 40));
+  expect(bounds.x).toBeCloseTo(original.x - (handle === 'w' ? 40 : 0));
+  expect(bounds.y).toBeCloseTo(original.y - (handle === 'n' ? 40 : 0));
+  editor.commitTransform();
+  expect(changes).toHaveBeenCalledTimes(1);
+  editor.undo();
+  expect(editor.document).toEqual(before);
+  expect(editor.getSession().canUndo).toBe(false);
+});
+
+it('keeps a grouped pencil fixed at the opposite edge during nonuniform resize', () => {
+  const editor = createGraphicsEditor(
+    createScene([
+      {
+        id: 'group',
+        type: 'group',
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: translation(100, 100),
+      },
+      {
+        id: 'ink',
+        type: 'pencil',
+        placement: { parentId: 'group', sortKey: 'a0' },
+        transform: translation(0, 20),
+        geometry: {
+          points: [
+            [0, 0, 0.5],
+            [100, 0, 0.5],
+          ],
+          simulatePressure: false,
+        },
+        appearance: {
+          fill: 'transparent',
+          stroke: 'black',
+          strokeWidth: 16,
         },
       },
-    });
-    const before = editor.document,
-      world = worldMatrix(before, 'a');
-    const horizontal = handle === 'e' || handle === 'w',
-      negative = handle === 'w' || handle === 'n';
-    const origin = horizontal
-      ? { x: negative ? 0 : 100, y: 40 }
-      : { x: 50, y: negative ? 0 : 80 };
-    const fixed = horizontal
-      ? { x: negative ? 100 : 0, y: 40 }
-      : { x: 50, y: negative ? 80 : 0 };
-    editor.beginTransform('a', transformPoint(world, origin), handle);
-    // Motion perpendicular to the active axis must not change the other size.
-    const delta = negative ? -25 : 25;
-    editor.updateTransform(
-      transformPoint(world, {
-        x: origin.x + (horizontal ? delta : 61),
-        y: origin.y + (horizontal ? 61 : delta),
-      })
+      {
+        id: 'box',
+        type: 'rectangle',
+        placement: { parentId: 'group', sortKey: 'a1' },
+        transform: translation(180, 0),
+        geometry: { width: 100, height: 80 },
+        appearance: { fill: 'red', stroke: 'black' },
+      },
+    ])
+  );
+  try {
+    editor.select('group');
+    const before = worldBounds(editor.document, 'group');
+    editor.beginTransform(
+      'group',
+      { x: before.x + before.width, y: before.y + before.height / 2 },
+      'e'
     );
-    const nodes = editor.getSession().transform!.nodes;
-    const preview = nodes.a;
-    if (
-      !isShape(preview) ||
-      preview.type === 'pencil' ||
-      preview.type === 'connector'
-    )
-      throw new Error('Missing preview');
-    expect(preview.geometry.width).toBeCloseTo(horizontal ? 125 : 100, 8);
-    expect(preview.geometry.height).toBeCloseTo(horizontal ? 80 : 105, 8);
-    const nextFixed = horizontal
-      ? { x: negative ? 125 : 0, y: 40 }
-      : { x: 50, y: negative ? 105 : 0 };
-    closePoint(
-      transformPoint(worldMatrix(before, 'a', nodes), nextFixed),
-      transformPoint(world, fixed)
-    );
-    editor.commitTransform();
-    editor.undo();
-    expect(editor.document).toEqual(before);
-  }
-);
-
-it.each(edges)(
-  'stretches multi-selection from %s on only its active axis and commits once',
-  (handle) => {
-    const editor = createGraphicsEditor(seed());
-    editor.select('a');
-    editor.toggleSelection('b');
-    const before = editor.document,
-      horizontal = handle === 'e' || handle === 'w';
-    const negative = handle === 'w' || handle === 'n';
-    const original = worldBounds(before, before.rootId);
-    const origin = {
-      x: handle === 'w' ? original.x : original.x + original.width,
-      y: handle === 'n' ? original.y : original.y + original.height,
-    };
-    const changes = vi.fn();
-    editor.subscribeDocument(changes);
-    editor.beginTransform('a', origin, handle);
-    const distance = negative ? -40 : 40;
     editor.updateTransform({
-      x: origin.x + (horizontal ? distance : 123),
-      y: origin.y + (horizontal ? 123 : distance),
+      x: before.x + before.width + 100,
+      y: before.y + before.height / 2,
     });
-    expect(changes).not.toHaveBeenCalled();
-    const bounds = worldBounds(
-      before,
-      before.rootId,
+    const after = worldBounds(
+      editor.document,
+      'group',
       editor.getSession().transform!.nodes
     );
-    expect(bounds.width).toBeCloseTo(original.width + (horizontal ? 40 : 0));
-    expect(bounds.height).toBeCloseTo(original.height + (horizontal ? 0 : 40));
-    expect(bounds.x).toBeCloseTo(original.x - (handle === 'w' ? 40 : 0));
-    expect(bounds.y).toBeCloseTo(original.y - (handle === 'n' ? 40 : 0));
-    editor.commitTransform();
-    expect(changes).toHaveBeenCalledTimes(1);
-    editor.undo();
-    expect(editor.document).toEqual(before);
-    expect(editor.getSession().canUndo).toBe(false);
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.width).toBeCloseTo(before.width + 100);
+  } finally {
+    editor.dispose();
   }
-);
+});
+
+it('resizes a pencil to its visible ink bounds while keeping the opposite edge fixed', () => {
+  const editor = createGraphicsEditor(
+    createScene([
+      {
+        id: 'ink',
+        type: 'pencil',
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: translation(0, 0),
+        geometry: {
+          points: [
+            [0, 0, 0.5],
+            [100, 0, 0.5],
+          ],
+          simulatePressure: false,
+        },
+        appearance: {
+          fill: 'transparent',
+          stroke: 'black',
+          strokeWidth: 16,
+        },
+      },
+    ])
+  );
+  try {
+    editor.select('ink');
+    const before = worldBounds(editor.document, 'ink');
+    editor.beginTransform(
+      'ink',
+      { x: before.x + before.width, y: before.y + before.height / 2 },
+      'e'
+    );
+    editor.updateTransform({
+      x: before.x + before.width + 100,
+      y: before.y + before.height / 2,
+    });
+    editor.commitTransform();
+    const after = worldBounds(editor.document, 'ink');
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.width).toBeCloseTo(before.width + 100);
+    editor.select('ink');
+    editor.beginTransform(
+      'ink',
+      { x: after.x + after.width / 2, y: after.y + after.height },
+      's'
+    );
+    editor.updateTransform({
+      x: after.x + after.width / 2,
+      y: after.y + after.height + 100,
+    });
+    editor.commitTransform();
+    const clamped = worldBounds(editor.document, 'ink');
+    expect(clamped.x).toBeCloseTo(after.x);
+    expect(clamped.y).toBeCloseTo(after.y);
+    expect(clamped.width).toBeCloseTo(after.width);
+    expect(clamped.height).toBeCloseTo(after.height);
+  } finally {
+    editor.dispose();
+  }
+});
 
 it('recomputes edge modifiers without drift, including proportional shrinking and center resizing', () => {
   const b = { x: 20, y: 30, width: 100, height: 80 };

@@ -11,18 +11,25 @@ import {
   sameBoxGeometry,
   validBoxGeometry,
 } from './box-geometry';
+import { connectorPath } from './connector-routing';
 import { type TextGeometry, type TextMeasurer, textDefinition } from './text';
 
 /** A shape-owned annotation, not an independently selectable scene node. */
 export type ShapeLabel = Pick<
   TextGeometry,
   'content' | 'fontSize' | 'fontFamily' | 'height'
->;
+> &
+  Readonly<{
+    /** Measured text width for connectors; box labels use the interior. */
+    width?: number;
+  }>;
 export type LabeledGeometry = BoxGeometry & Readonly<{ label?: ShapeLabel }>;
-export type LabelShape = ShapeItem<'rectangle' | 'ellipse'>;
+export type LabelShape = ShapeItem<'rectangle' | 'ellipse' | 'connector'>;
 export const canLabel = (item: GraphicsItem | undefined): item is LabelShape =>
-  item?.type === 'rectangle' || item?.type === 'ellipse';
-const innerSize = (item: LabelShape) => {
+  item?.type === 'rectangle' ||
+  item?.type === 'ellipse' ||
+  item?.type === 'connector';
+const innerSize = (item: ShapeItem<'rectangle' | 'ellipse'>) => {
   const ratio = item.type === 'ellipse' ? Math.SQRT1_2 : 1;
   return {
     width: Math.max(1, item.geometry.width * ratio - 24),
@@ -36,7 +43,10 @@ export function labelTextGeometry(
   return {
     ...label,
     autoWidth: false,
-    width: Math.max(label.fontSize * 2, innerSize(item).width),
+    width:
+      item.type === 'connector'
+        ? (label.width ?? 240)
+        : Math.max(label.fontSize * 2, innerSize(item).width),
   };
 }
 export function measureShapeLabel(
@@ -44,6 +54,17 @@ export function measureShapeLabel(
   label: ShapeLabel,
   measure?: TextMeasurer
 ): ShapeLabel {
+  if (item.type === 'connector') {
+    const size = measure?.({
+      ...labelTextGeometry(item, label),
+      autoWidth: true,
+    });
+    return {
+      ...label,
+      width: size?.width ?? label.width ?? 240,
+      height: size?.height ?? label.height,
+    };
+  }
   return {
     ...label,
     height: measure?.(labelTextGeometry(item, label)).height ?? label.height,
@@ -54,8 +75,35 @@ export function measureShapeLabel(
 export function shapeLabelLayout(item: LabelShape) {
   const label = item.geometry.label;
   if (!label) return;
-  const geometry = labelTextGeometry(item, label),
-    inner = innerSize(item);
+  const geometry = labelTextGeometry(item, label);
+  if (item.type === 'connector') {
+    const { start, end, route } = item.geometry;
+    const points = connectorPath(start, end, route).points;
+    const lengths = points
+      .slice(1)
+      .map((p, i) => Math.hypot(p.x - points[i]!.x, p.y - points[i]!.y));
+    let remaining = lengths.reduce((sum, length) => sum + length, 0) / 2;
+    let center = start.point;
+    for (let i = 0; i < lengths.length; i++) {
+      const length = lengths[i]!;
+      if (remaining <= length) {
+        const a = points[i]!,
+          b = points[i + 1]!,
+          t = length ? remaining / length : 0;
+        center = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        break;
+      }
+      remaining -= length;
+    }
+    return {
+      geometry,
+      transform: translation(
+        center.x - geometry.width / 2,
+        center.y - geometry.height / 2
+      ),
+    };
+  }
+  const inner = innerSize(item);
   const scale = Math.min(
     1,
     inner.width / geometry.width,
@@ -107,7 +155,7 @@ export function validShapeLabel(value: unknown): value is ShapeLabel {
   return (
     !!value &&
     typeof value === 'object' &&
-    textDefinition.validateGeometry({ ...value, width: 1, autoWidth: false })
+    textDefinition.validateGeometry({ width: 1, ...value, autoWidth: false })
   );
 }
 export function validLabeledGeometry(value: unknown): value is LabeledGeometry {
@@ -122,6 +170,7 @@ export function freezeLabeledGeometry(
   geometry: LabeledGeometry
 ): LabeledGeometry {
   return Object.freeze({
+    ...geometry,
     width: geometry.width,
     height: geometry.height,
     ...(geometry.label
@@ -135,15 +184,11 @@ export function freezeLabeledGeometry(
   });
 }
 export function sameLabeledGeometry(a: LabeledGeometry, b: LabeledGeometry) {
-  return (
-    sameBoxGeometry(a, b) && JSON.stringify(a.label) === JSON.stringify(b.label)
-  );
+  return sameBoxGeometry(a, b) && JSON.stringify(a) === JSON.stringify(b);
 }
-export function resizeLabeledShape<T extends LabelShape>(
-  item: T,
-  size: BoxGeometry,
-  measure?: TextMeasurer
-): T {
+export function resizeLabeledShape<
+  T extends ShapeItem<'rectangle' | 'ellipse'>,
+>(item: T, size: BoxGeometry, measure?: TextMeasurer): T {
   const resized = {
     ...item,
     geometry: { ...item.geometry, width: size.width, height: size.height },
@@ -158,4 +203,13 @@ export function resizeLabeledShape<T extends LabelShape>(
         },
       }
     : resized;
+}
+
+/** Replace a label while preserving the owner's geometry and discriminant. */
+export function withShapeLabel<T extends LabelShape>(
+  item: T,
+  label?: ShapeLabel
+): T {
+  const { label: _previous, ...geometry } = item.geometry;
+  return { ...item, geometry: { ...geometry, ...(label ? { label } : {}) } };
 }

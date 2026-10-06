@@ -40,80 +40,80 @@ const nestedEditor = (kind: ShapeKind) =>
     },
   ]);
 
-it.each(['rectangle', 'ellipse'] as const)(
-  'keeps the opposite corner fixed and preserves aspect ratio for a nested %s',
-  (kind) => {
-    for (const corner of ['nw', 'ne', 'sw', 'se'] as const) {
-      const editor = nestedEditor(kind);
-      const before = editor.document;
-      const world = worldMatrix(before, 'shape');
-      const west = corner.endsWith('w'),
-        north = corner.startsWith('n');
-      const origin = { x: (west ? 0 : 200) + 3, y: (north ? 0 : 100) - 2 };
-      const fixed = transformPoint(world, {
-        x: west ? 200 : 0,
-        y: north ? 100 : 0,
-      });
-      editor.beginTransform('shape', transformPoint(world, origin), corner);
-      editor.updateTransform(
-        transformPoint(world, {
-          x: origin.x + (west ? -80 : 80),
-          y: origin.y + (north ? -10 : 10),
-        }),
-        { proportional: true }
-      );
-      expect(editor.document).toBe(before);
-      const overrides = editor.getSession().transform?.nodes;
-      expect(overrides?.shape).toMatchObject({
-        geometry: { width: 280, height: 140 },
-      });
-      closePoint(
-        transformPoint(worldMatrix(before, 'shape', overrides), {
-          x: west ? 280 : 0,
-          y: north ? 140 : 0,
-        }),
-        fixed
-      );
-      editor.commitTransform();
-      editor.undo();
-      expect(editor.document).toEqual(before);
-    }
-  }
-);
-
-it.each([false, true])(
-  'holds the original center with proportional=%s through nested transforms',
-  (proportional) => {
-    const editor = nestedEditor('ellipse');
-    const world = worldMatrix(editor.document, 'shape');
-    const center = transformPoint(world, { x: 100, y: 50 });
-    editor.beginTransform(
-      'shape',
-      transformPoint(world, { x: 200, y: 100 }),
-      'se'
-    );
-    editor.updateTransform(transformPoint(world, { x: 230, y: 90 }), {
-      fromCenter: true,
-      proportional,
+it.each([
+  'rectangle',
+  'ellipse',
+] as const)('keeps the opposite corner fixed and preserves aspect ratio for a nested %s', (kind) => {
+  for (const corner of ['nw', 'ne', 'sw', 'se'] as const) {
+    const editor = nestedEditor(kind);
+    const before = editor.document;
+    const world = worldMatrix(before, 'shape');
+    const west = corner.endsWith('w'),
+      north = corner.startsWith('n');
+    const origin = { x: (west ? 0 : 200) + 3, y: (north ? 0 : 100) - 2 };
+    const fixed = transformPoint(world, {
+      x: west ? 200 : 0,
+      y: north ? 100 : 0,
     });
-    const nodes = editor.getSession().transform?.nodes;
-    const expectedHeight = proportional ? 130 : 80;
-    const previewShape = nodes?.shape;
-    if (previewShape?.type !== 'ellipse')
-      throw new Error('Missing ellipse preview');
-    expect(previewShape.geometry.width).toBeCloseTo(260, 8);
-    expect(previewShape.geometry.height).toBeCloseTo(expectedHeight, 8);
-    closePoint(
-      transformPoint(worldMatrix(editor.document, 'shape', nodes), {
-        x: 130,
-        y: expectedHeight / 2,
+    editor.beginTransform('shape', transformPoint(world, origin), corner);
+    editor.updateTransform(
+      transformPoint(world, {
+        x: origin.x + (west ? -80 : 80),
+        y: origin.y + (north ? -10 : 10),
       }),
-      center
+      { proportional: true }
     );
-    editor.cancelTransform();
-    expect(editor.getSession().canUndo).toBe(false);
+    expect(editor.document).toBe(before);
+    const overrides = editor.getSession().transform?.nodes;
+    expect(overrides?.shape).toMatchObject({
+      geometry: { width: 280, height: 140 },
+    });
+    closePoint(
+      transformPoint(worldMatrix(before, 'shape', overrides), {
+        x: west ? 280 : 0,
+        y: north ? 140 : 0,
+      }),
+      fixed
+    );
+    editor.commitTransform();
+    editor.undo();
+    expect(editor.document).toEqual(before);
   }
-);
+});
+
+it.each([
+  false,
+  true,
+])('holds the original center with proportional=%s through nested transforms', (proportional) => {
+  const editor = nestedEditor('ellipse');
+  const world = worldMatrix(editor.document, 'shape');
+  const center = transformPoint(world, { x: 100, y: 50 });
+  editor.beginTransform(
+    'shape',
+    transformPoint(world, { x: 200, y: 100 }),
+    'se'
+  );
+  editor.updateTransform(transformPoint(world, { x: 230, y: 90 }), {
+    fromCenter: true,
+    proportional,
+  });
+  const nodes = editor.getSession().transform?.nodes;
+  const expectedHeight = proportional ? 130 : 80;
+  const previewShape = nodes?.shape;
+  if (previewShape?.type !== 'ellipse')
+    throw new Error('Missing ellipse preview');
+  expect(previewShape.geometry.width).toBeCloseTo(260, 8);
+  expect(previewShape.geometry.height).toBeCloseTo(expectedHeight, 8);
+  closePoint(
+    transformPoint(worldMatrix(editor.document, 'shape', nodes), {
+      x: 130,
+      y: expectedHeight / 2,
+    }),
+    center
+  );
+  editor.cancelTransform();
+  expect(editor.getSession().canUndo).toBe(false);
+});
 
 it('scales a mixed selection around its collective center in one undo step', () => {
   const editor = createGraphicsEditor([

@@ -1,5 +1,4 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
 import Undo from '@phosphor/arrow-u-up-left.svg';
 import Redo from '@phosphor/arrow-u-up-right.svg';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
@@ -24,7 +23,6 @@ import {
   createSignal,
   createUniqueId,
   For,
-  Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { CanvasSnapMode } from '../core/snapping';
@@ -50,7 +48,6 @@ export function CanvasDrawingToolbar(props: {
   onInsert: (kind: 'media' | 'document' | 'embed') => void;
   state: CanvasState;
   onFocusCanvas: () => void;
-  onReset?: () => void;
   layers: boolean;
   onLayers: () => void;
 }) {
@@ -105,12 +102,6 @@ export function CanvasDrawingToolbar(props: {
                   <Stack class="size-4" />
                   {props.layers ? 'Hide layers' : 'Show layers'}
                 </Dropdown.Item>
-                <Show when={props.onReset}>
-                  <Dropdown.Item onSelect={props.onReset}>
-                    <ArrowCounterClockwise class="size-4" />
-                    Reset demo
-                  </Dropdown.Item>
-                </Show>
               </Dropdown.Group>
             </Dropdown.Content>
           </Dropdown>

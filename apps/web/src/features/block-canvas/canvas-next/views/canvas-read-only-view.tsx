@@ -1,24 +1,25 @@
 import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import type { GraphicsEditor } from '@macro-inc/graphics';
 import {
+  ConnectorView,
   EllipseView,
   GraphicsSurface,
   RectangleView,
   TextView,
 } from '@macro-inc/graphics/solid';
 import { onCleanup, onMount } from 'solid-js';
-import type { CanvasState } from '../primitives/create-canvas-state';
 import { CanvasMediaView } from './embedded-items';
 import { CanvasTextContent } from './text-content';
 
 /** Viewers get navigation without mounting editing handlers or embedded editors. */
 export function CanvasReadOnlyView(props: {
-  state: CanvasState;
+  editor: GraphicsEditor;
   fitOnLoad?: boolean;
 }) {
   let host!: HTMLDivElement;
   const fit = () =>
-    props.state.editor.fitScene({
+    props.editor.fitScene({
       width: host.clientWidth,
       height: host.clientHeight,
     });
@@ -34,10 +35,13 @@ export function CanvasReadOnlyView(props: {
   return (
     <div ref={host} class="relative size-full min-h-0">
       <GraphicsSurface
-        editor={props.state.editor}
+        editor={props.editor}
         input={{ editing: false, tool: () => 'pan' }}
         hideSelection
         renderers={{
+          connector: (p) => (
+            <ConnectorView {...p} contentView={CanvasTextContent} />
+          ),
           rectangle: (p) => (
             <RectangleView {...p} contentView={CanvasTextContent} />
           ),

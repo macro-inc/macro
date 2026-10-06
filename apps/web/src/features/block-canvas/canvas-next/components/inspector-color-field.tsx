@@ -34,7 +34,10 @@ export function InspectorColorField(props: {
   };
   return (
     <div class="space-y-2">
-      <InputGroup class="has-[button:focus-visible]:border-edge has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-edge-muted">
+      <InputGroup
+        size="sm"
+        class="border-transparent bg-hover/50 hover:border-edge-muted has-[button:focus-visible]:border-edge has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-edge-muted"
+      >
         <InputGroup.Addon>
           <Popover
             placement="left-start"

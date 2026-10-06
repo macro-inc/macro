@@ -4,7 +4,9 @@ import Drop from '@phosphor/drop.svg';
 import Line from '@phosphor/line-segment.svg';
 import { Show } from 'solid-js';
 import type { InspectorNumberScrub } from '../primitives/create-inspector-preview';
+import { StrokeStyleIcon } from './connector-style-icon';
 import { InspectorColorField } from './inspector-color-field';
+import { InspectorField } from './inspector-field';
 import { InspectorNumberField } from './inspector-number-field';
 import { InspectorSection } from './inspector-section';
 import { InspectorSelect } from './inspector-select';
@@ -25,86 +27,83 @@ export function StyleInspector(props: {
   return (
     <>
       <InspectorSection title="Appearance">
-        <div class="grid grid-cols-2 items-center gap-3">
-          <span class="text-xs text-ink-muted">Opacity</span>
-          <InspectorNumberField
-            label="Opacity (%)"
-            icon={<Drop class="size-4" />}
-            value={
-              props.value('opacity') === undefined
-                ? undefined
-                : Math.round(props.value('opacity')! * 100)
-            }
-            max={100}
-            unit="%"
-            onChange={(value) => props.onChange({ opacity: value / 100 })}
-            onScrub={() => props.onScrub('opacity')}
-          />
+        <div class="grid grid-cols-2 gap-2">
+          <InspectorField label="Opacity">
+            <InspectorNumberField
+              label="Opacity (%)"
+              icon={<Drop class="size-3" />}
+              value={
+                props.value('opacity') === undefined
+                  ? undefined
+                  : Math.round(props.value('opacity')! * 100)
+              }
+              max={100}
+              unit="%"
+              onChange={(value) => props.onChange({ opacity: value / 100 })}
+              onScrub={() => props.onScrub('opacity')}
+            />
+          </InspectorField>
+          <Show when={props.corners}>
+            <InspectorField label="Corner radius">
+              <InspectorNumberField
+                label="Corner radius"
+                icon={<Corners class="size-3" />}
+                value={props.value('cornerRadius')}
+                max={500}
+                onChange={(cornerRadius) => props.onChange({ cornerRadius })}
+                onScrub={() => props.onScrub('cornerRadius')}
+              />
+            </InspectorField>
+          </Show>
         </div>
       </InspectorSection>
-      <Show when={props.fill}>
+      <Show when={props.fill || props.text}>
         <InspectorSection title="Fill">
           <InspectorColorField
-            label="Fill"
+            label={props.text ? 'Text' : 'Fill'}
             canvasColors={props.canvasColors}
-            value={props.value('fill')}
-            onChange={(fill) => props.onChange({ fill })}
+            value={props.value(props.text ? 'stroke' : 'fill')}
+            onChange={(color) =>
+              props.onChange(props.text ? { stroke: color } : { fill: color })
+            }
           />
         </InspectorSection>
       </Show>
-      <Show when={props.stroke || props.text}>
-        <InspectorSection title={props.text ? 'Text color' : 'Stroke'}>
+      <Show when={props.stroke}>
+        <InspectorSection title="Stroke">
           <InspectorColorField
-            label={props.text ? 'Text' : 'Stroke'}
+            label="Stroke"
             canvasColors={props.canvasColors}
             value={props.value('stroke')}
             onChange={(stroke) => props.onChange({ stroke })}
           />
-          <Show when={props.strokePattern}>
-            <div class="grid grid-cols-2 items-center gap-3">
-              <span class="text-xs text-ink-muted">Style</span>
-              <InspectorSelect
-                label="Stroke style"
-                value={props.value('strokeStyle')}
-                options={[
-                  { value: 'solid', label: 'Solid' },
-                  { value: 'dashed', label: 'Dashed' },
-                  { value: 'dotted', label: 'Dotted' },
-                ]}
-                onChange={(strokeStyle) => props.onChange({ strokeStyle })}
-              />
-            </div>
-          </Show>
-          <Show when={props.stroke}>
-            <div class="grid grid-cols-2 items-center gap-3">
-              <span class="text-xs text-ink-muted">Weight</span>
+          <div class="grid grid-cols-2 gap-2">
+            <InspectorField label="Weight">
               <InspectorNumberField
                 label="Stroke width"
-                icon={<Line class="size-4" />}
+                icon={<Line class="size-3" />}
                 value={props.value('strokeWidth')}
                 max={40}
                 step={0.5}
-                unit="px"
                 onChange={(strokeWidth) => props.onChange({ strokeWidth })}
                 onScrub={() => props.onScrub('strokeWidth')}
               />
-            </div>
-          </Show>
-        </InspectorSection>
-      </Show>
-      <Show when={props.corners}>
-        <InspectorSection title="Corners">
-          <div class="grid grid-cols-2 items-center gap-3">
-            <span class="text-xs text-ink-muted">Radius</span>
-            <InspectorNumberField
-              label="Corner radius"
-              icon={<Corners class="size-4" />}
-              value={props.value('cornerRadius')}
-              max={500}
-              unit="px"
-              onChange={(cornerRadius) => props.onChange({ cornerRadius })}
-              onScrub={() => props.onScrub('cornerRadius')}
-            />
+            </InspectorField>
+            <Show when={props.strokePattern}>
+              <InspectorField label="Style">
+                <InspectorSelect
+                  label="Stroke style"
+                  value={props.value('strokeStyle')}
+                  renderIcon={(style) => <StrokeStyleIcon style={style} />}
+                  options={[
+                    { value: 'solid', label: 'Solid' },
+                    { value: 'dashed', label: 'Dashed' },
+                    { value: 'dotted', label: 'Dotted' },
+                  ]}
+                  onChange={(strokeStyle) => props.onChange({ strokeStyle })}
+                />
+              </InspectorField>
+            </Show>
           </div>
         </InspectorSection>
       </Show>

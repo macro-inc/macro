@@ -5,12 +5,12 @@ import {
   createGraphicsEditor,
   createScene,
   freezeDocument,
-  type LabelShape,
   multiply,
   parseFragment,
   pasteCommand,
   rectangleDefinition,
   rotation,
+  type ShapeItem,
   type ShapeLabel,
   setShapeLabelCommand,
   shapeLabelLayout,
@@ -20,7 +20,7 @@ import {
   translation,
   worldMatrix,
 } from '../src/core';
-import { createGraphicsPeerLab } from '../src/loro';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((fn) => fn()));
@@ -30,7 +30,9 @@ const label = (text = 'Shape label'): ShapeLabel => ({
   fontFamily: 'sans',
   height: 27,
 });
-const shape = (type: LabelShape['type'] = 'rectangle'): LabelShape => ({
+const shape = (
+  type: 'rectangle' | 'ellipse' = 'rectangle'
+): ShapeItem<'rectangle' | 'ellipse'> => ({
   id: 'shape',
   type,
   placement: { parentId: 'scene-root', sortKey: 'a0' },

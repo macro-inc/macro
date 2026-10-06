@@ -40,7 +40,7 @@ import {
   connectorHead,
   connectorPath,
 } from '../src/core/shapes/connector-routing';
-import { createGraphicsPeerLab } from '../src/loro';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((fn) => fn()));
@@ -277,31 +277,32 @@ describe('legacy routes and picking', () => {
       / Z$/
     );
   });
-  it.each(['straight', 'stepped', 'smooth'] as const)(
-    'picks the actual %s path, not its box',
-    (route) => {
-      const item = link();
-      const g = {
-        ...item.geometry,
-        route,
-        start: { point: { x: 0, y: 0 } },
-        end: { point: { x: 200, y: 100 } },
-      };
-      const doc = createScene([{ ...item, geometry: g }]),
-        path = connectorPath(g.start, g.end, route);
-      const p = path.points[Math.floor(path.points.length / 2)]!;
-      expect(hitTest(doc, p, false, 3)).toBe('link');
-      expect(hitTest(doc, { x: 20, y: 85 }, false, 3)).toBeUndefined();
-      expect(
-        connectorDefinition.intersectsBox({ ...item, geometry: g }, IDENTITY, {
-          x: p.x - 1,
-          y: p.y - 1,
-          width: 2,
-          height: 2,
-        })
-      ).toBe(true);
-    }
-  );
+  it.each([
+    'straight',
+    'stepped',
+    'smooth',
+  ] as const)('picks the actual %s path, not its box', (route) => {
+    const item = link();
+    const g = {
+      ...item.geometry,
+      route,
+      start: { point: { x: 0, y: 0 } },
+      end: { point: { x: 200, y: 100 } },
+    };
+    const doc = createScene([{ ...item, geometry: g }]),
+      path = connectorPath(g.start, g.end, route);
+    const p = path.points[Math.floor(path.points.length / 2)]!;
+    expect(hitTest(doc, p, false, 3)).toBe('link');
+    expect(hitTest(doc, { x: 20, y: 85 }, false, 3)).toBeUndefined();
+    expect(
+      connectorDefinition.intersectsBox({ ...item, geometry: g }, IDENTITY, {
+        x: p.x - 1,
+        y: p.y - 1,
+        width: 2,
+        height: 2,
+      })
+    ).toBe(true);
+  });
 });
 
 describe('document reference lifecycle', () => {

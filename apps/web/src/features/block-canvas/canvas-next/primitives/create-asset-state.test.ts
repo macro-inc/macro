@@ -57,7 +57,7 @@ it('batches file inserts as one undo entry and preserves stable references on re
   editor.redo();
   expect(drawableIds(editor.document)).toHaveLength(2);
 });
-it('does not insert an async upload after resetting the demo', async () => {
+it('does not insert an async upload after resetting canvas state', async () => {
   let resolve!: (value: PreparedMedia) => void;
   const { editor, assets } = setup({
     upload: () =>

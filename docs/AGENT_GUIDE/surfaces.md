@@ -951,11 +951,6 @@ Desktop and mobile share this scale, with accessibility text scaling preserved.
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
 # Canvas Next
 
-Open `/app/component/canvas-next`. This local-only component is enabled by
-`USE_CANVAS_NEXT` (override with `VITE_USE_CANVAS_NEXT=false`); it lives inside
-`block-canvas/canvas-next` and uses the pure graphics core. Reset demo (in the history drawer’s Canvas menu) restores
-the disposable seed; reload restores the local debug snapshot.
-
 Saved Canvas documents use the new editor when `enable-canvas-next` is enabled
 (local override: `VITE_ENABLE_CANVAS_NEXT=true`). Opening a legacy file migrates
 it in memory; the first edit saves version 2 JSON. Reload should preserve edits,
@@ -963,8 +958,7 @@ text formatting, labels, groups and connectors. Unsupported legacy content shows
 **Open in legacy editor** without saving a migration. Version 2 files require
 Canvas Next and cannot be opened by the legacy editor when the flag is off.
 Read-only documents show a pan/zoom surface with **Fit canvas** and no drawing
-controls. Failed saves show **Retry**. Real documents have neither **Reset demo**
-nor the demo's local snapshot. SyncService integration is a follow-up.
+controls. Failed saves show **Retry**. SyncService integration is a follow-up.
 
 Smoke test the rollout with a disposable file: open legacy JSON, edit once,
 reload, and verify the edit remains. Disable the flag and reopen the saved file;
@@ -973,12 +967,8 @@ editing controls. The flag is fixed for each open document until it is reopened.
 
 For implementation status and upcoming checkpoints, see
 [Graphics and Canvas parity](../GRAPHICS_PARITY.md). This page describes the current
-editor UI. Canvas Next has versioned JSON persistence but no production sync; the separate
-graphics peer playground is an in-memory Loro experiment, not this full editor.
+editor UI. Canvas Next has versioned JSON persistence but no production sync.
 
-The disposable demo saves committed scene changes and the camera in local storage under
-`macro.canvas-next.debug.v1`, restoring them on reload. Reset demo replaces the
-saved scene; undo history and unfinished gestures are not persisted.
 Ctrl/Meta-wheel zooms around the pointer with a gentle continuous response;
 100 wheel pixels zooms from 100% to about 122%, and larger individual events are
 capped at the same factor. Plain wheel input still pans. Check small trackpad
@@ -987,7 +977,7 @@ movements, coarse wheel ticks, and reversing direction without the anchor drifti
 The bottom-center drawing toolbar uses icon buttons with tooltips and sits above
 the inspector when they overlap. It also contains Add media, Add document, and Add
 embed. Its trailing Toggle history drawer button opens/closes the attached bar above
-it, which contains Undo, Redo, and Canvas menu (Show/Hide layers and Reset demo).
+it, which contains Undo, Redo, and Canvas menu (Show/Hide layers).
 The zoom percentage in the Design panel header opens the standard dropdown and
 remains visible with or without a selection. Its sections contain Zoom In
 and Zoom Out (Cmd+= / Cmd+-, with Zoom In displayed as Cmd++), plus Zoom to fit
@@ -1019,24 +1009,38 @@ independent of selection. It zooms in or out until the width or height fills the
 available space with 100 screen pixels of padding per side, within the camera's
 zoom limits. Padding shrinks for small embedded viewports.
 The Design inspector is always visible on the right. Show layers in Canvas menu
-toggles the floating left Layers panel. The Design inspector is a single
-header row when nothing is selected; selecting an item reveals its properties in
-a viewport-bounded card with a fixed header and a scrolling body. Fit scene accounts
-for the expanded inspector. The top selection section offers separate horizontal and
-vertical alignment button groups, distribution,
+toggles the floating left Layers panel. The Design inspector is a rounded floating right panel, inset from the canvas
+edges, with a fixed width and height, fixed header, and scrolling body; clearing selection keeps its footprint unchanged. Fit scene
+always reserves its width. Sections follow Position, Layout, Appearance, Fill,
+Stroke, Connection, Typography, skipping inapplicable sections without reordering
+the rest. Position, Layout, and Appearance stay at the top across selection types.
+Position offers compact horizontal and vertical alignment button groups, distribution
+when at least three layout objects are selected,
 X/Y position, rotation, quarter-turn and flip controls. Layout provides width/height
 and horizontal/vertical spacing; differing values show Mixed. The lock beside dimensions
 shows an active background when locked and links width and height, preserving each selected item’s aspect ratio when typing or scrubbing. These fields support
-negative positions/spacing and undo. Fully connected connectors do not contribute
-to alignment, distribution, or layout bounds, even inside groups. Connectors render
+negative positions/spacing and undo. Editing or scrubbing Width/Height resizes
+shape geometry and reflows labels using the same measurer as canvas handles,
+without stretching glyphs. Standalone text width reflows; text height scales
+proportionally. Rotated world dimensions and groups with incompatible axes use
+proportional scaling to avoid introducing shear. Fully connected connectors do not contribute
+to alignment, distribution, or layout bounds, even inside groups. Selecting only
+these connectors keeps Position and Layout visible with disabled fields showing
+an em dash, so Appearance stays in place. Connectors render
 above their highest connected endpoint after layer changes and grouping. Connected
 connector strokes, dashes, and arrowheads keep their size when items or groups scale.
 Smooth connector selection bounds follow the curve extrema, with selection outlines
 and picking using the same world-space geometry as the visible connector.
-Fill appears for rectangles/ellipses, Corners for
-rectangles, Connection for connectors, and Typography/Text color for text. Rectangle and ellipse drawing previews use the current fill, stroke, opacity, and
+Fill appears for rectangles, ellipses, and text (text color); Connection appears for
+connectors. Typography appears for text and existing labels, or while editing a
+label. Unlabeled shapes do not show typography or editing instructions. Corner
+radius shares the Appearance row with opacity. Font/size, stroke weight/style, and
+connector start/end controls use paired columns with compact 24px fields. Route,
+endpoint, and stroke-pattern selectors show icons for every option, including the
+selected value; start endpoint previews face left and end previews face right.
+Rotation and flip buttons use the same evenly spaced group as alignment controls. Rectangle and ellipse drawing previews use the current fill, stroke, opacity, and
 corner style throughout the drag. Sections
-are always expanded, with `border-edge` dividers. Color fields are compact input
+are always expanded, with subtle dividers and muted property labels. Color fields are compact input
 groups: click the swatch to open the shared ColorPicker with a saturation/brightness
 field, Hue and Opacity sliders, and a hex input. Keyboard focus marks the field's
 handle, not its outer edge; the opacity track and preview checkerboards use the
@@ -1155,7 +1159,7 @@ cancellation or focus loss still discards the preview.
 The box, handles, rotation circle and resize math all use
 the same core selection frame.
 
-The left inspector edits fill, stroke, width, opacity, and rectangle radius;
+The right inspector edits fill, stroke, width, opacity, and rectangle radius;
 mixed selections show Mixed values. Group styling applies to descendant shapes.
 Styles also become creation defaults. Arrange offers six alignments, horizontal
 and vertical equal-gap distribution, grouping, and stable layer changes. The
@@ -1173,144 +1177,24 @@ undo again. Verify its original stroke shape returns and unrelated items stay pu
 After undo, making a new edit must disable redo; selection and camera changes must
 preserve redo. Each completed gesture remains one undo step (up to 100 steps).
 
-# Graphics playground (local development)
+### Opening saved canvases locally
 
-The scene foundation is shared by the graphics and image demos. The graphics demo
-adds a circular **Rotate selection** handle 16 screen pixels outside a single shape's
-oriented top edge, or above the world-aligned bounds for groups and multiple selections,
-with no connecting stem. Single shapes retain oriented solid
-boxes; groups and multiple selections have dashed world-axis-aligned boxes.
-Click-drag their interiors to move the selection. Resize grips stay square, with
-fixed EW/NS edge cursors and diagonal corner cursors matching their world-space
-quadrant. Drag the circle to rotate; hold **Shift** to snap a single
-shape/group's world angle to 30° increments. Multiple selections snap the rotation
-delta, preserving relative angles.
-Shift can be pressed or released during the drag, including while stationary.
-The edit is one undo step. The shared selection box and all transform handles hide during move,
-rotate, and scale previews, then return on release or cancellation. Individual
-outlines remain visible. Drag a shared corner to scale the selection about the
-opposite corner. Shared corner and edge resizing stretch independently when all
-descendant axes align with the selection frame (including quarter turns).
-Incompatible rotations or shear force proportional scaling for the whole selection.
-Resizing continues through zero, reflecting the crossed axis. A tiny nonzero
-minimum at the crossing keeps scene transforms invertible. Rectangle corner
-handles follow its transformed corners. Hold **Shift** during single-shape corner resizing to
-preserve its starting aspect ratio. Hold **Alt/Option** to resize from the center;
-combine both modifiers for proportional resizing from the center. Modifiers
-can be pressed or released during the drag, including while the pointer is
-stationary. Alt/Option also scales groups and multiple selections around their
-collective center. **Group** combines selected siblings; **Ungroup** restores
-their children to the parent. Groups can nest and contain rotation/nonuniform
-scale. Ordinary canvas clicks select the outermost group; Alt-click selects the
-hit rectangle directly. **Fit scene** brings content and handle space into view.
+To use Canvas Next for saved files, set `VITE_ENABLE_CANVAS_NEXT=true` in
+`apps/web/.env.local`, reload localhost, and reopen the file from Drive. Without
+that override, local development treats remote flags as off because analytics
+is disabled. Version 2 files show a Canvas Next requirement instead of waiting
+for a feature-flag response that will never arrive.
 
-Expand **Layers** in either graphics demo to see the scene tree in back-to-front
-order and select nodes directly. **Send to back**, **Send backward**, **Bring
-forward**, and **Bring to front** reorder the selection within each node's parent.
-Multiple selected nodes keep their relative order, and groups move as contiguous
-subtrees. Reordering is one undo step; selecting or transforming a shape keeps its
-document layer position. The document stores stable fractional sort keys rather
-than array indexes or CSS z-index values. **Reset test scene** rebuilds the demo
-from its seed script, clears history and selection, returns to Select, and resets
-the camera (fitting the nested demo). Reloading also recreates the seeded data.
-Test documents stay in memory: there are no schema versions, migrations, or local
-storage saves. Saving/loading and multiplayer remain separate checkpoints.
+### Canvas Next rich text
 
-Open `/app/component/nested-scene-playground` for the scene graph tester. It starts
-with a rotated/scaled outer group, a rotated inner group, three descendants and a
-root-level sibling. Expand **Layers** to see the indented hierarchy and select
-any node directly, then collapse it to edit on the canvas. **Move selected to root**
-reparents while preserving the world pose; Undo restores the prior parent and
-order. Reparenting and grouping must not remount unchanged rectangle components.
-All demos are local, in-memory; reload resets the seeded scene.
-
-
-The image variant is `/app/component/image-markup-playground`. It loads the bundled
-`teo.png` automatically. Drag over the image
-to create an annotation. Reverse drags work; ends are clipped to the image bounds.
-Scroll or use the zoom buttons to zoom around the image center. Panning is disabled;
-the image stays centered on zoom and viewport resize. **Fit image** fits it in view. Escape cancels a drawing. **Clear rectangles**
-removes annotations; **Replace image** starts a fresh scene after successful decode.
-Invalid files leave the previous image intact. Files and annotations stay local and
-are discarded on reload. There is no save/upload, selection or resize yet.
-
-Open `/app/component/graphics-playground` on a local frontend server.
-Use **Select** to click a shape and drag it, or drag a visible corner handle or anywhere along an edge to resize.
-Unfilled rectangles and ellipses are picked only within 3 screen pixels of their outline at
-any zoom; their empty interiors let clicks reach shapes beneath. Filled shapes
-also accept clicks inside. The orange seed rectangle is filled; the other two
-seed rectangles and newly drawn shapes have no fill. Box selection tests the
-whole shape, including its interior, but excludes empty corners around an ellipse.
-Drag empty canvas to select all shapes the box touches; Shift-drag adds to the
-selection, and Shift-click toggles individual shapes. Drag a selected shape
-to move the group; Delete removes the group in one undo step. Escape during box
-selection restores the previous selection. Multiple selection and persistent groups expose visible corner handles and invisible full-edge resize targets; scaling
-is one undo step and preserves relative placement, including nested descendants. Click empty canvas to deselect. **Rectangle** and **Ellipse** draw their respective shapes anywhere in the
-infinite world. Ellipse previews follow the curve; ellipses support the same
-move, resize, rotation, multi-selection, grouping and history as rectangles. **Delete** (or Delete/Backspace while the canvas is focused) removes
-the selection. Escape cancels an active gesture; otherwise it deselects.
-**Undo** / **Redo** also support Ctrl/Meta-Z, Ctrl/Meta-Shift-Z and Ctrl/Meta-Y while
-the canvas is focused. Creation, moving, resizing and deletion each undo as one
-operation. Camera and selection changes do not enter history; a new edit clears
-redo. This is local, in-memory history, discarded on reload.
-
-Open `/app/component/graphics-playground` on a local frontend server. This
-registry-mounted experiment shows three seeded rectangles, an infinite grid,
-camera position and zoom. It has no persistence or document creation effects.
-
-- Scroll to pan; Ctrl/Meta-scroll zooms about the pointer.
-- Focus the canvas, then Space-drag, or use a middle-button drag, to pan.
-- Zoom buttons use the viewport center. Reset view returns to 100% at camera 0, 0.
-- Each split owns its own camera and local scene.
-
-### Graphics multiplayer playground
-
-Open `/app/component/graphics-multiplayer-playground` on the local frontend. Alice
-and Bob render independent Loro replicas of the same seeded scene side by side.
-Each panel has Select/Rectangle/Ellipse, Fill/No fill, Delete, Group/Ungroup, Fit and
-its own Undo/Redo. Expand Layers to select nested nodes, reorder, move to root, or
-move the selected node into an eligible group. Canvas pan/zoom, selection, resize
-and rotation use the same controls as the infinite canvas playground.
-
-Go offline stops delivery. Make different edits in the two panels, then Sync now
-to deliver the queued bytes while staying offline, or Reconnect to resume automatic
-delivery. Delivery delay simulates batching latency; the status shows queued and
-delivered update counts. Gestures sync on release. A remote commit cancels an active
-local preview. Undo affects local history; same-property conflicts follow native
-Loro undo behavior. The adapter notes document the provisional reparent/move policy.
-
-While connected, each panel shows the other peer's colored cursor/name, dashed
-selection outlines and tinted ghosts of pending drawing, movement, resizing or
-rotation. Dragging a selection box also shows a remote marquee. Try selecting a
-shape in Alice's panel, then dragging it slowly: Bob sees Alice's pending position
-while the committed shape stays put until release. Pan/zoom Bob independently to
-check that awareness follows his camera. Escape clears a gesture preview.
-The cursor has a rounded name-only badge; no action/status text or detached label
-appears on the selection. During transforms, the ghost supplies the outline.
-Cursor and preview updates debounce for 40 ms (100 ms maximum during continuous
-movement), and the receiver spring-smooths their motion between updates. Release
-and cancellation clear ghosts promptly. Reduced-motion settings disable smoothing.
-
-Awareness does not edit the document or local selection, intercept clicks or add
-undo steps. Delivery delay applies to presence too, with intermediate messages
-coalesced. Go offline immediately hides remote awareness and drops its pending
-messages; Sync now while offline syncs documents only. Reconnect publishes fresh
-presence. Document update counts exclude cursor/selection/preview messages.
-
-Reset both peers recreates the scene and clears histories, selections and queued
-updates. Reload also resets everything. This is a local-only component registry
-demo: no document files, storage, SyncService, or backend data are created.
-
-### Canvas Next rich text (local)
-
-In `/app/component/canvas-next`, choose Text (T), then click empty space for
+In a flagged Canvas Next document, choose Text (T), then click empty space for
 auto-width text or drag horizontally for a wrapped box. Type normally. Use the
-Text formatting toolbar for inline marks, headings/quotes, lists, links and
-alignment; the left inspector controls font family/size and auto width.
+text selection formatting toolbar for inline marks, headings/quotes, lists, and
+links; the right inspector controls font family/size and auto width.
 Double-click a text shape, or select it and press Enter, to reopen its editor.
-Escape, Cmd/Ctrl+Enter, Done, or clicking elsewhere commits one canvas history
+Escape, Cmd/Ctrl+Enter, or clicking elsewhere commits one canvas history
 entry. Inside the editor, Cmd/Ctrl+Z undoes typing without undoing canvas shapes.
-Empty drafts leave no item. Clearing existing text removes the item on Done;
+Empty drafts leave no item. Clearing existing text removes the item when editing finishes;
 canvas Undo restores it. Canvas Next owns these empty-content decisions. Clipboard
 fragments and saved scenes with invalid editor payloads are rejected by the host.
 Side edges wrap text without changing font size;
@@ -1326,23 +1210,23 @@ selects the shape; deleting all label text removes only the label. Copy/duplicat
 grouping, rotation, and resizing keep it attached. Verify native text paste does not
 create an extra canvas item, and finished label edits undo in one canvas step.
 Text and labels now use the shared Markdown builder and store serialized Lexical
-JSON strings. Select text to expose the shared floating formatting toolbar; alignment
-and Done are above the canvas. The Loro adapter merges completed edits as one LWW
-string, separately from pose. Canvas Next is still local-only; Reload/Reset demo
-discards text and labels along with other shapes.
+JSON strings. Select text to expose the shared floating formatting toolbar. Pending
+`@` searches stay inline without adding an extra wrapped line. The Loro adapter
+merges completed edits as one LWW string, separately from pose. Reloading the
+document restores the last saved text and labels.
 
 Type `@` while editing text or a shape label to open the shared mention picker.
 Search and pick a person/document/reference using the mouse or arrows and Enter.
 Escape dismisses the picker without finishing the text edit. Verify the mention
-renders after Done, reopening, and shape copy/paste. Mention-only text is valid
-content. The local demo does not track references or send mention notifications.
+renders after committing, reopening, and shape copy/paste. Mention-only text is valid
+content. Canvas Next does not yet track references or send mention notifications.
 Task mention badges and avatars follow the text's font size. Verify a horizontal
 corner drag shrinks text smoothly, Option/Alt preserves the center, and a side-edge
 drag changes wrapping at a fixed font size. Corner scaling preserves line layout.
 
-### Canvas Next arrows and connectors (local)
+### Canvas Next arrows and connectors
 
-In `/app/component/canvas-next`, use A (Arrow) or L (Line), then drag
+In a flagged Canvas Next document, use A (Arrow) or L (Line), then drag
 between empty points or shapes. Only the hovered shape shows attachment targets:
 small white circles with blue borders at its center and four edge midpoints.
 The active point gets a larger pale-blue halo, before the initial click as well
@@ -1366,16 +1250,24 @@ moves free ends; bound ends stay attached.
 Check target movement during its preview, reconnecting either end, undo/redo, and
 copying connected shapes together. Copies should connect to copied targets; copying
 only a connector should detach it at its visible endpoints. Deleting a target
-leaves the connector in place, and undo restores its binding. Reset/reload discards
-all demo data. Connector labels and remote endpoint-drag awareness are not present.
+leaves the connector in place, and undo restores its binding. Reloading preserves
+committed connectors. Remote endpoint-drag awareness is not present.
 
-### Canvas Next media and document cards (local)
+Double-click a connector, use T and click its path, or select it and press Enter
+to add or edit its rich-text label. Escape, clicking outside or Cmd/Ctrl+Enter commits one
+undo step. Clearing the text removes only the label. Labels follow the route
+midpoint as endpoints or bound shapes move; clicking a label selects its connector.
+Copy/paste and reload preserve the label. Pasting Excalidraw JSON imports bound
+line/arrow text as connector labels. Connectors import as Straight unless both
+endpoints bind to imported shapes; doubly bound connectors retain their route.
 
-In `/app/component/canvas-next`, Add media offers an upload input and a searchable
+### Canvas Next media and document cards
+
+In a flagged Canvas Next document, Add media offers an upload input and a searchable
 list of existing workspace images/videos. Selecting an existing file inserts its
 reference without uploading again. File drop and pasted images use the same
-insertion path; uploads go to the existing static-file service. The scene itself
-remains disposable. Select a video and use Play/Pause video in the inspector.
+insertion path; uploads go to the existing static-file service. Select a video and
+use Play/Pause video in the inspector.
 
 Add document inserts workspace files as compact 340 × 136 preview cards, one
 surface layer above the canvas and at the front of the scene. Select a card and
@@ -1387,12 +1279,12 @@ popups use the same skeleton. Workspace entity drops insert
 images/videos or document cards as appropriate; pasted Macro links create cards.
 
 Verify move/resize/rotate/flip, grouping, layer order, copy/paste and undo work for
-these items; failures show in the status line or the individual preview. Reset demo
-cancels pending insertion. Reload resets the scene and does not delete any uploaded
-file. SVG files render as media, not editable imported shapes.
+these items; failures show in the status line or the individual preview. Navigating
+away cancels pending insertion and does not delete any uploaded file. SVG files
+render as media, not editable imported shapes.
 
 
-### Canvas Next full embeds (local)
+### Canvas Next full embeds
 
 Add embed lists existing Markdown documents and canvases. Insert one, then choose
 Interact (or double-click the inactive editor) to use its full editor inside the
@@ -1406,8 +1298,8 @@ selected; a transparent selection overlay must not intercept them.
 
 These are real existing editors using their existing permissions and sync. Edits
 inside an embed change the source file; use disposable test files for edit tests.
-The outer Canvas Next scene still resets on reload. Supported full embeds are
-currently Markdown and existing Canvas documents.
+The outer Canvas Next scene persists through the normal versioned save path.
+Supported full embeds are currently Markdown and existing Canvas documents.
 
 Legacy canvas drawing under outer zoom/rotation/flip still needs coordinate-mapping
 work. Do not treat the successful mount/pan checks as transformed drawing coverage.

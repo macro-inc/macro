@@ -1,14 +1,9 @@
-import { type Appearance, createScene, translation } from '@macro-inc/graphics';
+import { createScene, translation } from '@macro-inc/graphics';
+import { initialAppearance } from './defaults';
 
-export const initialAppearance: Appearance = {
-  fill: 'transparent',
-  stroke: 'var(--color-ink)',
-  strokeWidth: 2,
-  opacity: 1,
-  cornerRadius: 0,
-};
+export { initialAppearance } from './defaults';
 
-/** Disposable demo data; refreshing starts a new document. */
+/** Shared test fixture for Canvas Next state and interaction tests. */
 export function createCanvasNextScene() {
   return createScene([
     {

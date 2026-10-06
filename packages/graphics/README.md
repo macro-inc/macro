@@ -2,19 +2,23 @@
 
 Experimental graphics editor with a framework-independent scene tree.
 
+For a short implementation-based reference, start with the
+[Graphics API guide](../../docs/GRAPHICS_API.md).
+
 Status reviewed 2026-09-28. The [parity plan](../../docs/GRAPHICS_PARITY.md) is the
-progress/next-checkpoint index. Local Canvas Next now includes rich text/mentions,
-shape labels, connectors, media, document cards and full embeds. The two-peer Loro
-lab remains a separate, smaller composition; production persistence is not wired.
+progress/next-checkpoint index. Canvas Next now includes rich text/mentions,
+shape labels, connectors, media, document cards and full embeds behind its rollout
+flag. The Loro adapter remains experimental; production persistence is not wired.
 The next product checkpoint is a
 [legacy bridge and color policy](../../docs/CANVAS_LEGACY_BRIDGE.md), kept outside
 the pure core. Expanding peer support is deferred.
 
 - `@macro-inc/graphics`: document, affine math, scene queries, selection, editing,
   validation and local history. No DOM, Solid, app or Loro imports.
-- `@macro-inc/graphics/browser`: pointer capture, keyboard, wheel and local images.
+- `@macro-inc/graphics/browser`: pointer capture, keyboard and wheel input.
 - `@macro-inc/graphics/solid`: read-only reactive projection and keyed renderers.
-- `@macro-inc/graphics/loro`: optional Loro backend and disposable peer harness.
+- `@macro-inc/graphics/loro`: optional Loro backend and presence APIs. The
+  in-memory peer transport lives in test support only.
 - `@macro-inc/graphics/loro/solid`: optional awareness rendering and smoothing.
 
 ## Scene contract
@@ -32,7 +36,8 @@ uses code-unit ordering, never locale-sensitive sorting. Rendering and reverse
 hit testing consume the same depth-first scene order.
 Flat scenes are ordinary trees with shapes directly under the surface. Additional
 typed kinds are text, connector, image, video and document; their feature contracts
-are documented below. Shape labels are owned by rectangle/ellipse geometry.
+are documented below. Shape labels are owned by rectangle, ellipse or connector
+geometry.
 
 Matrices use column vectors: x'=a*x+c*y+e, y'=b*x+d*y+f. World transforms compose
 parent * local. Positive rotation is clockwise; angles are radians. Core queries
@@ -41,17 +46,8 @@ intersection and topmost hits. Invalid roots, cycles, missing/leaf parents,
 nonfinite or noninvertible local/world transforms and invalid dimensions are rejected
 before an atomic document commit.
 
-`createScene` accepts only current typed nodes. There are no schema versions,
-legacy formats, migrations, or durable persistence adapters in this playground.
-
-Demo data is built by
-[`core/test-scenes.ts`](../../apps/web/src/features/graphics-playground/core/test-scenes.ts).
-`createGraphicsTestScene()` and `createNestedTestScene()` produce fresh documents
-on mount. **Reset test scene** reruns the appropriate seed function, clears
-selection/previews/history, selects the selection tool, and resets the camera
-(fitting the nested scene). Reloading also recreates the test document. When the
-model changes, update these seed scripts and test fixtures directly. No test
-documents are read from or written to local storage.
+`createScene` accepts only current typed nodes. Schema versions, legacy formats and
+migrations belong to durable host boundaries such as Canvas Next.
 
 ## Editing
 
@@ -216,32 +212,6 @@ It never enters core session state, history, persistence or collaboration awaren
 The scene tree does not require
 a matching DOM tree.
 
-## Local demos
-
-- `/app/component/graphics-playground`: infinite canvas. Select/Rectangle/Ellipse tools,
-  drag-box selection, Shift-click toggle, Shift-drag addition, group move/delete,
-  Group/Ungroup and rotation via the circle above the selection. Alt-click targets
-  a nested rectangle; ordinary clicks select its outermost group. Single-shape
-  selections expose corner handles and invisible full-edge resize targets. Space/middle-drag and wheel pan;
-  Ctrl/Meta-wheel zooms around the pointer with a gradual exponential curve:
-  100 normalized wheel pixels changes scale by about 22%, which is also the cap
-  for a single zoom-in event. Smaller trackpad deltas stay continuous. Fit scene
-  leaves space for rotation handles.
-  Expand Layers for the scene tree and front/back/forward/backward controls.
-- `/app/component/nested-scene-playground`: registry-mounted tester containing a
-  rotated, nonuniformly scaled outer group, a rotated inner group and root sibling.
-  Expand Layers to inspect hierarchy/select any node directly. Move selected
-  to root demonstrates pose-preserving reparenting. Undo restores its parent.
-- `/app/component/image-markup-playground`: bundled teo.png and local replacement
-  images. Draw annotations, zoom around the image center, fit and clear.
-  Panning stays disabled. Annotations are rectangle children of a surface root.
-  Image decoding/object URLs stay in the host/browser layer and are disposed on
-  replacement/unmount.
-
-Escape/cancellation drops previews. Delete/Backspace and Ctrl/Meta-Z,
-Ctrl/Meta-Shift-Z or Ctrl/Meta-Y apply only when the canvas has focus. Data and
-history reset on reload. Each mounted demo owns an independent editor.
-
 ## Boundaries and verification
 
 One surface per document, a centrally compiled typed shape registry, linear scene
@@ -370,15 +340,11 @@ Its session-only preview document includes new nodes; the durable document remai
 unchanged until a moved gesture commits. Cancellation discards the preview and
 restores the previous selection. Solid keeps original keyed mounts intact.
 
-## Two-peer experiment
+## Loro adapter
 
-`/app/component/graphics-multiplayer-playground` renders Alice and Bob side by side
-with independent selection, camera and local undo. Both use real Loro replicas via
-`@macro-inc/graphics/loro` and exchange update bytes in memory. Go offline, edit both
-sides, then Sync now or Reconnect. Delivery delay and Reset both peers are available.
-The ordinary playgrounds use local item-delta history; this experiment uses
-Loro history exclusively. See [the adapter notes](src/loro/README.md) for its ordered
-tree mapping, geometry conflict policy, limitations and validation cases.
+The in-memory peer harness gives tests two real Loro replicas with independent
+selection, camera and local undo. See [the adapter notes](src/loro/README.md) for
+its ordered tree mapping, geometry conflict policy, limitations and validation cases.
 
 The optional `@macro-inc/graphics/loro/solid` wrapper adds colored peer cursors,
 selection outlines and ghosts of pending drawing/move/resize/rotation gestures.
@@ -404,7 +370,7 @@ matching TextMeasurer. Graphics does not parse editor JSON or infer empty conten
 
 Canvas Next owns its Lexical codec in `canvas-next/core/text-codec.ts`, including
 bounded tree validation, seed construction, serialization and empty-content
-checks. Its clipboard and debug-storage adapters validate imported text/labels.
+checks. Its clipboard adapter validates imported text/labels.
 It uses the shared Markdown builder and StaticLexical renderer for editing,
 display and measurement, and owns the matching markup styles. Only the active item
 mounts an editable editor. The optional Loro adapter continues storing the whole
@@ -412,7 +378,7 @@ string without parsing it; no content migration is needed.
 
 The shared host supports mentions in both text and labels. Mention decorators
 scale with typography; active editing keeps the native caret without an extra
-box outline. Backend mention tracking/notifications are disabled in the demo.
+box outline. Backend mention tracking/notifications remain disabled in Canvas Next.
 
 Single-text side edges change wrapping width; other grips scale font and box
 proportionally. Completed content is one LWW string in the optional Loro adapter,
@@ -424,11 +390,12 @@ Mixed selections containing text scale uniformly to preserve letter proportions;
 use a single text shape’s side edges to change wrapping width. Shape definitions
 express this through the `canDeform` capability used by selection-frame math.
 
-Rectangles and ellipses accept `geometry.label?: ShapeLabel`, containing the same
-portable rich content, font family/size, and measured height. Width is derived from
-the padded shape interior. `setShapeLabelCommand` edits/clears only the label;
+Rectangles, ellipses and connectors accept `geometry.label?: ShapeLabel`, containing
+portable rich content, font family/size, and measured height. Box label width is
+derived from the padded shape interior. Connector labels store a measured width
+and sit at the route midpoint. `setShapeLabelCommand` edits/clears only the label.
 `shapeLabelLayout` supplies a shared local transform for rendering, editing, and
-picking. The label wraps and fits uniformly inside its owner. Shape resizing uses
+picking. Box labels wrap and fit uniformly inside their owner. Shape resizing uses
 the injected measurer to update label height; headless hosts without one retain the
 stored height and should remeasure before displaying changed wrapping. Labels are
 part of shape geometry in the core; fragments preserve their serialized strings.
@@ -478,8 +445,9 @@ references detach at their current visible endpoints. Deleting a target detaches
 surviving connectors in the same history transaction; undo restores the references.
 Reparenting keeps world positions through the existing tree math. The existing Loro
 adapter transports connector geometry and references without core dependencies on
-collaboration. Endpoint drafts are local only; connector-specific remote gesture
-awareness and connector labels are follow-up work.
+collaboration. Connector labels share the existing label/text path and Loro mapping.
+Endpoint drafts are local only; connector-specific remote gesture awareness remains
+follow-up work.
 
 ### Embedded items
 

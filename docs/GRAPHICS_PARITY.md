@@ -15,10 +15,9 @@ planning inventory, not a fresh runtime certification of every
 legacy feature. Excalidraw master may lead the deployed app; Plus-only product
 features are outside the baseline. Priorities below are recommendations.
 
-A1 and A2 are now implemented in the local [Canvas Next demo](../apps/web/src/features/block-canvas/canvas-next/README.md)
-at `/app/component/canvas-next`, gated by `USE_CANVAS_NEXT`. It uses fresh in-memory
-seed data. Saved documents now have a separate opt-in rollout and versioned JSON
-load/save path; production sync remains deferred.
+A1 and A2 are implemented in [Canvas Next](../apps/web/src/features/block-canvas/canvas-next/README.md).
+Saved documents use an opt-in rollout and versioned JSON load/save path;
+production sync remains deferred.
 
 The scene/transform foundation, everyday editing, rich text/mentions, connectors,
 media, document cards and full document/canvas embeds exist locally. The largest
@@ -32,7 +31,7 @@ Solid component identity and collaboration isolation while filling those gaps.
 | --- | --- | --- |
 | Pure TypeScript core | Document/tree, geometry, operations, selection and history are in `packages/graphics`; no DOM, Solid, Zod or Loro dependency in the root export | SyncService coordination remains deferred; versioned JSON saves are wired in Canvas Next |
 | Solid items and reactivity | Keyed Solid renderers remain; reordering preserves mounts. Geometry rendering/queries use immutable snapshots to reuse caches; UI consumers retain the reconciled store | Broad session updates and whole-document validation still exist; no general incremental scene index or culling |
-| Multiple graphic apps | Canvas Next, centered-image markup, nested-scene and peer testers share the same core | Image markup remains a small rectangle prototype; slides/design products are unstarted |
+| Multiple graphic apps | Canvas Next uses the shared core | Additional products such as image markup, slides and design are unstarted |
 | Typed feature contributions | Explicit shape definitions, renderer registry, typed commands and separate gesture contracts; extension recipe documented | Registry is centrally compiled; per-host core feature composition and runtime plugins are not implemented |
 | TypeScript owns types | Explicit TS model and runtime validation; text is stored as a string | Canvas Next owns Lexical codecs and legacy schema migration; graphics treats text as opaque |
 | Loro/SyncService path | Optional LoroTree backend, native local undo, ephemeral awareness, whole-string text and asset/reference mapping have tests | Canvas Next uses whole-file versioned JSON saves; real transport, collaborative recovery and durable Loro initialization remain open |
@@ -42,22 +41,21 @@ interactive document cards with loading skeletons; em-sized mention decorators;
 no extra outline while editing text; cached pencil geometry during navigation and
 transform previews; centered Fit Scene that zooms in/out to the current viewport
 with 100 screen pixels per side on the limiting axis (within camera zoom limits).
-The Canvas Next demo restores a browser-local debug snapshot. Real documents use
-version 2 JSON and do not read that snapshot.
+Canvas Next documents use version 2 JSON through the existing storage endpoint.
 
 ## 1. Legacy Canvas parity
 
-“Missing” means absent from the new graphics package and its playgrounds. A type
+“Missing” means absent from the new graphics package and Canvas Next. A type
 in the legacy schema alone does not count as a working user feature.
 
 | Capability | Legacy Canvas evidence | New graphics status | Work owner |
 | --- | --- | --- | --- |
-| Infinite view, pan/zoom, fit | RenderState, CanvasController, zoom/center controls | Present; Fit Scene centers full geometry and fits current viewport with 100px margins; image demo has centered zoom | Graphics browser adapter; Canvas controls |
+| Infinite view, pan/zoom, fit | RenderState, CanvasController, zoom/center controls | Present; Fit Scene centers full geometry and fits current viewport with 100px margins | Graphics browser adapter; Canvas controls |
 | Touch navigation | CanvasController uses pinch gestures | Multi-touch missing | Graphics browser adapter |
 | Click, multiselect, marquee, move, resize, delete | Selection and operation modules | Present; shape-aware click-through and transform modifiers added | Graphics core |
 | Grouping and layer actions | Group records, reorder module, render queue | Present with a real transform tree, reparenting and stable sibling ordering | Graphics core |
 | Rotation and nested transforms | No equivalent transform-tree/rotation model found | Present; preserve this foundation | Graphics core |
-| Undo/redo | Snapshot history | Present locally; Loro native local undo in the peer demo | Core history boundary; optional Loro adapter |
+| Undo/redo | Snapshot history | Present locally; Loro native local undo is covered by the peer harness | Core history boundary; optional Loro adapter |
 | Rectangle and ellipse | Rectangle creation; ellipse schema/renderer support | Both creation tools present | Graphics shape modules and Solid renderers |
 | Fill/stroke and richer appearance | Style model and floating controls: colors, line weight, corner rounding, text size; opacity rendering | Fill/stroke, stroke width, opacity and rectangle radius present; text font family/size and rich formatting present | Typed graphics style capabilities; Canvas inspector |
 | Freehand drawing | Pencil operation, stored points and renderer | Pencil present: smoothed ink, mouse pressure simulation and pen pressure | Graphics path feature; browser sampling; Canvas tool |
@@ -72,7 +70,7 @@ in the legacy schema alone does not count as a working user feature.
 | Macro entity cards and mentions | Documents, chats, projects and other entity references; Lexical mentions | Interactive DocumentPreview cards, full Markdown/legacy-canvas embeds, and shared mentions in text/labels present; other standalone entity cards pending | Canvas/Macro feature; generic graphics item/focus contract |
 | Import and download | JSON load/save/download; SVG import path | Bidirectional legacy bridge is the next planned checkpoint; converter not implemented | Legacy compatibility adapter and Canvas host |
 | Saving and reopening | Whole-document JSON saves to DSS; camera saved separately | Missing by design in prototypes | Persistence adapter and Canvas document host |
-| Permissions, sharing and document shell | canEdit, sharing, file actions, location links, Ask Macro, block/drive hosts | Registry demos only | Canvas/Macro host |
+| Permissions, sharing and document shell | canEdit, sharing, file actions, location links, Ask Macro, block/drive hosts | Saved-document host is wired behind the rollout flag | Canvas/Macro host |
 | Concurrent document editing | No Loro/SyncService canvas document path found; live avatars are not document sync | Loro two-peer experiment only, with ephemeral cursor/selection/gesture awareness | Optional collaboration adapter and host wiring |
 | Toolbars, contextual controls, shortcuts | Legacy toolbar, floating inspector and shortcut bindings | Shared Toolbar/Phosphor tools, bottom-left navigation/history, floating inspectors/layers, standard context menu and focus-scoped Macro hotkeys | Canvas composition and browser bindings |
 
@@ -109,13 +107,13 @@ The table distinguishes priority from evidence of availability.
 
 | Additional capability | Current graphics gap | Recommendation / owner |
 | --- | --- | --- |
-| Diamond, editable lines and arrows | Lines/arrows present with endpoint editing; diamond missing | Early graphics feature modules; Canvas tools |
-| Arrow binding and arrow labels | Center/edge bindings present; connector labels missing | Early graphics reference/attachment semantics; text UI in adapters |
-| Pressure-aware freehand and erasing | Pencil/pressure present; eraser missing | Eraser and point editing later; geometry in graphics |
-| Text layout, wrapping and container-bound text | Auto-width/wrapped text, font scaling, and rectangle/ellipse labels present | Early text feature; measurement/editing outside pure core |
-| Stroke variants, fill patterns, roundness, opacity | Width, roundness and opacity present; variants/patterns missing | Basic styles early; optional painter for sketch/pattern styles |
-| Duplicate/Alt-drag, flip, style copying | Duplicate/Alt-drag and flipping through resize-zero present; dedicated flip actions/style copying missing | Core commands; Canvas gestures/menus |
-| Align/distribute and object/grid snapping | Align/distribute and angular snapping present; object/grid snapping missing | Shared geometry/session features; Canvas policy and guides |
+| Diamond, editable lines and arrows | Lines/arrows and endpoint editing are present; diamond is approximated on Excalidraw import | Add a native diamond kind only if product requirements need it |
+| Arrow binding and arrow labels | Center/edge bindings and connector labels are present | Arbitrary bend-point editing and remote endpoint awareness remain |
+| Pressure-aware freehand and erasing | Pencil/pressure and whole-shape erasing are present | Point editing remains later work |
+| Text layout, wrapping and container-bound text | Auto-width/wrapped text, font scaling, and rectangle/ellipse/connector labels are present | Measurement/editing remain outside pure core |
+| Stroke variants, fill patterns, roundness, opacity | Width, dashed/dotted strokes, roundness and opacity are present; fill patterns are missing | Optional painter for sketch/pattern styles |
+| Duplicate/Alt-drag, flip, style copying | Duplicate/Alt-drag and flip actions are present; style copying is missing | Canvas gestures/menus |
+| Align/distribute and object/grid snapping | Align/distribute, grid and angular snapping are present; object snapping is missing | Shared geometry/session features; Canvas policy and guides |
 | Lock/unlock and view mode | No item locks; limited browser editing toggle | Explicit edit eligibility in graphics; permission policy in host |
 | Frames, clipping and frame membership | Groups exist but do not clip | Add after mixed content; useful to slides/design too |
 | Image crop and flip | Flip through resize-zero is present; crop pending | Image geometry crop extension |
@@ -124,8 +122,8 @@ The table distinguishes priority from evidence of availability.
 | Links and web embeds | Rich-text links and Macro document/legacy-canvas embeds present; arbitrary web embeds missing | Typed optional items/references; host navigation and embed security |
 | Find text, tool locking, context menus and shortcut discoverability | Basic context menu and Macro hotkeys present; find/tool lock missing | Canvas workflow; reusable query/input pieces as needed |
 | Laser and following another peer | Missing | Later collaboration/presentation add-ons; never durable scene state |
-| Real network collaboration and recovery | In-memory replica/awareness demo only | Production adapter milestone; reuse Macro collaboration infrastructure |
-| Local saving and share links | Disposable scenes only | Host persistence/sharing; retain disposable playgrounds |
+| Real network collaboration and recovery | In-memory replica/awareness test harness only | Production adapter milestone; reuse Macro collaboration infrastructure |
+| Local saving and share links | Versioned JSON saving is wired | Collaboration-backed persistence and recovery remain |
 
 Newest upstream UI/model entries also include sticky notes, lasso, draw-to-shape,
 bucket fill, diagram generation and AI workflows. Treat these as a separate
@@ -218,15 +216,15 @@ not authorization to implement all features at once.
 | C1: lines (baseline implemented) | Path geometry, free endpoints, arrowheads, endpoint editing | Line/arrow tools | Paths select, transform, layer, copy and undo alongside text/shapes. Arbitrary bend editing remains separate. |
 | C2: connected diagrams (bindings/routing implemented; labels and remote endpoint previews pending) | Bindings, target geometry, deletion/reference rules | Connect/reconnect UX and labels; routing styles incrementally | Nested target move/rotate/reparent and concurrent target deletion converge with valid endpoints. |
 | D1: media and document content (baseline implemented) | Image/video/document kinds, stable references and Loro round-trip tests | Paste/drop/upload/workspace picker, clickable preview cards, full document/legacy-canvas embeds | Local insert/transform/copy/undo and reset-during-upload tests exist. Broader mixed-content layering/focus and interrupted-asset scenarios remain integration gates. |
-| D2: markup and drawing (partial) | Pencil input built; annotation anchors/export still missing | Centered teo.png rectangle demo built; comments and richer markup not implemented | Same graphics features work in whiteboard and centered image host; annotation-specific UX is a later checkpoint. |
+| D2: markup and drawing (partial) | Pencil input built; annotation anchors/export still missing | Comments and richer markup are not implemented | A future centered-image host should reuse the same core; annotation-specific UX is a later checkpoint. |
 | Interaction/performance polish (implemented 2026-09-28) | Immutable geometry cache reuse during pan/hover/selection and move/rotation previews; viewport-based scene fit | Shared controls/context menu, text-edit outline cleanup, centered fit with 100px margins | Targeted pencil regression and browser checks pass; broad mixed-scene performance remains unmeasured. |
 | E: whiteboard polish | Snap constraints, edit eligibility, frames/clipping incrementally | Guides, locks, frames, touch, crop, eraser, libraries and exports | A useful Excalidraw-style board; mixed-content layering and responsiveness remain stable. Split this into individual feature checkpoints. |
 | Production gate | Finalize feature mappings/conflict behavior and import validation | Durable document host, existing sync infrastructure, permissions, recovery and legacy import | Reopen, offline/reconnect, duplicate delivery, asset failure and read-only tests pass before replacing old Canvas. Can proceed alongside later polish. |
 
 Pencil, text/mentions, connectors and media have advanced beyond A2. The chosen
 text policy is whole-string LWW; a character/mark CRDT is not planned. Keep the
-shape, nested-scene, image and peer demos as focused regression fixtures while
-bringing their integration coverage into the full Canvas Next composition.
+headless shape and peer fixtures focused while bringing integration coverage into
+the full Canvas Next composition.
 
 ## 6. Next checkpoints to choose from
 
@@ -243,17 +241,17 @@ P1/P2 remain smaller whiteboarding alternatives.
 | **N1: full Canvas Next two-peer lab (deferred)** | Compose the existing Canvas view with injected editors/backends, actual rich-text measurement/renderers, clipboard and optional presence. Give new kinds typed ghosts or intentional bounds previews; handle connector endpoint drafts. Keep transport in memory and seeds disposable. Core changes only for demonstrated semantic gaps. | Both peers can edit a mixed scene with text/mentions/labels, pencil, bound connectors and media/card references. Text-versus-move and conflicting whole-string edits behave as specified; local undo preserves unrelated remote edits; focus, stacking and keyed mounts survive. Offline/reconnect and delayed commits work. Measure pan/select/drag in this mixed fixture; no network service or persistence required. |
 | **N2: read-only and locked items** | Core edit eligibility shared by commands, hit testing and gestures; Canvas exposes lock/unlock and injects host edit permission. | Pointer, hotkeys, paste/drop, text editing and async insertion all respect read-only state. Locked items cannot be mutated through alternate input paths. Navigation and explicitly allowed links remain usable. |
 | **N3: durable new-document host** | Finalize conflict/initialization contracts; connect newly created Canvas Next documents behind an opt-in host to the existing collaboration manager, engine, WAL, snapshots and SyncService. Follow the spreadsheet session's recovery/disposal patterns. Audit server routing before promising no backend work. | New documents reopen, recover offline edits, handle duplicate delivery/storage failure and report local-versus-remote save status. Permissions work. Legacy documents still use the old host; migration/import is a separate reviewed checkpoint. |
-| **P1: connector labels** | Graphics attachment/layout/edit commands plus Canvas's existing rich-text editor; define resize, clipboard, deletion and whole-string LWW mapping. | A label follows its connector, edits naturally, survives rerouting/copy/undo, and round-trips through the peer lab. |
+| **P1: connector labels (implemented)** | Graphics attachment/layout/edit commands plus Canvas's existing rich-text editor, clipboard, deletion and whole-string LWW mapping. | Labels follow connectors, survive rerouting/copy/undo and round-trip through the peer harness. |
 | **P2: object snapping and guides** | Pure snap candidates/constraints in graphics; session-only guides and modifier policy in Canvas. Start with movement. | Centers/edges snap at a constant screen-space tolerance under zoom/nesting; temporary bypass, cancellation and undo remain predictable. |
 
 Build the bidirectional legacy bridge before expanding peer support; production
 cutover and SVG/PNG export remain separate gates. Frames, crop, eraser, touch, comments, libraries and slides/design are still
 backlog; do not combine them into one large polish milestone. Keep the current
-playgrounds unversioned and unsaved even when a real document host is introduced.
+test fixtures unversioned and unsaved when a real document host is introduced.
 
-Why N1 remains useful later: the core mapping has automated coverage for new content, but the
-visual peer lab still exposes only Select/Rectangle/Ellipse and default renderers.
-It has not exercised the full rich editor, asset views or embed focus together.
+Why N1 remains useful later: the core mapping has automated coverage for new content,
+but the in-memory harness has not exercised the full rich editor, asset views or
+embed focus together.
 That is a smaller architectural checkpoint than production sync and directly tests
 the boundary needed for it. Embeds retain their own document permissions/sync;
 outer-scene collaboration synchronizes references and presentation only.

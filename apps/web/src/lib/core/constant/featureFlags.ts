@@ -91,18 +91,11 @@ export function defineFlag(config: RemoteFlagConfig | EnvFlagConfig): Flag {
   };
 }
 
-/** Canvas Next is a disposable local demo. Never enabled in deployed builds. */
-export const USE_CANVAS_NEXT =
-  LOCAL_ONLY &&
-  defineFlag({
-    env: 'USE_CANVAS_NEXT',
-    default: true,
-  }).enabled;
-
 /** Opt-in versioned canvas documents. Unset overrides defer to PostHog. */
 export const enableCanvasNext = defineFlag({
   key: 'enable-canvas-next',
   env: 'ENABLE_CANVAS_NEXT',
+  default: LOCAL_ONLY ? false : undefined,
 });
 
 /**

@@ -49,6 +49,7 @@ export {
   type ItemRenderers,
   type ShapeViewProps,
 } from './shape-renderers';
+export { ConnectorView } from './shapes/connector';
 export { EllipseView } from './shapes/ellipse';
 export { RectangleView } from './shapes/rectangle';
 export { TextView } from './shapes/text';

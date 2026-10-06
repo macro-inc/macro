@@ -144,3 +144,60 @@ it('finishing a text draft preserves an intervening move', () => {
     transform: [1, 0, 0, 1, 110, 20],
   });
 });
+
+it('edits connector labels at their visible bound midpoint and clears only the label', () => {
+  const editor = createGraphicsEditor([
+    {
+      id: 'link',
+      type: 'connector',
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
+      transform: [1, 0, 0, 1, 0, 0],
+      appearance: { stroke: 'black', fill: 'transparent' },
+      geometry: {
+        start: { point: { x: 0, y: 0 } },
+        end: {
+          point: { x: 10, y: 0 },
+          binding: { targetId: 'target', anchor: 'left' },
+        },
+        route: 'straight',
+        startHead: 'none',
+        endHead: 'arrow',
+      },
+    },
+    {
+      id: 'target',
+      type: 'rectangle',
+      placement: { parentId: 'scene-root', sortKey: 'a1' },
+      transform: [1, 0, 0, 1, 400, -50],
+      appearance: { stroke: 'black', fill: 'transparent' },
+      geometry: { width: 100, height: 100 },
+    },
+  ]);
+  cleanups.push(editor.dispose);
+  const before = editor.document.items.link;
+  const state = createTextState(
+    editor,
+    () => ({ width: 100, height: 30 }),
+    () => ({ stroke: 'black', fill: 'transparent' })
+  );
+  state.edit('link');
+  expect(state.isLabel()).toBe(true);
+  expect(state.draft()?.transform).toEqual([1, 0, 0, 1, 150, -15]);
+  state.change(plainRichText('Bound label'));
+  expect(editor.document.items.link).toEqual(before);
+  state.finish();
+  const labeled = editor.document.items.link;
+  expect(labeled).toMatchObject({
+    type: 'connector',
+    geometry: {
+      label: { width: 100, height: 30 },
+      end: { binding: { targetId: 'target' } },
+    },
+  });
+  state.edit('link');
+  state.change(plainRichText());
+  state.finish();
+  expect(editor.document.items.link).toEqual(before);
+  editor.undo();
+  expect(editor.document.items.link).toEqual(labeled);
+});

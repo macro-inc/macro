@@ -2,8 +2,8 @@ import { onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { expect, it, vi } from 'vitest';
 import { createScene, translation } from '../src/core';
-import { createGraphicsPeerLab } from '../src/loro';
 import { GraphicsSurface, RectangleView } from '../src/solid';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 it('remote edits and reordering preserve Solid mounts, DOM identity and local selection', () => {
   const lab = createGraphicsPeerLab(

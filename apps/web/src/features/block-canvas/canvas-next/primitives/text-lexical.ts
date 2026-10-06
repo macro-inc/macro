@@ -34,7 +34,7 @@ export function serializeCanvasText(editor: LexicalEditor): RichText {
   );
 }
 export function createCanvasTextConfig(onChange: (content: RichText) => void) {
-  // The disposable canvas has no source document or mention notifications.
+  // Canvas text does not emit source-document mention notifications.
   return buildConfig('markdown')
     .namespace('canvas-next-text')
     .withHistory()

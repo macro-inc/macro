@@ -8,14 +8,14 @@ ellipse, pencil, text, connector, image, video and document items. Canvas Next
 composes rich text/labels/mentions, media/cards/embeds and shared controls on this
 foundation. See the [graphics README](../packages/graphics/README.md) for extension
 contracts and [parity plan](GRAPHICS_PARITY.md) for current progress/next steps.
-Demos remain unversioned and disposable; document storage/migration is not supported.
+Saved Canvas Next documents use a versioned storage and migration boundary.
 
 The current implementation supports one surface per document, fractional string sibling
 order keys, linear queries and local snapshot undo. Multi-surface documents,
 decomposition inspectors and general incremental scene indexes remain future work.
 Derived pencil ink is cached by immutable geometry; the Solid snapshot path and
 move/rotation previews now preserve this cache. An initial
-Loro convergence spike and two-peer visual playground are implemented separately;
+Loro convergence spike and a two-peer automated harness are implemented separately;
 their geometry conflict policy is still experimental. The design below records the intended boundary; those future
 capabilities must not be inferred from the local prototype.
 
@@ -162,8 +162,8 @@ Require a documented policy and convergence tests for move versus reparent, oppo
 reparents, and deleting a group while another peer extracts a child. Do not call the
 schema collaboration-ready until these cases have a defined outcome.
 
-Keep one current TypeScript model during playground development. Update the seed
-scripts and reset test documents when it changes; do not migrate disposable data.
+Keep one current TypeScript model in the graphics package. Update test fixtures when
+it changes; migrate only durable Canvas document formats.
 Validate tree references, transforms and geometry before editor mutations. Add a
 versioned import boundary only when durable or exchanged documents require it.
 
@@ -176,16 +176,16 @@ versioned import boundary only when durable or exchanged documents require it.
 2. Editing kernel: atomic structural operations and undo. Test reparent/group/
    ungroup world-pose preservation, ordering, descendant deletion/restoration,
    cycle rejection, mixed-parent movement and parent/child selection normalization.
-3. Adapt the demos: rectangle rendering, selection, marquee, move and resize all
-   consume scene queries. Both the infinite canvas and centered image demo work
-   on surface roots. Include a seeded nested rotated group to expose accidental
-   world-space assumptions. Verify keyed rendering and zoom-independent handles.
+3. Adapt the product surfaces: rectangle rendering, selection, marquee, move and
+   resize all consume scene queries. Include a nested rotated-group fixture to
+   expose accidental world-space assumptions. Verify keyed rendering and
+   zoom-independent handles.
 4. Validate the Loro structural mapping in an isolated multi-replica harness before
    persistence or network integration. This can inform the storage adapter without
    making local scene math depend on Loro.
 
 Gates 1–3 are implemented. Gate 4 now has an initial automated harness and a visual
-two-peer playground. See [the Loro adapter notes](../packages/graphics/src/loro/README.md)
+two-peer test harness. See [the Loro adapter notes](../packages/graphics/src/loro/README.md)
 for tested cases and the provisional parent/pose mismatch policy. Production schema
 selection and sync integration remain open; shared documents use native Loro undo,
 never local snapshot history.

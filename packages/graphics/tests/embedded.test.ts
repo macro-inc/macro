@@ -11,7 +11,7 @@ import {
   type ShapeItem,
   translation,
 } from '../src/core';
-import { createGraphicsPeerLab } from '../src/loro';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const disposers: (() => void)[] = [];
 afterEach(() => disposers.splice(0).forEach((dispose) => dispose()));

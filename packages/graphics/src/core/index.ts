@@ -96,6 +96,7 @@ export {
   type ShapeLabel,
   shapeLabelLayout,
   shapeLabelText,
+  withShapeLabel,
 } from './shapes/label';
 export {
   type PencilGeometry,
@@ -117,6 +118,7 @@ export {
   textDefinition,
 } from './shapes/text';
 export { snapPoint, snapTranslation, snapValue } from './snapping';
+export { regenerateScaledShapes, stretchShapes } from './stretch';
 export { selectedShapeIds } from './style-selection';
 export * from './text-commands';
 export { textTargetAt } from './text-target';

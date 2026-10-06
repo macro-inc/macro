@@ -1,7 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createScene, translation } from '../src/core';
-import { createGraphicsPeerLab, currentPresencePreview } from '../src/loro';
+import { currentPresencePreview } from '../src/loro';
 import type { PresencePacket } from '../src/loro/presence';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const dispose: (() => void)[] = [];
 afterEach(() => {
@@ -79,23 +80,23 @@ it('captures nested pending moves in world space and clears on cancel', () => {
   expect(b.presence.getRemote()[0]!.preview).toBeNull();
   expect(lab.status().delivered).toBe(0);
 });
-it.each(['rectangle', 'ellipse'] as const)(
-  'shares a pending %s without creating a remote item',
-  (kind) => {
-    const { a, b } = setup();
-    a.editor.beginShape(kind, { x: 20, y: 30 });
-    a.editor.updateShape({ x: 100, y: 90 });
-    vi.advanceTimersByTime(50);
-    expect(b.presence.getRemote()[0]?.preview).toMatchObject({
-      kind: 'draw',
-      shapes: [{ kind, width: 80, height: 60, world: [1, 0, 0, 1, 20, 30] }],
-    });
-    expect(Object.keys(b.editor.document.items)).toHaveLength(4);
-    a.editor.cancelShape();
-    vi.advanceTimersByTime(50);
-    expect(b.presence.getRemote()[0]?.preview).toBeNull();
-  }
-);
+it.each([
+  'rectangle',
+  'ellipse',
+] as const)('shares a pending %s without creating a remote item', (kind) => {
+  const { a, b } = setup();
+  a.editor.beginShape(kind, { x: 20, y: 30 });
+  a.editor.updateShape({ x: 100, y: 90 });
+  vi.advanceTimersByTime(50);
+  expect(b.presence.getRemote()[0]?.preview).toMatchObject({
+    kind: 'draw',
+    shapes: [{ kind, width: 80, height: 60, world: [1, 0, 0, 1, 20, 30] }],
+  });
+  expect(Object.keys(b.editor.document.items)).toHaveLength(4);
+  a.editor.cancelShape();
+  vi.advanceTimersByTime(50);
+  expect(b.presence.getRemote()[0]?.preview).toBeNull();
+});
 it('shares box selection and resize/rotation action kinds', () => {
   const { a, b } = setup();
   a.editor.beginBoxSelection({ x: 0, y: 0 });

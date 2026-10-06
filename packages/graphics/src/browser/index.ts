@@ -16,8 +16,6 @@ import {
 import { isShapeKind } from '../core/shapes/registry';
 import { selectionTarget } from './selection-target';
 
-export { type LocalImage, loadLocalImage } from './local-image';
-
 const WHEEL_ZOOM_RATE = 0.002;
 const MAX_WHEEL_ZOOM_EXPONENT = 0.2;
 

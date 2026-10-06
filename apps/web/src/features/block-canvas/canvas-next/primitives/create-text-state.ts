@@ -4,14 +4,17 @@ import {
   children,
   type GraphicsCommand,
   type GraphicsEditor,
+  inverse,
   type LabelShape,
   measureShapeLabel,
+  multiply,
   type Point,
   type RichText,
   type ShapeItem,
   setShapeLabelCommand,
   setTextCommand,
   shapeLabelText,
+  shapeProjection,
   snapPoint,
   snapValue,
   sortKeysBetween,
@@ -19,6 +22,8 @@ import {
   type TextMeasurer,
   textDefinition,
   translation,
+  withShapeLabel,
+  worldMatrix,
 } from '@macro-inc/graphics';
 import { createSignal } from 'solid-js';
 import {
@@ -38,6 +43,21 @@ export function createTextState(
   const [editing, setEditing] = createSignal<TextDraft>();
   const draft = () => {
     const current = editing();
+    if (current?.kind === 'label' && current.item.type === 'connector') {
+      const { item, transform } = shapeProjection(
+        editor.document,
+        current.item.id,
+        { [current.item.id]: current.item }
+      );
+      if (item?.type !== 'connector') return;
+      return shapeLabelText({
+        ...item,
+        transform: multiply(
+          inverse(worldMatrix(editor.document, item.placement.parentId)),
+          transform
+        ),
+      });
+    }
     return current?.kind === 'label'
       ? shapeLabelText(current.item)
       : current?.item;
@@ -76,7 +96,7 @@ export function createTextState(
       );
       return {
         ...current,
-        item: { ...item, geometry: { ...item.geometry, label } },
+        item: withShapeLabel(item, label),
       };
     });
   }
@@ -175,7 +195,7 @@ export function createTextState(
         );
       setEditing({
         kind: 'label',
-        item: { ...item, geometry: { ...item.geometry, label } },
+        item: withShapeLabel(item, label),
       });
     }
   }

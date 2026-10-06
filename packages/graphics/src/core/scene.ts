@@ -269,6 +269,32 @@ const frozenDocuments = new WeakSet<GraphicsDocument>();
 const frozenItems = new WeakSet<GraphicsItem>();
 const frozenGeometries = new WeakMap<object, ShapeKind>();
 
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function cloneGeometryValue<T>(value: T, ancestors = new WeakSet<object>()): T {
+  if (!value || typeof value !== 'object') return value;
+  if (ancestors.has(value)) throw new Error('Cyclic geometry value');
+  const prototype = Object.getPrototypeOf(value);
+  if (
+    !Array.isArray(value) &&
+    prototype !== Object.prototype &&
+    prototype !== null
+  )
+    throw new Error('Invalid geometry value');
+  ancestors.add(value);
+  const clone = (Array.isArray(value) ? [] : {}) as Record<string, unknown>;
+  for (const [key, child] of Object.entries(value))
+    clone[key] = cloneGeometryValue(child, ancestors);
+  ancestors.delete(value);
+  return clone as T;
+}
+
 export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
   if (frozenDocuments.has(doc)) return doc;
   if (doc.items[doc.rootId]?.type !== 'surface')
@@ -349,8 +375,10 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
                   geometry:
                     frozenGeometries.get(node.geometry) === node.type
                       ? node.geometry
-                      : shapeDefinition(node.type).freezeGeometry(
-                          node.geometry
+                      : deepFreeze(
+                          shapeDefinition(node.type).freezeGeometry(
+                            cloneGeometryValue(node.geometry)
+                          )
                         ),
                   appearance: Object.freeze({ ...node.appearance }),
                 }

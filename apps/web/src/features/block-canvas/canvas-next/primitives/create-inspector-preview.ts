@@ -2,6 +2,7 @@ import type {
   CommandContext,
   GraphicsDocument,
   GraphicsEditor,
+  TextMeasurer,
 } from '@macro-inc/graphics';
 import { batch, createSignal, onCleanup } from 'solid-js';
 
@@ -12,7 +13,10 @@ export type InspectorNumberScrub = {
 };
 
 /** Inspector gestures paint a draft scene; only release changes the document. */
-export function createInspectorPreview(editor: GraphicsEditor) {
+export function createInspectorPreview(
+  editor: GraphicsEditor,
+  measureText?: TextMeasurer
+) {
   const [document, setDocument] = createSignal<GraphicsDocument>();
   let cancelActive: (() => void) | undefined;
   const cancel = () => cancelActive?.();
@@ -31,6 +35,7 @@ export function createInspectorPreview(editor: GraphicsEditor) {
       document: editor.document,
       selection: [...editor.getSession().selectedIds],
       snapUnit: editor.getSnapUnit(),
+      measureText,
     };
     let active = true;
     const end = (revert: boolean) => {

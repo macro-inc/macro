@@ -9,11 +9,8 @@ import {
   translation,
   worldMatrix,
 } from '../src/core';
-import {
-  createGraphicsPeerLab,
-  createLoroGraphicsBackend,
-  createLoroSeed,
-} from '../src/loro';
+import { createLoroGraphicsBackend, createLoroSeed } from '../src/loro';
+import { createGraphicsPeerLab } from './helpers/peer-lab';
 
 const seed = () =>
   createScene([
