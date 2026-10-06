@@ -4,9 +4,10 @@
 use super::financial::FundingPeriod;
 use super::ledger::SettlementPolicy;
 use super::models::{
-    AllowanceDecision, AllowanceStore, BillingPeriod, BillingSettings, Entitlement,
-    OpenPeriodStart, OverageChargeStatus, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
-    SeatGeneration, SeatUsage, SubscriptionScope, UsageSnapshot,
+    AllowanceDecision, AllowanceStore, AutoReloadThresholds, BillingPeriod, BillingSettings,
+    CreditReloadStatus, Entitlement, OpenPeriodStart, OverageChargeStatus, PeriodAllowance,
+    PeriodLedger, Result, SeatAllowance, SeatGeneration, SeatUsage, SubscriptionScope,
+    UsageSnapshot,
 };
 use super::policy::UsageAllocation;
 use ai_usage::domain::financial::{
@@ -96,6 +97,28 @@ pub struct PendingCharge {
     /// The Stripe invoice an earlier attempt opened for this charge, if any.
     /// A retry pays that invoice instead of opening a second one.
     pub stripe_invoice_id: Option<String>,
+}
+
+/// An automatic credit reload reserved in the ledger that still has to be
+/// collected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingReload {
+    /// The `ai_credit_reload` row.
+    pub id: Uuid,
+    /// Amount to collect and then book as credits, customer cents.
+    pub amount_cents: i64,
+    /// The Stripe invoice an earlier attempt opened for this reload, if any.
+    /// A retry pays that invoice instead of opening a second one.
+    pub stripe_invoice_id: Option<String>,
+}
+
+/// A credit reload whose Stripe invoice outcome just changed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedReload {
+    /// Who the credits belong to.
+    pub payer: MacroUserIdStr<'static>,
+    /// Amount collected (or not), customer cents.
+    pub amount_cents: i64,
 }
 
 /// What a settlement booked.
@@ -265,6 +288,72 @@ pub trait BillingRepo: Send + Sync + 'static {
         &self,
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<OverageChargeStatus>>> + Send;
+
+    /// Set overage on/off with the cap, and optionally the reload thresholds.
+    /// `None` thresholds keep the stored ones. Clears both the overage and the
+    /// reload suspension.
+    fn update_auto_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        enabled: bool,
+        overage_limit_cents: i64,
+        thresholds: Option<&AutoReloadThresholds>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Atomically decide whether to reload credits: under the payer's row
+    /// lock, read the balance and the period ledger, run
+    /// [`plan_reload`](super::ledger::plan_reload) with the stored thresholds
+    /// against the usage `chargeable_customer_cents` that credits or charges
+    /// have not yet covered, and reserve a pending reload. Reloads already
+    /// reserved or paid in the UTC calendar month containing `now` count
+    /// against the monthly limit.
+    ///
+    /// `None` unless [`BillingSettings::auto_reload_active`] holds. A reload
+    /// reserved earlier whose collection never finished (pending, no invoice,
+    /// stale) is handed back so the retry reuses its id and Stripe idempotency
+    /// keys; any other pending reload blocks a new one until Stripe resolves it.
+    fn reserve_credit_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+        chargeable_customer_cents: i64,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<PendingReload>>> + Send;
+
+    /// Record the result of collecting a reserved reload.
+    fn finish_credit_reload(
+        &self,
+        reload_id: Uuid,
+        stripe_invoice_id: Option<&str>,
+        status: CreditReloadStatus,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Book a collected reload as purchased credits. Returns `false` when
+    /// `stripe_invoice_id` was already booked (collector and webhook both
+    /// reported it).
+    fn record_credit_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+        stripe_invoice_id: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Update a reload by its Stripe invoice (webhook). Returns the payer and
+    /// amount when the invoice was one of ours *and* the status changed.
+    /// `Paid` is terminal: a late or duplicate failure event never un-pays a
+    /// reload, and re-reporting the current status is a no-op.
+    fn resolve_credit_reload_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        status: CreditReloadStatus,
+    ) -> impl Future<Output = Result<Option<ResolvedReload>>> + Send;
+
+    /// Pause automatic reloads after a failed collection. Overage itself
+    /// stays as it was.
+    fn suspend_auto_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// A one-off credit purchase to start.

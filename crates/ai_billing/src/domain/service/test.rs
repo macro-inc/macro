@@ -1,10 +1,10 @@
 use super::*;
-use crate::domain::ledger::plan_settlement;
+use crate::domain::ledger::{ReloadState, plan_reload, plan_settlement};
 use crate::domain::models::{
-    AllowanceStore, DenyReason, OpenPeriodStart, PayerScope, PeriodAllowance, PeriodLedger,
-    PlanTier, SeatGeneration,
+    AllowanceStore, AutoReloadThresholds, CreditReloadStatus, DenyReason, OpenPeriodStart,
+    PayerScope, PeriodAllowance, PeriodLedger, PlanTier, SeatGeneration,
 };
-use crate::domain::ports::SettlementOutcome;
+use crate::domain::ports::{PendingReload, ResolvedReload, SettlementOutcome};
 use chrono::TimeZone;
 use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
@@ -152,6 +152,16 @@ struct FakeCharge {
     invoice: Option<String>,
 }
 
+/// One `ai_credit_reload` row.
+#[derive(Debug, Clone)]
+struct FakeReload {
+    id: Uuid,
+    amount_cents: i64,
+    status: CreditReloadStatus,
+    invoice: Option<String>,
+    created_at: DateTime<Utc>,
+}
+
 #[derive(Default)]
 struct RepoState {
     settings: BillingSettings,
@@ -161,6 +171,8 @@ struct RepoState {
     purchases: Vec<String>,
     charges: Vec<FakeCharge>,
     suspended: bool,
+    reloads: Vec<FakeReload>,
+    auto_reload_suspended: bool,
     allowances: HashMap<DateTime<Utc>, PeriodAllowance>,
     releases: Vec<(String, DateTime<Utc>, String)>,
     activated_seats: Vec<String>,
@@ -193,6 +205,10 @@ struct FakeRepo {
 impl FakeRepo {
     fn charges(&self) -> Vec<FakeCharge> {
         self.state.lock().unwrap().charges.clone()
+    }
+    #[expect(dead_code, reason = "read once the service collects reloads")]
+    fn reloads(&self) -> Vec<FakeReload> {
+        self.state.lock().unwrap().reloads.clone()
     }
     fn freeze(&self, period_start: DateTime<Utc>, allowance: PeriodAllowance) {
         self.state
@@ -238,6 +254,7 @@ impl BillingRepo for FakeRepo {
         let s = self.state.lock().unwrap();
         let mut settings = s.settings.clone();
         settings.overage_suspended_at = s.suspended.then(Utc::now);
+        settings.auto_reload_suspended_at = s.auto_reload_suspended.then(Utc::now);
         Ok(settings)
     }
     async fn update_overage(
@@ -464,6 +481,146 @@ impl BillingRepo for FakeRepo {
         _payer: &MacroUserIdStr<'_>,
     ) -> Result<Option<OverageChargeStatus>> {
         Ok(self.state.lock().unwrap().charges.last().map(|c| c.status))
+    }
+    async fn update_auto_reload(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        enabled: bool,
+        overage_limit_cents: i64,
+        thresholds: Option<&AutoReloadThresholds>,
+    ) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        s.settings.overage_enabled = enabled;
+        s.settings.overage_limit_cents = overage_limit_cents;
+        if let Some(thresholds) = thresholds {
+            s.settings.auto_reload = *thresholds;
+        }
+        s.suspended = false;
+        s.auto_reload_suspended = false;
+        Ok(())
+    }
+    /// Mirrors the Postgres adapter: a stale uninvoiced reload is handed
+    /// back, any other pending reload blocks, otherwise plan a new one.
+    async fn reserve_credit_reload(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+        chargeable_customer_cents: i64,
+        now: DateTime<Utc>,
+    ) -> Result<Option<PendingReload>> {
+        let mut s = self.state.lock().unwrap();
+        let active = s.settings.overage_enabled
+            && !s.suspended
+            && s.settings.overage_limit_cents > 0
+            && !s.auto_reload_suspended;
+        if !active {
+            return Ok(None);
+        }
+
+        let stale_before = now - chrono::Duration::minutes(10);
+        let pending: Vec<&FakeReload> = s
+            .reloads
+            .iter()
+            .filter(|r| r.status == CreditReloadStatus::Pending)
+            .collect();
+        if let Some(orphan) = pending
+            .iter()
+            .find(|r| r.invoice.is_none() && r.created_at < stale_before)
+        {
+            return Ok(Some(PendingReload {
+                id: orphan.id,
+                amount_cents: orphan.amount_cents,
+                stripe_invoice_id: orphan.invoice.clone(),
+            }));
+        }
+        if !pending.is_empty() {
+            return Ok(None);
+        }
+
+        let ledger = s.ledger(period_start);
+        let covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
+        let month = BillingPeriod::calendar_month(now);
+        let spent_this_month_cents = s
+            .reloads
+            .iter()
+            .filter(|r| {
+                r.status != CreditReloadStatus::Failed
+                    && month.start <= r.created_at
+                    && r.created_at < month.end
+            })
+            .map(|r| r.amount_cents)
+            .sum();
+        let amount_cents = plan_reload(
+            ReloadState {
+                credit_balance_cents: s.balance,
+                uncovered_cents: (chargeable_customer_cents - covered).max(0),
+                spent_this_month_cents,
+            },
+            &s.settings.auto_reload,
+        );
+        let Some(amount_cents) = amount_cents else {
+            return Ok(None);
+        };
+        let id = macro_uuid::generate_uuid_v7();
+        s.reloads.push(FakeReload {
+            id,
+            amount_cents,
+            status: CreditReloadStatus::Pending,
+            invoice: None,
+            created_at: now,
+        });
+        Ok(Some(PendingReload {
+            id,
+            amount_cents,
+            stripe_invoice_id: None,
+        }))
+    }
+    async fn finish_credit_reload(
+        &self,
+        reload_id: Uuid,
+        stripe_invoice_id: Option<&str>,
+        status: CreditReloadStatus,
+    ) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        for r in s.reloads.iter_mut().filter(|r| r.id == reload_id) {
+            r.status = status;
+            if let Some(inv) = stripe_invoice_id {
+                r.invoice = Some(inv.to_string());
+            }
+        }
+        Ok(())
+    }
+    async fn record_credit_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+        stripe_invoice_id: &str,
+    ) -> Result<bool> {
+        self.record_credit_purchase(payer, amount_cents, stripe_invoice_id)
+            .await
+    }
+    async fn resolve_credit_reload_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        status: CreditReloadStatus,
+    ) -> Result<Option<ResolvedReload>> {
+        let mut s = self.state.lock().unwrap();
+        let found = s.reloads.iter_mut().find(|r| {
+            r.invoice.as_deref() == Some(stripe_invoice_id)
+                && r.status != CreditReloadStatus::Paid
+                && r.status != status
+        });
+        Ok(found.map(|r| {
+            r.status = status;
+            ResolvedReload {
+                payer: user("payer@x.com"),
+                amount_cents: r.amount_cents,
+            }
+        }))
+    }
+    async fn suspend_auto_reload(&self, _payer: &MacroUserIdStr<'_>) -> Result<()> {
+        self.state.lock().unwrap().auto_reload_suspended = true;
+        Ok(())
     }
 }
 
