@@ -1,3 +1,4 @@
+import { pollCardHeight } from '@app/features/block-form/core/poll-card-layout';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { isInBlock, type PreviewState, useMaybeBlockName } from '@core/block';
 import { useItemPreviewData } from '@core/component/ItemPreview';
@@ -82,7 +83,29 @@ const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
 
 export function DocumentCard(props: DocumentCardDecoratorProps) {
   return (
-    <Suspense>
+    <Suspense
+      fallback={
+        <Show
+          when={props.blockName === 'form' && pollCardHeight(props.previewData)}
+        >
+          {(height) => (
+            <Card
+              variant="filled"
+              depth={2}
+              class="my-2 overflow-hidden"
+              style={{ height: height() }}
+            >
+              <div
+                role="status"
+                class="flex flex-1 items-center justify-center text-sm text-ink-muted"
+              >
+                Loading poll…
+              </div>
+            </Card>
+          )}
+        </Show>
+      }
+    >
       <DocumentCardInner {...props} />
     </Suspense>
   );
@@ -174,8 +197,9 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   });
 
   const previewData = () => {
-    if (props.previewData?.view) {
-      return { view: props.previewData.view };
+    const data = props.previewData;
+    if (data && 'view' in data) {
+      return { view: data.view };
     }
     return {};
   };
@@ -345,6 +369,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   // A form fits its content (a poll is a few rows); other previews keep a
   // resizable box.
   const resizable = () => isPreviewable() && props.blockName !== 'form';
+  const pollHeight = () =>
+    props.blockName === 'form' && !collapsed()
+      ? pollCardHeight(props.previewData)
+      : undefined;
+  const boundedPreview = () => resizable() || Boolean(pollHeight());
 
   const [_, previewBoxHeight] = stringifyPreviewBox(
     props.previewBox || DEFAULT_PREVIEW_BOX
@@ -515,7 +544,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         resizable() && 'resize-y shrink-0 min-h-80'
       )}
       style={{
-        height: resizable() ? previewBoxHeight : 'auto',
+        height: pollHeight() ?? (resizable() ? previewBoxHeight : 'auto'),
       }}
       onClick={(e) => {
         if (channelMessageId()) return;
@@ -533,7 +562,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     >
       <Switch>
         <Match when={item().loading}>
-          <div class="flex items-center justify-center p-4 text-ink-muted">
+          <div class="flex flex-1 items-center justify-center p-4 text-ink-muted">
             <LoadingSpinner class="size-6 animate-spin" />
           </div>
         </Match>
@@ -566,7 +595,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 <Card.Body
                   class={cn(
                     'mx-3 mt-2 mb-3 p-0',
-                    resizable() && 'flex min-h-0 flex-1'
+                    boundedPreview() && 'flex min-h-0 flex-1'
                   )}
                   data-document-card-controls
                 >
@@ -575,13 +604,13 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                     offset={1}
                     class={cn(
                       'w-full overflow-hidden rounded-lg',
-                      resizable() && 'min-h-0 flex-1'
+                      boundedPreview() && 'min-h-0 flex-1'
                     )}
                   >
                     <div
                       class={cn(
                         'relative min-w-0',
-                        resizable() && 'min-h-0 flex-1 overflow-y-auto'
+                        boundedPreview() && 'min-h-0 flex-1 overflow-y-auto'
                       )}
                     >
                       <Dynamic component={previewComponent()} {...props} />

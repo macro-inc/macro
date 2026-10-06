@@ -55,3 +55,34 @@ it('posts a poll with its form as a message reference, so the channel is granted
     dispose();
   });
 });
+
+it('persists the poll option count in the card before the message is sent', () => {
+  const editor = createEditor({
+    nodes: SupportedNodeTypes,
+    onError: (error) => {
+      throw error;
+    },
+  });
+  editor.setRootElement(document.createElement('div'));
+  let snapshot: ReturnType<typeof editor.getEditorState> | undefined;
+  postFormCard(
+    editor,
+    'form-2',
+    'Lunch?',
+    () => {
+      snapshot = editor.getEditorState();
+    },
+    4
+  );
+  expect(snapshot?.toJSON().root.children).toEqual([
+    expect.objectContaining({
+      type: 'document-card',
+      previewData: { poll: { optionCount: 4 } },
+    }),
+  ]);
+  if (!snapshot) throw new Error('The message was not sent');
+  const restored = editor.parseEditorState(JSON.stringify(snapshot.toJSON()));
+  expect(restored.toJSON().root.children).toEqual(
+    snapshot.toJSON().root.children
+  );
+});

@@ -82,3 +82,19 @@ describe('publishPoll', () => {
     expect(discarded).toEqual(['form-1']);
   });
 });
+
+it('rejects duplicate options without creating a form or silently dropping a choice', async () => {
+  const result = await publishPoll(
+    {
+      question: 'Lunch?',
+      options: ['Pizza', ' pizza ', 'Salad'],
+      multi: false,
+      showResults: true,
+    },
+    () => okAsync(undefined)
+  );
+  expect(result._unsafeUnwrapErr().message).toBe(
+    'Each option needs a different name.'
+  );
+  expect(storage.createForm).not.toHaveBeenCalled();
+});

@@ -44,6 +44,7 @@ function PollCardBody(props: {
     <div class="flex flex-col gap-2">
       <PollBars
         question={props.detail.form.name}
+        showQuestion={false}
         bars={voting.bars()}
         showResults={voting.hasTally()}
         multi={props.poll.multi}
@@ -104,9 +105,11 @@ export function FormCardView(props: {
   return (
     <div class="flex flex-col gap-3 p-3" data-form-card={props.detail.form.id}>
       <div class="flex items-center gap-2 text-xs">
-        <span class="rounded-full border border-edge-muted px-2 py-0.5 text-ink-muted">
-          {props.detail.access === 'view' ? 'can respond' : 'can edit'}
-        </span>
+        <Show when={!poll()}>
+          <span class="rounded-full border border-edge-muted px-2 py-0.5 text-ink-muted">
+            {props.detail.access === 'view' ? 'can respond' : 'can edit'}
+          </span>
+        </Show>
         <Show when={poll()}>
           <span class="text-ink-muted">Poll</span>
         </Show>
@@ -121,7 +124,7 @@ export function FormCardView(props: {
         </Button>
       </div>
       <Show
-        when={!props.narrow}
+        when={poll() || !props.narrow}
         fallback={
           <Button variant="outline" size="sm" onClick={props.onOpen}>
             Open the form to respond

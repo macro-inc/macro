@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type JSX, onCleanup } from 'solid-js';
+import { createResource, type JSX, onCleanup } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MarkdownHostContext } from '../../context/MarkdownHostContext';
 import { DocumentCard } from './DocumentCard';
@@ -18,18 +18,25 @@ const mocks = vi.hoisted(() => {
     send() {}
   }
   vi.stubGlobal('WebSocket', FakeWebSocket);
-  return { disposed: 0, created: [] as string[] };
+  return {
+    disposed: 0,
+    created: [] as string[],
+    read: undefined as (() => void) | undefined,
+  };
 });
 
 vi.mock('@core/component/ItemPreview', () => ({
   useItemPreviewData: () => ({
-    item: () => ({
-      id: 'form-1',
-      name: 'Lunch?',
-      type: 'form',
-      loading: false,
-      access: 'view',
-    }),
+    item: () => {
+      mocks.read?.();
+      return {
+        id: 'form-1',
+        name: 'Lunch?',
+        type: 'form',
+        loading: false,
+        access: 'view',
+      };
+    },
     ItemEntityIcon: () => null,
     documentProperties: () => undefined,
   }),
@@ -78,7 +85,10 @@ vi.mock('@ui', async (importOriginal) => {
   return { ...actual, Dropdown };
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.read = undefined;
+});
 
 it('mounts a form card’s body in a channel message, with no block and no editor around it, and disposes it with the card', async () => {
   const { unmount } = render(() => (
@@ -124,4 +134,40 @@ it('offers a sent card only what works without an editor: collapsing it here, ne
   ).toBeNull();
   fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse' }));
   expect(screen.queryByText('form-1')).toBeNull();
+});
+
+it('reserves a poll’s height across suspended metadata loading', async () => {
+  let release: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  render(() => {
+    const [ready] = createResource(() => pending);
+    mocks.read = () => {
+      ready();
+    };
+    return (
+      <MarkdownHostContext.Provider value="channel">
+        <DocumentCard
+          key="poll-node"
+          documentId="form-1"
+          documentName="Lunch?"
+          blockName="form"
+          blockParams={{}}
+          previewData={{ poll: { optionCount: 3 } }}
+          theme={{}}
+        />
+      </MarkdownHostContext.Provider>
+    );
+  });
+  const placeholder = await screen.findByRole('status');
+  expect(
+    placeholder.closest<HTMLElement>('[data-slot="card"]')?.style.height
+  ).toBe('21.5rem');
+  release?.();
+  const content = await screen.findByText('form-1');
+  expect(content.closest<HTMLElement>('.rounded-xl')?.style.height).toBe(
+    '21.5rem'
+  );
+  expect(screen.queryByRole('status')).toBeNull();
 });

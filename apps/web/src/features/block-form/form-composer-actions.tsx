@@ -33,7 +33,12 @@ function discardPoll(made: MadePoll) {
  * Put a form into the message as a card, where the caret is. Committed at
  * once, so the composer's draft and references hold it when this returns.
  */
-function insertFormCard(editor: LexicalEditor, formId: string, name: string) {
+function insertFormCard(
+  editor: LexicalEditor,
+  formId: string,
+  name: string,
+  optionCount?: number
+) {
   editor.update(
     () => {
       $insertNodes([
@@ -41,6 +46,8 @@ function insertFormCard(editor: LexicalEditor, formId: string, name: string) {
           documentId: formId,
           documentName: name,
           blockName: 'form',
+          previewData:
+            optionCount === undefined ? undefined : { poll: { optionCount } },
         }),
       ]);
     },
@@ -53,15 +60,16 @@ export function postFormCard(
   editor: LexicalEditor,
   formId: string,
   name: string,
-  sendMessage: () => void
+  sendMessage: () => void,
+  optionCount?: number
 ) {
-  insertFormCard(editor, formId, name);
+  insertFormCard(editor, formId, name, optionCount);
   sendMessage();
 }
 
 function PollComposerDialog(
   props: ManagedDialogProps & {
-    onCreated: (formId: string, name: string) => void;
+    onCreated: (formId: string, name: string, optionCount: number) => void;
   }
 ) {
   const [pending, setPending] = createSignal(false);
@@ -85,7 +93,11 @@ function PollComposerDialog(
       void discardPoll(created.value);
       return;
     }
-    props.onCreated(created.value.formId, created.value.name);
+    props.onCreated(
+      created.value.formId,
+      created.value.name,
+      created.value.optionCount
+    );
     props.onOpenChange(false);
   }
   return (
@@ -94,14 +106,14 @@ function PollComposerDialog(
       onOpenChange={(open) => {
         if (!open) close();
       }}
-      class="w-110"
+      class="w-120 max-w-[calc(100vw-2rem)]"
       visibleScrim
     >
-      <div class="flex flex-col gap-3 p-4">
-        <h2 class="flex items-center gap-2 text-sm font-semibold text-ink">
-          <ChartBar class="size-4 text-violet" aria-hidden="true" />
+      <div class="flex min-h-0 flex-col">
+        <Dialog.Title class="flex items-center gap-2 px-5 py-5 text-base font-semibold text-ink">
+          <ChartBar class="size-5 text-ink-muted" aria-hidden="true" />
           New poll
-        </h2>
+        </Dialog.Title>
         <PollComposer
           pending={pending()}
           error={error()}
@@ -119,8 +131,8 @@ export function openPollComposer(
   sendMessage: () => void
 ) {
   openDialog(PollComposerDialog, {
-    onCreated: (formId, name) =>
-      postFormCard(editor, formId, name, sendMessage),
+    onCreated: (formId, name, optionCount) =>
+      postFormCard(editor, formId, name, sendMessage, optionCount),
   });
 }
 

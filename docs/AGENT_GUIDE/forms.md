@@ -102,6 +102,8 @@ and Booking choices open dialogs that fit within the screen.
   question and Share settings edits are saved, including edits started before
   switching tabs. Fill it, try the screeners, and return to the builder. Preview
   creates no response rows, file uploads or bookings.
+  On touch devices, Preview, Publish (or Open form), and Share are in the
+  floating header above the editor.
 - **Booking** in the right panel selects an existing booking link from **Booking links**
   settings. It is always the last step. **Change** selects another link;
   **Remove booking step** leaves the link itself intact. A form's screeners
@@ -180,7 +182,16 @@ option to vote; click another to change it. **Responses** opens the Responses
 tab for editors; respondents get **Results**, the counts as a table in the
 card. In a draft, the card menu's **Convert to Inline Mention** minimizes it;
 in a sent message, **Collapse / Expand** hides the body for you only. Arrow
-keys move between poll options; Space or Enter votes.
+keys move between poll options; Space or Enter votes. Polls can also be voted
+on directly in mobile channels. In New poll, Add option focuses the new
+choice; removing a choice focuses its replacement. Duplicate choice names
+(ignore case and surrounding spaces) show an inline error and disable Post
+until corrected. Poll cards omit permission badges and display the question
+once, in the card header. Newly posted poll cards
+store their option count in Lexical preview metadata to reserve their height
+before loading. Choices have fixed-height rows; large polls and expanded
+results scroll inside the card. Older cards without that metadata keep their
+content-sized layout.
 
 ## Reading responses as an agent
 

@@ -1,3 +1,4 @@
+import Circle from '@phosphor/circle.svg';
 import CheckCircle from '@phosphor-fill/check-circle-fill.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
@@ -28,6 +29,8 @@ function moveFocus(event: KeyboardEvent, list: HTMLElement | null) {
  */
 export function PollBars(props: {
   question: string;
+  /** The surrounding document card already displays the question. */
+  showQuestion?: boolean;
   bars: readonly PollBar[];
   showResults: boolean;
   multi: boolean;
@@ -51,11 +54,15 @@ export function PollBars(props: {
     return mine >= 0 ? mine : 0;
   };
   return (
-    <div class="flex flex-col gap-2" data-form-poll>
-      <p class="text-sm font-medium text-ink wrap-anywhere">{props.question}</p>
+    <div class="flex flex-col gap-3" data-form-poll>
+      <Show when={props.showQuestion !== false}>
+        <p class="line-clamp-2 h-10 text-sm leading-5 font-medium text-ink wrap-anywhere">
+          {props.question}
+        </p>
+      </Show>
       <ul
         ref={list}
-        class="flex flex-col gap-1.5"
+        class="flex flex-col gap-2"
         role={props.multi ? 'group' : 'radiogroup'}
         aria-label={props.question}
       >
@@ -64,6 +71,7 @@ export function PollBars(props: {
             <li role="none">
               <button
                 type="button"
+                title={bar().label}
                 data-poll-option
                 data-keyboard-input
                 role={props.multi ? 'checkbox' : 'radio'}
@@ -73,10 +81,10 @@ export function PollBars(props: {
                 aria-disabled={props.disabled || props.pending}
                 onKeyDown={(event) => moveFocus(event, list ?? null)}
                 class={cn(
-                  'relative flex h-9 w-full items-center gap-2 overflow-hidden rounded-lg border px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-edge-focus disabled:opacity-70 aria-disabled:opacity-70',
+                  'relative flex h-11 w-full items-center gap-2 overflow-hidden rounded-lg border px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-edge-focus disabled:opacity-70 aria-disabled:opacity-70',
                   bar().mine
-                    ? 'border-accent'
-                    : 'border-edge-muted hover:bg-hover'
+                    ? 'border-accent bg-accent-bg'
+                    : 'border-edge-muted bg-page hover:bg-hover'
                 )}
                 onClick={() => {
                   if (!props.disabled && !props.pending)
@@ -94,7 +102,15 @@ export function PollBars(props: {
                   />
                 </Show>
                 <span class="relative flex min-w-0 flex-1 items-center gap-1.5 text-ink">
-                  <Show when={bar().mine}>
+                  <Show
+                    when={bar().mine}
+                    fallback={
+                      <Circle
+                        class="size-4 shrink-0 text-ink-subtle"
+                        aria-hidden="true"
+                      />
+                    }
+                  >
                     <CheckCircle
                       class="size-4 shrink-0 text-accent"
                       aria-hidden="true"
@@ -103,10 +119,13 @@ export function PollBars(props: {
                   <span class="truncate">{bar().label}</span>
                 </span>
                 <Show when={props.showResults}>
-                  <span class="relative text-xs text-ink-muted tabular-nums">
+                  <span class="relative flex shrink-0 items-center gap-2 text-xs text-ink-muted tabular-nums">
                     {bar().count}
                     <span class="sr-only">
                       {bar().count === 1 ? ' vote' : ' votes'}
+                    </span>
+                    <span aria-hidden="true" class="w-8 text-right font-medium">
+                      {bar().percent}%
                     </span>
                   </span>
                 </Show>
@@ -115,19 +134,19 @@ export function PollBars(props: {
           )}
         </Key>
       </ul>
-      <div class="flex items-center gap-2 text-xs text-ink-muted">
+      <div class="flex h-10 items-center gap-3 border-t border-edge-divider pt-2 text-xs leading-4 text-ink-muted">
         <Show
           when={props.showResults}
-          fallback={<span>{props.hiddenNote}</span>}
+          fallback={<span class="line-clamp-2">{props.hiddenNote}</span>}
         >
-          <span>{props.summary}</span>
+          <span class="line-clamp-2">{props.summary}</span>
         </Show>
         <Show when={props.results}>
           {(results) => (
             <button
               type="button"
               aria-expanded={results().expanded}
-              class="ml-auto rounded text-link outline-none hover:underline focus-visible:ring-2 focus-visible:ring-edge-focus"
+              class="ml-auto shrink-0 rounded text-link outline-none hover:underline focus-visible:ring-2 focus-visible:ring-edge-focus"
               onClick={results().onOpen}
             >
               {results().label}

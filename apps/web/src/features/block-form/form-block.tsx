@@ -8,6 +8,7 @@
 
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -140,27 +141,29 @@ function FormBlockContent(props: {
       </SplitHeaderLeft>
       <SplitHeaderRight>
         <BlockLiveIndicators />
-        <div class="order-[1000] flex items-center gap-1.5">
-          <Show
-            when={
-              !props.respondOnly &&
-              source.detail() &&
-              source.detail()?.access !== 'view'
-            }
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={preview.opening()}
-              onClick={() => void preview.open()}
+        <HeaderIsland>
+          <div class="order-[1000] flex items-center gap-1.5">
+            <Show
+              when={
+                !props.respondOnly &&
+                source.detail() &&
+                source.detail()?.access !== 'view'
+              }
             >
-              <Eye class="size-3.5" />
-              Preview
-            </Button>
-            {primary()}
-          </Show>
-          <ShareTrigger onClick={openShare} copyLink={copyRespondLink} />
-        </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={preview.opening()}
+                onClick={() => void preview.open()}
+              >
+                <Eye class="size-3.5" />
+                Preview
+              </Button>
+              {primary()}
+            </Show>
+            <ShareTrigger onClick={openShare} copyLink={copyRespondLink} />
+          </div>
+        </HeaderIsland>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <Show

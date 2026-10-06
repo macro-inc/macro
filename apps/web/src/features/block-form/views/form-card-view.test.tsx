@@ -107,7 +107,10 @@ function mount(
 describe('FormCardView poll', () => {
   it('asks the poll question, not the column name, with a bar per option', () => {
     mount('view');
-    expect(screen.getByText('Where should we get lunch?')).toBeTruthy();
+    expect(
+      screen.getByRole('radiogroup', { name: 'Where should we get lunch?' })
+    ).toBeTruthy();
+    expect(screen.queryByText('Where should we get lunch?')).toBeNull();
     expect(screen.queryByText('Answer')).toBeNull();
     expect(screen.getByRole('radio', { name: /Tacos/ })).toBeTruthy();
     expect(screen.getByText('4 votes · one vote each')).toBeTruthy();
@@ -126,6 +129,7 @@ describe('FormCardView poll', () => {
 
   it('sends editors to the Responses tab', () => {
     const { onOpen, onOpenResponses } = mount('edit');
+    expect(screen.queryByText('can edit')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Responses' }));
     expect(onOpenResponses).toHaveBeenCalledTimes(1);
     expect(onOpen).not.toHaveBeenCalled();

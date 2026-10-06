@@ -9,6 +9,7 @@ import { createForm, putFormLayout, updateForm } from '@queries/storage/forms';
 import { err, errAsync, ok, ResultAsync } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import type { FormWriteFailure } from '../context/form-context';
+import { duplicatePollOptions } from '../core/poll-options';
 import { columnWriteFailure } from './column-writes';
 import { publicationMessage } from './form-publication';
 import { writeFailureOf } from './form-sources';
@@ -20,26 +21,20 @@ export type PollDraft = {
   showResults: boolean;
 };
 
-/** A poll draft's options, trimmed, blank ones dropped, each label once. */
-export function pollOptions(options: readonly string[]): string[] {
-  const seen = new Set<string>();
-  return options.flatMap((option) => {
-    const label = option.trim();
-    if (!label || seen.has(label.toLowerCase())) return [];
-    seen.add(label.toLowerCase());
-    return [label];
-  });
-}
-
 /** What a half-made poll leaves behind, for the caller to put in the trash. */
 export type MadePoll = { formId: string; databaseId: string };
 
 export function publishPoll(
   draft: PollDraft,
   discard: (made: MadePoll) => ResultAsync<void, unknown>
-): ResultAsync<MadePoll & { name: string }, FormWriteFailure> {
+): ResultAsync<
+  MadePoll & { name: string; optionCount: number },
+  FormWriteFailure
+> {
   const question = draft.question.trim();
-  const labels = pollOptions(draft.options);
+  const labels = draft.options.map((option) => option.trim()).filter(Boolean);
+  if (duplicatePollOptions(draft.options).size > 0)
+    return errAsync({ message: 'Each option needs a different name.' });
   if (!question) return errAsync({ message: 'Ask a question.' });
   if (labels.length < 2)
     return errAsync({ message: 'Give at least two options.' });
@@ -104,6 +99,11 @@ export function publishPoll(
           )
         )
         .orElse(abandon)
-        .map(() => ({ formId, databaseId, name: question }));
+        .map(() => ({
+          formId,
+          databaseId,
+          name: question,
+          optionCount: labels.length,
+        }));
     });
 }
