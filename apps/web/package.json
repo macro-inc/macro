@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "just ensure-cache-wasm && just ensure-agent-fold-wasm && just ensure-database-sql-wasm && just ensure-pptx-engine-wasm && just ensure-docx-engine-wasm && just ensure-fig-engine-wasm && just ensure-psd-engine-wasm && just ensure-ai-engine-wasm && vite -c vite.config.ts",
+    "dev": "bun run dev:prepare && bun run dev:server",
+    "dev:prepare": "just ensure-cache-wasm && just ensure-agent-fold-wasm && just ensure-database-sql-wasm && just ensure-pptx-engine-wasm && just ensure-docx-engine-wasm && just ensure-fig-engine-wasm && just ensure-psd-engine-wasm && just ensure-ai-engine-wasm",
+    "dev:server": "vite -c vite.config.ts",
     "build": "vite build -c vite.config.ts && bun run postbuild:semver && bun run postbuild:bundle-manifest",
     "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
     "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
