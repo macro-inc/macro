@@ -7,6 +7,7 @@
 import CaretRight from '@phosphor/caret-right.svg';
 import { cn } from '@ui';
 import { createSignal, Index, type JSX, onCleanup, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 
 export interface MenuItem {
   label: string;
@@ -32,6 +33,8 @@ export function MenuList(props: {
   items: MenuEntry[];
   onDone: () => void;
   class?: string;
+  /** Submenus open to the left (near the window's right edge). */
+  submenusLeft?: boolean;
 }) {
   const [submenu, setSubmenu] = createSignal<number>();
   return (
@@ -87,7 +90,12 @@ export function MenuList(props: {
                   <MenuList
                     items={item().items ?? []}
                     onDone={props.onDone}
-                    class="absolute top-0 left-full ml-1"
+                    submenusLeft={props.submenusLeft}
+                    class={
+                      props.submenusLeft
+                        ? 'absolute top-0 right-full mr-1'
+                        : 'absolute top-0 left-full ml-1'
+                    }
                   />
                 </Show>
               </div>
@@ -172,7 +180,11 @@ export function MenuBar(props: { menus: MenuDefinition[] }) {
   );
 }
 
-/** A menu that opens from a button (the layers panel's ⋯ and + menus). */
+/**
+ * A menu that opens from a button (the layers panel's ⋯ and + menus). It
+ * is drawn over the page (portaled, fixed at the button) so the panels'
+ * clipping does not cut it or its submenus.
+ */
 export function MenuButton(props: {
   label: string;
   testId?: string;
@@ -182,16 +194,19 @@ export function MenuButton(props: {
   up?: boolean;
   disabled?: boolean;
 }) {
-  const [open, setOpen] = createSignal(false);
-  let root!: HTMLDivElement;
+  const [at, setAt] = createSignal<DOMRect>();
   let button!: HTMLButtonElement;
+  let menu: HTMLDivElement | undefined;
+  const close = () => setAt(undefined);
   const onDocumentDown = (e: PointerEvent) => {
-    if (!root.contains(e.target as Node)) setOpen(false);
+    const target = e.target as Node;
+    if (button.contains(target) || menu?.contains(target)) return;
+    close();
   };
   document.addEventListener('pointerdown', onDocumentDown);
   onCleanup(() => document.removeEventListener('pointerdown', onDocumentDown));
   return (
-    <div ref={root} class="relative">
+    <>
       <button
         ref={button}
         type="button"
@@ -199,23 +214,40 @@ export function MenuButton(props: {
         title={props.label}
         data-testid={props.testId}
         disabled={props.disabled}
-        aria-expanded={open()}
+        aria-expanded={!!at()}
         class="flex size-7 items-center justify-center rounded-md text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setAt(at() ? undefined : button.getBoundingClientRect())}
       >
         {props.children}
       </button>
-      <Show when={open()}>
-        <MenuList
-          items={props.items}
-          onDone={() => closeMenu(() => setOpen(false), button)}
-          class={
-            props.up
-              ? 'absolute bottom-full left-0 mb-1'
-              : 'absolute top-full right-0 mt-1'
-          }
-        />
+      <Show when={at()}>
+        {(r) => (
+          <Portal>
+            <div
+              ref={menu}
+              class="fixed z-50"
+              style={
+                props.up
+                  ? {
+                      left: `${r().left}px`,
+                      bottom: `${window.innerHeight - r().top + 4}px`,
+                    }
+                  : {
+                      right: `${window.innerWidth - r().right}px`,
+                      top: `${r().bottom + 4}px`,
+                    }
+              }
+            >
+              <MenuList
+                items={props.items}
+                onDone={() => closeMenu(close, button)}
+                // Aligned to its button's right edge: submenus go left.
+                submenusLeft={!props.up}
+              />
+            </div>
+          </Portal>
+        )}
       </Show>
-    </div>
+    </>
   );
 }

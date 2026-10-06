@@ -23,7 +23,7 @@ import PaintBrush from '@phosphor/paint-brush.svg';
 import Plus from '@phosphor/plus.svg';
 import SquareHalf from '@phosphor/square-half.svg';
 import Trash from '@phosphor/trash.svg';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
 import {
   createDragKeys,
   IconToggle,
@@ -534,12 +534,32 @@ function patchOp(ids: number[], patch: LayerPatch) {
   return { op: 'setLayer' as const, ids, ...patch };
 }
 
-/** The layer menu at the pointer (right-click on a row). */
+/** Space kept between a menu and the window's edge, in pixels. */
+const MENU_MARGIN = 8;
+
+/**
+ * The layer menu at the pointer (right-click on a row), kept inside the
+ * window; its submenus open leftward when there is no room on the right.
+ */
 function ContextMenu(props: {
   at: { x: number; y: number };
   items: MenuEntry[];
   onClose: () => void;
 }) {
+  const [place, setPlace] = createSignal({ ...props.at, flip: false });
+  let menu!: HTMLDivElement;
+  onMount(() => {
+    const r = menu.getBoundingClientRect();
+    const x = Math.max(
+      MENU_MARGIN,
+      Math.min(props.at.x, window.innerWidth - r.width - MENU_MARGIN)
+    );
+    const y = Math.max(
+      MENU_MARGIN,
+      Math.min(props.at.y, window.innerHeight - r.height - MENU_MARGIN)
+    );
+    setPlace({ x, y, flip: x + r.width * 2 > window.innerWidth });
+  });
   return (
     <div
       class="fixed inset-0 z-50"
@@ -552,11 +572,16 @@ function ContextMenu(props: {
       }}
     >
       <div
+        ref={menu}
         class="absolute"
-        style={{ left: `${props.at.x}px`, top: `${props.at.y}px` }}
+        style={{ left: `${place().x}px`, top: `${place().y}px` }}
         data-testid="psd-layer-context-menu"
       >
-        <MenuList items={props.items} onDone={props.onClose} />
+        <MenuList
+          items={props.items}
+          onDone={props.onClose}
+          submenusLeft={place().flip}
+        />
       </div>
     </div>
   );
