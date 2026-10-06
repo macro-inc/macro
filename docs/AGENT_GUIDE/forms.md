@@ -42,12 +42,22 @@ then **Open form** (respond view in a new split); other editors always see
 
 ### Build
 
-A centered column of sections, each a card of question rows, with the rail
-(Add, Outline, Stores to) at the right on wide splits.
+A banner at the top contains the editable form name, description, and a link
+to its database. Below, a centered column of sections holds the question rows,
+with **Outline** on the left and the **Add question** type tiles and **Structure**
+controls on the right. Each type tile has its icon beside its label. Narrow
+splits place the banner above the canvas and the question palette below it.
 
-- Add question goes after the selected question; after **Add section** (or
+- Click a question type in the right panel to add it after the selected
+  question, or drag the tile to an insertion line in the canvas. A drop creates
+  exactly one question; Escape or dropping outside the canvas creates nothing.
+  **Database row** asks which table to use before adding the question. An empty
+  form accepts a question directly and creates its first section.
+- After **Section** (or
   focusing a section's title, which outlines it) it goes to the end of that
   section. An empty section has its own **Add question** menu.
+- Click a section or question in the left **Outline** to reveal it in the
+  canvas. Selecting a section also directs subsequent question additions there.
 - Click a row to select it: the title input renames the column, the type chip
   opens the type menu (Short answer … Database row), choice questions edit
   their options in place, and the footer has Duplicate, **Remove from form**
@@ -65,7 +75,7 @@ A centered column of sections, each a card of question rows, with the rail
   Rules are sent to respondents' browsers, so keep confidential criteria out.
   A gate whose rule tests a question that is gone shows **Remove broken
   rules**.
-- The rail's **Section** and **Screener** controls can also be dragged directly
+- The right panel's **Section** and **Screener** controls can also be dragged directly
   into the canvas. The insertion line shows where the new section will go;
   dropping outside the canvas or pressing Escape leaves the form unchanged.
 - "N columns not on this form" at the bottom lists table columns that are not
@@ -80,7 +90,7 @@ A centered column of sections, each a card of question rows, with the rail
 - **Preview** opens a new tab with the respondent experience after pending
   edits are saved. Fill it, try the screeners, and return to the builder. Preview
   creates no response rows, file uploads or bookings.
-- **Booking** in the rail selects an existing booking link from **Booking links**
+- **Booking** in the right panel selects an existing booking link from **Booking links**
   settings. It is always the last step. **Change** selects another link;
   **Remove booking step** leaves the link itself intact. A form's screeners
   control when its respondents see the link; the native link still works directly.
@@ -152,6 +162,6 @@ keys move between poll options; Space or Enter votes.
 
 ## Reading responses as an agent
 
-Use the Responses tab grid, or open the database (`/app/database/<uuid>`) the
-form names under **Stores to**. Each submission is a row; the `Submitted` and
+Use the Responses tab grid, or open the database (`/app/database/<uuid>`) linked
+in the form's banner. Each submission is a row; the `Submitted` and
 `Respondent` columns are written by the form.

@@ -6,7 +6,7 @@ import Rows from '@phosphor/rows.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
 import Warning from '@phosphor/warning.svg';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { Button, Dropdown } from '@ui';
+import { Button, Dialog, Dropdown, Panel } from '@ui';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import {
   type Accessor,
@@ -28,7 +28,9 @@ import {
   type BookingLinkState,
 } from '../components/builder/booking-card';
 import {
-  BuilderRail,
+  BuilderPalette,
+  BuilderSidebar,
+  BuilderSkeleton,
   ConversionNotice,
   DropIndicator,
   HiddenColumns,
@@ -68,6 +70,7 @@ import {
   bookingStep,
   brokenGateColumns,
   gateColumns,
+  type QuestionPlacement,
   questionNumbers,
 } from '../core/form-layout';
 import type {
@@ -86,6 +89,9 @@ import {
 } from '../core/layout-messages';
 import {
   hasOptions,
+  QUESTION_TYPE_CHOICES,
+  type QuestionTypeChoice,
+  type QuestionTypeId,
   questionTypeLabel,
   questionTypeOf,
 } from '../core/question-types';
@@ -161,18 +167,13 @@ export function BuilderView(props: BuilderViewProps) {
     <Show
       when={builder.layout()}
       fallback={
-        <div class="mx-auto flex w-full max-w-[680px] flex-col gap-4 px-4 py-6">
-          <Show
-            when={failure()}
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Opening the form for editing…
-              </p>
-            }
-          >
-            {(message) => <LayoutFailure message={message()} />}
-          </Show>
-        </div>
+        <Show when={failure()} fallback={<BuilderSkeleton />}>
+          {(message) => (
+            <div class="mx-auto w-full max-w-[680px] px-4 py-6">
+              <LayoutFailure message={message()} />
+            </div>
+          )}
+        </Show>
       }
     >
       {(layout) => (
@@ -263,6 +264,10 @@ function BuilderCanvas(
     </Show>
   );
   const [editingRules, setEditingRules] = createSignal<string>();
+  const [pendingRelation, setPendingRelation] = createSignal<{
+    choice: QuestionTypeChoice;
+    placement: QuestionPlacement | undefined;
+  }>();
   // One per mount: the same form can be built in two splits.
   const instructionsId = createUniqueId();
   let viewport: HTMLDivElement | undefined;
@@ -327,7 +332,39 @@ function BuilderCanvas(
       .with({ kind: 'new-section' }, ({ id }) =>
         id === 'gate' ? 'screener' : 'section'
       )
+      .with(
+        { kind: 'new-question' },
+        ({ id }) => `${questionChoice(id).label} question`
+      )
       .exhaustive();
+
+  function questionChoice(id: QuestionTypeId) {
+    const choice = QUESTION_TYPE_CHOICES.find((choice) => choice.id === id);
+    if (!choice) throw new Error(`Unknown question palette type: ${id}`);
+    return choice;
+  }
+
+  async function insertQuestion(
+    choice: QuestionTypeChoice,
+    placement?: QuestionPlacement,
+    relation?: RelationTable
+  ) {
+    if (choice.kind === 'pick-table' && !relation) {
+      setPendingRelation({ choice, placement });
+      return;
+    }
+    const previousSelection = builder.selectedId();
+    await builder.addQuestion(choice, relation, placement);
+    const selected = builder.selectedId();
+    if (!selected || selected === previousSelection) return;
+    const question = viewport?.querySelector<HTMLElement>(
+      `[data-form-question="${selected}"]`
+    );
+    question?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    question
+      ?.querySelector<HTMLInputElement>('input[aria-label="Question"]')
+      ?.focus({ preventScroll: true });
+  }
 
   /** Focus a question's or section's drag handle, wherever it now renders. */
   const focusHandle = (target: DragTarget) =>
@@ -356,6 +393,8 @@ function BuilderCanvas(
       if (id && kind === 'gate') setEditingRules(id);
       return id;
     },
+    dropNewQuestion: (type, placement) =>
+      void insertQuestion(questionChoice(type), placement),
     describe,
     describePlacement: (questionId, placement) =>
       placementDescription(layout(), questionId, placement),
@@ -495,39 +534,24 @@ function BuilderCanvas(
       <div aria-live="assertive" aria-atomic="true" class="sr-only">
         {drag.announcement()}
       </div>
-      <div class="mx-auto flex w-full max-w-[1040px] flex-col gap-6 px-4 py-6 @4xl/builder:flex-row @4xl/builder:items-start @4xl/builder:px-8">
-        <div class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col gap-4">
-          <Show when={props.detail.tableGone}>
-            <div
-              role="alert"
-              class="flex items-start gap-2 rounded-lg border border-failure bg-failure-bg px-3 py-2.5 text-sm text-failure-ink"
-            >
-              <Warning class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              This form’s table was deleted or its database is in the trash. It
-              can’t take responses until the database is restored.
-            </div>
-          </Show>
-          <Show when={props.failure}>
-            {(message) => <LayoutFailure message={message()} />}
-          </Show>
-          <Show when={props.collaboration.publicationError()}>
-            {(problem) => (
-              <LayoutFailure
-                message={`Respondents still see the last valid version of this form. ${problem()}`}
-              />
-            )}
-          </Show>
-          <Show when={saveNotice(props.collaboration)}>
-            {(notice) => (
-              <p
-                role="status"
-                class="rounded-lg border border-edge-muted bg-panel px-3 py-2 text-sm text-ink-muted"
-              >
-                {notice()}
-              </p>
-            )}
-          </Show>
+      <div class="mx-auto grid w-full max-w-[1280px] grid-cols-1 items-start justify-center gap-5 p-4 @5xl/builder:grid-cols-[256px_minmax(0,680px)_256px] @5xl/builder:py-6">
+        <div class="mx-auto w-full max-w-[680px] @5xl/builder:col-span-3 @5xl/builder:max-w-none">
           <TitleCard
+            databaseLink={
+              <Button
+                variant="outline"
+                class="max-w-full gap-2"
+                aria-label={`Open database ${table.databaseName() ?? 'Database'}`}
+                tooltip={table.databaseName() ?? 'Database'}
+                onClick={() => props.onOpenDatabase(form().databaseId)}
+              >
+                <Database class="size-4 text-code" aria-hidden="true" />
+                <span class="truncate">
+                  {table.databaseName() ?? 'Database'}
+                </span>
+                <ArrowSquareOut class="size-3.5" aria-hidden="true" />
+              </Button>
+            }
             name={form().name}
             description={form().description}
             onName={(name) =>
@@ -559,18 +583,6 @@ function BuilderCanvas(
             meta={
               <>
                 <li>
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-1 rounded text-ink-muted outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-edge-focus"
-                    onClick={props.onOpenResponses}
-                  >
-                    <Database class="size-3.5" aria-hidden="true" />
-                    {table.databaseName()
-                      ? `Responses in database “${table.databaseName()}”`
-                      : 'Responses in its database'}
-                  </button>
-                </li>
-                <li>
                   {form().audience === 'public'
                     ? 'Anyone with the link'
                     : 'Invited people'}
@@ -593,6 +605,79 @@ function BuilderCanvas(
               </>
             }
           />
+        </div>
+        <BuilderSidebar
+          outline={
+            <ul class="flex flex-col gap-2">
+              <For each={layout().sections}>
+                {(section) => (
+                  <OutlineSection
+                    name={sectionName(layout(), section.id)}
+                    kind={section.kind}
+                    onSelectSection={() => {
+                      builder.focusSection(section.id);
+                      viewport
+                        ?.querySelector(`[data-form-section="${section.id}"]`)
+                        ?.scrollIntoView({
+                          block: 'start',
+                          behavior: 'smooth',
+                        });
+                    }}
+                    questions={section.questions.map((question) => ({
+                      id: question.id,
+                      title: columnTitle(question.columnId),
+                      selected: builder.selectedId() === question.id,
+                    }))}
+                    onSelectQuestion={(questionId) => {
+                      builder.select(questionId);
+                      viewport
+                        ?.querySelector(`[data-form-question="${questionId}"]`)
+                        ?.scrollIntoView({
+                          block: 'center',
+                          behavior: 'smooth',
+                        });
+                    }}
+                  />
+                )}
+              </For>
+            </ul>
+          }
+        />
+        <div
+          role="region"
+          aria-label="Form canvas"
+          class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col gap-4"
+        >
+          <Show when={props.detail.tableGone}>
+            <div
+              role="alert"
+              class="flex items-start gap-2 rounded-lg border border-failure bg-failure-bg px-3 py-2.5 text-sm text-failure-ink"
+            >
+              <Warning class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              This form’s table was deleted or its database is in the trash. It
+              can’t take responses until the database is restored.
+            </div>
+          </Show>
+          <Show when={props.failure}>
+            {(message) => <LayoutFailure message={message()} />}
+          </Show>
+          <Show when={props.collaboration.publicationError()}>
+            {(problem) => (
+              <LayoutFailure
+                message={`Respondents still see the last valid version of this form. ${problem()}`}
+              />
+            )}
+          </Show>
+          <Show when={saveNotice(props.collaboration)}>
+            {(notice) => (
+              <p
+                role="status"
+                class="rounded-lg border border-edge-muted bg-panel px-3 py-2 text-sm text-ink-muted"
+              >
+                {notice()}
+              </p>
+            )}
+          </Show>
           <Show when={builder.conversion()}>
             {(pending) => (
               <ConversionNotice
@@ -603,7 +688,12 @@ function BuilderCanvas(
               />
             )}
           </Show>
-          <div ref={column} class="relative flex min-h-24 flex-col gap-4">
+          <div ref={column} class="relative flex min-h-60 flex-col gap-4">
+            <Show when={layout().sections.length === 0}>
+              <div class="flex min-h-72 items-center justify-center rounded-xl border border-dashed border-edge bg-surface p-6 text-sm text-ink-muted">
+                Click a question type or drag it here.
+              </div>
+            </Show>
             <For each={sectionIds()}>
               {(sectionId) => {
                 const section = () => sectionById(sectionId);
@@ -855,23 +945,10 @@ function BuilderCanvas(
             onAdd={(columnId) => builder.addExistingColumn(columnId)}
           />
         </div>
-        <BuilderRail
-          add={
+        <BuilderPalette
+          question={(choice) => <AddQuestionButton choice={choice} />}
+          structure={
             <div class="flex flex-col gap-1.5">
-              <AddQuestionMenu
-                trigger={
-                  <>
-                    <Plus class="size-3.5" />
-                    Add question
-                  </>
-                }
-                tables={relationTables()}
-                hiddenColumns={hiddenColumnRows()}
-                onChoose={(choice, relation) =>
-                  void builder.addQuestion(choice, relation)
-                }
-                onAddColumn={(columnId) => builder.addExistingColumn(columnId)}
-              />
               <AddSectionButton kind="questions">
                 <Rows class="size-3.5" />
                 Section
@@ -942,62 +1019,98 @@ function BuilderCanvas(
               </Dropdown>
             </div>
           }
-          outline={
-            <ul class="flex flex-col gap-2">
-              <For each={layout().sections}>
-                {(section) => (
-                  <OutlineSection
-                    name={sectionName(layout(), section.id)}
-                    kind={section.kind}
-                    questions={section.questions.map((question) => ({
-                      id: question.id,
-                      title: columnTitle(question.columnId),
-                      selected: builder.selectedId() === question.id,
-                    }))}
-                    onSelectQuestion={(questionId) => {
-                      builder.select(questionId);
-                      viewport
-                        ?.querySelector(`[data-form-question="${questionId}"]`)
-                        ?.scrollIntoView({
-                          block: 'center',
-                          behavior: 'smooth',
-                        });
-                    }}
-                  />
-                )}
-              </For>
-            </ul>
-          }
-          storesTo={
-            <div class="flex flex-col gap-2">
-              <button
-                type="button"
-                class="flex items-center gap-2 rounded-lg border border-edge-muted bg-surface px-2.5 py-2 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
-                onClick={() => props.onOpenDatabase(form().databaseId)}
-              >
-                <Database
-                  class="size-4 shrink-0 text-code"
-                  aria-hidden="true"
-                />
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm text-ink">
-                    {table.databaseName() ?? 'Database'}
-                  </span>
-                  <span class="block truncate text-xs text-ink-muted">
-                    {table.tableName() ?? 'Responses'}
-                  </span>
-                </span>
-                <ArrowSquareOut
-                  class="size-3.5 text-ink-muted"
-                  aria-hidden="true"
-                />
-              </button>
-            </div>
-          }
         />
       </div>
+      <Show when={pendingRelation()}>
+        {(pending) => (
+          <Dialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setPendingRelation(undefined);
+            }}
+            class="w-96 max-w-[calc(100vw-2rem)]"
+          >
+            <Panel>
+              <Panel.Body>
+                <div class="flex flex-col gap-3 p-5">
+                  <Dialog.Title class="text-base font-semibold">
+                    Choose a table
+                  </Dialog.Title>
+                  <Dialog.Description class="text-sm text-ink-muted">
+                    Respondents choose a row from this table.
+                  </Dialog.Description>
+                  <For each={relationTables()}>
+                    {(relation) => (
+                      <Button
+                        variant="outline"
+                        class="justify-start"
+                        onClick={() => {
+                          const current = pending();
+                          setPendingRelation(undefined);
+                          void insertQuestion(
+                            current.choice,
+                            current.placement,
+                            relation
+                          );
+                        }}
+                      >
+                        <Database class="size-4" />
+                        {relation.name}
+                      </Button>
+                    )}
+                  </For>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setPendingRelation(undefined)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </Panel.Body>
+            </Panel>
+          </Dialog>
+        )}
+      </Show>
     </div>
   );
+
+  function AddQuestionButton(buttonProps: { choice: QuestionTypeChoice }) {
+    const target = (): DragTarget => ({
+      kind: 'new-question',
+      id: buttonProps.choice.id,
+    });
+    const handle = drag.handleProps(target);
+    return (
+      <Button
+        variant="outline"
+        size="md"
+        class="h-auto min-h-12 w-full touch-none justify-start gap-1.5 rounded-lg px-2 py-3 text-xs"
+        aria-label={`Add ${buttonProps.choice.label}`}
+        data-drag-source
+        data-drag-handle={`new-question:${buttonProps.choice.id}`}
+        disabled={
+          props.detail.tableGone ||
+          (buttonProps.choice.kind === 'pick-table' &&
+            relationTables().length === 0)
+        }
+        onPointerDown={handle.onPointerDown}
+        onKeyDown={handle.onKeyDown}
+        onBlur={handle.onBlur}
+        onClick={(event) => {
+          handle.onClick(event);
+          if (!event.defaultPrevented) void insertQuestion(buttonProps.choice);
+        }}
+      >
+        <QuestionTypeIcon
+          type={buttonProps.choice.id}
+          class="size-3.5 text-ink-muted"
+        />
+        <span class="whitespace-normal text-left leading-tight">
+          {buttonProps.choice.label}
+        </span>
+      </Button>
+    );
+  }
 
   function AddSectionButton(buttonProps: {
     kind: NewSectionKind;

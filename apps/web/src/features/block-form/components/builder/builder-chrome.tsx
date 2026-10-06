@@ -6,9 +6,69 @@ import ShieldCheck from '@phosphor/shield-check.svg';
 import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { SectionKind } from '../../core/form-model';
-import type { QuestionTypeId } from '../../core/question-types';
+import {
+  QUESTION_TYPE_CHOICES,
+  type QuestionTypeChoice,
+  type QuestionTypeId,
+} from '../../core/question-types';
 import { QuestionTypeIcon } from '../question-type-icon';
 import { DraftInput, DraftTextarea } from './draft-input';
+
+/** Holds the editor's layout while its shared document opens. */
+export function BuilderSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Loading form editor"
+      aria-busy="true"
+      class="@container/builder h-full overflow-hidden"
+    >
+      <div
+        aria-hidden="true"
+        class="mx-auto grid w-full max-w-[1280px] grid-cols-1 items-start justify-center gap-5 p-4 @5xl/builder:grid-cols-[256px_minmax(0,680px)_256px] @5xl/builder:py-6"
+      >
+        <div class="mx-auto flex h-38 w-full max-w-[680px] flex-col gap-4 rounded-xl border border-edge-muted bg-surface p-6 @5xl/builder:col-span-3 @5xl/builder:max-w-none">
+          <div class="h-7 w-2/5 rounded bg-hover motion-safe:animate-pulse" />
+          <div class="h-4 w-3/5 rounded bg-hover motion-safe:animate-pulse" />
+          <div class="mt-auto h-3 w-1/4 rounded bg-hover motion-safe:animate-pulse" />
+        </div>
+        <div class="hidden flex-col gap-5 px-1 py-2 @5xl/builder:flex">
+          <div class="h-3 w-16 rounded bg-hover motion-safe:animate-pulse" />
+          <For each={[0, 1, 2]}>
+            {() => (
+              <div class="flex flex-col gap-3">
+                <div class="h-4 w-3/5 rounded bg-hover motion-safe:animate-pulse" />
+                <div class="ml-3 h-3 w-3/4 rounded bg-hover motion-safe:animate-pulse" />
+              </div>
+            )}
+          </For>
+        </div>
+        <div class="mx-auto flex w-full max-w-[680px] flex-col gap-4">
+          <For each={[0, 1]}>
+            {() => (
+              <div class="flex h-56 flex-col gap-5 rounded-xl border border-edge-muted bg-surface p-5">
+                <div class="h-3 w-1/4 rounded bg-hover motion-safe:animate-pulse" />
+                <div class="h-5 w-2/5 rounded bg-hover motion-safe:animate-pulse" />
+                <div class="mt-4 h-4 w-1/2 rounded bg-hover motion-safe:animate-pulse" />
+                <div class="h-9 w-full rounded bg-hover motion-safe:animate-pulse" />
+              </div>
+            )}
+          </For>
+        </div>
+        <div class="hidden flex-col gap-4 rounded-xl border border-edge-muted bg-surface p-3 @5xl/builder:flex">
+          <div class="h-4 w-24 rounded bg-hover motion-safe:animate-pulse" />
+          <div class="grid grid-cols-2 gap-2">
+            <For each={[0, 1, 2, 3, 4, 5, 6, 7]}>
+              {() => (
+                <div class="h-14 rounded-lg bg-hover motion-safe:animate-pulse" />
+              )}
+            </For>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Where the drop would land, drawn across the builder column. */
 export function DropIndicator(props: { top: number; refusal?: string }) {
@@ -49,13 +109,17 @@ export function TitleCard(props: {
   name: string;
   description: string;
   meta: JSX.Element;
+  databaseLink: JSX.Element;
   /** Each resolves whether it saved; a refused one stays in its field. */
   onName: (name: string) => PromiseLike<boolean>;
   onDescription: (description: string) => PromiseLike<boolean>;
 }) {
   return (
-    <div class="overflow-hidden rounded-xl border border-edge bg-surface shadow-xs">
-      <div class="flex flex-col gap-1 px-4 pt-4 pb-3">
+    <section
+      aria-label="Form details"
+      class="flex flex-col gap-4 rounded-xl border border-edge bg-surface p-4 shadow-xs @2xl/builder:flex-row @2xl/builder:items-start"
+    >
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
         <DraftInput
           aria-label="Form name"
           value={props.name}
@@ -80,7 +144,10 @@ export function TitleCard(props: {
           </ul>
         </div>
       </div>
-    </div>
+      <div class="min-w-0 shrink-0 @2xl/builder:max-w-64">
+        {props.databaseLink}
+      </div>
+    </section>
   );
 }
 
@@ -146,31 +213,56 @@ export function HiddenColumns(props: {
   );
 }
 
-/** The right rail: Add, Outline, and where answers are stored. */
-export function BuilderRail(props: {
-  add: JSX.Element;
-  outline: JSX.Element;
-  storesTo: JSX.Element;
+/** Section and question navigation to the left of the canvas. */
+export function BuilderSidebar(props: { outline: JSX.Element }) {
+  return (
+    <nav
+      aria-label="Form outline"
+      class="hidden min-w-0 flex-col gap-3 px-1 text-sm @5xl/builder:sticky @5xl/builder:top-4 @5xl/builder:flex @5xl/builder:max-h-[calc(100dvh-8rem)] @5xl/builder:overflow-y-auto"
+    >
+      <h3 class="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">
+        Outline
+      </h3>
+      {props.outline}
+    </nav>
+  );
+}
+
+/** Visible type choices are both buttons and drag sources, supplied by the view. */
+export function BuilderPalette(props: {
+  question: (choice: QuestionTypeChoice) => JSX.Element;
+  structure: JSX.Element;
 }) {
   return (
-    <aside class="flex w-full flex-col gap-5 text-sm @4xl/builder:sticky @4xl/builder:top-4 @4xl/builder:w-64">
-      <div class="flex flex-col gap-2">
-        <h3 class="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">
-          Add
-        </h3>
-        {props.add}
+    <aside
+      aria-label="Add to form"
+      class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col gap-4 @5xl/builder:sticky @5xl/builder:top-4 @5xl/builder:max-h-[calc(100dvh-8rem)] @5xl/builder:overflow-y-auto"
+    >
+      <div class="rounded-xl border border-edge-muted bg-surface p-3">
+        <h3 class="mb-3 text-sm font-semibold text-ink">Add question</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <For
+            each={QUESTION_TYPE_CHOICES.filter(
+              (choice) => choice.group === 'forms'
+            )}
+          >
+            {props.question}
+          </For>
+        </div>
+        <h4 class="mt-4 mb-2 text-[11px] font-medium text-ink-muted">Macro</h4>
+        <div class="grid grid-cols-2 gap-2">
+          <For
+            each={QUESTION_TYPE_CHOICES.filter(
+              (choice) => choice.group === 'macro'
+            )}
+          >
+            {props.question}
+          </For>
+        </div>
       </div>
-      <div class="hidden flex-col gap-2 @4xl/builder:flex">
-        <h3 class="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">
-          Outline
-        </h3>
-        {props.outline}
-      </div>
-      <div class="flex flex-col gap-2">
-        <h3 class="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">
-          Stores to
-        </h3>
-        {props.storesTo}
+      <div class="flex flex-col gap-2 rounded-xl border border-edge-muted bg-surface p-3">
+        <h3 class="mb-1 text-xs font-medium text-ink-muted">Structure</h3>
+        {props.structure}
       </div>
     </aside>
   );
@@ -181,11 +273,16 @@ export function OutlineSection(props: {
   name: string;
   kind: SectionKind;
   questions: readonly { id: string; title: string; selected: boolean }[];
+  onSelectSection: () => void;
   onSelectQuestion: (questionId: string) => void;
 }) {
   return (
     <li class="flex flex-col gap-0.5">
-      <span class="flex items-center gap-1.5 truncate text-xs font-medium text-ink">
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded px-1.5 py-1 text-left text-xs font-medium text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+        onClick={props.onSelectSection}
+      >
         <Switch>
           <Match when={props.kind === 'gate'}>
             <ShieldCheck class="size-3.5 text-amber-ink" aria-hidden="true" />
@@ -195,7 +292,7 @@ export function OutlineSection(props: {
           </Match>
         </Switch>
         {props.name}
-      </span>
+      </button>
       <ul class="flex flex-col border-l border-edge-divider pl-2">
         <For each={props.questions}>
           {(question) => (

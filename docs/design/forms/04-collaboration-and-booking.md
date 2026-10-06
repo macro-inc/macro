@@ -11,8 +11,17 @@ calendar picker. Remove the colored title stripe, the persistent saved badge
 and explanatory implementation copy. The UI calls a gate a **Screener**; the
 existing `gate` protocol value remains unchanged.
 
-Section and Screener controls support click to insert and drag from the rail
-to an insertion point in the canvas. Existing section/question handles retain
+The top banner contains the editable form name, description and a link to the
+database. Below it, the question canvas is centered between equal-width side
+panels: the outline on the left, and visible question types on the right.
+Question tiles place their icons to the left of their labels, followed by
+Section, Screener and Booking controls. Narrow splits put the banner above the
+canvas and the palette below it.
+
+Question type tiles, Section and Screener controls support click to insert and
+drag from the right panel to an insertion point in the canvas. Question drops
+create a column only after release; Database row first opens the native table
+picker, preserving the drop placement. Existing section/question handles retain
 pointer and keyboard reordering, invalid-drop feedback and Escape to cancel.
 
 The native share dialog includes the responder link and **Anyone with the

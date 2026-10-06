@@ -157,6 +157,7 @@ function setup() {
       drops.push([questionId, placement]),
     dropSection: () => {},
     dropNewSection: () => undefined,
+    dropNewQuestion: () => {},
     describe: (target) => target.id,
     describePlacement: (_, placement) =>
       `${placement.sectionId} ${placement.index + 1}`,
@@ -172,6 +173,208 @@ function setup() {
     );
   return { drag, handle, other, drops, focused, key, viewport };
 }
+
+it('drags a question type from the palette, creating it at the marked slot only on drop', () => {
+  createRoot((dispose) => {
+    const formLayout: FormLayout = {
+      sections: [
+        {
+          id: 'first',
+          kind: 'questions',
+          title: 'First',
+          description: '',
+          questions: [
+            {
+              id: 'existing',
+              columnId: 'column',
+              helpText: '',
+              required: false,
+              widget: 'short',
+            },
+          ],
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: null,
+        },
+      ],
+    };
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
+    const canvas = document.createElement('div');
+    canvas.getBoundingClientRect = () => new DOMRect(200, 0, 400, 500);
+    const handle = document.createElement('button');
+    document.body.append(viewport, canvas, handle);
+    const created: {
+      type: string;
+      placement: QuestionPlacement | undefined;
+    }[] = [];
+    const drag = createBuilderDrag({
+      layout: () => formLayout,
+      viewport: () => viewport,
+      canvas: () => canvas,
+      measureQuestions: () => [
+        {
+          id: 'first',
+          kind: 'questions',
+          box: { top: 20, bottom: 300, left: 200, right: 600 },
+          list: { top: 80, bottom: 270, left: 200, right: 600 },
+          questions: [
+            {
+              id: 'existing',
+              box: { top: 100, bottom: 200, left: 200, right: 600 },
+            },
+          ],
+        },
+      ],
+      measureSections: () => [
+        { id: 'first', box: { top: 20, bottom: 300, left: 200, right: 600 } },
+      ],
+      refusalForQuestion: () => undefined,
+      refusalForSection: () => undefined,
+      dropQuestion: () => {
+        throw new Error('A palette item creates a question');
+      },
+      dropSection: () => {
+        throw new Error('A palette item creates a question');
+      },
+      dropNewSection: () => undefined,
+      dropNewQuestion: (type, placement) => created.push({ type, placement }),
+      describe: () => 'Paragraph question',
+      describePlacement: () => 'First, question 2',
+      focusHandle: () => {},
+    });
+    const handlers = drag.handleProps(() => ({
+      kind: 'new-question',
+      id: 'paragraph',
+    }));
+    handle.addEventListener('pointerdown', handlers.onPointerDown);
+    handle.addEventListener('click', handlers.onClick);
+    handle.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: 1,
+        button: 0,
+        clientX: 720,
+        clientY: 100,
+      })
+    );
+    handle.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerId: 1,
+        clientX: 400,
+        clientY: 230,
+      })
+    );
+    expect(drag.session()?.placement).toEqual({ sectionId: 'first', index: 1 });
+    expect(drag.session()?.lineY).toBe(204);
+    expect(created).toEqual([]);
+    handle.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerId: 1,
+        clientX: 720,
+        clientY: 230,
+      })
+    );
+    expect(drag.session()?.lineY).toBeUndefined();
+    handle.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerId: 1,
+        clientX: 400,
+        clientY: 230,
+      })
+    );
+    handle.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerId: 1,
+        clientX: 400,
+        clientY: 230,
+      })
+    );
+    expect(created).toEqual([
+      { type: 'paragraph', placement: { sectionId: 'first', index: 1 } },
+    ]);
+    const click = new MouseEvent('click', { detail: 1, cancelable: true });
+    handle.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    dispose();
+  });
+});
+
+it('creates a question in an empty canvas after a touch drag, while canceled and outside drops create nothing', () => {
+  createRoot((dispose) => {
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
+    const canvas = document.createElement('div');
+    canvas.getBoundingClientRect = () => new DOMRect(200, 40, 400, 400);
+    const handle = document.createElement('button');
+    document.body.append(viewport, canvas, handle);
+    const createQuestion = vi.fn();
+    const drag = createBuilderDrag({
+      layout: () => ({ sections: [] }),
+      viewport: () => viewport,
+      canvas: () => canvas,
+      measureQuestions: () => [],
+      measureSections: () => [],
+      refusalForQuestion: () => undefined,
+      refusalForSection: () => undefined,
+      dropQuestion: () => {},
+      dropSection: () => {},
+      dropNewSection: () => undefined,
+      dropNewQuestion: createQuestion,
+      describe: () => 'Paragraph question',
+      describePlacement: () => 'First question',
+      focusHandle: () => {},
+    });
+    const handlers = drag.handleProps(() => ({
+      kind: 'new-question',
+      id: 'paragraph',
+    }));
+    handle.addEventListener('pointerdown', handlers.onPointerDown);
+    for (const ending of ['escape', 'outside', 'drop']) {
+      handle.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          pointerId: 7,
+          pointerType: 'touch',
+          button: 0,
+          clientX: 720,
+          clientY: 100,
+        })
+      );
+      vi.advanceTimersByTime(201);
+      handle.dispatchEvent(
+        new PointerEvent('pointermove', {
+          pointerId: 7,
+          pointerType: 'touch',
+          clientX: 400,
+          clientY: 200,
+        })
+      );
+      expect(drag.session()?.lineY).toBe(48);
+      expect(createQuestion).not.toHaveBeenCalled();
+      if (ending === 'escape') {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      } else {
+        if (ending === 'outside') {
+          handle.dispatchEvent(
+            new PointerEvent('pointermove', {
+              pointerId: 7,
+              pointerType: 'touch',
+              clientX: 100,
+              clientY: 200,
+            })
+          );
+          expect(drag.session()?.lineY).toBeUndefined();
+        }
+        handle.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7 }));
+      }
+      expect(drag.session()).toBeUndefined();
+    }
+    expect(createQuestion).toHaveBeenCalledExactlyOnceWith(
+      'paragraph',
+      undefined
+    );
+    dispose();
+  });
+});
 
 it('drags a new section from the sidebar into the form and creates it only on a valid drop', () => {
   createRoot((dispose) => {
@@ -228,6 +431,7 @@ it('drags a new section from the sidebar into the form and creates it only on a 
         created.push({ kind, index });
         return 'created';
       },
+      dropNewQuestion: () => {},
       describe: () => 'new section',
       describePlacement: () => '',
       focusHandle: (target) => focused.push(target),
@@ -335,6 +539,7 @@ it('shows and announces a new section dropped below the booking step where it la
         created.push(index);
         return 'created';
       },
+      dropNewQuestion: () => {},
       describe: () => 'new section',
       describePlacement: () => '',
       focusHandle: () => {},

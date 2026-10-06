@@ -1,5 +1,6 @@
 import { cloneDragPreview } from '@app/components/drag-drop/drag-preview';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   type Box,
   lineForPlacement,
@@ -16,11 +17,13 @@ import {
   sectionInsertIndex,
 } from '../core/form-layout';
 import type { FormLayout } from '../core/form-model';
+import type { QuestionTypeId } from '../core/question-types';
 import type { NewSectionKind } from './create-builder';
 
 export type DragTarget =
   | { kind: 'question'; id: string }
   | { kind: 'section'; id: string }
+  | { kind: 'new-question'; id: QuestionTypeId }
   | { kind: 'new-section'; id: NewSectionKind };
 
 /** A drag in progress: what moves, where it would land, and whether it may. */
@@ -64,6 +67,11 @@ export type BuilderDragOptions = {
   dropSection: (sectionId: string, index: number) => void;
   /** Create only on drop; return the new section so focus follows it. */
   dropNewSection: (kind: NewSectionKind, index: number) => string | undefined;
+  /** A palette drop creates its column and question; an empty form has no placement yet. */
+  dropNewQuestion: (
+    type: QuestionTypeId,
+    placement: QuestionPlacement | undefined
+  ) => void;
   /** What the announcement calls a target, e.g. "question “Team”". */
   describe: (target: DragTarget) => string;
   /** Where a placement is, read aloud. */
@@ -143,7 +151,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
   }
 
   function sectionSession(
-    target: Exclude<DragTarget, { kind: 'question' }>,
+    target: DragTarget & { kind: 'section' | 'new-section' },
     mode: DragSession['mode'],
     index: number | undefined,
     lineY: number | undefined
@@ -170,6 +178,30 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     const active = session();
     if (!active || active.mode !== 'pointer') return;
     const { x, y } = pointer();
+    if (active.target.kind === 'new-question') {
+      const canvas = options.canvas()?.getBoundingClientRect();
+      const viewport = options.viewport()?.getBoundingClientRect();
+      const inside =
+        !!canvas &&
+        !!viewport &&
+        x >= canvas.left &&
+        x <= canvas.right &&
+        y >= Math.max(canvas.top, viewport.top) &&
+        y <= viewport.bottom;
+      const drop = inside
+        ? questionDropAt(y, options.measureQuestions(), '')
+        : undefined;
+      setSession({
+        target: active.target,
+        mode: 'pointer',
+        placement: drop && { sectionId: drop.sectionId, index: drop.index },
+        sectionIndex: undefined,
+        lineY: inside ? (drop?.lineY ?? canvas.top + 8) : undefined,
+        refusal: undefined,
+        unchanged: !inside,
+      });
+      return;
+    }
     if (active.target.kind === 'question') {
       const drop = questionDropAt(
         y,
@@ -320,19 +352,34 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     window.addEventListener('blur', cancelLeavingFocus);
     startPreview(press.handle);
     setSession(
-      target.kind === 'question'
-        ? questionSession(
-            target,
+      match(target)
+        .returnType<DragSession>()
+        .with({ kind: 'new-question' }, (created) => ({
+          target: created,
+          mode: 'pointer',
+          placement: undefined,
+          sectionIndex: undefined,
+          lineY: undefined,
+          refusal: undefined,
+          unchanged: true,
+        }))
+        .with({ kind: 'question' }, (question) =>
+          questionSession(
+            question,
             'pointer',
-            currentPlacement(target.id),
+            currentPlacement(question.id),
             undefined
           )
-        : sectionSession(
-            target,
+        )
+        .with({ kind: 'section' }, { kind: 'new-section' }, (section) =>
+          sectionSession(
+            section,
             'pointer',
-            currentSectionIndex(target.id),
+            currentSectionIndex(section.id),
             undefined
           )
+        )
+        .exhaustive()
     );
     locate();
     scrollFrame = requestAnimationFrame(autoScroll);
@@ -343,6 +390,18 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     const active = session();
     if (!active) return;
     const { target } = active;
+    // Creation can open a picker or asynchronously focus the new question.
+    // End pointer capture first and let that flow own focus.
+    if (
+      target.kind === 'new-question' &&
+      !active.unchanged &&
+      !active.refusal
+    ) {
+      end();
+      options.dropNewQuestion(target.id, active.placement);
+      announce(`Adding ${options.describe(target)}.`);
+      return;
+    }
     let focusTarget = target;
     const described = options.describe(target);
     if (active.refusal) {
@@ -450,7 +509,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
   }
 
   function startKeyboard(target: DragTarget) {
-    if (target.kind === 'new-section') return;
+    if (target.kind === 'new-section' || target.kind === 'new-question') return;
     if (target.kind === 'question') {
       const placement = currentPlacement(target.id);
       if (!placement) return;
@@ -482,6 +541,11 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     const active = session();
     const layout = options.layout();
     if (!active || active.mode !== 'keyboard' || !layout) return;
+    if (
+      active.target.kind === 'new-section' ||
+      active.target.kind === 'new-question'
+    )
+      return;
     if (active.target.kind === 'question') {
       const from = active.placement ?? currentPlacement(active.target.id);
       const next =
@@ -567,7 +631,11 @@ export function createBuilderDrag(options: BuilderDragOptions) {
         if (!active) {
           // The rail's normal button adds on Enter/Space. The created
           // section then has the same keyboard move controls as every section.
-          if (target().kind === 'new-section') return;
+          if (
+            target().kind === 'new-section' ||
+            target().kind === 'new-question'
+          )
+            return;
           if (event.key === ' ' || event.key === 'Enter') {
             event.preventDefault();
             startKeyboard(target());

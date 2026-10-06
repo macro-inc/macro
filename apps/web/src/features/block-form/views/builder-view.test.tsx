@@ -30,6 +30,7 @@ import { BuilderView } from './builder-view';
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = () => {};
+  window.scrollTo = () => {};
 });
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -119,12 +120,14 @@ function rsvp(): FormDetail {
 
 function mount(
   options: {
+    detail?: FormDetail;
     overrides?: Partial<FormContext>;
     trackWrites?: (flush: () => ResultAsync<void, FormWriteFailure>) => void;
   } = {}
 ) {
+  const detail = options.detail ?? rsvp();
   const mock = createMockFormContext({
-    detail: rsvp(),
+    detail,
     tableColumns: columns,
     overrides: options.overrides,
   });
@@ -132,7 +135,7 @@ function mount(
     <FormProvider value={mock.context}>
       <BuilderView
         source={mock.source}
-        detail={rsvp()}
+        detail={detail}
         collaboration={mock.shared.collaboration}
         trackWrites={options.trackWrites ?? (() => {})}
         onOpenResponses={() => {}}
@@ -144,6 +147,79 @@ function mount(
 }
 
 describe('BuilderView', () => {
+  it('shows the question palette beside a separate outline and adds the chosen type after the selected question', async () => {
+    const { calls, shared } = mount();
+    const banner = screen.getByRole('region', { name: 'Form details' });
+    expect(within(banner).getByLabelText('Form name')).toBeTruthy();
+    expect(within(banner).getByLabelText('Form description')).toBeTruthy();
+    expect(
+      within(banner).getByRole('button', { name: /Open database/ })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('navigation', { name: 'Form outline' })
+    ).toBeTruthy();
+    const palette = screen.getByRole('complementary', { name: 'Add to form' });
+    for (const name of [
+      'Short answer',
+      'Paragraph',
+      'Multiple choice',
+      'Checkboxes',
+      'Dropdown',
+      'Number',
+      'Date & time',
+      'Person',
+      'Document',
+      'Database row',
+    ]) {
+      expect(
+        within(palette).getByRole('button', { name: `Add ${name}` })
+      ).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole('group', { name: 'Question 1: Name' }));
+    fireEvent.click(
+      within(palette).getByRole('button', { name: 'Add Paragraph' })
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    const questions = shared.theirs().sections[0].questions;
+    expect(questions).toHaveLength(3);
+    expect(questions[0].id).toBe('q-name');
+    expect(questions[1].widget).toBe('paragraph');
+    expect(questions[2].id).toBe('q-team');
+    expect(calls.notices).toEqual([]);
+  });
+
+  it('adds the first question to an empty form from the palette', async () => {
+    const detail = rsvp();
+    detail.layout = { sections: [] };
+    const { shared, calls } = mount({ detail });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Short answer' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(shared.theirs().sections).toHaveLength(1);
+    expect(shared.theirs().sections[0].questions).toHaveLength(1);
+    expect(shared.theirs().sections[0].questions[0].widget).toBe('short');
+    expect(calls.notices).toEqual([]);
+  });
+
+  it('waits for the native table picker before creating a relation question, and cancel creates nothing', async () => {
+    const { shared, calls } = mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Add Database row' }));
+    expect(screen.getByRole('dialog', { name: 'Choose a table' })).toBeTruthy();
+    expect(shared.theirs().sections[0].questions).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(calls.layouts).toEqual([]);
+    fireEvent.click(screen.getByRole('group', { name: 'Question 1: Name' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Database row' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Responses' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const questions = shared.theirs().sections[0].questions;
+    expect(questions).toHaveLength(3);
+    expect(questions[0].id).toBe('q-name');
+    expect(questions[2].id).toBe('q-team');
+    expect(calls.notices).toEqual([]);
+  });
+
   it('reorders a question with the keyboard and writes the shared layout once, on the drop', async () => {
     const { calls } = mount();
     const handle = screen.getByRole('button', { name: 'Move question “Name”' });
@@ -299,13 +375,19 @@ describe('BuilderView', () => {
         />
       </FormProvider>
     ));
-    expect(screen.getByRole('status').textContent).toBe(
-      'Opening the form for editing…'
-    );
+    expect(
+      screen
+        .getByRole('status', { name: 'Loading form editor' })
+        .getAttribute('aria-busy')
+    ).toBe('true');
+    expect(screen.queryByRole('textbox')).toBeNull();
     expect(
       screen.queryByRole('group', { name: 'Question 1: Name' })
     ).toBeNull();
     mock.shared.setStatus({ kind: 'ready' });
+    expect(
+      screen.queryByRole('status', { name: 'Loading form editor' })
+    ).toBeNull();
     expect(
       screen.getByRole('group', { name: 'Question 1: Name' })
     ).toBeTruthy();
