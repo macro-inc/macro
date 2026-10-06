@@ -138,7 +138,6 @@ function mount(
         detail={detail}
         collaboration={mock.shared.collaboration}
         trackWrites={options.trackWrites ?? (() => {})}
-        onOpenResponses={() => {}}
         onOpenDatabase={() => {}}
       />
     </FormProvider>
@@ -300,7 +299,6 @@ describe('BuilderView', () => {
           detail={detail}
           collaboration={mock.shared.collaboration}
           trackWrites={() => {}}
-          onOpenResponses={() => {}}
           onOpenDatabase={() => {}}
         />
       </FormProvider>
@@ -346,7 +344,6 @@ describe('BuilderView', () => {
           detail={detail}
           collaboration={mock.shared.collaboration}
           trackWrites={() => {}}
-          onOpenResponses={() => {}}
           onOpenDatabase={() => {}}
         />
       </FormProvider>
@@ -370,7 +367,6 @@ describe('BuilderView', () => {
           detail={rsvp()}
           collaboration={mock.shared.collaboration}
           trackWrites={() => {}}
-          onOpenResponses={() => {}}
           onOpenDatabase={() => {}}
         />
       </FormProvider>
@@ -609,7 +605,6 @@ describe('BuilderView', () => {
             detail={detail}
             collaboration={mock.shared.collaboration}
             trackWrites={() => {}}
-            onOpenResponses={() => {}}
             onOpenDatabase={() => {}}
           />
         </FormProvider>

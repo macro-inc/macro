@@ -140,7 +140,6 @@ function EditorPanels(
               detail={props.detail}
               collaboration={collaboration}
               trackWrites={props.preview.trackWrites}
-              onOpenResponses={() => props.onTabChange('responses')}
               onOpenDatabase={props.onOpenDatabase}
             />
           </Match>

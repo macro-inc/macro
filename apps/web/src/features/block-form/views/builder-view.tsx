@@ -120,7 +120,6 @@ type BuilderViewProps = {
   collaboration: FormLayoutCollaboration;
   /** Registers writes a preview waits for, while the builder is open. */
   trackWrites: TrackWrites;
-  onOpenResponses: () => void;
   onOpenDatabase: (databaseId: string) => void;
 };
 
