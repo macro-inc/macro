@@ -1,68 +1,37 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import {
+  parseChannelAccessLevel,
+  type RecipientOption,
+  type ShareForm,
+  type ShareItem,
+  type ShareSubmitResult,
+  useShareForm,
+} from '@app/features/sharing/share-delivery/share-delivery';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useIsAuthenticated } from '@core/auth';
-import {
-  type BlockAlias,
-  type BlockName,
-  useMaybeBlockAliasedName,
-  useMaybeBlockId,
-  useMaybeBlockName,
-} from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
-import { resolveBlockAlias } from '@core/constant/allBlocks';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import type { WithCustomUserInput } from '@core/user';
-import { useSendMessageToPeople } from '@core/util/channels';
-import { getDestinationFromOptions } from '@core/util/destination';
-import CheckIcon from '@phosphor/check.svg?component-solid';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import {
-  blockNameToItemType,
-  itemTypeToReferenceEntityType,
-} from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
-import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
-import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
-import { Button, cn, Hotkey } from '@ui';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-  onMount,
-  Show,
-} from 'solid-js';
-import { Permissions } from './SharePermissions';
+import { Button, Hotkey } from '@ui';
+import { type Accessor, createSignal, onMount, Show } from 'solid-js';
+import { SendAsGroupToggle } from './SendAsGroupToggle';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
 
-type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
-
 interface MobileForwardToChannelLayoutProps
-  extends Pick<
-    ForwardToChannelProps,
-    'submitPermissionInfo' | 'hideAccessLevelSelector' | 'editPermissionEnabled'
-  > {
+  extends Pick<ForwardToChannelProps, 'editPermissionEnabled'> {
+  form: ShareForm<RecipientOption>;
   isAuthenticated: Accessor<boolean | undefined>;
-  selectedOptions: Accessor<Recipient[]>;
-  setSelectedOptions: (v: Recipient[]) => void;
-  triedToSubmit: Accessor<boolean>;
   destinationOptions: ReturnType<typeof useCombinedRecipients>['all'];
-  submitAccessLevel: Accessor<AccessLevel | null>;
-  setSubmitAccessLevel: (level: AccessLevel | null) => void;
   mdScrollRef: Accessor<HTMLElement | undefined>;
   setMdScrollRef: (el: HTMLElement) => void;
   markdownEditor: ReturnType<typeof createConfiguredChannelMarkdownEditor>;
-  handleSubmit: () => void;
-  canSendAsGroup: Accessor<boolean>;
-  sendAsGroupMessage: Accessor<boolean>;
-  setSendAsGroupMessage: (v: boolean) => void;
 }
 
 function MobileForwardToChannelLayout(
@@ -73,78 +42,45 @@ function MobileForwardToChannelLayout(
       <div class="px-3 py-2 min-h-11" data-share-drawer-recipient>
         <RecipientSelector<'user' | 'contact' | 'channel'>
           placeholder="To: Email or group"
-          setSelectedOptions={props.setSelectedOptions}
-          selectedOptions={props.selectedOptions()}
-          triedToSubmit={props.triedToSubmit}
+          setSelectedOptions={props.form.setRecipients}
+          selectedOptions={props.form.recipients()}
+          triedToSubmit={props.form.triedToSubmit}
           options={props.destinationOptions}
           triggerMode="input"
           class="border border-edge-muted p-1"
           focusOnMount
+          disabled={props.form.locked()}
         />
       </div>
       {/* Send as group */}
-      <Show when={props.canSendAsGroup()}>
-        <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
-          <label
-            class={`flex items-start gap-2 ${!props.canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'}`}
-          >
-            <div class="relative mt-0.5">
-              <input
-                onChange={(e) =>
-                  props.setSendAsGroupMessage(e.currentTarget.checked)
-                }
-                checked={props.sendAsGroupMessage() && props.canSendAsGroup()}
-                disabled={!props.canSendAsGroup()}
-                class="peer sr-only"
-                type="checkbox"
-              />
-              <div
-                class={`size-4 border ${
-                  !props.canSendAsGroup()
-                    ? 'border-edge peer-checked:bg-surface/20'
-                    : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
-                }`}
-              >
-                <Show
-                  when={props.sendAsGroupMessage() && props.canSendAsGroup()}
-                >
-                  <CheckIcon class="size-full text-accent p-0.5" />
-                </Show>
-              </div>
-            </div>
-            <div
-              class={`flex flex-col text-sm ${!props.canSendAsGroup() ? 'text-ink-disabled/50' : ''}`}
-            >
-              <span class="font-medium">Send As Group Message</span>
-              <span
-                class={`text-xs mt-0.5 ${!props.canSendAsGroup() ? 'text-ink-disabled/50' : 'text-ink-muted'}`}
-              >
-                {props.sendAsGroupMessage() && props.canSendAsGroup()
-                  ? 'Creates a new group message with all recipients'
-                  : 'Send a message to each recipient'}
-              </span>
-            </div>
-          </label>
-        </div>
+      <Show when={props.form.group()}>
+        {(group) => (
+          <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
+            <SendAsGroupToggle
+              on={group().on}
+              locked={props.form.locked()}
+              onChange={props.form.setGroup}
+            />
+          </div>
+        )}
       </Show>
-      <Show
-        when={
-          props.submitPermissionInfo?.userPermissions === Permissions.OWNER &&
-          !props.hideAccessLevelSelector
-        }
-      >
-        <div class="px-3 py-2 flex items-center">
-          <span class="text-sm text-ink-muted pr-2">Access:</span>
-          <ShareOptions
-            editPermissionEnabled={props.editPermissionEnabled}
-            setPermissions={(accessLevel) =>
-              props.setSubmitAccessLevel(accessLevel)
-            }
-            permissions={props.submitAccessLevel()}
-            label="Permission"
-            hideNoAccess
-          />
-        </div>
+      <Show when={props.form.level()}>
+        {(level) => (
+          <div class="px-3 py-2 flex items-center">
+            <span class="text-sm text-ink-muted pr-2">Access:</span>
+            <ShareOptions
+              editPermissionEnabled={props.editPermissionEnabled}
+              allowedAccessLevels={level().options}
+              setPermissions={(accessLevel) =>
+                pickLevel(props.form, accessLevel)
+              }
+              permissions={level().value}
+              label="Permission"
+              hideNoAccess
+              disabled={props.form.locked()}
+            />
+          </div>
+        )}
       </Show>
 
       <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t border-edge-muted relative">
@@ -160,6 +96,7 @@ function MobileForwardToChannelLayout(
             placeholder="Optional message"
             portalScope="local"
             class="text-sm"
+            disabled={props.form.locked()}
           />
         </div>
       </div>
@@ -168,56 +105,28 @@ function MobileForwardToChannelLayout(
 }
 
 interface ForwardToChannelProps {
+  item: ShareItem;
   editPermissionEnabled?: boolean;
-  submitPermissionInfo?: {
-    setChannelPermissions: (
-      channelId: string,
-      accessLevel: AccessLevel
-    ) => void | boolean | Promise<void | boolean>;
-    channelSharePermissions?: SharePermissionV2ChannelSharePermissions;
-    userPermissions: Permissions;
-  };
   onSubmit?: () => void;
   onCancel?: () => void;
   refetch?: () => void;
-  projectId?: string;
-  name: string;
   ref?: (ref: {
-    getSelectedOptions: () => WithCustomUserInput<
-      'user' | 'contact' | 'channel'
-    >[];
+    getSelectedOptions: () => RecipientOption[];
     setSubmitAccessLevel: (level: AccessLevel | null) => void;
     getSubmitAccessLevel: () => AccessLevel | null;
     handleSubmit: () => void;
   }) => void;
-  hideAccessLevelSelector?: boolean;
-  initialAccessLevel?: AccessLevel | null;
-  /** Attach an entity that has no block, instead of `blockId`/`blockName`. */
-  entity?: NewAttachment;
-  /**
-   * Grant the destination before the message is sent, for entities that
-   * sending does not grant. Rejecting cancels that delivery.
-   */
-  prepareChannel?: (
-    channelId: string,
-    accessLevel: AccessLevel | null
-  ) => Promise<void>;
-  blockId?: string;
-  blockName?: BlockName | BlockAlias;
 }
 
 export function ForwardToChannel(props: ForwardToChannelProps) {
   const isAuthenticated = useIsAuthenticated();
-  const analytics = useAnalytics();
-
-  const [selectedOptions, setSelectedOptions] = createSignal<
-    WithCustomUserInput<'user' | 'contact' | 'channel'>[]
-  >([]);
+  const form = useShareForm(() => [props.item], {
+    location: 'forward_to_channel',
+  });
 
   const [mdScrollRef, setMdScrollRef] = createSignal<HTMLElement>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
-  const [markdown, setMarkdown] = createSignal('');
   // No onEnter: the optional message is a multi-line composer, so a bare Enter
   // falls through to Lexical and inserts a newline. Sharing is bound to
   // cmd+enter through the hotkey system below.
@@ -225,249 +134,16 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     namespace: 'forward-to-channel-markdown',
     resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
-    onChange: setMarkdown,
+    onChange: form.setText,
   });
-  const [triedToSubmit, setTriedToSubmit] = createSignal(false);
-  const [isSubmitting, setIsSubmitting] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
 
-  const destination = createMemo(() => {
-    let options = selectedOptions();
-    if (!options || options.length === 0) {
-      return;
-    }
-    return getDestinationFromOptions(options);
-  });
-
-  const channelPermissions = createMemo(() => {
-    if (!props.submitPermissionInfo) {
-      return;
-    }
-    const destination_ = destination();
-    if (!destination_ || destination_.type !== 'channel') {
-      return;
-    }
-    const perms = props.submitPermissionInfo.channelSharePermissions?.find(
-      (p) => p.channel_id === destination_.id
-    );
-    return perms;
-  });
-
-  const { sendToUsers, sendToChannel } = useSendMessageToPeople();
-  const contextBlockBaseName = useMaybeBlockName();
-  const blockBaseName = props.entity
-    ? undefined
-    : props.blockName
-      ? resolveBlockAlias(props.blockName)
-      : contextBlockBaseName;
-  const [submitAccessLevel, setSubmitAccessLevel] =
-    createSignal<AccessLevel | null>(
-      props.initialAccessLevel ?? (blockBaseName === 'md' ? 'edit' : 'view')
-    );
-  createEffect(() => {
-    const channelPermissions_ = channelPermissions();
-    if (channelPermissions_) {
-      setSubmitAccessLevel(channelPermissions_.access_level);
-    }
-  });
-
-  const submitChannelPermissions = async (
-    channelId: string,
-    accessLevel: AccessLevel | null
-  ) => {
-    if (!props.submitPermissionInfo) {
-      return true;
-    }
-
-    if (!accessLevel) {
-      toast.failure('Failed to set channel permissions');
-      return false;
-    }
-
-    try {
-      if (props.prepareChannel) {
-        await props.prepareChannel(channelId, accessLevel);
-        return true;
-      }
-      const result = await props.submitPermissionInfo.setChannelPermissions(
-        channelId,
-        accessLevel
-      );
-      return result !== false;
-    } catch (error) {
-      console.error('Failed to set channel permissions', error);
-      toast.failure('Failed to set channel permissions');
-      return false;
-    }
-  };
-
-  const [sendAsGroupMessage, setSendAsGroupMessage] =
-    createSignal<boolean>(true);
-
-  const canSendAsGroup = createMemo(() => {
-    const _selectedOptions = selectedOptions();
-    if (!_selectedOptions || _selectedOptions.length <= 1) {
-      return false;
-    }
-    for (const selectedOption of _selectedOptions) {
-      if (selectedOption.kind === 'channel') {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  const contextBlockName = useMaybeBlockAliasedName();
-  const contextBlockId = useMaybeBlockId();
-  // Explicit identity can differ from the enclosing block (e.g. a newly
-  // persisted agent session still mounted in its launcher placeholder).
-  const blockName = () => props.blockName ?? contextBlockName;
-  const blockId = () => props.blockId ?? contextBlockId;
-  const itemType = () => {
-    if (props.entity) return;
-    const name = blockName();
-    return name != null ? blockNameToItemType(name) : undefined;
-  };
-
-  const asAttachment = (): NewAttachment => {
-    if (props.entity) return props.entity;
-    const type = itemType();
-    return {
-      entity_type: type ? itemTypeToReferenceEntityType(type) : 'unknown',
-      entity_id: blockId() ?? '',
-    };
-  };
-
-  const trackForwardShare = (targetType: 'channel' | 'user') => {
-    const attachment = asAttachment();
-    analytics.track('share_entity', {
-      entityType: itemType() ?? attachment.entity_type,
-      entityId: attachment.entity_id || undefined,
-      shareMethod: 'forward',
-      targetType,
-      location: 'forward_to_channel',
-    });
-  };
-
-  // Keep confirmed deliveries until the whole share succeeds. Retrying a
-  // failed grant must not send the same message to that recipient again.
-  const deliveries = new Map<
-    string,
-    {
-      result: NonNullable<Awaited<ReturnType<typeof sendToChannel>>>;
-      accessLevel?: AccessLevel | null;
-    }
-  >();
-
-  async function sendForward(
-    target: NonNullable<ReturnType<typeof destination>>,
-    accessLevel: AccessLevel | null
-  ) {
-    const prepare = props.prepareChannel;
-    const message = {
-      attachments: [asAttachment()],
-      content: markdown(),
-      mentions: [],
-      beforeSend: prepare && ((id: string) => prepare(id, accessLevel)),
-    };
-    const deliveryKey = JSON.stringify([
-      message,
-      target.type === 'channel'
-        ? target
-        : { type: target.type, users: [...target.users].sort() },
-    ]);
-    let delivery = deliveries.get(deliveryKey);
-    if (!delivery) {
-      let result;
-      try {
-        result =
-          target.type === 'channel'
-            ? await sendToChannel({ ...message, channelId: target.id })
-            : await sendToUsers({ ...message, users: target.users });
-      } catch (error) {
-        console.error('Failed to forward message', error);
-      }
-      if (!result) {
-        toast.failure('Message failed to send');
-        return;
-      }
-      // A prepared destination was granted this level before sending.
-      delivery = prepare ? { result, accessLevel } : { result };
-      deliveries.set(deliveryKey, delivery);
-      if (prepare) {
-        trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
-      }
-    }
-
-    // Sending an attachment can automatically grant access. Apply the selected
-    // level afterward so that auto-grant cannot overwrite the user's choice.
-    if (delivery.accessLevel !== accessLevel) {
-      if (
-        !(await submitChannelPermissions(
-          delivery.result.channelId,
-          accessLevel
-        ))
-      ) {
-        return;
-      }
-      if (delivery.accessLevel === undefined) {
-        trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
-      }
-      delivery.accessLevel = accessLevel;
-    }
-    return delivery.result;
-  }
-
   async function handleSubmit() {
-    if (isSubmitting()) return;
-    const options = selectedOptions();
-    const destination_ = destination();
-    if (options.length === 0 || !destination_) {
-      return setTriedToSubmit(true);
-    }
-
-    const targets: NonNullable<ReturnType<typeof destination>>[] =
-      canSendAsGroup() && sendAsGroupMessage()
-        ? [destination_]
-        : options.map((option) =>
-            option.kind === 'channel'
-              ? { type: 'channel', id: option.id }
-              : { type: 'users', users: [option.id] }
-          );
-    const accessLevel = submitAccessLevel();
-    setIsSubmitting(true);
-    try {
-      const results = await Promise.all(
-        targets.map((target) => sendForward(target, accessLevel))
-      );
-      props.refetch?.();
-      if (results.some((result) => !result)) {
-        if (targets.length > 1) {
-          toast.failure('Some messages failed to send');
-        }
-        return;
-      }
-
-      if (targets.length > 1) {
-        toast.success('Messages sent successfully');
-      } else {
-        const result = results[0];
-        if (result) {
-          toast.success('Message sent successfully', {
-            actions: [
-              {
-                label: 'View in channel',
-                onClick: result.navigateToChannel,
-              },
-            ],
-          });
-        }
-      }
-      deliveries.clear();
-      props.onSubmit?.();
-    } finally {
-      setIsSubmitting(false);
-    }
+    const result = await form.submit();
+    if (!result) return;
+    props.refetch?.();
+    toastForwardResult(result);
+    if (result.outcome.complete) props.onSubmit?.();
   }
 
   // Not detached: the handler below captures cmd+enter before the scope walk
@@ -497,9 +173,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
     if (props.ref) {
       props.ref({
-        getSubmitAccessLevel: submitAccessLevel,
-        getSelectedOptions: selectedOptions,
-        setSubmitAccessLevel,
+        getSubmitAccessLevel: () => form.level()?.value ?? null,
+        getSelectedOptions: form.recipients,
+        setSubmitAccessLevel: (level) => pickLevel(form, level),
         handleSubmit,
       });
     }
@@ -514,22 +190,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         fallback={
           <MobileForwardToChannelLayout
             editPermissionEnabled={props.editPermissionEnabled}
+            form={form}
             isAuthenticated={isAuthenticated}
-            selectedOptions={selectedOptions}
-            setSelectedOptions={(v) => setSelectedOptions(v)}
-            triedToSubmit={triedToSubmit}
             destinationOptions={destinationOptions}
-            submitPermissionInfo={props.submitPermissionInfo}
-            hideAccessLevelSelector={props.hideAccessLevelSelector}
-            submitAccessLevel={submitAccessLevel}
-            setSubmitAccessLevel={setSubmitAccessLevel}
             mdScrollRef={mdScrollRef}
             setMdScrollRef={setMdScrollRef}
             markdownEditor={markdownEditor}
-            handleSubmit={handleSubmit}
-            canSendAsGroup={canSendAsGroup}
-            sendAsGroupMessage={sendAsGroupMessage}
-            setSendAsGroupMessage={setSendAsGroupMessage}
           />
         }
       >
@@ -539,37 +205,37 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             <div class="min-w-0 flex-1 min-h-11">
               <RecipientSelector<'user' | 'contact' | 'channel'>
                 placeholder="To: Email or group"
-                setSelectedOptions={setSelectedOptions}
-                selectedOptions={selectedOptions()}
-                triedToSubmit={triedToSubmit}
+                setSelectedOptions={form.setRecipients}
+                selectedOptions={form.recipients()}
+                triedToSubmit={form.triedToSubmit}
                 options={destinationOptions}
                 triggerMode="input"
                 focusOnMount
                 horizontalScroll
                 hideBorder
+                disabled={form.locked()}
               />
             </div>
-            <Show
-              when={
-                props.submitPermissionInfo?.userPermissions ===
-                  Permissions.OWNER && !props.hideAccessLevelSelector
-              }
-            >
-              <div class="shrink-0 pr-2 flex items-center gap-2">
-                <Show when={selectedOptions().length > 0}>
-                  <span class="text-sm text-ink-extra-muted">can</span>
-                </Show>
-                <ShareOptions
-                  editPermissionEnabled={props.editPermissionEnabled}
-                  setPermissions={(accessLevel) =>
-                    setSubmitAccessLevel(accessLevel)
-                  }
-                  permissions={submitAccessLevel()}
-                  label="Permission"
-                  hideNoAccess
-                  noBorder
-                />
-              </div>
+            <Show when={form.level()}>
+              {(level) => (
+                <div class="shrink-0 pr-2 flex items-center gap-2">
+                  <Show when={form.recipients().length > 0}>
+                    <span class="text-sm text-ink-extra-muted">can</span>
+                  </Show>
+                  <ShareOptions
+                    editPermissionEnabled={props.editPermissionEnabled}
+                    allowedAccessLevels={level().options}
+                    setPermissions={(accessLevel) =>
+                      pickLevel(form, accessLevel)
+                    }
+                    permissions={level().value}
+                    label="Permission"
+                    hideNoAccess
+                    noBorder
+                    disabled={form.locked()}
+                  />
+                </div>
+              )}
             </Show>
           </div>
 
@@ -588,63 +254,21 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   placeholder="Optional message"
                   portalScope="local"
                   class="text-sm"
+                  disabled={form.locked()}
                 />
               </div>
             </div>
 
             {/* Row 3: Send As Group (optional) + Cancel + Send */}
             <div class="shrink-0 flex w-full items-center px-4 py-4 gap-3 flex-wrap">
-              <Show when={canSendAsGroup()}>
-                <label
-                  class={cn(
-                    'flex items-start gap-2',
-                    !canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'
-                  )}
-                >
-                  <div class="relative mt-0.5">
-                    <input
-                      onChange={(e) =>
-                        setSendAsGroupMessage(e.currentTarget.checked)
-                      }
-                      checked={sendAsGroupMessage() && canSendAsGroup()}
-                      disabled={!canSendAsGroup()}
-                      class="peer sr-only"
-                      type="checkbox"
-                    />
-                    <div
-                      class={cn(
-                        'size-4 border',
-                        !canSendAsGroup()
-                          ? 'border-edge peer-checked:bg-surface/20'
-                          : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
-                      )}
-                    >
-                      <Show when={sendAsGroupMessage() && canSendAsGroup()}>
-                        <CheckIcon class="size-full text-accent p-0.5" />
-                      </Show>
-                    </div>
-                  </div>
-                  <div
-                    class={cn(
-                      'flex flex-col text-sm',
-                      !canSendAsGroup() && 'text-ink-disabled/50'
-                    )}
-                  >
-                    <span class="font-medium">Send As Group Message</span>
-                    <span
-                      class={cn(
-                        'text-xs mt-0.5',
-                        !canSendAsGroup()
-                          ? 'text-ink-disabled/50'
-                          : 'text-ink-muted'
-                      )}
-                    >
-                      {sendAsGroupMessage() && canSendAsGroup()
-                        ? 'Creates a new group message with all recipients'
-                        : 'Send a message to each recipient'}
-                    </span>
-                  </div>
-                </label>
+              <Show when={form.group()}>
+                {(group) => (
+                  <SendAsGroupToggle
+                    on={group().on}
+                    locked={form.locked()}
+                    onChange={form.setGroup}
+                  />
+                )}
               </Show>
 
               <div class="flex flex-auto items-center justify-end gap-2">
@@ -659,13 +283,11 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 <Button
                   variant="strong"
                   depth={3}
-                  disabled={selectedOptions().length === 0 || isSubmitting()}
-                  onClick={() => {
-                    const options = selectedOptions();
-                    if (options && options.length > 0) {
-                      void handleSubmit();
-                    }
-                  }}
+                  disabled={
+                    form.recipients().length === 0 ||
+                    form.status().t === 'sending'
+                  }
+                  onClick={() => void handleSubmit()}
                 >
                   <PaperPlaneTilt class="size-4" />
                   Share
@@ -677,5 +299,39 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         </Show>
       </Show>
     </div>
+  );
+}
+
+function pickLevel(
+  form: ShareForm<RecipientOption>,
+  level: AccessLevel | null
+) {
+  if (level === null) return;
+  const parsed = parseChannelAccessLevel(level);
+  if (parsed) form.setLevel(parsed);
+}
+
+function toastForwardResult({ outcome, open }: ShareSubmitResult) {
+  for (const recipient of outcome.recipients) {
+    if (recipient.unsent.length > 0) toast.failure('Message failed to send');
+    if (recipient.accessIssues.length > 0) {
+      toast.alert('Failed to change channel access', {
+        subtext: 'Please try again',
+      });
+    }
+  }
+  if (!outcome.complete) {
+    if (outcome.recipients.length > 1) {
+      toast.failure('Some messages failed to send');
+    }
+    return;
+  }
+  if (outcome.recipients.length > 1) {
+    toast.success('Messages sent successfully');
+    return;
+  }
+  toast.success(
+    'Message sent successfully',
+    open && { actions: [{ label: 'View in channel', onClick: open }] }
   );
 }

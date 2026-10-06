@@ -546,8 +546,9 @@ Session creation and prompt delivery use the shared pending-session flow.
 
 A standalone chat (`/app/chat/<uuid>`) has **Share** and **Copy Share Link** in
 the desktop header; the same **Share** action is on entity list menus and the
-entity sharing shortcut. It opens the same Share dialog (mobile: drawer) as
-documents:
+entity sharing shortcut. With several list rows selected, **Share** opens the
+bulk dialog in [Entity action dialogs](navigation.md#entity-action-dialogs).
+For one chat it opens the same Share dialog (mobile: drawer) as documents:
 
 - People/channels: pick recipients and an access level and send the chat with
   an optional message.
@@ -1029,7 +1030,9 @@ on mobile, open the session title menu and choose **Share**. The owner can
 select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
 Sessions also support **Share** from entity list menus and the entity sharing
-shortcut. **People with access** lists the owner and shared conversations;
+shortcut; with several list rows selected, list **Share** opens the bulk dialog
+in [Entity action dialogs](navigation.md#entity-action-dialogs) instead.
+**People with access** lists the owner and shared conversations;
 the owner can change or remove a conversation's access. **Link sharing** offers
 None / Public / Team and an access level. **Team access** shares directly with
 the owner's team when one exists. On mobile these controls are in the Share,

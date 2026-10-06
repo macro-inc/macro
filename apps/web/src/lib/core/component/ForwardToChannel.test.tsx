@@ -1,3 +1,4 @@
+import { toShareItem } from '@app/features/sharing/share-delivery/share-delivery';
 import {
   cleanup,
   fireEvent,
@@ -5,16 +6,27 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { err, ok } from 'neverthrow';
 import type { ComponentProps, JSX } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { ForwardToChannel } from './ForwardToChannel';
-import { Permissions } from './SharePermissions';
 
 const mocks = vi.hoisted(() => ({
+  resolvePeopleChannel: vi.fn(),
   sendToChannel: vi.fn(),
-  sendToUsers: vi.fn(),
   success: vi.fn(),
   failure: vi.fn(),
+  alert: vi.fn(),
+  editDocument: vi.fn(),
+  updateAgentSessionSharePermissions: vi.fn(),
   recipients: [] as { kind: 'channel' | 'user'; id: string }[],
 }));
 
@@ -27,11 +39,6 @@ vi.mock('@channel/Input', () => ({
   }),
 }));
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
-vi.mock('@core/block', () => ({
-  useMaybeBlockName: () => 'md',
-  useMaybeBlockAliasedName: () => 'md',
-  useMaybeBlockId: () => 'enclosing-document',
-}));
 vi.mock('@core/component/CustomScrollbar', () => ({
   CustomScrollbar: () => null,
 }));
@@ -63,12 +70,18 @@ vi.mock('@core/signal/useCombinedRecipient', () => ({
   useCombinedRecipients: () => ({ all: () => [] }),
 }));
 vi.mock('@core/util/channels', () => ({ useSendMessageToPeople: () => mocks }));
+vi.mock('@queries/agent-session/share-permissions', () => ({
+  updateAgentSessionSharePermissions: mocks.updateAgentSessionSharePermissions,
+}));
+vi.mock('@queries/messages/mutations', () => {
+  let minted = 0;
+  return { newMessageId: () => `message-${++minted}` };
+});
 vi.mock('@service-storage/client', () => ({
-  blockNameToItemType: () => 'agent_session',
-  itemTypeToReferenceEntityType: () => 'agent_session',
+  storageServiceClient: { editDocument: mocks.editDocument },
 }));
 vi.mock('./Toast/Toast', () => ({
-  toast: { success: mocks.success, failure: mocks.failure },
+  toast: { success: mocks.success, failure: mocks.failure, alert: mocks.alert },
 }));
 vi.mock('./VerticalScrollIndicators', () => ({ ScrollIndicators: () => null }));
 vi.mock('@ui', () => ({
@@ -93,9 +106,26 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+const replace = (channelId: string, accessLevel: string) => ({
+  channelSharePermissions: [{ operation: 'replace', accessLevel, channelId }],
+});
+
+const serverError = err([{ code: 'SERVER_ERROR', message: 'Server error' }]);
+
+function silenceErrors() {
+  const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  onTestFinished(() => logError.mockRestore());
+  return logError;
+}
+
 function mountForward(
-  setChannelPermissions = vi.fn().mockResolvedValue(true),
-  blockName: ComponentProps<typeof ForwardToChannel>['blockName'] = 'agent'
+  item = toShareItem({
+    id: 'session-1',
+    kind: 'agent_session',
+    name: 'Agent session',
+    block: 'agent',
+    canGrant: true,
+  })
 ) {
   const onSubmit = vi.fn();
   const refetch = vi.fn();
@@ -104,17 +134,11 @@ function mountForward(
     | undefined;
   render(() => (
     <ForwardToChannel
-      name="Agent session"
-      blockName={blockName}
-      blockId="session-1"
+      item={item}
       onSubmit={onSubmit}
       refetch={refetch}
       ref={(value) => {
         controls = value;
-      }}
-      submitPermissionInfo={{
-        userPermissions: Permissions.OWNER,
-        setChannelPermissions,
       }}
     />
   ));
@@ -122,7 +146,6 @@ function mountForward(
   return {
     onSubmit,
     refetch,
-    setChannelPermissions,
     setAccessLevel: (level: 'view' | 'edit') =>
       controls?.setSubmitAccessLevel(level),
     submit: () => controls?.handleSubmit(),
@@ -132,23 +155,35 @@ function mountForward(
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.recipients = [{ kind: 'channel', id: 'channel-1' }];
+  mocks.editDocument.mockResolvedValue(ok({}));
+  mocks.updateAgentSessionSharePermissions.mockResolvedValue(ok({}));
 });
 afterEach(cleanup);
 
 describe('forwarding with selected access', () => {
   it.each(['md', 'task', 'snippet', 'skill'] as const)(
     'retains the edit default for %s sharing',
-    async (blockName) => {
+    async (block) => {
       mocks.sendToChannel.mockResolvedValue({
         channelId: 'channel-1',
         navigateToChannel: vi.fn(),
       });
-      const setChannelPermissions = vi.fn().mockResolvedValue(true);
-      const { submit } = mountForward(setChannelPermissions, blockName);
+      const { submit } = mountForward(
+        toShareItem({
+          id: 'doc-1',
+          kind: 'document',
+          name: 'Document',
+          block,
+          canGrant: true,
+        })
+      );
 
       await submit();
 
-      expect(setChannelPermissions).toHaveBeenCalledWith('channel-1', 'edit');
+      expect(mocks.editDocument).toHaveBeenCalledWith({
+        documentId: 'doc-1',
+        sharePermission: replace('channel-1', 'edit'),
+      });
     }
   );
 
@@ -168,30 +203,35 @@ describe('forwarding with selected access', () => {
         channelId: string;
         navigateToChannel: () => void;
       }>();
-      const grant = deferred<boolean>();
-      const sendMessage =
-        target === 'channel' ? mocks.sendToChannel : mocks.sendToUsers;
-      sendMessage.mockReturnValue(send.promise);
-      const setChannelPermissions = vi.fn().mockReturnValue(grant.promise);
-      const { submit, onSubmit } = mountForward(setChannelPermissions);
+      const grant = deferred<unknown>();
+      mocks.resolvePeopleChannel.mockResolvedValue('channel-1');
+      mocks.sendToChannel.mockReturnValue(send.promise);
+      mocks.updateAgentSessionSharePermissions.mockReturnValue(grant.promise);
+      const { submit, onSubmit } = mountForward();
 
       const submitted = submit();
-      expect(sendMessage).toHaveBeenCalledOnce();
-      expect(setChannelPermissions).not.toHaveBeenCalled();
+      expect(
+        target === 'channel' ? mocks.sendToChannel : mocks.resolvePeopleChannel
+      ).toHaveBeenCalledOnce();
+      await waitFor(() => expect(mocks.sendToChannel).toHaveBeenCalledOnce());
+      expect(mocks.updateAgentSessionSharePermissions).not.toHaveBeenCalled();
       expect(onSubmit).not.toHaveBeenCalled();
 
       send.resolve({ channelId: 'channel-1', navigateToChannel: vi.fn() });
       await waitFor(() =>
-        expect(setChannelPermissions).toHaveBeenCalledWith('channel-1', 'view')
+        expect(mocks.updateAgentSessionSharePermissions).toHaveBeenCalledWith(
+          'session-1',
+          replace('channel-1', 'view')
+        )
       );
       expect(onSubmit).not.toHaveBeenCalled();
       expect(mocks.success).not.toHaveBeenCalled();
       // A second shortcut or button press must not duplicate the message while
       // its access update is still pending.
       await submit();
-      expect(sendMessage).toHaveBeenCalledOnce();
+      expect(mocks.sendToChannel).toHaveBeenCalledOnce();
 
-      grant.resolve(true);
+      grant.resolve(ok({}));
       await submitted;
       expect(onSubmit).toHaveBeenCalledOnce();
       expect(mocks.success).toHaveBeenCalledWith(
@@ -202,21 +242,28 @@ describe('forwarding with selected access', () => {
   );
 
   it('keeps the dialog open when a permission update reports failure', async () => {
+    silenceErrors();
     mocks.sendToChannel.mockResolvedValue({
       channelId: 'channel-1',
       navigateToChannel: vi.fn(),
     });
-    const { submit, onSubmit } = mountForward(vi.fn().mockResolvedValue(false));
+    mocks.updateAgentSessionSharePermissions.mockResolvedValue(serverError);
+    const { submit, onSubmit } = mountForward();
 
     await submit();
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(mocks.success).not.toHaveBeenCalled();
+    expect(mocks.alert).toHaveBeenCalledWith(
+      'Failed to change channel access',
+      { subtext: 'Please try again' }
+    );
   });
 
   it.each(['channel', 'user', 'group'] as const)(
     'retries a failed grant for a %s without repeating its delivered message',
     async (target) => {
+      silenceErrors();
       mocks.recipients =
         target === 'channel'
           ? [{ kind: 'channel', id: 'channel-1' }]
@@ -226,36 +273,36 @@ describe('forwarding with selected access', () => {
                 { kind: 'user', id: 'user-1' },
                 { kind: 'user', id: 'user-2' },
               ];
-      const sendMessage =
-        target === 'channel' ? mocks.sendToChannel : mocks.sendToUsers;
-      sendMessage.mockResolvedValue({
+      mocks.resolvePeopleChannel.mockResolvedValue('channel-1');
+      mocks.sendToChannel.mockResolvedValue({
         channelId: 'channel-1',
         navigateToChannel: vi.fn(),
       });
-      const grant = vi
-        .fn()
-        .mockResolvedValueOnce(false)
-        .mockResolvedValue(true);
-      const { submit, onSubmit, setAccessLevel } = mountForward(grant);
+      mocks.updateAgentSessionSharePermissions.mockResolvedValueOnce(
+        serverError
+      );
+      const { submit, onSubmit, setAccessLevel } = mountForward();
 
       await submit();
       expect(onSubmit).not.toHaveBeenCalled();
       setAccessLevel('edit');
-      // Reordering a group's recipients still addresses the same group.
       mocks.recipients = [...mocks.recipients].reverse();
       fireEvent.click(
         screen.getByRole('button', { name: 'Select recipients' })
       );
       await submit();
 
-      expect(sendMessage).toHaveBeenCalledOnce();
-      expect(grant).toHaveBeenNthCalledWith(1, 'channel-1', 'view');
-      expect(grant).toHaveBeenNthCalledWith(2, 'channel-1', 'edit');
+      expect(mocks.sendToChannel).toHaveBeenCalledOnce();
+      expect(mocks.updateAgentSessionSharePermissions.mock.calls).toEqual([
+        ['session-1', replace('channel-1', 'view')],
+        ['session-1', replace('channel-1', 'view')],
+      ]);
       expect(onSubmit).toHaveBeenCalledOnce();
     }
   );
 
   it('keeps completed recipients while retrying only the failed grant', async () => {
+    silenceErrors();
     mocks.recipients = [
       { kind: 'channel', id: 'channel-1' },
       { kind: 'channel', id: 'channel-2' },
@@ -264,16 +311,13 @@ describe('forwarding with selected access', () => {
       channelId,
       navigateToChannel: vi.fn(),
     }));
-    const grant = vi
-      .fn()
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false)
-      .mockResolvedValue(true);
-    const { submit, onSubmit } = mountForward(grant);
+    mocks.updateAgentSessionSharePermissions
+      .mockResolvedValueOnce(ok({}))
+      .mockResolvedValueOnce(serverError);
+    const { submit, onSubmit } = mountForward();
 
     await submit();
     expect(onSubmit).not.toHaveBeenCalled();
-    // A newly added recipient needs delivery; existing recipients do not.
     mocks.recipients = [
       ...mocks.recipients,
       { kind: 'channel', id: 'channel-3' },
@@ -281,48 +325,48 @@ describe('forwarding with selected access', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select recipients' }));
     await submit();
 
-    expect(mocks.sendToChannel).toHaveBeenCalledTimes(3);
+    expect(mocks.sendToChannel).toHaveBeenCalledTimes(2);
     expect(
       mocks.sendToChannel.mock.calls.map(([message]) => message.channelId)
-    ).toEqual(['channel-1', 'channel-2', 'channel-3']);
-    expect(grant.mock.calls).toEqual([
-      ['channel-1', 'view'],
-      ['channel-2', 'view'],
-      ['channel-2', 'view'],
-      ['channel-3', 'view'],
+    ).toEqual(['channel-1', 'channel-2']);
+    expect(mocks.updateAgentSessionSharePermissions.mock.calls).toEqual([
+      ['session-1', replace('channel-1', 'view')],
+      ['session-1', replace('channel-2', 'view')],
+      ['session-1', replace('channel-2', 'view')],
     ]);
     expect(onSubmit).toHaveBeenCalledOnce();
   });
 
   it('handles rejected permission updates without closing the dialog', async () => {
     const error = new Error('Permission update failed');
-    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logError = silenceErrors();
     mocks.sendToChannel.mockResolvedValue({
       channelId: 'channel-1',
       navigateToChannel: vi.fn(),
     });
-    const { submit, onSubmit } = mountForward(vi.fn().mockRejectedValue(error));
+    mocks.updateAgentSessionSharePermissions.mockRejectedValue(error);
+    const { submit, onSubmit } = mountForward();
 
     await submit();
 
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(mocks.failure).toHaveBeenCalledWith(
-      'Failed to set channel permissions'
+    expect(mocks.alert).toHaveBeenCalledWith(
+      'Failed to change channel access',
+      { subtext: 'Please try again' }
     );
     expect(logError).toHaveBeenCalledWith(
-      'Failed to set channel permissions',
+      'Failed to change channel access',
       error
     );
-    logError.mockRestore();
   });
 
   it('does not grant access or close when the message fails', async () => {
     mocks.sendToChannel.mockResolvedValue(undefined);
-    const { submit, onSubmit, setChannelPermissions } = mountForward();
+    const { submit, onSubmit } = mountForward();
 
     await submit();
 
-    expect(setChannelPermissions).not.toHaveBeenCalled();
+    expect(mocks.updateAgentSessionSharePermissions).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
     expect(mocks.failure).toHaveBeenCalledWith('Message failed to send');
   });
@@ -339,18 +383,21 @@ describe('forwarding with selected access', () => {
         navigateToChannel: vi.fn(),
       })
       .mockReturnValueOnce(secondSend.promise);
-    const { submit, onSubmit, setChannelPermissions } = mountForward();
+    const { submit, onSubmit } = mountForward();
 
     const submitted = submit();
     await waitFor(() =>
-      expect(setChannelPermissions).toHaveBeenCalledWith('channel-1', 'view')
+      expect(mocks.updateAgentSessionSharePermissions).toHaveBeenCalledWith(
+        'session-1',
+        replace('channel-1', 'view')
+      )
     );
     expect(onSubmit).not.toHaveBeenCalled();
     expect(mocks.success).not.toHaveBeenCalled();
     secondSend.resolve(undefined);
     await submitted;
 
-    expect(setChannelPermissions).toHaveBeenCalledOnce();
+    expect(mocks.updateAgentSessionSharePermissions).toHaveBeenCalledOnce();
     expect(onSubmit).not.toHaveBeenCalled();
     expect(mocks.failure).toHaveBeenCalledWith('Some messages failed to send');
 
@@ -363,9 +410,9 @@ describe('forwarding with selected access', () => {
     expect(
       mocks.sendToChannel.mock.calls.map(([message]) => message.channelId)
     ).toEqual(['channel-1', 'channel-2', 'channel-2']);
-    expect(setChannelPermissions.mock.calls).toEqual([
-      ['channel-1', 'view'],
-      ['channel-2', 'view'],
+    expect(mocks.updateAgentSessionSharePermissions.mock.calls).toEqual([
+      ['session-1', replace('channel-1', 'view')],
+      ['session-1', replace('channel-2', 'view')],
     ]);
     expect(onSubmit).toHaveBeenCalledOnce();
   });

@@ -1,7 +1,6 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
-import { isShareableEntityType } from '@app/features/sharing/global-share-modal/shareable-entity';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { useUserId } from '@core/context/user';
@@ -618,18 +617,19 @@ export const useEntityActionHotkeys = (
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.share,
     scopeId,
-    description: 'Share',
+    description: () =>
+      getEntitiesForAction().length > 1 ? 'Share items' : 'Share',
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      if (!shareAction.canExecute(entities[0])) return false;
+      if (!entities.every(shareAction.canExecute)) return false;
       shareAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.length === 1 && isShareableEntityType(entities[0].type);
+      return entities.length > 0 && entities.every(shareAction.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

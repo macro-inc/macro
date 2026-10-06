@@ -436,14 +436,14 @@ export function createSoupEntityActions(): {
         label: 'Copy ID',
         onClick: handle(copyEntityIdAction.executeWithSoup),
       });
+    }
 
-      if (shareAction.canExecute(entities[0])) {
-        middleItems.push({
-          id: 'share',
-          label: 'Share',
-          onClick: handle(shareAction.executeWithSoup),
-        });
-      }
+    if (canExecuteAll(shareAction.canExecute)) {
+      middleItems.push({
+        id: 'share',
+        label: 'Share',
+        onClick: handle(shareAction.executeWithSoup),
+      });
     }
 
     // Sender group: Sender → Signal, Sender → Noise, Block Sender

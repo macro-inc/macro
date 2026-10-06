@@ -346,11 +346,13 @@ impl PgMessageRepository {
             .execute(&mut **tx)
             .await
             .map_err(database_error)?;
+            // These rows share the transaction's created_at, so reads fall back to
+            // the id for their order. `now_v7` ids rise in the order they are made.
             for (entity_type, attachment) in added {
                 sqlx::query!(
                     r#"INSERT INTO comms_attachments (id, message_id, entity_type, entity_id, width, height)
                        VALUES ($1, $2, $3, $4, $5, $6)"#,
-                    macro_uuid::generate_uuid_v7(), id, entity_type, attachment.entity_id,
+                    Uuid::now_v7(), id, entity_type, attachment.entity_id,
                     attachment.width, attachment.height,
                 ).execute(&mut **tx).await.map_err(database_error)?;
             }

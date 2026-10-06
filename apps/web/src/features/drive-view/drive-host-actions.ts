@@ -146,7 +146,7 @@ export function createDriveHostActions(options: {
     },
 
     shareFolder: (folder) => {
-      void share.execute(folder);
+      void share.execute([folder]);
     },
 
     uploadFiles: () =>
