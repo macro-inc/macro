@@ -2,13 +2,16 @@
 
 use crate::backfill_queue::{CalendarBackfillMessage, CalendarBackfillQueueClient};
 use calendar_events::domain::{
-    ports::GoogleCalendarSyncRepository, service::GoogleCalendarSyncScheduler,
+    changes::{CalendarChangeLogPruner, CalendarChangeLogRetention},
+    ports::GoogleCalendarSyncRepository,
+    service::GoogleCalendarSyncScheduler,
 };
 use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 const BATCH_SIZE: usize = 50;
+const CHANGE_LOG_RETENTION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60 * 60);
 
 struct OutboxRow {
     id: Uuid,
@@ -17,22 +20,26 @@ struct OutboxRow {
     kind: String,
 }
 
-/// Continuously schedule due syncs, reap wedged jobs, and publish calendar
-/// outbox rows to calendar's own backfill queue.
+/// Continuously schedule due syncs, reap wedged jobs, publish calendar outbox
+/// rows to calendar's own backfill queue, and hourly prune the calendar
+/// change log.
 ///
 /// A row lock is held through each SQS publish. A crash after publish but
 /// before commit can duplicate a message, so every consumer remains
 /// idempotent by calendar job id.
-#[tracing::instrument(skip(db, queue, scheduler))]
-pub async fn run<R>(
+#[tracing::instrument(skip(db, queue, scheduler, retention))]
+pub async fn run<R, P>(
     db: PgPool,
     queue: CalendarBackfillQueueClient,
     scheduler: GoogleCalendarSyncScheduler<R>,
+    retention: CalendarChangeLogRetention<P>,
     calendar_sync_enabled: bool,
     cancellation_token: tokio_util::sync::CancellationToken,
 ) where
     R: GoogleCalendarSyncRepository,
+    P: CalendarChangeLogPruner,
 {
+    let mut next_retention = tokio::time::Instant::now();
     loop {
         if cancellation_token.is_cancelled() {
             return;
@@ -61,6 +68,16 @@ pub async fn run<R>(
                     tracing::error!(error = ?error, "failed to publish calendar backfill outbox");
                 })
                 .ok();
+            if tokio::time::Instant::now() >= next_retention {
+                retention
+                    .run_once(Utc::now())
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(error = ?error, "failed to prune the calendar change log");
+                    })
+                    .ok();
+                next_retention = tokio::time::Instant::now() + CHANGE_LOG_RETENTION_INTERVAL;
+            }
         }
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}

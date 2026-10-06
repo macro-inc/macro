@@ -1498,13 +1498,17 @@ pub struct GoogleBackfillRunReport {
     pub events_upserted: usize,
     /// Cancellation tombstones the change feed reported this run.
     pub cancellations_observed: usize,
+    /// Events removed or rewritten because a source they relied on was
+    /// retired: unobserved by a full snapshot, or on a calendar the account
+    /// no longer lists.
+    pub events_retired: usize,
 }
 
 impl GoogleBackfillRunReport {
     /// Whether the run plausibly changed the local projection. Quiet
     /// token-only polls report nothing and skip client notifications.
     pub fn changed(&self) -> bool {
-        self.events_upserted > 0 || self.cancellations_observed > 0
+        self.events_upserted > 0 || self.cancellations_observed > 0 || self.events_retired > 0
     }
 }
 

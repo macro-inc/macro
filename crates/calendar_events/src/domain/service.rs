@@ -841,6 +841,7 @@ where
             // A provider-side deletion reaches search only here: the row is
             // gone once the commit lands, so nothing downstream can rediscover
             // it by re-reading Postgres.
+            report.events_retired += retired.len();
             self.publish_retirements(retired);
             // Tombstones only apply inside the snapshot commit, so they
             // count once it succeeds.
@@ -946,6 +947,7 @@ where
             .repository
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
+        report.events_retired += retired.len();
         self.publish_retirements(retired);
 
         Ok(())
