@@ -6,13 +6,17 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { fileDrop } from '@core/directive/fileDrop';
 import { uploadFile } from '@core/util/upload';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, Show } from 'solid-js';
+
+false && fileDrop;
 import {
   type EffortChoice,
   effortConfigOption,
@@ -198,6 +202,8 @@ export function NewChatPage(props: {
         uploadFile(file, 'static', { hideProgressIndicator: true }),
     });
 
+  const [isFileDragging, setIsFileDragging] = createSignal(false);
+
   const send = (prompt: string, attachments: InputAttachmentData[]) => {
     const persona = selected();
     if (
@@ -307,7 +313,22 @@ export function NewChatPage(props: {
 
   return (
     <Show when={!props.compact} fallback={composer()}>
-      <section class="page newchat" data-active aria-label="New conversation">
+      <section
+        class="page newchat relative"
+        data-active
+        aria-label="New conversation"
+        use:fileDrop={{
+          onDragStart: () => setIsFileDragging(true),
+          onDragEnd: () => setIsFileDragging(false),
+          onDrop: (files) => attachFiles(files),
+          multiple: true,
+        }}
+      >
+        <Show when={isFileDragging()}>
+          <FileDropOverlay>
+            Drop files to attach to your message
+          </FileDropOverlay>
+        </Show>
         <div ref={tourTarget(AGENTS_TOUR.composer)} class="col">
           <div class="greeting">
             <h2>
