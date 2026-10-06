@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveEmoji, searchEmojis } from './emojis';
+import { resolveEmoji, searchEmojis } from './emoji-catalog';
 import {
   clearEmojiUsage,
   frequentEmojiChars,

@@ -68,6 +68,10 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - When adding or changing a feature flag, follow the `define-feature-flag` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
+### Startup bundle
+- Everything statically reachable from `src/index.tsx` downloads and runs before the first screen. Views, block components, and modals load through `lazy()` / `lazyNamed` (`@core/util/lazyNamed`) inside a `<Suspense>`; never statically import one into a shared hub (`Root`, `Layout`, `componentRegistry`, `app-router-view`, block `definition.ts`, Lexical `init.ts`).
+- `index.html` paints a static boot shell (rail, header, rows) before any JS runs and `dismissBootShell` fades it when the router mounts. Keep its geometry roughly in step with the sidebar rail and split header.
+
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.
 - Prefer wrapping the setter over `createEffect(() => { if (signal()) sideEffect() })`. When setting focus/selection should also clear another stop, blur a control, or scroll, put that work in the setter (or a named helper the setter calls) so the action is explicit at the call site — not a distant effect watching the signal.

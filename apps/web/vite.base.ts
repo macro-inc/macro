@@ -72,6 +72,30 @@ function gitBranchHmrPlugin(): Plugin {
   };
 }
 
+/**
+ * Orval's generated schemas are top-level `zod.object(...)` chains. Rollup
+ * cannot prove those calls are side-effect free, so every schema (≈700 for the
+ * storage service alone) stayed in the entry chunk and was constructed at
+ * startup, used or not. Annotating each one pure lets Rollup drop the unused
+ * ones; the annotation is applied at build time so regenerated files keep it.
+ */
+function pureGeneratedZodSchemas(): Plugin {
+  return {
+    name: 'pure-generated-zod-schemas',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!/[\\/]generated[\\/]zod\.ts$/.test(id)) return;
+      return {
+        code: code.replace(
+          /^(export const [\w$]+ = )(zod\b)/gm,
+          '$1/* @__PURE__ */ $2'
+        ),
+        map: null,
+      };
+    },
+  };
+}
+
 export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
@@ -91,6 +115,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         devHttps(),
         hostedDevProxy(),
         // solidDevtools({ autoname: true }),
+        pureGeneratedZodSchemas(),
         solid(),
         wasm(),
         tailwind(),
@@ -256,6 +281,12 @@ function defineEnv(mode: string, command: string) {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
     'import.meta.env.__APP_BUILD_TIME__': JSON.stringify(appBuildTime),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
+    // index.html preconnects to the API gateway; keep in sync with servers.ts.
+    'import.meta.env.GATEWAY_ORIGIN': JSON.stringify(
+      mode === 'development'
+        ? 'https://dev-gateway.macro.com'
+        : 'https://gateway.macro.com'
+    ),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),
     'import.meta.env.__GIT_BRANCH__': JSON.stringify(

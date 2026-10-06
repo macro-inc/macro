@@ -26,10 +26,301 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
     <link rel="manifest" href="/manifest.json" />
+    <!-- The first API calls wait for the bundle; open their connection meanwhile. -->
+    <link
+      rel="preconnect"
+      href="%GATEWAY_ORIGIN%"
+      crossorigin="use-credentials"
+    />
+    <!--
+      Boot shell: a static skeleton of the app frame, painted with the HTML so
+      the screen is never blank while the bundle downloads and starts. The app
+      fades it out once its own shell mounts (see dismissBootShell).
+    -->
+    <style>
+      #boot-shell {
+        --bs-page: oklch(0.17 0 0);
+        --bs-panel: oklch(0.1949 0 0);
+        --bs-ink: oklch(1 0 0);
+        --bs-bar: color-mix(in oklch, var(--bs-ink) 9%, transparent);
+        --bs-shine: color-mix(in oklch, var(--bs-ink) 16%, transparent);
+        --bs-edge: color-mix(in oklch, var(--bs-ink) 8%, transparent);
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        background: var(--bs-panel);
+        transition: opacity 180ms ease-out;
+        pointer-events: none;
+      }
+      @media (prefers-color-scheme: light) {
+        #boot-shell {
+          --bs-page: oklch(1 0 0);
+          --bs-panel: oklch(0.985 0 0);
+          --bs-ink: oklch(0.2 0 0);
+        }
+      }
+      #boot-shell[data-leaving] {
+        opacity: 0;
+      }
+      #boot-shell .bs-bar {
+        flex: none;
+        border-radius: 999px;
+        /* One fixed-position gradient shared by every bar, so the shimmer
+           sweeps across the whole frame as a single band. */
+        background: linear-gradient(
+            100deg,
+            transparent 40%,
+            var(--bs-shine) 50%,
+            transparent 60%
+          )
+          var(--bs-bar);
+        background-size: 200vw 100%;
+        background-attachment: fixed;
+        animation: bs-shimmer 1.6s linear infinite;
+      }
+      @keyframes bs-shimmer {
+        from {
+          background-position: 100vw 0;
+        }
+        to {
+          background-position: -100vw 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-shell .bs-bar {
+          animation: none;
+        }
+      }
+      #boot-shell .bs-rail {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 56px;
+        flex: none;
+        padding: 8px 8px 12px;
+        border-right: 1px solid var(--bs-edge);
+      }
+      #boot-shell .bs-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+      }
+      #boot-shell .bs-icon {
+        width: 20px;
+        height: 20px;
+        margin: 10px;
+        border-radius: 6px;
+      }
+      #boot-shell .bs-main {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        flex-direction: column;
+      }
+      #boot-shell .bs-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 48px;
+        flex: none;
+        padding: 0 16px;
+      }
+      #boot-shell .bs-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        margin: 2px 8px;
+        padding: 0 8px;
+      }
+      #boot-shell .bs-row > .bs-bar:first-child {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+      }
+      #boot-shell .bs-row > .bs-bar + .bs-bar {
+        height: 10px;
+      }
+      #boot-shell .bs-dock {
+        display: none;
+      }
+      #boot-shell .bs-glyph {
+        width: 20px;
+        height: 20px;
+        margin: 10px;
+        flex: none;
+        color: color-mix(in oklch, var(--bs-ink) 45%, transparent);
+      }
+      #boot-shell .bs-mark {
+        display: none;
+        margin: auto;
+        width: 44px;
+        height: 44px;
+        color: color-mix(in oklch, var(--bs-ink) 18%, transparent);
+      }
+      /* Touch devices: no rail; taller rows and the floating bottom dock. */
+      @media (pointer: coarse) {
+        #boot-shell {
+          background: var(--bs-page);
+          padding: env(safe-area-inset-top) env(safe-area-inset-right) 0
+            env(safe-area-inset-left);
+        }
+        #boot-shell .bs-rail {
+          display: none;
+        }
+        #boot-shell .bs-header {
+          height: 56px;
+        }
+        #boot-shell .bs-row {
+          height: 64px;
+          gap: 12px;
+          margin: 0 4px;
+        }
+        #boot-shell .bs-row > .bs-bar:first-child {
+          width: 32px;
+          height: 32px;
+          border-radius: 999px;
+        }
+        #boot-shell .bs-dock {
+          position: absolute;
+          left: 50%;
+          bottom: calc(env(safe-area-inset-bottom) + 12px);
+          display: flex;
+          gap: 20px;
+          padding: 12px 22px;
+          border-radius: 999px;
+          transform: translateX(-50%);
+          background: var(--bs-panel);
+          border: 1px solid var(--bs-edge);
+        }
+        #boot-shell .bs-dock > .bs-bar {
+          width: 24px;
+          height: 24px;
+        }
+      }
+      /* Signed out: the app opens on a login page, so show only a mark. */
+      #boot-shell:not([data-signed-in]) > :not(.bs-mark) {
+        display: none;
+      }
+      #boot-shell:not([data-signed-in]) {
+        background: var(--bs-page);
+      }
+      #boot-shell:not([data-signed-in]) > .bs-mark {
+        display: block;
+      }
+    </style>
   </head>
 
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="boot-shell" aria-hidden="true">
+      <!-- Real glyphs (the rail's Create and Search) make this a contentful
+           paint, so browsers stop holding the previous frame. -->
+      <div class="bs-rail">
+        <svg class="bs-glyph" viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" /></svg>
+        <svg class="bs-glyph" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z" /></svg>
+        <div style="height: 16px"></div>
+        <div class="bs-bar bs-icon"></div>
+        <div class="bs-bar bs-icon"></div>
+        <div class="bs-bar bs-icon"></div>
+        <div class="bs-bar bs-icon"></div>
+        <div class="bs-bar bs-icon"></div>
+        <div class="bs-bar bs-icon"></div>
+        <div class="bs-bar bs-icon"></div>
+        <div style="flex: 1"></div>
+        <div class="bs-bar bs-btn" style="border-radius: 999px"></div>
+      </div>
+      <div class="bs-main">
+        <div class="bs-header">
+          <div class="bs-bar" style="width: 88px; height: 12px"></div>
+          <div class="bs-bar" style="width: 44px; height: 8px; margin-left: 12px"></div>
+          <div class="bs-bar" style="width: 52px; height: 8px"></div>
+          <div class="bs-bar" style="width: 40px; height: 8px"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 46%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 62%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 38%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 54%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 70%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 42%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 58%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 34%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 66%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 48%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 40%"></div>
+        </div>
+        <div class="bs-row">
+          <div class="bs-bar"></div>
+          <div class="bs-bar" style="width: 60%"></div>
+        </div>
+      </div>
+      <div class="bs-dock">
+        <div class="bs-bar"></div>
+        <div class="bs-bar"></div>
+        <div class="bs-bar"></div>
+        <div class="bs-bar"></div>
+        <div class="bs-bar"></div>
+      </div>
+      <svg class="bs-mark" viewBox="0 0 24 24" fill="currentColor"><path d="m6.25 4.038-2.242.879v5.818l-1.756-1.658-2.242.879v6.677c0 .257.106.502.292.678l2.794 2.642 2.244-.879v-5.818l7.084 6.697 2.244-.879v-5.818l7.086 6.698 2.24-.879v-6.677c0-.257-.104-.502-.292-.678l-8.124-7.682-2.244.879v5.818z" /></svg>
+    </div>
+    <script>
+      // Paint the boot shell (and the page behind it) in the saved theme.
+      try {
+        const shell = document.getElementById("boot-shell");
+        if (localStorage.getItem("macro:login") === "true") {
+          shell.setAttribute("data-signed-in", "");
+        }
+        const htmlColorString = localStorage.getItem("html-color-theme");
+        if (htmlColorString) {
+          const htmlColor = JSON.parse(htmlColorString);
+          if (htmlColor.color) {
+            document.body.style.backgroundColor = htmlColor.color;
+            shell.style.setProperty("--bs-page", htmlColor.color);
+            shell.style.setProperty("--bs-panel", htmlColor.panel || htmlColor.color);
+          }
+          // Saves from older builds have no ink; infer it from page lightness.
+          const lightness = parseFloat(/oklch\(\s*([\d.]+)/.exec(htmlColor.color)?.[1]);
+          const ink = htmlColor.ink || (lightness > 0.6 ? "oklch(0.2 0 0)" : lightness >= 0 ? "oklch(1 0 0)" : "");
+          if (ink) shell.style.setProperty("--bs-ink", ink);
+        }
+      } catch (err) {
+        console.error("Failed to apply boot theme: ", err);
+      }
+    </script>
     <div id="root" class="h-[calc(var(--dvh,1dvh)*100)]"></div>
     <div id="modal" class="z-modal"></div>
     <!--
@@ -38,18 +329,6 @@
     <script type="module" src="/src/index.tsx"></script>
     <script>
       window.__START_TIME__ = performance.now();
-    </script>
-    <!-- Sets blank page to theme surface color to prevent background color flash -->
-    <script>
-      try {
-        let htmlColorString = localStorage.getItem("html-color-theme");
-        if (htmlColorString) {
-          let htmlColor = JSON.parse(htmlColorString);
-          document.body.style.backgroundColor = htmlColor.color;
-        }
-      } catch (err) {
-        console.error("Failed parse macro-selected-theme: ", err);
-      }
     </script>
   </body>
 </html>
