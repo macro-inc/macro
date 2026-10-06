@@ -273,9 +273,11 @@ fn configure_postgres() -> Step<Run> {
         .run(include_str!("scripts/configure_postgres.sh"))
 }
 
-/// Set up test env files and databases.
+/// Set up test env files and databases. The pre-migrated template1 spares each
+/// `#[sqlx::test]` database from replaying every migration.
 fn prepare_tests() -> Step<Run> {
-    Step::new("prepare tests").run("just setup_test_envs && just initialize_dbs")
+    Step::new("prepare tests")
+        .run("just setup_test_envs && just initialize_dbs && just setup_test_template")
 }
 
 /// Run the test suite (no AWS credentials; sccache uses Namespace's remote cache).

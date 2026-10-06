@@ -1,6 +1,9 @@
--- NOTE: This is used purely to setup the testing DB
--- Changes from `crates/macro_db_client/migrations` need to be reflected here as raw SQL
--- Changes here WILL NOT ever make it into the dev/production db.
+-- Test-only schema, loaded as the first fixture with `migrations = false`.
+-- CI clones test databases from a pre-migrated template1 (`just setup_test_template`),
+-- so start from an empty public schema.
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE "Organization"
@@ -17,14 +20,6 @@ CREATE TABLE "OrganizationRetentionPolicy"
     FOREIGN KEY ("organization_id") REFERENCES "Organization" ("id") ON DELETE CASCADE
 );
 
-CREATE TABLE "macro_user"
-(
-    "id"                 UUID PRIMARY KEY,
-    "username"           TEXT UNIQUE NOT NULL,
-    "email"              TEXT UNIQUE NOT NULL,
-    "stripe_customer_id" TEXT UNIQUE NOT NULL
-);
-
 CREATE TABLE "User"
 (
     "id"               TEXT PRIMARY KEY,
@@ -32,9 +27,7 @@ CREATE TABLE "User"
     "name"             TEXT,
     "stripeCustomerId" TEXT UNIQUE,
     "organizationId"   INTEGER,
-    "macro_user_id"    UUID NOT NULL,
-    FOREIGN KEY ("organizationId") REFERENCES "Organization" ("id") ON DELETE SET NULL,
-    FOREIGN KEY ("macro_user_id") REFERENCES "macro_user" ("id")
+    FOREIGN KEY ("organizationId") REFERENCES "Organization" ("id") ON DELETE SET NULL
 );
 
 CREATE TABLE "Permission"
