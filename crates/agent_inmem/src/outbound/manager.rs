@@ -206,11 +206,13 @@ impl InMemAgentManager {
         server_half
     }
 
-    /// End the session for good: kill its agent task and drop its
-    /// conversation.
+    /// End the session for good: kill its agent task, drop its conversation,
+    /// and close the MCP sessions its token was holding open.
     pub fn teardown(&self, session: AgentSessionId) {
         self.live.remove(&session);
         self.store.remove(&session);
-        self.tokens.remove(&session);
+        if let Some((_, token)) = self.tokens.remove(&session) {
+            self.mcp.release_dyn(&token);
+        }
     }
 }

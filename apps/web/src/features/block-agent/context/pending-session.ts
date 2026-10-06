@@ -26,6 +26,7 @@ import {
   type PromptSubmitSurface,
   PromptTrace,
 } from '@core/agent-session/prompt-telemetry';
+import { takeWarmAgentSession } from '@queries/agent-session/warm';
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -98,7 +99,8 @@ export type StartPendingSessionOptions = {
 export function startPendingSession(
   options: StartPendingSessionOptions = {}
 ): string {
-  const id = uuidv7();
+  const warmId = takeWarmAgentSession(options);
+  const id = warmId ?? uuidv7();
   const prompt = options.prompt?.trim() ?? '';
   // Started before the create so the whole wait up to the first output,
   // and every request on the way, lands in one trace.
@@ -126,17 +128,25 @@ export function startPendingSession(
   const traced = <T>(operation: () => T): T =>
     trace ? trace.run(operation) : operation();
 
+  const create = (sessionId: string) =>
+    agentHarnessServiceClient.create({
+      id: sessionId,
+      ...(options.botId ? { botId: options.botId } : {}),
+      ...(options.modelOverride ? { model: options.modelOverride } : {}),
+      ...(options.instructions ? { instructions: options.instructions } : {}),
+      ...(options.repoUrl
+        ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
+        : {}),
+    } satisfies CreateAgentSessionRequest);
+
+  // An expired or failed reservation must not prevent ordinary creation.
+  const createWithFallback = async () => {
+    const result = await create(id);
+    return warmId && result.isErr() ? await create(uuidv7()) : result;
+  };
+
   void traced(() =>
-    agentHarnessServiceClient
-      .create({
-        id,
-        ...(options.botId ? { botId: options.botId } : {}),
-        ...(options.modelOverride ? { model: options.modelOverride } : {}),
-        ...(options.instructions ? { instructions: options.instructions } : {}),
-        ...(options.repoUrl
-          ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
-          : {}),
-      } satisfies CreateAgentSessionRequest)
+    createWithFallback()
       .then(async (result) => {
         if (result.isErr()) {
           handleAiUsageLimitError(result.error);
