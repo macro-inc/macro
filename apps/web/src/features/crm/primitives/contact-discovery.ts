@@ -12,11 +12,15 @@ export type CachedContactMatches = {
   loadMore: () => Promise<void>;
 };
 
-/** Authorized server pages answering `query`, which trails the live query. */
+/** Loaded server rows and the query they answer. */
+export type ServerAnswer = { query: string; contacts: CrmContactEntity[] };
+
+/** Authorized server pages for `query`, which trails the live query. */
 export type ServerContactPages = {
   query: Accessor<string>;
-  /** Undefined until the first page for `query` settles. */
-  contacts: Accessor<CrmContactEntity[] | undefined>;
+  /** Loaded pages and the query they answer, read from the pages themselves;
+   * undefined until a first page settles. */
+  answer: Accessor<ServerAnswer | undefined>;
   error: Accessor<Error | undefined>;
   isLoading: Accessor<boolean>;
   hasMore: Accessor<boolean>;
@@ -24,8 +28,6 @@ export type ServerContactPages = {
   loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
 };
-
-type ServerAnswer = { query: string; contacts: CrmContactEntity[] };
 
 /** Rows answering an earlier query show only while the cache's matching
  * semantics still match them against the live query by name or email. */
@@ -55,11 +57,11 @@ export function createContactDiscovery(options: {
 
   // A newer query's first page replaces the last answer only once it lands,
   // so typing does not blank rows that still match.
-  const serverAnswer = createMemo<ServerAnswer>((previous) => {
-    if (!searching()) return NO_ANSWER;
-    const contacts = options.server.contacts();
-    return contacts ? { query: options.server.query(), contacts } : previous;
-  }, NO_ANSWER);
+  const serverAnswer = createMemo<ServerAnswer>(
+    (previous) =>
+      searching() ? (options.server.answer() ?? previous) : NO_ANSWER,
+    NO_ANSWER
+  );
 
   const serverContacts = () => {
     const answer = serverAnswer();

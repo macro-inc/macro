@@ -121,11 +121,14 @@ export function useCrmContactDiscovery(
     },
     server: {
       query: serverQuery,
-      contacts: () =>
+      answer: () =>
         queryReadyGate(server)
-          ? server.data.pages.flatMap((page) =>
-              page.contacts.map(toCrmContactEntity)
-            )
+          ? {
+              query: server.data.pages[0]?.search ?? '',
+              contacts: server.data.pages.flatMap((page) =>
+                page.contacts.map(toCrmContactEntity)
+              ),
+            }
           : undefined,
       error: () => server.error ?? undefined,
       isLoading: () => server.isLoading,

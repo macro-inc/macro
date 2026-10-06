@@ -12,6 +12,7 @@ export const makeMoveToProjectAction = () => {
       entity.type !== 'channel' &&
       entity.type !== 'channel_message' &&
       entity.type !== 'channel_thread' &&
+      entity.type !== 'crm_contact' &&
       entity.type !== 'foreign'
     );
   };

@@ -1448,16 +1448,18 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   });
 
   const { searchQuery, contacts } = search;
-  // A failed contact search must not read as an empty result: without rows
-  // it shows the load error, while rows from either source still render.
+  // A failed contact search must not read as an empty result, but it never
+  // replaces rows that are on screen.
+  const contactSearchError = () =>
+    entities().length === 0 ? contacts.error() : undefined;
   const searchSourceHasData = () =>
     (!searchQuery.isPlaceholderData && entities().length > 0) ||
     (searchQuery.data !== undefined &&
       !searchQuery.isPlaceholderData &&
-      !contacts.error());
+      !contactSearchError());
   const searchSourceError = () =>
     (searchQuery.error as Error | null) ??
-    contacts.error() ??
+    contactSearchError() ??
     nativeOfflineLoadError(searchSourceHasData);
 
   const context = {
@@ -1483,10 +1485,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
               !itemsSource().isPlaceholderData() &&
               entities().length > 0),
       isLoading: () => itemsSource().isLoading(),
-      isFetching: () =>
-        itemsSource().isFetching() ||
-        searchQuery.isFetching ||
-        contacts.isLoading(),
+      isFetching: () => itemsSource().isFetching() || searchQuery.isFetching,
       isPlaceholderData: () =>
         itemsSource().isPlaceholderData() && !search.isSearching(),
       isFetchingNextPage: () =>

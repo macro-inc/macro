@@ -1,7 +1,7 @@
 import type { CrmContactEntity } from '@entity';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createContactDiscovery } from './contact-discovery';
+import { createContactDiscovery, type ServerAnswer } from './contact-discovery';
 
 const contact = (
   id: string,
@@ -28,15 +28,24 @@ function setup() {
     const [serverQuery, setServerQuery] = createSignal('');
     const [active, setActive] = createSignal(true);
     const [cached, setCached] = createSignal<CrmContactEntity[]>([]);
-    const [pages, setPages] = createSignal<CrmContactEntity[][]>();
+    const [answer, setAnswer] = createSignal<ServerAnswer>();
     const [error, setError] = createSignal<Error>();
     const [loadingMore, setLoadingMore] = createSignal(false);
     const queuedPages: CrmContactEntity[][] = [];
+    const nextPage = () =>
+      setAnswer((loaded) =>
+        loaded
+          ? {
+              query: loaded.query,
+              contacts: [...loaded.contacts, ...(queuedPages.shift() ?? [])],
+            }
+          : loaded
+      );
     const serverLoadMore = vi.fn(async () => {
       setLoadingMore(true);
       await Promise.resolve();
       batch(() => {
-        setPages((loaded) => [...(loaded ?? []), queuedPages.shift() ?? []]);
+        nextPage();
         setLoadingMore(false);
       });
     });
@@ -53,9 +62,9 @@ function setup() {
       },
       server: {
         query: serverQuery,
-        contacts: () => pages()?.flat(),
+        answer,
         error,
-        isLoading: () => pages() === undefined,
+        isLoading: () => answer() === undefined,
         hasMore: () => queuedPages.length > 0,
         isLoadingMore: loadingMore,
         loadMore: serverLoadMore,
@@ -75,8 +84,9 @@ function setup() {
       search,
       setActive,
       setCached,
-      setPages,
+      setAnswer,
       setError,
+      nextPage,
       queuedPages,
       serverLoadMore,
       refresh,
@@ -94,8 +104,9 @@ describe('contact discovery', () => {
 
     batch(() => {
       t.setServerQuery('asher');
-      t.setPages([
-        [
+      t.setAnswer({
+        query: 'asher',
+        contacts: [
           contact('cached-asher', {
             name: 'Asher',
             lastInteraction: '2026-04-01T00:00:00Z',
@@ -105,7 +116,7 @@ describe('contact discovery', () => {
             lastInteraction: '2025-01-01T00:00:00Z',
           }),
         ],
-      ]);
+      });
     });
     expect(t.ids()).toEqual(['cached-asher', 'beyond-seed']);
     expect(t.discovery.contacts()[0].lastInteraction).toBe(
@@ -120,7 +131,7 @@ describe('contact discovery', () => {
     expect(t.discovery.isLoading()).toBe(true);
     batch(() => {
       t.setServerQuery('ash');
-      t.setPages([[]]);
+      t.setAnswer({ query: 'ash', contacts: [] });
     });
     expect(t.discovery.isLoading()).toBe(false);
   });
@@ -128,12 +139,13 @@ describe('contact discovery', () => {
   it('never shows or pages an earlier answer the live query no longer matches', async () => {
     const t = setup();
     t.search('ash');
-    t.setPages([
-      [
+    t.setAnswer({
+      query: 'ash',
+      contacts: [
         contact('ashley', { name: 'Ashley' }),
         contact('asher', { name: 'Asher' }),
       ],
-    ]);
+    });
     t.queuedPages.push([contact('ash-page-2', { name: 'Ash Two' })]);
     expect(t.ids()).toEqual(['ashley', 'asher']);
 
@@ -146,20 +158,41 @@ describe('contact discovery', () => {
     // The settled query's first page is pending: keep rows that still match.
     batch(() => {
       t.setServerQuery('asher');
-      t.setPages(undefined);
+      t.setAnswer(undefined);
     });
     expect(t.ids()).toEqual(['asher']);
-    t.setPages([[contact('asher-b', { name: 'Asher B' })]]);
+    t.setAnswer({
+      query: 'asher',
+      contacts: [contact('asher-b', { name: 'Asher B' })],
+    });
     expect(t.ids()).toEqual(['asher-b']);
 
     t.setQuery('bob');
     expect(t.ids()).toEqual([]);
   });
 
+  it('judges pages by the query they answer, not the query that is settling', () => {
+    const t = setup();
+    t.search('ash');
+    t.setAnswer({
+      query: 'ash',
+      contacts: [
+        contact('ashley', { name: 'Ashley' }),
+        contact('asher', { name: 'Asher' }),
+      ],
+    });
+    // The debounced query advances before the query cache swaps its pages.
+    t.search('asher');
+    expect(t.ids()).toEqual(['asher']);
+  });
+
   it('exposes nothing while inactive and does not resurface the closed search', async () => {
     const t = setup();
     t.search('asher');
-    t.setPages([[contact('asher', { name: 'Asher' })]]);
+    t.setAnswer({
+      query: 'asher',
+      contacts: [contact('asher', { name: 'Asher' })],
+    });
     t.setError(new Error('boom'));
     t.queuedPages.push([contact('next')]);
     t.setActive(false);
@@ -182,7 +215,10 @@ describe('contact discovery', () => {
   it('loads past pages holding only duplicates without overlapping requests', async () => {
     const t = setup();
     t.search('pat');
-    t.setPages([[contact('pat', { email: 'pat@x.com' })]]);
+    t.setAnswer({
+      query: 'pat',
+      contacts: [contact('pat', { email: 'pat@x.com' })],
+    });
     t.queuedPages.push(
       [
         contact('pat-other-team', {
@@ -203,11 +239,11 @@ describe('contact discovery', () => {
   it('stops paging the earlier query once the query changes', async () => {
     const t = setup();
     t.search('pat');
-    t.setPages([[contact('pat')]]);
+    t.setAnswer({ query: 'pat', contacts: [contact('pat')] });
     t.queuedPages.push([contact('pat')], [contact('pat-2')]);
     t.serverLoadMore.mockImplementationOnce(async () => {
       t.setQuery('patr');
-      t.setPages((loaded) => [...(loaded ?? []), t.queuedPages.shift() ?? []]);
+      t.nextPage();
     });
     await t.discovery.loadMore();
     expect(t.serverLoadMore).toHaveBeenCalledTimes(1);
