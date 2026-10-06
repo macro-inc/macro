@@ -1,7 +1,3 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { EmailFollowup } from '@service-storage/generated/schemas/emailFollowup';
@@ -14,11 +10,7 @@ import {
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { fetchGraphqlEmailThread } from '../email/graphql/thread';
-import { emailKeys } from '../email/keys';
-import { refetchSoupEntity } from '../soup/cache';
-import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
-import { invalidateEmailReminderReads } from './email-collection';
+import { refreshEmailFollowup } from './email-refresh';
 import { reminderKeys } from './keys';
 
 /** Reuse a loaded Reminders page without treating filtered-out emails as absent. */
@@ -90,17 +82,7 @@ async function reconcileEmailFollowup(
     console.error('Email reminder saved but navigation failed', error);
   }
   try {
-    await Promise.all([
-      invalidateEmailReminderReads(),
-      refetchSoupEntity(threadId, 'emailThread'),
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(threadId).queryKey,
-      }),
-      queryClient.invalidateQueries({ queryKey: emailKeys.previews._def }),
-      ...(isFeatureEnabled(enableGraphqlSoup)
-        ? [refreshActiveGraphqlSoupQueries(), fetchGraphqlEmailThread(threadId)]
-        : []),
-    ]);
+    await refreshEmailFollowup(threadId);
   } catch (error) {
     console.error('Email reminder saved but refresh failed', error);
   }

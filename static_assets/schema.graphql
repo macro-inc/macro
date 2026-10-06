@@ -6663,6 +6663,10 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	latestInboundMessageTs: String
 	"""
+	Most recent explicit return from an email reminder.
+	"""
+	reminderReturnedAt: String
+	"""
 	Complete body-free metadata for local draft edits and discards.
 	"""
 	mailDraftState: GraphqlMailDraftState

@@ -642,6 +642,7 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
+                        reminder_returned_at: (thread_id.as_u128() % 2 == 0).then(Default::default),
                     }),
                 )
             })
@@ -2028,7 +2029,7 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
 
     let with_metadata = harness
         .execute(
-            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs } } } } }"#,
+            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs reminderReturnedAt } } } } }"#,
         )
         .await;
     assert!(
@@ -2051,6 +2052,8 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
     assert_eq!(items[1]["linkId"], Uuid::from_u128(952).to_string());
     assert!(items[0]["latestInboundMessageTs"].as_str().is_some());
     assert!(items[1]["latestInboundMessageTs"].is_null());
+    assert!(items[0]["reminderReturnedAt"].is_null());
+    assert_eq!(items[1]["reminderReturnedAt"], "1970-01-01T00:00:00+00:00");
 }
 
 #[tokio::test]
