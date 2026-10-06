@@ -332,6 +332,13 @@ pub struct OpenManagedSession {
 /// its own schedule, while a managed session's sandbox is provisioned here.
 /// That difference is why only one of them takes a workspace.
 pub trait SessionOpener: Send + Sync + 'static {
+    /// Prepare an unprompted hidden in-memory session for an authenticated user.
+    fn warm_session(
+        &self,
+        owner: Owner,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// Open a session and return the persisted row.
     fn open_external_session(
         &self,

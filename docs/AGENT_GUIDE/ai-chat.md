@@ -21,6 +21,12 @@ must not send a prompt. Record navigation and focus time separately from typing
 and Enter-to-first-answer time. Check the first readable agent words in the DOM,
 not a loading indicator or a bare Markdown delimiter.
 
+Repeat from Home, Agents, and the create menu with an already-ready session.
+The first prompt can be accepted before its destination mounts; navigating into
+the session must keep the same streamed turn without restarting its load. Also
+leave a pending destination, then reopen the session and confirm the sent prompt
+and complete answer remain available.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and
@@ -1414,3 +1420,29 @@ The chat's **Read skill** tool row expands to show the full instructions. When
 verifying this flow, invoke a saved skill by name, confirm the agent reads it,
 and expand the row to inspect the returned content. Document access permissions
 apply; ordinary documents and deleted skills cannot be read as skills.
+
+### Agent warm-up
+
+Home's agent composer and the Agents page issue a best-effort authenticated
+`POST /agent-sessions/warm`. It starts an unprompted in-memory session, hidden
+from history and lists. Opening either page must not add an empty conversation
+or execute a model/tool call. A warm response waits until ACP initialization
+and the shared MCP listing have finished. On first send, the default agent can claim the
+prepared session only when the user, model, and instructions match. Other
+personas and changed settings use normal creation. Warm failures must not block
+sending. Unclaimed sessions expire after ten minutes; a claimed conversation
+must remain visible and usable after that deadline.
+
+Taking a reservation clears it immediately, but replacement preparation waits
+until session creation succeeds. This lets a warm claim release its server
+reservation before requesting another. An active Home or Agents surface then
+prepares one replacement; otherwise preparation waits for the next mount. Verify
+a second conversation can reuse that replacement without waiting five minutes,
+including when another tab already holds the owner's other warm reservation.
+Successful cold creation also replenishes an empty cache left by an expired or
+failed reservation. A failed create does not trigger more warming.
+An already-started preparation stays in the shared cache across Home-to-Agents
+navigation, so mounting the next surface joins that request instead of warming
+another server session.
+Empty or failed warm responses do not trigger a refill loop, and mismatched
+agent settings leave a usable reservation available for the default agent.

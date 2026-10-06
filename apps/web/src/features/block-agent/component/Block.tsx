@@ -30,7 +30,6 @@ import {
 } from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
-import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentComposer } from './AgentComposer';
@@ -211,7 +210,6 @@ export default function BlockAgent() {
   // nowhere.
   const adoptSessionId = (sessionId: string) => {
     split?.handle.adoptContentId({ type: 'agent', nextId: sessionId });
-    forgetPendingSession(blockId);
   };
 
   return (

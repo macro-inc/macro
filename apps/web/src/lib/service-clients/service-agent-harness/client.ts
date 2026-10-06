@@ -30,6 +30,7 @@ import type {
   SharePermissionV2,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
+  WarmAgentSessionResponse,
 } from './generated/schemas';
 
 export type { SandboxSize, SandboxSizeBody };
@@ -90,6 +91,19 @@ export const agentHarnessServiceClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
+        signal,
+      }
+    );
+  },
+
+  /** Prepare a hidden, unprompted in-memory session for this browser. */
+  warm(id: string, signal?: AbortSignal) {
+    return fetchWithToken<WarmAgentSessionResponse>(
+      `${agentHarnessHost}/agent-sessions/warm`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
         signal,
       }
     );

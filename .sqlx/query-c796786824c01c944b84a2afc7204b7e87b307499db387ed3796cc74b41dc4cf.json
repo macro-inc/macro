@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)\n                 FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_parent?: Json<MessageParent>\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\",\n                ext.last_run_id AS \"external_last_run_id?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE owner_id = $1\n            ORDER BY agent_session.created_at DESC, id DESC\n            LIMIT $2\n            ",
+  "query": "\n            SELECT\n                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)\n                 FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_parent?: Json<MessageParent>\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\",\n                ext.last_run_id AS \"external_last_run_id?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE owner_id = $1 AND NOT list_hidden\n            ORDER BY agent_session.created_at DESC, id DESC\n            LIMIT $2\n            ",
   "describe": {
     "columns": [
       {
@@ -181,5 +181,5 @@
       true
     ]
   },
-  "hash": "96f3b7e2076b357e4d6da82fe8f63dab87467d1890dac888c860bd7584db1e03"
+  "hash": "c796786824c01c944b84a2afc7204b7e87b307499db387ed3796cc74b41dc4cf"
 }
