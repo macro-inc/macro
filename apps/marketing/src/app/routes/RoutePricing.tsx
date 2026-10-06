@@ -13,7 +13,7 @@ import { setPageSeo } from '../utils/utilSeo';
 const mobile = () => viewportWidth() < 700;
 const stacked = () => breakpoint();
 // Plan cards collapse to a single column before the global breakpoint.
-const narrow = () => viewportWidth() < 900;
+const narrow = () => viewportWidth() < 1000;
 
 // Prerendering has no window; bake the production URL into the static HTML.
 const isLocalhost =
@@ -203,7 +203,7 @@ function PricingPlans() {
       style={{
         'box-sizing': 'border-box',
         margin: '0 auto',
-        'max-width': '760px',
+        'max-width': narrow() ? '560px' : '1100px',
         'padding-inline': mobile() ? '18px' : '24px',
         width: '100%',
       }}
@@ -212,39 +212,52 @@ function PricingPlans() {
         style={{
           display: 'grid',
           gap: mobile() ? '16px' : '20px',
-          'grid-template-columns':
-            mobile() || narrow()
-              ? 'minmax(0, 1fr)'
-              : 'repeat(2, minmax(0, 1fr))',
+          'grid-template-columns': narrow()
+            ? 'minmax(0, 1fr)'
+            : 'repeat(3, minmax(0, 1fr))',
         }}
       >
         <PlanCard
-          eyebrow="Guest"
+          eyebrow="Free"
           price="$0"
-          primaryLine="to join a workspace"
-          secondaryLine="no subscription required"
+          primaryLine="per seat / month"
+          secondaryLine="no credit card required"
           note={
             <>
-              <strong>Guest access includes:</strong> "Sent with Macro" in email
-              signatures, limits on storage and AI.
+              <strong>Get started with limited usage:</strong> Haiku, up to two
+              email accounts, 5 GB of storage, and a "Sent with Macro" footer.
             </>
           }
           buttonName="pricing_free_connect_google"
-          buttonLabel="Join as Guest"
+          buttonLabel="Start for free"
         />
         <PlanCard
           accent
-          eyebrow="Paid"
+          eyebrow="Pro"
           price="$40"
           primaryLine="per seat / month"
-          secondaryLine="first 5 seats, then $80"
+          secondaryLine="30 days free"
           note={
             <>
-              <strong>Includes your whole workspace:</strong> messages, docs,
-              tasks, calls, email, unified search, and AI context.
+              <strong>Your whole workspace:</strong> every AI model with
+              standard usage, unlimited email accounts, calls, teams, and 1 TB
+              of storage.
             </>
           }
           buttonName="pricing_paid_connect_google"
+        />
+        <PlanCard
+          eyebrow="Max"
+          price="$200"
+          primaryLine="per seat / month"
+          secondaryLine="10× Pro usage"
+          note={
+            <>
+              <strong>Everything in Pro,</strong> with 10× the AI usage for
+              heavy agent work, plus priority support.
+            </>
+          }
+          buttonName="pricing_max_connect_google"
         />
       </div>
     </div>
@@ -255,43 +268,81 @@ type CellValue = boolean | string;
 
 const comparisonGroups: Array<{
   group: string;
-  rows: Array<{ label: string; free: CellValue; paid: CellValue }>;
+  rows: Array<{
+    label: string;
+    free: CellValue;
+    pro: CellValue;
+    max: CellValue;
+  }>;
 }> = [
   {
     group: 'AI and agents',
     rows: [
+      { label: 'AI usage', free: 'Limited', pro: 'Standard', max: '10× Pro' },
+      { label: 'AI models', free: 'Haiku', pro: 'All', max: 'All' },
       {
-        label: 'AI agents with workspace context',
-        free: 'Limited',
-        paid: 'Full',
+        label: 'Agents with workspace context',
+        free: true,
+        pro: true,
+        max: true,
       },
-      { label: 'Storage', free: 'Limited', paid: 'Generous' },
-      { label: 'Calls, recording, and transcription', free: false, paid: true },
+    ],
+  },
+  {
+    group: 'Workspace',
+    rows: [
+      {
+        label: 'Connected email accounts',
+        free: 'Up to 2',
+        pro: 'Unlimited',
+        max: 'Unlimited',
+      },
+      { label: 'Storage', free: '5 GB', pro: '1 TB', max: '1 TB' },
+      {
+        label: 'Calls, recording, and transcription',
+        free: false,
+        pro: true,
+        max: true,
+      },
     ],
   },
   {
     group: 'Branding and teams',
     rows: [
       {
-        label: '"Sent with Macro" email signature',
+        label: '"Sent with Macro" email footer',
         free: 'Added',
-        paid: 'Removed',
+        pro: 'Removed',
+        max: 'Removed',
       },
       {
         label: 'Auto-shared email and CRM for your team',
         free: false,
-        paid: true,
+        pro: true,
+        max: true,
       },
-      { label: 'Team-level memory for your agents', free: false, paid: true },
+      {
+        label: 'Team-level memory for your agents',
+        free: false,
+        pro: true,
+        max: true,
+      },
       {
         label: 'Channel-based sharing and access control',
         free: false,
-        paid: true,
+        pro: true,
+        max: true,
       },
-      { label: 'Priority support', free: false, paid: true },
+      { label: 'Priority support', free: false, pro: false, max: true },
     ],
   },
 ];
+
+const comparisonPlans = [
+  { key: 'free', name: 'Free', price: '$0' },
+  { key: 'pro', name: 'Pro', price: '$40 / seat' },
+  { key: 'max', name: 'Max', price: '$200 / seat' },
+] as const;
 
 function CheckMark() {
   return (
@@ -344,8 +395,9 @@ function ComparisonCell(props: { value: CellValue }) {
         style={{
           color: 'var(--c2)',
           'font-family': 'Inter, body',
-          'font-size': '14px',
+          'font-size': mobile() ? '12px' : '14px',
           'font-weight': '600',
+          'text-align': 'center',
         }}
       >
         {props.value as string}
@@ -367,11 +419,12 @@ function comparisonPlanHeadingStyle(color: string): JSX.CSSProperties {
 }
 
 function ComparisonGrid() {
-  const cols = () => (mobile() ? '1fr 60px 60px' : '1fr 150px 150px');
+  const cols = () =>
+    mobile() ? '1fr 64px 64px 64px' : '1fr 140px 140px 140px';
 
   return (
     <section
-      aria-label="Guest access versus paid comparison"
+      aria-label="Free, Pro, and Max plan comparison"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -400,30 +453,24 @@ function ComparisonGrid() {
           }}
         >
           <div aria-hidden="true" />
-          <div style={{ 'text-align': 'center' }}>
-            <div style={comparisonPlanHeadingStyle('var(--c1)')}>Guest</div>
-            <div
-              style={{
-                color: 'var(--c4)',
-                'font-size': mobile() ? '11px' : '13px',
-                'margin-top': '4px',
-              }}
-            >
-              $0
-            </div>
-          </div>
-          <div style={{ 'text-align': 'center' }}>
-            <div style={comparisonPlanHeadingStyle('var(--c1)')}>Paid</div>
-            <div
-              style={{
-                color: 'var(--c4)',
-                'font-size': mobile() ? '11px' : '13px',
-                'margin-top': '4px',
-              }}
-            >
-              $40 / seat
-            </div>
-          </div>
+          <For each={comparisonPlans}>
+            {(plan) => (
+              <div style={{ 'text-align': 'center' }}>
+                <div style={comparisonPlanHeadingStyle('var(--c1)')}>
+                  {plan.name}
+                </div>
+                <div
+                  style={{
+                    color: 'var(--c4)',
+                    'font-size': mobile() ? '11px' : '13px',
+                    'margin-top': '4px',
+                  }}
+                >
+                  {plan.price}
+                </div>
+              </div>
+            )}
+          </For>
         </div>
 
         <For each={comparisonGroups}>
@@ -464,12 +511,15 @@ function ComparisonGrid() {
                     >
                       {row.label}
                     </div>
-                    <div style={{ display: 'grid', 'place-items': 'center' }}>
-                      <ComparisonCell value={row.free} />
-                    </div>
-                    <div style={{ display: 'grid', 'place-items': 'center' }}>
-                      <ComparisonCell value={row.paid} />
-                    </div>
+                    <For each={comparisonPlans}>
+                      {(plan) => (
+                        <div
+                          style={{ display: 'grid', 'place-items': 'center' }}
+                        >
+                          <ComparisonCell value={row[plan.key]} />
+                        </div>
+                      )}
+                    </For>
                   </div>
                 )}
               </For>
@@ -800,7 +850,18 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
         Teams share email, tasks, documents, and calls through workspace
         permissions. Agents can search and read the work you have access to, and
         use memory built from your workspace activity. Team subscriptions
-        require a paid seat for every member.
+        require a paid seat for every member, and each seat can be Pro or Max.
+      </>
+    ),
+  },
+  {
+    q: 'What happens if I hit my AI usage limit?',
+    a: (
+      <>
+        Every plan includes a monthly amount of AI usage. Free has a limited
+        allowance for trying Macro, Pro covers standard everyday use, and Max
+        includes 10× Pro's usage for heavy agent work. If you reach your limit,
+        upgrade from billing settings: Free to Pro, or Pro to Max.
       </>
     ),
   },
@@ -973,7 +1034,7 @@ export const RoutePricing: Component = () => {
   setPageSeo({
     title: 'Pricing — Macro',
     description:
-      'Join a workspace as a Guest for free. The paid plan is $40 per seat per month for the first 5 seats, then $80. Every module is included on every plan — we charge for limits and team features, not feature gates.',
+      'Start free. Pro is $40 per seat per month with every AI model and standard usage. Max is $200 per seat per month with 10× Pro usage. Every module is included on every plan — we charge for usage limits and team features, not feature gates.',
     path: '/pricing',
   });
 
