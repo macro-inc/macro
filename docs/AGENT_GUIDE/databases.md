@@ -374,6 +374,9 @@ has six database tools: `ListDatabases`, `DescribeDatabase`, `QueryDatabase`,
 `QueryDatabase` reads and changes rows and handles schema changes through SQL
 (`CREATE`, `ALTER`, and `DROP`). The assistant reads the current schema before
 editing and checks actual results before reporting success.
+A supplied `databaseId` must refer to an accessible database before rows or
+schema changes resolve. Valid selections still allow qualified joins across
+accessible databases.
 
 Query tool rows say what the query did in words (**Read Invites**, **Updated 3
 rows in Guests**, **Changed Price to number**, or **Queried Party Planner**) and
