@@ -533,3 +533,57 @@ describe('pipe table external transformer', () => {
     expect(lines[1]).toBe('| x | y | z |');
   });
 });
+
+describe('video link transformer', () => {
+  it('converts markdown links with video URLs to video nodes', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '[Screen Recording 2026-10-06 at 4.03.28 PM.mov](https://static-file-service.macro.com/file/3d7ab8c8-05b7-477f-aa83-7dd514219867)'
+    );
+
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const video = root.getChildren().find($isVideoNode);
+      expect(video).toBeDefined();
+      expect(video!.getUrl()).toBe(
+        'https://static-file-service.macro.com/file/3d7ab8c8-05b7-477f-aa83-7dd514219867'
+      );
+    });
+  });
+
+  it('converts links with .mp4 extension to video nodes', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(editor, '[Video](https://example.com/video.mp4)');
+
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const video = root.getChildren().find($isVideoNode);
+      expect(video).toBeDefined();
+      expect(video!.getUrl()).toBe('https://example.com/video.mp4');
+    });
+  });
+
+  it('converts links with .mov extension to video nodes', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(editor, '[Recording](https://example.com/clip.mov)');
+
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const video = root.getChildren().find($isVideoNode);
+      expect(video).toBeDefined();
+      expect(video!.getUrl()).toBe('https://example.com/clip.mov');
+    });
+  });
+
+  it('leaves non-video links as links', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(editor, '[Document](https://example.com/doc.pdf)');
+
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const video = root.getChildren().find($isVideoNode);
+      expect(video).toBeUndefined();
+    });
+  });
+});

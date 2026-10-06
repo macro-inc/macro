@@ -6,6 +6,29 @@ import {
   UnknownMentionNode,
 } from './unknownFallback';
 
+const isVideoUrl = (url: string): boolean => {
+  const videoExtensions = [
+    '.mp4',
+    '.webm',
+    '.ogg',
+    '.mov',
+    '.avi',
+    '.mkv',
+    '.m4v',
+  ];
+  const lowerUrl = url.toLowerCase();
+
+  if (videoExtensions.some((ext) => lowerUrl.includes(ext))) {
+    return true;
+  }
+
+  if (lowerUrl.includes('static-file-service.macro.com/file/')) {
+    return true;
+  }
+
+  return false;
+};
+
 // Internal transformer — always uses <m-video> for unambiguous round-tripping.
 export const I_VIDEO: ElementTransformer = {
   dependencies: [VideoNode, UnknownMentionNode],
@@ -62,5 +85,33 @@ export const I_VIDEO: ElementTransformer = {
       console.error('Failed to parse m-video:', e);
       replaceElementWithUnknownMention(parent, 'Unknown Video');
     }
+  },
+};
+
+// Standard markdown link transformer for video URLs
+export const VIDEO_LINK: ElementTransformer = {
+  dependencies: [VideoNode],
+  type: 'element',
+  export: (_node: LexicalNode) => {
+    return null;
+  },
+  regExp: /\[([^\]]*)\]\(([^)\s]+)(?:\s"([^"]*)"\s*)?\)$/,
+  replace: (node, _, match) => {
+    const [, _linkText, url] = match;
+
+    if (!isVideoUrl(url)) {
+      return;
+    }
+
+    const videoNode = $createVideoNode({
+      srcType: 'url',
+      url,
+      width: 0,
+      height: 0,
+      id: '',
+      controls: true,
+      scale: 1,
+    });
+    node.replace(videoNode);
   },
 };
