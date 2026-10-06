@@ -969,6 +969,14 @@ the chime. Closing the audible tab lets the other take over while the call is
 still ringing. Answering or dismissing stops ringing across tabs. An unanswered
 call stops ringing after 30 seconds, including after a tab takes over.
 
+Declining is per user and per device set, not per tab: the sidebar `X` and the
+rail `Decline` button send `POST /call/record/{call_id}/decline`, and every other
+signed-in device of the same user (other browsers, the iPhone's CallKit ring)
+stops ringing via `call_declined`. Declining on the iPhone lock screen does the
+same for the browser. Other channel members keep ringing, and the call stays
+active for them. Closing only the browser notification toast silences the chime
+without declining.
+
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —

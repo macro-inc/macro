@@ -31,6 +31,16 @@ export function requestCallToken(channelId: string) {
 }
 
 /**
+ * Declines this ringing call for the user so their other devices stop ringing.
+ * Bound to `callId` so a stale incoming-call UI cannot decline a replacement
+ * call. Nothing to cache: the call stays active for other members, and the
+ * caller's own ring is already dismissed locally.
+ */
+export function declineCall(callId: string) {
+  return throwOnErr(() => callServiceClient.declineCall(callId));
+}
+
+/**
  * All active calls in channels the user is a member of, newest first. One
  * request app-wide; the websocket
  * call_started/call_ended handlers keep it live.

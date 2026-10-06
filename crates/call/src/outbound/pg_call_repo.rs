@@ -901,6 +901,42 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn record_decline(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            INSERT INTO call_declines (call_id, user_id)
+            VALUES ($1, $2)
+            ON CONFLICT (call_id, user_id) DO NOTHING
+            "#,
+            call_id,
+            user_id.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn has_declined(&self, call_id: &Uuid, user_id: &str) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM call_declines
+                WHERE call_id = $1 AND user_id = $2
+            ) as "exists!"
+            "#,
+            call_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
         let mut tx = self.pool.begin().await?;
 
@@ -1331,6 +1367,7 @@ impl CallRepository for PgCallRepo {
                 team_share_access_level: active.team_share_access_level,
                 is_active: true,
                 status: None,
+                viewer_has_declined: false,
                 participants,
                 guests,
                 transcript,
@@ -1441,6 +1478,7 @@ impl CallRepository for PgCallRepo {
             team_share_access_level: archived.team_share_access_level,
             is_active: false,
             status: None,
+            viewer_has_declined: false,
             participants,
             guests,
             transcript,
@@ -1865,6 +1903,7 @@ impl CallRepository for PgCallRepo {
                 team_share_access_level: row.team_share_access_level,
                 is_active: row.is_active,
                 status: Some(call_status_from_sql(&row.status)),
+                viewer_has_declined: false,
                 participants,
                 guests,
                 transcript: Vec::new(),

@@ -257,6 +257,7 @@ fn call_record(
         is_active: true,
         status: None,
         user_access_level: None,
+        viewer_has_declined: false,
         participants: Vec::new(),
         guests: Vec::new(),
         transcript: Vec::new(),

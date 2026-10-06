@@ -8,13 +8,14 @@ import {
   createCallResolutionsEffect,
   getCallRecordResolution,
   publishCallResolution,
+  resolvesRingFor,
 } from '@channel/Call/call-resolution';
 import { silenceIncomingCallRing } from '@channel/Call/ring-coordination';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTabFocused } from '@core/signal/tabFocus';
-import { fetchCallRecord } from '@queries/call/call';
+import { declineCall, fetchCallRecord } from '@queries/call/call';
 import {
   type Accessor,
   createEffect,
@@ -72,15 +73,44 @@ export function dismissIncomingCall(callId: string) {
 }
 
 /**
- * Dismisses an incoming call in this tab and silences its audible ring in
- * every tab — the tab making noise may be a sibling (see
- * `ring-coordination.ts`). Use for explicit user dismissals; programmatic
- * paths (resolutions, auto-dismiss, joining) run in every tab already and
- * should use `dismissIncomingCall`.
+ * Declines an incoming call: dismisses it in this tab, publishes a local
+ * `declined` resolution so sibling tabs stop immediately, silences its audible
+ * ring in every tab — the tab making noise may be a sibling (see
+ * `ring-coordination.ts`) — and tells the backend, which stops the ring on
+ * the user's other devices (phone, other browsers) via `call_declined`. Use
+ * for explicit user dismissals; programmatic paths (resolutions,
+ * auto-dismiss, joining) run in every tab already and should use
+ * `dismissIncomingCall`.
+ *
+ * Dev-only debug calls (`window.macroDebugIncomingCall`) have no server
+ * record, so they are only dismissed locally.
  */
-export function dismissIncomingCallEverywhere(callId: string) {
+export function dismissIncomingCallEverywhere(
+  callId: string,
+  declinedBy?: string | null
+) {
+  const call = incomingCalls().find((candidate) => candidate.callId === callId);
   silenceIncomingCallRing(callId);
   dismissIncomingCall(callId);
+  if (declinedBy) {
+    publishCallResolution({ type: 'declined', callId, declinedBy });
+  }
+  if (!call || isDebugIncomingCall(call)) return;
+  void declineOnOtherDevices(call.callId);
+}
+
+// Best-effort: the local dismissal already happened, and a lost request only
+// leaves the other devices ringing until reconciliation or their own timeout.
+async function declineOnOtherDevices(callId: string) {
+  try {
+    await declineCall(callId);
+  } catch (error) {
+    console.warn('failed to decline incoming call', error);
+  }
+}
+
+function isDebugIncomingCall(call: IncomingCall) {
+  return DEV_MODE_ENV && call.callId.startsWith('debug-');
 }
 
 function addIncomingCall(call: IncomingCall) {
@@ -168,9 +198,7 @@ export function IncomingCallEvents() {
   const userId = useUserId();
 
   createCallResolutionsEffect((resolution) => {
-    if (resolution.type === 'answered' && resolution.answeredBy !== userId()) {
-      return;
-    }
+    if (!resolvesRingFor(resolution, userId())) return;
     dismissIncomingCall(resolution.callId);
   });
 
@@ -220,9 +248,7 @@ export function IncomingCallEvents() {
   // Dev-only debug calls (`window.macroDebugIncomingCall`) have no server
   // record to reconcile against.
   const reconcilableCalls = createMemo(() =>
-    incomingCalls().filter(
-      (call) => !(DEV_MODE_ENV && call.callId.startsWith('debug-'))
-    )
+    incomingCalls().filter((call) => !isDebugIncomingCall(call))
   );
   const shouldReconcile = createMemo(
     () => reconcilableCalls().length > 0 && !!userId()

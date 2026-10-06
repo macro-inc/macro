@@ -270,6 +270,21 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Record that a user declined an active call. Idempotent: declining the
+    /// same call twice keeps the first decline.
+    fn record_decline<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Check if a user has declined an active call on any of their devices.
+    fn has_declined(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Delete a call record (when the call ends).
     fn delete_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -891,6 +906,31 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
+
+    /// Decline a specific active call for this user without joining it.
+    ///
+    /// Records the decline and notifies the user's other connected clients
+    /// (`call_declined`) so they stop ringing; the call itself keeps going
+    /// for everyone else. Bound to `call_id` so a stale ring for a replaced
+    /// call cannot decline the channel's newer active call. Returns
+    /// [`CallError::NotFound`] when that call is no longer active.
+    fn decline_call<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Decline a ringing call from a native client, authenticated like
+    /// [`Self::get_ring_status`] with the RTC access token from its VoIP push
+    /// payload. Has the same effect as [`Self::decline_call`] for the token's
+    /// identity. Returns [`CallError::Auth`] when the token is invalid or
+    /// carries no room grant, and [`CallError::NotFound`] when the room's
+    /// active call is not the one being declined.
+    fn decline_ring(
+        &self,
+        call_id: &Uuid,
+        bearer_token: &str,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Report the per-user ring status for a call. The caller authenticates
     /// with the RTC access token delivered in its VoIP push payload; the

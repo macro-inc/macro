@@ -390,6 +390,46 @@ async fn remove_participant_removes_from_db(pool: Pool<Postgres>) -> anyhow::Res
     Ok(())
 }
 
+// -- record_decline / has_declined ----------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn record_decline_is_idempotent_and_scoped_to_the_user(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    assert!(!repo.has_declined(&CALL1, &USER_C.as_ref()).await?);
+
+    repo.record_decline(&CALL1, USER_C.deref().copied()).await?;
+    repo.record_decline(&CALL1, USER_C.deref().copied()).await?;
+
+    assert!(repo.has_declined(&CALL1, &USER_C.as_ref()).await?);
+    assert!(!repo.has_declined(&CALL1, &USER_B.as_ref()).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn declines_are_dropped_with_the_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    repo.record_decline(&CALL1, USER_C.deref().copied()).await?;
+    repo.delete_call(&CALL1).await?;
+
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM call_declines WHERE call_id = $1")
+            .bind(CALL1)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(remaining, 0);
+    Ok(())
+}
+
 // -- find_active_call_for_user ------------------------------------------------
 
 #[sqlx::test(
