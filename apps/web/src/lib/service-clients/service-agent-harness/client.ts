@@ -1,6 +1,10 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ErrorResponseHandler } from '@core/util/safeFetch';
+import {
+  type AI_USAGE_LIMIT_ERROR,
+  readAiUsageLimitError,
+} from '../ai-usage-limit';
 import type {
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
@@ -9,6 +13,7 @@ import type {
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
+  AnswerToolApprovalResponse,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -23,6 +28,7 @@ import type {
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SharePermissionV2,
+  ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
 } from './generated/schemas';
 
@@ -43,6 +49,11 @@ const sessionError: ErrorResponseHandler<never> = async (response) => {
         : message || `Agent request failed (HTTP ${response.status}).`,
   };
 };
+
+const sessionAiError: ErrorResponseHandler<
+  typeof AI_USAGE_LIMIT_ERROR
+> = async (response) =>
+  (await readAiUsageLimitError(response)) ?? (await sessionError(response));
 
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
@@ -85,15 +96,15 @@ export const agentHarnessServiceClient = {
   },
 
   create(request: CreateAgentSessionRequest) {
-    return fetchWithToken<CreateAgentSessionResponse>(
-      `${agentHarnessHost}/agent-sessions`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-        errorResponseHandler: sessionError,
-      }
-    );
+    return fetchWithToken<
+      CreateAgentSessionResponse,
+      typeof AI_USAGE_LIMIT_ERROR
+    >(`${agentHarnessHost}/agent-sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      errorResponseHandler: sessionAiError,
+    });
   },
 
   /**
@@ -185,13 +196,13 @@ export const agentHarnessServiceClient = {
    * out (`sent`) or waits in the session's queue (`queued`).
    */
   control(sessionId: string, request: ControlRequest) {
-    return fetchWithToken<ControlResponse>(
+    return fetchWithToken<ControlResponse, typeof AI_USAGE_LIMIT_ERROR>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/control`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
-        errorResponseHandler: sessionError,
+        errorResponseHandler: sessionAiError,
       }
     );
   },
@@ -338,6 +349,26 @@ export const agentHarnessServiceClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
+      }
+    );
+  },
+
+  /**
+   * Answer a tool call the agent made in a turn somebody other than the
+   * owner prompted. Approve and deny are the owner's; cancel is anyone's
+   * with edit access. 409 once somebody already answered.
+   */
+  answerToolApproval(
+    sessionId: string,
+    approvalId: string,
+    answer: ToolApprovalAnswerDto
+  ) {
+    return fetchWithToken<AnswerToolApprovalResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/tool-approvals/${approvalId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer }),
       }
     );
   },

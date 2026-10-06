@@ -35,6 +35,8 @@ export type ViewerAction =
   | 'export'
   | 'find'
   | 'show-shortcuts'
+  | 'open-actions'
+  | 'toggle-assets'
   | 'tool-frame'
   | 'tool-rectangle'
   | 'tool-ellipse'
@@ -42,6 +44,8 @@ export type ViewerAction =
   | 'tool-line'
   | 'tool-arrow'
   | 'tool-pen'
+  | 'tool-pencil'
+  | 'place-image'
   | 'undo'
   | 'redo'
   | 'delete'
@@ -49,6 +53,7 @@ export type ViewerAction =
   | 'copy'
   | 'cut'
   | 'paste'
+  | 'paste-replace'
   | 'group'
   | 'ungroup'
   | 'frame-selection'
@@ -70,6 +75,16 @@ export type ViewerAction =
   | 'flip-horizontal'
   | 'flip-vertical'
   | 'rename'
+  | 'align-left'
+  | 'align-center'
+  | 'align-right'
+  | 'align-top'
+  | 'align-middle'
+  | 'align-bottom'
+  | 'distribute-horizontal'
+  | 'distribute-vertical'
+  | 'swap-fill-stroke'
+  | OpacityAction
   | 'nudge-left'
   | 'nudge-right'
   | 'nudge-up'
@@ -78,6 +93,11 @@ export type ViewerAction =
   | 'nudge-right-10'
   | 'nudge-up-10'
   | 'nudge-down-10';
+
+type Digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+
+/** Figma's opacity keys: 1 is 10%, 0 is 100%; two quick digits, 45%. */
+export type OpacityAction = `opacity-${Digit}`;
 
 export interface KeyInput {
   key: string;
@@ -111,15 +131,32 @@ export function shortcutAction(
   )
     return 'toggle-layout-grids';
 
+  // Distribute: ⌃⌥H / ⌃⌥V (Ctrl+Alt elsewhere, where Ctrl is the modifier).
+  if (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey) {
+    if (e.code === 'KeyH') return 'distribute-horizontal';
+    if (e.code === 'KeyV') return 'distribute-vertical';
+  }
+
   if (e.altKey && !mod && !otherMod) {
-    if (e.shiftKey && e.code === 'KeyA') return 'remove-auto-layout';
-    if (e.shiftKey && e.code === 'KeyU') return 'boolean-union';
-    if (e.shiftKey && e.code === 'KeyS') return 'boolean-subtract';
-    if (e.shiftKey && e.code === 'KeyI') return 'boolean-intersect';
-    if (e.shiftKey && e.code === 'KeyX') return 'boolean-exclude';
+    if (e.shiftKey) {
+      if (e.code === 'KeyA') return 'remove-auto-layout';
+      if (e.code === 'KeyU') return 'boolean-union';
+      if (e.code === 'KeyS') return 'boolean-subtract';
+      if (e.code === 'KeyI') return 'boolean-intersect';
+      // ⌥⇧E is Figma's; ⌥⇧X is kept for those used to it here.
+      if (e.code === 'KeyE' || e.code === 'KeyX') return 'boolean-exclude';
+      return undefined;
+    }
     if (e.code === 'Digit1') return 'toggle-layers';
+    if (e.code === 'Digit2') return 'toggle-assets';
     if (e.code === 'Digit8') return 'toggle-design';
     if (e.code === 'KeyL') return 'collapse-layers';
+    if (e.code === 'KeyA') return 'align-left';
+    if (e.code === 'KeyH') return 'align-center';
+    if (e.code === 'KeyD') return 'align-right';
+    if (e.code === 'KeyW') return 'align-top';
+    if (e.code === 'KeyV') return 'align-middle';
+    if (e.code === 'KeyS') return 'align-bottom';
     return undefined;
   }
 
@@ -140,6 +177,8 @@ export function shortcutAction(
       if (e.code === 'KeyG') return 'ungroup';
       if (e.code === 'KeyH') return 'toggle-visible';
       if (e.code === 'KeyL') return 'toggle-locked';
+      if (e.code === 'KeyK') return 'place-image';
+      if (e.code === 'KeyR') return 'paste-replace';
       return undefined;
     }
     if (e.code === 'KeyZ') return 'undo';
@@ -157,13 +196,19 @@ export function shortcutAction(
     if (e.code === 'Minus' || e.code === 'NumpadSubtract') return 'zoom-out';
     if (e.code === 'Digit0' || e.code === 'Numpad0') return 'zoom-100';
     if (e.code === 'KeyA') return 'select-all';
-    if (e.code === 'Backslash') return 'toggle-ui';
+    // Figma takes both ⌘\ and ⌘. for showing and hiding the UI.
+    if (e.code === 'Backslash' || e.code === 'Period') return 'toggle-ui';
+    // The actions menu (the browser's print is not used here).
+    if (e.code === 'KeyP' || e.code === 'Slash') return 'open-actions';
     if (e.code === 'KeyY') return 'toggle-outline';
     if (e.code === 'KeyF') return 'find';
     return undefined;
   }
 
   if (!plain) return undefined;
+
+  if (!e.shiftKey && /^Digit[0-9]$/.test(e.code))
+    return `opacity-${e.code.slice(5) as Digit}`;
 
   if (e.shiftKey) {
     switch (e.code) {
@@ -183,6 +228,10 @@ export function shortcutAction(
         return 'flip-vertical';
       case 'KeyL':
         return 'tool-arrow';
+      case 'KeyP':
+        return 'tool-pencil';
+      case 'KeyX':
+        return 'swap-fill-stroke';
       case 'KeyR':
         return 'toggle-rulers';
       case 'Quote':
@@ -270,12 +319,15 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'tool-line',
   'tool-arrow',
   'tool-pen',
+  'tool-pencil',
+  'place-image',
   'undo',
   'redo',
   'delete',
   'duplicate',
   'cut',
   'paste',
+  'paste-replace',
   'group',
   'ungroup',
   'frame-selection',
@@ -297,6 +349,25 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'flip-horizontal',
   'flip-vertical',
   'rename',
+  'align-left',
+  'align-center',
+  'align-right',
+  'align-top',
+  'align-middle',
+  'align-bottom',
+  'distribute-horizontal',
+  'distribute-vertical',
+  'swap-fill-stroke',
+  'opacity-0',
+  'opacity-1',
+  'opacity-2',
+  'opacity-3',
+  'opacity-4',
+  'opacity-5',
+  'opacity-6',
+  'opacity-7',
+  'opacity-8',
+  'opacity-9',
   'nudge-left',
   'nudge-right',
   'nudge-up',
@@ -307,103 +378,203 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'nudge-down-10',
 ]);
 
+/**
+ * Actions that do nothing without a selection: their keys then go on to
+ * the app (⇧←/⇧→ focus the next split, ⇧⌘C copies the item's link).
+ */
+export const SELECTION_ACTIONS: ReadonlySet<ViewerAction> =
+  new Set<ViewerAction>([
+    'flip-horizontal',
+    'flip-vertical',
+    'copy-png',
+    'nudge-left',
+    'nudge-right',
+    'nudge-up',
+    'nudge-down',
+    'nudge-left-10',
+    'nudge-right-10',
+    'nudge-up-10',
+    'nudge-down-10',
+  ]);
+
 export interface ShortcutHelp {
   action: string;
   /** Key caps; `mod` is ⌘ on macOS and Ctrl elsewhere. */
   keys: string[];
+  /** Keys elsewhere, when they differ by more than ⌘ for Ctrl. */
+  otherKeys?: string[];
+  /** What it runs, for the actions menu (absent for gestures). */
+  id?: ViewerAction;
 }
 
-/** The shortcuts panel, grouped. */
+/** The shortcuts panel, grouped; the actions menu lists the same. */
 export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
   {
     title: 'Tools',
     items: [
-      { action: 'Move', keys: ['V'] },
-      { action: 'Frame', keys: ['F'] },
-      { action: 'Rectangle', keys: ['R'] },
-      { action: 'Ellipse', keys: ['O'] },
-      { action: 'Line', keys: ['L'] },
-      { action: 'Arrow', keys: ['⇧', 'L'] },
-      { action: 'Text', keys: ['T'] },
-      { action: 'Pen', keys: ['P'] },
-      { action: 'Hand (pan)', keys: ['H'] },
+      { action: 'Move', keys: ['V'], id: 'tool-move' },
+      { action: 'Frame', keys: ['F'], id: 'tool-frame' },
+      { action: 'Rectangle', keys: ['R'], id: 'tool-rectangle' },
+      { action: 'Ellipse', keys: ['O'], id: 'tool-ellipse' },
+      { action: 'Line', keys: ['L'], id: 'tool-line' },
+      { action: 'Arrow', keys: ['⇧', 'L'], id: 'tool-arrow' },
+      { action: 'Text', keys: ['T'], id: 'tool-text' },
+      { action: 'Pen', keys: ['P'], id: 'tool-pen' },
+      { action: 'Pencil', keys: ['⇧', 'P'], id: 'tool-pencil' },
+      { action: 'Place image', keys: ['mod', '⇧', 'K'], id: 'place-image' },
+      { action: 'Hand (pan)', keys: ['H'], id: 'tool-hand' },
       { action: 'Pan while held', keys: ['Space'] },
     ],
   },
   {
     title: 'Edit',
     items: [
-      { action: 'Undo', keys: ['mod', 'Z'] },
-      { action: 'Redo', keys: ['mod', '⇧', 'Z'] },
-      { action: 'Duplicate', keys: ['mod', 'D'] },
-      { action: 'Copy / paste (across files)', keys: ['mod', 'C / V'] },
-      { action: 'Delete', keys: ['⌫'] },
+      { action: 'Undo', keys: ['mod', 'Z'], id: 'undo' },
+      { action: 'Redo', keys: ['mod', '⇧', 'Z'], id: 'redo' },
+      { action: 'Duplicate', keys: ['mod', 'D'], id: 'duplicate' },
+      { action: 'Copy', keys: ['mod', 'C'], id: 'copy' },
+      { action: 'Cut', keys: ['mod', 'X'], id: 'cut' },
+      { action: 'Paste (across files)', keys: ['mod', 'V'] },
+      {
+        action: 'Paste to replace',
+        keys: ['mod', '⇧', 'R'],
+        id: 'paste-replace',
+      },
+      { action: 'Delete', keys: ['⌫'], id: 'delete' },
       { action: 'Nudge', keys: ['←↑→↓'] },
       { action: 'Nudge 10', keys: ['⇧', '←↑→↓'] },
-      { action: 'Rename', keys: ['mod', 'R'] },
+      { action: 'Rename', keys: ['mod', 'R'], id: 'rename' },
     ],
   },
   {
     title: 'Arrange',
     items: [
-      { action: 'Group', keys: ['mod', 'G'] },
-      { action: 'Ungroup', keys: ['mod', '⇧', 'G'] },
-      { action: 'Frame selection', keys: ['mod', '⌥', 'G'] },
-      { action: 'Add auto layout', keys: ['⇧', 'A'] },
-      { action: 'Remove auto layout', keys: ['⌥', '⇧', 'A'] },
-      { action: 'Create component', keys: ['mod', '⌥', 'K'] },
-      { action: 'Detach instance', keys: ['mod', '⌥', 'B'] },
-      { action: 'Bring forward', keys: ['mod', ']'] },
-      { action: 'Send backward', keys: ['mod', '['] },
-      { action: 'Bring to front', keys: ['mod', '⌥', ']'] },
-      { action: 'Send to back', keys: ['mod', '⌥', '['] },
-      { action: 'Show/hide', keys: ['mod', '⇧', 'H'] },
-      { action: 'Lock/unlock', keys: ['mod', '⇧', 'L'] },
-      { action: 'Flip horizontal', keys: ['⇧', 'H'] },
-      { action: 'Flip vertical', keys: ['⇧', 'V'] },
+      { action: 'Group', keys: ['mod', 'G'], id: 'group' },
+      { action: 'Ungroup', keys: ['mod', '⇧', 'G'], id: 'ungroup' },
+      {
+        action: 'Frame selection',
+        keys: ['mod', '⌥', 'G'],
+        id: 'frame-selection',
+      },
+      { action: 'Add auto layout', keys: ['⇧', 'A'], id: 'add-auto-layout' },
+      {
+        action: 'Remove auto layout',
+        keys: ['⌥', '⇧', 'A'],
+        id: 'remove-auto-layout',
+      },
+      {
+        action: 'Create component',
+        keys: ['mod', '⌥', 'K'],
+        id: 'create-component',
+      },
+      {
+        action: 'Detach instance',
+        keys: ['mod', '⌥', 'B'],
+        id: 'detach-instance',
+      },
+      { action: 'Bring forward', keys: ['mod', ']'], id: 'bring-forward' },
+      { action: 'Send backward', keys: ['mod', '['], id: 'send-backward' },
+      {
+        action: 'Bring to front',
+        keys: ['mod', '⌥', ']'],
+        id: 'bring-to-front',
+      },
+      { action: 'Send to back', keys: ['mod', '⌥', '['], id: 'send-to-back' },
+      { action: 'Show/hide', keys: ['mod', '⇧', 'H'], id: 'toggle-visible' },
+      { action: 'Lock/unlock', keys: ['mod', '⇧', 'L'], id: 'toggle-locked' },
+      { action: 'Flip horizontal', keys: ['⇧', 'H'], id: 'flip-horizontal' },
+      { action: 'Flip vertical', keys: ['⇧', 'V'], id: 'flip-vertical' },
+    ],
+  },
+  {
+    title: 'Align',
+    items: [
+      { action: 'Align left', keys: ['⌥', 'A'], id: 'align-left' },
+      {
+        action: 'Align horizontal centers',
+        keys: ['⌥', 'H'],
+        id: 'align-center',
+      },
+      { action: 'Align right', keys: ['⌥', 'D'], id: 'align-right' },
+      { action: 'Align top', keys: ['⌥', 'W'], id: 'align-top' },
+      {
+        action: 'Align vertical centers',
+        keys: ['⌥', 'V'],
+        id: 'align-middle',
+      },
+      { action: 'Align bottom', keys: ['⌥', 'S'], id: 'align-bottom' },
+      {
+        action: 'Distribute horizontal spacing',
+        keys: ['⌃', '⌥', 'H'],
+        otherKeys: ['Ctrl', 'Alt', 'H'],
+        id: 'distribute-horizontal',
+      },
+      {
+        action: 'Distribute vertical spacing',
+        keys: ['⌃', '⌥', 'V'],
+        otherKeys: ['Ctrl', 'Alt', 'V'],
+        id: 'distribute-vertical',
+      },
     ],
   },
   {
     title: 'Shapes',
     items: [
-      { action: 'Union', keys: ['⌥', '⇧', 'U'] },
-      { action: 'Subtract', keys: ['⌥', '⇧', 'S'] },
-      { action: 'Intersect', keys: ['⌥', '⇧', 'I'] },
-      { action: 'Exclude', keys: ['⌥', '⇧', 'X'] },
-      { action: 'Flatten', keys: ['mod', 'E'] },
+      { action: 'Union', keys: ['⌥', '⇧', 'U'], id: 'boolean-union' },
+      { action: 'Subtract', keys: ['⌥', '⇧', 'S'], id: 'boolean-subtract' },
+      { action: 'Intersect', keys: ['⌥', '⇧', 'I'], id: 'boolean-intersect' },
+      { action: 'Exclude', keys: ['⌥', '⇧', 'E'], id: 'boolean-exclude' },
+      { action: 'Flatten', keys: ['mod', 'E'], id: 'flatten' },
       { action: 'Edit points', keys: ['Enter'] },
+    ],
+  },
+  {
+    title: 'Fill and stroke',
+    items: [
+      { action: 'Opacity 10%–90%', keys: ['1…9'] },
+      { action: 'Opacity 100%', keys: ['0'], id: 'opacity-0' },
+      { action: 'Opacity, exact (e.g. 45%)', keys: ['4', '5'] },
+      {
+        action: 'Swap fill and stroke',
+        keys: ['⇧', 'X'],
+        id: 'swap-fill-stroke',
+      },
     ],
   },
   {
     title: 'Zoom',
     items: [
-      { action: 'Zoom in', keys: ['mod', '+'] },
-      { action: 'Zoom out', keys: ['mod', '-'] },
-      { action: 'Zoom to 100%', keys: ['⇧', '0'] },
-      { action: 'Zoom to fit', keys: ['⇧', '1'] },
-      { action: 'Zoom to selection', keys: ['⇧', '2'] },
+      { action: 'Zoom in', keys: ['mod', '+'], id: 'zoom-in' },
+      { action: 'Zoom out', keys: ['mod', '-'], id: 'zoom-out' },
+      { action: 'Zoom to 100%', keys: ['⇧', '0'], id: 'zoom-100' },
+      { action: 'Zoom to fit', keys: ['⇧', '1'], id: 'zoom-fit' },
+      { action: 'Zoom to selection', keys: ['⇧', '2'], id: 'zoom-selection' },
       { action: 'Zoom with scroll', keys: ['mod', 'Scroll'] },
     ],
   },
   {
     title: 'Navigate',
     items: [
-      { action: 'Next frame', keys: ['N'] },
-      { action: 'Previous frame', keys: ['⇧', 'N'] },
-      { action: 'Next page', keys: ['PgDn'] },
-      { action: 'Previous page', keys: ['PgUp'] },
-      { action: 'Find layers', keys: ['mod', 'F'] },
+      { action: 'Next frame', keys: ['N'], id: 'next-frame' },
+      { action: 'Previous frame', keys: ['⇧', 'N'], id: 'previous-frame' },
+      { action: 'Next page', keys: ['PgDn'], id: 'next-page' },
+      { action: 'Previous page', keys: ['PgUp'], id: 'previous-page' },
+      { action: 'Find layers', keys: ['mod', 'F'], id: 'find' },
     ],
   },
   {
     title: 'Selection',
     items: [
-      { action: 'Select all', keys: ['mod', 'A'] },
+      { action: 'Select all', keys: ['mod', 'A'], id: 'select-all' },
       { action: 'Deep select', keys: ['mod', 'Click'] },
-      { action: 'Select children', keys: ['Enter'] },
-      { action: 'Select parent', keys: ['⇧', 'Enter'] },
-      { action: 'Next sibling', keys: ['Tab'] },
-      { action: 'Previous sibling', keys: ['⇧', 'Tab'] },
+      { action: 'Select children', keys: ['Enter'], id: 'select-children' },
+      { action: 'Select parent', keys: ['⇧', 'Enter'], id: 'select-parent' },
+      { action: 'Next sibling', keys: ['Tab'], id: 'next-sibling' },
+      {
+        action: 'Previous sibling',
+        keys: ['⇧', 'Tab'],
+        id: 'previous-sibling',
+      },
       { action: 'Deselect / parent', keys: ['Esc'] },
       { action: 'Measure to layer', keys: ['⌥', 'Hover'] },
     ],
@@ -411,14 +582,21 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
   {
     title: 'View',
     items: [
-      { action: 'Show/hide UI', keys: ['mod', '\\'] },
-      { action: 'Outline view', keys: ['mod', 'Y'] },
-      { action: 'Rulers', keys: ['⇧', 'R'] },
-      { action: 'Pixel grid', keys: ['⇧', "'"] },
-      { action: 'Layout grids (Ctrl+⇧4 off macOS)', keys: ['⌃', 'G'] },
-      { action: 'Layers panel', keys: ['⌥', '1'] },
-      { action: 'Design panel', keys: ['⌥', '8'] },
-      { action: 'Collapse layers', keys: ['⌥', 'L'] },
+      { action: 'Actions', keys: ['mod', 'P'], id: 'open-actions' },
+      { action: 'Show/hide UI', keys: ['mod', '.'], id: 'toggle-ui' },
+      { action: 'Outline view', keys: ['mod', 'Y'], id: 'toggle-outline' },
+      { action: 'Rulers', keys: ['⇧', 'R'], id: 'toggle-rulers' },
+      { action: 'Pixel grid', keys: ['⇧', "'"], id: 'toggle-pixel-grid' },
+      {
+        action: 'Layout grids',
+        keys: ['⌃', 'G'],
+        otherKeys: ['Ctrl', '⇧', '4'],
+        id: 'toggle-layout-grids',
+      },
+      { action: 'Layers panel', keys: ['⌥', '1'], id: 'toggle-layers' },
+      { action: 'Assets panel', keys: ['⌥', '2'], id: 'toggle-assets' },
+      { action: 'Design panel', keys: ['⌥', '8'], id: 'toggle-design' },
+      { action: 'Collapse layers', keys: ['⌥', 'L'], id: 'collapse-layers' },
     ],
   },
   {
@@ -431,9 +609,13 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
   {
     title: 'Export',
     items: [
-      { action: 'Copy as PNG', keys: ['mod', '⇧', 'C'] },
-      { action: 'Export selection', keys: ['mod', '⇧', 'E'] },
-      { action: 'Keyboard shortcuts', keys: ['Ctrl', '⇧', '?'] },
+      { action: 'Copy as PNG', keys: ['mod', '⇧', 'C'], id: 'copy-png' },
+      { action: 'Export selection', keys: ['mod', '⇧', 'E'], id: 'export' },
+      {
+        action: 'Keyboard shortcuts',
+        keys: ['Ctrl', '⇧', '?'],
+        id: 'show-shortcuts',
+      },
     ],
   },
 ];

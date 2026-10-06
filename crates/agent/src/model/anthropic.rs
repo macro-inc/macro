@@ -26,8 +26,15 @@ impl<'a, H: HttpClientExt + Clone + Default + 'static> AnthropicModel<'a, H> {
 
     /// The rig completion model for this id. The id is passed verbatim to the
     /// Anthropic API.
+    ///
+    /// Caching uses three 5-minute breakpoints. The last tool and the system
+    /// prompt are fixed per agent, so sessions share them. The top-level
+    /// automatic marker follows the conversation tail from one turn to the next.
     pub fn completion(&self) -> anthropic::completion::CompletionModel<H> {
-        self.client.completion_model(self.model.name().to_string())
+        self.client
+            .completion_model(self.model.name().to_string())
+            .with_prompt_caching()
+            .with_automatic_caching()
     }
 
     /// Best-effort extended-thinking config for the configured model, flattened
@@ -73,3 +80,6 @@ impl<'a, H: HttpClientExt + Clone + Default + 'static> AnthropicModel<'a, H> {
             .then_some(params)
     }
 }
+
+#[cfg(test)]
+mod test;

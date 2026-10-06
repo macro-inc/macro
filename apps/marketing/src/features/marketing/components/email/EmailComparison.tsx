@@ -29,7 +29,7 @@ const comparisonRows: ComparisonRow[] = [
     feature: 'Agents draft & send for you',
     cells: [true, 'partial', 'partial', 'partial'],
   },
-  { feature: 'Free plan', cells: [true, false, true, true] },
+  { feature: 'No-cost access', cells: [true, false, true, true] },
   {
     feature: 'Email, chat & tasks in one place',
     cells: [true, false, 'partial', false],

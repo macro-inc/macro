@@ -35,7 +35,13 @@ export function ShortcutsDialog(props: { mac: boolean; onClose: () => void }) {
                   <div class="flex items-center justify-between gap-2 py-0.5">
                     <span>{item.action}</span>
                     <span class="flex gap-0.5">
-                      <For each={item.keys}>
+                      <For
+                        each={
+                          !props.mac && item.otherKeys
+                            ? item.otherKeys
+                            : item.keys
+                        }
+                      >
                         {(k) => (
                           <kbd class="rounded border border-edge-muted bg-inset px-1 font-sans">
                             {cap(k)}

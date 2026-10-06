@@ -4,7 +4,7 @@
       "source_paths": [
         "services/agent_harness_service/**",
         "crates/agent_harness/**",
-        "crates/agent_fold/**",
+        "crates/folds/agent_fold/**",
         "crates/agent_session/**",
         "crates/agent_trigger/**",
         "crates/agent_runtime_protocol/**",
@@ -246,6 +246,14 @@
       "deploy_lambdas": [
         "image_optimizer"
       ]
+    },
+    "lexical-service": {
+      "source_paths": [
+        "services/lexical-service/**",
+        "packages/lexical-core/**",
+        "docker/lexical-service.Dockerfile"
+      ],
+      "stack_path": "infra/stacks/lexical-service/**"
     },
     "unfurl-service": {
       "source_paths": [

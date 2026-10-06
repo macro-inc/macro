@@ -3,6 +3,7 @@
  * viewer, wired to the worker engine and document storage.
  */
 
+import { CommandState } from '@app/features/command';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import {
   ResponsiveBlockToolbar,
@@ -23,17 +24,18 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
-import { FigEngine } from '@core/fig-engine/client';
+import type { FigEngine } from '@core/fig-engine/client';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
   useCanEdit,
   useGetPermissions,
+  useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
-import { idToEmail } from '@core/user/util';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -61,10 +63,8 @@ import {
   type FigSharing,
   FigViewerProvider,
 } from './context/fig-viewer-context';
-import { fileFingerprint } from './core/collab-entries';
 import type { FigData } from './definition';
 import { createDesignCollabSession } from './queries/fig-collab';
-import { useFigComments } from './queries/fig-comments';
 import { saveFigFile } from './queries/fig-file';
 import { useFigLibrarySource } from './queries/fig-libraries';
 import { shareFigEngine } from './queries/fig-sharing';
@@ -74,7 +74,25 @@ import {
   initializeDesignSync,
 } from './queries/fig-sync';
 import { createFontSource } from './queries/font-source';
+import { openFigEngine, prepareFigEngine } from './queries/prepare-engine';
 import { FigViewer } from './views/fig-viewer';
+import { useMacroComments } from './views/macro-comments';
+
+/**
+ * ⌘K on a design opens the command menu, which then offers the design
+ * palette (Figma's actions menu, ⌘P here).
+ */
+const suggestActions = (openActions: () => void) =>
+  CommandState.setHint({
+    message: 'Did you mean to open the design palette?',
+    shortcut: IS_MAC ? '⌘P' : 'Ctrl+P',
+    matches: (e) =>
+      (IS_MAC ? e.metaKey : e.ctrlKey) &&
+      !e.altKey &&
+      !e.shiftKey &&
+      e.code === 'KeyP',
+    run: openActions,
+  });
 
 /**
  * Opens the file in the engine (and, for a shared design, applies what
@@ -90,6 +108,8 @@ function FigHost(props: {
   collaboration?: FigCollaboration;
   /** Whether every change made here reached the sync service. */
   delivered?: () => Promise<boolean>;
+  /** Parsing already in progress while the shared session connects. */
+  opening?: ReturnType<typeof prepareFigEngine>;
   /** Why the design is read-only, with the action that helps. */
   notice?: { message: string; action: string; onAction: () => void };
   comments?: FigCommentStore;
@@ -119,21 +139,24 @@ function FigHost(props: {
     let shared: FigSharing | undefined;
     const open = async () => {
       try {
-        // Before the engine takes the bytes.
-        const fingerprint = props.shared
-          ? await fileFingerprint(props.bytes)
-          : undefined;
-        const e = await FigEngine.open(props.bytes, {
-          onFailure: (error) => setFailure(error.message),
-        });
+        const onFailure = (error: Error) => setFailure(error.message);
+        const { engine: e, fingerprint } = props.opening
+          ? await props.opening.take(onFailure)
+          : await openFigEngine(props.bytes, onFailure);
         opened = e;
-        if (disposed) return;
+        if (disposed) {
+          e.close();
+          return;
+        }
         if (props.shared && fingerprint) {
           shared = await shareFigEngine(e, props.shared, {
             fingerprint,
             delivered: props.delivered,
           });
-          if (disposed) return;
+          if (disposed) {
+            shared.close();
+            return;
+          }
           shared.onReplaced(() => setReplaced(true));
           setSharing(shared);
         }
@@ -151,7 +174,7 @@ function FigHost(props: {
   });
 
   return (
-    <Switch fallback={<FigOpening bytes={props.bytes} />}>
+    <Switch fallback={<FigOpening />}>
       <Match when={failure()}>
         {(message) => (
           <div class="flex size-full items-center justify-center p-6 text-center text-ink-muted text-sm">
@@ -185,6 +208,7 @@ function FigHost(props: {
                   presentAt: props.present,
                   fonts: createFontSource(),
                   libraries,
+                  suggestActions,
                 }}
               >
                 <FigViewer />
@@ -241,6 +265,8 @@ function DesignSession(props: {
   retry: () => void;
 }) {
   const userId = useUserId();
+  const opening = prepareFigEngine(props.bytes);
+  onCleanup(() => void opening.dispose());
   const session = createDesignCollabSession({
     documentId: props.documentId,
     userId: userId(),
@@ -259,20 +285,15 @@ function DesignSession(props: {
     return state.t === 'error' ? state.message : undefined;
   };
   return (
-    <Switch
-      fallback={
-        <div class="flex size-full items-center justify-center text-ink-muted text-sm">
-          Opening design…
-        </div>
-      }
-    >
+    <Switch fallback={<FigOpening />}>
       <Match when={session.state().t === 'unshared'}>
-        <FigHost {...props} canEdit={() => false} />
+        <FigHost {...props} opening={opening} canEdit={() => false} />
       </Match>
       <Match when={failed()}>
         {(message) => (
           <FigHost
             {...props}
+            opening={opening}
             canEdit={() => false}
             notice={
               props.canEdit()
@@ -290,6 +311,7 @@ function DesignSession(props: {
         {(doc) => (
           <FigHost
             {...props}
+            opening={opening}
             shared={doc}
             collaboration={session.collaboration}
             delivered={session.delivered}
@@ -320,13 +342,14 @@ export default function FigBlock(props: { share?: string; present?: string }) {
   const permissions = useGetPermissions();
   const canEdit = useCanEdit();
   const canComment = useCanComment();
+  const isOwner = useIsDocumentOwner();
   const userId = useUserId();
-  const comments = useFigComments({
+  const comments = useMacroComments({
     documentId,
     userId,
     canComment,
+    canModerate: isOwner,
     displayName,
-    email: idToEmail,
   });
   const openShare = useShareModal(() => ({
     id: documentId,
@@ -359,64 +382,66 @@ export default function FigBlock(props: { share?: string; present?: string }) {
   };
 
   return (
-    <DocumentBlockContainer>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <SplitHeaderLeft>
-          <BlockItemSplitLabel badges={<FileTypeChip />} />
-        </SplitHeaderLeft>
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-        </SplitHeaderRight>
-        <ResponsivePermissionsBadge />
-        <ResponsiveBlockToolbar
-          id={documentId}
-          itemType="document"
-          name={name()}
-          ops={[
-            { op: 'rename' },
-            { op: 'copy' },
-            { op: 'moveToProject' },
-            {
-              group: 'file',
-              label: 'Download',
-              icon: DownloadSimple,
-              action: () => void download(),
-            },
-            { op: 'delete' },
-          ]}
-          tools={[
-            {
-              group: 'sharing',
-              label: 'Share',
-              icon: IconShared,
-              action: openShare,
-              buttonComponent: () => <ShareTrigger onClick={openShare} />,
-              focusTarget: getShareDrawerRecipientInput,
-            },
-          ]}
-        />
-        <div class="min-h-0 flex-1">
-          <Show when={data()} keyed>
-            {(d) => (
-              <Show
-                when={d.bytes}
-                fallback={<DownloadOnly onDownload={() => void download()} />}
-              >
-                {(bytes) => (
-                  <CollaborativeFigHost
-                    bytes={bytes()}
-                    fileName={() => name() ?? 'Design'}
-                    documentId={documentId}
-                    canEdit={canEdit}
-                    comments={comments}
-                    present={props.present}
-                  />
-                )}
-              </Show>
-            )}
-          </Show>
+    <div class="size-full border-edge-frame border-t">
+      <DocumentBlockContainer loadingFallback={<FigOpening />}>
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <SplitHeaderLeft>
+            <BlockItemSplitLabel badges={<FileTypeChip />} />
+          </SplitHeaderLeft>
+          <SplitHeaderRight>
+            <BlockLiveIndicators />
+          </SplitHeaderRight>
+          <ResponsivePermissionsBadge />
+          <ResponsiveBlockToolbar
+            id={documentId}
+            itemType="document"
+            name={name()}
+            ops={[
+              { op: 'rename' },
+              { op: 'copy' },
+              { op: 'moveToProject' },
+              {
+                group: 'file',
+                label: 'Download',
+                icon: DownloadSimple,
+                action: () => void download(),
+              },
+              { op: 'delete' },
+            ]}
+            tools={[
+              {
+                group: 'sharing',
+                label: 'Share',
+                icon: IconShared,
+                action: openShare,
+                buttonComponent: () => <ShareTrigger onClick={openShare} />,
+                focusTarget: getShareDrawerRecipientInput,
+              },
+            ]}
+          />
+          <div class="min-h-0 flex-1">
+            <Show when={data()} keyed>
+              {(d) => (
+                <Show
+                  when={d.bytes}
+                  fallback={<DownloadOnly onDownload={() => void download()} />}
+                >
+                  {(bytes) => (
+                    <CollaborativeFigHost
+                      bytes={bytes()}
+                      fileName={() => name() ?? 'Design'}
+                      documentId={documentId}
+                      canEdit={canEdit}
+                      comments={comments}
+                      present={props.present}
+                    />
+                  )}
+                </Show>
+              )}
+            </Show>
+          </div>
         </div>
-      </div>
-    </DocumentBlockContainer>
+      </DocumentBlockContainer>
+    </div>
   );
 }

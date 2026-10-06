@@ -50,8 +50,8 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeclinedMention, DeliverAction,
-    HarnessCommand, HarnessDefaults, OpenSession, ReplyOutcome, ResolvedReply, SessionAnnouncement,
-    SpawnContainer, is_macro_staff,
+    HarnessCommand, HarnessDefaults, OpenSession, PromptPeople, ReplyOutcome, ResolvedReply,
+    SessionAnnouncement, SpawnContainer, ToolApprovalChange, is_macro_staff,
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{

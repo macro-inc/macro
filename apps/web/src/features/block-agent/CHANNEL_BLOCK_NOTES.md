@@ -286,7 +286,7 @@ messages in a `Scroll` (component/Block.tsx), `AgentInput` with an unwired `onSe
    derived messages `pending`. The confirmed row promotes it in place by action id (by
    content for a stop), a foreign row rebases the suffix behind it, a failed POST retracts
    it. Nothing is predicted about the runtime's answer: a pending stop reads as `stopping`,
-   never as a closed turn. See `crates/agent_fold/src/domain/speculation.rs`.
+   never as a closed turn. See `crates/folds/agent_fold/src/domain/speculation.rs`.
 5. **Scroll (implemented)**: reuse `ThreadList` directly, as described in section 5.
    If history restoration is later added, use its `measurements` snapshot contract,
    not the retired Virtua cache or a second pinning loop.

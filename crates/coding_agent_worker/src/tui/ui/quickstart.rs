@@ -239,7 +239,7 @@ fn render_discovered_agents(frame: &mut Frame, setup: &Quickstart, area: Rect) {
             Paragraph::new(Line::from(vec![
                 Span::styled(focus_marker(focused), Style::new().fg(ACCENT)),
                 Span::styled(if chosen { "● " } else { "○ " }, Style::new().fg(ACCENT)),
-                Span::styled(format!("{:<20}", agent.name), focus_style(focused)),
+                Span::styled(format!("{:<22}", agent.name), focus_style(focused)),
                 Span::styled(agent.note.unwrap_or(""), Style::new().fg(DIM)),
             ])),
             row,

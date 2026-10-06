@@ -133,7 +133,9 @@ async fn admitted_edit_keeps_worker_arguments_and_each_models_usage() {
         events[0].amount,
         UsageAmount::Tokens {
             input: 12,
-            output: 3
+            output: 3,
+            cache_read: 0,
+            cache_write: 0,
         }
     );
     assert_eq!(events[1].model, "model-b");

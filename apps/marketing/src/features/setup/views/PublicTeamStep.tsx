@@ -85,7 +85,7 @@ export function PublicTeamStep(props: { onContinue: () => void }) {
           </Show>
         </TeamSetupFields>
         <ContinueButton
-          label="Finish preview"
+          label="Continue"
           disabled={!name().trim() || invalid() || tooManyInvites()}
           onClick={props.onContinue}
         />

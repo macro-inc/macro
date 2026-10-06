@@ -37,6 +37,10 @@ export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
         ),
       throwOnError: false,
       staleTime: USER_INFO_STALE_TIME,
+      // Signed-out screens also observe this query. Retrying their cached 401
+      // on mount resets auth to loading, unmounts them, and repeats forever.
+      // Successful login explicitly invalidates the query to refresh identity.
+      retryOnMount: false,
       // Never pause on navigator.onLine — it reports false during native cold
       // launches (e.g. woken by a notification tap) while the network is fine,
       // and a paused auth check renders as "unauthenticated" at the base path.

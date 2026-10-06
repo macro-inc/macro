@@ -18,6 +18,10 @@ pub use agent_fold::domain::model::{
     Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
 };
 
+/// The `_meta` key on `session/new`, `session/load` and `session/resume`
+/// whose string value is the [`AgentSessionId`] the ACP session serves.
+pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
+
 /// Identity of one harness participant, minted fresh at construction.
 ///
 /// A restarted process is a new replica: whatever the old identity claimed is
@@ -362,6 +366,19 @@ pub struct SessionBot {
     /// Avatar, when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+}
+
+/// Who prompted the turn a session is running, or last ran.
+///
+/// Written at dispatch, before the runtime can act on the prompt, so the
+/// egress proxy - which may be on any replica - can tell a turn the owner
+/// prompted from one somebody else did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnPrompter {
+    /// The action that opened the turn.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// The user who prompted it, absent when a bot acted on nobody's behalf.
+    pub user: Option<MacroUserIdStr<'static>>,
 }
 
 /// One waiting action as the session store records it.

@@ -6,15 +6,11 @@
  * Presentational.
  */
 
-import type {
-  ExportFormat,
-  ExportSetting,
-} from '@core/fig-engine/handoff-types';
+import type { ExportSetting } from '@core/fig-engine/handoff-types';
 import CaretDown from '@phosphor/caret-down.svg';
 import Copy from '@phosphor/copy.svg';
 import DotsThree from '@phosphor/dots-three.svg';
 import Minus from '@phosphor/minus.svg';
-import { Button } from '@ui/components/Button';
 import { createSignal, For, Index, onCleanup, Show } from 'solid-js';
 import {
   EXPORT_FORMATS,
@@ -26,6 +22,8 @@ import {
   sizeLabel,
 } from '../core/export-settings';
 import { isCommitKey } from '../core/shortcuts';
+import { EditorMenu } from './editor-menu';
+import { InspectorSelect } from './inspector-select';
 import { Section } from './panel-section';
 
 /** A text field that commits on Enter or blur (empty is a value). */
@@ -46,7 +44,7 @@ function DraftInput(props: {
   };
   return (
     <input
-      class={`min-w-0 rounded-md bg-inset px-1.5 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent ${props.class ?? ''}`}
+      class={`h-6 min-w-0 rounded-md bg-inset px-2 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent ${props.class ?? ''}`}
       aria-label={props.ariaLabel}
       placeholder={props.placeholder}
       list={props.list}
@@ -82,7 +80,7 @@ function ExportRow(props: {
         <Show
           when={hasSize(s().format)}
           fallback={
-            <span class="min-w-0 rounded-md bg-inset px-1.5 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent w-16 text-ink-muted">
+            <span class="h-6 min-w-0 rounded-md bg-inset px-2 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent w-16 text-ink-muted">
               1x
             </span>
           }
@@ -99,55 +97,57 @@ function ExportRow(props: {
             }}
           />
         </Show>
-        <DraftInput
-          class="w-0 flex-1"
-          ariaLabel="Suffix"
-          placeholder="Suffix"
-          testId={`fig-export-suffix-${k()}`}
-          value={s().suffix}
-          onCommit={(suffix) => props.onChange({ ...s(), suffix })}
-        />
-        <select
-          class="min-w-0 rounded-md bg-inset px-1.5 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent w-16"
-          aria-label="Format"
-          data-testid={`fig-export-format-${k()}`}
+        <InspectorSelect
+          class="min-w-0 flex-1"
+          label="Export file type"
+          testId={`fig-export-format-${k()}`}
           value={s().format}
-          onChange={(e) => {
-            const format = e.currentTarget.value as ExportFormat;
-            // Vectors export at their own size.
+          options={EXPORT_FORMATS.map((f) => ({
+            value: f.format,
+            label: f.label,
+          }))}
+          onChange={(format) =>
             props.onChange(
               hasSize(format)
                 ? { ...s(), format }
                 : { ...s(), format, constraint: 'CONTENT_SCALE', value: 1 }
-            );
-          }}
+            )
+          }
+        />
+
+        <button
+          type="button"
+          aria-label="Export settings"
+          aria-expanded={open()}
+          class="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink aria-expanded:bg-hover"
+          data-testid={`fig-export-options-${k()}`}
+          onClick={() => setOpen((o) => !o)}
         >
-          <For each={EXPORT_FORMATS}>
-            {(f) => <option value={f.format}>{f.label}</option>}
-          </For>
-        </select>
-        <Show when={s().format === 'SVG' || s().format === 'JPEG'}>
-          <button
-            type="button"
-            aria-label="Export settings"
-            aria-expanded={open()}
-            class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink aria-expanded:bg-hover"
-            data-testid={`fig-export-options-${k()}`}
-            onClick={() => setOpen((o) => !o)}
-          >
-            <DotsThree class="size-3.5" />
-          </button>
-        </Show>
+          <DotsThree class="size-3.5" />
+        </button>
         <button
           type="button"
           aria-label="Remove export setting"
-          class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+          class="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
           data-testid={`fig-export-remove-${k()}`}
           onClick={props.onRemove}
         >
           <Minus class="size-3.5" />
         </button>
       </div>
+      <Show when={open()}>
+        <label class="flex items-center gap-2 text-ink-muted">
+          Suffix
+          <DraftInput
+            class="w-0 flex-1"
+            ariaLabel="Suffix"
+            placeholder="Suffix"
+            testId={`fig-export-suffix-${k()}`}
+            value={s().suffix}
+            onCommit={(suffix) => props.onChange({ ...s(), suffix })}
+          />
+        </label>
+      </Show>
       <Show when={open() && s().format === 'SVG'}>
         <div class="flex flex-col gap-1 rounded-md bg-inset px-2 py-1.5 text-ink-muted">
           <label class="flex items-center gap-2">
@@ -248,6 +248,26 @@ export function ExportSection(props: {
       title="Export"
       testId="fig-export"
       onAdd={() => update([...settings(), nextSetting(settings())])}
+      actions={
+        <EditorMenu
+          label="Copy as"
+          items={[
+            {
+              label: 'Copy as PNG',
+              icon: <Copy class="size-3.5" />,
+              onSelect: props.onCopyPng,
+            },
+            {
+              label: 'Copy as SVG',
+              icon: <Copy class="size-3.5" />,
+              onSelect: props.onCopySvg,
+              testId: 'fig-copy-svg',
+            },
+          ]}
+        >
+          <Copy class="size-3.5" />
+        </EditorMenu>
+      }
     >
       <datalist id="fig-export-sizes">
         <For each={EXPORT_SIZES}>{(s) => <option value={s} />}</For>
@@ -265,10 +285,9 @@ export function ExportSection(props: {
         )}
       </Index>
       <Show when={settings().length > 0}>
-        <Button
-          variant="outline"
-          size="sm"
-          class="w-full truncate"
+        <button
+          type="button"
+          class="h-6 w-full truncate rounded-md border border-edge bg-transparent px-2 text-ink hover:bg-hover"
           data-testid="fig-export-button"
           title={
             props.count === 1
@@ -280,7 +299,7 @@ export function ExportSection(props: {
           onClick={() => props.onExport(settings())}
         >
           Export {label()}
-        </Button>
+        </button>
         <Show when={props.preview && props.count === 1}>
           <button
             type="button"
@@ -309,21 +328,6 @@ export function ExportSection(props: {
           </Show>
         </Show>
       </Show>
-      <div class="flex flex-wrap gap-1.5">
-        <Button variant="outline" size="sm" onClick={props.onCopyPng}>
-          <Copy />
-          Copy as PNG
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid="fig-copy-svg"
-          onClick={props.onCopySvg}
-        >
-          <Copy />
-          Copy as SVG
-        </Button>
-      </div>
     </Section>
   );
 }

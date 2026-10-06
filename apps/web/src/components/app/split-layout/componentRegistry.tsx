@@ -37,6 +37,7 @@ import { EventComposerSplit } from '@block-calendar/components/EventComposerSpli
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
 import { ComposeTask } from '@block-md/component/ComposeTask';
+import { ComposeDocument } from '@block-md/views/compose-document';
 import NotFound from '@core/component/AccessErrorViews/NotFound';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
@@ -329,6 +330,11 @@ registerComponent('routine-compose', (params) => (
     }
   />
 ));
+registerComponent('document-compose', (params) => {
+  usePageViewTracking('document-compose');
+  return <ComposeDocument {...params} />;
+});
+
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;

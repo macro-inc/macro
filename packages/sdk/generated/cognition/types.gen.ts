@@ -1111,6 +1111,16 @@ export type Price = {
      */
     price_per_audio_minute?: number | null;
     /**
+     * Price per million cache-read input tokens (USD), absent when the model
+     * has no published rate and for audio billing.
+     */
+    price_per_million_cache_read?: number | null;
+    /**
+     * Price per million cache-write input tokens (USD), absent when the model
+     * has no published rate and for audio billing.
+     */
+    price_per_million_cache_write?: number | null;
+    /**
      * Price per million input tokens (USD); zero for audio billing.
      */
     price_per_million_in: number;
@@ -1300,6 +1310,16 @@ export type SetPricingRequest = {
      * Price per minute of audio (USD), or null for token-only pricing.
      */
     price_per_audio_minute?: number | null;
+    /**
+     * Price per million cache-read input tokens (USD). Omit it when the model
+     * has no published rate: calls that report cache reads then stay unpriced.
+     */
+    price_per_mil_cache_read?: number | null;
+    /**
+     * Price per million cache-write input tokens (USD). Omit it when the model
+     * has no published rate: calls that report cache writes then stay unpriced.
+     */
+    price_per_mil_cache_write?: number | null;
     /**
      * New price per million input tokens (USD). Required for token pricing.
      */
@@ -1653,11 +1673,19 @@ export type Usage = {
      */
     audio_seconds?: number | null;
     /**
+     * Input tokens read from a prompt cache; zero for audio billing.
+     */
+    cache_read_input_tokens: number;
+    /**
+     * Input tokens written to a prompt cache; zero for audio billing.
+     */
+    cache_write_input_tokens: number;
+    /**
      * Recording timestamp.
      */
     created_at: string;
     /**
-     * Input tokens; zero for audio billing.
+     * Uncached input tokens; zero for audio billing.
      */
     input_tokens: number;
     /**

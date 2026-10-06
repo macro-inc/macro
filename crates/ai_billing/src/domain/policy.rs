@@ -38,9 +38,11 @@ const PUBLIC_UNITS_PER_CENT: u64 = CustomerMoney::UNITS_PER_CENT / 100;
 const EXTRA_RATE_DENOMINATOR: u64 = 100;
 
 /// Non-rolling public-provider-price allowance for each activated seat and
-/// period: the configured allowance ([`AiPricing::included_allowance_cents`])
-/// of public usage. Both accounting paths read the same value, so this policy
-/// and the ledger never disagree.
+/// period: the configured Premium allowance
+/// ([`AiPricing::included_allowance_cents`]) of public usage. Both accounting
+/// paths read the same value, so this policy and the ledger never disagree.
+/// This prospective policy is not yet tier-aware; activating it for a Max seat
+/// requires threading the seat's tier through here first.
 pub fn included_public_usage(pricing: AiPricing) -> PublicUsage {
     // The allowance is validated non-negative at construction.
     PublicUsage::from_units(pricing.included_allowance_cents() as u64 * PUBLIC_UNITS_PER_CENT)

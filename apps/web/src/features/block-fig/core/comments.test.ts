@@ -5,11 +5,7 @@ import {
   byActivity,
   type FigCommentThread,
   filterThreads,
-  insertMention,
   isUnread,
-  mentionParts,
-  mentionQuery,
-  mentionsIn,
 } from './comments';
 
 const alex = { id: 'u1', name: 'Alex Morgan' };
@@ -21,15 +17,15 @@ const thread = (
   times: [string, number][]
 ): FigCommentThread => ({
   id,
-  anchor: null,
+  anchor: { pageId: '0:1', nodeId: null, x: 0, y: 0 },
   resolved,
   comments: times.map(([author, createdAt], k) => ({
     id: `${id}-${k}`,
     author: author === 'u1' ? alex : blair,
     text: 'hi',
-    mentions: [],
     createdAt,
   })),
+  replyCount: times.length - 1,
 });
 
 describe('anchoring', () => {
@@ -73,32 +69,5 @@ describe('threads', () => {
     expect(isUnread(c, 'u1', 40)).toBe(false);
     expect(isUnread(c, 'u1', 39)).toBe(true);
     expect(isUnread(c, 'u2', undefined)).toBe(true);
-  });
-});
-
-describe('mentions', () => {
-  it('finds the @query being typed', () => {
-    expect(mentionQuery('Hey @Bl', 7)).toEqual({ start: 4, query: 'Bl' });
-    expect(mentionQuery('@', 1)).toEqual({ start: 0, query: '' });
-    expect(mentionQuery('mail@example', 12)).toBeUndefined();
-    expect(mentionQuery('Hey @Blair done', 15)).toBeUndefined();
-  });
-
-  it('inserts a mention and keeps those still in the text', () => {
-    const r = insertMention('Hey @Bl!', 4, 7, blair);
-    expect(r).toEqual({ text: 'Hey @Blair !', caret: 11 });
-    expect(mentionsIn(r.text, [blair, alex, blair])).toEqual([blair]);
-    expect(mentionsIn('Hey', [blair])).toEqual([]);
-  });
-
-  it('splits text into mentions for display, longest names first', () => {
-    const parts = mentionParts('cc @Alex Morgan and @Blair.', [alex, blair]);
-    expect(parts).toEqual([
-      { text: 'cc ' },
-      { text: '@Alex Morgan', mention: alex },
-      { text: ' and ' },
-      { text: '@Blair', mention: blair },
-      { text: '.' },
-    ]);
   });
 });

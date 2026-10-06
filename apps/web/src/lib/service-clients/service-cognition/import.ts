@@ -13,6 +13,10 @@ import {
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
+import {
+  type AI_USAGE_LIMIT_ERROR,
+  aiUsageErrorResponseHandler,
+} from '../ai-usage-limit';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
@@ -132,10 +136,14 @@ export const importClient = {
 
   /** Accept staged rows (starts import jobs) and/or discard staged rows. */
   async runImport(args: { import_ids: string[]; discard_ids: string[] }) {
-    return await importFetch<RunImportOutcome>('/import/run', {
-      method: 'POST',
-      body: JSON.stringify(args),
-    });
+    return await fetchWithToken<RunImportOutcome, typeof AI_USAGE_LIMIT_ERROR>(
+      `${dcsHost}/import/run`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    );
   },
 
   /** Discover candidates for manual selection. */
@@ -147,9 +155,13 @@ export const importClient = {
 
   /** Restart a failed gather run for one source. */
   async retryGather(source: ImportSource) {
-    return await importFetch(`/import/runs/${source}/retry`, {
-      method: 'POST',
-    });
+    return await fetchWithToken<{}, typeof AI_USAGE_LIMIT_ERROR>(
+      `${dcsHost}/import/runs/${source}/retry`,
+      {
+        method: 'POST',
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    );
   },
 
   /** Dismiss one source's import section. */

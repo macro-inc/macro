@@ -47,8 +47,7 @@ pub type DcsUserPermissionsService =
     >;
 
 /// The AI billing gate: reads plan allowances, credits, and overage state.
-/// DCS never charges anyone (the payment gateway is a no-op); settlement is
-/// requested from the authentication service.
+/// DCS never charges anyone.
 pub type DcsAiBillingService = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::RolesTeamsEntitlementSource<
         DcsUserPermissionsService,
@@ -56,7 +55,7 @@ pub type DcsAiBillingService = ai_billing::domain::BillingServiceImpl<
     >,
     ai_billing::outbound::PgUsageReader,
     ai_billing::outbound::PgBillingRepo,
-    ai_billing::outbound::NoOpPaymentGateway,
+    ai_billing::outbound::HttpPaymentGateway,
 >;
 
 /// Type alias for the chat model entitlement extractor wired to DCS services.

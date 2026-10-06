@@ -10,6 +10,7 @@ mod test;
 
 pub mod ai_operations;
 mod build_context;
+mod deferred;
 mod display_results;
 mod import_channels;
 mod mcp_app_catalog;
@@ -56,6 +57,7 @@ pub use build_context::{
     build_anthropic_tool_context, build_image_generator_from_env,
     build_tool_service_context_from_env,
 };
+pub use deferred::{DeferredToolSet, deferred_tools};
 pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
 pub use search::search_toolset;
 pub use tool_context::{
@@ -112,6 +114,9 @@ pub fn database_read_only_tools() -> AiToolSet {
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
     pub prompt: Box<dyn std::fmt::Display + Send + Sync>,
+    /// The tools a [`DeferredToolSet`] keeps out of every request; the prompt
+    /// lists them. Empty on hosts that send every schema.
+    pub deferred: Arc<[ai_toolset::SearchableTool]>,
 }
 
 impl ToolSchemaGenerator for ToolSetWithPrompt {
@@ -182,6 +187,38 @@ pub enum AiHost {
     Mcp,
 }
 
+/// The tools whose schemas go out with every request on hosts with tool
+/// search: the ones most turns use. Every other tool is deferred (see
+/// [`DeferredToolSet`]), listed by name and summary in the prompt and loaded
+/// with `LoadTools` when needed.
+pub const EAGER_TOOLS: &[&str] = &[
+    "BashCodeExecution",
+    "ContentSearch",
+    "CreateDocument",
+    "DisplayResults",
+    "EditDocument",
+    "GetThread",
+    "ListEntities",
+    "ListSkills",
+    "LoadTools",
+    "NameSearch",
+    "ReadChannelMessageContext",
+    "ReadChannelMessages",
+    "ReadChannelThread",
+    "ReadChat",
+    "ReadContent",
+    "ReadMetadata",
+    "ReadSkill",
+    "SearchSkills",
+    "SearchTools",
+    "SelfKnowledge",
+    "SendChannelMessage",
+    "Subagent",
+    "TextEditorCodeExecution",
+    "WebFetch",
+    "WebSearch",
+];
+
 /// Assemble the toolset and tool-use prompt for a host. These are actually
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
@@ -213,6 +250,13 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
+    // External MCP clients have no `LoadTools`, so they get every schema.
+    let deferred = match host {
+        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => {
+            deferred_tools(&toolset, EAGER_TOOLS)
+        }
+        AiHost::Mcp => Arc::from([]),
+    };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
         AiHost::Chat => Box::new(prompt::TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT)),
         AiHost::AgentSession => {
@@ -222,9 +266,19 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
             Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
         }
     };
+    let catalog: Vec<(&str, &str)> = deferred
+        .iter()
+        .map(|tool| (tool.name.as_str(), tool.description.as_str()))
+        .collect();
+    let prompt: Box<dyn std::fmt::Display + Send + Sync> =
+        match prompt::deferred_tools::render(&catalog) {
+            Some(section) => Box::new(format!("{prompt}{section}")),
+            None => prompt,
+        };
     ToolSetWithPrompt {
         toolset: Arc::new(toolset),
         prompt,
+        deferred,
     }
 }
 
@@ -243,5 +297,6 @@ pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
         prompt: Box::new(&prompt::BASE_PROMPT),
         toolset: Arc::new(AsyncToolCollection::new()),
+        deferred: Arc::from([]),
     }
 }

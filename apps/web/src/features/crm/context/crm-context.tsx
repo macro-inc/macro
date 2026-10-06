@@ -38,7 +38,7 @@ export type CrmContext = {
   copyRecordLink(target: {
     type: 'company' | 'contact';
     id: string;
-  }): Promise<void>;
+  }): Promise<boolean>;
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(

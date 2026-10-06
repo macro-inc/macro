@@ -5,6 +5,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArchiveIcon from '@phosphor/archive.svg';
 import BellIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ClockIcon from '@phosphor/clock.svg';
@@ -37,6 +38,7 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   calendar: CalendarBlankIcon,
   drafts: FileIcon,
   shared: UsersThreeIcon,
+  archived: ArchiveIcon,
   all: EnvelopeIcon,
 };
 

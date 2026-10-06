@@ -17,6 +17,7 @@ export type SettingsTab =
   | 'Account'
   | 'API Keys'
   | 'Notifications'
+  | 'Usage'
   | 'Billing'
   | 'Subscription'
   | 'Organization'

@@ -63,7 +63,7 @@ export function useIncludedAiCentsByTier(): () => Partial<
   const plans = useAiBillingPlansQuery();
   return () =>
     Object.fromEntries(
-      (plans.data?.plans ?? []).map((plan) => [
+      (plans.isSuccess ? plans.data.plans : []).map((plan) => [
         plan.tier,
         plan.included_ai_cents_per_seat,
       ])

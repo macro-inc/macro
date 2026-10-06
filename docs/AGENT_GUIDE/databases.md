@@ -58,6 +58,10 @@ PostHog unless the variable was set when it was built. With the flag off:
 
 ## Properties and records
 
+An embedded records editor can allow cell edits while its host controls the
+schema. In that case, column creation and schema actions are absent; record
+editing still works. The standalone database app keeps its full column controls.
+
 Use **Add column** immediately after the table’s headers. It creates an **Unnamed**
 Text column (**Unnamed 2**, and so on if that name exists), selects its name in the
 header, and lets you type immediately. Enter saves; Escape keeps the default name.
@@ -378,7 +382,8 @@ a scalar answer, or compatible bar, line, area, scatter, and pie charts. A saved
 offers **Open view**, which opens that database/table and selects the created view.
 The same tools are exposed to agent sessions through the Macro MCP server.
 
-In a document or channel composer, `/database` → **Database** opens the question box with the AI prompt focused
+In a document, channel composer, or the task/document creation composer,
+`/database` → **Database** opens the question box with the AI prompt focused
 immediately. The empty input rotates through example questions; a selected database
 uses its actual table and column names. Typing hides these hints, and reduced-motion
 preferences keep them static. Use the searchable source picker below the question to

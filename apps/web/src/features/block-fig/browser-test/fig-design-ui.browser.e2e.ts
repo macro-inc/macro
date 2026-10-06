@@ -136,7 +136,7 @@ test('right-click menus act on layers and the canvas', async ({ page }) => {
   await expect(page.getByTestId('fig-field-x')).toHaveValue('400');
   await expect(page.getByTestId('fig-field-rotation')).toHaveValue('0');
   await page.getByTestId('fig-canvas').focus();
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   // A vertical flip reads as a half turn about the center.
   await page.keyboard.press('Shift+V');
   await expect(page.getByTestId('fig-field-rotation')).toHaveValue(/^-?180$/);
@@ -171,7 +171,8 @@ test('picks colors and edits gradients', async ({ page }) => {
   await expect
     .poll(async () => (await pixelAt(page, 20, 20)).join(','))
     .toBe('255,0,0');
-  await page.getByTestId('fig-color-format').selectOption('rgb');
+  await page.getByTestId('fig-color-format').click();
+  await page.getByRole('option', { name: 'RGB', exact: true }).click();
   await expect(page.getByTestId('fig-color-field-1')).toHaveValue('0');
 
   // A drag across the square is one undo step: top left is white.
@@ -180,12 +181,13 @@ test('picks colors and edits gradients', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(picker).toBeHidden();
   await page.getByTestId('fig-canvas').focus();
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect(page.getByTestId('fig-fill-0-hex')).toHaveValue('FF0000');
 
   // Linear gradient: click the bar to add a stop, Delete removes it.
   await page.getByTestId('fig-fill-0-swatch').click();
-  await page.getByTestId('fig-paint-type').selectOption('GRADIENT_LINEAR');
+  await page.getByTestId('fig-paint-type').click();
+  await page.getByRole('option', { name: 'Linear', exact: true }).click();
   await expect(page.getByTestId('fig-fill-0')).toContainText('Linear');
   const stops = page.getByTestId('fig-gradient-stop');
   await expect(stops).toHaveCount(2);
@@ -197,7 +199,8 @@ test('picks colors and edits gradients', async ({ page }) => {
   await expect
     .poll(async () => (await pixelAt(page, 5, 100))[0])
     .toBeGreaterThan(240);
-  await page.getByTestId('fig-paint-type').selectOption('GRADIENT_RADIAL');
+  await page.getByTestId('fig-paint-type').click();
+  await page.getByRole('option', { name: 'Radial', exact: true }).click();
   await expect(page.getByTestId('fig-fill-0')).toContainText('Radial');
 });
 
@@ -256,7 +259,7 @@ test('edits several layers at once, with mixed values', async ({ page }) => {
   await rows(page)
     .filter({ hasText: 'Rectangle 1' })
     .click({ modifiers: ['Shift'] });
-  await expect(page.getByTestId('fig-mixed')).toContainText(
+  await expect(page.getByTestId('fig-design-panel')).toContainText(
     '3 layers selected'
   );
   await expect(page.getByTestId('fig-field-w')).toHaveValue('Mixed');
@@ -273,7 +276,7 @@ test('edits several layers at once, with mixed values', async ({ page }) => {
   await rows(page)
     .filter({ hasText: 'Rectangle 2' })
     .click({ modifiers: ['ControlOrMeta'] });
-  await expect(page.getByTestId('fig-mixed')).toContainText(
+  await expect(page.getByTestId('fig-design-panel')).toContainText(
     '2 layers selected'
   );
 

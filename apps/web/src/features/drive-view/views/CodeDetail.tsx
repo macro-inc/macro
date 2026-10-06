@@ -45,9 +45,7 @@ function CodeDetailContent(props: {
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
       <Show when={isHtmlFile}>
-        <div class="flex h-10 shrink-0 items-center justify-end border-edge border-b px-3">
-          <CodeModeControl mode={mode()} onModeChange={setMode} />
-        </div>
+        <CodeModeControl mode={mode()} onModeChange={setMode} />
       </Show>
       <div class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <CodeContent

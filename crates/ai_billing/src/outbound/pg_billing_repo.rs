@@ -732,7 +732,8 @@ async fn read_period_ledger(
 
 /// Pair a frozen roster with its cost-cent allowances. A missing or mismatched
 /// cost array means an older binary wrote the row; every seat then gets the
-/// configured allowance, which is what that binary's seats are entitled to now.
+/// configured Premium allowance, which is what that binary's seats were all
+/// entitled to (it predates per-plan allowances).
 fn parse_seat_allowances(
     billed_users: Vec<String>,
     included_cost_cents_by_user: Option<Vec<i64>>,

@@ -1,4 +1,5 @@
 import { showDatabaseSql } from '@core/constant/featureFlags';
+import { Dialog } from '@kobalte/core/dialog';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -108,6 +109,40 @@ describe('live database charts', () => {
 });
 
 describe('answer titles', () => {
+  it('keeps a new question focused inside a modal composer until dismissed', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const discard = vi.fn();
+    const rendered = render(() => (
+      <Dialog open>
+        <Dialog.Portal>
+          <Dialog.Content class="portal-scope">
+            <Dialog.Title>Document composer</Dialog.Title>
+            <PlainAnswerDisplay>
+              <LiveQuestion
+                source={{ queryId: '', prompt: '', displayMode: 'scalar' }}
+                loading={false}
+                onRefresh={vi.fn()}
+                onDiscard={discard}
+                editor={() => <textarea aria-label="Ask your database" />}
+              />
+            </PlainAnswerDisplay>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
+    ));
+    const field = await screen.findByLabelText('Ask your database');
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect(field.closest('.portal-scope')).not.toBeNull();
+    await fireEvent.input(field, { target: { value: 'How many tasks?' } });
+    expect(discard).not.toHaveBeenCalled();
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Close database answer' })
+    );
+    expect(discard).toHaveBeenCalledOnce();
+    rendered.unmount();
+    scrollTo.mockRestore();
+  });
+
   it.each(['scalar', 'table'] as const)(
     'renames a %s answer inline without changing its question',
     async (displayMode) => {

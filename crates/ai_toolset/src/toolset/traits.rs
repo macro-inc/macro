@@ -105,6 +105,7 @@ where
             .values()
             .map(|tool| RequestSchema {
                 name: tool.name.clone(),
+                description: tool.description.clone(),
                 schema: tool.input_schema.clone().into(),
             })
             .collect::<Vec<_>>();

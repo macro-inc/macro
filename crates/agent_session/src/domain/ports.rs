@@ -125,6 +125,22 @@ pub struct RequestedExternalSession {
     /// reaches the runtime the way the persona's own does: recorded on the
     /// session, then selected when the session binds on its first prompt.
     pub model: Option<String>,
+    /// Remote repository selected for this external coding session.
+    pub repo_url: Option<String>,
+}
+
+/// Validate the base branch supported by external repository provisioning.
+/// External runtimes currently create every new worktree from origin/main.
+pub fn external_repository(
+    repo_url: Option<String>,
+    branch: Option<&str>,
+) -> super::error::Result<Option<String>> {
+    if branch.is_some_and(|branch| !matches!(branch, "main" | "origin/main")) {
+        return Err(super::error::AgentSessionError::InvalidRepositorySelection(
+            "external coding sessions start from origin/main",
+        ));
+    }
+    Ok(repo_url.filter(|url| !url.trim().is_empty()))
 }
 
 /// Hands a composer request to the bot's own runtime and waits for the
@@ -379,6 +395,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         id: AgentSessionId,
         hash: &str,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record who prompted the turn `id` is about to run.
+    fn set_turn_prompter(
+        &self,
+        id: AgentSessionId,
+        prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Who prompted the turn `id` is running or last ran; `None` before its
+    /// first dispatch.
+    fn turn_prompter(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<TurnPrompter>>> + Send;
 
     /// The session a sandbox's egress token stands for, if any still does.
     ///

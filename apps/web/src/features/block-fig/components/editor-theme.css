@@ -1,0 +1,72 @@
+/* Editor-local semantic tokens: Figma's neutral chrome, with the app's
+   light/dark preference. Document and canvas colors remain document data. */
+.fig-editor-theme {
+  font-family: "Inter Variable", var(--font-sans);
+  --color-panel: #2c2c2c;
+  --color-menu: #2c2c2c;
+  --color-inset: #383838;
+  --color-input: #383838;
+  --color-accent-bg: #0d99ff26;
+  --color-hover: #383838;
+  --color-selected: #383838;
+  --color-edge: #444444;
+  --color-edge-muted: #444444;
+  --color-ink: #ffffff;
+  --color-ink-muted: #b3b3b3;
+  --color-ink-subtle: #999999;
+  --color-ink-placeholder: #808080;
+  --color-accent: #0d99ff;
+  --color-accent-contrast: #ffffff;
+}
+
+[data-theme-light='true'] .fig-editor-theme {
+  --color-panel: #ffffff;
+  --color-menu: #ffffff;
+  --color-inset: #f5f5f5;
+  --color-input: #f5f5f5;
+  --color-hover: #f0f0f0;
+  --color-selected: #e6e6e6;
+  --color-edge: #d9d9d9;
+  --color-edge-muted: #e6e6e6;
+  --color-ink: #1e1e1e;
+  --color-ink-muted: #767676;
+  --color-ink-subtle: #808080;
+  --color-ink-placeholder: #999999;
+}
+
+/* Shared app dialogs are portaled outside the editor's root. */
+.fig-editor-theme.elevated-surface {
+  border-radius: 12px;
+  background-color: var(--color-menu);
+}
+
+.fig-editor-theme.elevated-surface > [data-layer] > [data-surface] {
+  border-radius: 12px;
+}
+
+/* Empty sections are one 40px header; populated ones share an 8px rhythm. */
+.fig-inspector-section-body:has(> :not(datalist)) {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.fig-editor-theme input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0;
+  border: 1px solid var(--color-ink-subtle);
+  border-radius: 3px;
+  background: transparent;
+}
+.fig-editor-theme input[type='checkbox']:checked {
+  background-color: var(--color-inset);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3.5 8 3 3 6-6' fill='none' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+.fig-editor-theme input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+[data-theme-light='true'] .fig-editor-theme input[type='checkbox']:checked {
+  background-color: var(--color-accent);
+}

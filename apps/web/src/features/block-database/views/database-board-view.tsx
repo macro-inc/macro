@@ -3,7 +3,6 @@ import { engineFailure } from '@core/database-sql/driver';
 import type { LaneKey } from '@core/database-sql/generated/types';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
-import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
 import { Button } from '@ui/components/Button';
 import { ConfirmDialog } from '@ui/components/ConfirmDialog';
@@ -44,6 +43,11 @@ import {
   isOptionColumn,
 } from '../core/database-view';
 import type { DatabaseRow } from '../core/table';
+import type {
+  CardMoved,
+  DatabaseViewState,
+  ViewChange,
+} from '../core/view-state';
 import { laneValue, withLaneHidden, withLaneOrder } from '../core/views';
 import {
   type DatabaseOpFailure,
@@ -55,7 +59,6 @@ import {
   createBoardEngine,
 } from '../primitives/board-layout';
 import type { RecordCreation } from '../primitives/record-actions';
-import type { CardMoved, ViewChange } from '../queries/views';
 
 type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 
@@ -63,14 +66,11 @@ type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 export type BoardPositions = {
   state: Accessor<BoardPositionsState>;
   setPositions: (change: (positions: CardPosition[]) => CardPosition[]) => void;
-  move: (
-    view: DatabaseView,
-    move: CardMove
-  ) => ResultAsync<CardMoved, DatabaseOpFailure>;
+  move: (move: CardMove) => ResultAsync<CardMoved, DatabaseOpFailure>;
 };
 
 type DatabaseBoardViewProps = {
-  view: DatabaseView;
+  view: DatabaseViewState;
   source: DatabaseRowsSource;
   rows: DatabaseRow[];
   columns: DatabaseViewColumn[];
@@ -243,7 +243,7 @@ function GroupedBoard(
       );
     setMoves((current) => [...current, { move }]);
     void props.positions
-      .move(props.view, move)
+      .move(move)
       .map(({ positions, tableVersion }) => {
         props.positions.setPositions((current) =>
           withPositions(current, positions)

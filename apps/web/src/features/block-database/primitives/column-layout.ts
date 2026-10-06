@@ -1,4 +1,3 @@
-import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { until } from '@solid-primitives/promise';
 import { Mutex } from 'async-mutex';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
@@ -9,20 +8,20 @@ import {
 } from '../core/column-schema';
 import type { DatabaseViewColumn } from '../core/database-view';
 import { withSort } from '../core/view-query';
+import type { DatabaseViewState, ViewChange } from '../core/view-state';
 import {
   layoutColumns,
   withLayoutColumn,
   withLayoutOrder,
   withoutColumn,
 } from '../core/views';
-import type { ViewChange } from '../queries/views';
 
 /**
  * A view's columns as the table shows them, and the header actions that
  * change them: sorting, resizing, reordering and inserting.
  */
 export function createColumnLayout(options: {
-  view: Accessor<DatabaseView>;
+  view: Accessor<DatabaseViewState>;
   columns: Accessor<DatabaseViewColumn[]>;
   canEdit: Accessor<boolean>;
   /** Whether the view is stored, so its own layout holds the column order. */

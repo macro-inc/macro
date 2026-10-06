@@ -16,9 +16,9 @@ import {
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CardMoved } from '../core/view-state';
 import type { DatabaseOpFailure } from '../core/write-failure';
 import type { BoardPositionsState } from '../primitives/board-layout';
-import type { CardMoved } from '../queries/views';
 import { DatabaseBoardView } from './database-board-view';
 
 const engine = vi.hoisted(() => ({
@@ -213,7 +213,7 @@ describe('database board view', () => {
     fireEvent.mouseDown(card, { button: 0, clientX: 560, clientY: 80 });
     fireEvent.mouseMove(document, { clientX: 30, clientY: 150 });
     fireEvent.mouseUp(document, { button: 0, clientX: 30, clientY: 150 });
-    expect(move).toHaveBeenCalledWith(view, {
+    expect(move).toHaveBeenCalledWith({
       row: 'moving',
       lane: { kind: 'option', id: 'done' },
       before: 'first',
@@ -539,7 +539,7 @@ describe('database board view', () => {
       key: 'Enter',
     });
     await waitFor(() =>
-      expect(move).toHaveBeenCalledWith(view, {
+      expect(move).toHaveBeenCalledWith({
         row: 'moving',
         lane: { kind: 'option', id: 'done' },
         before: 'first',
@@ -691,7 +691,7 @@ describe('database board view', () => {
     expect(onViewChange).toHaveBeenCalledWith({
       query: { filter: null, sort: [] },
     });
-    expect(move).toHaveBeenCalledWith(view, {
+    expect(move).toHaveBeenCalledWith({
       row: 'moving',
       lane: { kind: 'option', id: 'done' },
       before: 'first',

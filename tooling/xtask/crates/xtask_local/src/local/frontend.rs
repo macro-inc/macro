@@ -115,12 +115,7 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
 /// and exercises the real browser -> proxy -> collector path. Left unset
 /// otherwise. This overrides the bare-dev defaults in apps/web/.env.local
 /// (Vite lets process env win).
-fn dev_env(
-    instance: &Instance,
-    mode: Mode,
-    traces_enabled: bool,
-    enable_onboarding: bool,
-) -> Result<Vec<(String, String)>> {
+fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Result<Vec<(String, String)>> {
     let mut env = vec![
         (
             "PORT".to_string(),
@@ -167,12 +162,6 @@ fn dev_env(
     env.push((
         "VITE_ENABLE_BROWSER_OTEL".to_string(),
         traces_enabled.to_string(),
-    ));
-    // Existing override: always set so the app's DEV_MODE default (on) does
-    // not win. `just run_local --enable-onboarding` is the opt-in.
-    env.push((
-        "VITE_ENABLE_ONBOARDING_V4".to_string(),
-        enable_onboarding.to_string(),
     ));
     Ok(env)
 }
@@ -314,7 +303,6 @@ pub fn start(
     instance: &Instance,
     mode: Mode,
     traces_enabled: bool,
-    enable_onboarding: bool,
 ) -> Result<Option<Frontend>> {
     if mode.spec().wait_backend_before_frontend {
         wait_backend_ready(stage, instance)?;
@@ -367,7 +355,7 @@ pub fn start(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in dev_env(instance, mode, traces_enabled, enable_onboarding)? {
+    for (k, v) in dev_env(instance, mode, traces_enabled)? {
         cmd.env(k, v);
     }
     let process = spawn(stage, &mut cmd, port)?;

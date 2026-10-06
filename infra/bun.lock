@@ -159,6 +159,10 @@
       "name": "kafka-cluster-stack",
       "version": "0.0.0",
     },
+    "stacks/lexical-service": {
+      "name": "lexical-service-stack",
+      "version": "0.0.0",
+    },
     "stacks/link-sharing": {
       "name": "link-sharing-stack",
       "version": "0.0.0",
@@ -674,6 +678,8 @@
     "kafka-cluster-stack": ["kafka-cluster-stack@workspace:stacks/kafka-cluster"],
 
     "lambda": ["lambda@workspace:packages/lambda"],
+
+    "lexical-service-stack": ["lexical-service-stack@workspace:stacks/lexical-service"],
 
     "link-sharing-stack": ["link-sharing-stack@workspace:stacks/link-sharing"],
 

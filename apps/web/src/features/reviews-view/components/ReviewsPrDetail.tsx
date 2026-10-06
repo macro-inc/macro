@@ -98,7 +98,7 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
             <ViewShell.TopBar class="touch:flex">
               <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
               <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
-              <PrDetailActions />
+              <PrDetailActions detail={detail.data()} />
             </ViewShell.TopBar>
             <PrDetailContent
               foreignEntityId={props.foreignEntityId}

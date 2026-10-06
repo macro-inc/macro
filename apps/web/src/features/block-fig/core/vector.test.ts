@@ -8,6 +8,7 @@ import {
   moveHandle,
   moveVertex,
   type PenPoint,
+  pencilPoints,
   penNetwork,
   segmentCurve,
   vertexHandles,
@@ -134,5 +135,33 @@ describe('editing points', () => {
     expect(left.vertices).toHaveLength(2);
     expect(left.segments.map((s) => [s.start, s.end])).toEqual([[1, 0]]);
     expect(left.regions).toEqual([]);
+  });
+});
+
+describe('pencil strokes', () => {
+  it('keeps the ends and drops points along straight runs', () => {
+    const line = Array.from({ length: 50 }, (_, i) => ({ x: i, y: i }));
+    const points = pencilPoints(line, 1);
+    expect(points.map(({ x, y }) => ({ x, y }))).toEqual([
+      { x: 0, y: 0 },
+      { x: 49, y: 49 },
+    ]);
+    expect(points.every((p) => p.handle.x === 0 && p.handle.y === 0)).toBe(
+      true
+    );
+  });
+
+  it('keeps corners and smooths through middle points', () => {
+    const corner = [
+      ...Array.from({ length: 20 }, (_, i) => ({ x: i, y: 0 })),
+      ...Array.from({ length: 20 }, (_, i) => ({ x: 20, y: i + 1 })),
+    ];
+    const points = pencilPoints(corner, 1);
+    expect(points).toHaveLength(3);
+    // The middle point's handle is a sixth of its neighbors' chord.
+    expect(points[1].handle).toEqual({ x: 3.33, y: 3.33 });
+    const net = penNetwork(points, false);
+    expect(net.segments).toHaveLength(2);
+    expect(net.regions).toEqual([]);
   });
 });

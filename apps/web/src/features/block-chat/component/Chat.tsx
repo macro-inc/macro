@@ -1,3 +1,4 @@
+import { showAiUsageLimit } from '@app/features/paywall/ai-usage-limit-handling';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
@@ -42,7 +43,6 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -99,7 +99,6 @@ function ChatWithController(props: {
   loadedInputText: string | undefined;
 }) {
   const { showPaywall } = usePaywallState();
-  const { showUsageLimit } = useAiUsageLimitState();
   const input = useChatInputContext();
   const hasPaidAccess = useHasPaidAccess();
 
@@ -130,7 +129,7 @@ function ChatWithController(props: {
       messages={props.data.chat.messages}
       controllerOptions={{
         onShowPaywall: showPaywall,
-        onShowUsageLimit: showUsageLimit,
+        onShowUsageLimit: showAiUsageLimit,
         onSwitchModel,
         hasAlternateModel: () => nextModel() !== undefined,
       }}

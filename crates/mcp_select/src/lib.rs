@@ -27,7 +27,7 @@ use std::sync::Arc;
 mod test;
 
 /// Mangled MCP tool names start with this prefix on both stacks.
-const MANGLED_PREFIX: &str = "mcp__";
+pub const MANGLED_PREFIX: &str = "mcp__";
 
 /// A connector identified in both stacks: the Pipedream app slugs and the
 /// native server URL that back the same product (e.g. `linear` /
