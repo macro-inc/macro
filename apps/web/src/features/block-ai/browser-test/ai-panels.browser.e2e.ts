@@ -159,11 +159,17 @@ test('clipping masks, outlines, and select all', async ({ page }) => {
   await expect
     .poll(() => pixelAt(canvasOf(page), view.at(RED_BOX)))
     .toEqual([255, 255, 255]);
-  // Released, the clip group is a plain group again, as in Illustrator.
+  // Released, the clip group is a plain group again, as in Illustrator,
+  // with the mask an unpainted path on top.
   await page.keyboard.press(`${MOD}+Alt+7`);
   await expect
     .poll(async () => (await engineRows(page)).map((r) => r.kind))
     .toEqual(['layer', 'layer', 'text', 'group', 'path', 'path']);
+  expect((await engineRows(page)).slice(3).map((r) => r.name)).toEqual([
+    'Group',
+    'Path',
+    'Red box',
+  ]);
 
   // Create outlines turns the text into paths.
   await page.keyboard.press('Escape');
