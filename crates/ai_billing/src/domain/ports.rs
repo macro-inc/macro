@@ -529,6 +529,18 @@ pub trait BillingService: Send + Sync + 'static {
         limit_cents: i64,
     ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
 
+    /// Turn automatic credit reloads, and with them overage, on with
+    /// `thresholds` or off. Payer only. Enabling validates the thresholds,
+    /// derives the overage cap from the monthly spend limit, clears both
+    /// suspensions, and settles right away, so a balance already under the
+    /// minimum reloads immediately. Disabling keeps the stored thresholds.
+    fn update_auto_reload(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        enabled: bool,
+        thresholds: AutoReloadThresholds,
+    ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
+
     /// Start a credit-pack purchase. Payer only. Returns the Checkout URL.
     fn create_credit_checkout(
         &self,
@@ -560,6 +572,16 @@ pub trait BillingService: Send + Sync + 'static {
     /// Record the outcome of an overage invoice (webhook). Unknown invoices
     /// are ignored.
     fn mark_overage_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        paid: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record the outcome of a credit reload invoice (webhook). Unknown
+    /// invoices are ignored. A paid invoice books its credits once, even when
+    /// the collector already did, and settles; a failed one pauses automatic
+    /// reloads.
+    fn mark_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,
         paid: bool,
