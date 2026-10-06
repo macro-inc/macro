@@ -188,11 +188,10 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
       with:
         playwright: 'true'
-    # A cold Rust/WASM build can exceed the Vitest setup hook timeout.
     - name: Build agent-fold WASM for tests
       run: just build-agent-fold-wasm
-      working-directory: apps/web
       timeout-minutes: 15
+      working-directory: apps/web
     - name: Test
       run: bunx vitest
       working-directory: apps/web
