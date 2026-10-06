@@ -37,8 +37,16 @@ export function emailFollowupQueryOptions(threadId: string) {
         : [];
     })
     .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const queryKey = reminderKeys.email(threadId).queryKey;
+  const detailUpdatedAt =
+    queryClient.getQueryState(queryKey)?.dataUpdatedAt ?? 0;
+  if (cached && cached.updatedAt > detailUpdatedAt) {
+    queryClient.setQueryData(queryKey, cached.followup, {
+      updatedAt: cached.updatedAt,
+    });
+  }
   return queryOptions({
-    queryKey: reminderKeys.email(threadId).queryKey,
+    queryKey,
     queryFn: () =>
       throwOnErr(() =>
         storageServiceClient.reminders.getEmailFollowup(threadId)

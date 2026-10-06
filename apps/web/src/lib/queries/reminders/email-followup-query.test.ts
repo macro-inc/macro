@@ -103,3 +103,41 @@ it('does not revive an invalidated collection entry or replace a newer detail en
   );
   expect(observer.getCurrentResult().data?.state).toBe('removed');
 });
+
+it('uses a newer collection revision when a fresh detail entry already exists', () => {
+  const now = Date.now();
+  queryClient.setQueryData(
+    reminderKeys.email('thread').queryKey,
+    { ...followup, revision: 'older-detail' },
+    { updatedAt: now - 1_000 }
+  );
+  seedCollection(now);
+  const observer = new QueryObserver(
+    queryClient,
+    emailFollowupQueryOptions('thread')
+  );
+  const stop = observer.subscribe(() => {});
+  try {
+    expect(observer.getCurrentResult().data?.revision).toBe(followup.revision);
+    expect(observer.getCurrentResult().dataUpdatedAt).toBe(now);
+    expect(read).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
+});
+
+it('preserves a newer detail revision when the collection is older', () => {
+  const now = Date.now();
+  seedCollection(now - 1_000);
+  queryClient.setQueryData(
+    reminderKeys.email('thread').queryKey,
+    { ...followup, revision: 'newer-detail' },
+    { updatedAt: now }
+  );
+  const observer = new QueryObserver(
+    queryClient,
+    emailFollowupQueryOptions('thread')
+  );
+  expect(observer.getCurrentResult().data?.revision).toBe('newer-detail');
+  expect(observer.getCurrentResult().dataUpdatedAt).toBe(now);
+});
