@@ -74,6 +74,10 @@ HTTPS machine hostnames; verify the proxy configuration before retrying.
 
 ## Live database answers
 
+Opening the slash menu with `/` lists Normal Text, headings, and the other
+Markdown options before Database. Typing `/database` filters to the Database
+action.
+
 With Databases on, type `/database` and choose **Database** to insert a live answer
 to a question about a database. Answers run with each reader's database access and
 refresh when referenced tables change. See

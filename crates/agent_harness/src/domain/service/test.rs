@@ -4538,6 +4538,45 @@ async fn a_chosen_model_is_the_session_model_from_creation() {
     assert_eq!(session.model, "claude-4.5-sonnet-thinking");
 }
 
+/// A sandboxed coder does not read the session row, so a model chosen at
+/// creation reaches it as the first request after `session/new`, and the web
+/// app need not send one of its own.
+#[tokio::test]
+async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
+    let (service, _, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: Some("openai/gpt-5.6".to_owned()),
+        prompt: None,
+        profile: None,
+    });
+    let drive = async {
+        let session = containers.first_spawned().await;
+        let container = containers.container(session).unwrap();
+        complete_session_handshake(&container).await;
+        let agent = container.agent();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            agent.wait_for_requests(3),
+        )
+        .await
+        .expect("the runtime was never sent the chosen model");
+        agent.received_requests()
+    };
+    let (opened, requests) = tokio::join!(open, drive);
+    opened.unwrap();
+    let ClientRequest::SetSessionConfigOptionRequest(request) = &requests[2] else {
+        panic!("expected a model selection, got {:?}", requests[2]);
+    };
+    let request = serde_json::to_value(request).unwrap();
+    assert_eq!(request["configId"], "model");
+    assert_eq!(request["value"], "openai/gpt-5.6");
+}
+
 /// The agents-view create path names the Cursor bot with no persisted
 /// profile. The deployment default harness is the sandboxed coder's
 /// `opencode`; Cursor sessions must not inherit it.

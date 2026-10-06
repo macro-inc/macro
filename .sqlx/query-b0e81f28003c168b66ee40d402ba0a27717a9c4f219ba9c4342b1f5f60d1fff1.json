@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, form_id, status, stopped_at_section, row_id, submitted_at, updated_at\n        FROM form_responses WHERE form_id = $1 AND respondent_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "form_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "stopped_at_section",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "row_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b0e81f28003c168b66ee40d402ba0a27717a9c4f219ba9c4342b1f5f60d1fff1"
+}

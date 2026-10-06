@@ -18,6 +18,7 @@ use super::event_trigger::{
 use super::models::{ActionExecutionRecord, ScheduledAction};
 
 pub mod admission;
+pub mod condition;
 pub mod dispatch;
 
 #[cfg(test)]
@@ -126,7 +127,7 @@ pub enum RunContractError {
 
 /// Natural deduplication key. A matching event has at most one run per action,
 /// even if several filters matched or the source is redelivered.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct EventRunKey {
     pub action_id: Uuid,
     pub event_id: EventId,
@@ -139,6 +140,10 @@ pub enum CancellationReason {
     Disabled,
     Superseded,
     NotUserOwned,
+    /// The event's content answered every matching condition with no.
+    ConditionNotMet,
+    /// The condition could not be checked before the retry window closed.
+    ConditionUnavailable,
 }
 
 /// All outcomes are terminal. In particular, failure and interruption never
@@ -387,6 +392,17 @@ pub trait EventRunRepository: Send + Sync + 'static {
         key: EventRunKey,
         revision: ConfigurationRevision,
         reason: CancellationReason,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Cancel like [`Self::cancel_pending`], and record the skipped run in the
+    /// action's history in the same transaction. A run that is no longer
+    /// pending at this revision is left alone and gets no history.
+    fn skip_pending(
+        &self,
+        key: EventRunKey,
+        revision: ConfigurationRevision,
+        reason: CancellationReason,
+        record: ActionExecutionRecord,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Bounded cleanup of disabled/superseded pending rows, and expired started

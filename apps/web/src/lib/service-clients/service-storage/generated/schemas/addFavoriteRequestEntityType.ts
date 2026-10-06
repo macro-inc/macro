@@ -29,4 +29,5 @@ export type AddFavoriteRequestEntityType =
   | 'scheduled_action'
   | 'initiative'
   | 'database'
-  | 'database_row';
+  | 'database_row'
+  | 'form';

@@ -27,6 +27,7 @@ function isSoupEntityTag(
       'routine',
       'agent_session',
       'database',
+      'form',
       'calendar_event',
       'foreign',
       'crm_company',
